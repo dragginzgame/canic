@@ -10,9 +10,9 @@ use ic_platform::{
     management_canister_types::CanisterIdRecord,
 };
 use ic_platform_runtime::{
-    Principal,
-    call::{Call, CallFailed, WaitPolicy},
-    cdk::{self, api},
+    self as runtime,
+    call::{Call, Outcome, Wait},
+    system as api,
 };
 use std::cell::RefCell;
 
@@ -20,27 +20,22 @@ thread_local! {
     static JOURNAL: RefCell<FundingStatus> = RefCell::new(FundingStatus::default());
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform's entrypoint hook owns the argument buffer"
-)]
-fn decode_fund(bytes: Vec<u8>) -> FundingRequest {
+fn decode_fund(bytes: &[u8]) -> Result<FundingRequest, ic_wire::Error> {
     ic_wire::decode(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: FUND,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .expect("valid funding frame")
 }
 
 #[expect(
     clippy::needless_pass_by_value,
-    reason = "Platform's entrypoint hook transfers the returned value"
+    reason = "Runtime transfers the owned endpoint result to its encoder"
 )]
-fn encode_fund(value: FundingStatus) -> Vec<u8> {
+fn encode_fund(value: FundingStatus) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -49,30 +44,24 @@ fn encode_fund(value: FundingStatus) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded funding reply")
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform's entrypoint hook owns the argument buffer"
-)]
-fn decode_status(bytes: Vec<u8>) {
+fn decode_status(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     ic_wire::decode::<()>(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: FUNDING_STATUS,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .expect("valid funding status frame");
 }
 
 #[expect(
     clippy::needless_pass_by_value,
-    reason = "Platform's entrypoint hook transfers the returned value"
+    reason = "Runtime transfers the owned endpoint result to its encoder"
 )]
-fn encode_status(value: FundingStatus) -> Vec<u8> {
+fn encode_status(value: FundingStatus) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -81,31 +70,21 @@ fn encode_status(value: FundingStatus) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded funding status reply")
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform's entrypoint hook owns the argument buffer"
-)]
-fn decode_later(bytes: Vec<u8>) {
+fn decode_later(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     ic_wire::decode::<()>(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: FUNDING_LATER,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .expect("valid funding continuation");
 }
 
-#[cdk::query(
-    guard = "controller",
-    decode_with = "decode_status",
-    encode_with = "encode_status"
-)]
-pub(super) fn funding_status() -> FundingStatus {
+#[runtime::query(runtime = runtime, guard = controller, decode = decode_status, max_bytes = 2097152, on_error = endpoint_error, name = "funding_status", encode = encode_status)]
+pub(super) fn funding_status((): ()) -> FundingStatus {
     JOURNAL.with_borrow(Clone::clone)
 }
 
@@ -113,19 +92,13 @@ pub(super) fn restore(state: FundingStatus) {
     JOURNAL.with_borrow_mut(|journal| *journal = state);
 }
 
-#[cdk::update(
-    guard = "controller",
-    decode_with = "decode_fund",
-    encode_with = "encode_fund"
-)]
+#[runtime::update(runtime = runtime, guard = controller, decode = decode_fund, max_bytes = 2097152, on_error = endpoint_error, name = "fund", encode = encode_fund)]
 async fn fund(intent: FundingRequest) -> FundingStatus {
-    let previous = funding_status();
+    let previous = funding_status(());
     if previous.phase != Phase::Empty {
-        assert_eq!(
-            previous.intent.as_ref(),
-            Some(&intent),
-            "different funding intent refused"
-        );
+        if previous.intent.as_ref() != Some(&intent) {
+            api::trap("different funding intent refused");
+        }
         if previous.phase == Phase::Issued {
             api::trap("blocked: original funding outcome is not retained");
         }
@@ -138,7 +111,7 @@ async fn fund(intent: FundingRequest) -> FundingStatus {
     );
     let request = candid_codec::encode_one(
         &CanisterIdRecord {
-            canister_id: Principal::from_slice(&intent.target),
+            canister_id: ic_platform::principal::Principal::from_slice(&intent.target),
         },
         MAX_MANAGEMENT_REQUEST_BYTES,
     )
@@ -153,9 +126,12 @@ async fn fund(intent: FundingRequest) -> FundingStatus {
     let result = dispatch("deposit_cycles", request, intent.cycles, intent.fault).await;
     // Local dispatch errors occur before a callback exists. Trap that execution
     // instead of reading callback-only refund state or fabricating a receipt.
-    let (outcome, refunded) = match result {
-        Ok(reply) => {
-            let refunded = api::msg_cycles_refunded();
+    let completion = result.expect("local deposit dispatch");
+    let refunded = completion
+        .refunded_cycles()
+        .expect("callback refund retained");
+    let outcome = match completion.into_parts().0 {
+        Outcome::Reply(reply) => {
             decoder::decode_args::<()>(
                 &reply,
                 decoder::Limits {
@@ -172,15 +148,12 @@ async fn fund(intent: FundingRequest) -> FundingStatus {
                 refunded, 0,
                 "successful deposit must accept the full attachment"
             );
-            (FundingOutcome::Deposited, refunded)
+            FundingOutcome::Deposited
         }
-        Err(CallFailed::CallRejected(rejection)) => (
-            FundingOutcome::Rejected {
-                code: rejection.raw_reject_code(),
-            },
-            api::msg_cycles_refunded(),
-        ),
-        Err(error) => api::trap(format!("local deposit dispatch failed: {error}")),
+        Outcome::Rejected(rejection) => FundingOutcome::Rejected {
+            code: rejection.code(),
+        },
+        Outcome::OutcomeUnknown(_) => api::trap("unbounded deposit outcome unknown"),
     };
     assert!(
         refunded <= intent.cycles,
@@ -214,22 +187,25 @@ async fn fund(intent: FundingRequest) -> FundingStatus {
             LIMITS,
         )
         .expect("funding continuation");
-        let result = Call::new(api::canister_self(), "funding_later", WaitPolicy::Unbounded)
-            .take_raw_args(bytes)
+        let result = Call::new(api::canister_self(), "funding_later", Wait::Unbounded)
+            .owned_args(bytes)
             .execute()
             .await;
-        assert!(result.is_err(), "injected later work must reject");
+        assert!(
+            matches!(result.unwrap().into_parts().0, Outcome::Rejected(_)),
+            "injected later work must reject"
+        );
         api::trap("later work failed after result commit");
     }
-    funding_status()
+    funding_status(())
 }
 
-#[cdk::update(
-    guard = "private_continuation",
-    decode_with = "decode_later",
-    manual_reply
-)]
-fn funding_later() {
+#[runtime::update(runtime = runtime, guard = private_continuation, decode = decode_later, max_bytes = 2097152, on_error = endpoint_error, name = "funding_later", manual_reply)]
+async fn funding_later((): ()) {
     JOURNAL.with_borrow_mut(|state| state.later_work_entered = true);
     api::trap("injected later-work trap");
+}
+
+fn endpoint_error(error: impl std::fmt::Debug) -> ! {
+    ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }

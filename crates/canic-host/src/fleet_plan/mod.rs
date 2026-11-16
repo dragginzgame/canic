@@ -218,6 +218,8 @@ impl FleetPlan {
             controller: self.root.controller.clone(),
             artifact: child.artifact.clone(),
             action: crate::PlanAction::CreateChild(ManagedOwner {
+                arguments: None,
+                blob_attempt: None,
                 source: self.source(receipt, store, slot)?,
                 slot: (self.version == 2).then_some(slot),
                 root: receipt.canister.clone(),

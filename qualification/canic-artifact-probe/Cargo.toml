@@ -8,6 +8,8 @@ publish.workspace = true
 [target.'cfg(target_family = "wasm")'.dependencies]
 ic-platform.workspace = true
 ic-platform-runtime.workspace = true
+ic-platform-types.workspace = true
+ic-timers.workspace = true
 
 [target.'cfg(any())'.dev-dependencies]
 toko-tooling.workspace = true

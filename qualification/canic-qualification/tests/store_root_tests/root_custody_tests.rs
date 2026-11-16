@@ -1,8 +1,9 @@
 //! Actual Host Root replacement preserves the separate, still-closed Store operation.
 use super::{Client, artifacts, fixture, quiescence_tests, recover_store, settle, stage, support};
 use canic_management_protocol::{self as management, custody, store_maintenance as maintenance};
+use ic_testkit::pocket_ic::PocketIcBuilder;
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
-use ic_testkit::{pic::PocketIcStartupConfig, pocket_ic::PocketIcBuilder};
+use ic_testkit::server::{Limits, Server};
 use std::{
     path::Path,
     process::Command,
@@ -24,28 +25,33 @@ async fn complete(root: &Client<'_>) -> custody::Root {
 #[tokio::test(flavor = "current_thread")]
 async fn host_root_maintenance_preserves_stopped_store_operation_and_signed_install() {
     let (_, binary) = support::inputs();
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: binary,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(120)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        ic_testkit::server::PreparedServer::check(&binary).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(120),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
     // Drive the bounded timer fixture before starting the real-time gateway.
     // A recent baseline avoids charging years of storage when make_live catches up.
     owner
-        .instance()
+        .client()
         .set_time((SystemTime::now() - Duration::from_secs(60)).into())
         .await;
     let (root_id, store_id, operator, approval, expected, root_bytes, store_bytes) = {
-        let pic = owner.instance();
+        let pic = owner.client();
         let (root, supplier, child, _) = fixture(pic, true).await;
         stage(&root, &child).await.unwrap();
         pic.advance_time(Duration::from_secs(11)).await;
@@ -150,8 +156,8 @@ async fn host_root_maintenance_preserves_stopped_store_operation_and_signed_inst
             store_bytes,
         )
     };
-    let url = owner.instance_mut().make_live(None).await.to_string();
-    let pic = owner.instance();
+    let url = owner.client_mut().make_live(None).await.to_string();
+    let pic = owner.client();
     let stopped_status = pic
         .canister_status(store_id, Some(root_id))
         .await
@@ -228,5 +234,11 @@ async fn host_root_maintenance_preserves_stopped_store_operation_and_signed_inst
             .status,
         stopped_status
     );
-    owner.instance_mut().stop_live().await;
+    owner.client_mut().stop_live().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

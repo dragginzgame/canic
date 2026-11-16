@@ -68,6 +68,14 @@ returns the identical pending upgrade. Each successor needs the previous upgrade
 retained completion and exact predecessor hash; both paths keep the eight-upgrade
 bound and immutable historical approvals.
 
+From 0.218, upgrades stop the target and drain callbacks before installation,
+then restart it before readiness checks. Expect application downtime during this
+window. Stop/start attempts retain the original deadline and are never replaced
+after an uncertain outcome. Expiry or a refused installation can leave the target
+stopped; retain the operation and its evidence for explicit operator recovery.
+An unfinished legacy Host installation without retained stop evidence is blocked.
+Blob admission remains closed after restart until its separately approved activation.
+
 ## Current mainnet demo
 
 The maintainer's generated `starter/` project now has a live Root and greeting app.

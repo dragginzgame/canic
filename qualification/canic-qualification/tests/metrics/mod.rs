@@ -36,17 +36,24 @@ pub(super) async fn read(pic: &PocketIc, owner: CanisterId) -> Snapshot {
 
 #[tokio::test]
 async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
-    let owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(120)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(PocketIcBuilder::new().with_application_subnet())
-    .await
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(120),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
+    )
     .unwrap();
-    let pic = owner.instance();
+    let owner = server
+        .instance(
+            PocketIcBuilder::new().with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let pic = owner.client();
     let root = pic.create_canister().await;
     pic.install_canister(root, children::artifact("root.wasm"), vec![], None)
         .await;
@@ -93,9 +100,15 @@ async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
     }
     assert_eq!(pic.get_stable_memory(root).await, stable);
     assert_eq!(status(pic, root).await, complete);
-    pic.upgrade_canister(root, children::artifact("maintenance.wasm"), vec![], None)
-        .await
-        .unwrap();
+    canic_qualification::upgrade_stopped(
+        pic,
+        root,
+        children::artifact("maintenance.wasm"),
+        vec![],
+        None,
+    )
+    .await
+    .unwrap();
     let reset = read(pic, root).await.timers.unwrap();
     assert!(reset.started_at_version > timers.started_at_version);
     assert!(reset.started_at_ns >= timers.started_at_ns);
@@ -107,4 +120,10 @@ async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
     after.maintenance_candidate = complete.maintenance_candidate;
     assert_eq!(after, complete);
     assert_eq!(pic.get_stable_memory(root).await, stable);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

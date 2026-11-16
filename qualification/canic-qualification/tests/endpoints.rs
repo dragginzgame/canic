@@ -3,10 +3,10 @@ use canic_management_protocol::{
     Approval, CREATION_CYCLES, INJECT, LIMITS, Phase, RECONCILE, Refusal, STAGE, STAGE_LIMITS,
     STATUS, Stage, Status, digest, upgrade,
 };
-use ic_testkit::{
-    pic::{PocketIcStartupConfig, server_assets},
-    pocket_ic::{CanisterId, PocketIcBuilder, RejectCode, RejectResponse, nonblocking::PocketIc},
+use ic_testkit::pocket_ic::{
+    CanisterId, PocketIcBuilder, RejectCode, RejectResponse, nonblocking::PocketIc,
 };
+use ic_testkit::server::{Limits, PreparedServer, Server};
 use std::{path::PathBuf, time::Duration};
 
 async fn call(
@@ -110,19 +110,26 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         .unwrap()
         .to_path_buf();
     let artifacts = repo.join("target/endpoints");
-    let binary = server_assets::check(&canic_qualification::server_directory())
+    let binary = PreparedServer::check(&canic_qualification::server_directory())
         .expect("make qualification-setup");
-    let owner = PocketIcStartupConfig::Spawn {
-        server_binary: binary,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(180)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(PocketIcBuilder::new().with_application_subnet())
-    .await
+    let mut server = Server::start(
+        binary,
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(180),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
+    )
     .unwrap();
-    let pic = owner.instance();
+    let owner = server
+        .instance(
+            PocketIcBuilder::new().with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let pic = owner.client();
     let controller = CanisterId::anonymous();
     let outsider = CanisterId::self_authenticating(b"endpoint-outsider");
     let worker = std::fs::read(artifacts.join("worker.wasm")).unwrap();
@@ -197,10 +204,10 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                         .unwrap_err();
                     assert_eq!(
                         denied.reject_code,
-                        RejectCode::CanisterReject,
+                        RejectCode::CanisterError,
                         "{variant}/{method}"
                     );
-                    assert_eq!(denied.reject_message, "controller required");
+                    assert!(denied.reject_message.contains("controller required"));
                 }
                 let malformed = call(pic, target, controller, method, query, frame)
                     .await
@@ -222,14 +229,15 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                 )
                 .await
                 .unwrap_err();
-                assert_eq!(oversized.reject_code, RejectCode::CanisterReject);
-                assert_eq!(
-                    oversized.reject_message,
-                    if private && caller == outsider {
-                        "controller required"
-                    } else {
-                        "growth frame too large"
-                    }
+                assert_eq!(oversized.reject_code, RejectCode::CanisterError);
+                assert!(
+                    oversized
+                        .reject_message
+                        .contains(if private && caller == outsider {
+                            "controller required"
+                        } else {
+                            "growth frame too large"
+                        })
                 );
             }
             // Creation shares an ID; upgrade observations bind an exact approval.
@@ -484,7 +492,11 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         .await
         .unwrap_err();
     assert_eq!(failed.reject_code, RejectCode::CanisterError);
-    assert!(failed.reject_message.contains("bounded status"));
+    assert!(
+        failed
+            .reject_message
+            .contains("management endpoint: Encode(")
+    );
     assert_eq!(
         status(pic, target).await,
         original,
@@ -601,7 +613,11 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         .await
         .unwrap_err();
     assert_eq!(failed.reject_code, RejectCode::CanisterError);
-    assert!(failed.reject_message.contains("bounded status"));
+    assert!(
+        failed
+            .reject_message
+            .contains("management endpoint: Encode(")
+    );
     assert_eq!(status(pic, target).await, ready);
     assert_eq!(
         pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
@@ -610,7 +626,8 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
 
     // An infrastructure upgrade clears volatile callback fencing but preserves
     // the committed principal and spent slot. No reinstall or fresh effect.
-    pic.upgrade_canister(
+    canic_qualification::upgrade_stopped(
+        pic,
         target,
         std::fs::read(artifacts.join("maintenance.wasm")).unwrap(),
         vec![],
@@ -679,5 +696,10 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
         count + 1
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

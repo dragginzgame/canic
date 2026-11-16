@@ -97,7 +97,7 @@ remain separate; do not pull optional supplier runtimes into default application
 | `apps/profile/` | Profile protocol/client, discovery entry, persistent worker and autonomous manager | `make profile-test`, `make profile-clippy`, `make profile-doc` |
 | `ic-wasm-store` supplier; Canic's Root/Host integration | Supplier owns artifacts, pins and admission; Canic owns orchestration | `make store-test`, `make store-clippy`; `make root-doc` covers management contracts |
 | `qualification/canic-asset-catalog` | Installed local Blob/catalog composition | `make blob-test`, `make blob-clippy`, `make blob-doc` |
-| `canic::auth`, `qualification/canic-auth-witness` | Optional receiver mounts and installed volatile Auth composition | `make auth-test`, `make auth-clippy`, `make auth-doc` |
+| `canic::auth`, `qualification/canic-auth-witness` | Optional issuer/receiver mounts and installed volatile Auth composition | `make auth-test`, `make auth-clippy`, `make auth-doc` |
 
 The commands above select scope families; choose their affected cases for ordinary
 changes. `make endpoint-test` owns installed mount/authorization/rollback proofs;
@@ -118,29 +118,37 @@ No sibling checkout, copied runtime or Git fallback is required.
 
 The qualification harness owns explicit `make qualification-setup`; simulator setup
 and tests share `IC_TESTKIT_SERVER_DIRECTORY`, defaulting to
-`target/qualification/server`. Tests verify prepared assets. Retire probes only when
+`target/qualification/server/prepared`. Tests verify prepared assets. Retire probes only when
 their failure cases have a qualified product owner; renaming is not replacement.
+Testkit 0.107.3 owns client types, selected held replies, prepared assets and
+bounded server/instance ownership. Keep those owners explicit. Successful close
+records a deletion attempt; it does not independently prove remote deletion.
+Missing or corrupt assets refuse offline; only `make qualification-setup` downloads.
 
 ### Blob boundary
 
-- The qualified supplier is pinned Blob 0.100.6, Git revision
-  `decde204acb6d7c8362a0003e904beef72ff89b6`. Keep its sibling checkout read-only;
-  do not substitute pending supplier work. Initial preparation needs authenticated
-  Git access. `scripts/dev/blob-inputs.pl` records locked source identities and
+- The qualified supplier is registry Blob 0.102.0 in both lockfiles. Keep its
+  sibling checkout read-only; do not substitute pending supplier work.
+  `scripts/dev/blob-inputs.pl` records locked archive identities and
   hashes around installed qualification; changed inputs require requalification.
 - Blob owns Service, identity, accounting and maintenance admission. Canic mounts
   endpoints; the application owns users, catalog and publication permission. Pass
   captured ingress callers unchanged; check real user permission before invoking
   trusted local application authority. Compose through one Storage bootstrap.
 - Reopen with the real Service; preserve catalog/Blob rollback and exact maintenance
-  attempts. Do not activate during mounting or bypass closed admission. Current
-  fleet effects do not own Blob's drain/activation sequence: do not advertise a
-  fleet-managed provider journey. Blob remains optional and independently usable.
+  attempts. Root's optional `blob` feature extends its existing child upgrade owner;
+  it retains drain/stop/start/activation custody alongside exact application arguments.
+  `fleet activate` separately authorizes the matching reopened attempt. Issued
+  calls are observed, never replaced; readiness never activates admission. Old
+  complete-custody endpoints refuse application records they cannot represent.
+  Host-driven Root/Store maintenance over these new records remains closed until
+  its complete preservation contract is extended. Blob remains independently usable;
+  the local fleet witness does not qualify a provider journey.
 
 ### Auth boundary
 
 - Auth inputs are pinned to Git revision
-  `b78991e9833320692921bf766e51ad361c9c8c4d`; no moving sibling or old registry
+  `bfe2e548a997f10a876f01b4c72c4e5fec52c8d6`; no moving sibling or old registry
   substitution. Canic's optional `auth` feature mounts passive Wire contracts;
   the application selects the independent engine and protected authorities.
   `auth-enrollment` adds direct, bounded Root enrollment; Root's `auth` feature
@@ -153,6 +161,11 @@ their failure cases have a qualified product owner; renaming is not replacement.
   existing journal's exact configure/revoke plans; it imports passive types only.
   Retained Auth authority blocks Root/receiver preservation upgrades in that
   journal. Managed Auth preservation and the complete browser journey are pending.
+- Issuer mounts stay passive: applications own account authentication, browser
+  binding checks, grant policy and key/effect custody; `MemoryIssuer` owns intents,
+  renewal sequencing, results and pruning. Reconciliation is lookup-only. The
+  installed local test signer does not qualify production keys, external signing
+  recovery or browser-bound issuer logout, which needs a supplier binding API.
 
 ## CLI and developer experience
 
@@ -163,7 +176,7 @@ their failure cases have a qualified product owner; renaming is not replacement.
 - `make canic` builds and installs on PATH and verifies resolution. User-facing
   commands are `canic ...`, never target-directory paths, PATH edits or aliases.
   Use the prepared default signer; `--icp-bin` is for explicit overrides/fixtures.
-- Render tables with `ic-host-text::table`; Canic owns columns and wording, the
+- Render tables with `ic-host-text::plain_table` / `bordered_table`; Canic owns columns and wording, the
   supplier owns escaping, widths and alignment. Do not add a formatter alias.
 - Do not automatically open browsers, terminals or desktop windows. Serve requested
   previews over localhost and give a clickable `http://localhost:PORT/` URL, never

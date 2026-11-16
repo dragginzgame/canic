@@ -1,42 +1,36 @@
 //! Fixed enrollment transport; Platform owns execution and Wire owns codecs.
 use super::{Error, LIMITS};
-use ic_platform_runtime::{cdk::api, ic0};
+use ic_platform_runtime::raw;
 use ic_wire::{Direction, Encoding};
 use serde::{Serialize, de::DeserializeOwned};
 
 /// Raw header/size admission; the containing authority owns its access guard.
 pub fn admit<const ID: u64>() -> Result<(), String> {
-    if !(11..=LIMITS.bytes).contains(&ic0::msg_arg_data_size()) {
+    if !(11..=LIMITS.bytes).contains(&raw::msg_arg_data_size()) {
         return Err("enrollment frame size".into());
     }
     let mut header = [0; 11];
-    ic0::msg_arg_data_copy(&mut header, 0);
+    raw::msg_arg_data_copy(&mut header, 0);
     ic_wire::validate_request_header(ID, &header).map_err(|e| e.to_string())
 }
 /// Decode an admitted complete request; malformed input traps before mutation.
-/// # Panics
-/// Traps on malformed or over-budget input.
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform transfers the admitted input buffer"
-)]
-#[must_use]
-pub fn decode<T: DeserializeOwned, const ID: u64>(bytes: Vec<u8>) -> T {
+/// # Errors
+/// Refuses malformed or over-budget input; the endpoint traps this refusal.
+pub fn decode<T: DeserializeOwned, const ID: u64>(bytes: &[u8]) -> Result<T, ic_wire::Error> {
     ic_wire::decode(
-        &bytes,
+        bytes,
         Encoding::Frame {
             method: ID,
             direction: Direction::Request,
         },
         LIMITS,
     )
-    .expect("enrollment request")
 }
 /// Encode in the handler's transaction. Failure traps rather than returning a
 /// successful mutation with an ordinary serialization refusal.
-/// # Panics
-/// Traps on over-budget or failing serialization.
-pub fn encode<T: Serialize, const ID: u64>(value: T) -> Vec<u8> {
+/// # Errors
+/// Refuses unencodable or over-budget replies; the endpoint traps this refusal.
+pub fn encode<T: Serialize, const ID: u64>(value: T) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         Encoding::Frame {
@@ -45,7 +39,6 @@ pub fn encode<T: Serialize, const ID: u64>(value: T) -> Vec<u8> {
         },
         LIMITS,
     )
-    .unwrap_or_else(|_| api::trap("enrollment response"))
 }
 pub(super) fn encode_request(method: u64, value: &impl Serialize) -> Result<Vec<u8>, Error> {
     ic_wire::encode(

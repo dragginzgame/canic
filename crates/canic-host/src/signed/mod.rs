@@ -10,10 +10,10 @@ use crate::{
 };
 use base64::{Engine, prelude::BASE64_STANDARD};
 use ic_platform::{
-    agent::{Agent, CallResponse, EffectiveId, RequestId, RequestStatusResponse, to_request_id},
-    ic_protocol::{self, EnvelopeContent},
+    agent::{Agent, CallResponse, EffectiveId, RequestId, RequestStatusResponse},
     principal::Principal,
 };
+use ic_platform_ingress::ingress::{self, Content};
 use serde::{Deserialize, Serialize};
 use std::{
     path::Path,
@@ -98,11 +98,13 @@ fn admit(bytes: &[u8], plan: &Authority<'_>, call: &Call<'_>) -> Result<Attempt>
     // Raw-argument signing can leave the unsigned routing hint at aaaaa-aa.
     // Route management calls only to the effective principal derived from the
     // approved plan/result; the signed method and exact argument bytes bind it.
-    let content =
-        ic_protocol::decode_call_content_strict(&envelope, store::MAX_RECORD).map_err(supplier)?;
-    let id = to_request_id(&content).map_err(supplier)?;
+    let content = ingress::decode_envelope(&envelope, store::MAX_RECORD)
+        .map_err(supplier)?
+        .value
+        .content;
+    let id = RequestId::new(&content.request_id().map_err(supplier)?);
     let expiry = match content {
-        EnvelopeContent::Call {
+        Content::Call {
             sender,
             canister_id,
             method_name,
@@ -131,10 +133,9 @@ fn admit(bytes: &[u8], plan: &Authority<'_>, call: &Call<'_>) -> Result<Attempt>
     let status_check = BASE64_STANDARD
         .decode(&message.request.status_check)
         .map_err(supplier)?;
-    let status =
-        ic_protocol::decode_envelope(&status_check, store::MAX_RECORD).map_err(supplier)?;
-    match status.content.as_ref() {
-        EnvelopeContent::ReadState {
+    let status = ingress::decode_envelope(&status_check, store::MAX_RECORD).map_err(supplier)?;
+    match &status.value.content {
+        Content::ReadState {
             sender,
             ingress_expiry,
             paths,
@@ -142,8 +143,8 @@ fn admit(bytes: &[u8], plan: &Authority<'_>, call: &Call<'_>) -> Result<Attempt>
             && *ingress_expiry == expiry
             && paths.len() == 1
             && paths[0].len() == 2
-            && paths[0][0].as_ref() == b"request_status"
-            && paths[0][1].as_ref() == id.as_slice() => {}
+            && paths[0][0].as_slice() == b"request_status"
+            && paths[0][1].as_slice() == id.as_slice() => {}
         _ => {
             return Err(Error::Invalid(
                 "signed status check does not bind the same attempt".into(),

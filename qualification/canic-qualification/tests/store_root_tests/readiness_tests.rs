@@ -77,8 +77,8 @@ async fn handover(root: &Client<'_>, supplier: &Client<'_>) {
 #[tokio::test(flavor = "current_thread")]
 async fn store_custody_observation_preserves_all_owners_without_root_copies() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = fixture(pic).await;
     let first = supplier.publish_bytes("one", b"\0asm\x01\0\0\0").await;
     let second = store::Manifest {
@@ -322,14 +322,19 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
     assert_eq!(read(&root, input).await.unwrap(), expected);
     assert_eq!(pic.get_stable_memory(root.id).await, root_bytes);
     assert_eq!(pic.get_stable_memory(supplier.id).await, store_bytes);
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn store_readiness_follows_handover_without_reserving_an_application_slot() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = fixture(pic).await;
     let expected: store::Info = supplier
         .update("observe_info", store::INFO, &(), store::LIMITS)
@@ -406,13 +411,19 @@ async fn store_readiness_follows_handover_without_reserving_an_application_slot(
     assert_eq!(custody(&root).await, before);
     assert_eq!(pic.get_stable_memory(root.id).await, root_bytes);
     assert_eq!(pic.get_stable_memory(supplier.id).await, store_bytes);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn store_readiness_refusals_never_turn_missing_authority_into_ready() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = fixture(pic).await;
     handover(&root, &supplier).await;
     let root_bytes = pic.get_stable_memory(root.id).await;
@@ -516,4 +527,10 @@ async fn store_readiness_refusals_never_turn_missing_authority_into_ready() {
     assert_eq!(observe(&root, &input).await.unwrap().releases, 0);
     assert_eq!(pic.get_stable_memory(root.id).await, root_bytes);
     assert_eq!(pic.get_stable_memory(supplier.id).await, store_bytes);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

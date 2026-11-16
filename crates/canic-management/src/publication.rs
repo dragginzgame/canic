@@ -1,9 +1,9 @@
 //! One controller-authorized Store call. No catalog, payload persistence or retry owner.
 use canic_management_protocol::publication::{Command, Error, MAX_WINDOW_NS, Reply, Request};
+use ic_platform::principal::Principal;
 use ic_platform_runtime::{
-    Principal,
-    call::{Call, WaitPolicy},
-    cdk::api,
+    call::{Call, Wait},
+    system as api,
 };
 use ic_wasm_store_protocol as store;
 
@@ -75,11 +75,19 @@ pub async fn execute(input: Request) -> Reply {
     };
     // No await separates controller/deadline admission from this one dispatch.
     let bytes = bytes.map_err(|_| Error::Invalid)?;
-    let reply = Call::new(target, method, WaitPolicy::Bounded { timeout_seconds: 5 })
-        .take_raw_args(bytes)
-        .execute()
-        .await
-        .map_err(|_| Error::Uncertain)?;
+    let reply = Call::new(
+        ic_platform_types::Principal::from_slice((target).as_slice()),
+        method,
+        Wait::Bounded { seconds: 5 },
+    )
+    .owned_args(bytes)
+    .execute()
+    .await
+    .map_err(|_| Error::Uncertain)?;
+    let reply = match reply.into_parts().0 {
+        ic_platform_runtime::call::Outcome::Reply(bytes) => bytes,
+        _ => return Err(Error::Uncertain),
+    };
     let reply: Result<store::Status, store::Error> = ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
@@ -99,15 +107,12 @@ pub async fn execute(input: Request) -> Reply {
 }
 
 fn admit(store: &str, expires_at_ns: u64) -> Result<Principal, Error> {
-    assert!(
-        api::is_controller(&api::msg_caller()),
-        "controller required"
-    );
+    assert!(api::is_controller(&api::caller()), "controller required");
     let target = Principal::from_text(store).map_err(|_| Error::Invalid)?;
     if target.to_text() != store
         || target == Principal::anonymous()
         || target == Principal::management_canister()
-        || target == api::canister_self()
+        || target == Principal::from_slice(api::canister_self().as_slice())
     {
         return Err(Error::Invalid);
     }
@@ -148,7 +153,7 @@ pub async fn remove(
     };
     // A stalled Store may retain this call indefinitely; the caller stays blocked.
     let reply: Result<store::Manifest, store::Error> =
-        store_call(target, method, id, &input.manifest, WaitPolicy::Unbounded).await?;
+        store_call(target, method, id, &input.manifest, Wait::Unbounded).await?;
     let removed = reply.map_err(Error::Store)?;
     if removed != input.manifest {
         return Err(Error::Uncertain);
@@ -171,7 +176,7 @@ pub async fn observe_info(
         "observe_info",
         store::INFO,
         &(),
-        WaitPolicy::Bounded { timeout_seconds: 5 },
+        Wait::Bounded { seconds: 5 },
     )
     .await
 }
@@ -194,7 +199,7 @@ pub async fn observe_custody(
         "observe_custody",
         store::CUSTODY,
         &input.release,
-        WaitPolicy::Bounded { timeout_seconds: 5 },
+        Wait::Bounded { seconds: 5 },
     )
     .await?;
     let custody = reply.map_err(Error::Store)?;
@@ -224,7 +229,7 @@ pub async fn admission(
         "admission",
         store::ADMISSION,
         &input.command,
-        WaitPolicy::Bounded { timeout_seconds: 5 },
+        Wait::Bounded { seconds: 5 },
     )
     .await?;
     reply.map_err(Error::Store)
@@ -236,7 +241,7 @@ async fn store_call<T: serde::Serialize, R: serde::de::DeserializeOwned>(
     method: &'static str,
     id: u64,
     input: &T,
-    wait: WaitPolicy,
+    wait: Wait,
 ) -> Result<R, Error> {
     let bytes = ic_wire::encode(
         input,
@@ -247,11 +252,19 @@ async fn store_call<T: serde::Serialize, R: serde::de::DeserializeOwned>(
         store::LIMITS,
     )
     .map_err(|_| Error::Invalid)?;
-    let reply = Call::new(target, method, wait)
-        .take_raw_args(bytes)
-        .execute()
-        .await
-        .map_err(|_| Error::Uncertain)?;
+    let reply = Call::new(
+        ic_platform_types::Principal::from_slice((target).as_slice()),
+        method,
+        wait,
+    )
+    .owned_args(bytes)
+    .execute()
+    .await
+    .map_err(|_| Error::Uncertain)?;
+    let reply = match reply.into_parts().0 {
+        ic_platform_runtime::call::Outcome::Reply(bytes) => bytes,
+        _ => return Err(Error::Uncertain),
+    };
     ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {

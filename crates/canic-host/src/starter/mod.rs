@@ -147,7 +147,7 @@ fn files(
         "dependencies":{"canic":{"workspace":true},"ic-wire":{"workspace":true}},
         "target":{
             "cfg(any())":{"dev-dependencies":{"toko-tooling":{"workspace":true}}},
-            "cfg(target_family = \"wasm\")":{"dependencies":{"ic-platform-runtime":{"workspace":true,"features":["cdk"]}}}
+            "cfg(target_family = \"wasm\")":{"dependencies":{"ic-platform-runtime":{"workspace":true,"features":["entrypoint-macros"]}}}
         },
         "lints":{"workspace":true},
     });

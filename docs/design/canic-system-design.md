@@ -290,15 +290,50 @@ custody requires the qualified transition below, not an automatic migration.
 Keep Canic's CLI, Host, management contracts and runtime orchestration in one product workspace. CLI depends on Host, Host depends on passive Contracts, and the application runtime depends on Contracts and selected suppliers. Host communicates with deployed roles through contracts without depending on their runtime implementations. Add role crates when the topology requires separately compiled artifacts, and adapter crates with their first complete consumer journey.
 
 Platform replacement adoption is a cohort migration, not a version-only update.
-Published Platform 0.34.3 and Runtime 0.23.9 currently omit Canic's existing
-native Agent/signed-envelope and management/ledger interfaces, Ed25519/raw-rand
-facade, and complete CDK lifecycle surface. Canic's pinned Auth, Blob, Storage
-and Timers also retain the earlier Types/Runtime identities. Preserve the
-qualified 0.33.7 / 0.22.5 / 0.20.4 cohort until the replacement contracts and
-affected supplier boundaries can be qualified together; do not introduce a
-second linked executor or direct external IC dependencies to force adoption.
-See Platform's [consumer requirements](https://github.com/dragginzgame/ic-platform/blob/3f972ec7d43e2fcd087f69bae90767f6bc405c85/docs/requirements.md)
-and [Runtime scope](https://github.com/dragginzgame/ic-platform/blob/3f972ec7d43e2fcd087f69bae90767f6bc405c85/crates/ic-platform-runtime/README.md).
+Canic 0.218 selects Runtime 0.23.14 and Timers 0.46.0 with one exact executor guard.
+Product and qualification actors use Platform's explicit query, update and lifecycle
+macros; codecs remain with Wire. Runtime's completion owns the matching refund.
+Submission refusal, remote rejection and unknown outcome remain distinct; no new
+retry authority follows a timeout or callback failure. Storage 0.74.1's retained
+Runtime 0.22.5 edge supplies raw stable-memory access only, not another executor.
+Generated IC exports require a scoped unsafe-code expectation supplied by Platform;
+workspace policy denies handwritten unsafe code while permitting those exports.
+
+Runtime's supported upgrade boundary requires the target to be stopped, with
+callbacks drained. Host direct/Root upgrades retain stop, stopped-status, install
+and start attempts through the existing signer and original deadline. An unfinished
+legacy Host install without stop evidence stays blocked. Managed child upgrades
+retain stop/start issued phases in their existing journal; reconciliation observes
+them and never reissues them. Blob retains its separate explicit admission drain
+and activation contract. No endpoint mount implicitly stops or activates anything.
+The new phase variants append to the existing codec; older readers refuse pending
+new phases instead of discarding them. Older pending uploads cannot install on a
+running child and remain blocked if their retained path lacks a stopped target.
+Installation evidence retains the observed version before restart. Restart advances
+the version, as can subsequent application execution; its observation checks the
+approved code/controller and a later version, without rewriting the installation
+evidence. See the [IC version contract](https://docs.internetcomputer.org/references/ic-interface-spec/canister-interface/#canister-version).
+
+Blob 0.102.0, Store 0.3.0 and committed Auth and DB inputs use Types 0.21.2 at
+actual runtime public boundaries. Optional adapters stay optional. The installed
+qualification paths retain predecessor data, interruption and rollback obligations.
+The original artifact probe now schedules through Timers rather than a separate
+heartbeat execution path; issued effects remain blocked after uncertain callbacks.
+
+Full Platform replacement remains tracked by [Canic #14](https://github.com/dragginzgame/canic/issues/14).
+Host still consumes Platform 0.33.7's Agent and passive management/ledger codecs.
+Runtime management DTOs also retain that passive codec boundary with explicit
+Principal byte conversion. Platform 0.34.8 now supports externally signed status
+requests, and Protocol 0.2.7 supplies management/ledger codecs; migrating these
+remaining consumers must preserve exact ICP-signed bytes, request IDs, custody,
+original deadlines and stored formats. Do not retain a parallel dispatcher or
+introduce Canic-owned transport/codec replacements. Keys stay with ICP CLI.
+
+Testkit 0.107.3 owns bounded server/instance lifecycle. Its exact Protocol 0.2.6
+pin prevents selecting 0.2.7 in qualification; the compatible product lock selects
+0.2.7. Revisit that qualification hold when Testkit supports the newer Protocol.
+Auth signing/verification selects Platform 0.34.9 Ed25519 and bounded Protocol
+raw-rand framing without renewing enrollment or issuer reservations.
 
 The maintainer selected extraction of the versioned Wasm Store into
 `dragginzgame/ic-wasm-store`, a separate repository and product/qualification
@@ -838,7 +873,10 @@ extend a captured session lease. Clock disagreement may cause conservative
 refusal; it never permits extending a deadline or assuming synchronized clocks.
 
 After either owner upgrades, lost volatile state remains closed; reenrollment or
-an exact configuration retry cannot reconstruct it. Root's existing management
+an exact configuration retry cannot reconstruct it. A surviving receiver cannot
+instantly detect Root loss: its last accepted snapshot remains usable only within
+its original freshness window. Failed refreshes extend neither that window nor
+captured session leases. Root's existing management
 journal still reopens independently. Its generic maintenance receipt does not
 prove Auth preservation or readiness. Host's optional fleet `auth` declaration
 now compiles into v5 configure/revoke plans in the existing journal. The exact
@@ -859,6 +897,30 @@ not production login readiness. The [Auth guide](../demos/auth.md) links the
 separate admitted enrollment, issuance and profile/browser work. Stable Auth
 integration awaits its supplier contract; do not add an interim Storage adapter.
 
+### Optional issuer transport
+
+`canic::auth::issuer` adds bounded passive Issue, Renew, Lookup and Status contracts
+under the existing optional `auth` feature. `mount_auth_issuer_endpoints!` captures
+actual caller/time, applies pre-copy guards and delegates to application handlers.
+Issue and renewal may await; reconciliation is synchronous and lookup-only. Wire
+owns the codec and Auth owns canonical signed bytes. No issuer engine, signer,
+store or lifecycle starts when mounting. The original account and the retained
+browser binding are different authorities; request account fields select a login
+but never authenticate it. Complete results retain their original deadlines;
+missing, pruned, pending and unknown evidence remain unresolved.
+
+The installed witness supplies a bounded volatile `MemoryIssuer`, one explicit
+application account independent of its controller, and a public local Ed25519
+test key. It reserves before real IC entropy, rechecks application permission on
+the callback, and commits local signing/result publication with reply encoding.
+A callback trap preserves the earlier unresolved reservation. Renewal uses Auth's
+retained login and sequence owner; no Canic operation database is introduced.
+This implements a narrow portion of [#10](https://github.com/dragginzgame/canic/issues/10).
+Production key custody, Root-governed issuer lifecycle, external signing effects,
+certified publication and browser integration remain unqualified. In particular,
+the pinned supplier exposes account revocation but no browser-authenticated issuer
+logout contract; do not pass a browser principal as the account to bypass that gap.
+
 ### Embedded Blob composition witness
 
 The first optional adapter is a module in `canic`, behind its `blob` feature.
@@ -877,14 +939,20 @@ encoding failure traps, preserving atomic rollback of both owners. Blob retains
 all reference/accounting and maintenance decisions. Closed admission survives
 upgrade until activation of the exact attempt; readiness never activates it.
 
-Current Host and Root effects use empty installation/upgrade arguments and have
-no approved Blob drain/stop/reopen/activation sequence. That is an explicit
-integration gap, not permission to weaken the supplier's hooks. The local witness
-uses explicit installation and method-bound unit upgrade arguments with a trusted
-controller and a separately configured manager. Fleet lifecycle support must
-extend the existing approval/effect owners and bind those arguments and the exact
-maintenance attempt before this app can join the managed fleet journey. No parallel
-Blob deployment CLI or recovery engine is selected. See the
+Configured Store-backed children bind bounded application arguments into their
+existing plan, Store pin and Root artifact lease. Versioned complete custody
+includes those arguments; older observations refuse rather than omit them.
+Root's optional `blob` feature extends the existing child upgrade owner with
+the exact supplier attempt and drain/stop/start/activation request commitments.
+The actual Root principal must be the child's explicitly configured Blob manager.
+Drain inspection commits before stop; stopped execution precedes ordinary upgrade;
+verified code/version precedes start and replicated closed-state inspection.
+`fleet activate OPERATION` separately authorizes the original target, deadline
+and supplier attempt. Neither timers nor readiness activate admission. Callback
+loss retains issued custody; reconciliation observes without replacement effects.
+Host Root/Store preservation remains refused until its complete custody contract
+includes these application records. No parallel Blob deployment engine, supplier
+admission ledger or generic workflow engine is selected. See the
 [current witness and input evidence](../demos/blob.md). This does not close the
 provider journey, certificate, settlement or sustained-history gates.
 
@@ -893,6 +961,21 @@ provider journey, certificate, settlement or sustained-history gates.
 Domain transitions consume logical bounded values. Endpoint adapters select and invoke supplier-owned codecs, and call adapters own a single attempt. Application operations own retry and consistency. A decode failure after a remote mutation must not trigger a second request using another codec.
 
 ### Endpoint ownership and actor composition
+
+The optional `db` adapter now mounts application-owned typed inspection, query
+and write handlers through Platform hooks. Applications supply passive Wire
+contracts and synchronous caller authorization before request decoding; IC DB
+remains an independent library with its own durable codec and fluent semantics.
+The adapter owns no schema, query planner, authority store or lifecycle hooks.
+`make db-test` qualifies the actual library through sparse pages, batch refusal,
+reply rollback, upgrades and maintenance closure. Application CLI access and a
+shared inspection protocol remain future integration work.
+
+This follows the existing Blob mount pattern and retains IcyDB
+`6d421e3601a3d71e42af23ea5fe6b168cb6ef2ac`
+`crates/icydb/src/guards/mod.rs` authorization-before-request behavior. It does
+not import generated SQL endpoints or session execution into Canic. The earlier
+IC DB integration experiment is promoted here, not a second endpoint owner.
 
 Accepted direction, 2026-11-14: Canic owns endpoint composition for explicitly
 mounted actor capabilities. Platform owns generic IC entrypoint macros. Wire

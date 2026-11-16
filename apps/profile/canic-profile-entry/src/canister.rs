@@ -3,10 +3,11 @@ use canic_profile_protocol::{
     WorkerCheck,
 };
 use ic_platform_runtime::{
-    Principal,
-    call::{Call, WaitPolicy},
-    cdk::{self, api},
+    self as runtime,
+    call::{Call, Wait},
+    system as api,
 };
+use ic_platform_types::Principal;
 use ic_storage::{
     AllocationGrants, DefaultMemoryImpl, GenericAllocationPolicy, MemoryAuthority, MemoryRequest,
     MemoryRuntime, SealedDeclarationSnapshot, StableKey, StorageConfig,
@@ -93,12 +94,12 @@ fn open(fresh: bool) {
     });
 }
 
-#[cdk::init]
-fn init() {
+#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+fn init((): ()) {
     open(true);
 }
-#[cdk::post_upgrade]
-fn post_upgrade() {
+#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+fn post_upgrade((): ()) {
     open(false);
 }
 
@@ -115,59 +116,44 @@ fn valid_worker(text: &str) -> Result<Principal, RouteError> {
 }
 
 fn bounded() -> Result<(), String> {
-    if ic_platform_runtime::ic0::msg_arg_data_size() > LIMITS.bytes {
+    if ic_platform_runtime::system::argument_size() > LIMITS.bytes {
         return Err("entry frame too large".into());
     }
     Ok(())
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-fn decode_route(bytes: Vec<u8>) {
+fn decode_route(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     ic_wire::decode::<()>(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: ROUTE,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .unwrap_or_else(|_| api::trap("invalid route request"));
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-fn decode_bind(bytes: Vec<u8>) -> Route {
+fn decode_bind(bytes: &[u8]) -> Result<Route, ic_wire::Error> {
     ic_wire::decode(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: BIND,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .unwrap_or_else(|_| api::trap("invalid bind request"))
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-fn decode_check(bytes: Vec<u8>) {
+fn decode_check(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     ic_wire::decode::<()>(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: CHECK,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .unwrap_or_else(|_| api::trap("invalid check request"));
 }
 #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
-fn encode_route(value: RouteResult) -> Vec<u8> {
+fn encode_route(value: RouteResult) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -176,10 +162,9 @@ fn encode_route(value: RouteResult) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded route")
 }
 #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
-fn encode_bind(value: RouteResult) -> Vec<u8> {
+fn encode_bind(value: RouteResult) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -188,10 +173,9 @@ fn encode_bind(value: RouteResult) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded route")
 }
 #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
-fn encode_check(value: CheckResult) -> Vec<u8> {
+fn encode_check(value: CheckResult) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -200,15 +184,10 @@ fn encode_check(value: CheckResult) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded check")
 }
 
-#[cdk::query(
-    guard = "bounded",
-    decode_with = "decode_route",
-    encode_with = "encode_route"
-)]
-fn route() -> RouteResult {
+#[runtime::query(runtime = runtime, guard = bounded, decode = decode_route, max_bytes = 4096, on_error = endpoint_error, name = "route", encode = encode_route)]
+fn route((): ()) -> RouteResult {
     STATE
         .with_borrow(|state| {
             state
@@ -224,22 +203,14 @@ fn route() -> RouteResult {
 }
 
 // Clients use replicated resolution before sending private data to a discovered worker.
-#[cdk::update(
-    guard = "bounded",
-    decode_with = "decode_route",
-    encode_with = "encode_route"
-)]
-fn resolve() -> RouteResult {
-    route()
+#[runtime::update(runtime = runtime, guard = bounded, decode = decode_route, max_bytes = 4096, on_error = endpoint_error, name = "resolve", encode = encode_route)]
+fn resolve((): ()) -> RouteResult {
+    route(())
 }
 
-#[cdk::update(
-    guard = "bounded",
-    decode_with = "decode_bind",
-    encode_with = "encode_bind"
-)]
+#[runtime::update(runtime = runtime, guard = bounded, decode = decode_bind, max_bytes = 4096, on_error = endpoint_error, name = "bind", encode = encode_bind)]
 fn bind(input: Route) -> RouteResult {
-    if !api::is_controller(&api::msg_caller()) {
+    if !api::is_controller(&api::caller()) {
         return Err(RouteError::Forbidden);
     }
     valid_worker(&input.worker)?;
@@ -256,16 +227,12 @@ fn bind(input: Route) -> RouteResult {
     })
 }
 
-#[cdk::update(
-    guard = "bounded",
-    decode_with = "decode_check",
-    encode_with = "encode_check"
-)]
-async fn check() -> CheckResult {
-    if !api::is_controller(&api::msg_caller()) {
+#[runtime::update(runtime = runtime, guard = bounded, decode = decode_check, max_bytes = 4096, on_error = endpoint_error, name = "check", encode = encode_check)]
+async fn check((): ()) -> CheckResult {
+    if !api::is_controller(&api::caller()) {
         return Err(RouteError::Forbidden);
     }
-    let route = route()?;
+    let route = route(())?;
     let target = valid_worker(&route.worker)?;
     let request = ic_wire::encode(
         &(),
@@ -284,12 +251,16 @@ async fn check() -> CheckResult {
         state.checking = true;
         Ok(())
     })?;
-    let response = Call::new(target, "probe", WaitPolicy::Bounded { timeout_seconds: 5 })
-        .take_raw_args(request)
+    let response = Call::new(target, "probe", Wait::Bounded { seconds: 5 })
+        .owned_args(request)
         .execute()
         .await;
     STATE.with_borrow_mut(|state| state.as_mut().expect("initialized entry").checking = false);
     let response = response.map_err(|_| RouteError::Unavailable)?;
+    let response = match response.into_parts().0 {
+        ic_platform_runtime::call::Outcome::Reply(bytes) => bytes,
+        _ => return Err(RouteError::Unavailable),
+    };
     let info: Info = ic_wire::decode(
         &response,
         ic_wire::Encoding::Frame {
@@ -304,4 +275,16 @@ async fn check() -> CheckResult {
         return Err(RouteError::InvalidReply);
     }
     Ok(WorkerCheck { route, info })
+}
+
+fn endpoint_error(error: impl std::fmt::Debug) -> ! {
+    ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
+}
+
+fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
+    Ok(())
+}
+
+fn lifecycle_decode(_bytes: &[u8]) -> Result<(), std::convert::Infallible> {
+    Ok(())
 }

@@ -3,10 +3,8 @@ use canic_profile_protocol::{
     BIND, CHECK, CheckResult, GET, INFO, Info, LIMITS, MAX_PROFILES, PUT, ProfileError,
     ProfileResult, Put, ROUTE, Route, RouteError, RouteResult,
 };
-use ic_testkit::{
-    pic::{PocketIcStartupConfig, server_assets},
-    pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc},
-};
+use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc};
+use ic_testkit::server::{Limits, PreparedServer, Server};
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
@@ -381,7 +379,7 @@ async fn entry_journey(
     );
 
     // Same executable upgrade exercises strict reopen of the entry's separate stable cell.
-    pic.upgrade_canister(entry, std::fs::read(&wasm).unwrap(), vec![], None)
+    canic_qualification::upgrade_stopped(pic, entry, std::fs::read(&wasm).unwrap(), vec![], None)
         .await
         .unwrap();
     let reply = pic
@@ -494,32 +492,37 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
     assert_ne!(original, candidate);
     let facts = canic_qualification::footprint::measure(&original).unwrap();
     assert!(facts.raw_bytes <= 1_500_000);
-    let binary = server_assets::check(&canic_qualification::server_directory())
+    let binary = PreparedServer::check(&canic_qualification::server_directory())
         .expect("run make qualification-setup");
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: binary,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(300)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        binary,
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(300),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let url = owner.instance_mut().make_live(None).await.to_string();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let url = owner.client_mut().make_live(None).await.to_string();
     let root_key: String = owner
-        .instance()
+        .client()
         .root_key()
         .await
         .unwrap()
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    let routing = owner.instance().create_canister().await.to_text();
+    let routing = owner.client().create_canister().await.to_text();
     let root = artifacts.join(format!("journey-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
     let icp = repo.join(".tools/ic/bin/icp");
@@ -557,7 +560,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
     );
     let worker_text = receipt["canister"].as_str().unwrap();
     let worker = CanisterId::from_text(worker_text).unwrap();
-    let pic = owner.instance();
+    let pic = owner.client();
     let initial = pic.canister_status(worker, None).await.unwrap();
     let stable_before = u64::try_from(&initial.memory_metrics.stable_memory_size.0).unwrap();
     assert!(stable_before <= 32 * 65_536);
@@ -694,7 +697,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
 
     let fault = std::fs::read(artifacts.join("reject.wasm")).unwrap();
     assert!(
-        pic.upgrade_canister(worker, fault, vec![], None)
+        canic_qualification::upgrade_stopped(pic, worker, fault, vec![], None)
             .await
             .is_err()
     );
@@ -841,5 +844,10 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
     println!(
         "profile: Canic deploy/client/read/write/limits/failed-upgrade/v2 preservation/no-signer replay/fleet passed"
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

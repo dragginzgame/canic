@@ -68,6 +68,8 @@ fn replanning_refuses_conflicting_and_duplicate_reservations_in_either_directory
         };
         if kind == 2 {
             first.action = PlanAction::CreateChild(ManagedOwner {
+                arguments: None,
+                blob_attempt: None,
                 root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
                 root_module: "01".repeat(32),
                 execute_at_ns: 100,

@@ -89,8 +89,8 @@ async fn retained_artifact_installs_without_operator_and_survives_maintenance() 
         (Fault::AfterResultWrite, false),
         (Fault::None, true),
     ] {
-        let owner = support::instance(&binary).await;
-        let pic = owner.instance();
+        let (mut server, owner) = support::instance(&binary).await;
+        let pic = owner.client();
         let executor = pic
             .create_canister_with_settings(Some(operator), None)
             .await;
@@ -411,6 +411,11 @@ async fn retained_artifact_installs_without_operator_and_survives_maintenance() 
             pic.stored_chunks(executor, Some(operator)).await.unwrap(),
             vec![approval.sha256.to_vec()]
         );
-        owner.close().await;
+        assert_eq!(
+            owner.close(std::time::Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        let stopped = server.stop().unwrap();
+        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
     }
 }

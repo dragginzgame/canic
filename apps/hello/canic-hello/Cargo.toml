@@ -16,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 greeting-v2 = []
 
 [target.'cfg(target_family = "wasm")'.dependencies]
-ic-platform-runtime = { workspace = true, features = ["cdk"] }
+ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
 
 [dependencies]
 canic.workspace = true

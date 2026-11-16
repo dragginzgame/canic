@@ -1,10 +1,7 @@
 //! Explain retained Root evidence without granting recovery or replay authority.
 use canic_host::{ManagementStatus, StatusDetail};
 use canic_management_protocol::{Failure, Phase, stored::PinState, upgrade};
-use ic_host_text::{
-    escape::terminal_text,
-    table::{self, Alignment, Options},
-};
+use ic_host_text::{Alignment, escape, plain_table};
 use std::fmt::Write as _;
 
 pub(super) fn render(
@@ -13,7 +10,7 @@ pub(super) fn render(
     receipt: bool,
 ) -> String {
     let mut output = String::new();
-    let upload = if let StatusDetail::StoredChild { delivery } = detail {
+    let upload = if let StatusDetail::StoredChild { delivery, .. } = detail {
         match delivery {
             None => output.push_str(
                 "Store delivery: no retained observation; pin and cache preparation are unknown.\n",
@@ -65,7 +62,33 @@ pub(super) fn render(
         )
         .expect("String write");
         failure(&mut output, status.failure.as_ref());
-        let guidance = upgrade_continuation(status, receipt).1;
+        let guidance = if let StatusDetail::StoredChild {
+            maintenance: Some(maintenance),
+            ..
+        } = detail
+        {
+            writeln!(
+                output,
+                "Blob attempt {}: {:?}",
+                maintenance.attempt, maintenance.phase
+            )
+            .expect("String write");
+            output.push_str(&dispatches(
+                &["drain", "stop", "start", "activate"],
+                &maintenance.requests.map(|r| u8::from(r.is_some())),
+                &maintenance.requests,
+            ));
+            if maintenance.phase
+                == canic_management_protocol::application::MaintenancePhase::Inspected
+                && !receipt
+            {
+                "review the reopened state, then explicitly authorize fleet activate for this original operation. Admission remains closed."
+            } else {
+                upgrade_continuation(status, receipt).1
+            }
+        } else {
+            upgrade_continuation(status, receipt).1
+        };
         writeln!(output, "Next: {guidance}").expect("String write");
     } else if let ManagementStatus::Creation(status) = value {
         writeln!(output, "Retained Root phase: {:?}", status.phase).expect("String write");
@@ -77,7 +100,7 @@ pub(super) fn render(
         writeln!(
             output,
             "Retained child: {}\nCreation refund: {}",
-            terminal_text(status.worker.as_deref().unwrap_or("unknown")),
+            escape(status.worker.as_deref().unwrap_or("unknown")),
             status
                 .creation_refund
                 .map_or_else(|| "unknown".into(), |cycles| format!("{cycles} cycles"))
@@ -120,7 +143,10 @@ pub(crate) fn upgrade_continuation(
     match status.phase {
         upgrade::Phase::Expired => ("status", EXPIRED),
         upgrade::Phase::ReserveBlocked => ("status", RESERVE),
-        upgrade::Phase::UploadIssued | upgrade::Phase::InstallIssued => (
+        upgrade::Phase::UploadIssued
+        | upgrade::Phase::InstallIssued
+        | upgrade::Phase::StopIssued
+        | upgrade::Phase::StartIssued => (
             "reconcile",
             "request Root recovery for this original operation; original effect limits still apply. Reconciliation does not authorize another installation.",
         ),
@@ -175,14 +201,10 @@ fn dispatches<const N: usize>(
         .collect();
     format!(
         "\n{}\n",
-        table::render(
+        plain_table(
             &["ROOT EFFECT", "DISPATCHES", "REQUEST HASH"],
             &rows,
-            &[Alignment::Left, Alignment::Right, Alignment::Left],
-            Options {
-                column_gap: 2,
-                header_separator: true
-            }
+            &[Alignment::Left, Alignment::Right, Alignment::Left]
         )
     )
 }

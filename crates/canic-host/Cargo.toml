@@ -22,6 +22,7 @@ ic-host-fs.workspace = true
 ic-host-process.workspace = true
 ic-host-text.workspace = true
 ic-platform = { workspace = true, features = ["agent", "ic-protocol", "management-canister-types", "cycles-ledger-types", "icp-ledger-types", "icrc-ledger-types"] }
+ic-platform-ingress.workspace = true
 ic-topology.workspace = true
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true
@@ -32,6 +33,9 @@ thiserror.workspace = true
 tokio.workspace = true
 toml.workspace = true
 url.workspace = true
+
+[dev-dependencies]
+serde_cbor.workspace = true
 
 [lints]
 workspace = true

@@ -9,10 +9,8 @@ use canic_management_protocol::{
 use ic_platform::management_canister_types::{
     CanisterIdRecord, CanisterStatusResult, CanisterStatusType,
 };
-use ic_platform_runtime::{
-    Principal,
-    call::{Call, WaitPolicy},
-};
+use ic_platform::principal::Principal;
+use ic_platform_runtime::call::{Call, Wait};
 use ic_wasm_store_protocol as store;
 mod installation;
 mod preservation;
@@ -48,7 +46,7 @@ fn binding(state: &State, approval: &Approval) -> bool {
     target.to_text() == approval.store
         && target != Principal::anonymous()
         && target != Principal::management_canister()
-        && target != api::canister_self()
+        && target != Principal::from_slice(api::canister_self().as_slice())
         && approval.previous_module != [0; 32]
         && approval.module_hash != [0; 32]
         && approval.previous_module != approval.module_hash
@@ -155,10 +153,10 @@ pub fn observe_attempt(approval: &Approval) -> Option<Status> {
 /// # Panics
 /// Traps for noncontrollers, uninitialized storage or failed durable writes.
 pub fn stage(approval: Approval) -> Result<Status, Refusal> {
-    let operator = api::msg_caller();
+    let operator = api::caller();
     assert!(api::is_controller(&operator), "controller required");
     // Reopen requires a captured authenticated operator; reject before retaining unusable custody.
-    if operator == Principal::anonymous() {
+    if operator == ic_platform_types::Principal::anonymous() {
         return Err(Refusal::Binding);
     }
     if let Some(old) = observe_attempt(&approval) {
@@ -226,13 +224,10 @@ fn selected(approval: &Approval) -> Status {
     assert_eq!(&value.approval, approval, "maintenance approval mismatch");
     assert_eq!(
         value.operator,
-        api::msg_caller().to_text(),
+        api::caller().to_text(),
         "original operator required"
     );
-    assert!(
-        api::is_controller(&api::msg_caller()),
-        "controller required"
-    );
+    assert!(api::is_controller(&api::caller()), "controller required");
     value
 }
 fn change(approval: &Approval, expected: Phase, update: impl FnOnce(&mut Status)) {
@@ -251,14 +246,17 @@ fn dispatch(record: &Status) -> Result<(), Failure> {
     let current = observe().expect("retained maintenance");
     if current.approval != record.approval
         || current.phase != record.phase
-        || !api::is_controller(&Principal::from_text(&record.operator).expect("retained operator"))
+        || !api::is_controller(
+            &ic_platform_types::Principal::from_text(&record.operator).expect("retained operator"),
+        )
     {
         return Err(Failure::Uncertain);
     }
     if api::time() > record.approval.expires_at_ns {
         return Err(Failure::Mismatch);
     }
-    if api::canister_liquid_cycle_balance() < u128::from(canic_management_protocol::RESERVE_CYCLES)
+    if ic_platform_runtime::raw::liquid_cycle_balance()
+        < u128::from(canic_management_protocol::RESERVE_CYCLES)
     {
         return Err(Failure::Uncertain);
     }
@@ -287,7 +285,7 @@ async fn inspect_module(
     let value: CanisterStatusResult =
         decoder::decode_one(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
     if value.module_hash.as_deref() != Some(module.as_slice())
-        || value.settings.controllers != [api::canister_self()]
+        || value.settings.controllers != [Principal::from_slice(api::canister_self().as_slice())]
     {
         return Err(Failure::Mismatch);
     }
@@ -314,14 +312,15 @@ async fn admission(
 ) -> Result<(), Failure> {
     let bytes = admission_frame(&command);
     let reply = Call::new(
-        target(approval),
+        ic_platform_types::Principal::from_slice((target(approval)).as_slice()),
         "admission",
-        WaitPolicy::Bounded { timeout_seconds: 5 },
+        Wait::Bounded { seconds: 5 },
     )
-    .take_raw_args(bytes)
+    .owned_args(bytes)
     .execute()
     .await
-    .map_err(super::failure)?;
+    .map_err(super::failure)
+    .and_then(super::response)?;
     let result: Result<Option<store::Admission>, store::Error> = ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
@@ -333,7 +332,9 @@ async fn admission(
     .map_err(|_| Failure::InvalidReply)?;
     let expected = store::Admission {
         attempt: approval.attempt.clone(),
-        owner: api::canister_self().as_slice().to_vec(),
+        owner: Principal::from_slice(api::canister_self().as_slice())
+            .as_slice()
+            .to_vec(),
         closed,
     };
     if result != Ok(Some(expected)) {

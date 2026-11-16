@@ -1,9 +1,7 @@
 //! Exercise the shipped CLI process, with PocketIC confined to its own graph.
 
-use ic_testkit::{
-    pic::{PocketIcStartupConfig, server_assets},
-    pocket_ic::{CanisterId, PocketIcBuilder},
-};
+use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder};
+use ic_testkit::server::{Limits, PreparedServer, Server};
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
@@ -47,32 +45,37 @@ async fn deploy_call_resume_and_upgrade() {
         .nth(2)
         .unwrap()
         .to_path_buf();
-    let binary = server_assets::check(&canic_qualification::server_directory())
+    let binary = PreparedServer::check(&canic_qualification::server_directory())
         .expect("run make qualification-setup");
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: binary,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(300)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        binary,
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(300),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let url = owner.instance_mut().make_live(None).await.to_string();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let url = owner.client_mut().make_live(None).await.to_string();
     let root_key: String = owner
-        .instance()
+        .client()
         .root_key()
         .await
         .unwrap()
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect();
-    let routing_canister = owner.instance().create_canister().await.to_text();
+    let routing_canister = owner.client().create_canister().await.to_text();
     let root = repo
         .join("target/journey-tests")
         .join(format!("journey-{}", std::process::id()));
@@ -188,9 +191,9 @@ async fn deploy_call_resume_and_upgrade() {
     );
     assert_eq!(configured["operations"][0]["canister"], target);
     let target_id = CanisterId::from_text(target).unwrap();
-    let subnet = owner.instance().get_subnet(target_id).await.unwrap();
+    let subnet = owner.client().get_subnet(target_id).await.unwrap();
     let count = owner
-        .instance()
+        .client()
         .get_subnet_metrics(subnet)
         .await
         .unwrap()
@@ -217,7 +220,7 @@ async fn deploy_call_resume_and_upgrade() {
     );
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -266,7 +269,7 @@ async fn deploy_call_resume_and_upgrade() {
     assert_eq!(std::fs::read(&signed_path).unwrap(), original_signed);
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -315,6 +318,13 @@ async fn deploy_call_resume_and_upgrade() {
     );
     assert_eq!(upgraded["canister"], target);
     assert_ne!(upgraded["module_hash"], receipt["module_hash"]);
+    let upgrade_status = cli(&root, &["fleet", "status", upgrade_id]);
+    let runtime_attempts = ["stop", "stopped", "start"].map(|step| {
+        assert_eq!(upgrade_status["effects"][step], "reply_retained");
+        let path = root.join(upgrade_id).join(step).join("signed.json");
+        let signed = std::fs::read(&path).unwrap();
+        (path, signed)
+    });
     assert_eq!(
         cli(&root, &["fleet", "call", upgrade_id, "--name", "team"])["greeting"],
         "Hello again from Canic, team!"
@@ -354,9 +364,12 @@ async fn deploy_call_resume_and_upgrade() {
         upgraded
     );
     assert_eq!(std::fs::read(&signed_path).unwrap(), original_signed);
+    for (path, signed) in runtime_attempts {
+        assert_eq!(std::fs::read(path).unwrap(), signed);
+    }
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -421,7 +434,7 @@ async fn deploy_call_resume_and_upgrade() {
     assert_eq!(std::fs::read(&signed_path).unwrap(), original_signed);
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -431,7 +444,12 @@ async fn deploy_call_resume_and_upgrade() {
     println!(
         "deployed {target}, retained replay and receipt recovery passed, upgraded same canister to greeting v2"
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
     let offline = cli(&root, &["fleet", "show"]);
     assert_eq!(offline["canisters"].as_array().unwrap().len(), 2);
     assert!(offline["canisters"].as_array().unwrap().iter().all(

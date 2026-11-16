@@ -2,10 +2,8 @@
 mod fleet_growth;
 mod publication_removal_tests;
 mod store_upgrade_tests;
-use ic_testkit::{
-    pic::{PocketIcStartupConfig, server_assets},
-    pocket_ic::{CanisterId, CanisterSettings, PocketIcBuilder},
-};
+use ic_testkit::pocket_ic::{CanisterId, CanisterSettings, PocketIcBuilder};
+use ic_testkit::server::{Limits, PreparedServer, Server};
 use serde_json::{Value, json};
 use std::{
     os::unix::fs::PermissionsExt,
@@ -201,24 +199,29 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         .unwrap()
         .to_owned();
     let assets = PathBuf::from(std::env::var_os("CANIC_PUBLICATION_ARTIFACTS").unwrap());
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(300)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(300),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let routing = owner.instance().create_canister().await;
-    let subnet = owner.instance().get_subnet(routing).await.unwrap();
-    let url = owner.instance_mut().make_live(None).await.to_string();
-    let root_key = hex(&owner.instance().root_key().await.unwrap());
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let routing = owner.client().create_canister().await;
+    let subnet = owner.client().get_subnet(routing).await.unwrap();
+    let url = owner.client_mut().make_live(None).await.to_string();
+    let root_key = hex(&owner.client().root_key().await.unwrap());
     let dir = repo
         .join("target/publication")
         .join(format!("fleet-{}", std::process::id()));
@@ -302,7 +305,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     }
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -320,7 +323,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
             .unwrap(),
     )
     .unwrap();
-    let root_before = owner.instance().get_stable_memory(root).await;
+    let root_before = owner.client().get_stable_memory(root).await;
     let signed = std::fs::read(path.join("store/handover/signed.json")).unwrap();
     std::fs::remove_file(path.join("store/handover/reply.bin")).unwrap();
     // Reconcile may complete Store, but cannot admit either application child.
@@ -346,7 +349,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
             .iter()
             .all(|c| c["state"].is_null())
     );
-    assert_eq!(owner.instance().get_stable_memory(root).await, root_before);
+    assert_eq!(owner.client().get_stable_memory(root).await, root_before);
     assert_eq!(
         std::fs::read(path.join("store/handover/signed.json")).unwrap(),
         signed
@@ -434,13 +437,13 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     );
     assert_eq!(admitted["children"].as_array().unwrap().len(), 2);
     let store = CanisterId::from_text(admitted["store"]["canister"].as_str().unwrap()).unwrap();
-    assert_eq!(owner.instance().get_subnet(store).await, Some(subnet));
-    owner.instance().stop_progress().await;
-    owner.instance().advance_time(Duration::from_secs(65)).await;
+    assert_eq!(owner.client().get_subnet(store).await, Some(subnet));
+    owner.client().stop_progress().await;
+    owner.client().advance_time(Duration::from_secs(65)).await;
     for _ in 0..70 {
-        owner.instance().tick().await;
+        owner.client().tick().await;
     }
-    owner.instance().auto_progress().await;
+    owner.client().auto_progress().await;
     let complete = apply();
     for child in complete["children"].as_array().unwrap() {
         assert_eq!(child["outcome"]["controller"], root.to_text(), "{complete}");
@@ -448,7 +451,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     }
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -484,19 +487,14 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
             config["apps"]["demo"]["canisters"]["root"]["wasm"] =
                 json!(assets.join("root-maintenance.wasm"));
             std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
-            maintain_root(&dir, owner.instance(), root, store, &signer).await;
+            maintain_root(&dir, owner.client(), root, store, &signer).await;
         }
         let mut next = app_bytes.clone();
         *next.last_mut().unwrap() = marker;
         std::fs::write(dir.join(format!("{name}.wasm")), &next).unwrap();
-        let dispatch = (owner
-            .instance()
-            .get_time()
-            .await
-            .as_nanos_since_unix_epoch()
-            / 1_000_000_000
-            + 30)
-            .to_string();
+        let dispatch =
+            (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000 + 30)
+                .to_string();
         let plan = || {
             cli(
                 &dir,
@@ -570,16 +568,16 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         );
         apply_operation(upgrade_id);
         owner
-            .instance()
+            .client()
             .clear_chunk_store(store, Some(root))
             .await
             .unwrap();
-        owner.instance().stop_progress().await;
-        owner.instance().advance_time(Duration::from_secs(35)).await;
+        owner.client().stop_progress().await;
+        owner.client().advance_time(Duration::from_secs(35)).await;
         for _ in 0..70 {
-            owner.instance().tick().await;
+            owner.client().tick().await;
         }
-        owner.instance().auto_progress().await;
+        owner.client().auto_progress().await;
         let completed = apply_operation(upgrade_id);
         assert_eq!(
             completed["module_hash"],
@@ -607,8 +605,14 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
             .success()
     );
     std::fs::write(proof, bytes).unwrap();
-    observe_stopped_store(&dir, owner.instance(), root, store, &assets).await;
-    owner.instance_mut().stop_live().await;
+    observe_stopped_store(&dir, owner.client(), root, store, &assets).await;
+    owner.client_mut().stop_live().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 async fn observe_stopped_store(
@@ -757,33 +761,38 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
         .unwrap()
         .to_owned();
     let assets = PathBuf::from(std::env::var_os("CANIC_PUBLICATION_ARTIFACTS").unwrap());
-    let binary = server_assets::check(&canic_qualification::server_directory())
+    let binary = PreparedServer::check(&canic_qualification::server_directory())
         .expect("make qualification-setup");
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: binary,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(300)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        binary,
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(300),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
     let operator = CanisterId::anonymous();
     let root_bytes = std::fs::read(assets.join("root.wasm")).unwrap();
     let store_bytes = std::fs::read(assets.join("store.wasm")).unwrap();
-    let pic = owner.instance();
+    let pic = owner.client();
     let root = pic.create_canister().await;
     pic.add_cycles(root, 10_000_000_000_000).await;
     pic.install_canister(root, root_bytes.clone(), vec![], Some(operator))
         .await;
     let root_before = pic.get_stable_memory(root).await;
-    let url = owner.instance_mut().make_live(None).await.to_string();
-    let root_key = hex(&owner.instance().root_key().await.unwrap());
+    let url = owner.client_mut().make_live(None).await.to_string();
+    let root_key = hex(&owner.client().root_key().await.unwrap());
     let dir = repo
         .join("target/publication")
         .join(format!("run-{}", std::process::id()));
@@ -835,7 +844,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     assert_eq!(bootstrap["plan"]["store_root"]["canister"], root.to_text());
     // Changed Root control must refuse before any creation signing.
     owner
-        .instance()
+        .client()
         .update_canister_settings(
             root,
             Some(operator),
@@ -864,7 +873,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     );
     assert!(!bootstrap_dir.join("create/signed.json").exists());
     owner
-        .instance()
+        .client()
         .update_canister_settings(
             root,
             Some(operator),
@@ -875,9 +884,9 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
         )
         .await
         .unwrap();
-    let subnet = owner.instance().get_subnet(root).await.unwrap();
+    let subnet = owner.client().get_subnet(root).await.unwrap();
     let before_creation = owner
-        .instance()
+        .client()
         .get_subnet_metrics(subnet)
         .await
         .unwrap()
@@ -921,7 +930,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     );
     let store_text = completed_store["canister"].as_str().unwrap();
     let store = CanisterId::from_text(store_text).unwrap();
-    assert_eq!(owner.instance().get_subnet(store).await, Some(subnet));
+    assert_eq!(owner.client().get_subnet(store).await, Some(subnet));
     assert_eq!(
         serde_json::from_slice::<String>(
             &std::fs::read(bootstrap_dir.join("store-subnet.json")).unwrap()
@@ -932,7 +941,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     assert_eq!(completed_store["controller"], root.to_text());
     assert_eq!(completed_store["module_hash"], store_hash);
     let after_creation = owner
-        .instance()
+        .client()
         .get_subnet_metrics(subnet)
         .await
         .unwrap()
@@ -955,7 +964,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     );
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -969,7 +978,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
         );
     }
     assert!(!bootstrap_dir.join("handover/reply.bin").exists());
-    assert_eq!(owner.instance().get_stable_memory(root).await, root_before);
+    assert_eq!(owner.client().get_stable_memory(root).await, root_before);
     let readiness_path = bootstrap_dir.join("store-observe/0/reply.bin");
     let readiness = std::fs::read(&readiness_path).unwrap();
     std::fs::remove_file(&readiness_path).unwrap();
@@ -1034,7 +1043,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     let signed = std::fs::read(&prepare).unwrap();
     assert!(retained.join("publication/prepare/reply.bin").exists());
     assert!(!retained.join("publication/chunk-0/signed.json").exists());
-    let store_before = owner.instance().get_stable_memory(store).await;
+    let store_before = owner.client().get_stable_memory(store).await;
     let apply = |action: &str, operation: &str| {
         cli(
             &dir,
@@ -1059,10 +1068,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
             .unwrap()
             .is_empty()
     );
-    assert_eq!(
-        owner.instance().get_stable_memory(store).await,
-        store_before
-    );
+    assert_eq!(owner.client().get_stable_memory(store).await, store_before);
     let started = Instant::now();
     let completed = apply("apply", id);
     let cold_resume_ms = started.elapsed().as_millis();
@@ -1087,9 +1093,9 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     assert!(view["issues"].as_array().unwrap().is_empty());
     assert_eq!(view["canisters"].as_array().unwrap().len(), 2);
     assert_eq!(plan("v1", &store_hash)["operation"], id);
-    let published = owner.instance().get_stable_memory(store).await;
+    let published = owner.client().get_stable_memory(store).await;
     assert_eq!(apply("apply", id), completed);
-    assert_eq!(owner.instance().get_stable_memory(store).await, published);
+    assert_eq!(owner.client().get_stable_memory(store).await, published);
     // A new immutable label can reuse existing chunks; it gets no new chunk signatures.
     let started = Instant::now();
     let second = plan("v2", &store_hash);
@@ -1136,7 +1142,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
             .exists()
     );
     assert_eq!(apply("reconcile", id), completed);
-    assert_eq!(owner.instance().get_stable_memory(root).await, root_before);
+    assert_eq!(owner.client().get_stable_memory(root).await, root_before);
     let bad = plan("v3", &"00".repeat(32));
     let refused = run(
         &dir,
@@ -1199,7 +1205,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     );
     // A changed Store controller must fail before child admission is signed.
     owner
-        .instance()
+        .client()
         .update_canister_settings(
             store,
             Some(root),
@@ -1228,7 +1234,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     );
     assert!(!child_dir.join("stage/signed.json").exists());
     owner
-        .instance()
+        .client()
         .update_canister_settings(
             store,
             Some(operator),
@@ -1281,12 +1287,12 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
         .status
         .success()
     );
-    owner.instance().stop_progress().await;
-    owner.instance().advance_time(Duration::from_secs(65)).await;
+    owner.client().stop_progress().await;
+    owner.client().advance_time(Duration::from_secs(65)).await;
     for _ in 0..70 {
-        owner.instance().tick().await;
+        owner.client().tick().await;
     }
-    owner.instance().auto_progress().await;
+    owner.client().auto_progress().await;
     let created = apply("apply", child_id);
     let child = created["canister"].as_str().unwrap();
     assert_eq!(created["module_hash"], inspected["sha256"]);
@@ -1301,7 +1307,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     assert!(status["delivery"]["cache_deadline"].as_u64().is_some());
     let creation_delivery = status["delivery"].clone();
     let canister_count = owner
-        .instance()
+        .client()
         .get_subnet_metrics(subnet)
         .await
         .unwrap()
@@ -1309,7 +1315,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     assert_eq!(apply("apply", child_id), created);
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -1334,16 +1340,16 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     let admitted = apply("apply", upgrade_id);
     assert_eq!(admitted["upgrade"]["phase"], "Scheduled");
     owner
-        .instance()
+        .client()
         .clear_chunk_store(store, Some(root))
         .await
         .unwrap();
-    owner.instance().stop_progress().await;
-    owner.instance().advance_time(Duration::from_secs(65)).await;
+    owner.client().stop_progress().await;
+    owner.client().advance_time(Duration::from_secs(65)).await;
     for _ in 0..70 {
-        owner.instance().tick().await;
+        owner.client().tick().await;
     }
-    owner.instance().auto_progress().await;
+    owner.client().auto_progress().await;
     let upgraded = apply("apply", upgrade_id);
     assert_eq!(upgraded["canister"], child);
     let status = cli(&dir, &["fleet", "status", upgrade_id]);
@@ -1372,7 +1378,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     );
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -1388,5 +1394,11 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     )
     .unwrap();
     println!("Publication measurements: {}", measurements_path.display());
-    owner.instance_mut().stop_live().await;
+    owner.client_mut().stop_live().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

@@ -93,6 +93,8 @@ pub(super) fn root_operation(network: Network) -> FleetOperation {
             canister: "app".into(),
         }),
         Some(crate::ManagedOwner {
+            arguments: None,
+            blob_attempt: None,
             source: None,
             slot: None,
             root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),

@@ -1,11 +1,8 @@
 use super::{Call, admit};
 use crate::{Artifact, Error, Network, Plan, network::principal};
 use base64::{Engine, prelude::BASE64_STANDARD};
-use ic_platform::{
-    agent::Agent,
-    ic_protocol::{self, EnvelopeContent},
-};
-use std::borrow::Cow;
+use ic_platform::agent::{Agent, RequestId};
+use ic_platform_ingress::ingress::{self, Content};
 
 fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
     let time = crate::now().unwrap();
@@ -57,25 +54,26 @@ pub(crate) fn signed_fixture(plan: &Plan, call: &Call<'_>, expiry: u64) -> Vec<u
         .sign()
         .unwrap();
     {
-        let mut envelope = ic_protocol::decode_envelope(&update.signed_update, 4096).unwrap();
-        let EnvelopeContent::Call { ingress_expiry, .. } = envelope.content.to_mut() else {
+        let mut envelope = ingress::decode_envelope(&update.signed_update, 4096)
+            .unwrap()
+            .value;
+        let Content::Call { ingress_expiry, .. } = &mut envelope.content else {
             unreachable!()
         };
         *ingress_expiry = expiry;
         update.ingress_expiry = *ingress_expiry;
-        update.request_id = ic_platform::agent::to_request_id(envelope.content.as_ref()).unwrap();
-        update.signed_update = ic_protocol::encode_envelope(&envelope, 4096).unwrap();
+        update.request_id = RequestId::new(&envelope.content.request_id().unwrap());
+        update.signed_update = serde_cbor::to_vec(&envelope).unwrap();
     }
-    let mut status = ic_protocol::decode_envelope(&update.signed_update, 4096).unwrap();
-    status.content = Cow::Owned(EnvelopeContent::ReadState {
-        sender: update.sender,
+    let mut status = ingress::decode_envelope(&update.signed_update, 4096)
+        .unwrap()
+        .value;
+    status.content = Content::ReadState {
+        sender: update.sender.to_text().parse().unwrap(),
         ingress_expiry: update.ingress_expiry,
-        paths: vec![vec![
-            b"request_status".to_vec().into(),
-            update.request_id.to_vec().into(),
-        ]],
-    });
-    let status = ic_protocol::encode_envelope(&status, 4096).unwrap();
+        paths: vec![vec![b"request_status".to_vec(), update.request_id.to_vec()]],
+    };
+    let status = serde_cbor::to_vec(&status).unwrap();
     let message = serde_json::json!({"format":"icp-signed-message", "version":1,
         "request": {"type":"update", "envelope":BASE64_STANDARD.encode(&update.signed_update), "request_id":crate::hex(update.request_id.as_slice()), "status_check":BASE64_STANDARD.encode(&status)},
         "network":{"url":plan.network.url(),"root_key":plan.network.root()}, "destination":{"canister":call.effective.to_text()}});
@@ -165,6 +163,8 @@ async fn maintenance_observation_cannot_sign_another_root_or_effect() {
 async fn recovery_retains_exact_attempt_and_deadline_after_effect_expiry() {
     let (_, mut plan, _) = fixture();
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        arguments: None,
+        blob_attempt: None,
         source: None,
         slot: None,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
@@ -260,6 +260,58 @@ fn status_authority_must_bind_the_same_request() {
     ));
 }
 
+#[test]
+fn packet_admission_retains_bytes_and_refuses_unknown_signed_fields() {
+    let (bytes, plan, call) = fixture();
+    let original: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let admitted = admit(&bytes, &super::Authority::from(&plan), &call).unwrap();
+    for (field, retained) in [
+        ("envelope", admitted.envelope),
+        ("status_check", admitted.status_check),
+    ] {
+        let raw = BASE64_STANDARD
+            .decode(original["request"][field].as_str().unwrap())
+            .unwrap();
+        assert_eq!(
+            retained, raw,
+            "admission must retain original authentication bytes"
+        );
+        for at_content in [false, true] {
+            let mut value: serde_cbor::Value = serde_cbor::from_slice(&raw).unwrap();
+            let serde_cbor::Value::Map(ref mut envelope) = value else {
+                unreachable!()
+            };
+            let map = if at_content {
+                let serde_cbor::Value::Map(map) = envelope
+                    .get_mut(&serde_cbor::Value::Text("content".into()))
+                    .unwrap()
+                else {
+                    unreachable!()
+                };
+                map
+            } else {
+                envelope
+            };
+            map.insert(
+                serde_cbor::Value::Text("unapproved".into()),
+                serde_cbor::Value::Bool(true),
+            );
+            let mut changed = original.clone();
+            changed["request"][field] = BASE64_STANDARD
+                .encode(serde_cbor::to_vec(&value).unwrap())
+                .into();
+            assert!(
+                admit(
+                    &serde_json::to_vec(&changed).unwrap(),
+                    &super::Authority::from(&plan),
+                    &call
+                )
+                .is_err()
+            );
+        }
+    }
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn expired_uncertain_attempt_stays_retained_without_a_new_signature() {
     let (bytes, plan, call) = fixture_expiry(true);
@@ -297,6 +349,8 @@ async fn expired_uncertain_attempt_stays_retained_without_a_new_signature() {
 async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
     let (_, mut plan, mut call) = fixture_expiry(false);
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        arguments: None,
+        blob_attempt: None,
         source: None,
         slot: None,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
@@ -366,6 +420,8 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
 async fn scoped_observation_rejects_sibling_and_legacy_payloads_before_signing() {
     let (_, mut plan, _) = fixture();
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        arguments: None,
+        blob_attempt: None,
         source: None,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),

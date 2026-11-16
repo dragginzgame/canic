@@ -51,6 +51,16 @@ pub mod stored {
     };
 }
 
+/// Exact application lifecycle bindings, mounted explicitly by Root.
+#[cfg(target_arch = "wasm32")]
+pub mod application {
+    pub use crate::engine::application::{custody, reconcile, stage};
+    #[cfg(feature = "blob")]
+    pub use crate::engine::application::{reconcile_upgrade, stage_upgrade};
+    #[cfg(feature = "blob")]
+    pub use crate::engine::blob::activate;
+}
+
 /// Root-owned Store maintenance custody, mounted explicitly by Root.
 #[cfg(target_arch = "wasm32")]
 pub mod store_maintenance {

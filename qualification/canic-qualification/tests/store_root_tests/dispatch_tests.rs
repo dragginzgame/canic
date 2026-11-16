@@ -20,8 +20,8 @@ async fn stage_upgrade(
 #[tokio::test(flavor = "current_thread")]
 async fn elapsed_earliest_dispatch_creates_and_upgrades_without_renewing_expiry() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier, mut input, second) = fixture(pic, false).await;
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
     input.approval.execute_at_ns = now - 1_000_000_000;
@@ -104,13 +104,19 @@ async fn elapsed_earliest_dispatch_creates_and_upgrades_without_renewing_expiry(
         completed.children[0].upgrades[0]
     );
     assert_eq!(custody(&root).await, completed);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn future_dispatch_still_waits_and_expired_unstarted_work_does_not_create() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, _, mut input, _) = fixture(pic, false).await;
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
     input.approval.execute_at_ns = now + 60_000_000_000;
@@ -143,4 +149,10 @@ async fn future_dispatch_still_waits_and_expired_unstarted_work_does_not_create(
         management::Phase::Expired
     );
     assert_eq!(custody(&root).await, expired);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

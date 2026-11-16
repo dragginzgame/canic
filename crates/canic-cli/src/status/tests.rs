@@ -36,6 +36,7 @@ fn stored_delivery_keeps_pin_evidence_separate_from_current_cache_and_retry_auth
             delivery.state = state;
             delivery.cache_deadline = (state == PinState::Retained).then_some(123);
             let detail = StatusDetail::StoredChild {
+                maintenance: None,
                 delivery: Some(Box::new(delivery.clone())),
             };
             let before = serde_json::to_value(&detail).unwrap();
@@ -53,7 +54,14 @@ fn stored_delivery_keeps_pin_evidence_separate_from_current_cache_and_retry_auth
             assert_eq!(serde_json::to_value(&detail).unwrap(), before);
         }
     }
-    let unknown = management::render(None, &StatusDetail::StoredChild { delivery: None }, false);
+    let unknown = management::render(
+        None,
+        &StatusDetail::StoredChild {
+            delivery: None,
+            maintenance: None,
+        },
+        false,
+    );
     assert!(unknown.contains("pin and cache preparation are unknown"));
     assert!(!unknown.contains("Store pin:"));
     assert!(!management::render(None, &StatusDetail::Deployment {}, false).contains("Store"));

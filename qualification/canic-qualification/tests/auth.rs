@@ -1,5 +1,7 @@
 //! Actual Canic mounts with Auth's real volatile receiver and Platform signatures.
+mod auth_enrollment_tests;
 mod auth_host_tests;
+mod auth_issuer_tests;
 use canic_auth_witness::{
     KEY, LIMITS, OBSERVE, Observation, audience, enrollment,
     protocol::{
@@ -14,11 +16,9 @@ use ic_auth::{
     verification::{Ed25519Key, browser_principal},
 };
 use ic_auth_protocol_types::{DelegatedRoleGrant, PortableClaims, PortableMechanism, Principal};
-use ic_platform::ed25519::{Signer, SigningKey};
-use ic_testkit::{
-    pic::{PocketIcStartupConfig, server_assets},
-    pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc},
-};
+use ic_platform_crypto::ed25519::{Signer, SigningKey};
+use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc};
+use ic_testkit::server::{Instance, Limits, PreparedServer, Server};
 use sha2::{Digest, Sha256};
 use std::{path::PathBuf, time::Duration};
 
@@ -123,8 +123,28 @@ async fn snapshot(pic: &PocketIc, receiver: CanisterId) -> enrollment::Snapshot 
     .unwrap()
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
+struct Fixture {
+    server: Server,
+    owner: Instance,
+    root: CanisterId,
+    target: CanisterId,
+    installer: CanisterId,
+    root_wasm: Vec<u8>,
+    wasm: Vec<u8>,
+}
+
+impl Fixture {
+    async fn close(mut self) {
+        assert_eq!(
+            self.owner.close(Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        let stopped = self.server.stop().unwrap();
+        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
+    }
+}
+
+async fn fixture(cross_subnet: bool) -> Fixture {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
@@ -132,28 +152,39 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         .to_path_buf();
     let wasm = std::fs::read(repo.join("target/auth/receiver.wasm"))
         .expect("make auth-test builds witness");
-    let server = server_assets::check(&canic_qualification::server_directory())
+    let server = PreparedServer::check(&canic_qualification::server_directory())
         .expect("make qualification-setup");
-    let owner = PocketIcStartupConfig::Spawn {
-        server_binary: server,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(180)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(PocketIcBuilder::new().with_application_subnet())
-    .await
+    let builder = PocketIcBuilder::new().with_application_subnet();
+    let builder = if cross_subnet {
+        builder.with_application_subnet()
+    } else {
+        builder
+    };
+    let server = Server::start(
+        server,
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(180),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
+    )
     .unwrap();
-    let pic = owner.instance();
+    let owner = server
+        .instance(builder, Duration::from_secs(30))
+        .await
+        .unwrap();
+    let pic = owner.client();
+    let subnets = pic.topology().await.get_app_subnets();
     let installer = CanisterId::self_authenticating(b"auth-installation-authority");
     let root = pic
-        .create_canister_with_settings(Some(installer), None)
+        .create_canister_on_subnet(Some(installer), None, subnets[0])
         .await;
     let root_wasm = std::fs::read(repo.join("target/auth/root.wasm")).unwrap();
     pic.install_canister(root, root_wasm.clone(), vec![], Some(installer))
         .await;
     let target = pic
-        .create_canister_with_settings(Some(installer), None)
+        .create_canister_on_subnet(Some(installer), None, subnets[usize::from(cross_subnet)])
         .await;
     pic.install_canister(
         target,
@@ -162,11 +193,19 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         Some(installer),
     )
     .await;
-    let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    let (browser, input) = input(now);
-    let frame = EstablishSession::encode_request(&input).unwrap();
-    let outsider = CanisterId::self_authenticating(b"not-the-browser");
-    let grant = enrollment::Grant {
+    Fixture {
+        server,
+        owner,
+        root,
+        target,
+        installer,
+        root_wasm,
+        wasm,
+    }
+}
+
+fn grant(target: CanisterId, now: u64) -> enrollment::Grant {
+    enrollment::Grant {
         receiver: Principal::from_slice(target.as_slice()),
         audience: canic_auth_witness::protocol::model::AudienceId {
             canonical_network_id: [0x11; 32],
@@ -180,7 +219,26 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         },
         not_before_ns: now,
         expires_at_ns: now + 600 * SECOND,
-    };
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
+    let Fixture {
+        mut server,
+        owner,
+        root,
+        target,
+        installer,
+        root_wasm,
+        wasm,
+    } = fixture(false).await;
+    let pic = owner.client();
+    let now = pic.get_time().await.as_nanos_since_unix_epoch();
+    let (browser, input) = input(now);
+    let frame = EstablishSession::encode_request(&input).unwrap();
+    let outsider = CanisterId::self_authenticating(b"not-the-browser");
+    let grant = grant(target, now);
     let configure = enrollment_request(enrollment::CONFIGURE, &grant);
     assert!(
         pic.update_call(root, browser, "configure_auth", configure.clone())
@@ -509,7 +567,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         ReadSession::decode_response(&bytes).unwrap(),
         Err(SessionReadRefusal::AuthorityUnavailable)
     );
-    pic.upgrade_canister(root, root_wasm, vec![], Some(installer))
+    canic_qualification::upgrade_stopped(pic, root, root_wasm, vec![], Some(installer))
         .await
         .unwrap();
     let response = pic
@@ -522,7 +580,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     );
     assert!(!control(pic, target, installer, 1).await);
 
-    pic.upgrade_canister(target, wasm, vec![], Some(installer))
+    canic_qualification::upgrade_stopped(pic, target, wasm, vec![], Some(installer))
         .await
         .unwrap();
     assert!(!observe(pic, target).await.present);
@@ -546,4 +604,10 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         ReadSession::decode_response(&bytes).unwrap(),
         Err(SessionReadRefusal::Unavailable)
     );
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

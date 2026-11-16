@@ -7,6 +7,570 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Runtime/Timers 0.218 release qualification — 2026-11-16
+
+Product and qualification actors now consume Runtime/Macros/Guard 0.23.14 and
+Timers 0.46.0. Entrypoints use explicit supplier macros and Wire hooks; calls use
+the owned completion/refund contract. The artifact experiment uses one retained
+timer instead of its former heartbeat. Submission refusal and unknown outcomes
+retain uncertainty rather than inventing replacement authority.
+
+Reuse the legacy upgrade/lifecycle research at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, recorded under **First Root-owned child
+upgrade** and **Named upgrades preserve each child's history**. Immutable targets,
+failed-upgrade rollback and surviving effect custody remain requirements. The
+changed assumption is Runtime's explicit stopped/drained upgrade boundary. Extend
+the existing Host signer and managed-child journal with stop/start custody; do not
+port another operation catalogue. Installed stop/start callback-loss cases retain
+one installation, the original approval and both users' state through owner reopen.
+Host's real CLI journey retains its exact stop/status/start signatures when the
+installation reply is lost. A rejected installation leaves the child stopped;
+the fixture's explicit operator recovery is not automatic product retry authority.
+
+Select Platform 0.34.9, Types 0.21.2, Wire 0.24.3, Storage 0.74.1, Blob 0.102.0,
+Store/Protocol 0.3.0, Testkit 0.107.3 and Toko Tooling 0.44.11. Auth's committed
+input is `bfe2e548a997f10a876f01b4c72c4e5fec52c8d6`; DB's is
+`950f36807f8ffa7ebe4ca2cff6792fa2bbcbd03e`. The two Cargo lockfiles retain archive
+checksums. Cargo's official sparse index confirms current registry selections;
+the crates.io metadata API refused access, so it supplies no freshness evidence.
+Later Auth source `6d5c9704152cea05d6a095c8765fd74368c7d538` is now committed and
+is deferred to Canic #16/#17. Query's later checkpoint
+`ca8f66c202c053d686f1cab0ec1d159b778485d7` is deferred to the remaining Host/Topology
+migration in Canic #14. Neither requires another supplier release for this batch.
+
+Full Platform replacement remains open: Host's Agent and passive management/ledger
+codecs retain 0.33.7, with explicit principal-byte conversion at runtime codec
+boundaries. New Platform/Protocol APIs now exist; their consumer migration remains
+work, not an unavailable-contract claim. Product Protocol selects 0.2.7; Testkit's
+exact pin keeps qualification on 0.2.6. Storage's old Runtime edge is raw memory
+access only; each Wasm actor selects one 0.23.14 executor guard.
+
+The greeting probe is now 68,764 bytes, exceeding its old 64 KiB experiment bound;
+128 KiB remains within its existing frame/checkpoint limits. The manager measures
+1,571,628 bytes (1,098,250 code bytes, 1,921 functions, 18 stable pages). Its
+measurement helper now admits the existing product 1.9 MB direct-install ceiling.
+No application slot, Store quota or live deployment budget changes. Remove dead
+decoder/encoder error-label arguments from the management mount macro. A compile
+assertion ties each protocol guard to Platform's required literal physical ceiling.
+
+Release-gate logs are retained under `target/runtime-adoption/`. Historical opt-in
+legacy fixtures requiring external artifacts are not new qualification evidence.
+Remove the ignored single-upgrade-manager probe: inspection found it read a
+supplied predecessor but installed the current manager instead. Its historical
+migration claim is not usable evidence. Actual retained Root binaries in the
+normal predecessor/identity suites own the qualified migrations; this does not
+establish compatibility for arbitrary older managers.
+
+The first final gate passed through publication, then stopped before Blob because
+both lockfiles had independently changed from Platform 0.34.8 to uncached 0.34.9.
+The maintainer confirmed no active session and requested preserving 0.34.9.
+Inspect the published archive at supplier source
+`def09efbb7a19aa8ded742af9eb851c379ef062d`, SHA-256
+`87c8d12d9b6294a3319e54cbe0ade3ac937a240ba85e3e762b4b56999055f35b`.
+Its added bounded envelope encoder and shared native serializer do not replace
+Canic's retained signing/submission owner. Requalify the final locked selection;
+the interrupted run is not evidence for a complete 0.34.9 gate. Native Host, CLI,
+profile client and passive protocols explicitly retain `forbid(unsafe_code)`;
+only generated runtime exports need the workspace's scoped-expectation-compatible
+`deny` policy.
+
+The complete final `make ci` gate passes on the unchanged 0.34.9 lockfiles
+(`target/runtime-adoption/final-0349-ci.log`): strict lint/docs/format/tooling,
+effect/artifact boundaries, native Host/CLI, real deployment/profile/growth,
+Root (15 cases), endpoint composition, Store (31), publication (5), Blob (7),
+Auth (10 installed plus 3 native) and DB (1 installed, five upgrades). Three
+existing external-artifact opt-in cases remain ignored across Host/Root; they
+are not counted as proof. No mainnet effects or registry publication are involved.
+Final qualified Wasm SHA-256 values:
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Profile manager | `5b0e44d747d069f4ea5a1ea75c2072a0bf9713ddea617f3ae3f94f03a7f90b3d` |
+| Auth Root | `f4e805aa64e17e928e96a9511644e3f2485c0e836735d90b952f4b1e17fd1d75` |
+| Auth receiver | `e5882a9ad796c65c18794be3dbeb9303fb9c29c7d848562c119bcddf9bf7a8f9` |
+| Blob catalog | `d09d90ec23f95d8a01e2fa1828d95edc5b9bd02dae9b30f932d2c8b4b0c034b7` |
+| Blob candidate | `e6ba550a4d9dc74f6e6496c49865841229945f06bce7342bcc6283e288222676` |
+| DB normal | `9dbebf0a4d44c0b15e554feb655921e1b77c77eaad3dbfa3de32530f3ccbbe1d` |
+| DB fault witness | `74f459c760106c2152977b7a314ceb359adac42fcfd1d1db398261123a709dca` |
+
+## Canic #15: explicit simulator ownership — 2026-11-16
+
+Adopt registry Testkit 0.107.3, source
+`3c3fd63a6c16f4f1c38eef7984d211791022ba37`, archive SHA-256
+`f1abdecdc13e767e8f5f7f83f2c19e48a414d6a7eea2e2ffdbfe95222c56d6c2`.
+The actual published `managed-server` contract now supplies the missing ownership
+boundary. Remove `ic-testkit-lifecycle` 0.106.0 from both harnesses and the
+qualification catalog/lock; its old Host Artifacts/FS/Process selections disappear.
+Use supplier `Server` and `Instance` directly, preserving each fixture's lifetime
+and upstream client/subnet/gateway choices. Tests explicitly attempt deletion
+before stopping the server. Supplier fallback termination retains abandonment;
+it is not described as successful remote deletion. No compatibility facade,
+copied process implementation or application lifecycle owner is added.
+
+Explicit `make qualification-setup` uses the authenticated supplier asset selection
+and shared tooling downloader, then supplier bounded decompression/publication.
+The new prepared directory is `target/qualification/server/prepared`; existing
+old artifacts remain untouched. Offline tests only verify it. Initial setup and
+offline reuse pass. Four consumer lifecycle cases pass: missing/corrupt asset
+refusal, startup deadline with joined bounded evidence, independent instances and
+deletion-before-stop, and abandonment/final-owner teardown. Listener closure is
+observed independently; deletion completion remains an attempt.
+
+All ten installed Auth cases pass (9.76s), including actual CLI/ICP gateway calls
+and held-reply ordering. The DB installed case passes (4.55s), preserving its
+five upgrades, state, permission and rollback assertions. The shared creation
+harness passes all five interruption scenarios (20.98s). Three native enrollment
+cases also pass. All maintained entrypoints compile under strict Clippy, affected
+Rustdoc passes, and formatting, snapshot/pins, ShellCheck and locked/offline
+metadata pass. Logs are under `target/testkit-adoption/`.
+Auth Root/receiver SHA-256 values are
+`809423a474c77035e99b1bf96cb373a7abd83127c388547a8a6e7e87aacaab4c` and
+`48f8fd78ee307aa61fb94992999645d35989df8c16d1b54e213142075a182b6c`.
+
+Both locks now select Protocol 0.2.6; published Testkit resolves
+[Tooling #7](https://github.com/dragginzgame/ic-tooling/issues/7).
+[Canic #14](https://github.com/dragginzgame/canic/issues/14) remains broader work:
+Timers 0.46.0 now supplies Runtime 0.23.14 compatibility, but Canic's actual
+endpoint/state migration and external-signer/ledger contracts are not completed.
+[Canic #16](https://github.com/dragginzgame/canic/issues/16) and
+[Canic #17](https://github.com/dragginzgame/canic/issues/17) still need the Auth
+browser-revocation contract currently uncommitted beyond inspected HEAD
+`bfe2e548a997f10a876f01b4c72c4e5fec52c8d6`. No sibling edits, publication,
+deployment or push is performed.
+
+## Platform 0.34.7 and Tooling 0.44.11 adoption — 2026-11-16
+
+Both workspaces select registry Platform 0.34.7 for Host ingress admission and
+Auth signing/verification. Product selects Protocol 0.2.6; qualification retains
+0.2.5 because Testkit 0.107.2 pins it exactly. Raising the shared minimum caused
+Cargo resolution to refuse before compilation; retain the valid 0.2.5 minimum
+and record the supplying correction in
+[Tooling #7](https://github.com/dragginzgame/ic-tooling/issues/7).
+
+Platform and Protocol source is `a813d4ea5378515984a547a9f4e9d37f2124cf14`.
+Archive SHA-256 values are respectively
+`479e4899fe08d50c582e6b5b57668ed5cdcc3e0f75b81fde40ffb3ed2b14c093` and
+`758e0b8455b2ab340a4503f211357b7725f52a55a2c8c209ee2f01b122763b7e`.
+Tooling 0.44.11 is pinned in both catalogs/locks and installed through its
+authenticated preview/exporter: 60 files, archive
+`7d16b815ae322ae3f88580ee6af1611bdafde08b77592cd886bfa0eece0f1be8`.
+Only the baseline changes in the selected payload; executable tooling and CI
+wiring are unchanged. This refresh does not qualify hosted failure-artifact upload.
+
+Ten Host signed-attempt cases, three native enrollment cases and all ten installed
+Auth cases pass (13.84s installed). The sandbox initially refused PocketIC's local
+server bind; the explicit localhost-enabled rerun passes. Affected Host/Auth
+native/Wasm Clippy and Rustdoc, both locked/offline metadata graphs, formatting,
+snapshot agreement and pin checks pass. Logs are under `target/platform-adoption/`.
+Installed Root SHA-256 is
+`809423a474c77035e99b1bf96cb373a7abd83127c388547a8a6e7e87aacaab4c`;
+receiver SHA-256 is
+`b96bc8d32ab17df0a7f64617c31d0a184d6566bd63d8324382cc2e924f4a94b5`.
+
+[Canic #14](https://github.com/dragginzgame/canic/issues/14) remains open. New
+signed transport requires a local Ed25519 key to observe requests, whereas Canic
+retains ICP CLI's externally signed read-state envelope. Added the exact missing
+contract to [Platform #17](https://github.com/dragginzgame/ic-platform/issues/17);
+do not export keys or add a local transport. Management/ledger codecs remain
+with [Platform #20](https://github.com/dragginzgame/ic-platform/issues/20).
+Runtime 0.23.14 still conflicts with Timers 0.45.12's 0.22.5 executor guard in the
+isolated admission probe. Old Host 0.33.7, Runtime/Macros 0.22.5, Types 0.20.4,
+pinned Auth crypto, Topology's Git Platform 0.34.0/Types 0.21.0 and Storage's old
+raw-runtime selections remain explicit. No sibling edits, copied supplier code,
+guard bypass, new compatibility adapter or delivery is introduced.
+
+## Canic #14: entropy protocol cutover — 2026-11-16
+
+Recheck current published Platform 0.34.6, Runtime 0.23.13, Testkit 0.107.2,
+Timers 0.45.12 and Storage 0.74.1. No new publication resolves the recorded
+runtime or server-ownership gaps. Read the suppliers' current requirement and
+simulator-ownership contracts; pending sibling source remains unmodified.
+
+Migrate the available `raw_rand` boundary in Canic enrollment and the installed
+issuer to registry Protocol 0.2.5. Its archive is
+`93ed6052f78c99bf45bcf1ffdd11bd6eb4de4463dbe425a7b63e093b8f7a0ed2`, from
+`9dfdc0083fa5d6e56da7b90c04c20de4b2d3cc9f`. Remove both direct legacy Platform
+declarations used solely for entropy framing. Six request bytes and 42 response
+bytes are explicit caller budgets. Preserve the actual management call, original
+reservation/deadline, nonzero application policy and callback rollback; the
+supplier supplies no readiness, retry or seed owner. Prior enrollment and issuer
+legacy research below still applies to these unchanged authority contracts.
+
+Both locks resolve the published protocol. The three native enrollment tests and
+all ten installed Auth cases pass (13.59s), exercising actual IC-produced replies,
+entropy expiry and issuance rollback. Affected Wasm Clippy passes after replacing
+an unnecessary encode panic with the existing unavailable error. Logs are under
+`target/auth/platform-protocol-adoption.log` and
+`target/platform-adoption/raw-rand-clippy.log`.
+
+#14 still needs the missing signed transport/management/ledger contracts and a
+compatible runtime cohort. #15 still needs a supplier-owned prepared-server and
+bounded lifecycle capability. These cannot be completed by aliases, copied
+implementations or an old external launcher. The maintainer restricted source
+changes to Canic and requested upstream issues. Filed
+[Platform #20](https://github.com/dragginzgame/ic-platform/issues/20) for management
+and ledger codecs and [Tooling #6](https://github.com/dragginzgame/ic-tooling/issues/6)
+for prepared assets and bounded server lifecycle. Canic #14 links the existing
+Platform transport/status, Scheduling and Storage trackers rather than duplicating
+their work; Canic #15 links Tooling #6. Both consumer issues remain open. Existing
+unrelated work is preserved; no sibling source changes or delivery are performed.
+
+## Platform ingress, Testkit held replies and Auth ordering: 2026-11-16
+
+Adopt authenticated Toko Tooling 0.44.9 in both workspaces and the 60-file
+snapshot (archive `bdfd5bc761f55ede02e82f8af36ca82415696209b3ff45e8f080e82cab85c418`).
+Inventory covers products, profile packages, qualification and explicit native
+preparation. No sibling checkout is modified or used as an uncommitted input.
+
+Platform 0.34.6, source `9dfdc0083fa5d6e56da7b90c04c20de4b2d3cc9f`, archive
+`0759aec97b24f85cc16c042c3aa388955e84bd79e11703197fe0c60049db1b25`, now owns Host's
+call/status envelope admission through `ingress-packets`, plus the Auth witness's
+Ed25519 signer/verifier. Remove the old signed-envelope decoder use; keep the
+original bytes, request identity and approval deadline without normalization or
+replacement signing. Unknown call, status and outer envelope fields refuse.
+Test-only CBOR encoding constructs malformed inputs; no production codec is copied.
+
+This is partial Platform adoption. Host still requires 0.33.7 Agent, controller
+metadata and management/ledger codecs. Runtime/Macros 0.22.5 and Types 0.20.4 remain
+in products and Wasm witnesses: a fresh 0.23.13 resolution fails against Timers
+0.45.12's exact old executor guard; Storage 0.74.1 also consumes that runtime.
+Pinned Auth retains old crypto, and Topology's exact revision retains Git Platform
+0.34.0/Types 0.21.0. The independent new capability uses Types 0.21.2. No guard or
+identity boundary is bypassed. [#14](https://github.com/dragginzgame/canic/issues/14)
+owns completing this inventory and its consumer proofs.
+
+Testkit 0.107.2, source `74006cadd6501895959c6a7641a8f01f33cc47ff`, archive
+`6d0ad701e379df81e149511b0d6bbb810648770ec777a4eb88fd7e87e4ee2883`, owns all simulator
+client imports and Auth's optional held replies (Protocol 0.2.5/Types 0.21.2).
+Only prepared assets and managed-server custody retain 0.106.0 through the explicit
+`ic-testkit-lifecycle` dependency in the two native harnesses and setup example.
+The replacement has no equivalent, and the supplier's external-server recipe
+still uses the old launcher. Preserve bounded startup and cleanup instead of
+copying lifecycle code or silently using upstream auto-discovery. This is partial
+adoption; [#15](https://github.com/dragginzgame/canic/issues/15) owns the remainder.
+
+Extend [Auth #9](https://github.com/dragginzgame/canic/issues/9) with two installed
+receivers and their actual Roots. An installer-only fixture barrier pauses after
+the genuine authenticated response and before publication; Testkit releases their
+continuations in reverse order. One grant is revoked and one active. Receiver,
+challenge, original deadline and metadata stay isolated, with no application write.
+The barrier supplies no authority data. Reuse the legacy enrollment/late-outcome
+research at `fa92d886ef9beee824de3ec900832722fef85bd2` below. No production Auth
+state machine or retry mechanism is added.
+
+The four enrollment cases pass (13.75s); all ten affected installed Auth cases
+then pass (13.86s), including actual CLI/signer custody and issuer rollback. Ten
+native signed-attempt tests pass, including unchanged bytes and unknown-field
+refusal. A repeated native run exhausted stale test-directory name collisions;
+retain the old evidence at `target/host-tests-before-platform-0346` and rerun with
+fresh fixture directories, without changing production allocation policy.
+All maintained qualification entrypoints and the DB installed caller compile.
+Cargo now declares its 13 intended test entrypoints explicitly, avoiding accidental
+standalone compilation of five helper modules. Affected Host/CLI and harness
+Clippy, Wasm witness Clippy, Rustdoc and snapshot/pin/format checks pass.
+
+Root Wasm SHA-256: `66981b5c8fc295b69b4a2946b333cca4621e78fb5f4f224708340d99397ddfd8`.
+Auth witness: `91caa793eb8de3d1406200fd998e49bf66c2862b7d3b470e5d1452d974a4b73b`.
+Logs are in `target/platform-adoption/` and `target/auth/adoption-*.log`.
+Same-receiver expired/replaced response ordering remains native-only: Testkit
+forbids time jumps while held, and production correctly refuses overlap before
+expiry. #9 remains open; do not invent authenticated markers or a production
+bypass to close it. No browser, mainnet effects, release or push are claimed.
+
+## Blob fleet lifecycle and supplier adoption: 2026-11-16
+
+Complete the selected fresh-provisioning and maintenance scope in #12/#13 through
+the existing Host plan/signer, separate Store and Root child effect owner.
+Version-six plans retain bounded exact application bytes. CUA5 reuses the existing
+artifact lease for those bytes and the supplier attempt's effect commitments;
+legacy observations refuse incomplete custody. Root's optional `blob` feature
+adds drain/stop/start/activation around its existing install owner, not a supplier
+ledger or second scheduler. `fleet activate` is separate authorization under the
+original operation. The [Blob guide](../demos/blob.md#fleet-provisioning-and-maintenance)
+owns commands, current limits and ownership.
+
+Reuse the legacy endpoint/lifecycle/refusal research at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` recorded in the original Blob section
+below. Preserve captured caller identity, one Storage bootstrap, explicit local
+lifecycle and trapping rollback; replace legacy transport/role machinery with
+this rewrite's existing exact approval and effect custody. No supplier files changed.
+
+Select registry Blob 0.101.0, archive checksum
+`3c11d4f6c376bca6e3641b6b42bdc3ba1dab206d5ecd263f7179ed08a8685d1a`, source
+`7a9f723421b4b0a2f2a6fc64cbcdf2b8643bd4d4`. The source-file map hashes to
+`284d87ffba6e0a1f19b926424456fb1e7ebd50efbf11b09cc208bb921e69d4f3`.
+Both locks and before/after receipts agree. The sibling's dirty Runtime migration
+is not consumed. Installed consumers share Wire 0.24.2, Storage 0.74.1,
+Types 0.20.4 and Runtime 0.22.5. The retained 0.100.6 binary is documented in
+[fixture provenance](../../qualification/canic-qualification/fixtures/README.md).
+
+Seven installed cases pass (28.90s): original composition/rollback/refusal cases,
+populated predecessor reopening, and the real CLI/Root/Store lifecycle. The fleet
+witness separately loses drain, stop, installation, start and activation callbacks,
+reopens Root while preserving its custody, and resumes with new CLI processes.
+It preserves two owners, shared references and an unresolved declaration; wrong
+authority, changed inputs, malformed activation and stale activation refuse.
+The final focused run also loses Host admission evidence before child completion
+and checks changed planning input refuses before signing. Its final CLI bootstrap
+run passes in 31.88s: even Root is created and installed through normal plan/apply,
+rather than preinstalled by the simulator. The existing profile Store fleet's
+child/owner preservation regression also passes (87.99s).
+
+The updated default Root is 1,572,989 bytes and the Blob fault-injection Root is
+1,767,053 bytes, exceeding Host's former 1.5 MB direct-install ceiling. Raise that
+ceiling to 1,900,000 bytes. A native regression encodes the largest allowed install
+request, verifies at least 64 KiB remains below the
+[2 MiB ingress limit](https://docs.internetcomputer.org/references/resource-limits/),
+decodes the exact bytes and refuses an oversized plan. Both installed bootstrap
+paths pass. This is a finite direct-install budget, not automatic chunking or a
+change to the independent worker-footprint, inline-child or Store limits.
+
+Selected SHA-256 artifact identities:
+
+| Installed artifact | SHA-256 |
+| --- | --- |
+| Root with Blob and fault injection | `fa6972386d9a4bc2ba16cfa101f59954081535b8a20b43fa1dd6cfb2a5b11287` |
+| Original catalog | `c6bdaa820febe882e7e579c60dad3449e90be28beb2b34e23e82e0379dd21b20` |
+| Candidate catalog | `7ad51ac7e374e33ee3041140b640720c3b879937a302a3169803981c0b766693` |
+| Store | `2d6bb886db5049a2e06f292d13e462c38b0a95463a560fcb71dab5f52efa567b` |
+
+Adopt authenticated Toko Tooling 0.44.8 and Host Text 0.77.2. Other selected Host
+packages remain current at 0.80.2. Remove repeated table-options boilerplate and
+obsolete private-Blob CI key/SSH wiring; do not delete remote secrets or keys.
+The new catalog check also moves the pending DB witness's unchanged exact supplier
+pin into its qualification catalog. No DB behavior or supplier input changes.
+Platform 0.34.5 crypto remains qualified below; fresh scratch resolution confirms
+Timers 0.45.12 still pins Runtime 0.22.5, while 0.34.5 lacks the signed Host and
+management feature surface. No executor guard or signature owner is bypassed.
+
+Focused Host/CLI, management and protocol native tests pass, including exact
+argument/attempt binding, custody bounds and old-format refusal. Host/CLI and
+installed Blob harness Clippy, default/Blob Root Wasm Clippy, affected Rustdoc,
+formatting, snapshot/dependency agreement, pin checking and CI workflow syntax
+checks pass. `make canic` installs the updated PATH command; its plan and explicit
+activation help are checked. Changes remain uncommitted and unpushed.
+
+Raw logs and artifact/input receipts are under `target/blob/`. This is local
+installed composition, not mainnet or provider qualification. The named Host
+one-successor bound remains; whole-fleet configured arguments and Host Root/Store
+preservation of CUA5 remain closed pending complete custody support. No backup,
+provider settlement, compaction or active-owner restoration framework was added.
+
+## Platform 0.34.5 crypto adoption and Store completion: 2026-11-16
+
+Select registry Platform 0.34.5 for the actual Auth witness's Ed25519 signer and
+the native installed-test verifier. Its archive checksum is
+`acc6568e65c44808ebdf058087f24398ca165c79a17ce8ea84bbeac85608946d`, source
+`1e92703bc803b81dbe1e3d815fd1077d440d62b4`. Qualification owns the
+`ic-platform-crypto` capability dependency; it replaces the old direct Ed25519
+selection. The old facade remains consumed for raw randomness and management
+codecs, and pinned Auth retains its own old crypto edge. Root/product manifests,
+Types identities and the execution owner are unchanged. No supplier checkout is
+modified or pending supplier code consumed.
+
+Cargo confirms latest Platform 0.34.5, Runtime 0.23.12 and Types 0.21.1. Separate
+scratch resolution with current published Timers 0.45.12 still fails on its exact
+Runtime 0.22.5 guard versus Runtime 0.23.12. Host's selected Agent/management/ledger
+features still fail on Platform 0.34.5; its new anonymous reads cannot replace
+signed operation custody. Keep these scoped migration blockers rather than claim
+complete adoption. Do not add an unused new runtime or bypass the guard.
+
+`bash scripts/dev/test-auth.sh` passes three native and all nine installed cases
+(13.99s), including actual issuance/verification, renewal/reconciliation,
+duplicate delivery, callback rollback, enrollment, Host custody and expiry.
+Focused native Auth-harness/Wasm witness Clippy, witness Rustdoc, formatting,
+snapshot agreement and diff checks pass. Root Wasm remains
+`b46f5b0040451c8d8d5e8a9cba7c98bafc837b7a707908f81ee10ccd8afb75fd`; the witness is
+`37ad0e644c623f6329b7650dd904afe0c8ca7a887d6f0c0c79833f850a4ff974`.
+Changes remain uncommitted/unpushed. This is the local test-signing path, not
+production key custody, browser integration or full Platform replacement.
+
+Reconcile and close Store #4 after reviewing the already delivered 0.217.0
+removal/restoration and preservation owners against its acceptance. Its last
+comment predates the completed Host workflow; the existing 31-case Store and
+five-case publication release evidence plus focused cancellation/pinned-refusal
+results below complete that scope. No duplicate implementation, new catalog,
+retry owner or redundant broad rerun is introduced merely to retire the tracker.
+Existing-fleet conversion, cache repair and multiple-journal coordination remain
+outside the selected Store contract. Blob provisioning (#12), followed by its
+exact managed maintenance lifecycle (#13), remains the next independent feature
+work; backup stays deferred and Auth #10 still needs browser-bound issuer logout
+from its supplier before the full profile/browser journey (#11).
+
+## Active Auth authority loss and issue reconciliation: 2026-11-16
+
+Extend #9's existing installed enrollment cases with an admitted session followed
+by an actual Root stop or upgrade. Transport rejection and a closed Root response
+both preserve the original busy window, installed snapshot and captured session
+deadline. A new explicit attempt after the receipt window also fails without
+extending authority. Queries admit immediately before freshness expires and
+refuse at/after expiry; another admission cannot add an application write or alter
+retained session/replay usage. No production mechanism or dependency is added.
+Reuse the recorded legacy enrollment/root-refusal research at `fa92d886` below.
+
+The focused enrollment runner passed the three native cases and existing two
+installed concurrency/expiry cases. The new test initially sampled an old query
+round after changing PocketIC's next-round time; explicitly executing the round
+corrects the test boundary. Its focused rerun passes both stop/upgrade paths
+(13.60s). The existing installed receiver/malformed/rollback journey also passes
+(7.15s), validating and closing #8 against current inputs. Auth harness Clippy,
+formatting, snapshot agreement and diff whitespace checks pass. These checks do
+not qualify issuer/browser or persistent Auth.
+
+Inputs: pinned Auth `b78991e9833320692921bf766e51ad361c9c8c4d`, Platform 0.33.7,
+Runtime 0.22.5, Types 0.20.4, Wire 0.24.2 and Root's Timers 0.45.12. Root Wasm
+SHA-256 is `b46f5b0040451c8d8d5e8a9cba7c98bafc837b7a707908f81ee10ccd8afb75fd`;
+receiver is `4a096636dbc3987e5e36e6ee75a0b7872d35b3a78f47176e762b855cb3f6a712`.
+These tests and documentation remain uncommitted/unpushed; unrelated DB work is
+preserved. Root loss cannot instantly invalidate a remote receiver's accepted
+snapshot; its original finite freshness remains the boundary.
+
+Issue #3's previously missing hosted evidence is now available for delivered
+`e84702b3bdcf4eb209476aadd053df21f18dd8eb` (0.217.0):
+[run 43902392515](https://github.com/dragginzgame/canic/actions/runs/43902392515)
+passed Linux, macOS arm64 and Intel native/Wasm checks and the separate
+policy/secret scan. Reviewed the delivered workflow and Make callers and closed
+that issue. This hosted result does not cover current pending changes.
+
+## Toko Tooling 0.44.7 compatibility adoption: 2026-11-16
+
+Adopt registry Tooling 0.44.7 (checksum
+`b178292f781b0955ce9051329f4d6c6b77be7517acac7681fa3e073d4e469769`) in both
+workspace catalogs/locks and the authenticated 60-file snapshot. Review and
+install the baseline plus changed dependency-pin checker through the exporter.
+Canic already meets the one-tier qualification package layout. Apply the common
+`thiserror` v2 hold at 2.0.18 to the direct product dependency and implementation
+lock; qualification already selects that pair. Leave upstream v1 intact.
+
+The previous pinned Topology source requires `thiserror ^2.0.21`, so this adoption
+also selects committed topology 0.107.0 at
+`12844b628d96bfd203ffbd900f10d02c4a896988`, which carries the compatibility hold.
+Review its consumer contract and changes; existing placement/comparison callers
+need no source changes. Do not consume the dirty sibling checkout or claim its
+pending registry-Platform migration. Product Wire 0.24.2 and Timers 0.45.12 updates
+present at turn start remain intact; no supplier source is edited.
+
+Tools, dependency pins, snapshot agreement and formatting pass. Host tests pass
+140 cases with one existing opt-in ignored; all 70 CLI cases pass across the
+initial run and focused reruns of sandbox-denied localhost socket tests. Host/CLI
+Clippy and Rustdoc pass. No browser was opened and no release/push was performed.
+
+## Published Platform replacement reassessment: 2026-11-16
+
+At the maintainer's renewed adoption request, inspect published Platform 0.34.3,
+Runtime/macros/guard 0.23.11, Types 0.21.1 and Protocol 0.2.3 against upstream
+`9be37b45a74ca8e96e423da419709665ebc028d2`. Runtime's former Auth execution gaps
+are implemented: explicit lifecycle/query/update composition, system observations
+and certification, plus Storage's dependency-free `system-raw` surface. The
+upstream registry proof passes the pinned Auth fixture's five installed cases;
+it explicitly retains legacy Platform crypto and does not claim Canic adoption.
+
+Cargo registry inspection still selects latest Timers 0.45.11 and Storage 0.74.1.
+Two isolated, non-product resolution probes under `target/platform-adoption/`
+reproduce the remaining blockers without modifying either maintained workspace:
+
+- Runtime `=0.23.11` with `entrypoint-macros` plus Timers `=0.45.11`: resolution
+  fails because Timers requires Runtime `=0.22.5`; both exact runtime guards
+  declare the same executor `links` identity. This is a dependency exclusion,
+  not a missing cache or a failed application test.
+- Platform `=0.34.3` with Canic Host's actual Agent/protocol/management/ledger
+  feature selection: resolution fails because `agent` is absent. The published
+  features are certificate/canister-signature decoding and authentication only.
+
+The new Runtime APIs are available for migration, but the timer supplier must
+first qualify its replacement executor integration. Public Types boundaries in
+pinned Auth/Blob and Storage's old raw-runtime selection remain consumer migration
+work; the Host still needs its Platform-owned native/protocol adapters. Do not
+patch the singleton guard or introduce a second executor, copied supplier,
+unused new dependency or direct external IC imports. The design now records this
+updated boundary instead of claiming Runtime's Auth APIs are unimplemented.
+
+No product/qualification dependency selection or lockfile was changed by this
+reassessment; the pending issuer witness and its existing lockfile additions are
+preserved. Runtime archive checksum is
+`4dc0059577167175de70e44128d415b772d9d20f3276cb3d8aeb09b01448ec09` in the upstream
+publication evidence. No supplier edit, push, publication or deployment occurred.
+
+## Optional issuer mounts and local-key installed witness: 2026-11-16
+
+`canic::auth::issuer` now owns bounded passive issue/renew/lookup/result contracts
+and three explicit mounts. It reuses the existing Auth endpoint hooks for
+pre-copy guards, directional budgets and trap-on-encoding-failure behavior.
+It starts no engine or lifecycle and adds no product crate or default dependency.
+The qualification application explicitly selects `MemoryIssuer`; account policy
+and the local public test key stay with that application. Its permitted account
+differs from the installation controller. Auth owns the sole login/intent/result
+and renewal-sequence state, including work/result reservations and real pruning.
+
+`bash scripts/dev/test-auth.sh` passes three native and eight installed cases
+(13.47s). Four issuer cases qualify caller/grant/request conflicts, concurrent
+duplicate delivery, retained byte equality and committed signing counts, actual
+Root-enrolled receiver verification, browser-bound renewal with unchanged login
+deadline, lookup after permission loss/expiry, malformed framing, physical
+capacity, real pruning, callback encoding rollback, permission changes during
+entropy, expired entropy completion and closed upgrade loss. A local callback
+trap rolls signature/result/counter writes back together while the earlier
+reservation remains unresolved. No remote signer effect is present. Focused
+native/Wasm Clippy and Rustdoc pass. Host's normal graph still imports only passive
+Auth types/Wire; default `canic` imports neither supplier engine nor Auth contracts.
+
+Inputs remain pinned Auth `b78991e9833320692921bf766e51ad361c9c8c4d`, Platform
+0.33.7, Runtime 0.22.5, Types 0.20.4 and Wire 0.24.1. Only the qualification
+application adds existing Platform/SHA-256 dependencies and Auth's `issuer-memory`
+feature. Tested Root SHA-256:
+`398d86a13b7c5380e6e99651a5c298d7bab31ccb0be882e556e3592cbbcc2c55`;
+combined receiver/issuer SHA-256:
+`c4756bbb9a276a1cc466072df44c5b5e41f90cfe126d7434f7b80c042f86d72f`.
+
+Legacy research at `fa92d886ef9beee824de3ec900832722fef85bd2` inspected
+`crates/canic-auth/src/ops/issuer/issuance/{mod.rs,renewal/mod.rs,tests/retry/mod.rs}`
+and path history `ccae09b4`, `aa02dc0d`, `4426e24c`. Preserve exact nonce/result
+custody, retained browser binding, original lifetime and lookup-only uncertainty.
+Do not transplant its persistent owner, Core dependency, global key machinery or
+old storage readers into the volatile rewrite. Shared fixture codecs/setup avoid
+another helper layer; there is no duplicate issuer state machine in Canic.
+
+This is a partial implementation of [#10](https://github.com/dragginzgame/canic/issues/10).
+The pinned `MemoryIssuer::revoke` is explicitly account-authenticated; the missing
+browser-authenticated logout operation must bind the original account/login,
+retain results and fence late completion at Auth. Its exact gap is documented in
+the [Auth guide](../demos/auth.md#issuer-endpoints). Production key custody,
+Root-governed issuer lifecycle, external signer uncertainty, certified publication
+and the full profile/browser journey remain unfinished. No supplier edits, push,
+publication, browser launch or mainnet effects were performed.
+
+## Installed Auth refresh concurrency and expiry: 2026-11-16
+
+Extend the existing receiver fixture with independent reservation, direct-call
+dispatch and installation counters plus the original receipt deadline. These are
+qualification observations only; production adapters, contracts and dependencies
+are unchanged. The overlapping ingress case commits one reservation and one Root
+call without renewing its window. The expiry case uses two subnets to expose the
+real entropy and snapshot await boundaries: cold admission stays closed, and an
+expired refresh preserves the previous supplier metadata and application entry.
+A subsequent explicit refresh gets a new reservation and can complete.
+
+`bash scripts/dev/test-auth.sh` passes three native contract cases and all four
+installed cases (13.51s), including the existing mount/rollback/upgrade and CLI
+custody journeys after sharing fixture setup. Focused fixture Wasm and harness
+Clippy, fixture Rustdoc, `make fmt-check` and diff whitespace checks pass. The
+initial same-subnet expiry attempt completed the Root exchange within one tick;
+it was replaced with real separate-subnet placement, not a mock or timing sleep.
+Native cases still own deliberately reordered authenticated response markers;
+the installed cases do not claim arbitrary late-response reordering coverage.
+
+Inputs remain Auth `b78991e9833320692921bf766e51ad361c9c8c4d`, Platform 0.33.7,
+Runtime 0.22.5, Types 0.20.4 and Wire 0.24.1, with unchanged lockfiles. Reuse the
+legacy enrollment research recorded below at `fa92d886ef9beee824de3ec900832722fef85bd2`:
+pending work must not acquire renewed authority, and stale outcomes cannot install
+enrollment. Root SHA-256 remains
+`3fda758bb517604204f1e2aa3f083897c2c272b6f745e70dea4ce6c595e9725b`;
+updated receiver SHA-256 is
+`ae6dc061f955225858ea76aea47d985064d34627016acfced02a089ff8cad0b4`.
+No supplier edits, release, push or mainnet effects were performed. Issuance,
+renewal and lookup-only reconciliation (#10) remain the next implementation slice;
+this work does not establish browser login or persistent Auth readiness.
+
 ## 0.217.0 release qualification and supplier adoption: 2026-11-16
 
 Both workspace catalogs/locks and the authenticated snapshot select Toko Tooling

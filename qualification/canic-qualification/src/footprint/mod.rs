@@ -12,12 +12,12 @@ pub struct Footprint {
     pub defined_functions: u32,
 }
 
-/// Measure a fixture under the existing 1.5 MB, 64-section/export and 32-custom-section budgets.
+/// Measure a fixture under the direct-install 1.9 MB, 64-section/export and 32-custom-section budgets.
 /// # Errors
 /// Refuses oversized, malformed, invalid or non-core Wasm instead of returning partial facts.
 pub fn measure(bytes: &[u8]) -> Result<Footprint, Box<dyn std::error::Error>> {
     let (bytes, identity) =
-        ic_host_artifacts::read(bytes, ic_host_artifacts::Length::AtMost(1_500_000))?;
+        ic_host_artifacts::read(bytes, ic_host_artifacts::Length::AtMost(1_900_000))?;
     let mut facts = Footprint {
         raw_bytes: usize::try_from(identity.bytes)?,
         code_section_bytes: 0,

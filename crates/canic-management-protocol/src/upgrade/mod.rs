@@ -69,6 +69,14 @@ pub enum Phase {
     Expired,
     /// Reserve prevented another effect; authority remains consumed.
     ReserveBlocked,
+    /// The exact child's stop was issued; reconcile observes and never reissues it.
+    StopIssued,
+    /// IC observed the child stopped, with callbacks drained before installation.
+    Stopped,
+    /// The verified replacement's start was issued; reconcile never reissues it.
+    StartIssued,
+    /// IC observed the verified replacement running; readiness remains to be checked.
+    Started,
 }
 
 /// Retained upgrade evidence, separate from creation evidence.

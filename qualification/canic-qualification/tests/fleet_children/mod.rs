@@ -33,24 +33,29 @@ async fn advance(pic: &PocketIc) {
 
 #[tokio::test(flavor = "current_thread")]
 async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(300)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(300),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let routing = owner.instance().create_canister().await;
-    let url = owner.instance_mut().make_live(None).await.to_string();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let routing = owner.client().create_canister().await;
+    let url = owner.client_mut().make_live(None).await.to_string();
     let key: String = owner
-        .instance()
+        .client()
         .root_key()
         .await
         .unwrap()
@@ -126,12 +131,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         .unwrap();
     }
     let config_bytes = std::fs::read(&config).unwrap();
-    let dispatch = (owner
-        .instance()
-        .get_time()
-        .await
-        .as_nanos_since_unix_epoch()
-        / 1_000_000_000
+    let dispatch = (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000
         + 60)
         .to_string();
     let planned = cli(
@@ -178,9 +178,9 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     let second_signed = std::fs::read(path.join("sibling/stage/signed.json")).unwrap();
     assert_ne!(first_signed, second_signed); // Same Wasm/approval, different authenticated slot.
     // A declaration cannot enlarge an already admitted fleet or remap its children.
-    owner.instance().stop_progress().await;
+    owner.client().stop_progress().await;
     let root = CanisterId::from_text(pending["root"]["canister"].as_str().unwrap()).unwrap();
-    let stable = owner.instance().get_stable_memory(root).await;
+    let stable = owner.client().get_stable_memory(root).await;
     let approval_bytes = std::fs::read(path.join("fleet.json")).unwrap();
     let operations = std::fs::read_dir(&journal).unwrap().count();
     let mut expanded: serde_json::Value = serde_json::from_slice(&config_bytes).unwrap();
@@ -205,13 +205,13 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         std::fs::read(path.join("sibling/stage/signed.json")).unwrap(),
         second_signed
     );
-    assert_eq!(owner.instance().get_stable_memory(root).await, stable);
+    assert_eq!(owner.client().get_stable_memory(root).await, stable);
     std::fs::write(&config, &config_bytes).unwrap();
     assert_eq!(
         cli(&config, &["fleet", "plan", "--identity", "anonymous"]),
         planned
     );
-    owner.instance().auto_progress().await;
+    owner.client().auto_progress().await;
     std::fs::remove_file(path.join("sibling/stage/reply.bin")).unwrap();
     let recovered = cli(&config, &apply);
     assert_eq!(
@@ -230,7 +230,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         &config,
         &["fleet", "reconcile", id, "--identity", "anonymous"],
     );
-    advance(owner.instance()).await;
+    advance(owner.client()).await;
     let report = workspace.join("fleet.html");
     let before_receipts = cli(
         &config,
@@ -262,7 +262,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     for child in [app, worker] {
         assert_eq!(
             owner
-                .instance()
+                .client()
                 .canister_status(CanisterId::from_text(child).unwrap(), Some(root))
                 .await
                 .unwrap()
@@ -316,14 +316,9 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
             workspace.join(format!("artifacts/{name}.wasm")),
         )
         .unwrap();
-        let dispatch = (owner
-            .instance()
-            .get_time()
-            .await
-            .as_nanos_since_unix_epoch()
-            / 1_000_000_000
-            + 60)
-            .to_string();
+        let dispatch =
+            (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000 + 60)
+                .to_string();
         let upgrade = if name == "worker" {
             // Named planning must recover Second from creation custody, not
             // silently use the original first-slot endpoint.
@@ -379,7 +374,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
             &config,
             &["fleet", "reconcile", operation, "--identity", "anonymous"],
         );
-        advance(owner.instance()).await;
+        advance(owner.client()).await;
         let view = cli(&config, &["fleet", "show"]);
         let selected = view["managers"]
             .as_array()
@@ -463,11 +458,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     assert_eq!(blocked["action"], "maintenance");
     let blocked_id = blocked["operation"].as_str().unwrap();
     let wasm = std::fs::read(artifacts.join("app.wasm")).unwrap();
-    let now = owner
-        .instance()
-        .get_time()
-        .await
-        .as_nanos_since_unix_epoch();
+    let now = owner.client().get_time().await.as_nanos_since_unix_epoch();
     let change = canic_management_protocol::upgrade::Stage {
         approval: canic_management_protocol::upgrade::Approval {
             manager: root.to_text(),
@@ -480,7 +471,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         wasm,
     };
     let reply = owner
-        .instance()
+        .client()
         .update_call(
             root,
             CanisterId::anonymous(),
@@ -526,22 +517,27 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     assert!(!journal.join(blocked_id).join("receipt.json").exists());
     assert_eq!(
         owner
-            .instance()
+            .client()
             .canister_status(root, None)
             .await
             .unwrap()
             .module_hash,
         Some(digest(&std::fs::read(artifacts.join("maintenance.wasm")).unwrap()).to_vec())
     );
-    let subnet = owner.instance().get_subnet(root).await.unwrap();
+    let subnet = owner.client().get_subnet(root).await.unwrap();
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
             .num_canisters,
         4
     ); // Includes local routing fixture.
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

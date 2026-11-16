@@ -4,10 +4,10 @@ use canic_management_protocol::{
     STATUS, Stage, Status, digest,
 };
 use canic_profile_protocol::{PUT, ProfileResult, Put};
-use ic_testkit::{
-    pic::{PocketIcStartupConfig, server_assets},
-    pocket_ic::{CanisterId, CreateCanisterParams, PocketIcBuilder, nonblocking::PocketIc},
+use ic_testkit::pocket_ic::{
+    CanisterId, CreateCanisterParams, PocketIcBuilder, nonblocking::PocketIc,
 };
+use ic_testkit::server::{Limits, PreparedServer, Server};
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
@@ -165,32 +165,37 @@ async fn autonomous_growth_and_commit_boundaries() {
     let maintenance_wasm = std::fs::read(artifacts.join("maintenance.wasm")).unwrap();
     assert_ne!(manager_wasm, maintenance_wasm);
     let facts = canic_qualification::footprint::measure(&manager_wasm).unwrap();
-    let binary = server_assets::check(&canic_qualification::server_directory())
+    let binary = PreparedServer::check(&canic_qualification::server_directory())
         .expect("run make qualification-setup");
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: binary,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(300)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        binary,
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(300),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let url = owner.instance_mut().make_live(None).await.to_string();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let url = owner.client_mut().make_live(None).await.to_string();
     let key: String = owner
-        .instance()
+        .client()
         .root_key()
         .await
         .unwrap()
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    let routing = owner.instance().create_canister().await.to_text();
+    let routing = owner.client().create_canister().await.to_text();
     let root = artifacts.join(format!("journey-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
     let icp = repo.join(".tools/ic/bin/icp");
@@ -229,7 +234,7 @@ async fn autonomous_growth_and_commit_boundaries() {
     );
     let manager_text = receipt["canister"].as_str().unwrap();
     let manager = CanisterId::from_text(manager_text).unwrap();
-    let pic = owner.instance();
+    let pic = owner.client();
     let original_count = count(pic, manager).await;
     let file = root.join("approval.json");
     let base = [
@@ -317,7 +322,7 @@ async fn autonomous_growth_and_commit_boundaries() {
     .unwrap()
     .unwrap();
     assert_eq!(profile.owner, alice.as_slice());
-    pic.upgrade_canister(manager, maintenance_wasm.clone(), vec![], None)
+    canic_qualification::upgrade_stopped(pic, manager, maintenance_wasm.clone(), vec![], None)
         .await
         .unwrap();
     settle(pic).await;
@@ -443,7 +448,7 @@ async fn autonomous_growth_and_commit_boundaries() {
                 }
             }
         }
-        pic.upgrade_canister(manager, maintenance_wasm.clone(), vec![], None)
+        canic_qualification::upgrade_stopped(pic, manager, maintenance_wasm.clone(), vec![], None)
             .await
             .unwrap();
         if fault == 2 {
@@ -519,7 +524,12 @@ async fn autonomous_growth_and_commit_boundaries() {
         "manager footprint: raw={}, code={}, functions={}, stable_pages={}; normal/5 interruption windows/expiry/reserve passed",
         facts.raw_bytes, facts.code_section_bytes, facts.defined_functions, ready.stable_pages
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 async fn upgrade_status(
@@ -668,19 +678,6 @@ async fn profile_get(pic: &PocketIc, worker: CanisterId, caller: CanisterId) -> 
 
 #[tokio::test(flavor = "current_thread")]
 async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
-    qualify_child_upgrades(None, false).await;
-}
-
-#[tokio::test(flavor = "current_thread")]
-#[ignore = "requires CANIC_PREVIOUS_UPGRADE_MANAGER naming a retained v2-journal manager"]
-async fn previous_single_upgrade_manager_migrates_to_retained_history() {
-    let previous =
-        std::fs::read(std::env::var_os("CANIC_PREVIOUS_UPGRADE_MANAGER").unwrap()).unwrap();
-    qualify_child_upgrades(Some(previous.clone()), false).await;
-    qualify_child_upgrades(Some(previous), true).await;
-}
-
-async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool) {
     use canic_management_protocol::upgrade;
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
@@ -694,28 +691,30 @@ async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool
     let manager_wasm = std::fs::read(artifacts.join("faults.wasm")).unwrap();
     let maintenance = std::fs::read(artifacts.join("maintenance.wasm")).unwrap();
     assert_ne!(original, replacement);
-    let binary = server_assets::check(&canic_qualification::server_directory()).unwrap();
-    let owner = PocketIcStartupConfig::Spawn {
-        server_binary: binary,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(300)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(PocketIcBuilder::new().with_application_subnet())
-    .await
+    let binary = PreparedServer::check(&canic_qualification::server_directory()).unwrap();
+    let mut server = Server::start(
+        binary,
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(300),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
+    )
     .unwrap();
-    let pic = owner.instance();
+    let owner = server
+        .instance(
+            PocketIcBuilder::new().with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let pic = owner.client();
     let alice = CanisterId::self_authenticating(b"upgrade profile owner");
     let bob = CanisterId::self_authenticating(b"upgrade outsider");
     // Normal, upload callback loss, pre-dispatch trap, install callback loss,
     // and a real application post_upgrade rejection use the same admitted path.
-    let cases: &[u8] = if previous.is_some() {
-        &[0]
-    } else {
-        &[0, 6, 7, 8, 9]
-    };
-    for &case in cases {
+    for case in [0_u8, 6, 7, 8, 9, 24, 25] {
         let manager = pic.create_canister().await;
         pic.add_cycles(manager, 3_000_000_000_000).await;
         pic.install_canister(manager, manager_wasm.clone(), vec![], None)
@@ -726,11 +725,6 @@ async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool
             pic.get_time().await.as_nanos_since_unix_epoch(),
         );
         stage(pic, manager, &creation).await.unwrap();
-        if migrate_pending {
-            pic.upgrade_canister(manager, maintenance.clone(), vec![], None)
-                .await
-                .unwrap();
-        }
         pic.advance_time(Duration::from_secs(11)).await;
         settle(pic).await;
         let created = status(pic, manager).await;
@@ -812,7 +806,7 @@ async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool
             stage_upgrade(pic, manager, &invalid).await,
             Err(Refusal::Binding)
         );
-        if (6..=8).contains(&case) {
+        if (6..=8).contains(&case) || case >= 24 {
             pic.update_call(
                 manager,
                 CanisterId::anonymous(),
@@ -838,6 +832,8 @@ async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool
         settle(pic).await;
         let interrupted = upgrade_status(pic, manager).await;
         let expected = match case {
+            24 => upgrade::Phase::StopIssued,
+            25 => upgrade::Phase::StartIssued,
             6 => upgrade::Phase::UploadIssued,
             7 => upgrade::Phase::Uploaded,
             8 | 9 => upgrade::Phase::InstallIssued,
@@ -846,7 +842,9 @@ async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool
         assert_eq!(interrupted.phase, expected, "case {case}: {interrupted:?}");
         assert_eq!(
             interrupted.attempts,
-            if case == 6 || case == 7 {
+            if case == 24 {
+                [0, 0]
+            } else if case == 6 || case == 7 {
                 [1, 0]
             } else {
                 [1, 1]
@@ -858,7 +856,7 @@ async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool
             stage_upgrade(pic, manager, &invalid).await,
             Err(Refusal::Occupied)
         );
-        pic.upgrade_canister(manager, maintenance.clone(), vec![], None)
+        canic_qualification::upgrade_stopped(pic, manager, maintenance.clone(), vec![], None)
             .await
             .unwrap();
         reconcile_upgrade(pic, manager).await;
@@ -866,11 +864,15 @@ async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool
         let complete = upgrade_status(pic, manager).await;
         assert_eq!(complete.approval, Some(input.approval.clone()));
         assert_eq!(complete.attempts, [1, 1]);
-        assert_eq!(complete.requests[0], interrupted.requests[0]);
+        if interrupted.requests[0].is_some() {
+            assert_eq!(complete.requests[0], interrupted.requests[0]);
+        }
         if interrupted.requests[1].is_some() {
             assert_eq!(complete.requests[1], interrupted.requests[1]);
         }
-        assert_eq!(complete.previous_version, interrupted.previous_version);
+        if interrupted.previous_version.is_some() {
+            assert_eq!(complete.previous_version, interrupted.previous_version);
+        }
         if case == 9 {
             assert_eq!(complete.phase, upgrade::Phase::InstallIssued);
             assert!(complete.failure.is_some());
@@ -898,6 +900,11 @@ async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool
                     .module_hash,
                 Some(digest(&replacement).to_vec())
             );
+        }
+        if case == 9 {
+            assert!(pic.query_call(worker, alice, "get", vec![]).await.is_err());
+            // Explicit fixture operator recovery; rejected installation remains fenced.
+            pic.start_canister(worker, Some(manager)).await.unwrap();
         }
         assert_eq!(profile_get(pic, worker, alice).await.unwrap(), profile);
         assert_eq!(
@@ -946,7 +953,12 @@ async fn qualify_child_upgrades(previous: Option<Vec<u8>>, migrate_pending: bool
             complete.phase
         );
     }
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 async fn repeated_upgrades(
@@ -1039,7 +1051,7 @@ async fn repeated_upgrades(
         assert_eq!(upgrade_status(pic, manager).await, complete);
     }
     // Reopen the full journal: same original two allocations and retained history.
-    pic.upgrade_canister(manager, maintenance.to_vec(), vec![], None)
+    canic_qualification::upgrade_stopped(pic, manager, maintenance.to_vec(), vec![], None)
         .await
         .unwrap();
     let (last, expected) = retained.last().unwrap();

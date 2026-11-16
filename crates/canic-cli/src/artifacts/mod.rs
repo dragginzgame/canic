@@ -1,7 +1,7 @@
 //! Artifact evidence and explicit local plans; no live availability inference.
 use crate::Output;
 use canic_host::FleetArtifacts;
-use ic_host_text::{escape::terminal_text, table::render_bordered};
+use ic_host_text::{bordered_table, escape};
 use std::fmt::Write as _;
 
 pub(crate) fn output(report: &FleetArtifacts, json: bool, details: bool) -> Output {
@@ -80,8 +80,8 @@ pub(crate) fn run(
 fn render(report: &FleetArtifacts, details: bool) -> String {
     let mut output = format!(
         "App: {} · Fleet: {}\nLocal publication evidence\n\n",
-        terminal_text(&report.app),
-        terminal_text(&report.fleet),
+        escape(&report.app),
+        escape(&report.fleet),
     );
     if report.publications.is_empty() {
         output.push_str("No publication evidence found.\n\n");
@@ -93,7 +93,7 @@ fn render(report: &FleetArtifacts, details: bool) -> String {
         writeln!(
             output,
             "Store: {}",
-            terminal_text(&group[0].publication.store.canister)
+            escape(&group[0].publication.store.canister)
         )
         .expect("String write");
         let rows: Vec<_> = group
@@ -115,7 +115,7 @@ fn render(report: &FleetArtifacts, details: bool) -> String {
         writeln!(
             output,
             "{}\n",
-            render_bordered(&["ARTIFACT", "VERSION", "BYTES", "EVIDENCE"], &rows)
+            bordered_table(&["ARTIFACT", "VERSION", "BYTES", "EVIDENCE"], &rows)
         )
         .expect("String write");
         if details {
@@ -123,8 +123,8 @@ fn render(report: &FleetArtifacts, details: bool) -> String {
                 writeln!(
                     output,
                     "{} / {}",
-                    terminal_text(&entry.publication.release.name),
-                    terminal_text(&entry.publication.release.version),
+                    escape(&entry.publication.release.name),
+                    escape(&entry.publication.release.version),
                 )
                 .expect("String write");
                 for (label, value) in [
@@ -135,13 +135,13 @@ fn render(report: &FleetArtifacts, details: bool) -> String {
                     ("Approved Root module", &entry.publication.root.module),
                     ("Approved Store module", &entry.publication.store.module),
                 ] {
-                    writeln!(output, "  {label}: {}", terminal_text(value)).expect("String write");
+                    writeln!(output, "  {label}: {}", escape(value)).expect("String write");
                 }
                 if entry.publication_operation != entry.operation {
                     writeln!(
                         output,
                         "  Nested publication approval: {}",
-                        terminal_text(&entry.publication_operation)
+                        escape(&entry.publication_operation)
                     )
                     .expect("String write");
                 }
@@ -150,7 +150,7 @@ fn render(report: &FleetArtifacts, details: bool) -> String {
         }
     }
     for issue in &report.issues {
-        writeln!(output, "Journal issue: {}", terminal_text(issue)).expect("String write");
+        writeln!(output, "Journal issue: {}", escape(issue)).expect("String write");
     }
     output
 }

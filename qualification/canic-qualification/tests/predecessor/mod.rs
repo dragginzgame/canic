@@ -27,24 +27,29 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
         hash,
         "e4a4127abd525f59378503dcdb98fcb13f8eb9895673d4d8a4dea41d85e24296"
     );
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(240)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(240),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let routing = owner.instance().create_canister().await;
-    let url = owner.instance_mut().make_live(None).await.to_string();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let routing = owner.client().create_canister().await;
+    let url = owner.client_mut().make_live(None).await.to_string();
     let key: String = owner
-        .instance()
+        .client()
         .root_key()
         .await
         .unwrap()
@@ -116,10 +121,10 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
         &["fleet", "apply", creation_id, "--identity", "anonymous"],
     );
     let root = CanisterId::from_text(pending["root"]["canister"].as_str().unwrap()).unwrap();
-    owner.instance().stop_progress().await;
-    owner.instance().advance_time(Duration::from_secs(45)).await;
-    settle(owner.instance()).await;
-    owner.instance().auto_progress().await;
+    owner.client().stop_progress().await;
+    owner.client().advance_time(Duration::from_secs(45)).await;
+    settle(owner.client()).await;
+    owner.client().auto_progress().await;
     let created = cli(
         &config,
         &["fleet", "apply", creation_id, "--identity", "anonymous"],
@@ -132,18 +137,12 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     .unwrap();
     let journal = PathBuf::from(creation["state_dir"].as_str().unwrap());
     let creation_bytes = std::fs::read(journal.join(creation_id).join("fleet.json")).unwrap();
-    let before = status(owner.instance(), root).await;
+    let before = status(owner.client(), root).await;
     let child_code = std::fs::read(artifacts.join("app-v2.wasm")).unwrap();
     let mut old_upgrade_record = None;
     if completed {
         std::fs::write(workspace.join("artifacts/app.wasm"), &child_code).unwrap();
-        let at = (owner
-            .instance()
-            .get_time()
-            .await
-            .as_nanos_since_unix_epoch()
-            / 1_000_000_000
-            + 40)
+        let at = (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000 + 40)
             .to_string();
         let planned = cli(
             &config,
@@ -161,14 +160,14 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
             cli(&config, &["fleet", "apply", id, "--identity", "anonymous"])["upgrade"]["phase"],
             "Scheduled"
         );
-        owner.instance().stop_progress().await;
-        owner.instance().advance_time(Duration::from_secs(45)).await;
-        settle(owner.instance()).await;
-        owner.instance().auto_progress().await;
+        owner.client().stop_progress().await;
+        owner.client().advance_time(Duration::from_secs(45)).await;
+        settle(owner.client()).await;
+        owner.client().auto_progress().await;
         // Model custody already retained by the previous CLI: an authenticated
         // ID-25 reply remains readable, without adding live fallback to child apply.
         let reply = owner
-            .instance()
+            .client()
             .update_call(
                 root,
                 CanisterId::anonymous(),
@@ -215,11 +214,7 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     let dir = journal.join(id);
     let apply = ["fleet", "apply", id, "--identity", "anonymous"];
     if untracked {
-        let now = owner
-            .instance()
-            .get_time()
-            .await
-            .as_nanos_since_unix_epoch();
+        let now = owner.client().get_time().await.as_nanos_since_unix_epoch();
         let input = upgrade::Stage {
             approval: upgrade::Approval {
                 manager: root.to_text(),
@@ -232,7 +227,7 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
             wasm: child_code,
         };
         let reply = owner
-            .instance()
+            .client()
             .update_call(
                 root,
                 CanisterId::anonymous(),
@@ -269,14 +264,19 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
         assert!(!dir.join("receipt.json").exists());
         assert_eq!(
             owner
-                .instance()
+                .client()
                 .canister_status(root, None)
                 .await
                 .unwrap()
                 .module_hash,
             Some(digest(&original).to_vec())
         );
-        owner.close().await;
+        assert_eq!(
+            owner.close(std::time::Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        let stopped = server.stop().unwrap();
+        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
         return;
     }
     let maintained = cli(&config, &apply);
@@ -287,6 +287,9 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
             "custody-before-creation": "reply_retained",
             "custody-before-upgrade": "reply_retained",
             "install": "reply_retained",
+            "stop": "reply_retained",
+            "stopped": "reply_retained",
+            "start": "reply_retained",
             "custody-after": "reply_retained",
         })
     );
@@ -309,7 +312,7 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     assert_eq!(custody.upgrades.len(), usize::from(completed));
     let install = std::fs::read(dir.join("install/signed.json")).unwrap();
     let version = owner
-        .instance()
+        .client()
         .canister_status(root, None)
         .await
         .unwrap()
@@ -338,7 +341,7 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     );
     assert_eq!(
         owner
-            .instance()
+            .client()
             .canister_status(root, None)
             .await
             .unwrap()
@@ -355,13 +358,7 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     // New child authority uses the maintained Root, without rebinding old plans.
     let replacement = artifacts.join(if completed { "app.wasm" } else { "app-v2.wasm" });
     std::fs::copy(&replacement, workspace.join("artifacts/app.wasm")).unwrap();
-    let at = (owner
-        .instance()
-        .get_time()
-        .await
-        .as_nanos_since_unix_epoch()
-        / 1_000_000_000
-        + 40)
+    let at = (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000 + 40)
         .to_string();
     let next = cli(
         &config,
@@ -384,10 +381,10 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
         &config,
         &["fleet", "apply", next_id, "--identity", "anonymous"],
     );
-    owner.instance().stop_progress().await;
-    owner.instance().advance_time(Duration::from_secs(45)).await;
-    settle(owner.instance()).await;
-    owner.instance().auto_progress().await;
+    owner.client().stop_progress().await;
+    owner.client().advance_time(Duration::from_secs(45)).await;
+    settle(owner.client()).await;
+    owner.client().auto_progress().await;
     assert_eq!(
         cli(
             &config,
@@ -397,12 +394,17 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     );
     assert_eq!(
         owner
-            .instance()
+            .client()
             .canister_status(child, Some(root))
             .await
             .unwrap()
             .module_hash,
         Some(digest(&std::fs::read(replacement).unwrap()).to_vec())
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

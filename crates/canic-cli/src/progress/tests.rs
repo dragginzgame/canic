@@ -49,6 +49,7 @@ fn upgrade_follow_up_preserves_authority_and_selects_recovery_from_retained_evid
         (Phase::Empty, None, "status"),
     ] {
         let outcome = ApplyOutcome::UpgradePending {
+            maintenance: None,
             operation: "original".into(),
             root: "root".into(),
             upgrade: Box::new(Status {

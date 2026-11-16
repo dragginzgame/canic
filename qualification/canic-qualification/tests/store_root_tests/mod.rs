@@ -220,8 +220,8 @@ async fn reconcile(
 #[tokio::test(flavor = "current_thread")]
 async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_wasm() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier, input, second) = fixture(pic, true).await;
     stage(&root, &input).await.unwrap();
     let staged = custody(&root).await;
@@ -461,14 +461,20 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
     assert_eq!(old, history.children[0].upgrades[0]);
     maintain(&root).await;
     assert_eq!(custody(&root).await, history);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn lost_pin_and_creation_cache_callbacks_recover_without_reissuing_effects() {
     for fault in [11, 4] {
         let (_, binary) = support::inputs();
-        let owner = support::instance(&binary).await;
-        let pic = owner.instance();
+        let (mut server, owner) = support::instance(&binary).await;
+        let pic = owner.client();
         let (root, _, input, _) = fixture(pic, true).await;
         inject(&root, fault).await;
         stage(&root, &input).await.unwrap();
@@ -502,6 +508,12 @@ async fn lost_pin_and_creation_cache_callbacks_recover_without_reissuing_effects
             after.sources[0].as_ref().unwrap().creation.state,
             stored::PinState::Retained
         );
+        assert_eq!(
+            owner.close(std::time::Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        let stopped = server.stop().unwrap();
+        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
     }
 }
 
@@ -509,8 +521,8 @@ async fn lost_pin_and_creation_cache_callbacks_recover_without_reissuing_effects
 async fn missing_cache_and_expired_authority_remain_bounded_without_install_replay() {
     for fault in [4, 11] {
         let (_, binary) = support::inputs();
-        let owner = support::instance(&binary).await;
-        let pic = owner.instance();
+        let (mut server, owner) = support::instance(&binary).await;
+        let pic = owner.client();
         let (root, supplier, input, _) = fixture(pic, true).await;
         inject(&root, fault).await;
         stage(&root, &input).await.unwrap();
@@ -539,14 +551,20 @@ async fn missing_cache_and_expired_authority_remain_bounded_without_install_repl
         reconcile(&root, &input).await;
         settle(pic).await;
         assert_eq!(custody(&root).await, observed);
+        assert_eq!(
+            owner.close(std::time::Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        let stopped = server.stop().unwrap();
+        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
     }
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn unpublished_reference_cannot_authorize_child_creation() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, _, mut input, _) = fixture(pic, false).await;
     input.reference.manifest.release.version = "absent".into();
     stage(&root, &input).await.unwrap();
@@ -564,4 +582,10 @@ async fn unpublished_reference_cannot_authorize_child_creation() {
     reconcile(&root, &input).await;
     settle(pic).await;
     assert_eq!(custody(&root).await, blocked);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

@@ -286,6 +286,43 @@ file or separate review framework.
   qualification. Read [validation mechanics](https://github.com/dragginzgame/toko-tooling/blob/626da7cd9626cc2e152594862a2d82ea82ef51da/rules/engineering-details.md#validation-and-evidence)
   for release ordering, Cargo preparation and external-effect recovery.
 
+### CI setup failure diagnostics
+
+Failed external-tool and setup steps on ephemeral CI runners must leave useful
+diagnostics and retrievable evidence before the runner disappears. An exit code,
+stderr byte count or runner-local path alone is insufficient.
+
+- Surface a bounded, sanitized excerpt of the underlying failure, with the tool,
+  failed phase, original status and exact evidence location. State truncation or
+  missing diagnostics explicitly; do not infer a network cause from an exit code.
+- Arrange failure-path collection even when setup fails before tests start. Select
+  only relevant logs, failure metadata and attempt identifiers; include explicitly
+  selected hidden attempt directories. Do not upload whole homes, caches, stores
+  or workspaces merely to capture a small diagnostic. Do not follow arbitrary
+  symlinks outside the selected evidence boundary.
+- Exclude credentials, private keys, tokens, sensitive payloads and environment
+  dumps from both printed and uploaded evidence. Redact known sensitive fields
+  before publication; CI log masking does not sanitize artifact contents. If raw
+  output cannot be safely retained, preserve a sanitized diagnostic and say what
+  was omitted. Set explicit size limits and a finite artifact retention period.
+- Preserve the original failing step's status through pipes, log printing,
+  collection and cleanup. Report collection/upload failures separately; neither
+  successful diagnostics nor `continue-on-error` may turn setup failure into a
+  successful job. Link the retained artifact in the CI result when available and
+  explicitly report when upload failed or required evidence was missing.
+- When changing setup or collection wiring, exercise a focused failure path
+  before relying on it: an early setup failure with a hidden attempt log must
+  produce a useful bounded diagnostic, retain only the intended sanitized files,
+  and leave the job failed. Check missing evidence and collector failure handling.
+  An offline fixture can prove local collection; claim hosted upload/retrieval
+  only when observed. Reuse unchanged evidence rather than adding a recurring
+  failure rehearsal to every deployment.
+
+Consumers own their paths, retention values and workflow wiring. Reuse existing
+collectors where they fit; this requirement does not mandate a new helper,
+framework, committed report or duplicate artifact upload. Better diagnostics do
+not by themselves fix the underlying setup failure or authorize blind retries.
+
 ## DFINITY dependencies: own the solution
 
 Do not submit DFINITY PRs or depend on future DFINITY work. Use available qualified
@@ -373,6 +410,24 @@ type, protocol and executor boundaries remain valid. A failed optional upgrade
 probe blocks that upgrade, not release of an otherwise qualified existing
 selection. Preserve real incompatibility refusals and required integration tests.
 
+An unqualified request to adopt or update a named supplier (for example,
+"adopt new ic-platform crates") covers that supplier's uses throughout the
+current repository: the product workspace, every maintained qualification
+workspace and native/dev/build callers. No separate qualification command or
+permission is needed. Inventory the relevant manifests and locks, update the
+affected declarations and callers, remove superseded dependencies and temporary
+migration adapters, and run focused checks for the changed boundaries. Do not
+expand this into unrelated dependency upgrades, sibling edits or deployment.
+
+Separate workspaces need not select identical versions when their actual
+integration permits independent selections. Report every retained older selection
+with its concrete reason and remaining work; updating only the product workspace
+while an in-scope qualification migration remains is **partial adoption**.
+Explicitly maintained frozen comparison baselines, such as an old-engine
+measurement matrix, stay frozen unless the user includes them. Identify that
+exception in the result; an ordinary qualification lockfile or stale supplier pin
+is not a frozen comparison baseline. Explicit user scope takes precedence.
+
 - Freshness review is separate from pin consistency and passing tests. During
   dependency maintenance, review every direct supplier in the selected scope,
   including native tools, dev/build dependencies and independent qualification
@@ -416,6 +471,12 @@ selection. Preserve real incompatibility refusals and required integration tests
   effort is not sufficient. An upstream-only older transitive selection needs
   no freshness exception for our independent direct dependency; security
   findings still require remediation.
+
+`thiserror` follows the same independent selection rule: use compatible version
+requirements and let Cargo select the latest compatible release. PocketIC may
+constrain its own graph; do not propagate that constraint into independent
+workspaces or add unused dependencies to impose it. Align versions only for a
+demonstrated integration requirement. This supersedes the 0.44.7 fleet-wide hold.
 
 An unchanged release selection is not a new dependency adoption. The freshness
 review above may defer an optional upgrade to the next dependency-maintenance
@@ -741,11 +802,13 @@ not authorize sibling edits or deployment merely through policy adoption.
 Ordinary unit tests, package integration tests and examples stay beside their
 owning product code. Separate packages used only for qualification, benchmarks,
 fuzzing, test fixtures or test support live under `qualification/`, with
-`qualification/Cargo.toml` and its own `Cargo.lock`. Meaningful grouping such as
-`qualification/<domain>/<package-name>/` is supported too. Do not add a redundant
-`qualification/crates/` level or create an empty qualification
-workspace. This is the standard whenever separate qualification packages exist;
-it does not require first demonstrating a dependency conflict.
+`qualification/Cargo.toml` and its own `Cargo.lock`. Use one package tier:
+`qualification/<package-name>/Cargo.toml`. Do not mix direct packages with nested
+package trees, add domain or `crates/` wrappers, put a package in the qualification
+root, or create an empty qualification workspace. Product grouping under `crates/`
+does not extend to qualification. This is the standard whenever separate
+qualification packages exist; it does not require first demonstrating a
+dependency conflict.
 
 Classify canisters by purpose: standalone product canisters belong under
 `crates/`, product fleet components under `apps/`, and separate test, audit or
@@ -837,6 +900,18 @@ when changing platform behavior or CI. Routine CI cancels superseded runs while
 preserving required hosts on the retained run.
 
 ## Feedback and handoff
+
+Every issue reference must name its owning repository and issue number, even
+for the current repository: `Canic #14`, `WasmStore #1`, `BlobStorage #3`.
+The display name may omit the `IC` prefix, but must identify the repository
+containing the issue, not the package or subject being discussed. For example,
+a Platform migration tracked in Canic is `Canic #14 — Platform migration`, not
+`Platform #14`. Use that repository-qualified label in links and link directly
+to the issue when available. Never use a bare `#14` or rely on a heading to
+supply its repository. Apply this in conversation, progress updates, final
+reports, handoffs, documentation, changelogs and newly written issue/PR text.
+Use `owner/repository#number` when a shortened name would be ambiguous or GitHub
+closing syntax requires it. Verify an uncertain owner rather than guessing.
 
 Shared dependency defects and advisories have one remediation issue at the
 supplying owner. Do not create a waiting issue in every consumer; separate

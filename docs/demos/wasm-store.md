@@ -487,7 +487,7 @@ An unfinished step still needs its original live authority. Observation history
 is bounded to 32 attempts; exhaustion blocks without deleting evidence.
 
 Publication, artifact building and inspection accept up to 8 MiB, within Store’s
-bounded chunk contract. Direct-install plans retain their 1.5 MB transport bound,
+bounded chunk contract. Direct-install plans have a 1,900,000-byte transport bound,
 and inline child plans retain their smaller custody limits. No measured deployment
 speedup is claimed. Whole-fleet release selection and Root maintenance with full
 Store custody use the workflows above, including repeat Store replacement.

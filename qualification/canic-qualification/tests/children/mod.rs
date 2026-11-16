@@ -87,17 +87,24 @@ pub(super) fn artifact(name: &str) -> Vec<u8> {
 
 #[tokio::test]
 async fn two_children_preserve_history_and_upgrade_independently() {
-    let owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(180)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(PocketIcBuilder::new().with_application_subnet())
-    .await
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(180),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
+    )
     .unwrap();
-    let pic = owner.instance();
+    let owner = server
+        .instance(
+            PocketIcBuilder::new().with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let pic = owner.client();
     let root = pic.create_canister().await;
     // The release fixture retains the v3 one-child history schema, rather than
     // manufacturing stable bytes using the new writer under test.
@@ -196,7 +203,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     )
     .unwrap();
     assert_eq!(old_custody.upgrades.len(), 2);
-    pic.upgrade_canister(root, artifact("root.wasm"), vec![], None)
+    canic_qualification::upgrade_stopped(pic, root, artifact("root.wasm"), vec![], None)
         .await
         .unwrap();
     let migrated = read(pic, root).await;
@@ -281,7 +288,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     );
     // Scheduled work survives Root replacement without the operator resubmitting it.
     let scheduled = read(pic, root).await;
-    pic.upgrade_canister(root, artifact("maintenance.wasm"), vec![], None)
+    canic_qualification::upgrade_stopped(pic, root, artifact("maintenance.wasm"), vec![], None)
         .await
         .unwrap();
     assert_eq!(read(pic, root).await, scheduled);
@@ -484,7 +491,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         admit(pic, root, ChildId::SECOND, changed).await,
         Err(Refusal::Occupied)
     );
-    pic.upgrade_canister(root, artifact("root.wasm"), vec![], None)
+    canic_qualification::upgrade_stopped(pic, root, artifact("root.wasm"), vec![], None)
         .await
         .unwrap();
     assert_eq!(read(pic, root).await, upgraded);
@@ -494,22 +501,34 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
         3
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test]
 async fn lost_creation_callback_does_not_block_sibling() {
-    let owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(180)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(PocketIcBuilder::new().with_application_subnet())
-    .await
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(180),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
+    )
     .unwrap();
-    let pic = owner.instance();
+    let owner = server
+        .instance(
+            PocketIcBuilder::new().with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let pic = owner.client();
     let root = pic.create_canister().await;
     pic.install_canister(root, artifact("faults.wasm"), vec![], None)
         .await;
@@ -616,7 +635,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
         upgrade::Phase::InstallIssued
     );
     assert_eq!(interrupted[0], evidence[0]);
-    pic.upgrade_canister(root, artifact("root.wasm"), vec![], None)
+    canic_qualification::upgrade_stopped(pic, root, artifact("root.wasm"), vec![], None)
         .await
         .unwrap();
     settle(pic).await;
@@ -654,22 +673,34 @@ async fn lost_creation_callback_does_not_block_sibling() {
         pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
         3
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test]
 async fn child_admission_reserves_siblings_unissued_attachment() {
-    let owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(180)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(PocketIcBuilder::new().with_application_subnet())
-    .await
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(180),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
+    )
     .unwrap();
-    let pic = owner.instance();
+    let owner = server
+        .instance(
+            PocketIcBuilder::new().with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let pic = owner.client();
     let root = pic
         .create_canister_with_params(
             None,
@@ -698,7 +729,12 @@ async fn child_admission_reserves_siblings_unissued_attachment() {
     let evidence = read(pic, root).await;
     assert!(evidence.iter().all(|c| c.creation.phase == Phase::Ready));
     assert!(pic.cycle_balance(root).await > u128::from(canic_management_protocol::RESERVE_CYCLES));
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 // A custom section changes the exact module bytes without changing application

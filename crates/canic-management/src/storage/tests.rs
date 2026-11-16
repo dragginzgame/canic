@@ -43,6 +43,7 @@ fn previous_artifact(artifact: &Artifact) -> Vec<u8> {
         Artifact::Stored(value) => {
             encoded(b"CUS1", value, canic_management_protocol::stored::LIMITS)
         }
+        Artifact::Application(..) => panic!("historical format has no application arguments"),
     }
 }
 
@@ -216,6 +217,7 @@ fn full_mixed_predecessor_migrates_without_growing_either_checked_allocation() {
         upgrades: vec![],
     };
     let second = Artifact::Stored(sources.clone());
+    assert_application_artifact_codec(&sources);
     let original_ceiling = 2 * MAX_WASM - ic_storage::STABLE_CELL_HEADER_SIZE;
     let inline_bytes = original_ceiling - 8 - 8 - previous_artifact(&second).len();
     assert!(inline_bytes <= canic_management_protocol::children::MAX_ARTIFACT_BYTES);
@@ -291,6 +293,51 @@ fn full_mixed_predecessor_migrates_without_growing_either_checked_allocation() {
             .0
             .values()
             .all(|entry| entry.0.approval.is_none())
+    );
+}
+
+fn assert_application_artifact_codec(sources: &canic_management_protocol::stored::Sources) {
+    use canic_management_protocol::application;
+    let mut artifacts = Artifacts::default();
+    artifacts.0.insert(
+        ChildId::FIRST,
+        Artifact::Application(
+            sources.clone(),
+            application::Lifecycle {
+                creation: application::Arguments::new(vec![255; application::MAX_ARGUMENT_BYTES])
+                    .unwrap(),
+                upgrades: vec![],
+            },
+        ),
+    );
+    let bytes = artifacts.to_bytes().unwrap().into_owned();
+    assert!(bytes.starts_with(b"CUA5"));
+    assert_eq!(
+        Artifacts::from_bytes(Cow::Borrowed(&bytes))
+            .unwrap()
+            .to_bytes()
+            .unwrap(),
+        bytes
+    );
+    let mut old_tag = bytes;
+    old_tag[..4].copy_from_slice(b"CUA4");
+    assert!(Artifacts::from_bytes(Cow::Owned(old_tag)).is_err());
+    let Artifact::Application(_, lifecycle) = artifacts.0.get_mut(&ChildId::FIRST).unwrap() else {
+        unreachable!()
+    };
+    lifecycle.upgrades.push(application::Maintenance {
+        operator: "2vxsx-fae".into(),
+        arguments: application::Arguments::new(vec![1]).unwrap(),
+        attempt: 1,
+        phase: application::MaintenancePhase::Scheduled,
+        requests: [None; 4],
+        before: None,
+        after: None,
+        activator: None,
+    });
+    assert!(
+        !artifacts.fits(),
+        "arguments cannot outlive their effect/source history"
     );
 }
 

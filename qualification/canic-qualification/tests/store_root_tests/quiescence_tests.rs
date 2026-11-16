@@ -67,8 +67,8 @@ pub(super) async fn child_stage(
 #[tokio::test(flavor = "current_thread")]
 async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upgrade() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture(pic).await;
     let first = supplier.publish_bytes("kept", b"\0asm\x01\0\0\0").await;
     supplier
@@ -213,7 +213,8 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     assert_eq!(recover_store(&root, &input).await, scanned); // Complete pre-scan cannot authorize stop through recovery.
     // The pre-existing maintenance helper installs a non-fault build. Restore the fault build
     // without changing the journal so the stop callback still exercises its failure boundary.
-    pic.upgrade_canister(
+    canic_qualification::upgrade_stopped(
+        pic,
         root.id,
         std::fs::read(artifacts().join("root-faults.wasm")).unwrap(),
         vec![],
@@ -266,14 +267,19 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
         .is_err()
     );
     assert_eq!(observe(&root).await.unwrap(), stopped);
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn maintenance_refuses_unfinished_children_and_checks_live_store_authority_before_closure() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (busy, supplier) = readiness_tests::fixture(pic).await;
     child_stage(&busy).await.unwrap();
     let input = approval(&busy, &supplier).await;
@@ -310,7 +316,12 @@ async fn maintenance_refuses_unfinished_children_and_checks_live_store_authority
     pic.advance_time(Duration::from_secs(3601)).await;
     assert_eq!(advance(&root, &input).await.phase, Phase::Reserved); // Expiry grants no new close.
     assert_eq!(pic.get_stable_memory(supplier.id).await, before);
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -324,8 +335,8 @@ async fn cuj5_maintenance_migration_preserves_real_attempt_without_inventing_a_s
         failure: Option<management::Failure>,
     }
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let predecessor = include_bytes!("../../fixtures/root-store-quiescence.wasm");
     for stopped in [false, true] {
         let (root, supplier) = readiness_tests::fixture_with_root(pic, predecessor.to_vec()).await;
@@ -395,14 +406,19 @@ async fn cuj5_maintenance_migration_preserves_real_attempt_without_inventing_a_s
             assert_eq!(resumed.phase, Phase::Closed);
         }
     }
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn root_journal_migration_adds_no_store_authority_to_a_retained_predecessor() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let operator = CanisterId::self_authenticating(b"Root journal predecessor");
     let id = pic
         .create_canister_with_settings(Some(operator), None)
@@ -431,5 +447,10 @@ async fn root_journal_migration_adds_no_store_authority_to_a_retained_predecesso
             .iter()
             .all(|c| c.creation.approval.is_none() && c.upgrades.is_empty())
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

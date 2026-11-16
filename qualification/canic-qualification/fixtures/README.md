@@ -1,5 +1,17 @@
 # Retained Root executable
 
+## Blob catalog before registry adoption
+
+`blob-catalog-01006.wasm` is the populated-predecessor fixture retained before
+adopting registry Blob 0.101.0. Its 510,340 bytes have SHA-256
+`ddb725f52f1c819c652d4a47b967081a221a5832c5e616eb21e34b02ae89d96d`, matching the
+pre-adoption `target/blob/original.json`. It used the qualified Blob 0.100.6 Service
+and its Wire 0.22 persistence codec. This is an exact retained binary, not a tagged
+release or reproducible-build claim. The installed witness populates two owners,
+drains, releases one reference, upgrades to the current registry consumer and
+proves preserved closed admission, remaining ownership and non-resurrecting replay.
+No old supplier Git fetch or build fallback is introduced.
+
 `root-single-upgrade.wasm` is the retained pre-0.204 experimental greeting Root
 used before serial-upgrade implementation. SHA-256:
 `e4a4127abd525f59378503dcdb98fcb13f8eb9895673d4d8a4dea41d85e24296`.

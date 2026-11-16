@@ -73,26 +73,7 @@ jobs:
       - name: Admit sources and check formatting
         run: make toko-tooling-check fmt-check
       - name: Prepare locked dependencies
-        env:
-          CANIC_BLOB_DEPLOY_KEY: ${{ secrets.CANIC_BLOB_DEPLOY_KEY }}
-          CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
-          GIT_TERMINAL_PROMPT: '0'
-        run: |
-          test -n "$CANIC_BLOB_DEPLOY_KEY" || {
-            echo 'Configure CANIC_BLOB_DEPLOY_KEY with read-only access to ic-blob-storage.' >&2
-            exit 1
-          }
-          umask 077
-          key_file="$(mktemp "$RUNNER_TEMP/canic-blob-key.XXXXXX")"
-          trap 'rm -f -- "$key_file"' EXIT
-          printf '%s\n' "$CANIC_BLOB_DEPLOY_KEY" > "$key_file"
-          unset CANIC_BLOB_DEPLOY_KEY
-          printf -v GIT_SSH_COMMAND 'ssh -F /dev/null -i %q -p 443 -o Hostname=ssh.github.com -o HostKeyAlias=github.com -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=%q' "$key_file" "$GITHUB_WORKSPACE/ci/github-known-hosts"
-          export GIT_SSH_COMMAND
-          export GIT_CONFIG_COUNT=1
-          export GIT_CONFIG_KEY_0=url.ssh://git@github.com/dragginzgame/ic-blob-storage.insteadOf
-          export GIT_CONFIG_VALUE_0=https://github.com/dragginzgame/ic-blob-storage
-          cargo fetch --locked
+        run: cargo fetch --locked
       - name: Native product checks
         run: make ci-native
       - name: Wasm product checks

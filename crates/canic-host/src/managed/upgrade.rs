@@ -43,19 +43,24 @@ pub(super) fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) 
             .any(|(n, hash)| (*n == 1) != hash.is_some())
         || (status.attempts[0] == 1 && status.previous_version.is_none())
         || (status.attempts[1] == 1 && status.attempts[0] != 1)
+        || (matches!(status.phase, Phase::StopIssued | Phase::Stopped)
+            && (status.attempts != [0; 2]
+                || status.previous_version.is_some()
+                || status.observed_version.is_some()))
         || (status.observed_version.is_some()
             && status.observed_version != status.previous_version.and_then(|v| v.checked_add(1)))
-        || (status.phase == Phase::Ready
-            && (status.attempts != [1; 2]
-                || status.observed_version.is_none()
-                || status.failure.is_some()))
+        || (matches!(
+            status.phase,
+            Phase::Verified | Phase::StartIssued | Phase::Started | Phase::Ready
+        ) && (status.attempts != [1; 2] || status.observed_version.is_none()))
+        || (status.phase == Phase::Ready && status.failure.is_some())
     {
         return Err(Error::Invalid(
             "Root upgrade evidence differs from approval or dispatch custody".into(),
         ));
     }
     if let Some(old) = previous
-        && (old.phase as u8 > status.phase as u8
+        && (progress(old.phase) > progress(status.phase)
             || (matches!(
                 old.phase,
                 Phase::Expired | Phase::ReserveBlocked | Phase::Ready
@@ -76,6 +81,26 @@ pub(super) fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) 
         return Err(Error::Invalid("Root upgrade evidence regressed".into()));
     }
     Ok(())
+}
+// Codec discriminants preserve historical bytes; appended stop/start variants
+// occur earlier in execution. Observation ordering must not use their encoding.
+fn progress(phase: Phase) -> u8 {
+    match phase {
+        Phase::Empty => 0,
+        Phase::Scheduled => 1,
+        Phase::StopIssued => 2,
+        Phase::Stopped => 3,
+        Phase::Checked => 4,
+        Phase::UploadIssued => 5,
+        Phase::Uploaded => 6,
+        Phase::InstallIssued => 7,
+        Phase::Installed => 8,
+        Phase::Verified => 9,
+        Phase::StartIssued => 10,
+        Phase::Started => 11,
+        Phase::Ready => 12,
+        Phase::Expired | Phase::ReserveBlocked => 13,
+    }
 }
 fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
     let reply: std::result::Result<Status, Refusal> = ic_wire::decode(
@@ -119,15 +144,14 @@ pub(crate) fn evidence_with_source(
         ] {
             let path = dir.join(format!("observe/{index}/{name}"));
             if path.try_exists().map_err(supplier)? {
-                let bytes = store::read(
-                    &path,
-                    canic_management_protocol::custody::ROOT_HISTORY_LIMITS.bytes,
-                )?;
+                let bytes =
+                    store::read(&path, canic_management_protocol::application::LIMITS.bytes)?;
                 let (status, source) = if matches!(
                     method,
                     canic_management_protocol::stored::CUSTODY
                         | canic_management_protocol::custody::ROOT
                         | canic_management_protocol::custody::ROOT_HISTORY
+                        | canic_management_protocol::application::CUSTODY
                 ) {
                     super::stored::upgrade_evidence(plan, &bytes)?
                 } else {
@@ -279,6 +303,7 @@ pub(super) async fn apply(
         complete(dir, id, plan, child, agent).await
     } else {
         Ok(ApplyOutcome::UpgradePending {
+            maintenance: super::stored::maintenance_evidence(dir, plan)?.map(Box::new),
             operation: id.into(),
             root: owner.root.clone(),
             upgrade: Box::new(status),

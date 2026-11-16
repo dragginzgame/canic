@@ -1,6 +1,14 @@
 # Canic qualification
 
 This workspace owns installed effect-boundary and product regression tests.
+Actors select Platform Runtime 0.23.14 and Timers 0.46.0. Current upgrade fixtures
+stop/drain before replacing an executable, then restart explicitly; application
+admission (including Blob activation) remains separate. `make growth-test` includes
+lost stop/start callbacks and owner reopening. `make journey-test` checks exact
+Host stop/status/start signature retention across lost installation evidence.
+No current-suite pass qualifies the ignored legacy fixtures requiring external
+artifacts. See the dated [Runtime adoption evidence](../docs/qualification/history.md).
+
 Store-native tests and the standalone upload/reopen/version-reuse witness now live
 in `dragginzgame/ic-wasm-store`. The two local workspaces pin its passive protocol;
 the existing artifact builder selects the matching locked crates.io runtime and
@@ -8,7 +16,7 @@ builds it using its packaged lockfile.
 This workspace retains Root integration, chunked installation and complete CLI
 journeys. `make store-test` does not rerun the supplier's native suite.
 `bash scripts/dev/test-store.sh preservation` selects three installed boundaries
-against published 0.2.3: distinct removed/restored pages, an actual historical
+against published 0.3.0: distinct removed/restored pages, an actual historical
 scan retaining its digest/refusal across CUJ8→CUJ9, and a new Root scan retaining
 deleted/cancelled labels and its removed-entry cursor across Root and Store
 upgrades. Store activation remains explicit; a downgrade cannot discard the
@@ -34,7 +42,7 @@ Its packages are named by responsibility, independently of design milestones:
 | `canic-qualification` | Native harnesses, retained predecessor binaries and explicit shared simulator preparation |
 | `canic-effect-probe` | Small Wasm probe isolating creation/funding commit boundaries and owner rollback |
 | `canic-asset-catalog` | Real embedded Blob/catalog composition with explicit lifecycle and qualification-only failure points |
-| `canic-auth-witness` | Real volatile Auth receiver behind optional Canic mounts, direct Root enrollment and callback/reply rollback |
+| `canic-auth-witness` | Real volatile Auth issuer/receiver behind optional Canic mounts, direct Root enrollment and callback/reply rollback |
 | `canic-artifact-probe` | Small Wasm probe isolating retained-byte installation onto an existing target |
 
 Each package lives in its identically named directory under this workspace.
@@ -51,9 +59,42 @@ case uses the real CLI and ICP signer: exact fleet grant planning, certified
 controller prerequisites, configuration, receiver refresh, terminal revocation
 and lost local reply recovery with unchanged signed bytes. Native cases cover
 config conflicts, historical plan encoding and preservation-upgrade refusal.
-It does not qualify account issuance, certified proofs, managed Auth preservation
-or browser orchestration. See the
+`bash scripts/dev/test-auth.sh auth_enrollment_tests` selects three additional
+installed cases: overlapping refreshes retain one reservation/call/deadline,
+and expiry during actual entropy/snapshot awaits cannot publish new authority.
+The latter uses separate Root/receiver subnets to isolate the await boundaries,
+preserves existing enrollment during expired refresh, and admits a new attempt
+only through another explicit refresh. Independent fixture counters observe local
+commit boundaries; no production fault switch or substitute snapshot is used.
+The authority-loss case stops or upgrades an active Root. Failed refreshes retain
+their busy windows and cannot renew the last snapshot or session; access refuses
+at and after the original freshness deadline without another application write.
+`bash scripts/dev/test-auth.sh auth_issuer_tests` selects installed local-key
+issuance/renewal and lookup-only reconciliation. Actual ingress account/browser
+separation, independent signature verification/counts, a Root-enrolled receiver,
+unchanged login deadlines, duplicate delivery, reply rollback, permission changes
+across awaits, malformed frames, capacity, expiry, real pruning and upgrade-loss
+closure are covered. The supplier owns the sole intent/result/renewal engine.
+These tests do not qualify production key custody, external signer uncertainty,
+browser-bound issuer logout, certified proofs, managed Auth preservation or
+browser orchestration. See the
 [Auth guide](../docs/demos/auth.md) for exact inputs and the remaining issue scopes.
+The application's signer and native verifier use Platform 0.34.9 Ed25519.
+Enrollment and issuance use Protocol 0.2.6 for actual `raw_rand` framing in both
+workspaces. Testkit 0.107.3 resolves the former Protocol pin conflict
+([Tooling #7](https://github.com/dragginzgame/ic-tooling/issues/7)). Runtime and
+pinned Auth internals retain their existing older selections; the remaining
+migration belongs to [Canic #14](https://github.com/dragginzgame/canic/issues/14).
+
+All simulator client imports select Testkit 0.107.3. The Auth harness additionally
+selects its bounded held-reply feature for actual cross-receiver publication order.
+Its optional `managed-server` capability also owns prepared assets, bounded
+startup/output and server/instance custody. The old lifecycle dependency is removed
+([Canic #15](https://github.com/dragginzgame/canic/issues/15)). Explicit close attempts
+instance deletion before stopping the server; fallback drop records abandonment
+and terminates the last owner's process. Neither path invents confirmed deletion.
+The `server` test target exercises offline refusal, startup failure, independent
+instances, stop ordering and independently observed listener closure.
 
 M0/M1 package and Make names are retired without aliases. `make qualification-setup`
 prepares the simulator for every suite. Select `make effect-test`,
@@ -244,14 +285,17 @@ not invoke signing or continue maintenance.
 Native fleet tests admit both full 8 MiB manifests and
 preserve existing inline fleets with or without Store and their retained digests.
 `make blob-test` builds two embedded catalog executables using the optional
-Canic adapter and the real Blob Service at its pinned Git revision. Five installed cases cover user
+Canic adapter and registry Blob 0.102.0. Seven installed cases cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,
-non-resurrecting replay, drain/reopen/exact activation and reopen refusal.
-Supplier source/files and both consumer locks are fingerprinted before/after;
+non-resurrecting replay, drain/reopen/exact activation, reopen refusal and populated
+0.100.6 predecessor compatibility. The real CLI/Root/Store path additionally
+qualifies exact creation arguments, optional Root-owned maintenance, lost effect
+callbacks across Root reopening, explicit activation and stale-attempt refusal.
+Supplier archive/source files and both consumer locks are fingerprinted before/after;
 no supplier checkout files are changed. The immutable input is explicit
-in [AGENTS](../AGENTS.md#local-blob-composition). See [scope and evidence](../docs/demos/blob.md).
+in [AGENTS](../AGENTS.md#blob-boundary). See [scope and evidence](../docs/demos/blob.md).
 Tests never install the simulator themselves. Preparation and tests use the same
-`IC_TESTKIT_SERVER_DIRECTORY` override, defaulting to `target/qualification/server`.
+`IC_TESTKIT_SERVER_DIRECTORY` override, defaulting to `target/qualification/server/prepared`.
 Existing files under `target/m0/` are historical outputs and are not deleted or
 silently used as a fallback; run setup once for the new location.
 
@@ -290,7 +334,7 @@ make effect-test
 ```
 
 `qualification-setup` explicitly provisions Testkit's authenticated PocketIC bundle
-under `target/qualification/server`. Tests only check that prepared bundle; they never
+under `target/qualification/server/prepared`. Tests only check that prepared bundle; they never
 download a server. An already prepared bundle can be selected with
 `IC_TESTKIT_SERVER_DIRECTORY=/absolute/path make effect-test`. Tests need permission
 to bind a local loopback port. They create isolated local instances, use synthetic
@@ -584,3 +628,34 @@ the normal desktop browser. Ctrl-C stops the viewer; the replica has already
 closed. See the [growth guide](../docs/demos/growth.md) for the selected topology,
 limits, fresh mainnet instructions and recovery limitations. The focused lint and
 documentation checks are `make profile-clippy` and `make profile-doc`.
+
+## Typed database composition
+
+`make db-test` selects only `canic-db-witness`. The application declares its own
+`Item` schema, stores the installation owner separately, initializes IC DB
+explicitly and supplies synchronous inspect/query/write handlers to
+`canic::mount_db_endpoints!`. The `db` feature adds no IC DB runtime dependency to
+Canic. The witness consumes committed IC DB revision
+`950f36807f8ffa7ebe4ca2cff6792fa2bbcbd03e`; transport never becomes its durable codec.
+
+```sh
+make qualification-setup
+make db-test
+make db-clippy
+```
+
+The installed test checks authorization before malformed decoding, wrong
+method/direction and oversize refusal, atomic batch conflicts, sparse empty pages,
+cursor binding, five upgrades, reply-encoding rollback, frozen ordinary access
+and supported cancellation. Normal Wasm excludes the private fault/maintenance
+entrypoint. Requests bound results to 1–3 and candidates to 1–4, with 1 KiB engine
+output and a 64 KiB frame envelope; writes contain at most four rows. These are
+application witness bounds, not new engine limits.
+
+`target/db/` retains the source archive, lockfile/compiler, Cargo artifact records, selected
+feature graphs, normal/fault Wasm and installed run log. Simulator setup is
+explicit and uses the existing `IC_TESTKIT_SERVER_DIRECTORY` selection. This
+qualifies typed composition, not arbitrary remote queries, production authority
+storage, full migration orchestration or a deployed-database CLI. All database
+semantics remain in IC DB; permission and any tenant/row restrictions remain in
+the application. Mounting adds no initialization or lifecycle hooks.

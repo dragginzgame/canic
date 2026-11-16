@@ -12,6 +12,9 @@ pub use ic_auth_wire as protocol;
 /// Explicit, volatile single-grant enrollment. Does not mount or activate itself.
 pub mod enrollment;
 
+/// Canic-owned issuer transport; application handlers own authentication and keys.
+pub mod issuer;
+
 #[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
 pub mod endpoint;
@@ -39,56 +42,41 @@ pub mod endpoint;
 macro_rules! mount_auth_endpoints {
     (admit = $admit:path, read = $read:path, logout = $logout:path $(,)?) => {
         mod establish_portable_session {
-            use endpoint::{api, cdk};
+            use endpoint::{api, runtime};
             use $crate::auth::{
                 endpoint,
                 protocol::{EstablishSession, SessionInput, SessionView, model::AdmissionRefusal},
             };
             const ID: u64 = EstablishSession::ID;
-            #[cdk::update(
-                crate = "cdk",
-                guard = "endpoint::admit::<ID>",
-                decode_with = "endpoint::decode::<SessionInput, ID>",
-                encode_with = "endpoint::encode::<Result<SessionView, AdmissionRefusal>, ID>"
-            )]
+            #[runtime::update(runtime = runtime, guard = endpoint::admit::<ID>, decode = endpoint::decode::<SessionInput, ID>, max_bytes = 2097152, on_error = endpoint::fail, name = "establish_portable_session", encode = endpoint::encode::<Result<SessionView, AdmissionRefusal>, ID>)]
             fn establish_portable_session(
                 input: SessionInput,
             ) -> Result<SessionView, AdmissionRefusal> {
-                $admit(api::msg_caller(), input, api::time())
+                $admit(api::caller(), input, api::time())
             }
         }
         mod portable_session_read {
-            use endpoint::{api, cdk};
+            use endpoint::{api, runtime};
             use $crate::auth::{
                 endpoint,
                 protocol::{ReadSession, SessionView, model::SessionReadRefusal},
             };
             const ID: u64 = ReadSession::ID;
-            #[cdk::query(
-                crate = "cdk",
-                guard = "endpoint::admit::<ID>",
-                decode_with = "endpoint::decode::<(), ID>",
-                encode_with = "endpoint::encode::<Result<SessionView, SessionReadRefusal>, ID>"
-            )]
-            fn portable_session_read() -> Result<SessionView, SessionReadRefusal> {
-                $read(api::msg_caller(), api::time())
+            #[runtime::query(runtime = runtime, guard = endpoint::admit::<ID>, decode = endpoint::decode::<(), ID>, max_bytes = 2097152, on_error = endpoint::fail, name = "portable_session_read", encode = endpoint::encode::<Result<SessionView, SessionReadRefusal>, ID>)]
+            fn portable_session_read((): ()) -> Result<SessionView, SessionReadRefusal> {
+                $read(api::caller(), api::time())
             }
         }
         mod logout_portable_session {
-            use endpoint::{api, cdk};
+            use endpoint::{api, runtime};
             use $crate::auth::{
                 endpoint,
                 protocol::{Logout, model::LogoutResult},
             };
             const ID: u64 = Logout::ID;
-            #[cdk::update(
-                crate = "cdk",
-                guard = "endpoint::admit::<ID>",
-                decode_with = "endpoint::decode::<(), ID>",
-                encode_with = "endpoint::encode::<LogoutResult, ID>"
-            )]
-            fn logout_portable_session() -> LogoutResult {
-                $logout(api::msg_caller(), api::time())
+            #[runtime::update(runtime = runtime, guard = endpoint::admit::<ID>, decode = endpoint::decode::<(), ID>, max_bytes = 2097152, on_error = endpoint::fail, name = "logout_portable_session", encode = endpoint::encode::<LogoutResult, ID>)]
+            fn logout_portable_session((): ()) -> LogoutResult {
+                $logout(api::caller(), api::time())
             }
         }
     };

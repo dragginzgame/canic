@@ -1,4 +1,5 @@
-//! Isolated raw stable-memory and heartbeat fixture, not a production integration.
+//! Isolated raw stable-memory and scheduled artifact fixture, not a production integration.
+use ic_platform::principal::Principal;
 
 use crate::{
     ARTIFACT_LIMITS, AdmissionError, Approval, CHECKPOINT, Fault, LIMITS, Phase, RECONCILE,
@@ -12,11 +13,55 @@ use ic_platform::{
     },
 };
 use ic_platform_runtime::{
-    Principal,
-    call::{Call, CallFailed, WaitPolicy},
-    cdk::{self, api, stable},
+    self as runtime,
+    call::{Call, Outcome, Wait},
+    raw as stable, system as api,
 };
 use std::cell::RefCell;
+
+thread_local! {
+    static TIMER: RefCell<Option<ic_timers::Once>> = const { RefCell::new(None) };
+}
+#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+fn init((): ()) {
+    open_timer();
+}
+
+fn open_timer() {
+    ic_timers::initialize().expect("one artifact timer runtime");
+    let timer = ic_timers::bind_once(
+        ["qualification", "artifact", "install"],
+        ic_timers::Lifetime::Retained,
+        || async {
+            install_artifact().await;
+            ic_timers::OnceResult {
+                observation: ic_timers::Observation::Success,
+                next: ic_timers::OnceNext::Stop,
+            }
+        },
+    )
+    .expect("artifact timer");
+    TIMER.with_borrow_mut(|slot| *slot = Some(timer));
+    schedule();
+}
+fn schedule() {
+    let desired = JOURNAL.with_borrow(|state| {
+        state
+            .approval
+            .as_ref()
+            .filter(|_| state.phase == Phase::Scheduled)
+            .map_or(ic_timers::OnceDemand::Inactive, |a| {
+                ic_timers::OnceDemand::At(a.execute_at_ns)
+            })
+    });
+    TIMER.with_borrow_mut(|timer| {
+        timer
+            .as_mut()
+            .expect("initialized timer")
+            .set(desired)
+            .expect("artifact demand")
+    });
+}
 
 thread_local! {
     static JOURNAL: RefCell<Retained> = RefCell::new(Retained::default());
@@ -31,10 +76,10 @@ const MANAGEMENT_LIMITS: decoder::Limits = decoder::Limits {
 };
 
 fn guard(limit: usize) -> Result<(), String> {
-    if !api::is_controller(&api::msg_caller()) {
+    if !api::is_controller(&api::caller()) {
         return Err("controller required".into());
     }
-    if ic_platform_runtime::ic0::msg_arg_data_size() > limit {
+    if ic_platform_runtime::system::argument_size() > limit {
         return Err("request too large".into());
     }
     Ok(())
@@ -48,24 +93,19 @@ fn uploader() -> Result<(), String> {
     guard(ARTIFACT_LIMITS.bytes)
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns argument bytes"
-)]
-fn decode_stage(bytes: Vec<u8>) -> Approval {
+fn decode_stage(bytes: &[u8]) -> Result<Approval, ic_wire::Error> {
     ic_wire::decode(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: STAGE,
             direction: ic_wire::Direction::Request,
         },
         ARTIFACT_LIMITS,
     )
-    .expect("bounded approval")
 }
 
 #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns its reply")]
-fn encode_stage(value: Result<Status, AdmissionError>) -> Vec<u8> {
+fn encode_stage(value: Result<Status, AdmissionError>) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -74,52 +114,43 @@ fn encode_stage(value: Result<Status, AdmissionError>) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded staging result")
 }
 
-#[cdk::update(
-    guard = "uploader",
-    decode_with = "decode_stage",
-    encode_with = "encode_stage"
-)]
+#[runtime::update(runtime = runtime, guard = uploader, decode = decode_stage, max_bytes = 2097152, on_error = endpoint_error, name = "stage", encode = encode_stage)]
 fn stage(approval: Approval) -> Result<Status, AdmissionError> {
     let previous = JOURNAL.with_borrow(|state| state.approval.clone());
     if let Some(previous) = previous {
         return if previous == approval {
-            Ok(status())
+            Ok(status(()))
         } else {
             Err(AdmissionError::Occupied)
         };
     }
     approval.validate(api::time())?;
-    if approval.target == api::canister_self().as_slice() {
+    if approval.target == Principal::from_slice(api::canister_self().as_slice()).as_slice() {
         return Err(AdmissionError::Target);
     }
     JOURNAL.with_borrow_mut(|state| {
         state.approval = Some(approval);
         state.phase = Phase::Scheduled;
     });
-    Ok(status())
+    schedule();
+    Ok(status(()))
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns argument bytes"
-)]
-fn decode_status(bytes: Vec<u8>) {
+fn decode_status(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     ic_wire::decode::<()>(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: STATUS,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .expect("status request");
 }
 
 #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns its reply")]
-fn encode_status(value: Status) -> Vec<u8> {
+fn encode_status(value: Status) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -128,15 +159,10 @@ fn encode_status(value: Status) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded status")
 }
 
-#[cdk::query(
-    guard = "controller",
-    decode_with = "decode_status",
-    encode_with = "encode_status"
-)]
-fn status() -> Status {
+#[runtime::query(runtime = runtime, guard = controller, decode = decode_status, max_bytes = 2097152, on_error = endpoint_error, name = "status", encode = encode_status)]
+fn status((): ()) -> Status {
     JOURNAL.with_borrow(|state| Status {
         phase: state.phase,
         attempts: state.attempts,
@@ -150,14 +176,13 @@ fn status() -> Status {
         wasm_bytes: state.approval.as_ref().map_or(0, |a| a.wasm.len()),
         observed_module: state.observed_module.clone(),
         maintenance_candidate: cfg!(feature = "maintenance-candidate"),
-        stable_pages: api::stable_size(),
+        stable_pages: ic_platform_runtime::raw::stable64_size(),
     })
 }
 
 // Heartbeat is deliberately confined to this isolated experiment. It supplies
 // operator-independent execution without qualifying a production timer policy.
-#[cdk::heartbeat]
-async fn heartbeat() {
+async fn install_artifact() {
     let approval = JOURNAL.with_borrow(|state| {
         state
             .approval
@@ -168,7 +193,7 @@ async fn heartbeat() {
     let Some(approval) = approval else { return };
     let upload = candid_codec::encode_one(
         &UploadChunkArgs {
-            canister_id: api::canister_self(),
+            canister_id: Principal::from_slice(api::canister_self().as_slice()),
             chunk: approval.wasm,
         },
         ARTIFACT_LIMITS.bytes,
@@ -180,14 +205,17 @@ async fn heartbeat() {
         state.upload_request_sha256 = Some(artifact_hash(&upload));
     });
     let reply = Call::new(
-        Principal::management_canister(),
+        ic_platform_types::Principal::management_canister(),
         "upload_chunk",
-        WaitPolicy::Unbounded,
+        Wait::Unbounded,
     )
-    .take_raw_args(upload)
+    .owned_args(upload)
     .execute()
     .await
     .expect("chunk upload reply");
+    let Outcome::Reply(reply) = reply.into_parts().0 else {
+        api::trap("chunk upload refused")
+    };
     let chunk: ChunkHash = decoder::decode_one(&reply, MANAGEMENT_LIMITS).expect("chunk hash");
     assert_eq!(chunk.hash, approval.sha256, "uploaded chunk hash mismatch");
     JOURNAL.with_borrow_mut(|state| state.chunk_hash = Some(chunk.hash.clone()));
@@ -198,7 +226,7 @@ async fn heartbeat() {
         &InstallChunkedCodeArgs {
             mode: CanisterInstallMode::Install,
             target_canister: Principal::from_slice(&approval.target),
-            store_canister: Some(api::canister_self()),
+            store_canister: Some(Principal::from_slice(api::canister_self().as_slice())),
             chunk_hashes_list: vec![chunk],
             wasm_module_hash: approval.sha256.to_vec(),
             arg: vec![],
@@ -213,15 +241,15 @@ async fn heartbeat() {
         state.request_sha256 = Some(artifact_hash(&request));
     });
     let result = Call::new(
-        Principal::management_canister(),
+        ic_platform_types::Principal::management_canister(),
         "install_chunked_code",
-        WaitPolicy::Unbounded,
+        Wait::Unbounded,
     )
-    .take_raw_args(request)
+    .owned_args(request)
     .execute()
     .await;
-    match result {
-        Ok(reply) => {
+    match result.map(|completion| completion.into_parts().0) {
+        Ok(Outcome::Reply(reply)) => {
             decoder::decode_args::<()>(&reply, MANAGEMENT_LIMITS, decoder::Arity::Exact)
                 .expect("install success reply");
             JOURNAL.with_borrow_mut(|state| {
@@ -234,12 +262,12 @@ async fn heartbeat() {
             // This management call commits the install reply before verification.
             verify_target().await;
         }
-        Err(CallFailed::CallRejected(rejection)) => JOURNAL.with_borrow_mut(|state| {
-            state.phase = Phase::Rejected(rejection.raw_reject_code());
+        Ok(Outcome::Rejected(rejection)) => JOURNAL.with_borrow_mut(|state| {
+            state.phase = Phase::Rejected(rejection.code());
         }),
         // Keep the slot blocked on local dispatch errors too; this fixture makes
         // no recovery claim for that separate boundary and never retries install.
-        Err(_) => (),
+        Err(_) | Ok(Outcome::OutcomeUnknown(_)) => (),
     }
 }
 
@@ -263,14 +291,17 @@ async fn verify_target() {
     )
     .expect("status request");
     let reply = Call::new(
-        Principal::management_canister(),
+        ic_platform_types::Principal::management_canister(),
         "canister_status",
-        WaitPolicy::Unbounded,
+        Wait::Unbounded,
     )
-    .take_raw_args(request)
+    .owned_args(request)
     .execute()
     .await
     .expect("management observation");
+    let Outcome::Reply(reply) = reply.into_parts().0 else {
+        api::trap("management observation refused")
+    };
     let observed: CanisterStatusResult =
         decoder::decode_one(&reply, MANAGEMENT_LIMITS).expect("bounded management status");
     assert_eq!(
@@ -280,7 +311,7 @@ async fn verify_target() {
     );
     assert_eq!(
         observed.settings.controllers,
-        vec![api::canister_self()],
+        vec![Principal::from_slice(api::canister_self().as_slice())],
         "sole executor controller required"
     );
     JOURNAL.with_borrow_mut(|state| {
@@ -289,24 +320,19 @@ async fn verify_target() {
     });
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns argument bytes"
-)]
-fn decode_reconcile(bytes: Vec<u8>) {
+fn decode_reconcile(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     ic_wire::decode::<()>(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: RECONCILE,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .expect("reconcile request");
 }
 
 #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns its reply")]
-fn encode_reconcile(value: Status) -> Vec<u8> {
+fn encode_reconcile(value: Status) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -315,21 +341,16 @@ fn encode_reconcile(value: Status) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded reconciliation")
 }
 
-#[cdk::update(
-    guard = "controller",
-    decode_with = "decode_reconcile",
-    encode_with = "encode_reconcile"
-)]
-async fn reconcile() -> Status {
+#[runtime::update(runtime = runtime, guard = controller, decode = decode_reconcile, max_bytes = 2097152, on_error = endpoint_error, name = "reconcile", encode = encode_reconcile)]
+async fn reconcile((): ()) -> Status {
     verify_target().await;
-    status()
+    status(())
 }
 
-#[cdk::pre_upgrade]
-fn pre_upgrade() {
+#[runtime::pre_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+fn pre_upgrade((): ()) {
     let bytes = JOURNAL
         .with_borrow(|state| {
             ic_wire::encode(
@@ -343,47 +364,45 @@ fn pre_upgrade() {
         })
         .expect("bounded artifact checkpoint");
     let pages = (bytes.len() as u64 + 4).div_ceil(65_536);
-    let existing = api::stable_size();
+    let existing = ic_platform_runtime::raw::stable64_size();
     if pages > existing {
-        stable::stable_grow(pages - existing).expect("checkpoint allocation");
+        stable::stable64_grow(pages - existing).expect("checkpoint allocation");
     }
-    stable::stable_write(
+    stable::stable64_write(
         0,
         &u32::try_from(bytes.len())
             .expect("bounded length")
             .to_le_bytes(),
     );
-    stable::stable_write(4, &bytes);
+    stable::stable64_write(4, &bytes);
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns argument bytes"
-)]
-fn decode_upgrade(bytes: Vec<u8>) -> bool {
+fn decode_upgrade(bytes: &[u8]) -> Result<bool, ic_wire::Error> {
     ic_wire::decode(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: UPGRADE,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .expect("bounded upgrade argument")
 }
 
-#[cdk::post_upgrade(decode_with = "decode_upgrade")]
+#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = decode_upgrade, max_bytes = 2097152, on_error = endpoint_error)]
 fn post_upgrade(trap_after_restore: bool) {
-    assert!(api::stable_size() > 0, "artifact checkpoint missing");
+    assert!(
+        ic_platform_runtime::raw::stable64_size() > 0,
+        "artifact checkpoint missing"
+    );
     let mut length = [0; 4];
-    stable::stable_read(0, &mut length);
+    stable::stable64_read(0, &mut length);
     let length = u32::from_le_bytes(length) as usize;
     assert!(
         length > 0 && length <= ARTIFACT_LIMITS.bytes,
         "checkpoint length outside bound"
     );
     let mut bytes = vec![0; length];
-    stable::stable_read(4, &mut bytes);
+    stable::stable64_read(4, &mut bytes);
     let state: Retained = ic_wire::decode(
         &bytes,
         ic_wire::Encoding::Frame {
@@ -399,7 +418,20 @@ fn post_upgrade(trap_after_restore: bool) {
             .expect("valid retained artifact");
     }
     JOURNAL.with_borrow_mut(|journal| *journal = state);
+    open_timer();
     if trap_after_restore {
         api::trap("injected artifact maintenance trap");
     }
+}
+
+fn endpoint_error(error: impl std::fmt::Debug) -> ! {
+    ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
+}
+
+fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
+    Ok(())
+}
+
+fn lifecycle_decode(_bytes: &[u8]) -> Result<(), std::convert::Infallible> {
+    Ok(())
 }

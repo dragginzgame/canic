@@ -11,13 +11,14 @@ ignored = ["toko-tooling"]
 
 [features]
 auth = ["dep:ic-auth-protocol-types", "dep:ic-auth-wire", "dep:ic-platform-runtime"]
-auth-enrollment = ["auth", "dep:ic-auth", "dep:ic-platform", "dep:sha2"]
+auth-enrollment = ["auth", "dep:ic-auth", "dep:ic-platform-protocol", "dep:sha2"]
 blob = ["dep:ic-blob-storage", "dep:ic-platform-runtime"]
+db = ["dep:ic-platform-runtime"]
 metrics = ["dep:ic-platform-runtime"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-ic-platform = { workspace = true, optional = true, features = ["raw-rand"] }
-ic-platform-runtime = { workspace = true, optional = true, features = ["cdk"] }
+ic-platform-protocol = { workspace = true, optional = true, features = ["raw-rand"] }
+ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
 
 [dependencies]
 ic-auth = { workspace = true, optional = true }

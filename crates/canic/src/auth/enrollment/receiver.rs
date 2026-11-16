@@ -181,22 +181,31 @@ impl Receiver {
 impl Start {
     /// Obtain fresh IC entropy without renewing the admitted deadline.
     pub async fn entropy(self) -> Result<Challenge, Error> {
-        use ic_platform_runtime::cdk::{api, call::Call};
+        use ic_platform_runtime::{
+            call::{Call, Outcome, Wait},
+            system as api,
+        };
         if api::time() >= self.deadline_ns {
             return Err(Error::Expired);
         }
-        let response = Call::bounded_wait(
+        let response = Call::new(
             Principal::management_canister(),
-            ic_platform::raw_rand::METHOD,
+            ic_platform_protocol::raw_rand::METHOD,
+            Wait::Bounded { seconds: 300 },
         )
-        .with_raw_args(ic_platform::raw_rand::encode())
+        .args(ic_platform_protocol::raw_rand::encode(6).map_err(|_| Error::Unavailable)?)
+        .execute()
         .await
         .map_err(|_| Error::Unavailable)?;
+        let response = match response.into_parts().0 {
+            Outcome::Reply(bytes) => bytes,
+            _ => return Err(Error::Unavailable),
+        };
         if api::time() >= self.deadline_ns {
             return Err(Error::Expired);
         }
-        let bytes =
-            ic_platform::raw_rand::decode(response.as_ref()).map_err(|_| Error::Unavailable)?;
+        let bytes = ic_platform_protocol::raw_rand::decode(response.as_ref(), 42)
+            .map_err(|_| Error::Unavailable)?;
         if bytes == [0; 32] {
             return Err(Error::Unavailable);
         }
@@ -208,15 +217,27 @@ impl Pull {
     /// Authenticate by the actual call destination; never trust a response's
     /// claimed principal. This function owns one attempt, with no fallback/retry.
     pub async fn fetch(self) -> Result<Authenticated, Error> {
-        use ic_platform_runtime::cdk::{api, call::Call};
+        use ic_platform_runtime::{
+            call::{Call, Outcome, Wait},
+            system as api,
+        };
         if api::time() >= self.start.deadline_ns {
             return Err(Error::Expired);
         }
         let bytes = super::transport::encode_request(super::SNAPSHOT, &self.request)?;
-        let response = Call::bounded_wait(self.authority, super::SNAPSHOT_METHOD)
-            .with_raw_args(&bytes)
-            .await
-            .map_err(|_| Error::Unavailable)?;
+        let response = Call::new(
+            self.authority,
+            super::SNAPSHOT_METHOD,
+            Wait::Bounded { seconds: 300 },
+        )
+        .args(&bytes)
+        .execute()
+        .await
+        .map_err(|_| Error::Unavailable)?;
+        let response = match response.into_parts().0 {
+            Outcome::Reply(bytes) => bytes,
+            _ => return Err(Error::Unavailable),
+        };
         if api::time() >= self.start.deadline_ns {
             return Err(Error::Expired);
         }

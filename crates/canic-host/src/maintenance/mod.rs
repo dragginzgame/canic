@@ -15,6 +15,73 @@ mod stored;
 #[cfg(test)]
 mod tests;
 
+/// Stop/drain or restart the approved upgrade target through the existing signer.
+/// Successful stop plus retained management status precedes installation. Lost
+/// responses retain the original signed attempt; expiry never creates a new one.
+pub(crate) async fn runtime(
+    dir: &Path,
+    plan: &Plan,
+    start: bool,
+    identity: &str,
+    icp: &Path,
+    agent: &Agent,
+) -> Result<()> {
+    use ic_platform::{candid_codec, candid_codec::decoder, management_canister_types as mgmt};
+    let target = principal(plan.target().map(String::as_str).ok_or_else(invalid)?)?;
+    let args = candid_codec::encode_one(
+        &mgmt::CanisterIdRecord {
+            canister_id: target,
+        },
+        1024,
+    )
+    .map_err(Error::Encode)?;
+    let (step, method) = if start {
+        ("start", "start_canister")
+    } else {
+        ("stop", "stop_canister")
+    };
+    let call = signed::Call {
+        canister: ic_platform::principal::Principal::management_canister(),
+        effective: target,
+        method,
+        args,
+    };
+    let reply = signed::execute(&dir.join(step), plan, &call, identity, icp, agent).await?;
+    let limits = decoder::Limits {
+        bytes: 65_536,
+        header: 4096,
+        types: 256,
+        work: 100_000,
+        allocation: 262_144,
+    };
+    decoder::decode_args::<()>(&reply, limits, decoder::Arity::Exact).map_err(Error::Decode)?;
+    if !start {
+        let status_call = signed::Call {
+            method: "canister_status",
+            ..call
+        };
+        let reply = signed::execute(
+            &dir.join("stopped"),
+            plan,
+            &status_call,
+            identity,
+            icp,
+            agent,
+        )
+        .await?;
+        let status: mgmt::CanisterStatusResult =
+            decoder::decode_one(&reply, limits).map_err(Error::Decode)?;
+        if status.status != mgmt::CanisterStatusType::Stopped
+            || status.settings.controllers != [principal(&plan.controller)?]
+        {
+            return Err(Error::Blocked(
+                "upgrade target is not stopped under the approved controller".into(),
+            ));
+        }
+    }
+    Ok(())
+}
+
 // The retained pre-0.204 Root has exactly one non-resettable upgrade slot and
 // controller-only replicated unit observations. See the pinned qualification fixture.
 const SINGLE_UPGRADE_ROOT: &str =

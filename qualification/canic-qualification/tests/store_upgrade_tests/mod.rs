@@ -1,10 +1,8 @@
 //! Real fleet planner, isolated signer and Root-owned Store replacement on a local replica.
 use super::{cli, hex, run};
 use canic_management_protocol::{children, store_maintenance as wire};
-use ic_testkit::{
-    pic::{PocketIcStartupConfig, server_assets},
-    pocket_ic::{CanisterId, PocketIcBuilder},
-};
+use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder};
+use ic_testkit::server::{Limits, PreparedServer, Server};
 use serde_json::{Value, json};
 use std::{
     os::unix::fs::PermissionsExt,
@@ -112,23 +110,28 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     std::fs::create_dir(&dir).unwrap();
     let (signer, controller) = canic_qualification::isolated_signer(&dir, "store-fixture");
     let operator = CanisterId::from_text(&controller).unwrap();
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(600)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(600),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let routing = owner.instance().create_canister().await;
-    let url = owner.instance_mut().make_live(None).await.to_string();
-    let pic = owner.instance();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let routing = owner.client().create_canister().await;
+    let url = owner.client_mut().make_live(None).await.to_string();
+    let pic = owner.client();
     let dir = dir.join("project");
     let initialized = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args([
@@ -591,5 +594,11 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     write_config(&dir, &config);
     let third = cli(&dir, &["fleet", "plan", "--controller", &controller]);
     assert_eq!(third["plan"]["store_upgrade_sequence"], 3);
-    owner.instance_mut().stop_live().await;
+    owner.client_mut().stop_live().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

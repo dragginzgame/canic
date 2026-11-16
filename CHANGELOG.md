@@ -1,5 +1,182 @@
 # Changelog
 
+## [0.218.0] - 2026-11-16
+
+### ⚠️ Breaking
+
+Canic's actor mounts now use Platform Runtime 0.23.14 and Timers 0.46.0's single
+executor. Applications composing these mounts must select that Runtime cohort
+and its explicit entrypoint macros. Rebuild generated starter applications from
+the current template. Upgrades now stop the target and drain callbacks before
+installation, then restart before checking readiness. Interrupted stop/start calls
+retain their original authority. New pending phases require the new reader;
+existing completed records and approval digests retain their formats. An unfinished
+legacy Host installation without retained stop evidence remains blocked.
+Canic's explicit entrypoint error policy traps guard refusals as `CanisterError`;
+it no longer uses the former CDK's `CanisterReject` representation. Authorization
+still precedes argument copying, and response-encoding failures still roll back.
+
+### ▶️ Try it
+
+Inspect existing grant commands without sending effects. The status command needs
+an existing fleet config and retained operation:
+
+```sh
+canic fleet auth --help
+canic fleet status OPERATION --app demo --fleet local
+```
+
+After development-tool preparation, provision the authenticated local simulator
+explicitly and check its ownership boundary (synthetic local tests, no mainnet effects):
+
+```sh
+make qualification-setup
+cargo test --locked --manifest-path qualification/Cargo.toml \
+  -p canic-qualification --test server
+```
+
+With an existing Root/Store fleet, an application-generated initialization frame
+and a completed release publication, retain and approve exact application inputs:
+
+```sh
+canic fleet plan --canister catalog --root-module ROOT_HASH --release PUBLICATION \
+  --install-args catalog-init.bin --identity canic-mainnet
+canic fleet apply OPERATION --identity canic-mainnet
+```
+
+For an existing configured catalog, use a Root built with `blob`, a published
+candidate, its method-bound upgrade frame and the next supplier attempt. Reopening
+keeps admission closed until the separate activation command:
+
+```sh
+canic fleet plan --canister catalog --root-module ROOT_HASH --release PUBLICATION \
+  --target CANISTER --previous-module OLD_HASH --install-args catalog-upgrade.bin \
+  --blob-attempt 1 --identity canic-mainnet
+canic fleet apply UPGRADE_OPERATION --identity canic-mainnet
+canic fleet activate UPGRADE_OPERATION --identity canic-mainnet
+```
+
+### ✨ Blob fleet lifecycle
+
+Complete [Canic #12 — approved Blob provisioning](https://github.com/dragginzgame/canic/issues/12)
+and [Canic #13 — exact managed Blob maintenance](https://github.com/dragginzgame/canic/issues/13)
+through the existing plans, signed requests, Store pins and Root effect owner.
+Bounded application arguments survive in the existing artifact lease; newer
+custody is explicit and older observers refuse. Optional Root Blob support owns
+management calls while the supplier retains all admission and accounting rules.
+The installed witness preserves both users, shared references and unresolved
+declarations through lost callbacks and Root reopening, then separately activates
+the matching attempt. No new crate, Blob ledger, generic workflow engine,
+automatic activation, provider calls or live deployment is introduced.
+
+Raise the bounded direct-install input ceiling to 1,900,000 bytes so the current
+Root, including optional Blob support, can be bootstrapped through the CLI.
+Qualify the encoded management request's ingress headroom and reject larger
+plans. Store-backed child and inline-child limits remain independently owned.
+
+### 🔧 Dependencies
+
+Adopt Platform 0.34.9 for Host's signed-envelope admission and the installed Auth
+application's Ed25519 signing/native verifier. Retain original signed bytes,
+request IDs and deadlines; reject unknown call, status and envelope fields.
+Move enrollment and issuer entropy framing to Protocol's bounded `raw_rand`
+capability, removing those direct legacy Platform dependencies. Product Protocol
+selects 0.2.7; qualification retains 0.2.6 because Testkit 0.107.3 pins it exactly.
+Actual IC entropy still passes through the original reservations, caller checks
+and deadlines. Runtime captures refunds with their matching completion. Unknown
+outcomes remain uncertain and never authorize replacement calls.
+
+Full replacement remains open under
+[Canic #14 — Platform migration](https://github.com/dragginzgame/canic/issues/14):
+Host still uses the legacy Agent and management/ledger codecs; runtime management
+DTOs retain an explicit passive identity conversion at that codec boundary.
+The newly published alternatives need a separate custody-preserving migration.
+Canic continues to leave signing keys with ICP CLI.
+
+Adopt Toko Tooling 0.44.11 through the authenticated installer in both workspaces.
+Complete [Canic #15 — bounded simulator ownership](https://github.com/dragginzgame/canic/issues/15) using Testkit
+0.107.3's optional managed server across both installed harnesses and explicit
+preparation. Remove the 0.106.0 lifecycle dependency and its older Host selections.
+Servers have explicit startup/lifetime/output bounds; instances attempt deletion
+before server stop. Qualify refusal, startup failure, teardown and fallback ownership
+without copying supplier lifecycle code or adding a compatibility wrapper.
+Adopt Host Text 0.77.2 and call its simpler table API
+directly, removing repeated options. Other IC Host packages already select 0.80.2.
+
+Select published Blob 0.102.0 and Wasm Store 0.3.0 with locked archive checksums,
+plus committed Auth and DB inputs that use Platform Types 0.21.2. Qualify reopening
+the retained populated 0.100.6 executable. Remove the obsolete private-Blob fetch
+key wiring from CI; the supplier checkout remains read-only.
+
+The earlier compatibility adoption selected Topology 0.107.0 at committed revision
+`12844b628d96bfd203ffbd900f10d02c4a896988`: the previous pinned release requires
+`thiserror` 2.0.21. Both lockfiles select Wire 0.24.3. Storage's old
+Runtime dependency supplies raw stable-memory operations only, not a second
+executor. No uncommitted supplier checkout is consumed.
+
+Release freshness review confirms these registry selections against Cargo's
+official index. Auth's newer committed 0.47.0 source is deferred to
+[Canic #16 — browser logout integration](https://github.com/dragginzgame/canic/issues/16)
+and [Canic #17 — browser client integration](https://github.com/dragginzgame/canic/issues/17).
+The newer Query repository checkpoint is deferred to the remaining Host/Topology
+migration in Canic #14. DB retains its current committed 0.19.0 release.
+
+### 🧪 Qualification
+
+Extend [Canic #9 — Auth qualification](https://github.com/dragginzgame/canic/issues/9) with actual Root
+responses held before publication, released in reverse receiver order. Active
+and revoked grants retain their own caller, challenge and original deadline;
+the test barrier supplies no authentication data. Same-receiver expired-request
+reordering remains open. Explicit Cargo test entrypoints prevent helper modules
+from being misidentified as independent suites.
+
+```sh
+# Inspect enrollment commands; this sends no effects.
+canic fleet auth --help
+```
+
+Add optional typed database mounts and `make db-test`. Applications retain their
+schema, passive protocol, caller policy and explicit storage initialization.
+The installed witness checks bounded pages, cursor refusal, atomic batches,
+five upgrades, maintenance closure and reply-encoding rollback. It consumes
+committed IC DB without adding a database dependency to the adapter.
+
+```sh
+make db-test
+```
+
+Add bounded optional issuer mounts for
+[Canic #10 — Auth issuance, renewal and lookup-only reconciliation](https://github.com/dragginzgame/canic/issues/10).
+Applications own caller authentication and keys; Auth owns retained intents and
+results. The installed local-key witness exercises real issuance and renewal,
+receiver verification, duplicate/lost replies, callback rollback, expiry and
+pruning without replacement signatures. Production key custody, browser issuer
+logout and external signing recovery remain pending.
+
+With the toolchain prepared, build the experimental composition witness locally:
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml \
+  --package canic-auth-witness --output target/auth/receiver.wasm
+canic artifact inspect target/auth/receiver.wasm
+```
+
+Strengthen [Canic #9 — Fleet-authorized Auth enrollment](https://github.com/dragginzgame/canic/issues/9)
+with installed concurrency and expiry cases. Overlapping refreshes retain one
+reservation, Root call and original deadline. Separate-subnet expiry cases
+interrupt real entropy/snapshot awaits, preserve prior enrollment and require a
+new explicit admission before another attempt. Reuse the existing fixture setup;
+no production endpoint, workflow, dependency or failure switch is added.
+
+Also qualify loss of an active Root by stopping and upgrading it. Failed refreshes
+preserve the original busy window, snapshot and session deadlines; access refuses
+at the original freshness boundary without another application write.
+
+### 📚 Documentation
+
+Remove the stale claim that no Auth CLI exists. Grant configuration/revocation
+are available; issuer mounts now exist, while browser login remains unfinished.
+
 ## [0.217.0] - 2026-11-16
 
 ### ▶️ Try it

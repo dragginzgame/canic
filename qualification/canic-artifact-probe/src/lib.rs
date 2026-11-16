@@ -19,8 +19,8 @@ pub const RECONCILE: u64 = 3;
 pub const UPGRADE: u64 = 4;
 /// Identity of the isolated stable checkpoint frame.
 pub const CHECKPOINT: u64 = 5;
-/// Maximum approved uncompressed Wasm in this experiment: 64 KiB.
-pub const MAX_WASM_BYTES: usize = 65_536;
+/// Maximum approved uncompressed Wasm in this experiment: 128 KiB.
+pub const MAX_WASM_BYTES: usize = 131_072;
 /// Bounded large-frame policy for admission and the single checkpoint.
 pub const ARTIFACT_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 262_144,

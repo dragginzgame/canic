@@ -1,4 +1,5 @@
 //! Installed probes sharing only authentication and dispatch fault injection.
+use ic_platform_types::Principal;
 
 mod creation;
 mod funding;
@@ -6,24 +7,23 @@ mod maintenance;
 
 use crate::{Fault, LIMITS};
 use ic_platform_runtime::{
-    Principal,
-    call::{Call, CallFailed, Response, WaitPolicy},
-    cdk::api,
+    call::{Call, Completion, SubmitError, Wait},
+    system as api,
 };
 use std::{future::Future, pin::pin, task::Poll};
 
 fn controller() -> Result<(), String> {
-    if !api::is_controller(&api::msg_caller()) {
+    if !api::is_controller(&api::caller()) {
         return Err("controller required".into());
     }
-    if ic_platform_runtime::ic0::msg_arg_data_size() > LIMITS.bytes {
+    if ic_platform_runtime::system::argument_size() > LIMITS.bytes {
         return Err("request too large".into());
     }
     Ok(())
 }
 
 fn private_continuation() -> Result<(), String> {
-    if api::msg_caller() == api::canister_self() {
+    if api::caller() == api::canister_self() {
         Ok(())
     } else {
         Err("self call required".into())
@@ -35,15 +35,11 @@ async fn dispatch(
     request: Vec<u8>,
     cycles: u128,
     fault: Fault,
-) -> Result<Response, CallFailed> {
-    let call = Call::new(
-        Principal::management_canister(),
-        method,
-        WaitPolicy::Unbounded,
-    )
-    .take_raw_args(request)
-    .with_cycles(cycles)
-    .execute();
+) -> Result<Completion, SubmitError> {
+    let call = Call::new(Principal::management_canister(), method, Wait::Unbounded)
+        .owned_args(request)
+        .cycles(cycles)
+        .execute();
     let mut call = pin!(call);
     if fault == Fault::Dispatch {
         std::future::poll_fn::<(), _>(|cx| {

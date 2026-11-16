@@ -5,7 +5,7 @@ use canic_management_protocol::{
     children::{self, ChildId},
     stored,
 };
-use ic_platform_runtime::cdk::api;
+use ic_platform_runtime::system as api;
 
 /// Admit creation from a published Store artifact without retaining Wasm bytes.
 /// # Errors
@@ -13,11 +13,8 @@ use ic_platform_runtime::cdk::api;
 /// # Panics
 /// Traps for noncontrollers or failed durable writes.
 pub fn stage(slot: ChildId, input: stored::Stage<Approval>) -> Result<Status, Refusal> {
-    assert!(
-        api::is_controller(&api::msg_caller()),
-        "controller required"
-    );
-    if super::store_maintenance::active() {
+    assert!(api::is_controller(&api::caller()), "controller required");
+    if super::store_maintenance::active() || super::application::lifecycle(slot).is_some() {
         return Err(Refusal::Occupied);
     }
     if let Some(previous) = snapshot(slot).approval {
@@ -79,9 +76,10 @@ pub(super) fn upgrade_source(
 /// Traps for noncontrollers or mismatched complete authority.
 pub async fn reconcile(slot: ChildId, input: stored::Stage<Approval>) -> Status {
     assert!(
-        api::is_controller(&api::msg_caller()),
-        "controller required"
+        super::application::lifecycle(slot).is_none(),
+        "application binding required"
     );
+    assert!(api::is_controller(&api::caller()), "controller required");
     assert_eq!(
         delivery::source(slot, false)
             .expect("Store source")
@@ -98,10 +96,7 @@ pub async fn reconcile_upgrade(
     slot: ChildId,
     input: stored::Stage<canic_management_protocol::upgrade::Approval>,
 ) -> canic_management_protocol::upgrade::Status {
-    assert!(
-        api::is_controller(&api::msg_caller()),
-        "controller required"
-    );
+    assert!(api::is_controller(&api::caller()), "controller required");
     assert_eq!(
         upgrade_source(slot, &input.approval)
             .expect("Store upgrade source")
@@ -116,6 +111,7 @@ pub async fn reconcile_upgrade(
 /// Traps if lifecycle has not opened storage.
 #[must_use]
 pub fn custody() -> stored::Custody {
+    super::application::require_legacy();
     assert!(
         super::store_maintenance::observe().is_none(),
         "Store maintenance custody required"
@@ -127,6 +123,7 @@ pub fn custody() -> stored::Custody {
 /// Traps if lifecycle has not opened storage.
 #[must_use]
 pub fn root_custody() -> canic_management_protocol::custody::Root {
+    super::application::require_legacy();
     assert!(
         STATE.with_borrow(|state| state
             .as_ref()
@@ -144,6 +141,10 @@ pub fn root_custody() -> canic_management_protocol::custody::Root {
 /// Traps if lifecycle has not opened storage.
 #[must_use]
 pub fn root_history() -> canic_management_protocol::custody::RootHistory {
+    super::application::require_legacy();
+    root_history_complete()
+}
+pub(super) fn root_history_complete() -> canic_management_protocol::custody::RootHistory {
     canic_management_protocol::custody::RootHistory {
         current: current_root_custody(),
         store_history: STATE

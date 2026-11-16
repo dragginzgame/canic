@@ -5,6 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 publish.workspace = true
 description = "Installed Canic effect and product qualification"
+# Helper modules beside these entrypoints are not standalone test crates.
+autotests = false
 
 [target.'cfg(any())'.dev-dependencies]
 toko-tooling.workspace = true
@@ -14,6 +16,7 @@ category = "tests"
 
 [dependencies]
 ic-host-artifacts.workspace = true
+ic-testkit.workspace = true
 wasmparser.workspace = true
 
 [dev-dependencies]
@@ -26,14 +29,56 @@ canic-management-protocol.workspace = true
 canic-profile-protocol.workspace = true
 ic-auth.workspace = true
 ic-auth-protocol-types.workspace = true
-ic-platform = { workspace = true, features = ["ed25519"] }
-ic-testkit.workspace = true
+ic-platform-crypto.workspace = true
+ic-testkit = { workspace = true, features = ["held-reply-fixtures"] }
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tokio.workspace = true
+
+[[test]]
+name = "artifact"
+
+[[test]]
+name = "auth"
+
+[[test]]
+name = "blob"
+
+[[test]]
+name = "creation"
+
+[[test]]
+name = "endpoints"
+
+[[test]]
+name = "funding"
+
+[[test]]
+name = "growth"
+
+[[test]]
+name = "journey"
+
+[[test]]
+name = "maintenance"
+
+[[test]]
+name = "profile"
+
+[[test]]
+name = "publication"
+
+[[test]]
+name = "root"
+
+[[test]]
+name = "server"
+
+[[test]]
+name = "store"
 
 [lints]
 workspace = true

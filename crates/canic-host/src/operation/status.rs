@@ -62,6 +62,9 @@ pub enum StatusDetail {
     StoredChild {
         /// No observation means unknown, including after an admission-only reply.
         delivery: Option<Box<stored::Delivery>>,
+        /// Optional Blob maintenance from the same authenticated Root custody.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        maintenance: Option<Box<canic_management_protocol::application::Maintenance>>,
     },
     /// Publication completion is distinct from deployment completion.
     Publication {

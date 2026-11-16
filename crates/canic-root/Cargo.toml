@@ -13,6 +13,7 @@ toko-tooling.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [features]
+blob = ["canic-management/blob"]
 auth = ["canic/auth-enrollment"]
 fault-injection = ["canic-management/fault-injection"]
 maintenance-candidate = ["canic-management/maintenance-candidate"]
@@ -21,7 +22,7 @@ maintenance-candidate = ["canic-management/maintenance-candidate"]
 canic = { workspace = true, features = ["metrics"] }
 canic-management.workspace = true
 canic-management-protocol.workspace = true
-ic-platform-runtime = { workspace = true, features = ["cdk"] }
+ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
 ic-wire.workspace = true
 
 [lints]

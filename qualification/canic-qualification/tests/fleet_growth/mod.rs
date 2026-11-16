@@ -10,23 +10,28 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         .to_owned();
     let assets = PathBuf::from(std::env::var_os("CANIC_PUBLICATION_ARTIFACTS").unwrap());
     for stored in [false, true] {
-        let mut owner = PocketIcStartupConfig::Spawn {
-            server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-            timeout: Duration::from_secs(30),
-            server_hard_ttl: Some(Duration::from_secs(300)),
-            server_idle_ttl: None,
-            server_output_files: None,
-        }
-        .build_instance(
-            PocketIcBuilder::new()
-                .with_nns_subnet()
-                .with_application_subnet(),
+        let mut server = Server::start(
+            PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+            Limits {
+                startup: Duration::from_secs(30),
+                lifetime: Duration::from_secs(300),
+                stdout_bytes: 1024 * 1024,
+                stderr_bytes: 1024 * 1024,
+            },
         )
-        .await
         .unwrap();
-        let routing = owner.instance().create_canister().await;
-        let subnet = owner.instance().get_subnet(routing).await.unwrap();
-        let url = owner.instance_mut().make_live(None).await.to_string();
+        let mut owner = server
+            .instance(
+                PocketIcBuilder::new()
+                    .with_nns_subnet()
+                    .with_application_subnet(),
+                Duration::from_secs(30),
+            )
+            .await
+            .unwrap();
+        let routing = owner.client().create_canister().await;
+        let subnet = owner.client().get_subnet(routing).await.unwrap();
+        let url = owner.client_mut().make_live(None).await.to_string();
         let dir = repo
             .join("target/publication")
             .join(format!("growth-{stored}-{}", std::process::id()));
@@ -38,7 +43,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
             "canisters":{"root":{"role":"root","wasm":assets.join("root.wasm")},
                 "app":{"role":"app","parent":"root","wasm":dir.join("app.wasm")}},
             "fleets":{"local":{"network":{"kind":"Local","url":url,
-                "root_key":hex(&owner.instance().root_key().await.unwrap()),
+                "root_key":hex(&owner.client().root_key().await.unwrap()),
                 "routing_canister":routing.to_text()},"journal":"journal","canisters":{}}}
         }}});
         if stored {
@@ -76,12 +81,12 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
                 ],
             )
         };
-        let dispatch = scheduled(owner.instance()).await;
+        let dispatch = scheduled(owner.client()).await;
         let initial = plan(&dispatch);
         let id = initial["operation"].as_str().unwrap();
         let path = dir.join("journal").join(id);
         apply(id);
-        advance(owner.instance()).await;
+        advance(owner.client()).await;
         let original = apply(id);
         let root = CanisterId::from_text(original["root"]["canister"].as_str().unwrap()).unwrap();
         let first = original["children"][0]["outcome"]["canister"]
@@ -96,14 +101,14 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         config["apps"]["demo"]["canisters"]["root"]["wasm"] =
             json!(assets.join("root-maintenance.wasm"));
         save(&config);
-        let maintenance = plan(&scheduled(owner.instance()).await);
+        let maintenance = plan(&scheduled(owner.client()).await);
         assert_eq!(maintenance["action"], "maintenance");
         apply(maintenance["operation"].as_str().unwrap());
         if stored {
             config["apps"]["demo"]["canisters"]["store"]["wasm"] =
                 json!(assets.join("store-candidate.wasm"));
             save(&config);
-            let maintenance = plan(&scheduled(owner.instance()).await);
+            let maintenance = plan(&scheduled(owner.client()).await);
             assert_eq!(maintenance["action"], "upgrade");
             let result = apply(maintenance["operation"].as_str().unwrap());
             assert!(result["canister"].is_string(), "{result}");
@@ -127,7 +132,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         );
         config = serde_json::from_slice(&std::fs::read(dir.join("canic.json")).unwrap()).unwrap();
         std::fs::write(dir.join("worker.wasm"), &app).unwrap();
-        let dispatch = scheduled(owner.instance()).await;
+        let dispatch = scheduled(owner.client()).await;
         let mut next = app.clone();
         next.extend_from_slice(&[0, 2, 1, b'x']);
         std::fs::write(dir.join("app.wasm"), &next).unwrap();
@@ -154,7 +159,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         let added = dir.join("journal").join(added_id);
         // Expired requested schedules cannot replace a pending approval.
         assert_eq!(plan("1"), addition);
-        let stable = owner.instance().get_stable_memory(root).await;
+        let stable = owner.client().get_stable_memory(root).await;
         let operations = std::fs::read_dir(dir.join("journal")).unwrap().count();
         for removed in ["app", "aaa"] {
             let mut changed = config.clone();
@@ -181,7 +186,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
             std::fs::read_dir(dir.join("journal")).unwrap().count(),
             operations
         );
-        assert_eq!(owner.instance().get_stable_memory(root).await, stable);
+        assert_eq!(owner.client().get_stable_memory(root).await, stable);
         apply(added_id);
         let signed = std::fs::read(added.join("stage/signed.json")).unwrap();
         std::fs::remove_file(added.join("stage/reply.bin")).unwrap();
@@ -191,7 +196,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
             std::fs::read(added.join("stage/signed.json")).unwrap(),
             signed
         );
-        advance(owner.instance()).await;
+        advance(owner.client()).await;
         let created = apply(added_id);
         let second = created["canister"].as_str().unwrap().to_owned();
         assert_ne!(first, second);
@@ -234,7 +239,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         for (round, artifact) in [&next, &other, &next, &other].into_iter().enumerate() {
             // B -> C -> B -> C repeats an exact code transition, but never its authority.
             std::fs::write(dir.join("worker.wasm"), artifact).unwrap();
-            let dispatch = scheduled(owner.instance()).await;
+            let dispatch = scheduled(owner.client()).await;
             let mut release = None;
             if stored {
                 if round < 2 {
@@ -368,7 +373,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
             save(&config);
             apply(upgrade_id);
             assert_eq!(std::fs::read(stage.join("signed.json")).unwrap(), signed);
-            advance(owner.instance()).await;
+            advance(owner.client()).await;
             let completed = apply(upgrade_id);
             assert_eq!(completed["canister"], second);
             save(&named_config);
@@ -397,7 +402,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
 
         config["apps"]["demo"]["canisters"]["root"]["wasm"] = json!(assets.join("root.wasm"));
         save(&config);
-        let maintenance = plan(&scheduled(owner.instance()).await);
+        let maintenance = plan(&scheduled(owner.client()).await);
         assert_eq!(maintenance["action"], "maintenance");
         assert_eq!(
             maintenance["plan"]["maintenance"]["creation"]["worker"],
@@ -414,11 +419,11 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
                 .len(),
             4
         );
-        let stable = owner.instance().get_stable_memory(root).await;
+        let stable = owner.client().get_stable_memory(root).await;
         apply(maintenance["operation"].as_str().unwrap());
-        assert_eq!(owner.instance().get_stable_memory(root).await, stable);
+        assert_eq!(owner.client().get_stable_memory(root).await, stable);
         assert_eq!(
-            plan(&scheduled(owner.instance()).await)["action"],
+            plan(&scheduled(owner.client()).await)["action"],
             "unchanged"
         );
         let view = cli(&dir, &["fleet", "show"]);
@@ -429,14 +434,20 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         assert!(view["issues"].as_array().unwrap().is_empty(), "{view}");
         assert_eq!(
             owner
-                .instance()
+                .client()
                 .get_subnet_metrics(subnet)
                 .await
                 .unwrap()
                 .num_canisters,
             if stored { 5 } else { 4 }
         );
-        owner.instance_mut().stop_live().await;
+        owner.client_mut().stop_live().await;
+        assert_eq!(
+            owner.close(std::time::Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        let stopped = server.stop().unwrap();
+        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
     }
 }
 

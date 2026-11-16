@@ -11,7 +11,7 @@ client or a production deployment recipe.
 | Owner | Responsibility |
 | --- | --- |
 | Blob | Grants, object/reference identity, accounting, durable record and exact maintenance-attempt admission |
-| Canic | Optional endpoint composition, captured caller/time, bounded Wire hooks; future fleet host integration |
+| Canic | Optional endpoint composition, exact Host approvals and Root management-effect custody |
 | Application | Two admitted users, catalog names, four lifetime catalog entries, publication and release decisions |
 | Platform / Wire | Generic IC execution and entrypoints / bounded codecs |
 | Storage | One application-owned bootstrap with granted catalog and `blob.control.v1` leases |
@@ -41,8 +41,8 @@ cleanup remain available under ordinary permissions while drained.
 
 ## Run locally
 
-Prerequisites: authenticated Git access to the pinned Blob repository,
-Rust 1.100.0 with the Wasm target, `make canic`, and previously prepared simulator
+Prerequisites: Rust 1.100.0 with the Wasm target, `make canic`, the prepared ICP
+signer and simulator
 assets from `make qualification-setup`. Nothing opens a desktop window.
 
 ```sh
@@ -52,23 +52,23 @@ make blob-test
 ```
 
 `make blob-test` builds original and maintenance-candidate executables through
-Canic's existing artifact builder and runs five installed tests with synthetic
+Canic's existing artifact builder and runs seven installed tests with synthetic
 cycles. `make blob-clippy` and `make blob-doc` select the adapter and actual caller.
 The two artifacts and input receipts stay under `target/blob/`; no live IC or
 Caffeine request is issued. Optional feature selection keeps Blob/Storage/Runtime
-out of Canic's default runtime graph. The library now comes from the exact
-0.100.6 commit `decde204acb6d7c8362a0003e904beef72ff89b6`, which contains the
-originally qualified Service implementation. The mutable sibling checkout is no
-longer a Cargo input; it stays read-only. This removes the external-path exception
-and the isolated formatting hook's former sibling-resolution limitation.
+out of Canic's default runtime graph. Both workspaces select published Blob 0.102.0,
+archive SHA-256 `cc0eda5382d1e399745e454894d1d16f8e7313429f92b3a0c73881499fcd1a94`,
+from source `548d9c3de7a3a224e66693685634d79cad191406`.
+The current witness uses Runtime 0.23.14 and Types 0.21.2; Storage's older raw-memory
+runtime edge has no executor.
+The mutable sibling checkout stays read-only and is not a Cargo input.
 
 The input recorder resolves the supplier via locked Cargo metadata, requires
-an exact Git revision, and records library/context hashes and consumer locks
+the same registry archive in both locks, and records library hashes and consumer locks
 before/after each installed run. Release evidence is recorded in the
 [qualification history](../qualification/history.md).
 
-Canic now selects Wire 0.24.1 for its adapter and application catalog. The pinned
-Blob service retains Wire 0.22.4 for its independently owned persistence codec.
+Canic and Blob select Wire 0.24.2. Blob still owns its persistence codec.
 `canic::blob::RPC_LIMITS` projects the supplier's numeric budgets into the adapter's
 Wire type; it does not change admission policy or add a codec implementation.
 The installed composition checks qualify that boundary. The older input hashes
@@ -124,25 +124,55 @@ Blob; the composed graph proves shared identities. Runtime logs are in
 `target/qualification/adoption/blob-test.log`; lint/doc and graph evidence is
 beside it. These are local simulator results, not mainnet, provider or macOS execution.
 
-## Management boundary still to integrate
+## Fleet provisioning and maintenance
 
-Current Canic Host and Root install/upgrade effects send empty application
-arguments. They do not retain Blob's drain attempt or perform its required
-stop/reopen/verification/explicit-activation sequence. The installed refusal is
-intentional: no default configuration, init-on-open-error, implicit activation,
-readiness bypass or second management engine has been added to make it fit.
+The additional installed witness uses the real CLI, signer, separate Store and
+Root. `fleet plan --install-args FILE` admits at most 4096 exact application bytes
+with a published release. Apply never rereads that file. The creation plan, Store
+pin, Root lease and actual management call bind the same bytes. The catalog's
+initialization explicitly names Root as manager; its real installation principal
+owns both stores. Arguments are not inferred from controller or parent roles.
 
-Before fleet plan/apply can manage this app, its existing immutable approval and
-effect owners must bind explicit lifecycle arguments and service maintenance
-attempts, preserve original request outcomes, and qualify the complete sequence.
-The present fixture uses a trusted simulator controller and a distinct explicit
-manager; it does **not** claim Root-owned creation or a Canic host management
-journal for Blob. This is a Canic integration obligation, not a missing supplier
-Service contract.
+For an upgrade, the app supplies its method-bound upgrade frame and the operator
+selects `--blob-attempt N`. Root must be built with its optional `blob` feature:
+
+```sh
+canic artifact build --package canic-root --features blob
+canic fleet plan --canister catalog --root-module ROOT_HASH --release PUBLICATION \
+  --target CANISTER --previous-module OLD_HASH --install-args catalog-upgrade.bin \
+  --blob-attempt 1 --identity canic-mainnet
+canic fleet apply OPERATION --identity canic-mainnet
+canic fleet status OPERATION
+canic fleet activate OPERATION --identity canic-mainnet
+```
+
+These commands require an existing configured Root/Store fleet, an app-defined
+candidate Wasm and completed publication. They do not fund or deploy this fixture
+automatically. The qualification-only Root also enables `fault-injection`; never
+select that feature for a live deployment.
+
+Root retains the original supplier attempt and request commitments in the existing
+artifact lease, alongside its creation/upgrade journal. It observes closed admission,
+stops the child, upgrades with exact bytes, verifies code/version, starts and inspects
+the reopened service. Admission remains closed until `fleet activate` separately
+authorizes that exact attempt. Unknown outcomes retain issued exposure;
+reconciliation observes without resubmitting those effects. The witness loses each
+drain/stop/upgrade/start/activation callback, reopens Root and resumes with new CLI
+processes. Both users, shared references and a pending declaration survive. Changed
+authority/arguments, malformed frames and stale activation refuse. Existing local
+transaction rollback cases remain separate.
+
+The registry predecessor case opens a populated retained 0.100.6 binary without
+reinitializing either owner. See its [binary provenance](../../qualification/canic-qualification/fixtures/README.md).
+The named CLI journey retains its existing one-successor bound; repeated Root
+admission is separately exercised for stale-attempt refusal. Whole-fleet configured
+arguments and Host-driven Root/Store preservation of these records remain
+unqualified and refuse rather than truncate custody. CUA5 records reuse the original
+checked lease; older executables must refuse them. No supplier changes were needed.
 
 Blob remains experimental: finite 64-record supplier history, four lifetime
 catalog entries and declared-byte accounting. Releases do not free historical
 slots or establish provider settlement. There are no Caffeine calls, certificates,
 provider proofs, compaction, snapshot recovery or completed provider-journey claim.
-The [supplier input policy](../../AGENTS.md#local-blob-composition) requires
+The [supplier input policy](../../AGENTS.md#blob-boundary) requires
 the pinned immutable supplier input and requalification when it changes.

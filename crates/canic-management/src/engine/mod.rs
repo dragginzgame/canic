@@ -5,6 +5,7 @@ use canic_management_protocol::{
     Approval, CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, Stage, Status, digest,
     stored,
 };
+use ic_platform::principal::Principal;
 use ic_platform::{
     candid_codec::{self, decoder},
     management_canister_types::{
@@ -13,9 +14,8 @@ use ic_platform::{
     },
 };
 use ic_platform_runtime::{
-    Principal,
-    call::{Call, CallFailed, WaitPolicy},
-    cdk::api,
+    call::{Call, Completion, Outcome, SubmitError, Wait},
+    system as api,
 };
 use ic_storage::{
     AllocationGrants, DefaultMemoryImpl, GenericAllocationPolicy, MemoryAuthority, MemoryRequest,
@@ -26,6 +26,9 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
 };
+pub(crate) mod application;
+#[cfg(feature = "blob")]
+pub(crate) mod blob;
 mod delivery;
 pub(super) mod metrics;
 pub(crate) mod store_maintenance;
@@ -50,6 +53,7 @@ pub fn custody() -> canic_management_protocol::custody::Custody {
 /// Traps when lifecycle has not opened the engine.
 #[must_use]
 pub fn owner_custody() -> children::Custody {
+    application::require_legacy();
     assert!(
         store_maintenance::observe().is_none(),
         "Store maintenance custody required"
@@ -233,7 +237,7 @@ fn validate(state: &State, slot: ChildId) {
         assert!(
             worker != Principal::anonymous()
                 && worker != Principal::management_canister()
-                && worker != api::canister_self()
+                && worker != Principal::from_slice(api::canister_self().as_slice())
         );
         assert_eq!(s.attempts[0], 1);
         assert!(s.creation_refund.is_some());
@@ -356,7 +360,7 @@ fn resume_after_reconciliation(slot: ChildId) {
 #[must_use]
 pub fn status(slot: ChildId) -> Status {
     let mut value = snapshot(slot);
-    value.stable_pages = api::stable_size();
+    value.stable_pages = ic_platform_runtime::raw::stable64_size();
     value.maintenance_candidate = cfg!(feature = "maintenance-candidate");
     value
 }
@@ -366,10 +370,7 @@ pub fn status(slot: ChildId) -> Status {
 /// # Panics
 /// Traps for noncontrollers, uninitialized storage or failed durable writes.
 pub fn stage(slot: ChildId, input: Stage) -> Result<Status, Refusal> {
-    assert!(
-        api::is_controller(&api::msg_caller()),
-        "controller required"
-    );
+    assert!(api::is_controller(&api::caller()), "controller required");
     if store_maintenance::active() || delivery::is_stored(slot) {
         return Err(Refusal::Occupied);
     }
@@ -388,7 +389,9 @@ pub fn stage(slot: ChildId, input: Stage) -> Result<Status, Refusal> {
     )
 }
 fn admit(slot: ChildId, approval: Approval, artifact: Artifact) -> Result<Status, Refusal> {
-    if api::canister_liquid_cycle_balance() < reserved_cycles() + u128::from(CREATION_CYCLES) {
+    if ic_platform_runtime::raw::liquid_cycle_balance()
+        < reserved_cycles() + u128::from(CREATION_CYCLES)
+    {
         return Err(Refusal::Reserve);
     }
     let mut artifacts =
@@ -419,11 +422,8 @@ fn fault(slot: ChildId, point: u8) {
 /// # Panics
 /// Traps unless the caller controls this canister and the point is in range.
 pub fn inject_fault(slot: ChildId, value: u8) {
-    assert!(
-        api::is_controller(&api::msg_caller()),
-        "controller required"
-    );
-    assert!(value <= 19);
+    assert!(api::is_controller(&api::caller()), "controller required");
+    assert!(value <= 25);
     FAULT.with_borrow_mut(|faults| {
         if value == 0 {
             faults.remove(&slot);
@@ -452,24 +452,36 @@ pub(crate) fn reply_fault(method: u64) -> bool {
     )
 }
 
-fn failure(error: CallFailed) -> Failure {
-    match error {
-        CallFailed::CallRejected(rejection) => Failure::Rejected(rejection.raw_reject_code()),
-        _ => Failure::Uncertain,
+fn failure(_error: SubmitError) -> Failure {
+    Failure::Uncertain
+}
+fn response(completion: Completion) -> Result<Vec<u8>, Failure> {
+    match completion.into_parts().0 {
+        Outcome::Reply(bytes) => Ok(bytes),
+        Outcome::Rejected(rejection) => Err(Failure::Rejected(rejection.code())),
+        Outcome::OutcomeUnknown(_) => Err(Failure::Uncertain),
     }
 }
-async fn management(method: &str, bytes: Vec<u8>, cycles: u128) -> Result<Vec<u8>, Failure> {
+async fn management_completion(
+    method: &str,
+    bytes: Vec<u8>,
+    cycles: u128,
+) -> Result<Completion, SubmitError> {
     Call::new(
-        Principal::management_canister(),
+        ic_platform_types::Principal::management_canister(),
         method,
-        WaitPolicy::Unbounded,
+        Wait::Unbounded,
     )
-    .take_raw_args(bytes)
-    .with_cycles(cycles)
+    .owned_args(bytes)
+    .cycles(cycles)
     .execute()
     .await
-    .map(|reply| reply.to_vec())
-    .map_err(failure)
+}
+async fn management(method: &str, bytes: Vec<u8>, cycles: u128) -> Result<Vec<u8>, Failure> {
+    management_completion(method, bytes, cycles)
+        .await
+        .map_err(failure)
+        .and_then(response)
 }
 fn issue(slot: ChildId, index: usize, phase: Phase, bytes: &[u8]) {
     mutate(slot, |s| {
@@ -495,7 +507,7 @@ async fn step(slot: ChildId) {
         if api::time() < a.execute_at_ns {
             return;
         }
-        if api::canister_liquid_cycle_balance() < reserved_cycles() {
+        if ic_platform_runtime::raw::liquid_cycle_balance() < reserved_cycles() {
             mutate(slot, |s| s.phase = Phase::ReserveBlocked);
             return;
         }
@@ -512,7 +524,9 @@ async fn step(slot: ChildId) {
             let bytes = candid_codec::encode_one(
                 &CreateCanisterArgs {
                     settings: Some(CanisterSettings {
-                        controllers: Some(vec![api::canister_self()]),
+                        controllers: Some(vec![Principal::from_slice(
+                            api::canister_self().as_slice(),
+                        )]),
                         ..Default::default()
                     }),
                     sender_canister_version: Some(api::canister_version()),
@@ -522,20 +536,25 @@ async fn step(slot: ChildId) {
             .expect("create args");
             issue(slot, 0, Phase::CreateIssued, &bytes);
             fault(slot, 1); // Trap rolls back intent and prevents dispatch; original demand survives.
-            let reply = management("create_canister", bytes, u128::from(CREATION_CYCLES)).await;
-            let refunded = api::msg_cycles_refunded();
+            let completion =
+                management_completion("create_canister", bytes, u128::from(CREATION_CYCLES)).await;
+            let refunded = completion
+                .as_ref()
+                .ok()
+                .and_then(Completion::refunded_cycles);
+            let reply = completion.map_err(failure).and_then(response);
             match reply.and_then(|bytes| {
                 decoder::decode_one::<CanisterIdRecord>(&bytes, MANAGEMENT_LIMITS)
                     .map_err(|_| Failure::InvalidReply)
             }) {
                 Ok(value) => mutate(slot, |s| {
                     s.worker = Some(value.canister_id.to_text());
-                    s.creation_refund = Some(refunded);
+                    s.creation_refund = refunded;
                     s.phase = Phase::Created;
                 }),
                 Err(error) => mutate(slot, |s| {
                     s.failure = Some(error);
-                    s.creation_refund = Some(refunded);
+                    s.creation_refund = refunded;
                 }),
             }
             fault(slot, 2); // Creation-result loss must remain blocked, including across upgrade.
@@ -566,10 +585,10 @@ async fn step(slot: ChildId) {
                     store_canister: Some(store),
                     chunk_hashes_list: chunks,
                     wasm_module_hash: hash,
-                    arg: vec![],
+                    arg: application::arguments(slot, false),
                     sender_canister_version: Some(api::canister_version()),
                 },
-                4096,
+                8192,
             )
             .expect("install args");
             issue(slot, 2, Phase::InstallIssued, &bytes);
@@ -627,7 +646,8 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
             let value: CanisterStatusResult = decoder::decode_one(&reply, MANAGEMENT_LIMITS)
                 .map_err(|_| Failure::InvalidReply)?;
             if value.module_hash.as_deref() != Some(a.module_hash.as_slice())
-                || value.settings.controllers != [api::canister_self()]
+                || value.settings.controllers
+                    != [Principal::from_slice(api::canister_self().as_slice())]
             {
                 return Err(Failure::Mismatch);
             }
@@ -642,14 +662,15 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
                 STATE.with_borrow(|state| state.as_ref().expect("state").readiness.clone());
             let bytes = readiness.request;
             let reply = Call::new(
-                worker(&before),
+                ic_platform_types::Principal::from_slice((worker(&before)).as_slice()),
                 readiness.method,
-                WaitPolicy::Bounded { timeout_seconds: 5 },
+                Wait::Bounded { seconds: 5 },
             )
-            .take_raw_args(bytes)
+            .owned_args(bytes)
             .execute()
             .await
-            .map_err(failure)?;
+            .map_err(failure)
+            .and_then(response)?;
             (readiness.accept)(&reply)?;
             mutate(slot, |s| {
                 s.phase = Phase::Ready;
@@ -664,10 +685,7 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
 /// # Panics
 /// Traps for noncontrollers, mismatched approvals, uninitialized storage or failed durable writes.
 pub async fn reconcile(slot: ChildId, expected: canic_management_protocol::Approval) -> Status {
-    assert!(
-        api::is_controller(&api::msg_caller()),
-        "controller required"
-    );
+    assert!(api::is_controller(&api::caller()), "controller required");
     assert!(
         !delivery::is_stored(slot),
         "Store-bound reconciliation required"

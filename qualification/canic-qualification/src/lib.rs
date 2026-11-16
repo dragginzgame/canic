@@ -1,5 +1,28 @@
 //! Shared preparation paths for installed Canic qualification; no product API.
 
+/// Apply Canic's Runtime upgrade contract to a running installed fixture.
+/// A successful stop reply establishes callback drain. Restart the original
+/// executable even when the candidate traps, so callers can inspect rollback.
+/// Existing fixtures that deliberately own a stopped interval use the raw client.
+/// # Errors
+/// Returns a refused stop or the candidate's upgrade refusal.
+/// # Panics
+/// Panics if the fixture cannot restart after its upgrade attempt.
+pub async fn upgrade_stopped(
+    pic: &ic_testkit::pocket_ic::nonblocking::PocketIc,
+    canister: ic_testkit::pocket_ic::CanisterId,
+    wasm: Vec<u8>,
+    args: Vec<u8>,
+    sender: Option<ic_testkit::pocket_ic::CanisterId>,
+) -> Result<(), ic_testkit::pocket_ic::RejectResponse> {
+    pic.stop_canister(canister, sender).await?;
+    let result = pic.upgrade_canister(canister, wasm, args, sender).await;
+    pic.start_canister(canister, sender)
+        .await
+        .expect("restart upgraded fixture");
+    result
+}
+
 /// Prepared PocketIC bundle used by every installed fixture and explicit setup.
 /// Tests check this directory; only the setup example provisions it.
 ///
@@ -14,7 +37,7 @@ pub fn server_directory() -> std::path::PathBuf {
                 .ancestors()
                 .nth(2)
                 .expect("repository root")
-                .join("target/qualification/server")
+                .join("target/qualification/server/prepared")
         })
 }
 

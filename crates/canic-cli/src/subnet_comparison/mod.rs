@@ -1,7 +1,7 @@
 //! Fleet-context projection of Query evidence; no ranking or deployment decision.
 use crate::Output;
 use canic_host::subnet_comparison::FleetSubnetComparison;
-use ic_host_text::{escape::terminal_text, table::render_bordered};
+use ic_host_text::{bordered_table, escape};
 
 pub(crate) fn output(report: &FleetSubnetComparison, json: bool) -> Output {
     let output = if json {
@@ -81,8 +81,8 @@ fn render(report: &FleetSubnetComparison) -> String {
         .collect();
     let mut text = format!(
         "App: {}\nFleet: {}\nNetwork: ic / mainnet\nLeft: {}\nRight: {}\nCollection: {} | elapsed: {:.2}s\nCandidates explicitly selected; no fleet ownership or placement approval inferred.\n\n{}\n",
-        terminal_text(&report.app),
-        terminal_text(&report.fleet),
+        escape(&report.app),
+        escape(&report.fleet),
         observation.left.subnet_id,
         observation.right.subnet_id,
         if observation.collection_complete {
@@ -91,7 +91,7 @@ fn render(report: &FleetSubnetComparison) -> String {
             "partial"
         },
         observation.elapsed.as_secs_f64(),
-        render_bordered(&["OBSERVATION", "LEFT", "RIGHT"], &rows)
+        bordered_table(&["OBSERVATION", "LEFT", "RIGHT"], &rows)
     );
     if let Some(overlap) = observation.infrastructure_overlap() {
         let rows = vec![
@@ -121,7 +121,7 @@ fn render(report: &FleetSubnetComparison) -> String {
             ],
         ];
         text.push_str("\nObserved infrastructure overlap\n\n");
-        text.push_str(&render_bordered(
+        text.push_str(&bordered_table(
             &[
                 "RELATIONSHIP",
                 "SHARED IDENTITIES",

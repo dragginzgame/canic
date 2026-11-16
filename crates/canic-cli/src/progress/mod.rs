@@ -1,10 +1,7 @@
 //! Human command outcomes and explicit, shell-safe continuations.
 use crate::args::FleetCommand;
 use canic_host::{ApplyOutcome, BuiltCanister};
-use ic_host_text::{
-    escape::terminal_text,
-    table::{self, Alignment, Options},
-};
+use ic_host_text::{Alignment, escape, plain_table};
 use std::fmt::Write as _;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -48,17 +45,18 @@ pub(crate) fn next(
             }
         }
     }
-    if matches!(action, "apply" | "reconcile") {
+    if matches!(action, "apply" | "reconcile" | "activate") {
         parts.extend(["--identity".into(), quote(identity.unwrap_or("IDENTITY"))]);
         if let FleetCommand::Plan { signer, .. }
         | FleetCommand::Apply { signer, .. }
-        | FleetCommand::Reconcile { signer, .. } = command
+        | FleetCommand::Reconcile { signer, .. }
+        | FleetCommand::Activate { signer, .. } = command
             && signer.icp_bin != crate::args::checkout().join(".tools/ic/bin/icp")
         {
             parts.extend(["--icp-bin".into(), quote(&signer.icp_bin.to_string_lossy())]);
         }
     }
-    format!("\nNext:\n{}\n", terminal_text(&parts.join(" ")))
+    format!("\nNext:\n{}\n", escape(&parts.join(" ")))
 }
 
 pub(crate) fn built(built: &[BuiltCanister]) -> String {
@@ -74,14 +72,10 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
         .collect();
     format!(
         "Built app canisters\n\n{}\n\nNothing deployed.\n",
-        table::render(
+        plain_table(
             &["CANISTER", "WASM", "BYTES"],
             &rows,
-            &[Alignment::Left, Alignment::Left, Alignment::Right],
-            Options {
-                column_gap: 2,
-                header_separator: true
-            }
+            &[Alignment::Left, Alignment::Left, Alignment::Right]
         )
     )
 }
@@ -103,7 +97,7 @@ fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {
         }
         ApplyOutcome::Removal { removal } => {
             writeln!(text, "Removal result retained: {} / {}\nPreserve this journal; restoration needs a separate plan after the original dispatch deadline.",
-                terminal_text(&removal.manifest.release.name), terminal_text(&removal.manifest.release.version)).expect("String write");
+                escape(&removal.manifest.release.name), escape(&removal.manifest.release.version)).expect("String write");
             true
         }
         ApplyOutcome::StorePending {
@@ -111,7 +105,7 @@ fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {
             store_maintenance,
             ..
         } => {
-            text.push_str(&format!("Root: {}\n", terminal_text(root),));
+            text.push_str(&format!("Root: {}\n", escape(root),));
             text.push_str(&crate::status::store::render(store_maintenance, now, false));
             false
         }
@@ -119,7 +113,7 @@ fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {
             let published = publication.status.as_ref().is_some_and(|s| s.published);
             text.push_str(&format!(
                 "Store: {}\nPublication: {}\n",
-                terminal_text(&publication.store),
+                escape(&publication.store),
                 if published {
                     "published; receipt retained"
                 } else {
@@ -134,19 +128,16 @@ fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {
             children,
             ..
         } => {
-            text.push_str(&format!(
-                "Root installed: {}\n",
-                terminal_text(&root.canister)
-            ));
+            text.push_str(&format!("Root installed: {}\n", escape(&root.canister)));
             if let Some(store) = store {
                 text.push_str(&format!(
                     "Store ready: {} (controlled by Root)\n",
-                    terminal_text(&store.canister)
+                    escape(&store.canister)
                 ));
             }
             let mut complete = true;
             for child in children {
-                text.push_str(&format!("Application: {}\n", terminal_text(&child.name)));
+                text.push_str(&format!("Application: {}\n", escape(&child.name)));
                 complete &= outcome(&child.outcome, text, now);
             }
             complete
@@ -154,21 +145,40 @@ fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {
         ApplyOutcome::Complete(receipt) => {
             text.push_str(&format!(
                 "Canister installed: {}\nVerified completion receipt retained.\n",
-                terminal_text(&receipt.canister)
+                escape(&receipt.canister)
             ));
             true
         }
         ApplyOutcome::Pending { root, status, .. } => {
-            text.push_str(&format!("Root: {}\nApplication: {:?}; completion not yet retained.\nResume this operation after dispatch to retain its outcome.\n", terminal_text(root), status.phase));
+            text.push_str(&format!("Root: {}\nApplication: {:?}; completion not yet retained.\nResume this operation after dispatch to retain its outcome.\n", escape(root), status.phase));
             false
         }
-        ApplyOutcome::UpgradePending { root, upgrade, .. } => {
+        ApplyOutcome::UpgradePending {
+            root,
+            upgrade,
+            maintenance,
+            ..
+        } => {
             text.push_str(&format!(
                 "Root: {}\nUpgrade: {:?}; completion not yet retained.\n",
-                terminal_text(root),
+                escape(root),
                 upgrade.phase
             ));
-            text.push_str(crate::status::management::upgrade_continuation(upgrade, false).1);
+            if let Some(maintenance) = maintenance {
+                text.push_str(&format!(
+                    "Blob attempt {}: {:?}. ",
+                    maintenance.attempt, maintenance.phase
+                ));
+            }
+            if maintenance.as_ref().is_some_and(|m| {
+                m.phase == canic_management_protocol::application::MaintenancePhase::Inspected
+            }) {
+                text.push_str(
+                    "Reopened with admission closed; activation requires separate approval.",
+                );
+            } else {
+                text.push_str(crate::status::management::upgrade_continuation(upgrade, false).1);
+            }
             text.push('\n');
             false
         }
@@ -180,6 +190,9 @@ pub(crate) fn applied(value: &ApplyOutcome, command: &FleetCommand) -> String {
         digest, identity, ..
     }
     | FleetCommand::Reconcile {
+        digest, identity, ..
+    }
+    | FleetCommand::Activate {
         digest, identity, ..
     }) = command
     else {
@@ -195,6 +208,13 @@ pub(crate) fn applied(value: &ApplyOutcome, command: &FleetCommand) -> String {
         ApplyOutcome::StorePending {
             store_maintenance, ..
         } => crate::status::store::continuation(store_maintenance, now).0,
+        ApplyOutcome::UpgradePending { maintenance, .. }
+            if maintenance.as_ref().is_some_and(|m| {
+                m.phase == canic_management_protocol::application::MaintenancePhase::Inspected
+            }) =>
+        {
+            "activate"
+        }
         ApplyOutcome::UpgradePending { upgrade, .. } => {
             crate::status::management::upgrade_continuation(upgrade, false).0
         }

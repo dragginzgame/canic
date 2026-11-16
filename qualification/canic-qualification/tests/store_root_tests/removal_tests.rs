@@ -53,8 +53,8 @@ async fn handover(root: &Client<'_>, supplier: &Client<'_>) {
 #[tokio::test(flavor = "current_thread")]
 async fn root_removal_keeps_pins_labels_and_exact_identity_before_expired_authority_restoration() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture(pic).await;
     let bytes = b"\0asm\x01\0\0\0";
     let removed = supplier.publish_bytes("removed", bytes).await;
@@ -178,13 +178,19 @@ async fn root_removal_keeps_pins_labels_and_exact_identity_before_expired_author
     let before = pic.get_stable_memory(supplier.id).await;
     assert_eq!(remove(&root, &fresh).await, Err(Error::Maintenance));
     assert_eq!(pic.get_stable_memory(supplier.id).await, before);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn root_cancellation_preserves_tombstone_and_lost_reply_never_becomes_a_receipt() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture(pic).await;
     handover(&root, &supplier).await;
     let bytes = b"\0asm\x01\0\0\0";
@@ -233,4 +239,10 @@ async fn root_cancellation_preserves_tombstone_and_lost_reply_never_becomes_a_re
         publish(&root, &supplier, Command::Observe(input.manifest.release)).await,
         Err(Error::Store(store::Error::NotFound))
     );
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

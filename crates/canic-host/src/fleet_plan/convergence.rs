@@ -176,6 +176,8 @@ pub(super) fn plan(
             artifact: selected.artifact.clone(),
             deployment: Some(selected.deployment.clone()),
             action: PlanAction::CreateChild(crate::ManagedOwner {
+                arguments: None,
+                blob_attempt: None,
                 root,
                 root_module,
                 slot: Some(selected.slot),

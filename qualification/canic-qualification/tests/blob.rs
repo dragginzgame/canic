@@ -13,6 +13,7 @@ use canic_asset_catalog::protocol as app;
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{num::NonZeroU128, path::PathBuf};
+mod blob_fleet_tests;
 mod support;
 
 fn id(n: u128) -> NonZeroU128 {
@@ -165,15 +166,15 @@ impl Client<'_> {
         .await
     }
     async fn upgrade(&self, artifact: &str, args: Vec<u8>) -> Result<(), String> {
-        self.pic
-            .upgrade_canister(
-                self.canister,
-                std::fs::read(directory().join(artifact)).unwrap(),
-                args,
-                Some(actor(9)),
-            )
-            .await
-            .map_err(|e| e.to_string())
+        canic_qualification::upgrade_stopped(
+            self.pic,
+            self.canister,
+            std::fs::read(directory().join(artifact)).unwrap(),
+            args,
+            Some(actor(9)),
+        )
+        .await
+        .map_err(|e| e.to_string())
     }
     async fn ready(&self) -> bool {
         self.pic
@@ -188,17 +189,66 @@ impl Client<'_> {
     }
 }
 async fn install(pic: &PocketIc) -> Client<'_> {
+    install_bytes(
+        pic,
+        std::fs::read(directory().join("original.wasm")).unwrap(),
+    )
+    .await
+}
+async fn install_bytes(pic: &PocketIc, wasm: Vec<u8>) -> Client<'_> {
     let canister = pic
         .create_canister_with_settings(Some(actor(9)), None)
         .await;
     pic.install_canister(
         canister,
-        std::fs::read(directory().join("original.wasm")).unwrap(),
+        wasm,
         frame(app::INIT, &initialization()),
         Some(actor(9)),
     )
     .await;
     Client { pic, canister }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn registry_blob_reopens_populated_predecessor_without_reinitialization() {
+    let (_, binary) = support::inputs();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
+    let client = install_bytes(
+        pic,
+        include_bytes!("../fixtures/blob-catalog-01006.wasm").to_vec(),
+    )
+    .await;
+    first(&client).await;
+    client
+        .authorize(actor(2), &client.draft(2).await)
+        .await
+        .unwrap();
+    client.publish(actor(2), 2).await.unwrap();
+    client.command(actor(8), Command::Drain(1)).await.unwrap();
+    client.remove(actor(1), 1).await.unwrap();
+    let retained = client.management().await;
+    let bob = client.asset(actor(2), 2).await.unwrap();
+    client
+        .upgrade("candidate.wasm", frame(app::UPGRADE, &()))
+        .await
+        .unwrap();
+    assert_eq!(client.management().await, retained);
+    assert_eq!(client.asset(actor(2), 2).await.unwrap(), bob);
+    assert!(!client.ready().await);
+    client
+        .command(actor(8), Command::Activate(1))
+        .await
+        .unwrap();
+    assert!(client.ready().await);
+    assert_eq!(client.asset(actor(2), 2).await.unwrap(), bob);
+    assert_eq!(client.publish(actor(1), 1).await, Err(app::Error::Released));
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 async fn first(client: &Client<'_>) -> app::Draft {
     let draft = client.draft(1).await;
@@ -214,8 +264,8 @@ async fn first(client: &Client<'_>) -> app::Draft {
 #[tokio::test(flavor = "current_thread")]
 async fn captured_users_share_one_object_without_application_authority_leaking() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let client = install(pic).await;
     let first = first(&client).await;
     let second = client.draft(2).await;
@@ -321,13 +371,19 @@ async fn captured_users_share_one_object_without_application_authority_leaking()
     assert_eq!(client.publish(actor(1), 1).await, Err(app::Error::Released));
     client.remove(actor(1), 1).await.unwrap();
     assert_eq!(pic.get_stable_memory(client.canister).await, released);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn catalog_validation_and_post_mutation_traps_preserve_both_owners() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let client = install(pic).await;
     first(&client).await;
     let second = client.draft(2).await;
@@ -416,13 +472,19 @@ async fn catalog_validation_and_post_mutation_traps_preserve_both_owners() {
         client.authorize(actor(1), &client.draft(5).await).await,
         Err(app::Error::Capacity)
     );
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn malformed_frames_at_actual_mounts_leave_all_state_unchanged() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let client = install(pic).await;
     let draft = first(&client).await;
     let before = pic.get_stable_memory(client.canister).await;
@@ -503,13 +565,19 @@ async fn malformed_frames_at_actual_mounts_leave_all_state_unchanged() {
             );
         }
     }
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn drain_reopen_and_exact_activation_preserve_catalog_and_blob() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let client = install(pic).await;
     first(&client).await;
     client
@@ -552,14 +620,8 @@ async fn drain_reopen_and_exact_activation_preserve_catalog_and_blob() {
     // Canic's current empty upgrade arguments are incompatible; they cannot activate Blob.
     assert!(client.upgrade("candidate.wasm", vec![]).await.is_err());
     assert_eq!(pic.get_stable_memory(client.canister).await, closed);
-    pic.stop_canister(client.canister, Some(actor(9)))
-        .await
-        .unwrap();
     client
         .upgrade("candidate.wasm", frame(app::UPGRADE, &()))
-        .await
-        .unwrap();
-    pic.start_canister(client.canister, Some(actor(9)))
         .await
         .unwrap();
     assert_eq!(pic.get_stable_memory(client.canister).await, closed);
@@ -585,14 +647,8 @@ async fn drain_reopen_and_exact_activation_preserve_catalog_and_blob() {
     );
     client.command(actor(8), Command::Drain(2)).await.unwrap();
     assert!(!client.ready().await);
-    pic.stop_canister(client.canister, Some(actor(9)))
-        .await
-        .unwrap();
     client
         .upgrade("original.wasm", frame(app::UPGRADE, &()))
-        .await
-        .unwrap();
-    pic.start_canister(client.canister, Some(actor(9)))
         .await
         .unwrap();
     let second = pic.get_stable_memory(client.canister).await;
@@ -608,13 +664,19 @@ async fn drain_reopen_and_exact_activation_preserve_catalog_and_blob() {
         .unwrap();
     assert!(client.ready().await);
     assert_eq!(client.asset(actor(2), 2).await.unwrap(), bob);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn reopen_failure_never_initializes_missing_invalid_or_foreign_state() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let source = install(pic).await;
     first(&source).await;
     source.command(actor(8), Command::Drain(1)).await.unwrap();
@@ -640,4 +702,10 @@ async fn reopen_failure_never_initializes_missing_invalid_or_foreign_state() {
         assert_eq!(pic.get_stable_memory(recipient.canister).await, bytes);
         assert_eq!(pic.get_stable_memory(source.canister).await, retained);
     }
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

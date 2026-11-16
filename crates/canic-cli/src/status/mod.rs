@@ -3,10 +3,7 @@
 use canic_host::{
     CanisterStatus, Error, ManagementStatus, Network, OperationStatus, Result, StatusDetail,
 };
-use ic_host_text::{
-    escape::terminal_text,
-    table::{self, Alignment, Options},
-};
+use ic_host_text::{Alignment, escape, plain_table};
 use std::{
     collections::BTreeMap,
     fmt::Write as _,
@@ -34,16 +31,16 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         .as_nanos();
     let mut output = format!(
         "CANIC OPERATION\nOperation: {}\nJournal: {}\nLocal evidence only; no network observation.\n",
-        terminal_text(operation),
-        terminal_text(&journal.to_string_lossy()),
+        escape(operation),
+        escape(&journal.to_string_lossy()),
     );
     if let Some(name) = &plan.deployment {
         writeln!(
             output,
             "App: {}\nFleet: {}\nCanister slot: {}",
-            terminal_text(&name.app),
-            terminal_text(&name.fleet),
-            terminal_text(&name.canister),
+            escape(&name.app),
+            escape(&name.fleet),
+            escape(&name.canister),
         )
         .expect("writing to String");
     }
@@ -55,10 +52,10 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
         match plan.action { canic_host::PlanAction::Auth(_) => "configure or revoke exact Auth grant (no deployment)", canic_host::PlanAction::Remove(_) => "remove exact Store release (no deployment)", canic_host::PlanAction::UpgradeStore { .. } => "Root upgrades Store, preserving its closed catalog and pins", canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
-        terminal_text(&network),
+        escape(&network),
         plan.network.binding_id()?,
-        terminal_text(plan.application_controller()),
-        terminal_text(&plan.artifact.sha256),
+        escape(plan.application_controller()),
+        escape(&plan.artifact.sha256),
         plan.artifact.bytes,
         plan.creation_cycles(),
         plan.expires_at_ns / 1_000_000_000,
@@ -69,13 +66,13 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         writeln!(output,
             "\nAuth action: {}\nRoot: {}\nReceiver: {}\nReceiver module: {}\nIssuer: {}\nPublic key: {}\nCanonical network ID: {}\nApplication ID: {}\nApplication role: {}\nScopes: {}\nGrant window: {}–{} Unix ns\nAuth reply: {} (historical; not receiver readiness)",
             if auth.revoke { "revoke" } else { "configure" },
-            terminal_text(&auth.root.canister), terminal_text(&auth.receiver.canister), terminal_text(&auth.receiver.module),
+            escape(&auth.root.canister), escape(&auth.receiver.canister), escape(&auth.receiver.module),
             auth.grant.issuer.to_text(),
             auth.grant.key.iter().map(|b| format!("{b:02x}")).collect::<String>(),
             auth.grant.audience.canonical_network_id.iter().map(|b| format!("{b:02x}")).collect::<String>(),
             auth.grant.audience.fleet_id.iter().map(|b| format!("{b:02x}")).collect::<String>(),
-            terminal_text(auth.grant.grant.target.as_str()),
-            auth.grant.grant.scopes.as_slice().iter().map(|s| terminal_text(s.as_str())).collect::<Vec<_>>().join(", "),
+            escape(auth.grant.grant.target.as_str()),
+            auth.grant.grant.scopes.as_slice().iter().map(|s| escape(s.as_str())).collect::<Vec<_>>().join(", "),
             auth.grant.not_before_ns, auth.grant.expires_at_ns,
             if matches!(&state.detail, StatusDetail::Auth { auth: Some(_) }) { "retained" } else { "unconfirmed" },
         ).expect("String write");
@@ -84,8 +81,8 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         writeln!(
             output,
             "Root: {}\nRoot module: {}",
-            terminal_text(&root.canister),
-            terminal_text(&root.module)
+            escape(&root.canister),
+            escape(&root.module)
         )
         .expect("String write");
     }
@@ -103,14 +100,14 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         writeln!(
             output,
             "Root: {}\nRoot module: {}\nStore: {}\nStore module: {}\nRelease: {} / {}\nRemoval: {:?}\nSource publication: {}",
-            terminal_text(&value.publication.root.canister),
-            terminal_text(&value.publication.root.module),
-            terminal_text(&value.publication.store.canister),
-            terminal_text(&value.publication.store.module),
-            terminal_text(&value.publication.release.name),
-            terminal_text(&value.publication.release.version),
+            escape(&value.publication.root.canister),
+            escape(&value.publication.root.module),
+            escape(&value.publication.store.canister),
+            escape(&value.publication.store.module),
+            escape(&value.publication.release.name),
+            escape(&value.publication.release.version),
             value.action,
-            terminal_text(&value.publication_operation)
+            escape(&value.publication_operation)
         )
         .expect("String write");
         if let StatusDetail::Removal {
@@ -128,19 +125,18 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
     }
     if let Some(publication) = plan.publication() {
         if let Some(id) = &publication.after_removal {
-            writeln!(output, "Restoration after removal: {}", terminal_text(id))
-                .expect("String write");
+            writeln!(output, "Restoration after removal: {}", escape(id)).expect("String write");
         }
         writeln!(output, "Root: {}\nRoot module: {}\nStore: {}\nStore module: {}\nRelease: {} / {}\nPublished receipt retained: {}",
-            terminal_text(&publication.root.canister), terminal_text(&publication.root.module),
-            terminal_text(&publication.store.canister), terminal_text(&publication.store.module),
-            terminal_text(&publication.release.name), terminal_text(&publication.release.version), matches!(&state.detail, StatusDetail::Publication { publication: Some(_) })).expect("String write");
+            escape(&publication.root.canister), escape(&publication.root.module),
+            escape(&publication.store.canister), escape(&publication.store.module),
+            escape(&publication.release.name), escape(&publication.release.version), matches!(&state.detail, StatusDetail::Publication { publication: Some(_) })).expect("String write");
     }
     for custody in plan.maintenance().into_iter().flatten() {
         writeln!(
             output,
             "Preserve: child {} creation and {} completed child upgrade(s)",
-            terminal_text(custody.creation.worker.as_deref().unwrap_or("unknown")),
+            escape(custody.creation.worker.as_deref().unwrap_or("unknown")),
             custody.upgrades.len()
         )
         .expect("writing to String");
@@ -149,8 +145,8 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         writeln!(
             output,
             "Preserved Store: {}\nStore module: {}\nRetained artifact pins: {}",
-            terminal_text(&store.store.canister),
-            terminal_text(&store.store.module),
+            escape(&store.store.canister),
+            escape(&store.store.module),
             store
                 .sources
                 .iter()
@@ -164,9 +160,9 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         writeln!(
             output,
             "Root: {}\nRoot module: {}\nOperator: {}\nAutonomous dispatch: {}",
-            terminal_text(&owner.root),
-            terminal_text(&owner.root_module),
-            terminal_text(&plan.controller),
+            escape(&owner.root),
+            escape(&owner.root_module),
+            escape(&plan.controller),
             dispatch(plan.created_at_ns, owner.execute_at_ns)
         )
         .expect("writing to String");
@@ -174,10 +170,10 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
             writeln!(
                 output,
                 "Artifact source: Store {}\nStore module: {}\nRelease: {} / {}",
-                terminal_text(&source.store.canister),
-                terminal_text(&source.store.module),
-                terminal_text(&source.manifest.release.name),
-                terminal_text(&source.manifest.release.version)
+                escape(&source.store.canister),
+                escape(&source.store.module),
+                escape(&source.manifest.release.name),
+                escape(&source.manifest.release.version)
             )
             .expect("String write");
         }
@@ -188,15 +184,11 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         ));
     }
     if let Some(target) = plan.target() {
-        writeln!(output, "Upgrade target: {}", terminal_text(target)).expect("writing to String");
+        writeln!(output, "Upgrade target: {}", escape(target)).expect("writing to String");
     }
     if let Some(module) = plan.previous_module() {
-        writeln!(
-            output,
-            "Required previous module: {}",
-            terminal_text(module)
-        )
-        .expect("writing to String");
+        writeln!(output, "Required previous module: {}", escape(module))
+            .expect("writing to String");
     }
     let store_upgrade = plan.store_upgrade_root().is_some();
     let rows: Vec<_> = if store_upgrade {
@@ -233,7 +225,7 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
     writeln!(
         output,
         "\n{}",
-        table::render(
+        plain_table(
             if store_upgrade {
                 &["RETAINED EVIDENCE", "ATTEMPTS"]
             } else {
@@ -248,10 +240,6 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
                     Alignment::Left
                 }
             ],
-            Options {
-                column_gap: 2,
-                header_separator: true
-            },
         )
     )
     .expect("writing to String");
@@ -259,10 +247,10 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         writeln!(
             output,
             "Receipt: retained (historical deployment evidence)\n  Operation: {}\n  Canister: {}\n  Module: {}\n  Controller: {}",
-            terminal_text(&receipt.operation),
-            terminal_text(&receipt.canister),
-            terminal_text(&receipt.module_hash),
-            terminal_text(&receipt.controller),
+            escape(&receipt.operation),
+            escape(&receipt.canister),
+            escape(&receipt.module_hash),
+            escape(&receipt.controller),
         )
         .expect("writing to String");
     } else if plan.auth().is_none() && plan.publication().is_none() && plan.removal().is_none() {
@@ -320,14 +308,10 @@ fn render_fleet(state: &canic_host::FleetStatus, journal: &Path) -> Result<Strin
         }
         rows.push([child.name.clone(), evidence(child.state.as_ref())]);
     }
-    output.push_str(&table::render(
+    output.push_str(&plain_table(
         &["STEP", "RETAINED EVIDENCE"],
         &rows,
         &[Alignment::Left; 2],
-        Options {
-            column_gap: 2,
-            header_separator: true,
-        },
     ));
     output
         .push_str("\n\nLocal evidence only. Resume this same fleet operation with fleet apply.\n");
@@ -335,7 +319,7 @@ fn render_fleet(state: &canic_host::FleetStatus, journal: &Path) -> Result<Strin
         if let Some(step) = &child.state
             && step.management.is_some()
         {
-            writeln!(output, "\nChild: {}", terminal_text(&child.name)).expect("String write");
+            writeln!(output, "\nChild: {}", escape(&child.name)).expect("String write");
             output.push_str(&management::render(
                 step.management.as_ref(),
                 &step.detail,
@@ -388,7 +372,7 @@ pub(crate) fn fleet_preview(
         writeln!(
             modules,
             "{} module: {}",
-            terminal_text(&store.deployment.canister),
+            escape(&store.deployment.canister),
             store.artifact.sha256
         )
         .expect("String write");
@@ -413,7 +397,7 @@ pub(crate) fn fleet_preview(
         writeln!(
             modules,
             "{} module: {}",
-            terminal_text(&child.deployment.canister),
+            escape(&child.deployment.canister),
             child.artifact.sha256
         )
         .expect("String write");
@@ -421,31 +405,27 @@ pub(crate) fn fleet_preview(
             writeln!(
                 modules,
                 "  Store release: {} / {} (publication before child admission)",
-                terminal_text(&release.release.name),
-                terminal_text(&release.release.version)
+                escape(&release.release.name),
+                escape(&release.release.version)
             )
             .expect("String write");
         }
     }
     Ok(format!(
         "CANIC FLEET PLAN\nOperation: {}\nApp: {}\nFleet: {}\nNetwork: {}\nOperator: {}\nJournal: {}\n\n{}\n\n{}Child dispatch: {}\nChild effect deadline: {}\n\n",
-        terminal_text(id),
-        terminal_text(&root.app),
-        terminal_text(&root.fleet),
-        terminal_text(&match &plan.root.network {
+        escape(id),
+        escape(&root.app),
+        escape(&root.fleet),
+        escape(&match &plan.root.network {
             Network::Mainnet => "IC mainnet".into(),
             Network::Local { url, .. } => format!("Local replica: {url}"),
         }),
-        terminal_text(&plan.root.controller),
-        terminal_text(&journal.to_string_lossy()),
-        table::render(
+        escape(&plan.root.controller),
+        escape(&journal.to_string_lossy()),
+        plain_table(
             &["CANISTER", "CONTROLLER", "BUDGET"],
             &rows,
-            &[Alignment::Left; 3],
-            Options {
-                column_gap: 2,
-                header_separator: true
-            }
+            &[Alignment::Left; 3]
         ),
         modules,
         dispatch(plan.root.created_at_ns, plan.children[0].execute_at_ns),

@@ -14,7 +14,8 @@ help:
 	  'make endpoint-test           Qualify management mounts, guards and reply rollback' \
 	  'make root-test               Qualify Root creation, upgrades and child isolation' \
 	  'make blob-test               Qualify embedded Blob/catalog composition' \
-	  'make auth-test               Qualify optional Auth receiver mounts and rollback' \
+	  'make db-test                 Qualify typed database mounts and rollback' \
+	  'make auth-test               Qualify optional Auth composition and rollback' \
 	  'make store-test              Qualify Canic Root/Store integration and maintenance' \
 	  'make store-readiness-test    Qualify Store observation after Root handover' \
 	  'make publication-test        Qualify CLI Store bootstrap and publication' \
@@ -62,9 +63,9 @@ doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --no-deps
 
 # The CLI journey owns product Clippy/Rustdoc coverage, including the shared canic library.
-lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc profile-clippy profile-doc root-clippy root-doc store-clippy blob-clippy blob-doc auth-clippy auth-doc
+lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc profile-clippy profile-doc root-clippy root-doc store-clippy blob-clippy blob-doc auth-clippy auth-doc db-clippy
 
-ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test
+ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
 
 # Routine hosted coverage: product packages only, no signer/server provisioning.
 # Installed journeys remain explicit through the existing qualification runners.
@@ -84,7 +85,7 @@ ci-wasm:
 
 # The runner selects the Wasm path from Cargo artifact messages.
 qualification-setup:
-	cargo run --locked --manifest-path qualification/Cargo.toml -p canic-qualification --example prepare_server
+	bash scripts/dev/prepare-server.sh
 
 effect-test:
 	bash scripts/dev/test-effects.sh
@@ -194,9 +195,21 @@ blob-test:
 
 blob-clippy:
 	cargo clippy --locked -p canic --features blob --all-targets -- -D warnings
+	cargo clippy --locked -p canic-root --features blob --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-asset-catalog --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test blob -- -D warnings
 
 blob-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features blob --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-root -p canic-management --features canic-root/blob --target wasm32-unknown-unknown --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-asset-catalog --no-deps
+
+.PHONY: db-test db-clippy
+db-test:
+	bash scripts/dev/test-db.sh
+
+db-clippy:
+	cargo clippy --locked -p canic --features db --lib --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features fault-injection -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --test installed -- -D warnings

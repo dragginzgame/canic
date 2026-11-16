@@ -1,0 +1,233 @@
+//! This application owns storage, authority, schema and fluent operations.
+use crate::protocol::{
+    Description, InspectReply, InspectRequest, Page, QueryReply, QueryRequest, Receipt, Refusal,
+    Row, WriteReply, WriteRequest,
+};
+use canic::db::{Operation, endpoint::runtime};
+use ic_db::{Batch, Comparison, Database, Entity, Error, QueryCursor, Schema};
+use ic_storage::{
+    AllocationGrants, DefaultMemoryImpl, GenericAllocationPolicy, MemoryAuthority, MemoryRequest,
+    MemoryRuntime, RuntimeMemory, SealedDeclarationSnapshot, StableKey,
+};
+use std::rc::Rc;
+
+#[ic_db::entity(pk(field="id"), index(fields=["score","id"]), fields(
+    field(name="id",value(item(prim="Nat64"))),
+    field(name="score",value(item(prim="Nat64")))
+))]
+struct Item {}
+
+fn schema() -> Schema {
+    Schema::new(&[Item::SCHEMA]).unwrap()
+}
+fn runtime() -> Rc<MemoryRuntime<DefaultMemoryImpl>> {
+    thread_local! {
+        static HOST: Rc<MemoryRuntime<DefaultMemoryImpl>> = Rc::new({
+            let mut host = MemoryRuntime::new(DefaultMemoryImpl::default()).unwrap();
+            host.bootstrap(
+                &SealedDeclarationSnapshot::new(["app.db.v1", "app.owner.v1"].map(|key|
+                    MemoryRequest::new("app", key).unwrap()).to_vec()).unwrap(),
+                &AllocationGrants::new(vec![MemoryAuthority::new("app", "app.").unwrap()]).unwrap(),
+                &GenericAllocationPolicy,
+            ).unwrap();
+            host
+        });
+    }
+    HOST.with(Rc::clone)
+}
+fn memory(host: &MemoryRuntime<DefaultMemoryImpl>, key: &str) -> RuntimeMemory<DefaultMemoryImpl> {
+    host.open_memory(&StableKey::parse(key).unwrap()).unwrap()
+}
+fn open(host: &MemoryRuntime<DefaultMemoryImpl>) -> Result<Database, Error> {
+    Database::open(memory(host, "app.db.v1"), schema())
+}
+fn decode_owner(bytes: &[u8]) -> Result<ic_db::Principal, std::convert::Infallible> {
+    Ok({ ic_db::Principal::try_from_slice(bytes).expect("installation owner") })
+}
+#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = decode_owner, max_bytes = 2097152, on_error = endpoint_error)]
+fn initialize(owner: ic_db::Principal) {
+    assert_ne!(owner, ic_db::Principal::anonymous());
+    let host = runtime();
+    let owner_memory = memory(&host, "app.owner.v1");
+    assert_eq!(owner_memory.size(), 0, "initialization only");
+    owner_memory.grow(1).unwrap();
+    let mut record = [0_u8; 34];
+    record[..4].copy_from_slice(b"OWN1");
+    record[4] = owner.as_slice().len() as u8;
+    record[5..5 + owner.as_slice().len()].copy_from_slice(owner.as_slice());
+    owner_memory.write(0, &record);
+    // Fresh fixture installation identity; no init hook on upgrade.
+    Database::create(memory(&host, "app.db.v1"), schema(), [91; 16]).unwrap();
+}
+fn authorize(caller: ic_db::Principal, _operation: Operation) -> Result<(), String> {
+    let host = runtime();
+    let owner_memory = memory(&host, "app.owner.v1");
+    let mut bytes = [0; 34];
+    if owner_memory.size() == 0 {
+        return Err("uninitialized".into());
+    }
+    owner_memory.read(0, &mut bytes);
+    assert_eq!(&bytes[..4], b"OWN1", "owner format");
+    assert!(bytes[4] <= 29, "owner length");
+    let owner = ic_db::Principal::try_from_slice(&bytes[5..5 + usize::from(bytes[4])]).unwrap();
+    if caller == owner {
+        Ok(())
+    } else {
+        Err("denied".into())
+    }
+}
+fn refusal(error: Error) -> Refusal {
+    match error {
+        Error::Limit => Refusal::Limit,
+        Error::Exists => Refusal::Exists,
+        Error::DuplicateTarget => Refusal::DuplicateTarget,
+        Error::Maintenance => Refusal::Maintenance,
+        Error::InvalidCursor => Refusal::Cursor,
+        other => panic!("unexpected database failure: {other:?}"),
+    }
+}
+fn inspect(_caller: ic_db::Principal, (): InspectRequest) -> InspectReply {
+    let host = runtime();
+    Description {
+        entity: Item::SCHEMA.name.into(),
+        fields: Item::SCHEMA
+            .fields
+            .iter()
+            .map(|f| (f.name.into(), format!("{:?}", f.value)))
+            .collect(),
+        indexes: Item::SCHEMA.indexes.iter().map(|i| i.name.into()).collect(),
+        rows: open(&host)
+            .and_then(|db| db.query::<Item>().count().map(|count| count.value))
+            .map_err(refusal),
+    }
+}
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "Mounted handler receives the decoded request"
+)]
+fn query(_caller: ic_db::Principal, request: QueryRequest) -> QueryReply {
+    if !(1..=3).contains(&request.limit) || !(1..=4).contains(&request.work) {
+        return Err(Refusal::Limit);
+    }
+    let host = runtime();
+    let db = open(&host).map_err(refusal)?;
+    let cursor = request
+        .after
+        .as_deref()
+        .map(QueryCursor::from_bytes)
+        .transpose()
+        .map_err(refusal)?;
+    let mut query = db
+        .query::<Item>()
+        .filter("score", Comparison::Ge, request.minimum)
+        .limit(usize::from(request.limit))
+        .work_limit(usize::from(request.work))
+        .byte_limit(1024);
+    if let Some(cursor) = &cursor {
+        query = query.after(cursor);
+    }
+    let page = query.fetch().map_err(refusal)?;
+    Ok(Page {
+        rows: page
+            .rows
+            .into_iter()
+            .map(|row| Row {
+                id: row.id,
+                score: row.score,
+            })
+            .collect(),
+        next: page.next.map(|cursor| cursor.to_bytes()),
+        examined: page.examined as u32,
+    })
+}
+fn write(_caller: ic_db::Principal, rows: WriteRequest, _time: u64) -> WriteReply {
+    if rows.is_empty() || rows.len() > 4 {
+        return Err(Refusal::Limit);
+    }
+    let host = runtime();
+    let mut db = open(&host).map_err(refusal)?;
+    let inserted = rows.len() as u32;
+    let mut batch = Batch::new();
+    for row in rows {
+        batch
+            .insert(&Item {
+                id: row.id,
+                score: row.score,
+            })
+            .map_err(refusal)?;
+    }
+    db.commit(batch).map_err(refusal)?;
+    let receipt = Receipt {
+        inserted,
+        note: String::new(),
+    };
+    #[cfg(feature = "fault-injection")]
+    let receipt = if controls::reply_failure() {
+        Receipt {
+            note: "x".repeat(65_536),
+            ..receipt
+        }
+    } else {
+        receipt
+    };
+    Ok(receipt)
+}
+canic::mount_db_endpoints! {
+    protocol = crate::protocol,
+    authorize = crate::canister::authorize,
+    inspect = crate::canister::inspect,
+    query = crate::canister::query,
+    write = crate::canister::write,
+}
+
+#[cfg(feature = "fault-injection")]
+mod controls {
+    type EmptyReply = ();
+    use super::{Entity, Operation, Schema, authorize, memory, open, runtime, schema};
+    use canic::db::endpoint;
+    use endpoint::api;
+    use ic_db::{Maintenance, SchemaTransition};
+    use std::cell::Cell;
+    thread_local! { static REPLY_FAILURE: Cell<bool> = const { Cell::new(false) }; }
+    pub(super) fn reply_failure() -> bool {
+        REPLY_FAILURE.get()
+    }
+    #[ic_db::entity(name="Item", pk(field="id"), index(fields=["score","id"]), fields(
+        field(name="id",value(item(prim="Nat64"))),
+        field(name="score",value(item(prim="Nat128")))
+    ))]
+    struct FutureItem {}
+    fn admit() -> Result<(), String> {
+        authorize(api::caller(), Operation::Write)?;
+        endpoint::admit::<991>()
+    }
+    #[runtime::update(runtime = runtime, guard = admit, decode = endpoint::decode::<u8, 991>, max_bytes = 2097152, on_error = endpoint::fail, name = "db_test_control", encode = endpoint::encode::<EmptyReply, 991>)]
+    fn db_test_control(control: u8) -> EmptyReply {
+        match control {
+            0 => REPLY_FAILURE.set(false),
+            1 => REPLY_FAILURE.set(true),
+            2 | 3 => {
+                let host = runtime();
+                let target = Schema::new(&[FutureItem::SCHEMA]).unwrap();
+                let transition =
+                    SchemaTransition::new(&schema(), &target, "widen-score", 1, &[]).unwrap();
+                if control == 2 {
+                    open(&host).unwrap().begin_maintenance(&transition).unwrap();
+                } else {
+                    Maintenance::resume(memory(&host, "app.db.v1"), &transition)
+                        .unwrap()
+                        .cancel();
+                }
+            }
+            _ => panic!("unknown fixture control"),
+        }
+    }
+}
+
+fn endpoint_error(error: impl std::fmt::Debug) -> ! {
+    ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
+}
+
+fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
+    Ok(())
+}

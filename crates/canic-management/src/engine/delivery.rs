@@ -1,15 +1,15 @@
 //! Artifact delivery under the existing child journal. Store bytes never enter Root.
-use super::{MANAGEMENT_LIMITS, STATE, State, failure, management};
+use super::{MANAGEMENT_LIMITS, STATE, State, failure, management, response};
 use crate::storage::Artifact;
 use canic_management_protocol::{Failure, Refusal, STAGE_LIMITS, children::ChildId, stored};
+use ic_platform::principal::Principal;
 use ic_platform::{
     candid_codec::{self, decoder},
     management_canister_types::{CanisterIdRecord, ChunkHash, UploadChunkArgs},
 };
 use ic_platform_runtime::{
-    Principal,
-    call::{Call, WaitPolicy},
-    cdk::api,
+    call::{Call, Wait},
+    system as api,
 };
 use ic_wasm_store_protocol as store;
 use serde::{Serialize, de::DeserializeOwned};
@@ -32,8 +32,9 @@ fn mutate(slot: ChildId, upgrade: bool, f: impl FnOnce(&mut stored::Delivery)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
         let mut artifacts = state.artifact.get().clone();
-        let Artifact::Stored(sources) = artifacts.0.get_mut(&slot).expect("known child") else {
-            panic!("Store source required")
+        let sources = match artifacts.0.get_mut(&slot).expect("known child") {
+            Artifact::Stored(sources) | Artifact::Application(sources, _) => sources,
+            Artifact::Inline(_) => panic!("Store source required"),
         };
         f(if upgrade {
             sources.upgrades.last_mut().expect("upgrade source")
@@ -47,7 +48,7 @@ pub(super) fn admit(reference: &stored::Reference, hash: &[u8; 32]) -> Result<()
     let principal = Principal::from_text(&reference.store).map_err(|_| Refusal::Binding)?;
     if principal == Principal::anonymous()
         || principal == Principal::management_canister()
-        || principal == api::canister_self()
+        || principal == Principal::from_slice(api::canister_self().as_slice())
         || principal.to_text() != reference.store
     {
         return Err(Refusal::Binding);
@@ -79,14 +80,36 @@ pub(super) fn validate(state: &State, slot: ChildId) {
         .approval
         .as_ref()
         .expect("Store creation approval");
+    let creation_input = stored::Stage {
+        approval: creation,
+        reference: sources.creation.reference.clone(),
+    };
+    let pin = if let Artifact::Application(_, lifecycle) = &state.artifact.get().0[&slot] {
+        #[cfg(not(feature = "blob"))]
+        assert!(
+            lifecycle.upgrades.is_empty(),
+            "Blob maintenance requires its selected runtime feature"
+        );
+        assert_eq!(
+            lifecycle.upgrades.len(),
+            sources.upgrades.len(),
+            "complete lifecycle history"
+        );
+        assert!(
+            !lifecycle.creation.as_slice().is_empty(),
+            "explicit initialization"
+        );
+        canic_management_protocol::application::Stage {
+            source: creation_input,
+            arguments: lifecycle.creation.clone(),
+        }
+        .pin(canic_management_protocol::application::STAGE, slot)
+    } else {
+        creation_input.pin(stored::STAGE, slot)
+    };
     validate_source(
         &sources.creation,
-        &stored::Stage {
-            approval: creation,
-            reference: sources.creation.reference.clone(),
-        },
-        slot,
-        stored::STAGE,
+        &pin,
         creation.module_hash,
         creation.expires_at_ns,
         journal.0.attempts[1],
@@ -105,33 +128,45 @@ pub(super) fn validate(state: &State, slot: ChildId) {
         upgrades.len(),
         "complete Store history"
     );
-    for (source, status) in sources.upgrades.iter().zip(upgrades) {
+    for (index, (source, status)) in sources.upgrades.iter().zip(upgrades).enumerate() {
         let approval = status.approval.as_ref().expect("upgrade approval");
+        let input = stored::Stage {
+            approval: approval.clone(),
+            reference: source.reference.clone(),
+        };
+        let pin = if let Artifact::Application(_, lifecycle) = &state.artifact.get().0[&slot] {
+            {
+                let maintenance = &lifecycle.upgrades[index];
+                canic_management_protocol::application::Upgrade {
+                    source: canic_management_protocol::application::Stage {
+                        source: input,
+                        arguments: maintenance.arguments.clone(),
+                    },
+                    attempt: maintenance.attempt,
+                }
+                .pin(slot)
+            }
+        } else {
+            input.pin(stored::STAGE_UPGRADE, slot)
+        };
         validate_source(
             source,
-            &stored::Stage {
-                approval,
-                reference: source.reference.clone(),
-            },
-            slot,
-            stored::STAGE_UPGRADE,
+            &pin,
             approval.module_hash,
             approval.expires_at_ns,
             status.attempts[0],
         );
     }
 }
-fn validate_source<A: Serialize>(
+fn validate_source(
     source: &stored::Delivery,
-    input: &stored::Stage<A>,
-    slot: ChildId,
-    method: u64,
+    pin: &store::Pin,
     hash: [u8; 32],
     expires: u64,
     uploads: u8,
 ) {
     admit(&source.reference, &hash).expect("Store source binding");
-    assert_eq!(source.pin(), input.pin(method, slot), "retention identity");
+    assert_eq!(&source.pin(), pin, "retention identity");
     assert_eq!(
         source.cache_deadline.is_some(),
         uploads == 1,
@@ -158,14 +193,17 @@ async fn call<T: Serialize, R: DeserializeOwned>(
     )
     .expect("Store request");
     let reply = Call::new(
-        Principal::from_text(&source.reference.store).expect("Store principal"),
+        ic_platform_types::Principal::from_slice(
+            (Principal::from_text(&source.reference.store).expect("Store principal")).as_slice(),
+        ),
         method,
-        WaitPolicy::Unbounded,
+        Wait::Unbounded,
     )
-    .take_raw_args(bytes)
+    .owned_args(bytes)
     .execute()
     .await
-    .map_err(failure)?;
+    .map_err(failure)
+    .and_then(response)?;
     ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
@@ -193,7 +231,9 @@ pub(super) async fn pin(slot: ChildId, upgrade: bool) -> Result<(), Failure> {
     let receipt: Result<store::PinReceipt, store::Error> =
         call(&source, method, id, &source.pin()).await?;
     let receipt = receipt.map_err(|_| Failure::Mismatch)?;
-    if receipt.pin != source.pin() || receipt.owner != api::canister_self().as_slice() {
+    if receipt.pin != source.pin()
+        || receipt.owner != Principal::from_slice(api::canister_self().as_slice()).as_slice()
+    {
         return Err(Failure::Mismatch);
     }
     mutate(slot, upgrade, |s| s.state = stored::PinState::Retained);
@@ -212,14 +252,18 @@ impl Upload {
     pub(super) async fn send(self) -> Result<(), Failure> {
         if let Some(source) = self.source {
             let reply = Call::new(
-                Principal::from_text(&source.reference.store).expect("Store principal"),
+                ic_platform_types::Principal::from_slice(
+                    (Principal::from_text(&source.reference.store).expect("Store principal"))
+                        .as_slice(),
+                ),
                 "prepare_cache",
-                WaitPolicy::Unbounded,
+                Wait::Unbounded,
             )
-            .take_raw_args(self.bytes)
+            .owned_args(self.bytes)
             .execute()
             .await
-            .map_err(failure)?;
+            .map_err(failure)
+            .and_then(response)?;
             let ready: Result<store::CacheReady, store::CacheError> = ic_wire::decode(
                 &reply,
                 ic_wire::Encoding::Frame {
@@ -271,7 +315,7 @@ pub(super) fn upload(slot: ChildId, upgrade: bool, hash: [u8; 32], expires: u64)
         });
         candid_codec::encode_one(
             &UploadChunkArgs {
-                canister_id: api::canister_self(),
+                canister_id: Principal::from_slice(api::canister_self().as_slice()),
                 chunk: wasm,
             },
             STAGE_LIMITS.bytes,
@@ -300,7 +344,7 @@ pub(super) fn layout(slot: ChildId, upgrade: bool, hash: [u8; 32]) -> (Principal
         )
     } else {
         (
-            api::canister_self(),
+            Principal::from_slice(api::canister_self().as_slice()),
             vec![ChunkHash {
                 hash: hash.to_vec(),
             }],

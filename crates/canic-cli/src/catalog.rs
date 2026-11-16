@@ -1,13 +1,8 @@
 //! Local declaration listings, independent of journals and live observations.
 use crate::Output;
 use canic_host::{Network, Result};
-use ic_host_text::table::{self, Alignment, Options};
+use ic_host_text::{Alignment, plain_table};
 use std::path::Path;
-
-const TABLE_OPTIONS: Options = Options {
-    column_gap: 2,
-    header_separator: true,
-};
 
 pub(crate) fn app_canisters(path: &Path, app: Option<&str>, json: bool) -> Result<Output> {
     let config = canic_host::load_config(path)?;
@@ -35,11 +30,10 @@ pub(crate) fn app_canisters(path: &Path, app: Option<&str>, json: bool) -> Resul
         ]
     })
     .collect();
-    let table = table::render(
+    let table = plain_table(
         &["CANISTER", "ROLE", "WASM INPUT"],
         &rows,
         &[Alignment::Left; 3],
-        TABLE_OPTIONS,
     );
     Ok(Output::Text(format!("App: {app}\n\n{table}\n\n")))
 }
@@ -79,11 +73,10 @@ pub(crate) fn canisters(
         ]
     })
     .collect();
-    let table = table::render(
+    let table = plain_table(
         &["CANISTER", "ROLE", "PRINCIPAL"],
         &rows,
         &[Alignment::Left; 3],
-        TABLE_OPTIONS,
     );
     Ok(Output::Text(format!("{title}\n\n{table}\n\n")))
 }
@@ -158,17 +151,16 @@ pub(crate) fn list(
         let (title, rendered) = if apps_only {
             (
                 "Configured apps (local declarations)",
-                table::render(
+                plain_table(
                     &["APP", "FLEETS", "CONFIG"],
                     &app_rows,
                     &[Alignment::Left, Alignment::Right, Alignment::Left],
-                    TABLE_OPTIONS,
                 ),
             )
         } else {
             (
                 "Configured fleets (local declarations; slots are not a live canister count)",
-                table::render(
+                plain_table(
                     &["APP", "FLEET", "SLOTS", "NETWORK", "CONFIG"],
                     &fleet_rows,
                     &[
@@ -178,7 +170,6 @@ pub(crate) fn list(
                         Alignment::Left,
                         Alignment::Left,
                     ],
-                    TABLE_OPTIONS,
                 ),
             )
         };

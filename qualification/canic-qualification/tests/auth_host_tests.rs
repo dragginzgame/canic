@@ -35,33 +35,38 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
         .nth(2)
         .unwrap()
         .to_path_buf();
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(180)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(180),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
     let operator = CanisterId::anonymous();
     let root = owner
-        .instance()
+        .client()
         .create_canister_with_settings(Some(operator), None)
         .await;
     let receiver = owner
-        .instance()
+        .client()
         .create_canister_with_settings(Some(operator), None)
         .await;
     let root_wasm = repo.join("target/auth/root.wasm");
     let receiver_wasm = repo.join("target/auth/receiver.wasm");
     owner
-        .instance()
+        .client()
         .install_canister(
             root,
             std::fs::read(&root_wasm).unwrap(),
@@ -70,7 +75,7 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
         )
         .await;
     owner
-        .instance()
+        .client()
         .install_canister(
             receiver,
             std::fs::read(&receiver_wasm).unwrap(),
@@ -78,7 +83,7 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
             Some(operator),
         )
         .await;
-    let url = owner.instance_mut().make_live(None).await.to_string();
+    let url = owner.client_mut().make_live(None).await.to_string();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -90,7 +95,7 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
     let mut config = json!({"apps":{"demo":{
     "canisters":{"root":{"wasm":root_wasm}, "receiver":{"wasm":receiver_wasm}},
     "fleets":{"local":{
-        "network":{"kind":"Local", "url":url, "root_key":hex(&owner.instance().root_key().await.unwrap()), "routing_canister":root.to_text()},
+        "network":{"kind":"Local", "url":url, "root_key":hex(&owner.client().root_key().await.unwrap()), "routing_canister":root.to_text()},
         "journal":"journal", "canisters":{"root":{"id":root.to_text()}, "receiver":{"id":receiver.to_text()}},
         "auth":{"root":"root", "receiver":"receiver", "issuer":Principal::from_slice(&[1]).to_text(),
             "key":hex(&KEY), "network_id":hex(&[0x11;32]), "application_id":hex(&[0x22;32]),
@@ -167,7 +172,7 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
     );
     assert!(!effect.join("signed.json").exists());
     owner
-        .instance()
+        .client()
         .update_canister_settings(
             receiver,
             Some(operator),
@@ -180,8 +185,8 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
         .unwrap();
     let configured = cli(&dir, &["fleet", "apply", id, "--identity", "anonymous"]);
     assert_eq!(configured["auth"]["revoked"], false);
-    assert!(control(owner.instance(), receiver, operator, 1).await);
-    let installed = snapshot(owner.instance(), receiver).await;
+    assert!(control(owner.client(), receiver, operator, 1).await);
+    let installed = snapshot(owner.client(), receiver).await;
     assert!(!installed.revoked);
     assert_eq!(installed.grant.receiver.as_slice(), receiver.as_slice());
     assert_eq!(
@@ -224,12 +229,12 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
         configured
     );
     assert_eq!(std::fs::read(effect.join("signed.json")).unwrap(), signed);
-    assert!(control(owner.instance(), receiver, operator, 1).await);
-    assert!(snapshot(owner.instance(), receiver).await.revoked);
+    assert!(control(owner.client(), receiver, operator, 1).await);
+    assert!(snapshot(owner.client(), receiver).await.revoked);
     let mut wrong = installed.grant;
     wrong.key[0] ^= 1;
     let response = owner
-        .instance()
+        .client()
         .update_call(
             root,
             operator,
@@ -245,5 +250,10 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
     let status = cli(&dir, &["fleet", "status", id]);
     assert_eq!(status["auth"], configured["auth"]);
     assert!(status["receipt"].is_null());
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

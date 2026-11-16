@@ -49,6 +49,8 @@ async fn recovery_requires_retained_admission_and_never_bootstraps_work() {
         &"01".repeat(32),
         None,
         None,
+        None,
+        None,
     )
     .unwrap();
     let before = plan.clone();
@@ -93,6 +95,8 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
         &selection(),
         "app",
         &"01".repeat(32),
+        None,
+        None,
         None,
         None,
     )
@@ -166,6 +170,8 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
         &"01".repeat(32),
         None,
         None,
+        None,
+        None,
     )
     .unwrap();
     assert_eq!(plan.management().unwrap().execute_at_ns, plan.created_at_ns);
@@ -191,7 +197,9 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
             "app",
             &"01".repeat(32),
             None,
-            None
+            None,
+            None,
+            None,
         )
         .unwrap(),
         (id.clone(), plan.clone())
@@ -205,7 +213,9 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
             "app",
             &"01".repeat(32),
             Some(1),
-            None
+            None,
+            None,
+            None,
         )
         .unwrap(),
         (id.clone(), plan.clone())
@@ -219,7 +229,9 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
             "app",
             &"02".repeat(32),
             None,
-            None
+            None,
+            None,
+            None,
         ),
         Err(Error::Blocked(_))
     ));
@@ -234,7 +246,9 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
             "app",
             &"01".repeat(32),
             None,
-            None
+            None,
+            None,
+            None,
         ),
         Err(Error::Blocked(_))
     ));
@@ -275,6 +289,8 @@ fn managed_reply_preserves_binding_child_and_attempt_evidence() {
         &selection(),
         "app",
         &"01".repeat(32),
+        None,
+        None,
         None,
         None,
     )
@@ -335,6 +351,8 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
                 canister: "app".into(),
             }),
             Some(ManagedOwner {
+                arguments: None,
+                blob_attempt: None,
                 slot,
                 root: selected.config.canisters["root"].id.clone().unwrap(),
                 root_module: root_hash.clone(),
@@ -351,6 +369,8 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
             &selected,
             "app",
             &root_hash,
+            None,
+            None,
             None,
             None,
         )
@@ -372,7 +392,9 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
             "app",
             &root_hash,
             None,
-            None
+            None,
+            None,
+            None,
         )
         .is_err()
     );
@@ -394,7 +416,9 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
             "app",
             &root_hash,
             None,
-            None
+            None,
+            None,
+            None,
         )
         .is_err()
     );
@@ -435,7 +459,9 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
             "app",
             &root_hash,
             None,
-            None
+            None,
+            None,
+            None,
         )
         .is_err()
     );
@@ -455,7 +481,7 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
         }
         assert!(
             create_managed_plan(
-                &dir, &wasm, invalid, &selected, "app", &root_hash, None, None
+                &dir, &wasm, invalid, &selected, "app", &root_hash, None, None, None, None,
             )
             .is_err()
         );
@@ -467,6 +493,8 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
         &selected,
         "app",
         &root_hash,
+        None,
+        None,
         None,
         None,
     )
@@ -487,7 +515,9 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
             "app",
             &root_hash,
             Some(1),
-            None
+            None,
+            None,
+            None,
         )
         .unwrap(),
         (id, plan)
@@ -506,7 +536,9 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
             "app",
             &"02".repeat(32),
             None,
-            None
+            None,
+            None,
+            None,
         )
         .is_err()
     );
@@ -520,7 +552,9 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
             "app",
             &root_hash,
             None,
-            None
+            None,
+            None,
+            None,
         )
         .is_err()
     );
@@ -540,6 +574,8 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
         &selection(),
         "app",
         &"01".repeat(32),
+        None,
+        None,
         None,
         None,
     )
@@ -582,6 +618,36 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
         observed_version: Some(8),
         ..installed.clone()
     };
+    let stopped = wire::Status {
+        phase: wire::Phase::Stopped,
+        attempts: [0; 2],
+        requests: [None; 2],
+        previous_version: None,
+        ..installed.clone()
+    };
+    let checked = wire::Status {
+        phase: wire::Phase::Checked,
+        previous_version: Some(7),
+        ..stopped.clone()
+    };
+    upgrade::validate(&plan, Some(&stopped), &checked).unwrap();
+    assert!(upgrade::validate(&plan, Some(&checked), &stopped).is_err());
+    let impossible_stop = wire::Status {
+        phase: wire::Phase::StopIssued,
+        ..installed.clone()
+    };
+    assert!(upgrade::validate(&plan, None, &impossible_stop).is_err());
+    let started = wire::Status {
+        phase: wire::Phase::Started,
+        ..ready.clone()
+    };
+    upgrade::validate(&plan, Some(&started), &ready).unwrap();
+    assert!(upgrade::validate(&plan, Some(&ready), &started).is_err());
+    let missing_installation = wire::Status {
+        observed_version: None,
+        ..started
+    };
+    assert!(upgrade::validate(&plan, None, &missing_installation).is_err());
     for kind in 0..6 {
         let mut invalid = ready.clone();
         match kind {
@@ -667,6 +733,8 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         &selection(),
         "app",
         &"01".repeat(32),
+        None,
+        None,
         None,
         None,
     )
@@ -763,6 +831,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         .unwrap()
     };
     assert_eq!(stored::creation(&plan, &encode(&custody)).unwrap(), status);
+    assert_application_arguments(&plan, &custody);
     assert_delivery_history(&plan, custody.clone());
     // Project the existing authenticated observation; status must not create a
     // second source record or infer delivery from the approved manifest.
@@ -773,7 +842,10 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     };
     assert!(matches!(
         projected(&plan).unwrap().detail,
-        crate::StatusDetail::StoredChild { delivery: None }
+        crate::StatusDetail::StoredChild {
+            delivery: None,
+            maintenance: None
+        }
     ));
     let observation_dir = evidence_dir.join("observe/0");
     std::fs::create_dir_all(&observation_dir).unwrap();
@@ -990,6 +1062,98 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     std::fs::remove_dir_all(dir).unwrap();
 }
 
+fn assert_application_arguments(
+    original: &Plan,
+    custody: &canic_management_protocol::stored::Custody,
+) {
+    use canic_management_protocol::{
+        application,
+        children::Request,
+        custody::{Root, RootHistory},
+    };
+    let mut plan = original.clone();
+    plan.version = 6;
+    let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
+        panic!("creation")
+    };
+    owner.arguments = Some(vec![1, 2, 255]);
+    plan.validate().unwrap();
+    let digest = plan.digest().unwrap();
+    assert_ne!(digest, original.digest().unwrap());
+    assert_eq!(
+        serde_json::from_slice::<Plan>(&serde_json::to_vec(&plan).unwrap()).unwrap(),
+        plan
+    );
+    let call = stage_call(&plan, &[]).unwrap();
+    assert_eq!(call.method, "stage_application_child");
+    let request: Request<application::Stage<Approval>> = ic_wire::decode(
+        &call.args,
+        ic_wire::Encoding::Frame {
+            method: application::STAGE,
+            direction: ic_wire::Direction::Request,
+        },
+        application::LIMITS,
+    )
+    .unwrap();
+    let mut value = application::Custody {
+        root: RootHistory {
+            current: Root {
+                stored: custody.clone(),
+                store_operation: None,
+            },
+            store_history: vec![],
+        },
+        applications: [
+            Some(application::Lifecycle {
+                creation: request.value.arguments.clone(),
+                upgrades: vec![],
+            }),
+            None,
+        ],
+    };
+    value.root.current.stored.sources[0]
+        .as_mut()
+        .unwrap()
+        .creation
+        .operation = request
+        .value
+        .pin(application::STAGE, request.slot)
+        .operation;
+    let encode = |value: &application::Custody| {
+        ic_wire::encode(
+            value,
+            ic_wire::Encoding::Frame {
+                method: application::CUSTODY,
+                direction: ic_wire::Direction::Response,
+            },
+            application::LIMITS,
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        decode_observation(&plan, application::CUSTODY, &encode(&value)).unwrap(),
+        custody.children[0].creation
+    );
+    value.applications[0].as_mut().unwrap().creation =
+        application::Arguments::new(vec![9]).unwrap();
+    assert!(decode_observation(&plan, application::CUSTODY, &encode(&value)).is_err());
+    value.applications[0] = None;
+    assert!(decode_observation(&plan, application::CUSTODY, &encode(&value)).is_err());
+    let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
+        unreachable!()
+    };
+    owner.arguments = Some(vec![9]);
+    assert_ne!(digest, plan.digest().unwrap());
+    assert!(!crate::plan::same_authority(original, &plan));
+    for arguments in [vec![], vec![0; application::MAX_ARGUMENT_BYTES + 1]] {
+        let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
+            unreachable!()
+        };
+        owner.arguments = Some(arguments);
+        assert!(plan.validate().is_err());
+    }
+}
+
 // Both effect readers must retain delivery across partial recovery replies and
 // refuse later custody that would erase a pin or renew its cache deadline.
 fn assert_delivery_history(plan: &Plan, mut custody: canic_management_protocol::stored::Custody) {
@@ -1038,6 +1202,7 @@ fn assert_delivery_history(plan: &Plan, mut custody: canic_management_protocol::
         write(index, &custody);
         let crate::StatusDetail::StoredChild {
             delivery: Some(observed),
+            ..
         } = read().unwrap().detail
         else {
             panic!("retained delivery");
@@ -1091,6 +1256,7 @@ fn assert_delivery_history(plan: &Plan, mut custody: canic_management_protocol::
     std::fs::write(&partial_path, &partial).unwrap();
     let crate::StatusDetail::StoredChild {
         delivery: Some(observed),
+        ..
     } = read().unwrap().detail
     else {
         panic!("partial recovery must preserve earlier delivery");

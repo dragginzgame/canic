@@ -309,6 +309,8 @@ fn store_declarations_cannot_use_the_greeting_child_contract() {
         &"11".repeat(32),
         None,
         None,
+        None,
+        None,
     )
     .unwrap_err();
     assert!(matches!(failure, Error::Invalid(_)));
@@ -338,7 +340,9 @@ fn deployment_refuses_an_unpublished_release_before_reserving_the_child() {
             "app",
             &"11".repeat(32),
             None,
-            Some(&id)
+            Some(&id),
+            None,
+            None,
         ),
         Err(Error::Blocked(_))
     ));
@@ -350,6 +354,8 @@ fn deployment_refuses_an_unpublished_release_before_reserving_the_child() {
         &selected,
         "app",
         &"11".repeat(32),
+        None,
+        None,
         None,
         None,
     )

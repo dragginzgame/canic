@@ -14,15 +14,35 @@ pub(super) enum Method {
     StageUpgrade,
     ObserveUpgrade,
     ReconcileUpgrade,
+    ActivateUpgrade,
 }
 impl Method {
     pub(super) fn id(self, plan: &Plan) -> u64 {
         self.contract(plan).1
     }
     fn contract(self, plan: &Plan) -> (&'static str, u64) {
+        if plan.management().is_some_and(|m| m.arguments.is_some()) {
+            use protocol::application;
+            return match self {
+                Self::Stage => ("stage_application_child", application::STAGE),
+                Self::Reconcile => ("reconcile_application_child", application::RECONCILE),
+                Self::Observe | Self::ObserveUpgrade => {
+                    ("observe_application_children", application::CUSTODY)
+                }
+                Self::StageUpgrade => ("stage_application_upgrade", application::STAGE_UPGRADE),
+                Self::ReconcileUpgrade => (
+                    "reconcile_application_upgrade",
+                    application::RECONCILE_UPGRADE,
+                ),
+                Self::ActivateUpgrade => ("activate_application_upgrade", application::ACTIVATE),
+            };
+        }
         if plan.management().is_some_and(|m| m.source.is_some()) {
             use protocol::stored;
             return match self {
+                Self::ActivateUpgrade => {
+                    unreachable!("activation requires application maintenance")
+                }
                 Self::Stage => ("stage_stored_child", stored::STAGE),
                 Self::Reconcile => ("reconcile_stored_child", stored::RECONCILE),
                 Self::StageUpgrade => ("stage_stored_upgrade", stored::STAGE_UPGRADE),
@@ -43,6 +63,9 @@ impl Method {
         }
         let scoped = plan.management().and_then(|owner| owner.slot).is_some();
         match (self, scoped) {
+            (Self::ActivateUpgrade, _) => {
+                unreachable!("activation requires application maintenance")
+            }
             (Self::Stage, false) => ("stage", protocol::STAGE),
             (Self::Stage, true) => ("stage_child", children::STAGE),
             (Self::Observe, false) => ("observe", protocol::STATUS),

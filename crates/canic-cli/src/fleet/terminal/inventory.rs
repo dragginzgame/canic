@@ -1,9 +1,6 @@
 use super::{paint, roles};
 use canic_host::{Fleet, FleetCanister};
-use ic_host_text::{
-    escape::terminal_text,
-    table::{self, Alignment, Options},
-};
+use ic_host_text::{Alignment, escape, plain_table};
 use std::{collections::BTreeMap, fmt::Write as _};
 
 pub(super) fn render(
@@ -111,7 +108,7 @@ pub(super) fn render(
                     writeln!(
                         output,
                         "Topology: {} has an unresolved parent; shown without nesting.",
-                        terminal_text(name)
+                        escape(name)
                     )
                     .expect("writing to String");
                 }
@@ -133,7 +130,7 @@ pub(super) fn render(
             ]
         })
         .collect();
-    let table = table::render(
+    let table = plain_table(
         &[
             "CANISTER (DECLARED TREE)",
             "PRINCIPAL",
@@ -143,10 +140,6 @@ pub(super) fn render(
         ],
         &rows,
         &[Alignment::Left; 5],
-        Options {
-            column_gap: 2,
-            header_separator: true,
-        },
     );
     // IC Host owns escaping and alignment. Apply colour only after it has rendered rows.
     for (index, line) in table.lines().enumerate() {
@@ -176,7 +169,7 @@ pub(super) fn render(
         output.push('\n');
     }
     for (id, label) in external {
-        writeln!(output, "  {label} = {}", terminal_text(id)).expect("writing to String");
+        writeln!(output, "  {label} = {}", escape(id)).expect("writing to String");
     }
     for target in canisters {
         let name = roles::name(snapshot, &target.network_id, &target.canister)
@@ -185,19 +178,14 @@ pub(super) fn render(
             writeln!(
                 output,
                 "  {} module: {}",
-                terminal_text(&name),
-                terminal_text(target.module_hash.as_deref().unwrap_or("unknown"))
+                escape(&name),
+                escape(target.module_hash.as_deref().unwrap_or("unknown"))
             )
             .expect("writing to String");
         }
         if let Some(error) = &target.observation_error {
-            writeln!(
-                output,
-                "  {}: {}",
-                terminal_text(&name),
-                paint(error, "33", color)
-            )
-            .expect("writing to String");
+            writeln!(output, "  {}: {}", escape(&name), paint(error, "33", color))
+                .expect("writing to String");
         }
     }
     output

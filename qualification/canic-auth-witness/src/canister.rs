@@ -1,5 +1,5 @@
 //! Explicit Root enrollment around the real volatile engine.
-use crate::{LIMITS, OBSERVE, Observation, audience, enrollment, protocol};
+use crate::{LIMITS, OBSERVE, Observation, RefreshObservation, audience, enrollment, protocol};
 use ic_auth::{
     receiver_memory::{
         AdmissionHost, EnrollmentBinding, LoginLimits, LogoutError, LogoutReceipt, MemoryConfig,
@@ -10,7 +10,7 @@ use ic_auth::{
     verification::{Ed25519Key, VerificationContext, VerificationCosts, VerificationProfile},
 };
 use ic_auth_protocol_types::{PortableMechanism, Principal};
-use ic_platform_runtime::{cdk, cdk::api, ic0};
+use ic_platform_runtime::{self as runtime, raw, system as api};
 use protocol::{
     SessionInput, SessionView,
     model::{AdmissionRefusal, LogoutResult, LogoutUnavailable, SessionReadRefusal},
@@ -27,20 +27,19 @@ struct State {
     writes: u32,
     fault: bool,
     enabled: bool,
+    refresh: RefreshObservation,
+    refresh_barrier: Option<Principal>,
 }
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform transfers the installation buffer"
-)]
-fn decode_init(bytes: Vec<u8>) -> Principal {
-    Principal::try_from_slice(&bytes).expect("installed authority principal")
+fn decode_init(bytes: &[u8]) -> Result<Principal, std::convert::Infallible> {
+    Ok({ Principal::try_from_slice(bytes).expect("installed authority principal") })
 }
-#[cdk::init(decode_with = "decode_init")]
+#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = decode_init, max_bytes = 2097152, on_error = endpoint_error)]
 fn init(authority: Principal) {
     let now = api::time();
-    let installer = api::msg_caller();
+    let installer = api::caller();
+    crate::issuer::init();
     let receiver = MemoryReceiver::new_fresh(
         MemoryConfig {
             audience: audience(),
@@ -91,34 +90,42 @@ fn init(authority: Principal) {
             writes: 0,
             fault: false,
             enabled: true,
+            refresh: RefreshObservation::default(),
+            refresh_barrier: None,
         })
     });
 }
 // No post-upgrade initializer: volatile safety loss remains closed, including to
 // the fixture's enrollment command. It cannot reconstruct replay/revocation state.
 
+// Qualification-only pause after the real Root reply, before local publication.
+// The barrier supplies no snapshot or authentication marker.
+#[runtime::update(runtime = runtime, guard = lifecycle_guard, decode = decode_init, max_bytes = 2097152, on_error = endpoint_error, name = "set_refresh_barrier", encode = encode_control)]
+fn set_refresh_barrier(barrier: Principal) -> bool {
+    STATE.with_borrow_mut(|state| {
+        let Some(s) = state else { return false };
+        if api::caller() != s.installer || barrier == Principal::anonymous() {
+            return false;
+        }
+        s.refresh_barrier = (barrier != Principal::management_canister()).then_some(barrier);
+        true
+    })
+}
+
 fn control_guard() -> Result<(), String> {
-    if ic0::msg_arg_data_size() == 1 {
+    if raw::msg_arg_data_size() == 1 {
         Ok(())
     } else {
         Err("fixture command length".into())
     }
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform transfers argument ownership"
-)]
-fn decode_control(bytes: Vec<u8>) -> u8 {
-    bytes[0]
+fn decode_control(bytes: &[u8]) -> Result<u8, std::convert::Infallible> {
+    Ok(bytes[0])
 }
-fn encode_control(value: bool) -> Vec<u8> {
-    vec![u8::from(value)]
+fn encode_control(value: bool) -> Result<Vec<u8>, std::convert::Infallible> {
+    Ok({ vec![u8::from(value)] })
 }
-#[cdk::update(
-    guard = "control_guard",
-    decode_with = "decode_control",
-    encode_with = "encode_control"
-)]
+#[runtime::update(runtime = runtime, guard = control_guard, decode = decode_control, max_bytes = 2097152, on_error = endpoint_error, name = "control", encode = encode_control)]
 async fn control(command: u8) -> bool {
     if command == 1 {
         return refresh().await.is_ok();
@@ -127,7 +134,7 @@ async fn control(command: u8) -> bool {
         let Some(s) = state else {
             return false;
         };
-        if api::msg_caller() != s.installer {
+        if api::caller() != s.installer {
             return false;
         }
         match command {
@@ -135,7 +142,7 @@ async fn control(command: u8) -> bool {
             3 => s.fault = false,
             4 => s.enabled = false,
             5 => s.enabled = true,
-            _ => return false,
+            _ => return crate::issuer::control(command),
         }
         true
     })
@@ -143,22 +150,50 @@ async fn control(command: u8) -> bool {
 async fn refresh() -> Result<(), enrollment::Error> {
     let start = STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(enrollment::Error::Closed)?;
-        if api::msg_caller() != s.installer {
+        if api::caller() != s.installer {
             return Err(enrollment::Error::Binding);
         }
-        s.enrollment.begin(api::time())
+        let now = api::time();
+        let start = s.enrollment.begin(now)?;
+        s.refresh.reserved += 1;
+        s.refresh.deadline_ns = now + enrollment::RECEIPT_NS;
+        Ok(start)
     })?;
     let challenge = start.entropy().await?;
     let pull = STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(enrollment::Error::Closed)?;
-        s.enrollment
-            .prepare(&mut s.receiver, challenge, api::time())
+        let pull = s
+            .enrollment
+            .prepare(&mut s.receiver, challenge, api::time())?;
+        s.refresh.dispatched += 1;
+        Ok(pull)
     })?;
     let response = pull.fetch().await?;
+    let barrier = STATE.with_borrow_mut(|state| {
+        let s = state.as_mut().ok_or(enrollment::Error::Closed)?;
+        s.refresh.fetched += 1;
+        Ok(s.refresh_barrier)
+    })?;
+    if let Some(barrier) = barrier {
+        let reply = runtime::call::Call::new(
+            barrier,
+            "hold",
+            runtime::call::Wait::Bounded { seconds: 300 },
+        )
+        .args(&[])
+        .execute()
+        .await
+        .map_err(|_| enrollment::Error::Unavailable)?;
+        if !matches!(reply.into_parts().0, runtime::call::Outcome::Reply(bytes) if bytes.is_empty())
+        {
+            return Err(enrollment::Error::Unavailable);
+        }
+    }
     STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(enrollment::Error::Closed)?;
         s.enrollment
             .finish(&mut s.receiver, response, api::time())?;
+        s.refresh.installed += 1;
         if s.fault {
             api::trap("after supplier metadata and host entry publication");
         }
@@ -201,9 +236,11 @@ impl Serialize for Unencodable {
         ))
     }
 }
-fn reply_fault<const ID: u64>(enabled: bool) {
+pub(crate) fn reply_fault<const ID: u64>(enabled: bool) {
     if enabled {
-        let _ = canic::auth::endpoint::encode::<_, ID>(Unencodable);
+        let _ = canic::auth::endpoint::encode::<_, ID>(Unencodable).unwrap_or_else(|error| {
+            api::trap(&format!("qualification reply encoding fault: {error:?}"))
+        });
     }
 }
 fn admit(
@@ -344,11 +381,8 @@ fn logout(caller: Principal, now: u64) -> LogoutResult {
 }
 canic::mount_auth_endpoints! { admit = super::admit, read = super::read, logout = super::logout }
 
-#[cdk::query(
-    decode_with = "decode_observe",
-    encode_with = "enrollment::transport::encode::<Result<enrollment::Snapshot, enrollment::Error>, {enrollment::SNAPSHOT}>"
-)]
-fn observe_enrollment() -> Result<enrollment::Snapshot, enrollment::Error> {
+#[runtime::query(runtime = runtime, guard = lifecycle_guard, decode = decode_observe, max_bytes = 2097152, on_error = endpoint_error, name = "observe_enrollment", encode = enrollment::transport::encode::<Result<enrollment::Snapshot, enrollment::Error>, {enrollment::SNAPSHOT}>)]
+fn observe_enrollment((): ()) -> Result<enrollment::Snapshot, enrollment::Error> {
     STATE.with_borrow(|state| {
         state
             .as_ref()
@@ -359,18 +393,11 @@ fn observe_enrollment() -> Result<enrollment::Snapshot, enrollment::Error> {
     })
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform transfers argument ownership"
-)]
-fn decode_observe(bytes: Vec<u8>) {
+pub(crate) fn decode_observe(bytes: &[u8]) -> Result<(), std::convert::Infallible> {
     assert!(bytes.is_empty());
+    Ok(())
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform transfers response ownership"
-)]
-fn encode_observe(value: Observation) -> Vec<u8> {
+pub(crate) fn encode_observe<T: Serialize>(value: T) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -379,10 +406,9 @@ fn encode_observe(value: Observation) -> Vec<u8> {
         },
         LIMITS,
     )
-    .unwrap()
 }
-#[cdk::query(decode_with = "decode_observe", encode_with = "encode_observe")]
-fn observe() -> Observation {
+#[runtime::query(runtime = runtime, guard = lifecycle_guard, decode = decode_observe, max_bytes = 2097152, on_error = endpoint_error, name = "observe", encode = encode_observe::<Observation>)]
+fn observe((): ()) -> Observation {
     STATE.with_borrow(|state| {
         let Some(s) = state else {
             return Observation {
@@ -410,4 +436,17 @@ fn observe() -> Observation {
             enrollment: s.receiver.enrollment().map(|m| (m.revision, m.generation)),
         }
     })
+}
+
+#[runtime::query(runtime = runtime, guard = lifecycle_guard, decode = decode_observe, max_bytes = 2097152, on_error = endpoint_error, name = "observe_refresh", encode = encode_observe::<RefreshObservation>)]
+fn observe_refresh((): ()) -> RefreshObservation {
+    STATE.with_borrow(|state| state.as_ref().expect("original fixture must exist").refresh)
+}
+
+fn endpoint_error(error: impl std::fmt::Debug) -> ! {
+    ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
+}
+
+fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
+    Ok(())
 }

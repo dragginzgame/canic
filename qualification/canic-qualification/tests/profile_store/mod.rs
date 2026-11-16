@@ -1,7 +1,7 @@
 //! Store-backed profile composition through the existing fleet CLI and readiness owner.
 use super::{
-    CanisterId, Duration, PathBuf, PocketIc, PocketIcBuilder, PocketIcStartupConfig, cli, repo,
-    server_assets, status,
+    CanisterId, Duration, Limits, PathBuf, PocketIc, PocketIcBuilder, PreparedServer, Server, cli,
+    repo, status,
 };
 use canic_management_protocol::upgrade;
 use canic_profile_protocol::{
@@ -183,23 +183,28 @@ async fn upgrade_status(pic: &PocketIc, root: CanisterId) -> upgrade::Status {
 
 #[tokio::test]
 async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
-    let mut replica = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(240)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(240),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let routing = replica.instance().create_canister().await;
-    let url = replica.instance_mut().make_live(None).await.to_string();
-    let pic = replica.instance();
+    let mut replica = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let routing = replica.client().create_canister().await;
+    let url = replica.client_mut().make_live(None).await.to_string();
+    let pic = replica.client();
     let key: String = pic
         .root_key()
         .await
@@ -301,9 +306,18 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
         ],
     );
     let mut interrupted = upgrade_status(pic, root).await;
+    let expected_module = canic_management_protocol::digest(
+        &std::fs::read(assets.join("profile-worker-v2.wasm")).unwrap(),
+    )
+    .to_vec();
     for _ in 0..100 {
         if interrupted.phase == upgrade::Phase::InstallIssued
-            && info(pic, child).await.executable == "profile-v2"
+            && pic
+                .canister_status(child, Some(root))
+                .await
+                .unwrap()
+                .module_hash
+                == Some(expected_module.clone())
         {
             break;
         }
@@ -311,7 +325,20 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
         interrupted = upgrade_status(pic, root).await;
     }
     assert_eq!(interrupted.phase, upgrade::Phase::InstallIssued);
-    assert_eq!(info(pic, child).await.executable, "profile-v2");
+    assert_eq!(
+        pic.canister_status(child, Some(root))
+            .await
+            .unwrap()
+            .module_hash,
+        Some(expected_module)
+    );
+    // Installation is retained independently of availability. Root has not yet
+    // issued start, so application queries must remain unavailable in this window.
+    assert!(
+        pic.query_call(child, CanisterId::anonymous(), "info", vec![])
+            .await
+            .is_err()
+    );
     assert_eq!(interrupted.attempts[1], 1);
     assert!(interrupted.requests[1].is_some());
     assert!(interrupted.observed_version.is_none());
@@ -335,7 +362,6 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
         pic.get_stable_memory(child).await == application_state,
         "interrupted callback changed application storage"
     );
-    verify_profiles(pic, child, root, &profiles).await;
     assert_eq!(plan(), upgrade);
     let pending = cli(
         &config,
@@ -730,5 +756,11 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
             .total
             > 0
     );
-    replica.instance_mut().stop_live().await;
+    replica.client_mut().stop_live().await;
+    assert_eq!(
+        replica.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

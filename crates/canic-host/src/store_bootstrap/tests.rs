@@ -98,6 +98,8 @@ fn store_bootstrap_retains_distinct_authority_and_original_approval() {
         &"11".repeat(32),
         None,
         None,
+        None,
+        None,
     )
     .unwrap();
     assert!(child.management().is_some());

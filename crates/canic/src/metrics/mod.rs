@@ -92,16 +92,10 @@ pub struct Snapshot {
 macro_rules! mount_metrics_endpoint {
     ($snapshot:path) => {
         mod canic_metrics {
-            use endpoint::cdk;
+            use endpoint::runtime;
             use $crate::metrics::{Snapshot, endpoint};
-            #[cdk::query(
-                crate = "cdk",
-                name = "metrics",
-                guard = "endpoint::admit",
-                decode_with = "endpoint::decode",
-                encode_with = "endpoint::encode"
-            )]
-            fn metrics() -> Snapshot {
+            #[runtime::query(runtime = runtime, guard = endpoint::admit, decode = endpoint::decode, max_bytes = 32, on_error = endpoint::fail, name = "metrics", encode = endpoint::encode)]
+            fn metrics((): ()) -> Snapshot {
                 $snapshot()
             }
         }

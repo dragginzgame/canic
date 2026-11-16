@@ -46,7 +46,7 @@ pub mod endpoint;
 macro_rules! mount_blob_endpoints {
     (execute = $execute:path, inspect = $inspect:path, management = $management:path $(,)?) => {
         mod blob_update {
-            use endpoint::{api, cdk};
+            use endpoint::{api, runtime};
             use $crate::blob::{
                 UPDATE, endpoint,
                 supplier::{
@@ -54,18 +54,13 @@ macro_rules! mount_blob_endpoints {
                     protocol::{Command, Outcome},
                 },
             };
-            #[cdk::update(
-                crate = "cdk",
-                guard = "endpoint::admit::<UPDATE>",
-                decode_with = "endpoint::decode::<Command, UPDATE>",
-                encode_with = "endpoint::encode::<Result<Outcome, Error>, UPDATE>"
-            )]
+            #[runtime::update(runtime = runtime, guard = endpoint::admit::<UPDATE>, decode = endpoint::decode::<Command, UPDATE>, max_bytes = 65536, on_error = endpoint::fail, name = "blob_update", encode = endpoint::encode::<Result<Outcome, Error>, UPDATE>)]
             fn blob_update(input: Command) -> Result<Outcome, Error> {
-                $execute(api::msg_caller(), input, api::time())
+                $execute(api::caller(), input, api::time())
             }
         }
         mod blob_query {
-            use endpoint::{api, cdk};
+            use endpoint::{api, runtime};
             use $crate::blob::{
                 QUERY, endpoint,
                 supplier::{
@@ -73,30 +68,20 @@ macro_rules! mount_blob_endpoints {
                     protocol::{Inspection, Observation},
                 },
             };
-            #[cdk::query(
-                crate = "cdk",
-                guard = "endpoint::admit::<QUERY>",
-                decode_with = "endpoint::decode::<Inspection, QUERY>",
-                encode_with = "endpoint::encode::<Result<Observation, Error>, QUERY>"
-            )]
+            #[runtime::query(runtime = runtime, guard = endpoint::admit::<QUERY>, decode = endpoint::decode::<Inspection, QUERY>, max_bytes = 65536, on_error = endpoint::fail, name = "blob_query", encode = endpoint::encode::<Result<Observation, Error>, QUERY>)]
             fn blob_query(input: Inspection) -> Result<Observation, Error> {
-                $inspect(api::msg_caller(), input)
+                $inspect(api::caller(), input)
             }
         }
         mod blob_management {
-            use endpoint::{api, cdk};
+            use endpoint::{api, runtime};
             use $crate::blob::{
                 MANAGEMENT, endpoint,
                 supplier::{local::Error, protocol::ManagementView},
             };
-            #[cdk::update(
-                crate = "cdk",
-                guard = "endpoint::admit::<MANAGEMENT>",
-                decode_with = "endpoint::decode::<(), MANAGEMENT>",
-                encode_with = "endpoint::encode::<Result<ManagementView, Error>, MANAGEMENT>"
-            )]
-            fn blob_management() -> Result<ManagementView, Error> {
-                $management(api::msg_caller())
+            #[runtime::update(runtime = runtime, guard = endpoint::admit::<MANAGEMENT>, decode = endpoint::decode::<(), MANAGEMENT>, max_bytes = 65536, on_error = endpoint::fail, name = "blob_management", encode = endpoint::encode::<Result<ManagementView, Error>, MANAGEMENT>)]
+            fn blob_management((): ()) -> Result<ManagementView, Error> {
+                $management(api::caller())
             }
         }
     };

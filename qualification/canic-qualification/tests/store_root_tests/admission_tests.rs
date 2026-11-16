@@ -7,8 +7,8 @@ use store::{AdmissionCommand as Command, MaintenanceAttempt};
 #[tokio::test(flavor = "current_thread")]
 async fn admission_fences_an_in_flight_cache_repair_without_losing_pins() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (_, supplier) = readiness_tests::fixture(pic).await;
     let mut bytes = vec![0; store::CHUNK_BYTES * 8];
     for (i, chunk) in bytes.chunks_mut(store::CHUNK_BYTES).enumerate() {
@@ -79,7 +79,12 @@ async fn admission_fences_an_in_flight_cache_repair_without_losing_pins() {
         .update("prepare_cache", store::PREPARE_CACHE, &input, store::LIMITS)
         .await;
     assert_eq!(ready.unwrap().pin, pin);
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 async fn request(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> AdmissionRequest {
@@ -102,8 +107,8 @@ async fn send(root: &Client<'_>, input: &AdmissionRequest) -> publication::Admis
 #[tokio::test(flavor = "current_thread")]
 async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture(pic).await;
     let manifest = supplier.publish_bytes("kept", b"\0asm\x01\0\0\0").await;
     let pin = store::Pin {
@@ -284,5 +289,10 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
     .unwrap();
     supplier.pin(&pin).await; // Mutation becomes available only after exact explicit activation.
     assert_eq!(pic.get_stable_memory(root.id).await, root_before);
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

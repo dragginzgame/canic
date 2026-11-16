@@ -26,6 +26,32 @@ fn plan() -> Plan {
 }
 
 #[test]
+fn direct_root_installation_has_ingress_headroom_and_a_finite_plan_ceiling() {
+    let mut plan = plan();
+    plan.artifact.bytes = crate::artifact::MAX_WASM;
+    plan.validate().unwrap();
+    let bytes = vec![7; crate::artifact::MAX_WASM];
+    let target = Principal::from_slice(&[3; 29]);
+    let call = super::install_call(&plan, &bytes, target).unwrap();
+    assert!(
+        call.args.len() < 2 * 1024 * 1024 - 64 * 1024,
+        "reserve ingress envelope headroom"
+    );
+    let decoded: ic_platform::management_canister_types::InstallCodeArgs = decoder::decode_one(
+        &call.args,
+        decoder::Limits {
+            work: 20 * 1024 * 1024,
+            ..DECODE
+        },
+    )
+    .unwrap();
+    assert_eq!(decoded.wasm_module, bytes);
+    assert_eq!(decoded.canister_id, target);
+    plan.artifact.bytes += 1;
+    assert!(plan.validate().is_err());
+}
+
+#[test]
 fn typed_status_preserves_json_evidence_and_absent_field_shapes() {
     use crate::{CanisterStatus, ManagementStatus, OperationStatus, StatusDetail};
     let mut status = CanisterStatus {
@@ -60,7 +86,10 @@ fn typed_status_preserves_json_evidence_and_absent_field_shapes() {
     assert_eq!(serde_json::to_value(&status).unwrap(), expected);
     status.management = None;
     expected["management"] = serde_json::Value::Null;
-    status.detail = StatusDetail::StoredChild { delivery: None };
+    status.detail = StatusDetail::StoredChild {
+        delivery: None,
+        maintenance: None,
+    };
     expected["delivery"] = serde_json::Value::Null;
     assert_eq!(serde_json::to_value(&status).unwrap(), expected);
     expected.as_object_mut().unwrap().remove("delivery");

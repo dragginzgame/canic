@@ -1,5 +1,7 @@
 //! Canic command line interface.
 
+#![forbid(unsafe_code)]
+
 mod args;
 mod artifacts;
 mod auth;
@@ -42,11 +44,11 @@ fn error_text(error: &Error, json: bool) -> String {
     let mut lines = message.split('\n');
     let mut text = format!(
         "Error: {}",
-        ic_host_text::escape::terminal_text(lines.next().unwrap_or_default())
+        ic_host_text::escape(lines.next().unwrap_or_default())
     );
     for line in lines {
         text.push_str("\n  ");
-        text.push_str(&ic_host_text::escape::terminal_text(line));
+        text.push_str(&ic_host_text::escape(line));
     }
     text
 }
@@ -107,7 +109,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                     return Ok(Output::Text(format!(
                         "Defined app canister {name}\nApp: {}\nConfig: {}\nShared by all app fleets. Local files only; nothing deployed.\n",
                         app,
-                        ic_host_text::escape::terminal_text(&path.to_string_lossy()),
+                        ic_host_text::escape(&path.to_string_lossy()),
                     )));
                 }
                 Ok(serde_json::json!({"config_path":path,"configuration":config,"deployed":false}))
@@ -137,7 +139,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 if !cli.json {
                     return Ok(Output::Text(format!(
                         "Initialized app {name}\nFleet: {fleet}\nConfig: {}\n\nRoot\n├─ Wasm Store\n└─ Application\n\nSource created; nothing built or deployed. See the generated README for build steps.\n",
-                        ic_host_text::escape::terminal_text(&path.to_string_lossy()),
+                        ic_host_text::escape(&path.to_string_lossy()),
                     )));
                 }
                 return Ok(Output::Json(
@@ -153,7 +155,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
             if !cli.json {
                 return Ok(Output::Text(format!(
                     "Initialized app {name}\nFleet: {fleet}\nConfig: {}\nNo canisters defined yet. Use app canister add.\nLocal files only; nothing deployed or funded.\n",
-                    ic_host_text::escape::terminal_text(&path.to_string_lossy()),
+                    ic_host_text::escape(&path.to_string_lossy()),
                 )));
             }
             Ok(serde_json::json!({"config_path":path,"configuration":declaration,"deployed":false}))
@@ -256,6 +258,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         });
     if let Some(config) = &configuration
         && let FleetCommand::Apply { digest, .. }
+        | FleetCommand::Activate { digest, .. }
         | FleetCommand::Reconcile { digest, .. }
         | FleetCommand::Cancel { digest, .. }
         | FleetCommand::Status { digest, .. }
@@ -294,7 +297,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                         "Bound canister slot {name}\nApp: {}\nFleet: {}\nConfig: {}\nConfigured ID: {}\nObservation declaration only; no canister or journal created. Existence and control are not verified.\n",
                         selected.app,
                         selected.fleet,
-                        ic_host_text::escape::terminal_text(&path.to_string_lossy()),
+                        ic_host_text::escape(&path.to_string_lossy()),
                         selected.config.canisters[name]
                             .id
                             .as_deref()
@@ -328,7 +331,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             if !cli.json {
                 return Ok(Output::Text(format!(
                     "Initialized fleet {name}\nApp: {app}\nConfig: {}\nUsing shared app definitions with no existing ID bindings. Nothing deployed or funded.\n",
-                    ic_host_text::escape::terminal_text(&path.to_string_lossy()),
+                    ic_host_text::escape(&path.to_string_lossy()),
                 )));
             }
             Ok(serde_json::json!({"config_path":path,"configuration":selected,"deployed":false}))
@@ -346,6 +349,8 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             target,
             previous_module,
             root_module,
+            install_args,
+            blob_attempt,
             publication,
             execute_at,
             cycles,
@@ -508,6 +513,8 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                             root_module,
                             execute_at,
                             publication.release.as_deref(),
+                            install_args.as_deref(),
+                            *blob_attempt,
                         )?
                     }
                 } else {
@@ -539,6 +546,19 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 return Ok(Output::Text(text));
             }
             Ok(serde_json::json!({"operation": digest, "plan": plan,"state_dir":state_dir}))
+        }
+        FleetCommand::Activate {
+            digest,
+            identity,
+            signer,
+            ..
+        } => {
+            let outcome =
+                canic_host::activate(&state_dir, digest, identity, &signer.icp_bin).await?;
+            if !cli.json {
+                return Ok(Output::Text(progress::applied(&outcome, command)));
+            }
+            Ok(serde_json::json!(outcome))
         }
         FleetCommand::Apply {
             digest,

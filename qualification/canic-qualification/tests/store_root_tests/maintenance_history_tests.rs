@@ -49,8 +49,8 @@ async fn finish(root: &Client<'_>, approval: &wire::Approval, wasm: &[u8]) -> wi
 #[tokio::test(flavor = "current_thread")]
 async fn root_migrates_issued_store_install_without_renewing_or_repeating_it() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture_with_root(
         pic,
         include_bytes!("../../fixtures/root-store-single-maintenance.wasm").to_vec(),
@@ -84,14 +84,19 @@ async fn root_migrates_issued_store_install_without_renewing_or_repeating_it() {
         ready.installation.as_ref().unwrap().sender_version,
         issued.installation.as_ref().unwrap().sender_version
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn root_retains_store_successors_across_migration_and_refuses_stale_authority() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let predecessor = include_bytes!("../../fixtures/root-store-single-maintenance.wasm");
     let (root, supplier) = readiness_tests::fixture_with_root(pic, predecessor.to_vec()).await;
     let original = std::fs::read(artifacts().join("original.wasm")).unwrap();
@@ -219,7 +224,8 @@ async fn root_retains_store_successors_across_migration_and_refuses_stale_author
         if sequence == 2 {
             // Upgrade Root with the successor pending, then lose its upload callback.
             maintain(&root).await;
-            pic.upgrade_canister(
+            canic_qualification::upgrade_stopped(
+                pic,
                 root.id,
                 std::fs::read(artifacts().join("root-faults.wasm")).unwrap(),
                 vec![],
@@ -296,9 +302,15 @@ async fn root_retains_store_successors_across_migration_and_refuses_stale_author
     assert_eq!(stage(&root, &ninth).await, Err(Refusal::Occupied));
     assert_eq!(history(&root).await, before);
     assert!(
-        pic.upgrade_canister(root.id, predecessor.to_vec(), vec![], Some(root.operator))
-            .await
-            .is_err()
+        canic_qualification::upgrade_stopped(
+            pic,
+            root.id,
+            predecessor.to_vec(),
+            vec![],
+            Some(root.operator)
+        )
+        .await
+        .is_err()
     );
     assert_eq!(history(&root).await, before);
     // Publication and child admission still work once the final operation has activated.
@@ -323,5 +335,10 @@ async fn root_retains_store_successors_across_migration_and_refuses_stale_author
     .await
     .unwrap();
     quiescence_tests::child_stage(&root).await.unwrap();
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

@@ -116,6 +116,9 @@ pub enum ApplyOutcome {
         root: String,
         /// Committed upgrade progress.
         upgrade: Box<canic_management_protocol::upgrade::Status>,
+        /// Optional Blob lifecycle evidence from the same complete Root observations.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        maintenance: Option<Box<canic_management_protocol::application::Maintenance>>,
     },
 }
 
@@ -439,10 +442,24 @@ async fn apply_operation(
             crate::maintenance::observe(dir, &plan, false, identity, icp, &agent).await?;
         }
         crate::maintenance::require_before(dir, &plan)?;
+        if plan.previous_module().is_some() {
+            if dir
+                .join("install/signed.json")
+                .try_exists()
+                .map_err(supplier)?
+                && !dir.join("stop/reply.bin").try_exists().map_err(supplier)?
+            {
+                return Err(Error::Blocked("legacy upgrade attempt has no retained stop evidence; retain it for reconciliation, do not replace it".into()));
+            }
+            crate::maintenance::runtime(dir, &plan, false, identity, icp, &agent).await?;
+        }
         let call = install_call(&plan, &wasm, canister)?;
         let reply =
             signed::execute(&dir.join("install"), &plan, &call, identity, icp, &agent).await?;
         decoder::decode_args::<()>(&reply, DECODE, decoder::Arity::Exact).map_err(Error::Decode)?;
+        if plan.previous_module().is_some() {
+            crate::maintenance::runtime(dir, &plan, true, identity, icp, &agent).await?;
+        }
         crate::maintenance::observe(dir, &plan, true, identity, icp, &agent).await?;
     }
     if plan.store_root().is_some() {
@@ -573,12 +590,13 @@ pub(crate) fn status_loaded(
             .iter()
             .chain(crate::maintenance::observations(&plan, true))
             .map(|(step, _)| *step)
-            .chain(std::iter::once("install"))
+            .chain(["stop", "stopped", "install", "start"])
             .collect(),
         crate::PlanAction::CreateChild(_) | crate::PlanAction::UpgradeChild { .. } => vec!["stage"],
-        crate::PlanAction::Create { .. } | crate::PlanAction::Upgrade(_) => {
+        crate::PlanAction::Create { .. } => {
             vec!["create", "install"]
         }
+        crate::PlanAction::Upgrade(_) => vec!["stop", "stopped", "install", "start"],
         crate::PlanAction::CreateStore { .. } => vec!["create", "install", "handover"],
     };
     for effect in effect_names {
@@ -622,6 +640,7 @@ pub(crate) fn status_loaded(
     {
         StatusDetail::StoredChild {
             delivery: delivery.map(Box::new),
+            maintenance: crate::managed::stored::maintenance_evidence(dir, &plan)?.map(Box::new),
         }
     } else {
         StatusDetail::Deployment {}

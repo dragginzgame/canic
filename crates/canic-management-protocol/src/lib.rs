@@ -1,10 +1,15 @@
 //! Single-use child creation authority and retained evidence; no application data or runtime.
 
+#![forbid(unsafe_code)]
+
 #[cfg(test)]
 mod tests;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
+pub mod application;
+#[cfg(test)]
+mod application_tests;
 pub mod children;
 pub mod custody;
 #[cfg(test)]

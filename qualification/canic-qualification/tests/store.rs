@@ -165,8 +165,8 @@ async fn pins_survive_maintenance_and_cache_reconstruction_supports_install_and_
     let candidate = std::fs::read(directory.join("candidate.wasm")).unwrap();
     let app = std::fs::read(directory.join("app.wasm")).unwrap();
     let app_v2 = std::fs::read(directory.join("app-v2.wasm")).unwrap();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let operator = CanisterId::self_authenticating(b"Store delivery controller");
     let id = pic
         .create_canister_with_settings(Some(operator), None)
@@ -342,5 +342,10 @@ async fn pins_survive_maintenance_and_cache_reconstruction_supports_install_and_
     println!(
         "Store pins survived maintenance; cold/warm cache and cache-loss repair supported real install and upgrade"
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

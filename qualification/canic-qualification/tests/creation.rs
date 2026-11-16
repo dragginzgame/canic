@@ -54,8 +54,8 @@ async fn creation_commit_boundaries() {
         Fault::LaterWork,
         Fault::None,
     ] {
-        let owner = support::instance(&binary).await;
-        let pic = owner.instance();
+        let (mut server, owner) = support::instance(&binary).await;
+        let pic = owner.client();
         let executor = pic.create_canister().await;
         pic.install_canister(executor, wasm.clone(), vec![], None)
             .await;
@@ -172,6 +172,11 @@ async fn creation_commit_boundaries() {
             state.attempts,
             state.reserved_cycles
         );
-        owner.close().await;
+        assert_eq!(
+            owner.close(std::time::Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        let stopped = server.stop().unwrap();
+        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
     }
 }

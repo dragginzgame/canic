@@ -4,7 +4,7 @@ use crate::{
     plan, store, supplier,
 };
 use canic_management_protocol::{
-    Status,
+    Status, application,
     children::{ChildId, Request},
     stored as wire, upgrade,
 };
@@ -151,6 +151,41 @@ fn slot(plan: &Plan) -> ChildId {
 }
 pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
     match method {
+        application::STAGE_UPGRADE | application::RECONCILE_UPGRADE | application::ACTIVATE => {
+            ic_wire::encode(
+                &Request {
+                    slot: slot(plan),
+                    value: application_upgrade(plan)?,
+                },
+                ic_wire::Encoding::Frame {
+                    method,
+                    direction: ic_wire::Direction::Request,
+                },
+                application::LIMITS,
+            )
+            .map_err(supplier)
+        }
+        application::STAGE | application::RECONCILE => ic_wire::encode(
+            &Request {
+                slot: slot(plan),
+                value: application_stage(plan, super::approval(plan)?)?,
+            },
+            ic_wire::Encoding::Frame {
+                method,
+                direction: ic_wire::Direction::Request,
+            },
+            application::LIMITS,
+        )
+        .map_err(supplier),
+        application::CUSTODY => ic_wire::encode(
+            &(),
+            ic_wire::Encoding::Frame {
+                method,
+                direction: ic_wire::Direction::Request,
+            },
+            application::LIMITS,
+        )
+        .map_err(supplier),
         wire::CUSTODY
         | canic_management_protocol::custody::ROOT
         | canic_management_protocol::custody::ROOT_HISTORY => ic_wire::encode(
@@ -194,7 +229,51 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
         .management()
         .and_then(|owner| owner.source.as_ref())
         .ok_or_else(invalid)?;
-    let value = crate::root_custody::decode(super::Method::Observe.id(plan), bytes)?;
+    let value = if plan.management().is_some_and(|m| m.arguments.is_some()) {
+        let value: application::Custody = ic_wire::decode(
+            bytes,
+            ic_wire::Encoding::Frame {
+                method: application::CUSTODY,
+                direction: ic_wire::Direction::Response,
+            },
+            application::LIMITS,
+        )
+        .map_err(supplier)?;
+        let lifecycle = &value.applications[slot(plan).index()];
+        if let Some(lifecycle) = lifecycle {
+            if plan.target().is_none() {
+                if Some(lifecycle.creation.as_slice())
+                    != plan.management().and_then(|m| m.arguments.as_deref())
+                {
+                    return Err(invalid());
+                }
+            } else if let Some(index) = value.root.current.stored.children[slot(plan).index()]
+                .upgrades
+                .iter()
+                .position(|s| s.approval.as_ref() == super::upgrade::approval(plan).ok().as_ref())
+            {
+                let maintenance = lifecycle.upgrades.get(index).ok_or_else(invalid)?;
+                if Some(maintenance.arguments.as_slice())
+                    != plan.management().and_then(|m| m.arguments.as_deref())
+                    || Some(maintenance.attempt) != plan.management().and_then(|m| m.blob_attempt)
+                    || maintenance.operator != plan.controller
+                {
+                    return Err(invalid());
+                }
+            }
+        } else if value.root.current.stored.children[slot(plan).index()].creation
+            != Status::default()
+        {
+            return Err(invalid());
+        }
+        crate::root_custody::Snapshot {
+            children: crate::root_custody::children(value.root.current.stored)?,
+            store_operation: value.root.current.store_operation,
+            store_history: value.root.store_history,
+        }
+    } else {
+        crate::root_custody::decode(super::Method::Observe.id(plan), bytes)?
+    };
     if let Some(attempt) = &source.maintenance {
         if value.store_history.len() as u64 + 1 != attempt.sequence {
             return Err(invalid());
@@ -225,6 +304,99 @@ pub(crate) fn delivery<A: Serialize>(
         return Err(invalid());
     }
     Ok(())
+}
+
+fn application_stage<A>(plan: &Plan, approval: A) -> Result<application::Stage<A>> {
+    Ok(application::Stage {
+        source: stage(plan, approval)?,
+        arguments: application::Arguments::new(
+            plan.management()
+                .and_then(|m| m.arguments.clone())
+                .ok_or_else(invalid)?,
+        )
+        .map_err(supplier)?,
+    })
+}
+fn application_upgrade(plan: &Plan) -> Result<application::Upgrade> {
+    Ok(application::Upgrade {
+        source: application_stage(plan, super::upgrade::approval(plan)?)?,
+        attempt: plan
+            .management()
+            .and_then(|m| m.blob_attempt)
+            .ok_or_else(invalid)?,
+    })
+}
+pub(super) fn maintenance(plan: &Plan, bytes: &[u8]) -> Result<Option<application::Maintenance>> {
+    custody(plan, bytes)?;
+    let value: application::Custody = ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: application::CUSTODY,
+            direction: ic_wire::Direction::Response,
+        },
+        application::LIMITS,
+    )
+    .map_err(supplier)?;
+    let expected = super::upgrade::approval(plan)?;
+    let index = value.root.current.stored.children[slot(plan).index()]
+        .upgrades
+        .iter()
+        .position(|s| s.approval.as_ref() == Some(&expected));
+    index
+        .map(|i| {
+            value.applications[slot(plan).index()]
+                .as_ref()
+                .and_then(|l| l.upgrades.get(i))
+                .cloned()
+                .ok_or_else(invalid)
+        })
+        .transpose()
+}
+
+pub(crate) fn maintenance_evidence(
+    dir: &Path,
+    plan: &Plan,
+) -> Result<Option<application::Maintenance>> {
+    if plan.management().is_none_or(|m| m.blob_attempt.is_none()) {
+        return Ok(None);
+    }
+    let mut latest = None;
+    for index in 0..super::OBSERVATIONS {
+        let path = dir.join(format!("observe/{index}/reply.bin"));
+        if path.try_exists().map_err(supplier)?
+            && let Some(value) = maintenance(plan, &store::read(&path, application::LIMITS.bytes)?)?
+        {
+            if !value.valid() {
+                return Err(invalid());
+            }
+            if let Some(old) = &latest {
+                let old: &application::Maintenance = old;
+                if old.phase as u8 > value.phase as u8
+                    || old
+                        .requests
+                        .iter()
+                        .zip(value.requests)
+                        .any(|(a, b)| a.is_some() && *a != b)
+                    || old
+                        .before
+                        .as_ref()
+                        .is_some_and(|b| Some(b) != value.before.as_ref())
+                    || old
+                        .after
+                        .as_ref()
+                        .is_some_and(|b| Some(b) != value.after.as_ref())
+                    || old
+                        .activator
+                        .as_ref()
+                        .is_some_and(|a| Some(a) != value.activator.as_ref())
+                {
+                    return Err(invalid());
+                }
+            }
+            latest = Some(value);
+        }
+    }
+    Ok(latest)
 }
 
 /// Combine already source-validated observations without forgetting a committed
@@ -269,13 +441,24 @@ pub(super) fn creation_evidence(
         return Ok((status.clone(), None));
     }
     let source = child.sources.as_ref().ok_or_else(invalid)?;
-    delivery(
-        slot(plan),
-        &stage(plan, super::approval(plan)?)?,
-        wire::STAGE,
-        &source.creation,
-        status.phase == canic_management_protocol::Phase::Ready,
-    )?;
+    if plan.management().is_some_and(|m| m.arguments.is_some()) {
+        let expected = application_stage(plan, super::approval(plan)?)?;
+        if source.creation.reference != expected.source.reference
+            || source.creation.pin() != expected.pin(application::STAGE, slot(plan))
+            || (status.phase == canic_management_protocol::Phase::Ready
+                && source.creation.state != wire::PinState::Retained)
+        {
+            return Err(invalid());
+        }
+    } else {
+        delivery(
+            slot(plan),
+            &stage(plan, super::approval(plan)?)?,
+            wire::STAGE,
+            &source.creation,
+            status.phase == canic_management_protocol::Phase::Ready,
+        )?;
+    }
     Ok((status.clone(), Some(source.creation.clone())))
 }
 pub(super) fn upgraded(plan: &Plan, bytes: &[u8]) -> Result<upgrade::Status> {
@@ -301,12 +484,23 @@ pub(super) fn upgrade_evidence(
         return Err(invalid());
     }
     let status = &journal.upgrades[position];
-    delivery(
-        slot(plan),
-        &stage(plan, expected)?,
-        wire::STAGE_UPGRADE,
-        &sources.upgrades[position],
-        status.phase == upgrade::Phase::Ready,
-    )?;
+    if plan.management().is_some_and(|m| m.arguments.is_some()) {
+        let expected = application_upgrade(plan)?;
+        if sources.upgrades[position].pin() != expected.pin(slot(plan))
+            || sources.upgrades[position].reference != expected.source.source.reference
+            || (status.phase == upgrade::Phase::Ready
+                && sources.upgrades[position].state != wire::PinState::Retained)
+        {
+            return Err(invalid());
+        }
+    } else {
+        delivery(
+            slot(plan),
+            &stage(plan, expected)?,
+            wire::STAGE_UPGRADE,
+            &sources.upgrades[position],
+            status.phase == upgrade::Phase::Ready,
+        )?;
+    }
     Ok((status.clone(), Some(sources.upgrades[position].clone())))
 }

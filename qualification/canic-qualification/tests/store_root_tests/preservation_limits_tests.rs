@@ -45,8 +45,8 @@ async fn versioned_page(
 #[tokio::test(flavor = "current_thread")]
 async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old_pages() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let (_, supplier) = readiness_tests::fixture(owner.instance()).await;
+    let (mut server, owner) = support::instance(&binary).await;
+    let (_, supplier) = readiness_tests::fixture(owner.client()).await;
     let bytes = b"\0asm\x01\0\0\0";
     let removed = store::Manifest {
         release: store::Release {
@@ -158,13 +158,19 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
         .await
         .unwrap();
     assert!(tombstones.is_empty());
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn historical_scan_keeps_its_refusal_and_digest_across_root_migration() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture_with_code(
         pic,
         include_bytes!("../../fixtures/root-release-scan.wasm").to_vec(),
@@ -221,13 +227,19 @@ async fn historical_scan_keeps_its_refusal_and_digest_across_root_migration() {
     // Duplicate continuation cannot bypass the refused cursor or issue stop.
     assert_eq!(maintenance_tests::advance(&root, &approval).await, status);
     assert_eq!(maintenance_tests::activate(&root, &approval).await, status);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn root_preserves_removed_entries_and_cursor_across_both_owner_upgrades() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture(pic).await;
     let removed = supplier.publish_bytes("a", b"\0asm\x01\0\0\0").await;
     supplier.publish_bytes("z", b"\0asm\x01\0\0\0").await;
@@ -315,7 +327,8 @@ async fn root_preserves_removed_entries_and_cursor_across_both_owner_upgrades() 
     assert_eq!(maintenance_tests::observe(&root).await, removed_page);
     // Downgrade cannot drop the scan discriminator or removed cursor.
     assert!(
-        pic.upgrade_canister(
+        canic_qualification::upgrade_stopped(
+            pic,
             root.id,
             include_bytes!("../../fixtures/root-release-scan.wasm").to_vec(),
             vec![],
@@ -364,4 +377,10 @@ async fn root_preserves_removed_entries_and_cursor_across_both_owner_upgrades() 
     let activated = recover_store(&root, &approval).await;
     assert_eq!(activated.phase, wire::Phase::Ready);
     assert_eq!(activated.preservation, verified.preservation);
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

@@ -3,10 +3,8 @@ use canic_management_protocol::{
     Approval, CREATION_CYCLES, LIMITS, Phase, Refusal, STAGE, STAGE_LIMITS, STATUS, Stage, Status,
     digest,
 };
-use ic_testkit::{
-    pic::{PocketIcStartupConfig, server_assets},
-    pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc},
-};
+use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc};
+use ic_testkit::server::{Limits, PreparedServer, Server};
 use std::{path::PathBuf, time::Duration};
 
 mod children;
@@ -113,19 +111,26 @@ async fn qualify(
     before_dispatch: bool,
 ) {
     assert_ne!(original, replacement);
-    let binary = server_assets::check(&canic_qualification::server_directory())
+    let binary = PreparedServer::check(&canic_qualification::server_directory())
         .expect("make qualification-setup");
-    let owner = PocketIcStartupConfig::Spawn {
-        server_binary: binary,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(180)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(PocketIcBuilder::new().with_application_subnet())
-    .await
+    let mut server = Server::start(
+        binary,
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(180),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
+    )
     .unwrap();
-    let pic = owner.instance();
+    let owner = server
+        .instance(
+            PocketIcBuilder::new().with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let pic = owner.client();
     let root = pic.create_canister().await;
     pic.install_canister(root, original, vec![], None).await;
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
@@ -163,7 +168,7 @@ async fn qualify(
     assert_eq!(admitted.phase, Phase::Scheduled);
     // Scheduled migration must resume original bytes and authority.
     if before_dispatch {
-        pic.upgrade_canister(root, replacement.clone(), vec![], None)
+        canic_qualification::upgrade_stopped(pic, root, replacement.clone(), vec![], None)
             .await
             .unwrap();
     }
@@ -179,7 +184,7 @@ async fn qualify(
     assert_eq!(ready.approval, admitted.approval);
     if !before_dispatch {
         // Completed migration must retain the irreplaceable principal and evidence.
-        pic.upgrade_canister(root, replacement, vec![], None)
+        canic_qualification::upgrade_stopped(pic, root, replacement, vec![], None)
             .await
             .unwrap();
         let preserved = status(pic, root).await;
@@ -244,7 +249,12 @@ async fn qualify(
     );
     assert_eq!(status(pic, root).await.worker, ready.worker);
     println!("Root {root}: one child {child}, exact replay and maintenance preserved authority");
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -375,33 +385,38 @@ fn deploy_root(config: &std::path::Path, fleet: &str) -> serde_json::Value {
 
 #[tokio::test(flavor = "current_thread")]
 async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
-    let binary = server_assets::check(&canic_qualification::server_directory()).unwrap();
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: binary,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(300)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let binary = PreparedServer::check(&canic_qualification::server_directory()).unwrap();
+    let mut server = Server::start(
+        binary,
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(300),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
     // Only local subnet routing is fixture setup. Both fleet Roots and apps are
     // created through the shipped CLI and its retained operation owners.
-    let routing = owner.instance().create_canister().await;
+    let routing = owner.client().create_canister().await;
     let artifacts = repo().join("target/root");
     let root_wasm = std::fs::read(artifacts.join("root.wasm")).unwrap();
     let root_hash: String = digest(&root_wasm)
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    let url = owner.instance_mut().make_live(None).await.to_string();
+    let url = owner.client_mut().make_live(None).await.to_string();
     let key: String = owner
-        .instance()
+        .client()
         .root_key()
         .await
         .unwrap()
@@ -585,10 +600,10 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         "reply_retained"
     );
     // Manual time changes must not race the live gateway's automatic clock.
-    owner.instance().stop_progress().await;
-    owner.instance().advance_time(Duration::from_secs(35)).await;
-    settle(owner.instance()).await;
-    owner.instance().auto_progress().await;
+    owner.client().stop_progress().await;
+    owner.client().advance_time(Duration::from_secs(35)).await;
+    settle(owner.client()).await;
+    owner.client().auto_progress().await;
     let report = workspace.join("fleet.html");
     let ready_view = cli(
         &config,
@@ -628,7 +643,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     let child = CanisterId::from_text(receipt["canister"].as_str().unwrap()).unwrap();
     assert_eq!(
         owner
-            .instance()
+            .client()
             .canister_status(child, Some(root))
             .await
             .unwrap()
@@ -671,7 +686,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         ),
         receipt
     );
-    let ready = status(owner.instance(), root).await;
+    let ready = status(owner.client(), root).await;
     assert_eq!(ready.attempts, [1; 3]);
     let first_receipt_bytes = std::fs::read(journal.join(id).join("receipt.json")).unwrap();
     let initialized = cli(
@@ -709,12 +724,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     let second_root =
         CanisterId::from_text(second_root_receipt["canister"].as_str().unwrap()).unwrap();
     assert_ne!(root, second_root);
-    let dispatch = (owner
-        .instance()
-        .get_time()
-        .await
-        .as_nanos_since_unix_epoch()
-        / 1_000_000_000
+    let dispatch = (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000
         + 30)
         .to_string();
     let second_plan_args = [
@@ -750,10 +760,10 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         icp.to_str().unwrap(),
     ];
     assert_eq!(cli(&config, &second_apply)["status"]["phase"], "Scheduled");
-    owner.instance().stop_progress().await;
-    owner.instance().advance_time(Duration::from_secs(35)).await;
-    settle(owner.instance()).await;
-    owner.instance().auto_progress().await;
+    owner.client().stop_progress().await;
+    owner.client().advance_time(Duration::from_secs(35)).await;
+    settle(owner.client()).await;
+    owner.client().auto_progress().await;
     let second_receipt = cli(&config, &second_apply);
     let second_child = CanisterId::from_text(second_receipt["canister"].as_str().unwrap()).unwrap();
     assert_eq!(second_receipt["controller"], second_root.to_text());
@@ -825,12 +835,12 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         std::fs::read(journal.join(id).join("receipt.json")).unwrap(),
         first_receipt_bytes
     );
-    assert_eq!(status(owner.instance(), root).await, ready);
-    assert_eq!(status(owner.instance(), second_root).await.attempts, [1; 3]);
-    let subnet = owner.instance().get_subnet(routing).await.unwrap();
+    assert_eq!(status(owner.client(), root).await, ready);
+    assert_eq!(status(owner.client(), second_root).await.attempts, [1; 3]);
+    let subnet = owner.client().get_subnet(routing).await.unwrap();
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -847,12 +857,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         workspace.join("artifacts/app.wasm"),
     )
     .unwrap();
-    let dispatch = (owner
-        .instance()
-        .get_time()
-        .await
-        .as_nanos_since_unix_epoch()
-        / 1_000_000_000
+    let dispatch = (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000
         + 30)
         .to_string();
     let child_text = child.to_text();
@@ -921,10 +926,10 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     let signed = std::fs::read(upgrade_dir.join("stage/signed.json")).unwrap();
     // Lost admission reply: exact original signed attempt stays in custody.
     std::fs::remove_file(upgrade_dir.join("stage/reply.bin")).unwrap();
-    owner.instance().stop_progress().await;
-    owner.instance().advance_time(Duration::from_secs(35)).await;
-    settle(owner.instance()).await;
-    owner.instance().auto_progress().await;
+    owner.client().stop_progress().await;
+    owner.client().advance_time(Duration::from_secs(35)).await;
+    settle(owner.client()).await;
+    owner.client().auto_progress().await;
     let report = workspace.join("upgrade.html");
     let observed = cli(
         &config,
@@ -1010,7 +1015,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         std::fs::read(journal.join(id).join("receipt.json")).unwrap(),
         first_receipt_bytes
     );
-    assert_eq!(status(owner.instance(), root).await, ready);
+    assert_eq!(status(owner.client(), root).await, ready);
     assert_eq!(
         cli(
             &config,
@@ -1026,7 +1031,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     assert_eq!(view["operations"].as_array().unwrap().len(), 3);
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -1036,7 +1041,12 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     println!(
         "CLI Root upgrade: same child, replacement greeting, retained creation receipt, lost-reply recovery and second fleet isolation passed"
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -1055,24 +1065,29 @@ async fn whole_fleet_maintenance_refuses_untracked_child_work() {
 }
 
 async fn qualify_whole_fleet(profile: bool, untracked: bool) {
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(300)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(300),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let routing = owner.instance().create_canister().await;
-    let url = owner.instance_mut().make_live(None).await.to_string();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let routing = owner.client().create_canister().await;
+    let url = owner.client_mut().make_live(None).await.to_string();
     let key: String = owner
-        .instance()
+        .client()
         .root_key()
         .await
         .unwrap()
@@ -1154,14 +1169,9 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     let mut retained_profile = None;
     let mut identities = Vec::new();
     for fleet in ["first", "second"] {
-        let dispatch = (owner
-            .instance()
-            .get_time()
-            .await
-            .as_nanos_since_unix_epoch()
-            / 1_000_000_000
-            + 40)
-            .to_string();
+        let dispatch =
+            (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000 + 40)
+                .to_string();
         let plan_args = [
             "fleet",
             "plan",
@@ -1237,10 +1247,10 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             std::fs::read(child_dir.join("stage/signed.json")).unwrap(),
             signed
         );
-        owner.instance().stop_progress().await;
-        owner.instance().advance_time(Duration::from_secs(45)).await;
-        settle(owner.instance()).await;
-        owner.instance().auto_progress().await;
+        owner.client().stop_progress().await;
+        owner.client().advance_time(Duration::from_secs(45)).await;
+        settle(owner.client()).await;
+        owner.client().auto_progress().await;
         let view = cli(&config, &["fleet", "show", "--fleet", fleet]);
         assert_eq!(view["issues"], serde_json::json!([]));
         assert_eq!(view["canisters"].as_array().unwrap().len(), 2);
@@ -1257,7 +1267,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             completed["children"][0]["outcome"]["controller"],
             root.to_text()
         );
-        let calls = status(owner.instance(), root).await.attempts;
+        let calls = status(owner.client(), root).await.attempts;
         assert_eq!(calls, [1; 3]);
         let repeat = cli(
             &config,
@@ -1274,7 +1284,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             ],
         );
         assert_eq!(repeat, completed);
-        assert_eq!(status(owner.instance(), root).await.attempts, calls);
+        assert_eq!(status(owner.client(), root).await.attempts, calls);
         let unchanged = cli(&config, &plan_args);
         assert_eq!(unchanged["action"], "unchanged");
         assert_eq!(unchanged["operation"], id);
@@ -1288,7 +1298,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             );
         } else if fleet == "first" {
             let reply = owner
-                .instance()
+                .client()
                 .update_call(
                     child,
                     alice,
@@ -1331,12 +1341,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
         "app-v2.wasm"
     });
     std::fs::copy(&replacement, workspace.join("artifacts/app.wasm")).unwrap();
-    let dispatch = (owner
-        .instance()
-        .get_time()
-        .await
-        .as_nanos_since_unix_epoch()
-        / 1_000_000_000
+    let dispatch = (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000
         + 40)
         .to_string();
     let plan_args = [
@@ -1378,10 +1383,10 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     reconcile[1] = "reconcile";
     assert_eq!(cli(&config, &reconcile)["upgrade"]["phase"], "Scheduled");
     assert_eq!(cli(&config, &plan_args), upgraded);
-    owner.instance().stop_progress().await;
-    owner.instance().advance_time(Duration::from_secs(45)).await;
-    settle(owner.instance()).await;
-    owner.instance().auto_progress().await;
+    owner.client().stop_progress().await;
+    owner.client().advance_time(Duration::from_secs(45)).await;
+    settle(owner.client()).await;
+    owner.client().auto_progress().await;
     let receipt = cli(&config, &apply);
     assert_eq!(receipt["canister"], identities[0].1.to_text());
     assert_eq!(receipt["controller"], identities[0].0.to_text());
@@ -1394,13 +1399,13 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     assert_eq!(unchanged["action"], "unchanged");
     assert_eq!(unchanged["operation"], id);
     let first_code = owner
-        .instance()
+        .client()
         .canister_status(identities[0].1, Some(identities[0].0))
         .await
         .unwrap()
         .module_hash;
     let second_code = owner
-        .instance()
+        .client()
         .canister_status(identities[1].1, Some(identities[1].0))
         .await
         .unwrap()
@@ -1472,23 +1477,15 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
                 child: identities[0].1.to_text(),
                 previous_module: digest(&std::fs::read(&replacement).unwrap()),
                 module_hash: digest(&wasm),
-                execute_at_ns: owner
-                    .instance()
-                    .get_time()
-                    .await
-                    .as_nanos_since_unix_epoch()
+                execute_at_ns: owner.client().get_time().await.as_nanos_since_unix_epoch()
                     + 40_000_000_000,
-                expires_at_ns: owner
-                    .instance()
-                    .get_time()
-                    .await
-                    .as_nanos_since_unix_epoch()
+                expires_at_ns: owner.client().get_time().await.as_nanos_since_unix_epoch()
                     + 640_000_000_000,
             },
             wasm,
         };
         let response = owner
-            .instance()
+            .client()
             .update_call(
                 identities[0].0,
                 CanisterId::anonymous(),
@@ -1539,14 +1536,19 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
         assert!(maintenance_dir.join("custody-before/reply.bin").exists());
         assert_eq!(
             owner
-                .instance()
+                .client()
                 .canister_status(identities[0].0, None)
                 .await
                 .unwrap()
                 .module_hash,
             Some(digest(&original_root).to_vec())
         );
-        owner.close().await;
+        assert_eq!(
+            owner.close(std::time::Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        let stopped = server.stop().unwrap();
+        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
         return;
     }
     let maintained = cli(&config, &maintenance_apply);
@@ -1567,7 +1569,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     std::fs::rename(saved_reply, after_reply).unwrap();
     let install_attempt = std::fs::read(maintenance_dir.join("install/signed.json")).unwrap();
     let root_version = owner
-        .instance()
+        .client()
         .canister_status(identities[0].0, None)
         .await
         .unwrap()
@@ -1582,7 +1584,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     );
     assert_eq!(
         owner
-            .instance()
+            .client()
             .canister_status(identities[0].0, None)
             .await
             .unwrap()
@@ -1592,7 +1594,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     assert_eq!(cli(&config, &plan_args)["action"], "unchanged");
     assert_eq!(
         owner
-            .instance()
+            .client()
             .canister_status(identities[1].0, None)
             .await
             .unwrap()
@@ -1618,14 +1620,9 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             workspace.join("artifacts/app.wasm"),
         )
         .unwrap();
-        let dispatch = (owner
-            .instance()
-            .get_time()
-            .await
-            .as_nanos_since_unix_epoch()
-            / 1_000_000_000
-            + 40)
-            .to_string();
+        let dispatch =
+            (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000 + 40)
+                .to_string();
         let args = [
             "fleet",
             "plan",
@@ -1655,10 +1652,10 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             "anonymous",
         ];
         assert_eq!(cli(&config, &apply)["upgrade"]["phase"], "Scheduled");
-        owner.instance().stop_progress().await;
-        owner.instance().advance_time(Duration::from_secs(45)).await;
-        settle(owner.instance()).await;
-        owner.instance().auto_progress().await;
+        owner.client().stop_progress().await;
+        owner.client().advance_time(Duration::from_secs(45)).await;
+        settle(owner.client()).await;
+        owner.client().auto_progress().await;
         let completed = cli(&config, &apply);
         assert_eq!(completed["canister"], identities[0].1.to_text());
         assert_eq!(cli(&config, &args)["action"], "unchanged");
@@ -1680,7 +1677,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             ),
         ] {
             let reply = owner
-                .instance()
+                .client()
                 .query_call(
                     identities[0].1,
                     caller,
@@ -1721,10 +1718,10 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     }
     assert_ne!(identities[0].0, identities[1].0);
     assert_ne!(identities[0].1, identities[1].1);
-    let subnet = owner.instance().get_subnet(routing).await.unwrap();
+    let subnet = owner.client().get_subnet(routing).await.unwrap();
     assert_eq!(
         owner
-            .instance()
+            .client()
             .get_subnet_metrics(subnet)
             .await
             .unwrap()
@@ -1732,5 +1729,10 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
         5
     );
     assert_eq!(std::fs::read(config).unwrap(), config_bytes);
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

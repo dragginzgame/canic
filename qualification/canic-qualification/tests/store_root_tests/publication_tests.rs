@@ -57,8 +57,8 @@ fn manifest(version: &str, bytes: &[u8]) -> store::Manifest {
 #[tokio::test(flavor = "current_thread")]
 async fn publication_after_handover_resumes_across_root_maintenance_without_a_root_catalog() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier, existing, _) = fixture(pic, false).await;
     let root_before = pic.get_stable_memory(root.id).await;
     let custody_before = custody(&root).await;
@@ -170,14 +170,19 @@ async fn publication_after_handover_resumes_across_root_maintenance_without_a_ro
             .all(|c| c.creation.approval.is_none())
     );
     assert_eq!(pic.get_stable_memory(root.id).await, root_before);
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn publication_refusals_preserve_state_and_lost_replies_recover_from_store() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier, _, _) = fixture(pic, true).await;
     let wasm = std::fs::read(artifacts().join("app.wasm")).unwrap();
     assert!(wasm.len() < store::CHUNK_BYTES);
@@ -307,5 +312,10 @@ async fn publication_refusals_preserve_state_and_lost_replies_recover_from_store
         .unwrap()
         .published
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

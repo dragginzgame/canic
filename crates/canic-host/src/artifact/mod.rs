@@ -8,8 +8,9 @@ use std::{
 };
 mod store_source;
 
-// Direct ingress installation retains its original transport bound.
-pub(crate) const MAX_WASM: usize = 1_500_000;
+// Leave at least 190 KiB for Candid/envelope overhead below the IC's 2 MiB ingress limit.
+// This is Host direct installation, independent of Root's retained inline-child quota.
+pub(crate) const MAX_WASM: usize = 1_900_000;
 // Build/inspection can admit the complete Store artifact without granting installation authority.
 pub(crate) const MAX_ARTIFACT_BYTES: usize =
     ic_wasm_store_protocol::CHUNK_BYTES * ic_wasm_store_protocol::MAX_CHUNKS;
@@ -67,7 +68,7 @@ fn cargo_diagnostic(stdout: &[u8], stderr: &[u8], partial: bool) -> Option<Strin
     }
     let mut diagnostic = prefix
         .split('\n')
-        .map(ic_host_text::escape::terminal_text)
+        .map(ic_host_text::escape)
         .collect::<Vec<_>>()
         .join("\n");
     if characters.next().is_some() || partial {

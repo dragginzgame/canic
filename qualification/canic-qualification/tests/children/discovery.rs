@@ -3,28 +3,33 @@ use super::*;
 
 #[tokio::test(flavor = "current_thread")]
 async fn discovers_both_children_without_local_deployment_records() {
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(180)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(180),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let root = owner.instance().create_canister().await;
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let root = owner.client().create_canister().await;
     owner
-        .instance()
+        .client()
         .install_canister(root, artifact("root.wasm"), vec![], None)
         .await;
-    owner.instance().add_cycles(root, 10_000_000_000_000).await;
-    let url = owner.instance_mut().make_live(None).await.to_string();
-    let pic = owner.instance();
+    owner.client().add_cycles(root, 10_000_000_000_000).await;
+    let url = owner.client_mut().make_live(None).await.to_string();
+    let pic = owner.client();
     let key: String = pic
         .root_key()
         .await
@@ -160,4 +165,10 @@ async fn discovers_both_children_without_local_deployment_records() {
     );
     assert_eq!(pic.get_stable_memory(old).await, stable);
     assert!(!directory.join("journal").exists());
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

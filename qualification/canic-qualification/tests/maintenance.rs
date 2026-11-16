@@ -129,8 +129,8 @@ async fn maintenance_preserves_effect_custody() {
         (Fault::None, true),
         (Fault::AfterResultWrite, true),
     ] {
-        let owner = support::instance(&binary).await;
-        let pic = owner.instance();
+        let (mut server, owner) = support::instance(&binary).await;
+        let pic = owner.client();
         let executor = pic
             .create_canister_with_settings(Some(operator), None)
             .await;
@@ -356,6 +356,11 @@ async fn maintenance_preserves_effect_custody() {
         println!(
             "{fault:?}, deleted={deleted}: failed upgrade rolled back, changed executable preserved both journals, no duplicate effects"
         );
-        owner.close().await;
+        assert_eq!(
+            owner.close(std::time::Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        let stopped = server.stop().unwrap();
+        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
     }
 }

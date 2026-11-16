@@ -3,17 +3,24 @@ use super::*;
 
 #[tokio::test]
 async fn identified_storage_migrates_pending_children_and_refuses_downgrade() {
-    let owner = PocketIcStartupConfig::Spawn {
-        server_binary: server_assets::check(&canic_qualification::server_directory()).unwrap(),
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(180)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(PocketIcBuilder::new().with_application_subnet())
-    .await
+    let mut server = Server::start(
+        PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(180),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
+    )
     .unwrap();
-    let pic = owner.instance();
+    let owner = server
+        .instance(
+            PocketIcBuilder::new().with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let pic = owner.client();
     let old = std::fs::read(
         repo().join("qualification/canic-qualification/fixtures/root-positional-children.wasm"),
     )
@@ -45,7 +52,7 @@ async fn identified_storage_migrates_pending_children_and_refuses_downgrade() {
     }
     let scheduled = read(pic, root).await;
     let stable = pic.get_stable_memory(root).await;
-    pic.upgrade_canister(root, artifact("root.wasm"), vec![], None)
+    canic_qualification::upgrade_stopped(pic, root, artifact("root.wasm"), vec![], None)
         .await
         .unwrap();
     let migrated = pic.get_stable_memory(root).await;
@@ -62,7 +69,7 @@ async fn identified_storage_migrates_pending_children_and_refuses_downgrade() {
     assert_eq!(pic.get_stable_memory(root).await, migrated);
     // Unsupported code must trap at load, leaving the migrated state and new code intact.
     assert!(
-        pic.upgrade_canister(root, old.clone(), vec![], None)
+        canic_qualification::upgrade_stopped(pic, root, old.clone(), vec![], None)
             .await
             .is_err()
     );
@@ -83,11 +90,15 @@ async fn identified_storage_migrates_pending_children_and_refuses_downgrade() {
     }
     assert_ne!(completed[0].creation.worker, completed[1].creation.worker);
     let stable = pic.get_stable_memory(root).await;
-    assert!(pic.upgrade_canister(root, old, vec![], None).await.is_err());
+    assert!(
+        canic_qualification::upgrade_stopped(pic, root, old, vec![], None)
+            .await
+            .is_err()
+    );
     assert_eq!(pic.get_stable_memory(root).await, stable);
     // Compatible executables reopen the collection without another rewrite or reset.
     for executable in [artifact("maintenance.wasm"), artifact("root.wasm")] {
-        pic.upgrade_canister(root, executable, vec![], None)
+        canic_qualification::upgrade_stopped(pic, root, executable, vec![], None)
             .await
             .unwrap();
         assert_eq!(pic.get_stable_memory(root).await, stable);
@@ -98,5 +109,10 @@ async fn identified_storage_migrates_pending_children_and_refuses_downgrade() {
         pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
         3
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

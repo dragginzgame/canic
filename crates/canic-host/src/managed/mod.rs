@@ -1,5 +1,6 @@
 //! Root admission and authenticated child evidence. No host-owned child effects.
 
+mod application;
 use crate::{
     ApplyOutcome, DeploymentName, Error, ManagedOwner, Plan, PlanInput, Receipt, Result,
     SelectedFleet,
@@ -8,6 +9,7 @@ use crate::{
     signed::{self, Call},
     store, supplier,
 };
+pub use application::activate;
 use canic_management_protocol::{Approval, LIMITS, Phase, Refusal, STAGE_LIMITS, Stage, Status};
 use ic_platform::agent::Agent;
 use std::path::Path;
@@ -47,7 +49,17 @@ pub fn create_managed_plan(
     root_module: &str,
     execute_at_ns: Option<u64>,
     release: Option<&str>,
+    arguments: Option<&Path>,
+    blob_attempt: Option<u64>,
 ) -> Result<(String, Plan)> {
+    let arguments = arguments
+        .map(|path| {
+            crate::store::read(
+                path,
+                canic_management_protocol::application::MAX_ARGUMENT_BYTES,
+            )
+        })
+        .transpose()?;
     selection.validate()?;
     let child = selection
         .config
@@ -167,6 +179,8 @@ pub fn create_managed_plan(
             canister: canister.into(),
         }),
         Some(ManagedOwner {
+            arguments,
+            blob_attempt,
             slot: creation.and_then(|(_, slot)| slot),
             root,
             source,
@@ -306,15 +320,14 @@ pub(crate) fn evidence_with_source(
         ] {
             let reply = dir.join(format!("observe/{index}/{name}"));
             if reply.try_exists().map_err(supplier)? {
-                let bytes = store::read(
-                    &reply,
-                    canic_management_protocol::custody::ROOT_HISTORY_LIMITS.bytes,
-                )?;
+                let bytes =
+                    store::read(&reply, canic_management_protocol::application::LIMITS.bytes)?;
                 let (status, source) = if matches!(
                     method,
                     canic_management_protocol::stored::CUSTODY
                         | canic_management_protocol::custody::ROOT
                         | canic_management_protocol::custody::ROOT_HISTORY
+                        | canic_management_protocol::application::CUSTODY
                 ) {
                     stored::creation_evidence(plan, &bytes)?
                 } else {
@@ -466,6 +479,7 @@ fn decode_observation(plan: &Plan, method: u64, bytes: &[u8]) -> Result<Status> 
         canic_management_protocol::stored::CUSTODY
             | canic_management_protocol::custody::ROOT
             | canic_management_protocol::custody::ROOT_HISTORY
+            | canic_management_protocol::application::CUSTODY
     ) {
         stored::creation(plan, bytes)
     } else {

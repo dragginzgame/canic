@@ -394,6 +394,9 @@ fn predecessor_requires_both_observations_and_current_postflight() {
             "custody-before-creation": "not_submitted",
             "custody-before-upgrade": "not_submitted",
             "install": "not_submitted",
+            "stop": "not_submitted",
+            "stopped": "not_submitted",
+            "start": "not_submitted",
             "custody-after": "not_submitted",
         })
     );
@@ -459,6 +462,9 @@ fn predecessor_requires_both_observations_and_current_postflight() {
             "custody-before-creation": "reply_retained",
             "custody-before-upgrade": "reply_retained",
             "install": "not_submitted",
+            "stop": "not_submitted",
+            "stopped": "not_submitted",
+            "start": "not_submitted",
             "custody-after": "reply_retained",
         })
     );

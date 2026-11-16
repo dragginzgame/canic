@@ -1,7 +1,7 @@
 //! Installed CLI custody: publication -> removal -> explicit restoration, plus lost replies.
 use super::{
-    CanisterId, CanisterSettings, Duration, Path, PathBuf, PocketIcBuilder, PocketIcStartupConfig,
-    Value, cli, hex, json, run, server_assets,
+    CanisterId, CanisterSettings, Duration, Limits, Path, PathBuf, PocketIcBuilder, PreparedServer,
+    Server, Value, cli, hex, json, run,
 };
 use canic_management_protocol::{children, publication as wire};
 use ic_testkit::pocket_ic::nonblocking::PocketIc;
@@ -151,22 +151,27 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
         .unwrap()
         .to_owned();
     let assets = PathBuf::from(std::env::var_os("CANIC_PUBLICATION_ARTIFACTS").unwrap());
-    let binary = server_assets::check(&canic_qualification::server_directory()).unwrap();
-    let mut owner = PocketIcStartupConfig::Spawn {
-        server_binary: binary,
-        timeout: Duration::from_secs(30),
-        server_hard_ttl: Some(Duration::from_secs(300)),
-        server_idle_ttl: None,
-        server_output_files: None,
-    }
-    .build_instance(
-        PocketIcBuilder::new()
-            .with_nns_subnet()
-            .with_application_subnet(),
+    let binary = PreparedServer::check(&canic_qualification::server_directory()).unwrap();
+    let mut server = Server::start(
+        binary,
+        Limits {
+            startup: Duration::from_secs(30),
+            lifetime: Duration::from_secs(300),
+            stdout_bytes: 1024 * 1024,
+            stderr_bytes: 1024 * 1024,
+        },
     )
-    .await
     .unwrap();
-    let pic = owner.instance();
+    let mut owner = server
+        .instance(
+            PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+            Duration::from_secs(30),
+        )
+        .await
+        .unwrap();
+    let pic = owner.client();
     let root_bytes = std::fs::read(assets.join("root-faults.wasm")).unwrap();
     let store_bytes = std::fs::read(assets.join("store.wasm")).unwrap();
     let root = pic.create_canister().await;
@@ -189,8 +194,8 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
     .await
     .unwrap();
     let root_stable = pic.get_stable_memory(root).await;
-    let url = owner.instance_mut().make_live(None).await.to_string();
-    let pic = owner.instance();
+    let url = owner.client_mut().make_live(None).await.to_string();
+    let pic = owner.client();
     let dir = repo
         .join("target/publication")
         .join(format!("removal-{}", std::process::id()));
@@ -450,6 +455,12 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
         }
         assert_eq!(std::fs::read(path.join("signed.json")).unwrap(), signed);
     }
-    owner.instance_mut().stop_live().await;
+    owner.client_mut().stop_live().await;
     std::fs::remove_dir_all(dir).unwrap();
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

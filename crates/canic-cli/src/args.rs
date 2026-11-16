@@ -280,6 +280,12 @@ pub(super) enum FleetCommand {
         /// Exact reviewed Root module for child management, Store bootstrap or publication.
         #[arg(long, value_name = "SHA256", requires = "canister")]
         root_module: Option<String>,
+        /// Exact initialization or upgrade frame to retain in a Store-backed child plan.
+        #[arg(long, value_name = "FILE", requires_all = ["canister", "root_module", "release"])]
+        install_args: Option<PathBuf>,
+        /// Exact Blob maintenance attempt; selected Root must include its optional blob feature.
+        #[arg(long, requires_all = ["target", "install_args"], value_parser = clap::value_parser!(u64).range(1..))]
+        blob_attempt: Option<u64>,
         #[command(flatten)]
         publication: Box<PublicationArgs>,
         /// Optional future Unix seconds for Root's child dispatch; default is ready once approved.
@@ -292,6 +298,17 @@ pub(super) enum FleetCommand {
     },
     /// Approve this exact digest and apply or resume its original signed attempts.
     Apply {
+        #[command(flatten)]
+        scope: FleetScope,
+        #[arg(value_name = "OPERATION")]
+        digest: String,
+        #[arg(long)]
+        identity: String,
+        #[command(flatten)]
+        signer: SignerArgs,
+    },
+    /// Explicitly activate the original Blob upgrade after verified closed reopening.
+    Activate {
         #[command(flatten)]
         scope: FleetScope,
         #[arg(value_name = "OPERATION")]
@@ -421,6 +438,7 @@ impl FleetCommand {
             Self::Plan { scope, .. }
             | Self::Cancel { scope, .. }
             | Self::Apply { scope, .. }
+            | Self::Activate { scope, .. }
             | Self::Reconcile { scope, .. }
             | Self::Status { scope, .. }
             | Self::Show { scope, .. }

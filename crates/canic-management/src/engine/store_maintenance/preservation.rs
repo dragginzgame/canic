@@ -1,5 +1,5 @@
 //! One read per continuation. Root retains a cursor and digest, never Store's catalog or bytes.
-use super::{Call, Failure, Phase, Status, WaitPolicy, change, store, target};
+use super::{Call, Failure, Phase, Status, Wait, change, store, target};
 use canic_management_protocol::store_maintenance::{Preservation, Scan};
 
 pub(super) fn validate(record: &Status) {
@@ -75,14 +75,15 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
     )
     .expect("preservation request");
     let reply = Call::new(
-        target(&record.approval),
+        ic_platform_types::Principal::from_slice((target(&record.approval)).as_slice()),
         name,
-        WaitPolicy::Bounded { timeout_seconds: 5 },
+        Wait::Bounded { seconds: 5 },
     )
-    .take_raw_args(bytes)
+    .owned_args(bytes)
     .execute()
     .await
-    .map_err(super::super::failure)?;
+    .map_err(super::super::failure)
+    .and_then(super::super::response)?;
     let encoding = ic_wire::Encoding::Frame {
         method,
         direction: ic_wire::Direction::Response,

@@ -44,8 +44,8 @@ async fn funding_commit_boundaries() {
             Fault::LaterWork,
             Fault::None,
         ] {
-            let owner = support::instance(&binary).await;
-            let pic = owner.instance();
+            let (mut server, owner) = support::instance(&binary).await;
+            let pic = owner.client();
             let executor = pic.create_canister().await;
             pic.install_canister(executor, wasm.clone(), vec![], None)
                 .await;
@@ -213,7 +213,8 @@ async fn funding_commit_boundaries() {
                     assert!(
                         error
                             .reject_message
-                            .contains("different funding intent refused")
+                            .contains("different funding intent refused"),
+                        "changed intent: {error:?}"
                     );
                 }
             }
@@ -228,7 +229,12 @@ async fn funding_commit_boundaries() {
                 "deleted_target={deleted_target}, {fault:?}: credit={expected_credit}, phase={:?}, reserved_cycles={}, outcome={:?}, refund={:?}, executor_cycle_decrease={spent}",
                 state.phase, state.reserved_cycles, state.outcome, state.refunded_cycles
             );
-            owner.close().await;
+            assert_eq!(
+                owner.close(std::time::Duration::from_secs(10)).await,
+                ic_testkit::server::Deletion::Attempted
+            );
+            let stopped = server.stop().unwrap();
+            assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
         }
     }
 }
@@ -236,8 +242,8 @@ async fn funding_commit_boundaries() {
 #[tokio::test(flavor = "current_thread")]
 async fn funding_admission_bounds() {
     let (wasm, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let executor = pic.create_canister().await;
     pic.install_canister(executor, wasm, vec![], None).await;
     let target = pic.create_canister().await;
@@ -305,5 +311,10 @@ async fn funding_admission_bounds() {
         status(pic, executor).await.outcome,
         Some(FundingOutcome::Deposited)
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }

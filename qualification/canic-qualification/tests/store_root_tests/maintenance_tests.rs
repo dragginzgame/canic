@@ -163,15 +163,15 @@ async fn lost_advance(root: &Client<'_>, approval: &Approval, point: u8, phase: 
     assert_eq!(observe(root).await.phase, phase);
 }
 async fn restore_faults(root: &Client<'_>) {
-    root.pic
-        .upgrade_canister(
-            root.id,
-            std::fs::read(artifacts().join("root-faults.wasm")).unwrap(),
-            vec![],
-            Some(root.operator),
-        )
-        .await
-        .unwrap();
+    canic_qualification::upgrade_stopped(
+        root.pic,
+        root.id,
+        std::fs::read(artifacts().join("root-faults.wasm")).unwrap(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -195,8 +195,8 @@ async fn root_upgrades_pre_registry_store_preserving_state_and_uncertain_effects
 async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool) {
     let previous_module = store::digest(&store_wasm);
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture_with_code(
         pic,
         if historical_scan {
@@ -454,14 +454,19 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
         .unwrap(),
         Some(closed)
     );
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn store_install_refuses_wrong_bytes_callers_frames_and_expired_dispatch() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture(pic).await;
     let wasm = std::fs::read(artifacts().join("candidate.wasm")).unwrap();
     let approval = stopped(&root, &supplier, &wasm).await;
@@ -571,14 +576,19 @@ async fn store_install_refuses_wrong_bytes_callers_frames_and_expired_dispatch()
     assert!(expired.failure.is_some());
     assert!(expired.installation.is_none());
     assert_eq!(pic.get_stable_memory(supplier.id).await, store_before);
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn installed_store_outcome_recovers_after_expiry_without_fresh_start_authority() {
     let (_, binary) = support::inputs();
-    let owner = support::instance(&binary).await;
-    let pic = owner.instance();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture(pic).await;
     let wasm = std::fs::read(artifacts().join("candidate.wasm")).unwrap();
     let approval = stopped(&root, &supplier, &wasm).await;
@@ -608,15 +618,20 @@ async fn installed_store_outcome_recovers_after_expiry_without_fresh_start_autho
     );
     assert_eq!(install(&root, &input).await.unwrap(), blocked);
     assert_eq!(activate(&root, &approval).await, blocked);
-    owner.close().await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn rejected_or_incompatible_store_replacement_never_activates_or_reissues() {
     let (_, binary) = support::inputs();
     for rejected in [true, false] {
-        let owner = support::instance(&binary).await;
-        let pic = owner.instance();
+        let (mut server, owner) = support::instance(&binary).await;
+        let pic = owner.client();
         let (root, supplier) = readiness_tests::fixture(pic).await;
         let mut wasm = b"\0asm\x01\0\0\0".to_vec();
         if rejected {
@@ -653,6 +668,11 @@ async fn rejected_or_incompatible_store_replacement_never_activates_or_reissues(
                 .activation_request
                 .is_none()
         );
-        owner.close().await;
+        assert_eq!(
+            owner.close(std::time::Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        let stopped = server.stop().unwrap();
+        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
     }
 }

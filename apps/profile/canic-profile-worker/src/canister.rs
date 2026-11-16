@@ -1,77 +1,62 @@
 use crate::state::{MAX_PAGES, State};
 use canic_profile_protocol::{GET, INFO, Info, LIMITS, MAX_PROFILES, PUT, ProfileResult, Put};
-use ic_platform_runtime::cdk::{self, api};
+use ic_platform_runtime::{self as runtime, system as api};
 use ic_storage::DefaultMemoryImpl;
 use std::cell::RefCell;
 
 thread_local! { static STATE: RefCell<Option<State<DefaultMemoryImpl>>> = const { RefCell::new(None) }; }
 
-#[cdk::init]
-fn init() {
+#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+fn init((): ()) {
     STATE.with_borrow_mut(|state| *state = Some(State::open(DefaultMemoryImpl::default(), true)));
 }
 
-#[cdk::post_upgrade]
-fn post_upgrade() {
+#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+fn post_upgrade((): ()) {
     STATE.with_borrow_mut(|state| *state = Some(State::open(DefaultMemoryImpl::default(), false)));
     #[cfg(feature = "reject-upgrade")]
     api::trap("profile qualification: reject after restoration");
 }
 
 fn bounded() -> Result<(), String> {
-    if ic_platform_runtime::ic0::msg_arg_data_size() > LIMITS.bytes {
+    if ic_platform_runtime::system::argument_size() > LIMITS.bytes {
         return Err("profile frame too large".into());
     }
     Ok(())
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-fn decode_put(bytes: Vec<u8>) -> Put {
+fn decode_put(bytes: &[u8]) -> Result<Put, ic_wire::Error> {
     ic_wire::decode(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: PUT,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .unwrap_or_else(|_| api::trap("invalid profile request"))
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-fn decode_get(bytes: Vec<u8>) -> u64 {
+fn decode_get(bytes: &[u8]) -> Result<u64, ic_wire::Error> {
     ic_wire::decode(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: GET,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .unwrap_or_else(|_| api::trap("invalid profile request"))
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoder bytes"
-)]
-fn decode_info(bytes: Vec<u8>) {
+fn decode_info(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     ic_wire::decode::<()>(
-        &bytes,
+        bytes,
         ic_wire::Encoding::Frame {
             method: INFO,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
-    .unwrap_or_else(|_| api::trap("invalid info request"));
 }
 #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
-fn encode_put(value: ProfileResult) -> Vec<u8> {
+fn encode_put(value: ProfileResult) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -80,10 +65,9 @@ fn encode_put(value: ProfileResult) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded profile")
 }
 #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
-fn encode_get(value: ProfileResult) -> Vec<u8> {
+fn encode_get(value: ProfileResult) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -92,10 +76,9 @@ fn encode_get(value: ProfileResult) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded profile")
 }
 #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
-fn encode_info(value: Info) -> Vec<u8> {
+fn encode_info(value: Info) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -104,14 +87,9 @@ fn encode_info(value: Info) -> Vec<u8> {
         },
         LIMITS,
     )
-    .expect("bounded info")
 }
 
-#[cdk::update(
-    guard = "bounded",
-    decode_with = "decode_put",
-    encode_with = "encode_put"
-)]
+#[runtime::update(runtime = runtime, guard = bounded, decode = decode_put, max_bytes = 4096, on_error = endpoint_error, name = "put", encode = encode_put)]
 #[expect(
     clippy::needless_pass_by_value,
     reason = "entrypoint owns decoded request"
@@ -121,30 +99,22 @@ fn put(input: Put) -> ProfileResult {
         state
             .as_mut()
             .expect("initialized profile state")
-            .put(api::msg_caller().as_slice(), &input)
+            .put(api::caller().as_slice(), &input)
     })
 }
 
-#[cdk::query(
-    guard = "bounded",
-    decode_with = "decode_get",
-    encode_with = "encode_get"
-)]
+#[runtime::query(runtime = runtime, guard = bounded, decode = decode_get, max_bytes = 4096, on_error = endpoint_error, name = "get", encode = encode_get)]
 fn get(user_id: u64) -> ProfileResult {
     STATE.with_borrow(|state| {
         state
             .as_ref()
             .expect("initialized profile state")
-            .get(api::msg_caller().as_slice(), user_id)
+            .get(api::caller().as_slice(), user_id)
     })
 }
 
-#[cdk::query(
-    guard = "bounded",
-    decode_with = "decode_info",
-    encode_with = "encode_info"
-)]
-fn info() -> Info {
+#[runtime::query(runtime = runtime, guard = bounded, decode = decode_info, max_bytes = 4096, on_error = endpoint_error, name = "info", encode = encode_info)]
+fn info((): ()) -> Info {
     Info {
         executable: if cfg!(feature = "profile-v2") {
             "profile-v2"
@@ -159,11 +129,19 @@ fn info() -> Info {
 }
 
 // Replicated, read-only endpoint for the entry's direct inter-canister check.
-#[cdk::update(
-    guard = "bounded",
-    decode_with = "decode_info",
-    encode_with = "encode_info"
-)]
-fn probe() -> Info {
-    info()
+#[runtime::update(runtime = runtime, guard = bounded, decode = decode_info, max_bytes = 4096, on_error = endpoint_error, name = "probe", encode = encode_info)]
+fn probe((): ()) -> Info {
+    info(())
+}
+
+fn endpoint_error(error: impl std::fmt::Debug) -> ! {
+    ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
+}
+
+fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
+    Ok(())
+}
+
+fn lifecycle_decode(_bytes: &[u8]) -> Result<(), std::convert::Infallible> {
+    Ok(())
 }

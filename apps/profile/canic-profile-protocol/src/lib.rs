@@ -1,4 +1,5 @@
 //! Bounded application contracts for the standalone profile demo.
+#![forbid(unsafe_code)]
 use serde::{Deserialize, Serialize};
 
 /// Update a caller-owned profile with optimistic revision checking.

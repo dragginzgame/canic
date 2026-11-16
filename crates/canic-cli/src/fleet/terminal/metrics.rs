@@ -1,9 +1,6 @@
 //! Diagnostic projection only; supplier counters are never summed into operation counts.
 use canic_host::Fleet;
-use ic_host_text::{
-    escape::terminal_text,
-    table::{self, Alignment, Options},
-};
+use ic_host_text::{Alignment, escape, plain_table};
 use std::fmt::Write as _;
 
 pub(super) fn render(snapshot: &Fleet) -> String {
@@ -11,23 +8,14 @@ pub(super) fn render(snapshot: &Fleet) -> String {
     for report in &snapshot.metrics {
         let name = super::roles::name(snapshot, &report.network_id, &report.canister)
             .unwrap_or_else(|| report.canister.clone());
-        writeln!(
-            output,
-            "\nTimer metrics (uncertified): {}",
-            terminal_text(&name)
-        )
-        .expect("String write");
-        writeln!(
-            output,
-            "  Network identity: {}",
-            terminal_text(&report.network_id)
-        )
-        .expect("String write");
+        writeln!(output, "\nTimer metrics (uncertified): {}", escape(&name)).expect("String write");
+        writeln!(output, "  Network identity: {}", escape(&report.network_id))
+            .expect("String write");
         let Some(timers) = report.reported.as_ref().and_then(|s| s.timers.as_ref()) else {
             writeln!(
                 output,
                 "  UNKNOWN: {}",
-                terminal_text(
+                escape(
                     report
                         .observation_error
                         .as_deref()
@@ -50,14 +38,10 @@ pub(super) fn render(snapshot: &Fleet) -> String {
         )
         .expect("String write");
         let rows = super::super::metrics::rows(report).expect("reported timers");
-        output.push_str(&table::render(
+        output.push_str(&plain_table(
             &["COUNTER", "TOTAL", "QUALITY"],
             &rows,
             &[Alignment::Left, Alignment::Right, Alignment::Left],
-            Options {
-                column_gap: 2,
-                header_separator: true,
-            },
         ));
         output.push_str(
             "\n  Volatile since initialization; counters do not prove operation outcomes.\n",

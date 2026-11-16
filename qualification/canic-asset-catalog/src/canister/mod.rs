@@ -11,7 +11,7 @@ use canic::blob::{
         protocol::{Command, Inspection, ManagementView, Observation, Outcome},
     },
 };
-use ic_platform_runtime::cdk::{self, api};
+use ic_platform_runtime::{self as runtime, system as api};
 use ic_platform_types::Principal;
 use state::State;
 use std::cell::{Cell, RefCell};
@@ -21,12 +21,12 @@ thread_local! {
     // This package is a qualification application; the product adapter has no fault mode.
     static FAILURE: Cell<u8> = const { Cell::new(0) };
 }
-#[cdk::init(decode_with = "endpoint::decode::<protocol::Installation, INIT>")]
+#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = endpoint::decode::<protocol::Installation, INIT>, max_bytes = 2097152, on_error = endpoint_error)]
 fn init(input: protocol::Installation) {
     STATE.with_borrow_mut(|state| *state = Some(State::open(Some(input), api::canister_self())));
 }
-#[cdk::pre_upgrade]
-fn pre_upgrade() {
+#[runtime::pre_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+fn pre_upgrade((): ()) {
     STATE.with_borrow(|state| {
         assert!(
             state.as_ref().expect("catalog").blob.is_drained(),
@@ -34,8 +34,8 @@ fn pre_upgrade() {
         )
     });
 }
-#[cdk::post_upgrade(decode_with = "endpoint::decode::<(), UPGRADE>")]
-fn post_upgrade() {
+#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = endpoint::decode::<(), UPGRADE>, max_bytes = 2097152, on_error = endpoint_error)]
+fn post_upgrade((): ()) {
     STATE.with_borrow_mut(|state| *state = Some(State::open(None, api::canister_self())));
 }
 canic::mount_blob_endpoints! {
@@ -64,81 +64,55 @@ fn inspect_management(caller: Principal) -> Result<ManagementView, BlobError> {
             .inspect_management(caller)
     })
 }
-#[cdk::update(
-    guard = "endpoint::admit::<AUTHORIZE>",
-    decode_with = "endpoint::decode::<Draft, AUTHORIZE>",
-    encode_with = "encode::<Result<Entry, Error>, AUTHORIZE>"
-)]
+#[runtime::update(runtime = runtime, guard = endpoint::admit::<AUTHORIZE>, decode = endpoint::decode::<Draft, AUTHORIZE>, max_bytes = 2097152, on_error = endpoint_error, name = "catalog_authorize", encode = encode::<Result<Entry, Error>, AUTHORIZE>)]
 fn catalog_authorize(input: Draft) -> Result<Entry, Error> {
     STATE.with_borrow_mut(|state| {
-        state.as_mut().expect("catalog").authorize(
-            api::msg_caller(),
-            input,
-            api::time(),
-            FAILURE.get(),
-        )
+        state
+            .as_mut()
+            .expect("catalog")
+            .authorize(api::caller(), input, api::time(), FAILURE.get())
     })
 }
-#[cdk::update(
-    guard = "endpoint::admit::<PUBLISH>",
-    decode_with = "endpoint::decode::<std::num::NonZeroU128, PUBLISH>",
-    encode_with = "encode::<Result<Entry, Error>, PUBLISH>"
-)]
+#[runtime::update(runtime = runtime, guard = endpoint::admit::<PUBLISH>, decode = endpoint::decode::<std::num::NonZeroU128, PUBLISH>, max_bytes = 2097152, on_error = endpoint_error, name = "catalog_publish", encode = encode::<Result<Entry, Error>, PUBLISH>)]
 fn catalog_publish(reference: std::num::NonZeroU128) -> Result<Entry, Error> {
     STATE.with_borrow_mut(|state| {
         state
             .as_mut()
             .expect("catalog")
-            .publish(api::msg_caller(), reference, FAILURE.get())
+            .publish(api::caller(), reference, FAILURE.get())
     })
 }
-#[cdk::update(
-    guard = "endpoint::admit::<REMOVE>",
-    decode_with = "endpoint::decode::<std::num::NonZeroU128, REMOVE>",
-    encode_with = "encode::<Result<Entry, Error>, REMOVE>"
-)]
+#[runtime::update(runtime = runtime, guard = endpoint::admit::<REMOVE>, decode = endpoint::decode::<std::num::NonZeroU128, REMOVE>, max_bytes = 2097152, on_error = endpoint_error, name = "catalog_remove", encode = encode::<Result<Entry, Error>, REMOVE>)]
 fn catalog_remove(reference: std::num::NonZeroU128) -> Result<Entry, Error> {
     STATE.with_borrow_mut(|state| {
         state.as_mut().expect("catalog").remove(
-            api::msg_caller(),
+            api::caller(),
             reference,
             api::time(),
             FAILURE.get(),
         )
     })
 }
-#[cdk::query(
-    guard = "endpoint::admit::<INSPECT>",
-    decode_with = "endpoint::decode::<std::num::NonZeroU128, INSPECT>",
-    encode_with = "endpoint::encode::<Result<Asset, Error>, INSPECT>"
-)]
+#[runtime::query(runtime = runtime, guard = endpoint::admit::<INSPECT>, decode = endpoint::decode::<std::num::NonZeroU128, INSPECT>, max_bytes = 2097152, on_error = endpoint_error, name = "catalog_inspect", encode = endpoint::encode::<Result<Asset, Error>, INSPECT>)]
 fn catalog_inspect(reference: std::num::NonZeroU128) -> Result<Asset, Error> {
     STATE.with_borrow(|state| {
         state
             .as_ref()
             .expect("catalog")
-            .inspect(api::msg_caller(), reference)
+            .inspect(api::caller(), reference)
     })
 }
 type Ack = ();
-#[cdk::update(
-    guard = "endpoint::admit::<FAULT>",
-    decode_with = "endpoint::decode::<u8, FAULT>",
-    encode_with = "endpoint::encode::<(), FAULT>"
-)]
+#[runtime::update(runtime = runtime, guard = endpoint::admit::<FAULT>, decode = endpoint::decode::<u8, FAULT>, max_bytes = 2097152, on_error = endpoint_error, name = "catalog_fault", encode = endpoint::encode::<(), FAULT>)]
 fn catalog_fault(point: u8) -> Ack {
-    assert!(api::is_controller(&api::msg_caller()));
+    assert!(api::is_controller(&api::caller()));
     assert!(point <= 2);
     FAILURE.set(point);
 }
 // Use the same greeting/readiness contract as Canic's current Root. Inspection
 // and code identity cannot substitute for the explicit Blob activation below.
 const GREET: u64 = canic::GREET;
-#[cdk::query(
-    guard = "endpoint::admit::<GREET>",
-    decode_with = "endpoint::decode::<String, GREET>",
-    encode_with = "endpoint::encode::<canic::Greeting, GREET>"
-)]
+#[runtime::query(runtime = runtime, guard = endpoint::admit::<GREET>, decode = endpoint::decode::<String, GREET>, max_bytes = 2097152, on_error = endpoint_error, name = "probe", encode = endpoint::encode::<canic::Greeting, GREET>)]
 fn probe(_name: String) -> canic::Greeting {
     STATE.with_borrow(|state| {
         assert!(
@@ -155,22 +129,38 @@ fn probe(_name: String) -> canic::Greeting {
         .into(),
     }
 }
-fn encode<T: serde::Serialize, const ID: u64>(value: T) -> Vec<u8> {
-    let limits = if FAILURE.get() == 2 {
-        ic_wire::Limits {
-            bytes: 0,
-            ..RPC_LIMITS
-        }
-    } else {
-        RPC_LIMITS
-    };
-    ic_wire::encode(
-        &value,
-        ic_wire::Encoding::Frame {
-            method: ID,
-            direction: ic_wire::Direction::Response,
-        },
-        limits,
-    )
-    .expect("catalog reply encoding")
+fn encode<T: serde::Serialize, const ID: u64>(
+    value: T,
+) -> Result<Vec<u8>, std::convert::Infallible> {
+    Ok({
+        let limits = if FAILURE.get() == 2 {
+            ic_wire::Limits {
+                bytes: 0,
+                ..RPC_LIMITS
+            }
+        } else {
+            RPC_LIMITS
+        };
+        ic_wire::encode(
+            &value,
+            ic_wire::Encoding::Frame {
+                method: ID,
+                direction: ic_wire::Direction::Response,
+            },
+            limits,
+        )
+        .expect("catalog reply encoding")
+    })
+}
+
+fn endpoint_error(error: impl std::fmt::Debug) -> ! {
+    ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
+}
+
+fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
+    Ok(())
+}
+
+fn lifecycle_decode(_bytes: &[u8]) -> Result<(), std::convert::Infallible> {
+    Ok(())
 }

@@ -133,6 +133,10 @@ impl Inline {
 pub(super) enum Artifact {
     Inline(Inline),
     Stored(canic_management_protocol::stored::Sources),
+    Application(
+        canic_management_protocol::stored::Sources,
+        canic_management_protocol::application::Lifecycle,
+    ),
 }
 impl Default for Artifact {
     fn default() -> Self {
@@ -143,7 +147,7 @@ impl Artifact {
     pub(super) fn sources(&self) -> Option<&canic_management_protocol::stored::Sources> {
         match self {
             Self::Inline(_) => None,
-            Self::Stored(value) => Some(value),
+            Self::Stored(value) | Self::Application(value, _) => Some(value),
         }
     }
     pub(super) fn wasm(&self, upgrade: bool) -> &[u8] {
@@ -155,7 +159,7 @@ impl Artifact {
                     &value.0
                 }
             }
-            Self::Stored(_) => panic!("Store bytes never belong to Root"),
+            Self::Stored(_) | Self::Application(..) => panic!("Store bytes never belong to Root"),
         }
     }
     pub(super) fn hash(&self, upgrade: bool) -> Option<[u8; 32]> {
@@ -164,7 +168,7 @@ impl Artifact {
                 let bytes = self.wasm(upgrade);
                 (!bytes.is_empty()).then(|| canic_management_protocol::digest(bytes))
             }
-            Self::Stored(value) => if upgrade {
+            Self::Stored(value) | Self::Application(value, _) => if upgrade {
                 value.upgrades.last()
             } else {
                 Some(&value.creation)
@@ -352,7 +356,7 @@ impl Artifacts {
             .values()
             .map(|artifact| match artifact {
                 Artifact::Inline(value) => value.0.len() + value.1.len(),
-                Artifact::Stored(_) => 0,
+                Artifact::Stored(_) | Artifact::Application(..) => 0,
             })
             .sum();
         if !complete(&self.0)
@@ -362,6 +366,14 @@ impl Artifacts {
                 .values()
                 .filter_map(Artifact::sources)
                 .any(|source| source.upgrades.len() > upgrade::MAX_UPGRADES)
+            || self.0.values().any(|artifact| match artifact {
+                Artifact::Application(sources, lifecycle) => {
+                    lifecycle.creation.as_slice().is_empty()
+                        || lifecycle.upgrades.len() != sources.upgrades.len()
+                        || lifecycle.upgrades.iter().any(|m| !m.valid())
+                }
+                _ => false,
+            })
         {
             return Err(CodecError::Invalid("aggregate artifact budget"));
         }
@@ -378,7 +390,16 @@ impl Storable for Artifacts {
         is_fixed_size: false,
     };
     fn to_bytes(&self) -> Result<Cow<'_, [u8]>, CodecError> {
-        let mut bytes = b"CUA4".to_vec();
+        let mut bytes = if self
+            .0
+            .values()
+            .any(|a| matches!(a, Artifact::Application(..)))
+        {
+            b"CUA5"
+        } else {
+            b"CUA4"
+        }
+        .to_vec();
         bytes.extend(
             ic_wire::encode(
                 &self.entries()?,
@@ -390,7 +411,11 @@ impl Storable for Artifacts {
         Ok(Cow::Owned(bytes))
     }
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
-        let value = if let Some(payload) = bytes.strip_prefix(b"CUA4") {
+        let historical = bytes.starts_with(b"CUA4");
+        let value = if let Some(payload) = bytes
+            .strip_prefix(b"CUA5")
+            .or_else(|| bytes.strip_prefix(b"CUA4"))
+        {
             let entries: Records<Artifact> =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, ARTIFACT_LIMITS)
                     .map_err(|_| CodecError::Invalid("identified child artifacts"))?;
@@ -413,6 +438,14 @@ impl Storable for Artifacts {
         } else {
             Ok(Self(bind([Artifact::decode(bytes)?, Artifact::default()])))
         }?;
+        if historical
+            && value
+                .0
+                .values()
+                .any(|a| matches!(a, Artifact::Application(..)))
+        {
+            return Err(CodecError::Invalid("application arguments require CUA5"));
+        }
         if !value.fits() {
             return Err(CodecError::Invalid("aggregate artifact budget"));
         }

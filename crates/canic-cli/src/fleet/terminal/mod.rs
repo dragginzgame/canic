@@ -1,6 +1,6 @@
 use super::roles;
 use canic_host::Fleet;
-use ic_host_text::escape::terminal_text;
+use ic_host_text::escape;
 use std::{collections::BTreeMap, fmt::Write as _};
 
 mod inventory;
@@ -9,7 +9,7 @@ mod metrics;
 mod tests;
 
 fn paint(value: &str, style: &str, color: bool) -> String {
-    let value = terminal_text(value);
+    let value = escape(value);
     if color {
         format!("\x1b[{style}m{value}\x1b[0m")
     } else {
@@ -22,8 +22,8 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         format!(
             "{} / {} · {}\n",
             paint(&config.app, "1", color),
-            terminal_text(&config.fleet),
-            terminal_text(&super::configured_network(config))
+            escape(&config.fleet),
+            escape(&super::configured_network(config))
         )
     } else {
         "Canic fleet\n".into()
@@ -41,8 +41,8 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                 writeln!(
                     output,
                     "  {}: {}",
-                    terminal_text(slot),
-                    terminal_text(&super::slot_status(snapshot, slot))
+                    escape(slot),
+                    escape(&super::slot_status(snapshot, slot))
                 )
                 .expect("writing to String");
             }
@@ -77,7 +77,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                 output,
                 "\nNetwork #{}: {}",
                 network_numbers[network_id],
-                terminal_text(&canisters[0].network),
+                escape(&canisters[0].network),
             )
             .expect("writing to String");
         } else {
@@ -87,7 +87,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             writeln!(
                 output,
                 "Network identity (diagnostic): {}",
-                terminal_text(network_id)
+                escape(network_id)
             )
             .expect("writing to String");
         }
@@ -109,7 +109,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             output,
             "\n{} report (uncertified): {}",
             super::manager_kind(snapshot, manager),
-            terminal_text(&name)
+            escape(&name)
         )
         .expect("writing to String");
         if network_numbers.len() > 1 {
@@ -129,7 +129,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                     status.attempts[0],
                     status.attempts[1],
                     status.attempts[2],
-                    terminal_text(status.worker.as_deref().unwrap_or("unresolved"))
+                    escape(status.worker.as_deref().unwrap_or("unresolved"))
                 )
                 .expect("writing to String");
             }
@@ -143,7 +143,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             output.push_str(" — UNKNOWN\n");
         }
         if let Some(error) = &manager.observation_error {
-            writeln!(output, "  Observation: {}", terminal_text(error)).expect("writing to String");
+            writeln!(output, "  Observation: {}", escape(error)).expect("writing to String");
         }
         if let Some(upgrade) = &manager.upgrade {
             if let Some(status) = &upgrade.reported {
@@ -175,14 +175,14 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
                 output.push_str("  Upgrade: UNKNOWN\n");
             }
             if let Some(error) = &upgrade.observation_error {
-                writeln!(output, "  Upgrade observation: {}", terminal_text(error))
+                writeln!(output, "  Upgrade observation: {}", escape(error))
                     .expect("writing to String");
             }
             if details {
                 writeln!(
                     output,
                     "  Upgrade operation: {}",
-                    terminal_text(&upgrade.operation)
+                    escape(&upgrade.operation)
                 )
                 .expect("writing to String");
             }
@@ -197,7 +197,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         write!(
             output,
             "\nStore maintenance (uncertified): {}",
-            terminal_text(&name)
+            escape(&name)
         )
         .expect("String write");
         if network_numbers.len() > 1 {
@@ -213,11 +213,11 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
             writeln!(output, "  Failure: {failure:?}").expect("String write");
         }
         if let Some(error) = &report.observation_error {
-            writeln!(output, "  Observation: {}", terminal_text(error)).expect("String write");
+            writeln!(output, "  Observation: {}", escape(error)).expect("String write");
         }
         if details {
             for (label, value) in super::stores::details(report) {
-                writeln!(output, "  {label}: {}", terminal_text(&value)).expect("String write");
+                writeln!(output, "  {label}: {}", escape(&value)).expect("String write");
             }
             output.push_str("  Retained maintenance evidence does not establish current Store admission or readiness.\n");
         }
@@ -226,32 +226,31 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         writeln!(
             output,
             "\nWallet: {} (uncertified mainnet balances)",
-            terminal_text(&wallet.principal)
+            escape(&wallet.principal)
         )
         .expect("writing to String");
         for (label, balance) in [("ICP", &wallet.icp), ("Cycles ledger", &wallet.cycles)] {
             writeln!(
                 output,
                 "  {label}: {}",
-                terminal_text(balance.display.as_deref().unwrap_or("UNKNOWN"))
+                escape(balance.display.as_deref().unwrap_or("UNKNOWN"))
             )
             .expect("writing to String");
             if let Some(error) = &balance.observation_error {
-                writeln!(output, "    Observation: {}", terminal_text(error))
-                    .expect("writing to String");
+                writeln!(output, "    Observation: {}", escape(error)).expect("writing to String");
             }
         }
         writeln!(
             output,
             "  Receive ICP: {}\n  Ledger balances exclude cycles held by canisters.",
-            terminal_text(&wallet.icp_address)
+            escape(&wallet.icp_address)
         )
         .expect("writing to String");
     }
     if !links.is_empty() {
         output.push_str("\nDeclared routes (not verified on-chain):\n");
         for link in links {
-            writeln!(output, "  {}", terminal_text(link)).expect("writing to String");
+            writeln!(output, "  {}", escape(link)).expect("writing to String");
         }
     }
     let receipts = snapshot
@@ -273,9 +272,9 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         writeln!(
             output,
             "  No terminal receipt: {}\n    Network #{}; target: {}; approval {}",
-            terminal_text(&operation.operation),
+            escape(&operation.operation),
             network_numbers[&operation.network_id],
-            terminal_text(operation.canister.as_deref().unwrap_or("unresolved")),
+            escape(operation.canister.as_deref().unwrap_or("unresolved")),
             if operation.approval_expired {
                 "expired"
             } else {
@@ -284,19 +283,14 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         )
         .expect("writing to String");
         for (effect, evidence) in &operation.effects {
-            writeln!(
-                output,
-                "    {}: {}",
-                terminal_text(effect),
-                terminal_text(evidence)
-            )
-            .expect("writing to String");
+            writeln!(output, "    {}: {}", escape(effect), escape(evidence))
+                .expect("writing to String");
         }
         if details {
             writeln!(
                 output,
                 "    Inspect: {}",
-                terminal_text(&super::status_command(snapshot, &operation.operation))
+                escape(&super::status_command(snapshot, &operation.operation))
             )
             .expect("writing to String");
         }
@@ -304,7 +298,7 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
     if !snapshot.issues.is_empty() {
         output.push_str("\nPARTIAL INVENTORY:\n");
         for issue in &snapshot.issues {
-            writeln!(output, "  {}", terminal_text(issue)).expect("writing to String");
+            writeln!(output, "  {}", escape(issue)).expect("writing to String");
         }
     }
 

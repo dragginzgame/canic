@@ -2,6 +2,8 @@
 //! Fixture control is installation-owned, never browser-selected authority.
 #[cfg(target_arch = "wasm32")]
 mod canister;
+#[cfg(target_arch = "wasm32")]
+mod issuer;
 
 pub use canic::auth::enrollment;
 pub use canic::auth::protocol;
@@ -46,4 +48,34 @@ pub struct Observation {
     pub credit: u32,
     /// Supplier metadata revision/generation, independent of host entry projection.
     pub enrollment: Option<(u64, u64)>,
+}
+
+/// Independent fixture counters at actual enrollment commit boundaries.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RefreshObservation {
+    /// Successful local reservations, before the entropy await.
+    pub reserved: u32,
+    /// Prepared direct Root calls, before the snapshot await.
+    pub dispatched: u32,
+    /// Authenticated Root replies captured before an optional fixture-only barrier.
+    pub fetched: u32,
+    /// Committed supplier metadata and application entry publications.
+    pub installed: u32,
+    /// Original receipt deadline of the latest successful reservation.
+    pub deadline_ns: u64,
+}
+
+/// Issuer fixture observations independent of returned credentials.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IssuerObservation {
+    /// Original volatile owner still exists.
+    pub present: bool,
+    /// Completed local signatures committed with the corresponding result.
+    pub signatures: u32,
+    /// Supplier retained operation count.
+    pub operations: u32,
+    /// Supplier retained login count.
+    pub logins: u32,
+    /// Supplier current admission epoch.
+    pub epoch: u64,
 }

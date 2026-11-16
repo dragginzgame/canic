@@ -39,6 +39,12 @@ pub struct Plan {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ManagedOwner {
+    /// Exact application initialization bytes; absent preserves historical empty arguments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub arguments: Option<Vec<u8>>,
+    /// Exact Blob maintenance attempt for a configured upgrade; absent for creation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blob_attempt: Option<u64>,
     /// Root principal, resolved from the selected parent slot.
     pub root: String,
     /// Exact reviewed Root executable hash, checked before admission and observation.
@@ -86,10 +92,11 @@ impl Plan {
         let controller = principal(&self.controller)?;
         if !matches!(
             (self.version, self.deployment.is_some()),
-            (1, false) | (2, true) | (3, true) | (4, true) | (5, true)
+            (1, false) | (2, true) | (3, true) | (4, true) | (5, true) | (6, true)
         ) || (self.version == 3) != self.publication().is_some()
             || (self.version == 4) != self.removal().is_some()
             || (self.version == 5) != self.auth().is_some()
+            || (self.version == 6) != self.management().is_some_and(|m| m.arguments.is_some())
             || self.artifact.bytes > self.artifact_limit()
             || self.artifact.sha256.len() != 64
             || self.expires_at_ns <= self.created_at_ns
@@ -137,7 +144,7 @@ impl Plan {
             {
                 return Err(Error::Invalid("invalid child upgrade target".into()));
             }
-            if self.version != 2
+            if !matches!(self.version, 2 | 6)
                 || (managed.source.is_none()
                     && self.artifact.bytes > canic_management_protocol::MAX_WASM)
                 || crate::unhex(&managed.root_module)?.len() != 32
@@ -147,6 +154,23 @@ impl Plan {
                 || self.expires_at_ns.checked_sub(managed.execute_at_ns) != Some(600_000_000_000)
             {
                 return Err(Error::Invalid("invalid Root-owned child approval".into()));
+            }
+            if managed.arguments.as_ref().is_some_and(|args| {
+                args.is_empty()
+                    || args.len() > canic_management_protocol::application::MAX_ARGUMENT_BYTES
+                    || managed.source.is_none()
+            }) {
+                return Err(Error::Invalid(
+                    "application arguments require Store-backed management".into(),
+                ));
+            }
+            if managed.blob_attempt.is_some()
+                != (managed.arguments.is_some() && self.target().is_some())
+                || managed.blob_attempt == Some(0)
+            {
+                return Err(Error::Invalid(
+                    "configured upgrades require an exact nonzero Blob attempt".into(),
+                ));
             }
         }
         match &self.action {
@@ -266,7 +290,14 @@ pub(crate) fn retain(
         }
     };
     let plan = Plan {
-        version: if deployment.is_some() { 2 } else { 1 },
+        version: if matches!(&action, PlanAction::CreateChild(owner) | PlanAction::UpgradeChild { owner, .. } if owner.arguments.is_some())
+        {
+            6
+        } else if deployment.is_some() {
+            2
+        } else {
+            1
+        },
         deployment,
         network: input.network,
         controller: input.controller,

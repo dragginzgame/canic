@@ -1,5 +1,7 @@
 //! Native deployment planning and retained attempts; no application runtime dependency.
 
+#![forbid(unsafe_code)]
+
 mod app_build;
 mod artifact;
 mod auth;
@@ -47,7 +49,7 @@ pub use fleet_plan::{
     Cancellation, CreatedCanister, FleetChild, FleetPlan, FleetPlanning, FleetStore,
     cancel_fleet_plan, plan_fleet,
 };
-pub use managed::{create_managed_plan, stored::StoredArtifact};
+pub use managed::{activate, create_managed_plan, stored::StoredArtifact};
 pub use network::{Network, greet};
 pub use operation::{
     ApplyOutcome, CanisterStatus, ChildOutcome, FleetChildStatus, FleetStatus, FleetStepStatus,

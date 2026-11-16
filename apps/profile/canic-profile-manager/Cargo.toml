@@ -21,7 +21,7 @@ canic = { workspace = true, features = ["metrics"] }
 canic-management.workspace = true
 canic-management-protocol.workspace = true
 canic-profile-protocol.workspace = true
-ic-platform-runtime = { workspace = true, features = ["cdk"] }
+ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
 ic-wire.workspace = true
 
 [lints]

@@ -1,7 +1,7 @@
 //! Pure presentation of configured slots and Query's independent observations.
 use crate::Output;
 use canic_host::placements::{FleetPlacements, PlacementOutcome};
-use ic_host_text::{escape::terminal_text, table::render_bordered};
+use ic_host_text::{bordered_table, escape};
 use std::collections::BTreeSet;
 
 pub(crate) fn output(report: &FleetPlacements, json: bool) -> Output {
@@ -62,8 +62,8 @@ fn render(report: &FleetPlacements) -> String {
         .collect();
     format!(
         "App: {}\nFleet: {}\nNetwork: ic / mainnet\nCoverage: configured bindings only; retained deployment outputs are not included.\nCollection: {}\nBindings: {} read / {} configured | {} unresolved | {} unbound slots\nObserved subnets: {} (successful reads only)\n\n{}\n\nIndependent Registry routing evidence; not consensus-certified or an atomic snapshot.\nRoles and parents are application declarations, not controllers or deployment authority.\nUse --json for each lookup's source evidence.\n",
-        terminal_text(&report.app),
-        terminal_text(&report.fleet),
+        escape(&report.app),
+        escape(&report.fleet),
         if report.observation.is_none() {
             "not attempted (no configured bindings)"
         } else if report.collection_complete() {
@@ -76,7 +76,7 @@ fn render(report: &FleetPlacements) -> String {
         configured.saturating_sub(read),
         report.slots.len() - configured,
         subnets.len(),
-        render_bordered(
+        bordered_table(
             &["SLOT", "ROLE", "PARENT", "CANISTER", "SUBNET", "OUTCOME"],
             &rows
         )
