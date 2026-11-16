@@ -656,6 +656,12 @@ format. This storage migration leaves request/pin encodings and the two-child
 admission ceiling unchanged; expanding complete custody and its Host consumers
 is still required before admitting additional children.
 
+Host projects the historical complete Root response formats into one identity-keyed
+view, shared by child recovery and Root maintenance. The projection retains empty
+slots and all supplied Store history; it does not choose or probe a contract.
+The approved operation selects the exact response format, with old array positions
+mapped only at that decoding boundary. Runtime wire capacity remains unchanged.
+
 Each pattern's useful journey includes creation, resolution, bounded growth where
 applicable, upgrade and interrupted-operation recovery. Before extending to many
 children, qualify repeatable maintenance without resetting spent or uncertain

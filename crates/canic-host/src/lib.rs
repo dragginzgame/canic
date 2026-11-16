@@ -15,6 +15,7 @@ pub mod placements;
 mod plan;
 mod process;
 mod publication;
+mod root_custody;
 mod sidecar_lock;
 mod signed;
 mod staging_directory;

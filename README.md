@@ -677,8 +677,26 @@ It runs Clippy with warnings denied, Rustdoc with warnings denied, formatting
 and tooling agreement checks, including the deployed Wasm targets. All packages
 inherit their workspace lint table; `unsafe_code` is forbidden and lint
 exceptions use scoped `expect` attributes with reasons. This command runs no
-application or simulator tests. These are local checks; a hosted GitHub Actions
-workflow has not yet been configured.
+application or simulator tests.
+
+The checked-in GitHub Actions workflow selects Ubuntu 24.04, macOS 15 arm64 and
+macOS 15 Intel. `make ci-native` owns product Clippy, Rustdoc and unit tests;
+`make ci-wasm` owns runtime Clippy and Wasm documentation. Routine CI checks
+formatting and snapshot/pin admission, with one full-history secret scan outside
+the host matrix. It never prepares a signer/server or deploys a fleet. Superseded
+runs are cancelled while the retained run keeps every host. Hosted execution is
+pending in [#3](https://github.com/dragginzgame/canic/issues/3). Toko Tooling 0.44.5
+is adopted in both workspaces and the snapshot, fixing pin admission for the
+required tooling selection and independent private qualification versions.
+Hosted dependency preparation also requires the repository Actions secret
+`CANIC_BLOB_DEPLOY_KEY`, a dedicated read-only deploy key on the pinned private
+`dragginzgame/ic-blob-storage` source. The secret is configured. Fetch uses SSH
+over port 443 with GitHub's verified host key in `ci/github-known-hosts`, a
+temporary private-key file and process-local URL rewriting. The key file is
+deleted when fetch exits; no credentials persist into Git configuration or later
+test steps. Fork PRs without this secret cannot qualify the complete product graph; do not use
+`pull_request_target` to expose it. Rotate by replacing Blob's dedicated deploy
+key and this Actions secret together; no personal GitHub token is needed.
 
 `toko-tooling` is pinned as a development dependency in both Cargo
 workspaces. Its authenticated source snapshot supplies shared Make commands and

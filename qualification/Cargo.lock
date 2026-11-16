@@ -283,7 +283,7 @@ dependencies = [
  "canic-effect-probe",
  "canic-management-protocol",
  "canic-profile-protocol",
- "ic-host-artifacts 0.80.1",
+ "ic-host-artifacts 0.80.2",
  "ic-testkit",
  "ic-wasm-store-protocol",
  "ic-wire 0.24.1",
@@ -871,9 +871,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.80.1"
+version = "0.80.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9083e3927eb9649c429a1c8dfeb5b7be844cebf1596e93b077f9908d6289dcc"
+checksum = "f8645c876c9f26469c46e0ec764b639b192d2f2336d71815a2fd11d4c86b6f1e"
 dependencies = [
  "sha2 0.11.1",
  "thiserror 2.0.18",
@@ -2409,9 +2409,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.44.4"
+version = "0.44.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b52bb793b386309b8c4a9e88f32711bb5d1fd11a47bf337c11c63ca2aa22fc97"
+checksum = "aef8ac5d84866cf4ceb5b9d91ce9d458708069fc0c585345f07054186d267199"
 
 [[package]]
 name = "tower"

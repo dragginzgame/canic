@@ -20,6 +20,11 @@ with all chunks missing, while Root checks ordering by release name/version.
 Removal needs an explicit tombstone-preservation contract and compatible scan
 ordering; ordinary upload progress cannot prove that a removed identity stayed
 removed across an upgrade.
+The installed reproducer is `bash scripts/dev/test-store.sh preservation`.
+[Store #2](https://github.com/dragginzgame/ic-wasm-store/issues/2) owns the
+versioned correction; [Canic #4](https://github.com/dragginzgame/canic/issues/4)
+owns its adoption and removal-flow qualification. The local supplier repair is
+not part of Canic's currently selected registry executable.
 
 The standalone Store is the first implementation of the
 [per-fleet artifact contract](../design/canic-system-design.md#per-fleet-versioned-wasm-store).

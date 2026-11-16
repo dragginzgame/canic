@@ -1,0 +1,10 @@
+# Frozen local PocketIC public subnet verification key (DER), not a signing key.
+# Exact historical findings only; other lines, revisions and keys remain scanned.
+# These bytes bind retained plan digests and must not be rewritten to appease a scan.
+f6b5c37ead9f443f49d1d7cac0b0897f56d221e7:crates/canic-host/src/fleet_plan/tests/fixtures/v2.json:generic-api-key:8
+f6b5c37ead9f443f49d1d7cac0b0897f56d221e7:crates/canic-host/src/plan/tests/fixtures/retained.json:generic-api-key:7
+f6b5c37ead9f443f49d1d7cac0b0897f56d221e7:crates/canic-host/src/plan/tests/fixtures/retained.json:generic-api-key:37
+f6b5c37ead9f443f49d1d7cac0b0897f56d221e7:crates/canic-host/src/plan/tests/fixtures/retained.json:generic-api-key:759
+f6b5c37ead9f443f49d1d7cac0b0897f56d221e7:crates/canic-host/src/plan/tests/fixtures/retained.json:generic-api-key:1481
+f6b5c37ead9f443f49d1d7cac0b0897f56d221e7:crates/canic-host/src/plan/tests/fixtures/retained.json:generic-api-key:1512
+f6b5c37ead9f443f49d1d7cac0b0897f56d221e7:crates/canic-host/src/plan/tests/fixtures/retained.json:generic-api-key:1542

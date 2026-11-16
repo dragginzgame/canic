@@ -3,6 +3,7 @@ mod admission_tests;
 mod dispatch_tests;
 mod maintenance_history_tests;
 mod maintenance_tests;
+mod preservation_limits_tests;
 mod publication_tests;
 mod quiescence_tests;
 mod readiness_tests;

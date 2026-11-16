@@ -7,6 +7,117 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Canic source-push validation: 2026-11-16
+
+Push preparation found pre-existing lockfile selections for Host FS/Artifacts
+0.80.2 beyond the earlier tooling-only adoption. These were preserved and
+qualified: `make ci-native` passed (221 tests, one installed-only test ignored),
+and the actual CLI `fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans`
+installed witness passed using those locks. It covers repeat Store replacement,
+lost-effect recovery, Root maintenance and the following child upgrade. The
+supplier's foundation release at `828c2692523a7a906188c111c9b58f30d0f52468`
+adds retained-file publication; Canic does not select that new API here.
+Artifacts' implementation is unchanged in the coordinated patch release.
+Snapshot/pin/format checks, actionlint and diff checks passed. Unchanged Wasm
+and Store-limitation evidence above/below was reused; no full local aggregate,
+mainnet operation, version bump or crates.io publication was selected.
+
+## Published Toko Tooling 0.44.5 adoption: 2026-11-16
+
+Both Canic workspace catalogs and lockfiles now select published 0.44.5, archive
+SHA-256 `aef8ac5d84866cf4ceb5b9d91ce9d458708069fc0c585345f07054186d267199`.
+The authenticated exporter preview and installation retained all entrypoints;
+only the pin checker and its jq module changed among the installed payloads.
+The baseline and prepared executable catalogs are unchanged. No other locked
+dependency changed, and no sibling checkout was modified by this adoption.
+
+`make toko-tooling-check check-pins tools-check fmt-check`, actionlint and
+`git diff --check` passed. This clears the installed-checker blocker recorded
+below without policy exceptions or supplier regression-suite duplication.
+[Canic #3](https://github.com/dragginzgame/canic/issues/3) remains open for hosted
+evidence; changes are uncommitted/unpushed. Store integration retains its existing
+published selection and is independent of this tooling adoption.
+
+## Hosted CI and explicit Store preservation boundary: 2026-11-16
+
+Local work over `a8b6f86128c186fcfa295b99432f66918c38e1b1` addresses Canic
+[#3](https://github.com/dragginzgame/canic/issues/3) and
+[#4](https://github.com/dragginzgame/canic/issues/4). Backup is deferred.
+The workflow selects Linux and macOS arm64/Intel, native/Wasm product checks,
+formatting, snapshot/pins and one history-wide secret scan. No signer/simulator
+setup or deployment is part of routine CI. Shared helpers were added through
+the authenticated 0.44.4 exporter. Legacy CI at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` was reviewed: retain explicit host and
+Wasm coverage without its old infrastructure/provisioning matrix.
+
+Linux `make ci-native` passed (221 tests, one existing installed-only test ignored),
+as did `make ci-wasm`, actionlint, formatting and snapshot admission. Gitleaks
+passed after reviewing seven exact historical false positives for the same public
+PocketIC DER verification key. `.gitleaksignore` lists only those fingerprints;
+retained fixture bytes and digests are unchanged. Native macOS and hosted checks
+have not run. The installed pin checker rejects mandatory exact tooling pins and
+private qualification versions without release-group metadata. The authorized
+source-owner repair passes declaration/qualification fixtures, ShellCheck, version
+checks and a read-only check against Canic. It is not yet adopted: 0.44.4 remains
+selected and `make check-pins` still fails. No policy exception was added.
+The pinned Blob repository was also confirmed private, with no Actions secrets
+configured in Canic. The workflow now requires `CANIC_BLOB_READ_TOKEN` solely
+during locked fetch; hosted authentication remains unverified until configured.
+
+The maintainer subsequently authorized credential setup. A dedicated read-only
+Blob deploy key (GitHub ID `170052507`) was created and its private half stored
+as Canic's `CANIC_BLOB_DEPLOY_KEY` Actions secret. The workflow was changed from
+the proposed personal token to SSH over 443, with the host key verified against
+GitHub's authenticated metadata, process-local URL rewriting and an ephemeral
+key file removed on exit. A real `git ls-remote` through that exact transport
+succeeded, and GitHub reported `read_only: true`; local private-key material was
+deleted. Actionlint and diff checks passed. The workflow remains unpushed and
+hosted execution is still pending; the user is handling supplier releases.
+
+`bash scripts/dev/test-store.sh preservation` passed both installed limitation
+regressions with registry runtime/protocol 0.2.2; Store SHA-256 is
+`7b522a37d7f865dcf64e5ce1377a7dee944411b6fe48342261fa1e0ce5b9e825`.
+One reproduces identical complete pages before/after restoring an empty upload
+while an incomplete alias retains the reservation. The other hands a mixed
+active/tombstone catalog to real Root: it retains Closed/Mismatch before stop,
+including duplicate continuation and activation. Focused harness Clippy passed.
+These are limitation proofs, not successful removal qualification. Existing
+publication/installation/maintenance evidence below does not establish that case.
+
+Reused the legacy Store research below: immutable identities and authoritative
+stable custody remain; mutable-version replacement does not. The maintainer
+authorized [Store #2](https://github.com/dragginzgame/ic-wasm-store/issues/2)'s
+versioned correction at its supplier. Canic's registry inputs and mutation
+surfaces remain unchanged pending release/adoption and consumer qualification.
+No push, supplier publication or mainnet effects occurred in this batch.
+
+## One identity-keyed Host custody projection: 2026-11-16
+
+Pending 0.217.0 shares complete Root decoding between Store-backed child recovery
+and Root maintenance. The three existing response contracts map once into child
+identity → journal/source pairs, preserving empty slots, uncertain effects and
+all supplied Store maintenance history. The approved operation still selects the
+exact method; wrong contracts never trigger endpoint probing or fallback.
+Existing plan, request, pin and response encodings and the two-child ceiling stay
+unchanged. This is a Host projection, not the future runtime capacity contract.
+
+This reuses the pinned legacy research under **Named upgrades preserve each child's
+allocation identity** and **Cascading and workflow scope review**, revision
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`: preserve target identity and complete
+custody without copying old workflow engines. The old positional wire layout
+remains a compatibility obligation at the decoder, not an indexing convention for
+both consumers. Their duplicate decoding branches are removed. No new package,
+endpoint, lifecycle owner or allocation policy is added.
+
+Thirteen focused Host tests pass, including exact contract/direction refusal,
+truncated replies and preservation of empty/uncertain identity-source pairs.
+The installed `fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans`
+journey passes in 87.69s with real CLI/signing, repeat Store maintenance, recovery,
+Root maintenance and subsequent child upgrade. Host Clippy/Rustdoc, formatting
+and tooling agreement pass; `make canic` installs the qualified CLI on PATH.
+Local logs are `target/qualification/root-custody-projection-*`. No runtime
+capacity increase, mainnet effect, release or push is part of this increment.
+
 ## Published host foundation adoption: 2026-11-16
 
 Pending 0.217.0 adopts registry FS/Artifacts 0.80.1 and Process 0.80.2;

@@ -13,8 +13,9 @@ case "$scope" in
     admission) filter=store_root_tests::admission_tests ;;
     quiescence) filter=store_root_tests::quiescence_tests ;;
     maintenance) filter=store_root_tests::maintenance_ ;;
+    preservation) filter=store_root_tests::preservation_limits_tests ;;
     root-maintenance) filter=store_root_tests::root_custody_tests ;;
-    *) printf 'Usage: %s [all|readiness|publication|dispatch|custody|admission|quiescence|maintenance|root-maintenance]\n' "$0" >&2; exit 2 ;;
+    *) printf 'Usage: %s [all|readiness|publication|dispatch|custody|admission|quiescence|maintenance|preservation|root-maintenance]\n' "$0" >&2; exit 2 ;;
 esac
 build() {
     local name=$1 package=$2
@@ -37,7 +38,7 @@ if [[ "$scope" == all || "$scope" == publication || "$scope" == dispatch || "$sc
     build app canic-hello
     build app-v2 canic-hello --features greeting-v2
 fi
-if [[ "$scope" == all || "$scope" == custody || "$scope" == admission || "$scope" == quiescence || "$scope" == maintenance || "$scope" == root-maintenance ]]; then
+if [[ "$scope" == all || "$scope" == custody || "$scope" == admission || "$scope" == quiescence || "$scope" == maintenance || "$scope" == preservation || "$scope" == root-maintenance ]]; then
     build candidate ic-wasm-store --features maintenance-candidate
 fi
 if [[ "$scope" == all || "$scope" == custody || "$scope" == admission ]]; then
@@ -45,7 +46,7 @@ if [[ "$scope" == all || "$scope" == custody || "$scope" == admission ]]; then
     cargo test --locked -p canic-management-protocol --lib
 elif [[ "$scope" == root-maintenance ]]; then
     cargo test --locked -p canic-management-protocol --lib complete_root_custody
-elif [[ "$scope" == quiescence || "$scope" == maintenance ]]; then
+elif [[ "$scope" == quiescence || "$scope" == maintenance || "$scope" == preservation ]]; then
     cargo test --locked -p canic-management-protocol --lib store_maintenance
 elif [[ "$scope" == dispatch ]]; then
     cargo test --locked -p canic-management-protocol --lib admission

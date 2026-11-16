@@ -2,9 +2,39 @@
 
 ## [0.217.0]
 
+### 🧪 Qualification
+
+Wire hosted Linux/macOS native and Wasm product checks, formatting, snapshot/pin
+admission and one full-history secret scan for
+[#3](https://github.com/dragginzgame/canic/issues/3). Adopted Toko Tooling 0.44.5
+fixes admission of the required exact tooling pin and independent private
+qualification versions. Hosted execution is still pending.
+Private Blob dependency access uses a dedicated read-only deploy key in the
+`CANIC_BLOB_DEPLOY_KEY` Actions secret, with pinned SSH host verification and
+fetch-only credential lifetime. Authenticated source access is verified locally;
+hosted execution is still pending.
+
+For [#4](https://github.com/dragginzgame/canic/issues/4), installed tests reproduce
+Store 0.2.2's ambiguous tombstone preservation and verify Root refuses incompatible
+ordering before stop. The supplier correction is tracked in
+[Store #2](https://github.com/dragginzgame/ic-wasm-store/issues/2); removal and
+restoration remain unexposed until adoption and consumer qualification.
+
+For an existing configured fleet and retained operation, inspect evidence without
+signing or opening a browser:
+
+```sh
+canic fleet show --app starter --fleet mainnet
+canic fleet status OPERATION --app starter --fleet mainnet
+```
+
 ### 🔧 Dependencies
 
-Adopt published `ic-host-fs` / `ic-host-artifacts` 0.80.1 and
+Both workspaces and the authenticated tooling snapshot now select published
+Toko Tooling 0.44.5. Existing tooling entrypoints and prepared tool versions are
+preserved.
+
+Adopt published `ic-host-fs` / `ic-host-artifacts` 0.80.2 and
 `ic-host-process` 0.80.2. Text remains at the current published 0.76.0.
 Host now uses held directories for journal writes and complete fleet publication,
 and bounded process reports for Cargo and ICP. Report publication shares Host's
@@ -101,6 +131,20 @@ canic fleet plan --app profile-store --identity canic-mainnet
 Apply each reviewed publication/creation operation separately, as above.
 
 ### 🧹 Cleanup
+
+Host now decodes complete Root custody once for Store-backed child recovery and
+Root maintenance. Each child journal stays paired with its artifact references
+under its stable identity, including empty and uncertain slots. Existing signed
+contracts, approval digests and the two-child limit remain unchanged.
+
+For an existing configured starter, inspect the retained operation and fleet:
+
+```sh
+canic fleet status OPERATION --app starter --fleet mainnet
+canic fleet show --app starter --fleet mainnet
+```
+
+These commands do not submit deployment effects or open a browser.
 
 Management timers, active-operation guards and qualification fault selection now
 use child identities directly, matching the durable journal. This removes their

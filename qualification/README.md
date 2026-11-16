@@ -7,6 +7,13 @@ the existing artifact builder selects the matching locked crates.io runtime and
 builds it using its packaged lockfile.
 This workspace retains Root integration, chunked installation and complete CLI
 journeys. `make store-test` does not rerun the supplier's native suite.
+`bash scripts/dev/test-store.sh preservation` selects two installed limitation
+regressions for published 0.2.2: indistinguishable removed/restored metadata, and
+Root refusing non-monotonic tombstone ordering before stop. Passing these tests
+demonstrates the limitation, not successful removal integration. The correction
+belongs to [Store #2](https://github.com/dragginzgame/ic-wasm-store/issues/2);
+adoption and the consumer journey remain in
+[Canic #4](https://github.com/dragginzgame/canic/issues/4).
 Its packages are named by responsibility, independently of design milestones:
 
 | Package | Responsibility |
@@ -397,6 +404,12 @@ truncated records and the full retained inline artifact budget. A mixed inline/S
 record fills the original artifact lease, migrates and reopens through governed
 Cells without growing either allocation; excess data refuses before writing. These checks use
 test-only native dependencies; Host still consumes the passive protocol alone.
+Host's `root_custody::`, `maintenance::` and `managed::` native tests cover the
+shared identity-keyed projection of historical complete Root replies: empty and
+uncertain children, paired Store sources, retained maintenance history, truncated
+frames and refusal of the wrong method or direction. The publication fixture
+`fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans`
+exercises both consumers through installed Root/Store and the real signer.
 The multi-child journey plans the second child's first upgrade through the named
 `--canister` path, verifies its retained slot and lost-reply recovery, then includes
 it in whole-fleet convergence and Root maintenance. General dynamic allocation

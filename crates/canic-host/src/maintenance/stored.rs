@@ -167,51 +167,20 @@ fn expected(plan: &Plan) -> Result<wire::Custody> {
     })
 }
 pub(super) fn matches(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
-    if let Some(store) = plan.maintenance_store().filter(|s| !s.history.is_empty()) {
-        if method != "observe_root_history" {
-            return Err(invalid());
-        }
-        let actual: canic_management_protocol::custody::RootHistory = ic_wire::decode(
-            bytes,
-            ic_wire::Encoding::Frame {
-                method: canic_management_protocol::custody::ROOT_HISTORY,
-                direction: ic_wire::Direction::Response,
-            },
-            canic_management_protocol::custody::ROOT_HISTORY_LIMITS,
-        )
-        .map_err(supplier)?;
-        return Ok(actual.current.stored == expected(plan)?
-            && actual.current.store_operation == store.operation
-            && actual.store_history == store.history);
-    }
-    if let Some(operation) = plan.maintenance_store().and_then(|s| s.operation.as_ref()) {
-        if method != "observe_root_custody" {
-            return Err(invalid());
-        }
-        let actual: canic_management_protocol::custody::Root = ic_wire::decode(
-            bytes,
-            ic_wire::Encoding::Frame {
-                method: canic_management_protocol::custody::ROOT,
-                direction: ic_wire::Direction::Response,
-            },
-            canic_management_protocol::custody::ROOT_LIMITS,
-        )
-        .map_err(supplier)?;
-        return Ok(
-            actual.stored == expected(plan)? && actual.store_operation.as_ref() == Some(operation)
-        );
-    }
-    if method != "observe_stored_children" {
+    if method != super::observations(plan, false)[0].1 {
         return Err(invalid());
     }
-    let actual: wire::Custody = ic_wire::decode(
-        bytes,
-        ic_wire::Encoding::Frame {
-            method: wire::CUSTODY,
-            direction: ic_wire::Direction::Response,
-        },
-        wire::LIMITS,
+    let contract = match method {
+        "observe_root_history" => canic_management_protocol::custody::ROOT_HISTORY,
+        "observe_root_custody" => canic_management_protocol::custody::ROOT,
+        "observe_stored_children" => wire::CUSTODY,
+        _ => return Err(invalid()),
+    };
+    let actual = crate::root_custody::decode(contract, bytes)?;
+    let store = plan.maintenance_store().ok_or_else(invalid)?;
+    Ok(
+        actual.children == crate::root_custody::children(expected(plan)?)?
+            && actual.store_operation == store.operation
+            && actual.store_history == store.history,
     )
-    .map_err(supplier)?;
-    Ok(actual == expected(plan)?)
 }

@@ -188,37 +188,16 @@ pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
         _ => Err(invalid()),
     }
 }
-fn custody(plan: &Plan, bytes: &[u8]) -> Result<wire::Custody> {
+fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
     let source = plan
         .management()
         .and_then(|owner| owner.source.as_ref())
         .ok_or_else(invalid)?;
+    let value = crate::root_custody::decode(super::Method::Observe.id(plan), bytes)?;
     if let Some(attempt) = &source.maintenance {
-        let value: canic_management_protocol::custody::Root = if attempt.sequence > 1 {
-            let all: canic_management_protocol::custody::RootHistory = ic_wire::decode(
-                bytes,
-                ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::custody::ROOT_HISTORY,
-                    direction: ic_wire::Direction::Response,
-                },
-                canic_management_protocol::custody::ROOT_HISTORY_LIMITS,
-            )
-            .map_err(supplier)?;
-            if all.store_history.len() as u64 + 1 != attempt.sequence {
-                return Err(invalid());
-            }
-            all.current
-        } else {
-            ic_wire::decode(
-                bytes,
-                ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::custody::ROOT,
-                    direction: ic_wire::Direction::Response,
-                },
-                canic_management_protocol::custody::ROOT_LIMITS,
-            )
-            .map_err(supplier)?
-        };
+        if value.store_history.len() as u64 + 1 != attempt.sequence {
+            return Err(invalid());
+        }
         let operation = value.store_operation.as_ref().ok_or_else(invalid)?;
         if &operation.approval.attempt != attempt
             || operation.approval.store != source.store.canister
@@ -228,17 +207,8 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<wire::Custody> {
         {
             return Err(invalid());
         }
-        return Ok(value.stored);
     }
-    ic_wire::decode(
-        bytes,
-        ic_wire::Encoding::Frame {
-            method: wire::CUSTODY,
-            direction: ic_wire::Direction::Response,
-        },
-        wire::LIMITS,
-    )
-    .map_err(supplier)
+    Ok(value)
 }
 pub(crate) fn delivery<A: Serialize>(
     slot: ChildId,
@@ -292,12 +262,12 @@ pub(super) fn creation_evidence(
     bytes: &[u8],
 ) -> Result<(Status, Option<wire::Delivery>)> {
     let value = custody(plan, bytes)?;
-    let index = slot(plan).index();
-    let status = &value.children[index].creation;
-    if status == &Status::default() && value.sources[index].is_none() {
+    let child = value.child(slot(plan))?;
+    let status = &child.journal.creation;
+    if status == &Status::default() && child.sources.is_none() {
         return Ok((status.clone(), None));
     }
-    let source = value.sources[index].as_ref().ok_or_else(invalid)?;
+    let source = child.sources.as_ref().ok_or_else(invalid)?;
     delivery(
         slot(plan),
         &stage(plan, super::approval(plan)?)?,
@@ -315,8 +285,8 @@ pub(super) fn upgrade_evidence(
     bytes: &[u8],
 ) -> Result<(upgrade::Status, Option<wire::Delivery>)> {
     let value = custody(plan, bytes)?;
-    let index = slot(plan).index();
-    let journal = &value.children[index];
+    let child = value.child(slot(plan))?;
+    let journal = &child.journal;
     let expected = super::upgrade::approval(plan)?;
     let Some(position) = journal
         .upgrades
@@ -325,7 +295,7 @@ pub(super) fn upgrade_evidence(
     else {
         return Ok((upgrade::Status::default(), None));
     };
-    let sources = value.sources[index].as_ref().ok_or_else(invalid)?;
+    let sources = child.sources.as_ref().ok_or_else(invalid)?;
     if sources.upgrades.len() != journal.upgrades.len() {
         return Err(invalid());
     }

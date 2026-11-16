@@ -65,6 +65,22 @@ lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-cli
 
 ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test
 
+# Routine hosted coverage: product packages only, no signer/server provisioning.
+# Installed journeys remain explicit through the existing qualification runners.
+.PHONY: check-pins ci-native ci-wasm
+check-pins:
+	bash vendor/toko-tooling/scripts/ci/check-dependency-pins.sh --cargo-inheritance
+
+ci-native:
+	cargo clippy --locked --workspace --all-targets -- -D warnings
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --no-deps
+	cargo test --locked --workspace
+
+ci-wasm:
+	cargo clippy --locked -p canic-hello -p canic-management -p canic-root -p canic-profile-worker -p canic-profile-entry -p canic-profile-manager --target wasm32-unknown-unknown --all-features -- -D warnings
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features blob --target wasm32-unknown-unknown --no-deps
+
 # The runner selects the Wasm path from Cargo artifact messages.
 qualification-setup:
 	cargo run --locked --manifest-path qualification/Cargo.toml -p canic-qualification --example prepare_server
