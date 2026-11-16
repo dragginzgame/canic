@@ -11,6 +11,10 @@ pub enum Slot {
 }
 
 impl Slot {
+    /// Qualified child identities in permanent custody order.
+    /// This is the current protocol bound, not an operator capacity setting.
+    pub const ALL: [Self; 2] = [Self::First, Self::Second];
+
     /// Array position in the bounded owner journal.
     #[must_use]
     pub const fn index(self) -> usize {

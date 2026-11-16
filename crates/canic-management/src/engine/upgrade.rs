@@ -26,7 +26,7 @@ use ic_platform_runtime::{
 #[must_use]
 pub fn status(slot: Slot) -> UpgradeStatus {
     STATE.with_borrow(|state| {
-        state.as_ref().expect("initialized manager").journal.get().0[slot.index()]
+        state.as_ref().expect("initialized manager").journal.get().0[&slot]
             .1
             .clone()
     })
@@ -35,7 +35,7 @@ fn mutate(slot: Slot, f: impl FnOnce(&mut UpgradeStatus)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
         let mut value = state.journal.get().clone();
-        f(&mut value.0[slot.index()].1);
+        f(&mut value.0.get_mut(&slot).expect("known child").1);
         state.journal.set(value);
     });
 }
@@ -45,7 +45,7 @@ fn mutate(slot: Slot, f: impl FnOnce(&mut UpgradeStatus)) {
 #[must_use]
 pub fn observe(slot: Slot, expected: &Approval) -> UpgradeStatus {
     STATE.with_borrow(|state| {
-        let journal = &state.as_ref().expect("initialized manager").journal.get().0[slot.index()];
+        let journal = &state.as_ref().expect("initialized manager").journal.get().0[&slot];
         journal
             .2
             .iter()
@@ -57,7 +57,7 @@ pub fn observe(slot: Slot, expected: &Approval) -> UpgradeStatus {
 }
 
 pub(super) fn validate(state: &State, slot: Slot) {
-    let journal = &state.journal.get().0[slot.index()];
+    let journal = &state.journal.get().0[&slot];
     assert!(journal.2.len() < MAX_UPGRADES, "bounded upgrade history");
     let mut previous = journal
         .0
@@ -93,12 +93,12 @@ pub(super) fn validate(state: &State, slot: Slot) {
     }
     if let Some(a) = &journal.1.approval {
         assert_eq!(
-            state.artifact.get().0[slot.index()].hash(true),
+            state.artifact.get().0[&slot].hash(true),
             Some(a.module_hash),
             "current artifact custody"
         );
     } else {
-        assert!(state.artifact.get().0[slot.index()].hash(true).is_none());
+        assert!(state.artifact.get().0[&slot].hash(true).is_none());
     }
 }
 
@@ -217,7 +217,7 @@ pub(super) fn stage_input(slot: Slot, input: Input) -> Result<UpgradeStatus, Ref
         return Err(Refusal::Occupied);
     }
     let full = STATE.with_borrow(|state| {
-        let journal = &state.as_ref().expect("initialized manager").journal.get().0[slot.index()];
+        let journal = &state.as_ref().expect("initialized manager").journal.get().0[&slot];
         journal.2.len() + usize::from(journal.1.approval.is_some()) >= MAX_UPGRADES
     });
     if full {
@@ -260,7 +260,7 @@ pub(super) fn stage_input(slot: Slot, input: Input) -> Result<UpgradeStatus, Ref
             .artifact
             .get()
             .clone();
-        match (&mut artifacts.0[slot.index()], input) {
+        match (artifacts.0.get_mut(&slot).expect("known child"), input) {
             (Artifact::Inline(artifact), Input::Inline(input)) => artifact.1 = input.wasm,
             (Artifact::Stored(sources), Input::Stored(input)) => sources
                 .upgrades
@@ -282,7 +282,7 @@ pub(super) fn stage_input(slot: Slot, input: Input) -> Result<UpgradeStatus, Ref
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
         let mut journals = state.journal.get().clone();
-        let journal = &mut journals.0[slot.index()];
+        let journal = journals.0.get_mut(&slot).expect("known child");
         if journal.1.approval.is_some() {
             journal.2.push(journal.1.clone());
         }
@@ -366,7 +366,7 @@ pub(super) async fn step(slot: Slot) {
             if value.module_hash.as_deref() != Some(a.previous_module.as_slice())
                 || value.version == u64::MAX
                 || STATE.with_borrow(|state| {
-                    state.as_ref().expect("initialized manager").journal.get().0[slot.index()]
+                    state.as_ref().expect("initialized manager").journal.get().0[&slot]
                         .2
                         .last()
                         .is_some_and(|old| {

@@ -177,6 +177,41 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     let first_signed = std::fs::read(path.join("child/stage/signed.json")).unwrap();
     let second_signed = std::fs::read(path.join("sibling/stage/signed.json")).unwrap();
     assert_ne!(first_signed, second_signed); // Same Wasm/approval, different authenticated slot.
+    // A declaration cannot enlarge an already admitted fleet or remap its children.
+    owner.instance().stop_progress().await;
+    let root = CanisterId::from_text(pending["root"]["canister"].as_str().unwrap()).unwrap();
+    let stable = owner.instance().get_stable_memory(root).await;
+    let approval_bytes = std::fs::read(path.join("fleet.json")).unwrap();
+    let operations = std::fs::read_dir(&journal).unwrap().count();
+    let mut expanded: serde_json::Value = serde_json::from_slice(&config_bytes).unwrap();
+    expanded["apps"]["starter"]["canisters"]["aaa"] = serde_json::json!({
+        "parent": "root", "role": "worker", "wasm": "missing-third.wasm"
+    });
+    std::fs::write(&config, serde_json::to_vec(&expanded).unwrap()).unwrap();
+    let error = rejected(&config, &["fleet", "plan", "--identity", "anonymous"]);
+    assert!(error["message"].as_str().unwrap().contains(
+        "fleet declares 3 direct application children under root; this Root path supports 1 to 2"
+    ), "{error}");
+    assert_eq!(std::fs::read_dir(&journal).unwrap().count(), operations);
+    assert_eq!(
+        std::fs::read(path.join("fleet.json")).unwrap(),
+        approval_bytes
+    );
+    assert_eq!(
+        std::fs::read(path.join("child/stage/signed.json")).unwrap(),
+        first_signed
+    );
+    assert_eq!(
+        std::fs::read(path.join("sibling/stage/signed.json")).unwrap(),
+        second_signed
+    );
+    assert_eq!(owner.instance().get_stable_memory(root).await, stable);
+    std::fs::write(&config, &config_bytes).unwrap();
+    assert_eq!(
+        cli(&config, &["fleet", "plan", "--identity", "anonymous"]),
+        planned
+    );
+    owner.instance().auto_progress().await;
     std::fs::remove_file(path.join("sibling/stage/reply.bin")).unwrap();
     let recovered = cli(&config, &apply);
     assert_eq!(

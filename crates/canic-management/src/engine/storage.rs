@@ -1,9 +1,11 @@
 //! Versioned payload migration inside the original two checked allocations.
 //! IC Storage directory capacities are fixed at creation; no backing rewrite is used.
-use canic_management_protocol::{LIMITS, MAX_WASM, Status, store_maintenance, upgrade};
+use canic_management_protocol::{
+    LIMITS, MAX_WASM, Status, children::Slot, store_maintenance, upgrade,
+};
 use ic_storage::adapter::{Bound, CodecError, Storable};
 use serde::{Deserialize, Serialize};
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::BTreeMap};
 
 const JOURNAL_TAG: &[u8] = b"CUJ3";
 const ARTIFACT_TAG: &[u8] = b"CUA2";
@@ -176,22 +178,35 @@ impl Storable for Artifact {
     }
 }
 
+// Only this codec maps historical array positions to runtime child identities.
+fn bind<T>([first, second]: [T; 2]) -> BTreeMap<Slot, T> {
+    BTreeMap::from([(Slot::First, first), (Slot::Second, second)])
+}
+
 // Both children share the original checked leases; each retains separate payloads.
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(super) struct Journals(
-    pub [Journal; 2],
+    pub BTreeMap<Slot, Journal>,
     pub Option<store_maintenance::Status>,
     pub Vec<store_maintenance::Status>,
 );
+impl Default for Journals {
+    fn default() -> Self {
+        Self(bind(Default::default()), None, vec![])
+    }
+}
 impl Storable for Journals {
     const BOUND: Bound = Bound::Bounded {
         max_size: JOURNAL_BYTES as u32,
         is_fixed_size: false,
     };
     fn to_bytes(&self) -> Result<Cow<'_, [u8]>, CodecError> {
+        if self.0.len() != Slot::ALL.len() {
+            return Err(CodecError::Invalid("child journal identities"));
+        }
         if self
             .0
-            .iter()
+            .values()
             .any(|journal| journal.2.len() >= upgrade::MAX_UPGRADES)
         {
             return Err(CodecError::Invalid("upgrade history bound"));
@@ -200,7 +215,7 @@ impl Storable for Journals {
             return Err(CodecError::Invalid("Store maintenance history bound"));
         }
         let payload = ic_wire::encode(
-            &(&self.0, &self.1, &self.2),
+            &(Slot::ALL.map(|slot| &self.0[&slot]), &self.1, &self.2),
             ic_wire::Encoding::Payload,
             JOURNAL_LIMITS,
         )
@@ -214,12 +229,12 @@ impl Storable for Journals {
             let (journals, maintenance, history) =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
                     .map_err(|_| CodecError::Invalid("Store maintenance history"))?;
-            Ok(Self(journals, maintenance, history))
+            Ok(Self(bind(journals), maintenance, history))
         } else if let Some(payload) = bytes.strip_prefix(b"CUJ6") {
             let (journals, maintenance) =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
                     .map_err(|_| CodecError::Invalid("Store maintenance journal"))?;
-            Ok(Self(journals, maintenance, vec![]))
+            Ok(Self(bind(journals), maintenance, vec![]))
         } else if let Some(payload) = bytes.strip_prefix(b"CUJ5") {
             // Wire records have exact arity: decode the historical shape explicitly.
             #[derive(Deserialize)]
@@ -234,7 +249,7 @@ impl Storable for Journals {
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
                     .map_err(|_| CodecError::Invalid("previous Store maintenance journal"))?;
             Ok(Self(
-                journals,
+                bind(journals),
                 maintenance.map(|old| store_maintenance::Status {
                     approval: old.approval,
                     operator: old.operator,
@@ -256,32 +271,38 @@ impl Storable for Journals {
             {
                 return Err(CodecError::Invalid("upgrade history bound"));
             }
-            Ok(Self(journals, None, vec![]))
+            Ok(Self(bind(journals), None, vec![]))
         } else {
             Ok(Self(
-                [Journal::decode(&bytes)?, Journal::default()],
+                bind([Journal::decode(&bytes)?, Journal::default()]),
                 None,
                 vec![],
             ))
         }
     }
 }
-#[derive(Clone, Default)]
-pub(super) struct Artifacts(pub [Artifact; 2]);
+#[derive(Clone)]
+pub(super) struct Artifacts(pub BTreeMap<Slot, Artifact>);
+impl Default for Artifacts {
+    fn default() -> Self {
+        Self(bind(Default::default()))
+    }
+}
 impl Artifacts {
     pub(super) fn fits(&self) -> bool {
         let inline_bytes: usize = self
             .0
-            .iter()
+            .values()
             .map(|artifact| match artifact {
                 Artifact::Inline(value) => value.0.len() + value.1.len(),
                 Artifact::Stored(_) => 0,
             })
             .sum();
-        inline_bytes <= canic_management_protocol::children::MAX_ARTIFACT_BYTES
+        self.0.len() == Slot::ALL.len()
+            && inline_bytes <= canic_management_protocol::children::MAX_ARTIFACT_BYTES
             && self
                 .0
-                .iter()
+                .values()
                 .try_fold(8_usize, |size, artifact| {
                     artifact
                         .to_bytes()
@@ -297,8 +318,8 @@ impl Storable for Artifacts {
         if !self.fits() {
             return Err(CodecError::Invalid("aggregate artifact budget"));
         }
-        let first = self.0[0].to_bytes()?;
-        let second = self.0[1].to_bytes()?;
+        let first = self.0[&Slot::First].to_bytes()?;
+        let second = self.0[&Slot::Second].to_bytes()?;
         let mut bytes = b"CUA3".to_vec();
         bytes.extend_from_slice(&(first.len() as u32).to_le_bytes());
         bytes.extend_from_slice(&first);
@@ -317,12 +338,15 @@ impl Storable for Artifacts {
             if length > payload.len() {
                 return Err(CodecError::Invalid("child artifact bounds"));
             }
-            Ok(Self([
+            Ok(Self(bind([
                 Artifact::from_bytes(Cow::Borrowed(&payload[..length]))?,
                 Artifact::from_bytes(Cow::Borrowed(&payload[length..]))?,
-            ]))
+            ])))
         } else {
-            Ok(Self([Artifact::from_bytes(bytes)?, Artifact::default()]))
+            Ok(Self(bind([
+                Artifact::from_bytes(bytes)?,
+                Artifact::default(),
+            ])))
         }
     }
 }

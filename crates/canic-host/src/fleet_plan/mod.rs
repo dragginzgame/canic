@@ -115,12 +115,12 @@ impl FleetPlan {
         self.root.validate()?;
         let root = self.root.deployment.as_ref().ok_or_else(invalid)?;
         if self.children.is_empty()
-            || self.children.len() > SLOTS.len()
+            || self.children.len() > Slot::ALL.len()
             || !self
                 .children
                 .iter()
                 .map(|child| child.slot)
-                .eq(SLOTS[..self.children.len()].iter().copied())
+                .eq(Slot::ALL[..self.children.len()].iter().copied())
             || self.version != self.children.len() as u32
             || !matches!(self.root.action, crate::PlanAction::Create { .. })
             || self.root.version != 2
@@ -348,10 +348,7 @@ pub fn plan_fleet(
         .iter()
         .filter(|(_, s)| s.role.as_deref() == Some("wasm-store"))
         .collect();
-    if stores.len() > 1
-        || !(2 + stores.len()..=SLOTS.len() + 1 + stores.len()).contains(&slots.len())
-        || slots.values().any(|s| s.id.is_some() || s.profile_manager)
-    {
+    if stores.len() > 1 || slots.values().any(|s| s.id.is_some() || s.profile_manager) {
         return Err(invalid());
     }
     let (root_name, _) = slots
@@ -364,6 +361,13 @@ pub fn plan_fleet(
             s.parent.as_ref() == Some(root_name) && s.role.as_deref() != Some("wasm-store")
         })
         .collect();
+    if children.is_empty() || children.len() > Slot::ALL.len() {
+        return Err(Error::Invalid(format!(
+            "fleet declares {} direct application children under {root_name}; this Root path supports 1 to {} (Wasm Store is separate)",
+            children.len(),
+            Slot::ALL.len()
+        )));
+    }
     if children.len() + 1 + stores.len() != slots.len()
         || stores
             .first()
@@ -422,7 +426,7 @@ pub fn plan_fleet(
     };
     let definition = |index: usize| -> Result<FleetChild> {
         Ok(FleetChild {
-            slot: SLOTS[index],
+            slot: Slot::ALL[index],
             deployment: name(children[index].0),
             parent: CreatedCanister {
                 operation: String::new(),
@@ -573,7 +577,7 @@ pub fn plan_fleet(
     for (index, bytes) in child_bytes.iter().enumerate() {
         store::put(
             &staging
-                .join(record::child_leaf(SLOTS[index]))
+                .join(record::child_leaf(Slot::ALL[index]))
                 .join("module.wasm"),
             bytes,
         )?;
@@ -826,7 +830,6 @@ pub(crate) fn artifact_inventory(
     releases::inventory(dir, id, &value)
 }
 
-pub(crate) const SLOTS: [Slot; 2] = [Slot::First, Slot::Second];
 const STORE_CYCLES: u64 = 1_000_000_000_000;
 
 fn store_state(dir: &Path, value: &FleetPlan) -> Result<Option<crate::CanisterStatus>> {

@@ -30,7 +30,7 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         if sources.upgrades.len() != child.upgrades.len() {
             return Err(invalid());
         }
-        let slot = crate::fleet_plan::SLOTS[index];
+        let slot = Slot::ALL[index];
         let approval = child.creation.approval.as_ref().ok_or_else(invalid)?;
         delivery(
             &store.store.canister,

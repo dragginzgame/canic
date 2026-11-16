@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.216.5] - 2026-11-16
+
+### 🩹 Fixed
+
+Whole-fleet planning now explains the supported application-child count when a
+fleet declares zero or more than two direct children. Wasm Store is counted
+separately. Refusal happens before reading artifacts or opening the journal;
+an existing approval and its signed child admissions remain unchanged.
+
+### 🧹 Cleanup
+
+Fleet planning, Root maintenance and runtime continuation now share the protocol's
+ordered child-slot list. This removes a Host-owned copy without changing slot
+identities, approval bytes or the current two-child limit. General allocation
+remains a separate, preservation-qualified change.
+
+Runtime creation, upgrades and artifact custody now look up children by identity.
+Historical array positions stay inside the storage codec, preserving the exact
+on-chain format and existing approvals. Installed witnesses check pending work
+and Store-backed children across the previous and updated executables.
+
+For an existing configured fleet, these commands inspect declarations and retained
+or observed deployment evidence without submitting effects:
+
+```sh
+canic fleet canister list --app starter --fleet mainnet
+canic fleet show --app starter --fleet mainnet
+```
+
 ## [0.216.4] - 2026-11-16
 
 ### ▶️ Try it

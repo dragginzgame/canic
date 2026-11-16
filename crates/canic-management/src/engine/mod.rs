@@ -53,32 +53,25 @@ pub fn owner_custody() -> children::Custody {
         "Store maintenance custody required"
     );
     assert!(
-        ![Slot::First, Slot::Second]
-            .into_iter()
-            .any(delivery::is_stored),
+        !Slot::ALL.into_iter().any(delivery::is_stored),
         "Store-aware custody required"
     );
     journals()
 }
 fn journals() -> children::Custody {
     STATE.with_borrow(|state| {
-        state
-            .as_ref()
-            .expect("open engine")
-            .journal
-            .get()
-            .0
-            .each_ref()
-            .map(|journal| {
-                let mut upgrades = journal.2.clone();
-                if journal.1.approval.is_some() {
-                    upgrades.push(journal.1.clone());
-                }
-                canic_management_protocol::custody::Custody {
-                    creation: journal.0.clone(),
-                    upgrades,
-                }
-            })
+        let journals = &state.as_ref().expect("open engine").journal.get().0;
+        Slot::ALL.map(|slot| {
+            let journal = &journals[&slot];
+            let mut upgrades = journal.2.clone();
+            if journal.1.approval.is_some() {
+                upgrades.push(journal.1.clone());
+            }
+            canic_management_protocol::custody::Custody {
+                creation: journal.0.clone(),
+                upgrades,
+            }
+        })
     })
 }
 
@@ -100,10 +93,10 @@ struct State {
 }
 thread_local! {
     static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
-    static TIMER: RefCell<[Option<Once>; 2]> = const { RefCell::new([None, None]) };
-    static OBSERVING: std::cell::Cell<[bool; 2]> = const { std::cell::Cell::new([false; 2]) };
+    static TIMER: RefCell<[Option<Once>; Slot::ALL.len()]> = const { RefCell::new([const { None }; Slot::ALL.len()]) };
+    static OBSERVING: std::cell::Cell<[bool; Slot::ALL.len()]> = const { std::cell::Cell::new([false; Slot::ALL.len()]) };
     #[cfg(feature = "fault-injection")]
-    static FAULT: std::cell::Cell<[u8; 2]> = const { std::cell::Cell::new([0; 2]) };
+    static FAULT: std::cell::Cell<[u8; Slot::ALL.len()]> = const { std::cell::Cell::new([0; Slot::ALL.len()]) };
 }
 
 /// Open the bounded child engine and register independent continuation timers.
@@ -170,16 +163,22 @@ pub fn open(fresh: bool, readiness: Readiness) {
         timer_window: (api::canister_version(), api::time()),
         _runtime: runtime,
     };
-    for slot in [Slot::First, Slot::Second] {
+    for slot in Slot::ALL {
         validate(&state, slot);
         upgrade::validate(&state, slot);
         delivery::validate(&state, slot);
     }
     assert!(state.artifact.get().fits(), "aggregate artifact budget");
     store_maintenance::validate(&state);
-    let journals = &state.journal.get().0;
-    if let (Some(first), Some(second)) = (&journals[0].0.worker, &journals[1].0.worker) {
-        assert_ne!(first, second, "distinct child identities");
+    let mut children = std::collections::BTreeSet::new();
+    for child in state
+        .journal
+        .get()
+        .0
+        .values()
+        .filter_map(|j| j.0.worker.as_ref())
+    {
+        assert!(children.insert(child), "distinct child identities");
     }
     // Commit the bounded v7 journal and v3 artifact payloads only after strict old/new schema validation.
     // A post-upgrade trap rolls back both writes with the executable change.
@@ -187,13 +186,13 @@ pub fn open(fresh: bool, readiness: Readiness) {
     state.artifact.set(state.artifact.get().clone());
     STATE.with_borrow_mut(|slot| *slot = Some(state));
     ic_timers::initialize().expect("one timer runtime");
-    for slot in [Slot::First, Slot::Second] {
+    for slot in Slot::ALL {
         schedule(slot);
     }
 }
 
 fn validate(state: &State, slot: Slot) {
-    let s = &state.journal.get().0[slot.index()].0;
+    let s = &state.journal.get().0[&slot].0;
     assert!(s.attempts.iter().all(|n| *n <= 1), "single-use counts");
     for index in 0..3 {
         assert_eq!(
@@ -210,7 +209,7 @@ fn validate(state: &State, slot: Slot) {
         );
         assert_eq!(a.creation_cycles, CREATION_CYCLES, "ceiling");
         assert_eq!(
-            state.artifact.get().0[slot.index()].hash(false),
+            state.artifact.get().0[&slot].hash(false),
             Some(a.module_hash),
             "artifact custody"
         );
@@ -223,7 +222,7 @@ fn validate(state: &State, slot: Slot) {
     } else {
         assert_eq!(s, &Status::default(), "unadmitted journal");
         assert!(
-            state.artifact.get().0[slot.index()].hash(false).is_none(),
+            state.artifact.get().0[&slot].hash(false).is_none(),
             "unadmitted artifact"
         );
     }
@@ -259,7 +258,7 @@ fn validate(state: &State, slot: Slot) {
 
 fn snapshot(slot: Slot) -> Status {
     STATE.with_borrow(|state| {
-        state.as_ref().expect("initialized manager").journal.get().0[slot.index()]
+        state.as_ref().expect("initialized manager").journal.get().0[&slot]
             .0
             .clone()
     })
@@ -268,7 +267,7 @@ fn mutate(slot: Slot, f: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
         let mut journal = state.journal.get().clone();
-        f(&mut journal.0[slot.index()].0);
+        f(&mut journal.0.get_mut(&slot).expect("known child").0);
         state.journal.set(journal);
     });
 }
@@ -391,7 +390,7 @@ fn admit(slot: Slot, approval: Approval, artifact: Artifact) -> Result<Status, R
     }
     let mut artifacts =
         STATE.with_borrow(|state| state.as_ref().expect("open engine").artifact.get().clone());
-    artifacts.0[slot.index()] = artifact;
+    *artifacts.0.get_mut(&slot).expect("known child") = artifact;
     if !artifacts.fits() {
         return Err(Refusal::Artifact);
     }
@@ -694,7 +693,7 @@ fn reserved_cycles() -> u128 {
                 .journal
                 .get()
                 .0
-                .iter()
+                .values()
                 .filter(|journal| journal.0.phase == Phase::Scheduled)
                 .map(|_| u128::from(CREATION_CYCLES))
                 .sum::<u128>()

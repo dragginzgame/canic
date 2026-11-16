@@ -31,7 +31,7 @@ pub(crate) fn active() -> bool {
     })
 }
 fn quiescent(state: &State) -> bool {
-    state.journal.get().0.iter().all(|journal| {
+    state.journal.get().0.values().all(|journal| {
         matches!(
             journal.0.phase,
             canic_management_protocol::Phase::Empty | canic_management_protocol::Phase::Ready
@@ -58,9 +58,9 @@ fn binding(state: &State, approval: &Approval) -> bool {
             .journal
             .get()
             .0
-            .iter()
+            .values()
             .all(|j| j.0.worker.as_ref() != Some(&approval.store))
-        && state.artifact.get().0.iter().all(|a| {
+        && state.artifact.get().0.values().all(|a| {
             a.sources()
                 .is_none_or(|s| s.creation.reference.store == approval.store)
         })

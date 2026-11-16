@@ -16,8 +16,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 pub(super) fn source(slot: Slot, upgrade: bool) -> Option<stored::Delivery> {
     STATE.with_borrow(|state| {
-        let sources =
-            state.as_ref().expect("open engine").artifact.get().0[slot.index()].sources()?;
+        let sources = state.as_ref().expect("open engine").artifact.get().0[&slot].sources()?;
         if upgrade {
             sources.upgrades.last()
         } else {
@@ -33,7 +32,7 @@ fn mutate(slot: Slot, upgrade: bool, f: impl FnOnce(&mut stored::Delivery)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
         let mut artifacts = state.artifact.get().clone();
-        let Artifact::Stored(sources) = &mut artifacts.0[slot.index()] else {
+        let Artifact::Stored(sources) = artifacts.0.get_mut(&slot).expect("known child") else {
             panic!("Store source required")
         };
         f(if upgrade {
@@ -71,10 +70,10 @@ pub(super) fn retained<A: Serialize>(
     }
 }
 pub(super) fn validate(state: &State, slot: Slot) {
-    let Some(sources) = state.artifact.get().0[slot.index()].sources() else {
+    let Some(sources) = state.artifact.get().0[&slot].sources() else {
         return;
     };
-    let journal = &state.journal.get().0[slot.index()];
+    let journal = &state.journal.get().0[&slot];
     let creation = journal
         .0
         .approval
@@ -266,7 +265,7 @@ pub(super) fn upload(slot: Slot, upgrade: bool, hash: [u8; 32], expires: u64) ->
         .expect("Store cache request")
     } else {
         let wasm = STATE.with_borrow(|state| {
-            state.as_ref().expect("open engine").artifact.get().0[slot.index()]
+            state.as_ref().expect("open engine").artifact.get().0[&slot]
                 .wasm(upgrade)
                 .to_vec()
         });

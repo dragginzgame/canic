@@ -6,6 +6,7 @@ use canic_management_protocol::{
 };
 
 mod discovery;
+mod identity;
 
 async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
     let reply = pic

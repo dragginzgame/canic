@@ -462,6 +462,45 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
 }
 
 #[test]
+fn fleet_child_bound_is_explicit_before_artifact_reads_or_journal_creation() {
+    for with_store in [false, true] {
+        for count in [0, 3] {
+            let (dir, mut selected) = fixture();
+            let child = selected.config.canisters.remove("app").unwrap();
+            for index in 0..count {
+                selected
+                    .config
+                    .canisters
+                    .insert(format!("app-{index}"), child.clone());
+            }
+            if with_store {
+                selected.config.canisters.insert(
+                    "store".into(),
+                    CanisterConfig {
+                        role: Some("wasm-store".into()),
+                        parent: Some("root".into()),
+                        wasm: Some("missing-store.wasm".into()),
+                        ..Default::default()
+                    },
+                );
+            }
+            std::fs::remove_file(dir.join("app.wasm")).unwrap();
+            std::fs::remove_file(dir.join("root.wasm")).unwrap();
+            let Err(Error::Invalid(message)) = create(&dir, &selected) else {
+                panic!("expected child capacity refusal");
+            };
+            assert_eq!(
+                message,
+                format!(
+                    "fleet declares {count} direct application children under root; this Root path supports 1 to 2 (Wasm Store is separate)"
+                )
+            );
+            assert!(!dir.join("journal").exists());
+        }
+    }
+}
+
+#[test]
 fn fleet_refuses_unsupported_trees_conflicts_and_tampered_artifacts() {
     let (dir, selected) = fixture();
     let mut bad = selected.clone();

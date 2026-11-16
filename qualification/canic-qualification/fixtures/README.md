@@ -56,6 +56,21 @@ checks that the original outcome survives before admitting successors. The older
 executable must refuse CUJ7 rather than discard history. This is retained binary
 evidence, not a reproducible-build claim or a Host compatibility fallback.
 
+## Positional child-storage predecessor
+
+`root-positional-children.wasm` was retained on 2026-11-16 before replacing runtime
+array access with identity-keyed collections. SHA-256:
+`a00ce6fcac8687c9c350e317c53d2d653665c1c531639af9d07961ade96cc90d`.
+
+Its 1,326,609 bytes match `target/root/slot-owner-root.json`, built from 0.216.4
+plus the pending shared-slot-list cleanup. This is a qualified retained binary,
+not the tagged release binary or a reproducible-build claim. It writes CUJ7/CUA3
+in the existing checked leases and exports both child and complete Store custody.
+The child witness compares every stable byte across pending/completed work and
+both executable directions. The publication witness carries two children's Store
+pins and upgrade histories through Host-driven Root replacement. No Host hash
+fallback or new state format is introduced.
+
 ## Pre-registry Store predecessor
 
 `store-0.1.0.wasm` is the normal standalone Store retained from Canic's extraction

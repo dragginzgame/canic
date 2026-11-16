@@ -14,6 +14,11 @@ controller is Root. External identities appear as controller metadata, never as
 nodes above the canister tree.
 
 The generated `wasm-store` child is separate from both application slots.
+Whole-fleet planning currently admits one or two direct application children.
+It reports an unsupported child count before reading artifacts or opening the
+journal. This is the qualified implementation bound, not an operator capacity
+setting. Adding a declaration cannot extend a retained approval; changing or
+removing a declaration does not release an existing allocation.
 Whole-fleet apply completes Store handover/readiness before
 admitting either app; the approval includes its separate 1T debit. See the
 [Store bootstrap workflow](wasm-store.md). Adding Store to an already retained

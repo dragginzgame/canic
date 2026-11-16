@@ -89,6 +89,7 @@ async fn maintain_root(
     store: CanisterId,
     signer: &Path,
 ) {
+    let stable = pic.get_stable_memory(root).await;
     let planned = cli(dir, &["fleet", "plan", "--controller", "2vxsx-fae"]);
     assert_eq!(planned["action"], "maintenance", "{planned}");
     let id = planned["operation"].as_str().unwrap();
@@ -173,6 +174,7 @@ async fn maintain_root(
         std::fs::read(path.join("custody-after/reply.bin")).unwrap()
     );
     assert_eq!(cli(dir, &apply), completed);
+    assert_eq!(pic.get_stable_memory(root).await, stable);
     assert_eq!(
         cli(dir, &["fleet", "plan", "--controller", "2vxsx-fae"])["action"],
         "unchanged"
@@ -212,8 +214,16 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     let app_bytes = padded(std::fs::read(assets.join("app.wasm")).unwrap());
     std::fs::write(dir.join("app.wasm"), &app_bytes).unwrap();
     std::fs::write(dir.join("worker.wasm"), &app_bytes).unwrap();
+    let predecessor =
+        repo.join("qualification/canic-qualification/fixtures/root-positional-children.wasm");
+    assert_eq!(
+        hex(&ic_wasm_store_protocol::digest(
+            &std::fs::read(&predecessor).unwrap()
+        )),
+        "a00ce6fcac8687c9c350e317c53d2d653665c1c531639af9d07961ade96cc90d"
+    );
     let mut config = json!({"apps":{"demo":{
-        "canisters":{"root":{"role":"root","wasm":assets.join("root.wasm")},
+        "canisters":{"root":{"role":"root","wasm":predecessor},
             "store":{"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")},
             "app":{"role":"app","parent":"root","wasm":dir.join("app.wasm")},
             "worker":{"role":"worker","parent":"root","wasm":dir.join("worker.wasm")}},

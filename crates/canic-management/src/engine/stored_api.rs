@@ -61,13 +61,13 @@ pub(super) fn upgrade_source(
 ) -> Option<stored::Delivery> {
     STATE.with_borrow(|state| {
         let state = state.as_ref().expect("open engine");
-        let journal = &state.journal.get().0[slot.index()];
+        let journal = &state.journal.get().0[&slot];
         let index = journal
             .2
             .iter()
             .chain(std::iter::once(&journal.1))
             .position(|record| record.approval.as_ref() == Some(approval))?;
-        state.artifact.get().0[slot.index()]
+        state.artifact.get().0[&slot]
             .sources()?
             .upgrades
             .get(index)
@@ -159,14 +159,8 @@ fn current_root_custody() -> canic_management_protocol::custody::Root {
 fn stored_journals() -> stored::Custody {
     let children: children::Custody = super::journals();
     let sources = STATE.with_borrow(|state| {
-        state
-            .as_ref()
-            .expect("open engine")
-            .artifact
-            .get()
-            .0
-            .each_ref()
-            .map(|artifact| artifact.sources().cloned())
+        let artifacts = &state.as_ref().expect("open engine").artifact.get().0;
+        Slot::ALL.map(|slot| artifacts[&slot].sources().cloned())
     });
     stored::Custody { children, sources }
 }

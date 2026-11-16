@@ -382,10 +382,23 @@ bash scripts/dev/test-root.sh whole_fleet managed_child_cli multi_child_cli reta
 
 These fixtures explicitly select inline custody. The publication runner above
 owns the generated Root/Store/app default; neither fixture migrates retained fleets.
+`bash scripts/dev/test-root.sh identified_runtime_preserves_positional_journal_bytes`
+checks the retained positional-storage Root against the identity-keyed runtime.
+Both child admissions survive replacement byte-for-byte before autonomous creation;
+completed state remains readable in both executable directions. The existing
+two-child publication journey starts from the same retained binary and checks
+all Root stable bytes across Host-driven replacement with both Store-backed
+children and their upgrade histories. Runtime lookup changes do not change the
+stored CUJ7/CUA3 formats or increase the two-child bound.
 The multi-child journey plans the second child's first upgrade through the named
 `--canister` path, verifies its retained slot and lost-reply recovery, then includes
 it in whole-fleet convergence and Root maintenance. General dynamic allocation
 and new-child admission are not qualified by this named-upgrade path.
+The same journey inserts a third declaration while both original child admissions
+are retained. Planning reports the two-child bound, preserves the original approval,
+signed admissions and Root stable bytes, and resumes the original plan after the
+configuration is restored. Native checks cover zero/three children with and without
+Store, refusing before artifact reads or journal creation.
 
 `bash scripts/dev/test-root.sh discovers_both_children_without_local_deployment_records`
 checks the shipped CLI against an installed Root with no local deployment journal.

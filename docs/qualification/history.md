@@ -7,6 +7,98 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.216.5 release qualification: 2026-11-16
+
+The sequential Linux `make -j1 ci` gate passed with all 292 captured inputs
+unchanged. It includes 111 Host tests (one existing ignore), 68 CLI tests,
+15 installed Root cases (two existing predecessor ignores), 26 Store cases,
+three publication journeys and five Blob cases, plus profile, growth, endpoint,
+effect/custody, native/Wasm lint, documentation, formatting and tooling checks.
+The log is `target/qualification/release-0216-5-ci.log`; source and delivery
+evidence is under `target/evidence/0.216.5/release/`.
+
+Fresh registry review confirms the current non-yanked first-party selections.
+Topology remains at the current qualified Git revision. Blob retains Service
+0.100.6; upstream 0.100.10 provider/browser work and its transitive Wire refresh
+remain deferred to the next requested Blob maintenance batch. No supplier changes
+are included. Product versions advance to 0.216.5 after qualification; private
+qualification packages remain 0.0.0. This is GitHub delivery only. Runtime formats,
+existing approvals and the two-child bound are unchanged.
+
+## Runtime child state is addressed by identity: 2026-11-16
+
+Pending 0.216.5 replaces runtime journal/artifact array indexing with ordinary
+bounded maps keyed by the existing child identity. Creation, upgrades, Store
+delivery, funding reservations and maintenance use those same owners. The storage
+codec alone maps historical positions to identities and writes the exact existing
+CUJ7/CUA3 bytes; wire custody remains in its qualified order. No schema, lease,
+endpoint, allocation policy or capacity bound changes. Volatile timer/observation
+arrays retain the protocol's current bound.
+
+Reuse the pinned legacy target-binding, cascading and retained-operation research
+recorded below at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`. Preserve identity
+across continuations without importing a pool catalogue, directory owner or generic
+collection framework. Two entries do not establish scalable allocation; this
+separates the effect engine from the historical record positions first.
+
+The retained positional executable and its provenance are documented in the
+qualification fixtures. Its new installed witness preserves every stable byte
+across pending admissions in reverse slot order, autonomous creation and completed
+state read by both executables. Existing predecessor/full-history, callback-loss
+and shared-cycle-reservation cases pass. The installed two-child Store publication
+journey starts from that same predecessor and preserves all Root stable bytes
+through Host-driven maintenance, including both children and Store pins/history.
+The first new test incorrectly compared live status diagnostics with stored
+custody; it now compares complete retained custody and stable bytes separately.
+Runtime/fixture Clippy, runtime Rustdoc, formatting and tooling agreement pass.
+Evidence is under `target/qualification/identified-children-*`. The patch remains
+local and unpushed; package versions and suppliers are unchanged.
+
+## Explicit child admission bound: 2026-11-16
+
+Pending 0.216.5 reports the declared direct-child count and qualified 1–2 bound
+before artifact reads or journal opening. Store remains separate. Reuse the
+permanent-target/cascade research recorded in the next entry; no allocation,
+capacity policy, record migration or replacement authority is introduced.
+
+Eleven focused Host fleet tests pass, including zero/three children with and
+without Store and absent artifacts. The installed multi-child CLI journey passes:
+adding a lexically earlier third declaration while both children are scheduled
+preserves the fleet approval, both signed admissions, operation count and Root
+stable bytes. Restoring configuration returns the original plan; subsequent
+creation, lost-reply recovery, child upgrades and Root maintenance still pass.
+Host and fixture Clippy, Host Rustdoc, formatting and tooling agreement pass.
+Logs are under `target/qualification/child-bound-*`; `make canic` installs the
+working CLI. Package versions remain 0.216.4, with 0.216.5 pending and unpushed.
+
+## Shared child-slot ownership: 2026-11-16
+
+Pending 0.216.5 removes Host's duplicate ordered slot list. The passive child
+protocol now supplies the identities used by fleet approval validation, artifact
+binding, maintenance source checks and runtime validation/continuation. Volatile
+timer, observation and fault arrays use that same list's length. Fixed historical
+record codecs remain explicit; this is not a storage migration or capacity increase.
+No new allocator, package, configuration switch or lifecycle owner is introduced.
+
+Reuse the legacy cascading review recorded under the two-child increment below,
+revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, especially the topology and
+cascade regression paths and their inspected history. Permanent target binding
+and sibling failure isolation remain required; legacy directory machinery is
+unnecessary for this ownership correction. Existing tests already cover changed
+configuration names/order, retained approval digests and wrong-slot refusal, so
+this cleanup adds no duplicate fixtures.
+
+Fourteen focused Host planning/maintenance tests pass (one existing installed-only
+entry remains ignored by the native harness). Two installed child cases pass with
+freshly built Root, maintenance and fault executables: actual predecessor history
+migration, both children's full upgrade histories, independent continuation and
+lost-callback recovery. Unchanged application artifacts and the prepared simulator
+are reused from release qualification. Native/Wasm Clippy, Rustdoc, formatting
+and tooling agreement pass. Logs are under `target/qualification/slot-owner-*`.
+
+The compatible pending version is 0.216.5; package versions remain at released
+0.216.4 until delivery is requested. No push, publication or mainnet effect occurs.
+
 ## 0.216.4 release qualification: 2026-11-16
 
 The final sequential Linux `make -j1 ci` gate passed with all 290 captured inputs
