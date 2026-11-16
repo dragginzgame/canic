@@ -13,6 +13,7 @@ toko-tooling.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [features]
+auth = ["canic/auth-enrollment"]
 fault-injection = ["canic-management/fault-injection"]
 maintenance-candidate = ["canic-management/maintenance-candidate"]
 

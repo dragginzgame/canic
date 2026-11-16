@@ -11,6 +11,7 @@ fn selected() -> SelectedFleet {
         app: "app".into(),
         fleet: "mainnet".into(),
         config: FleetConfig {
+            auth: None,
             network: Network::Mainnet,
             journal: None,
             canisters: BTreeMap::from([

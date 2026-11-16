@@ -10,16 +10,23 @@ description = "Small Canic contracts and optional actor adapters"
 ignored = ["toko-tooling"]
 
 [features]
+auth = ["dep:ic-auth-protocol-types", "dep:ic-auth-wire", "dep:ic-platform-runtime"]
+auth-enrollment = ["auth", "dep:ic-auth", "dep:ic-platform", "dep:sha2"]
 blob = ["dep:ic-blob-storage", "dep:ic-platform-runtime"]
 metrics = ["dep:ic-platform-runtime"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+ic-platform = { workspace = true, optional = true, features = ["raw-rand"] }
 ic-platform-runtime = { workspace = true, optional = true, features = ["cdk"] }
 
 [dependencies]
+ic-auth = { workspace = true, optional = true }
+ic-auth-protocol-types = { workspace = true, optional = true }
+ic-auth-wire = { workspace = true, optional = true }
 ic-blob-storage = { workspace = true, optional = true }
 ic-wire.workspace = true
 serde.workspace = true
+sha2 = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde_json.workspace = true

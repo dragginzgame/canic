@@ -73,6 +73,7 @@ impl Plan {
             canic_management_protocol::store_maintenance::MAX_MODULE_BYTES
         } else if self.publication().is_some()
             || self.removal().is_some()
+            || self.auth().is_some()
             || self.management().is_some_and(|m| m.source.is_some())
         {
             artifact::MAX_ARTIFACT_BYTES
@@ -85,9 +86,10 @@ impl Plan {
         let controller = principal(&self.controller)?;
         if !matches!(
             (self.version, self.deployment.is_some()),
-            (1, false) | (2, true) | (3, true) | (4, true)
+            (1, false) | (2, true) | (3, true) | (4, true) | (5, true)
         ) || (self.version == 3) != self.publication().is_some()
             || (self.version == 4) != self.removal().is_some()
+            || (self.version == 5) != self.auth().is_some()
             || self.artifact.bytes > self.artifact_limit()
             || self.artifact.sha256.len() != 64
             || self.expires_at_ns <= self.created_at_ns
@@ -148,6 +150,7 @@ impl Plan {
             }
         }
         match &self.action {
+            PlanAction::Auth(value) => crate::auth::validate(self, value)?,
             PlanAction::Publish(value) => crate::publication::validate(self, value)?,
             PlanAction::Remove(value) => crate::publication::removal::validate(self, value)?,
             PlanAction::Create { cycles } | PlanAction::CreateStore { cycles, .. }
@@ -339,7 +342,10 @@ pub(crate) fn retain_locked(store: &Store, mut plan: Plan, bytes: &[u8]) -> Resu
             if existing.digest()? != existing_id {
                 return Err(Error::Invalid("retained plan digest mismatch".into()));
             }
-            if existing.removal().is_some() || publication_predecessors.contains(&existing_id) {
+            if existing.auth().is_some()
+                || existing.removal().is_some()
+                || publication_predecessors.contains(&existing_id)
+            {
                 continue;
             }
             // Only the shared history owner can prove that these earlier upgrades completed.
@@ -457,6 +463,7 @@ pub(crate) fn same_authority(existing: &Plan, proposed: &Plan) -> bool {
 
 /// Publish after the caller validates its reservation under this same lock.
 pub(crate) fn publish_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
+    crate::auth::permit_upgrade(&store.path, &plan)?;
     let id = plan.digest()?;
     let dir = store.operation(&id)?;
     let held = crate::output_publication::prepare(&dir, 0o700)?;

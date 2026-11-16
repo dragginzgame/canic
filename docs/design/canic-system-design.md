@@ -289,13 +289,25 @@ custody requires the qualified transition below, not an automatic migration.
 
 Keep Canic's CLI, Host, management contracts and runtime orchestration in one product workspace. CLI depends on Host, Host depends on passive Contracts, and the application runtime depends on Contracts and selected suppliers. Host communicates with deployed roles through contracts without depending on their runtime implementations. Add role crates when the topology requires separately compiled artifacts, and adapter crates with their first complete consumer journey.
 
+Platform replacement adoption is a cohort migration, not a version-only update.
+Published Platform 0.34.3 and Runtime 0.23.9 currently omit Canic's existing
+native Agent/signed-envelope and management/ledger interfaces, Ed25519/raw-rand
+facade, and complete CDK lifecycle surface. Canic's pinned Auth, Blob, Storage
+and Timers also retain the earlier Types/Runtime identities. Preserve the
+qualified 0.33.7 / 0.22.5 / 0.20.4 cohort until the replacement contracts and
+affected supplier boundaries can be qualified together; do not introduce a
+second linked executor or direct external IC dependencies to force adoption.
+See Platform's [consumer requirements](https://github.com/dragginzgame/ic-platform/blob/3f972ec7d43e2fcd087f69bae90767f6bc405c85/docs/requirements.md)
+and [Runtime scope](https://github.com/dragginzgame/ic-platform/blob/3f972ec7d43e2fcd087f69bae90767f6bc405c85/crates/ic-platform-runtime/README.md).
+
 The maintainer selected extraction of the versioned Wasm Store into
 `dragginzgame/ic-wasm-store`, a separate repository and product/qualification
 workspace pair. It owns immutable releases, chunks, quotas, pins, cache preparation,
 persistence and exact maintenance admission. Canic owns fleet bindings, publication
 approvals, Root-driven effects and end-to-end integration qualification. The supplier
-has no Canic dependency. Canic consumes the passive protocol through an immutable
-Git revision and builds the Store executable from that same source and its lockfile.
+has no Canic dependency. Canic consumes the published passive protocol through
+Cargo.lock and builds the matching Store executable from its crates.io archive
+and packaged lockfile. Host never links the Store runtime.
 Package renaming does not change endpoint identities, Wire records, Storage keys or
 retained operation semantics; executable replacement still needs explicit approval.
 There is no duplicate in-tree Store, mandatory sibling checkout or new deployment
@@ -795,6 +807,57 @@ Do not assume synchronized cross-canister clocks. Preserve upstream signed deadl
 | ICRC | Required external standards and representations | Explicitly selected application adapter and guards |
 
 Qualify the selected service arrangement, embedded or separately deployed. If both arrangements are eventually supported, they must use the same independently owned service engine, with each arrangement qualified for its actual composition boundaries. Supplier packages remain usable without Canic. Direct supplier types are preferred where identity is shared; duplicate DTOs require an actual boundary. Pin and qualify type/runtime identities that must agree. Do not force unrelated tools and product packages to advance as one dependency generation.
+
+### Optional Auth receiver composition
+
+The `canic::auth` module, behind the optional `auth` feature, mounts
+`establish_portable_session`, `portable_session_read` and
+`logout_portable_session`. Passive IC Auth Wire contracts own numeric IDs,
+layouts and separate request/response byte, allocation, node and depth limits.
+Canic captures actual caller/time and uses Platform hooks to admit raw size/header
+before copying, then invokes one synchronous application handler. Wire encoding
+failure traps the same transaction. Ordinary refusals retain applicable charges.
+The data-only credential envelope is not an endpoint; no legacy export aliases
+or automatic enrollment, storage, timer or activation hooks are selected.
+
+The installed qualification application uses the real volatile `MemoryReceiver`
+and pulls a protected grant from an actual Root. Root's optional `auth` feature
+admits one immutable receiver/audience/issuer/Ed25519-key/role/scope grant under
+its existing controller boundary. Configuration retries cannot replace that
+grant or clear terminal key revocation. This is not a general issuer catalogue.
+
+The optional `auth-enrollment` integration reserves a 30-second local receipt
+window before obtaining IC `raw_rand` entropy. A consuming ticket performs one
+direct call to the configured Root; no response principal or relayed snapshot
+can manufacture its provenance. An unexpired pending attempt stays busy after
+transport failure or a callback trap. A new attempt after expiry fences the old
+callback and gets fresh entropy. Complete validation and canonical commitments
+precede atomic supplier metadata/host-entry publication. Snapshot freshness is
+at most 60 seconds and bounded by the original grant deadline. Refresh does not
+extend a captured session lease. Clock disagreement may cause conservative
+refusal; it never permits extending a deadline or assuming synchronized clocks.
+
+After either owner upgrades, lost volatile state remains closed; reenrollment or
+an exact configuration retry cannot reconstruct it. Root's existing management
+journal still reopens independently. Its generic maintenance receipt does not
+prove Auth preservation or readiness. Host's optional fleet `auth` declaration
+now compiles into v5 configure/revoke plans in the existing journal. The exact
+grant, network trust, controller, Root code and receiver code are retained; apply
+checks certified code and the operator → Root → receiver controller graph.
+`fleet auth plan` sends nothing; ordinary apply/status/reconcile own execution
+and exact signed-attempt custody. Revocation derives from a configuration's
+successful retained reply, never an edited config or an unknown outcome.
+Canonical network/application identities are explicit, not display names or the
+Host transport digest. Auth approvals are not deployment-slot reservations or
+deployment receipts. Known Auth authority fences preservation upgrades of its
+Root/receiver in that journal, including after revocation. Existing upgrade
+approvals block fresh enrollment. The managed Auth lifecycle remains unfinished;
+do not enable the feature in a
+default fleet recipe or represent this local witness as an upgrade-safe login.
+This is [#8 — Mount Auth receiver contracts](https://github.com/dragginzgame/canic/issues/8),
+not production login readiness. The [Auth guide](../demos/auth.md) links the
+separate admitted enrollment, issuance and profile/browser work. Stable Auth
+integration awaits its supplier contract; do not add an interim Storage adapter.
 
 ### Embedded Blob composition witness
 

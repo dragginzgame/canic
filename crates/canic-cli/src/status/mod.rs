@@ -54,7 +54,7 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
     writeln!(
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
-        match plan.action { canic_host::PlanAction::Remove(_) => "remove exact Store release (no deployment)", canic_host::PlanAction::UpgradeStore { .. } => "Root upgrades Store, preserving its closed catalog and pins", canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
+        match plan.action { canic_host::PlanAction::Auth(_) => "configure or revoke exact Auth grant (no deployment)", canic_host::PlanAction::Remove(_) => "remove exact Store release (no deployment)", canic_host::PlanAction::UpgradeStore { .. } => "Root upgrades Store, preserving its closed catalog and pins", canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
         terminal_text(&network),
         plan.network.binding_id()?,
         terminal_text(plan.application_controller()),
@@ -65,6 +65,21 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         if now >= u128::from(plan.expires_at_ns) { "expired" } else { "within original deadline" },
     )
     .expect("writing to String");
+    if let Some(auth) = plan.auth() {
+        writeln!(output,
+            "\nAuth action: {}\nRoot: {}\nReceiver: {}\nReceiver module: {}\nIssuer: {}\nPublic key: {}\nCanonical network ID: {}\nApplication ID: {}\nApplication role: {}\nScopes: {}\nGrant window: {}–{} Unix ns\nAuth reply: {} (historical; not receiver readiness)",
+            if auth.revoke { "revoke" } else { "configure" },
+            terminal_text(&auth.root.canister), terminal_text(&auth.receiver.canister), terminal_text(&auth.receiver.module),
+            auth.grant.issuer.to_text(),
+            auth.grant.key.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            auth.grant.audience.canonical_network_id.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            auth.grant.audience.fleet_id.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            terminal_text(auth.grant.grant.target.as_str()),
+            auth.grant.grant.scopes.as_slice().iter().map(|s| terminal_text(s.as_str())).collect::<Vec<_>>().join(", "),
+            auth.grant.not_before_ns, auth.grant.expires_at_ns,
+            if matches!(&state.detail, StatusDetail::Auth { auth: Some(_) }) { "retained" } else { "unconfirmed" },
+        ).expect("String write");
+    }
     if let Some(root) = plan.store_root().or_else(|| plan.store_upgrade_root()) {
         writeln!(
             output,
@@ -250,7 +265,7 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
             terminal_text(&receipt.controller),
         )
         .expect("writing to String");
-    } else if plan.publication().is_none() && plan.removal().is_none() {
+    } else if plan.auth().is_none() && plan.publication().is_none() && plan.removal().is_none() {
         output.push_str("Receipt: none retained; deployment completion is not established.\n");
     }
     if effects

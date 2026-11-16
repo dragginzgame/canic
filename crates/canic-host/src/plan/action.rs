@@ -32,6 +32,8 @@ pub struct StoreMaintenance {
 /// One operation with all and only the authority it needs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PlanAction {
+    /// Configure or revoke one exact Auth grant; grants no installation authority.
+    Auth(Box<crate::AuthApproval>),
     /// Publish immutable artifact bytes through Root; grants no installation authority.
     Publish(crate::Publication),
     /// Remove one exact release through Root; no installation or replacement authority.
@@ -80,6 +82,14 @@ pub enum PlanAction {
 }
 
 impl super::Plan {
+    /// Exact Auth approval, separate from deployment and readiness.
+    #[must_use]
+    pub fn auth(&self) -> Option<&crate::AuthApproval> {
+        match &self.action {
+            PlanAction::Auth(value) => Some(value),
+            _ => None,
+        }
+    }
     /// Exact removal authority, separate from publication and deployment.
     #[must_use]
     pub fn removal(&self) -> Option<&crate::PublicationRemoval> {
@@ -141,6 +151,7 @@ impl super::Plan {
             | PlanAction::CreateStore { .. }
             | PlanAction::CreateChild(_)
             | PlanAction::Remove(_)
+            | PlanAction::Auth(_)
             | PlanAction::Publish(_) => None,
         }
     }

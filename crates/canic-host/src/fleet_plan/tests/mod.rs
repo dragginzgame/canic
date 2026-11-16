@@ -14,6 +14,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
         app: "demo".into(),
         fleet: "local".into(),
         config: FleetConfig {
+            auth: None,
             network: Network::Mainnet,
             journal: None,
             canisters: BTreeMap::from([

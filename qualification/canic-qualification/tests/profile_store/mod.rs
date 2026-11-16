@@ -412,12 +412,18 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
             store_upgrade["operation"].as_str().unwrap(),
         ],
     );
-    let preservation = &store_status["store_maintenance"]["preservation"];
-    assert_eq!(preservation["complete"], true);
-    assert_eq!(preservation["observed"], 2);
+    let maintenance: canic_management_protocol::store_maintenance::Status =
+        serde_json::from_value(store_status["store_maintenance"].clone()).unwrap();
+    let canic_management_protocol::store_maintenance::Scan::Entries(Some(preservation)) =
+        &maintenance.preservation
+    else {
+        panic!("new Store maintenance must retain the explicit entries scan");
+    };
+    assert!(preservation.complete);
+    assert_eq!(preservation.observed, 2);
     assert_eq!(
-        preservation,
-        &store_status["store_maintenance"]["installation"]["verification"]
+        maintenance.preservation,
+        maintenance.installation.as_ref().unwrap().verification
     );
     // Activation retains a new attempt fence. Compare complete Store backing
     // after that legitimate transition, across the following owner replacement.

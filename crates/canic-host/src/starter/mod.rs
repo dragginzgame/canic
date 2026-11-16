@@ -86,6 +86,7 @@ fn files(
                 fleets: BTreeMap::from([(
                     fleet.into(),
                     FleetDeclaration {
+                        auth: None,
                         network,
                         journal: None,
                         canisters: BTreeMap::new(),

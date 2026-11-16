@@ -71,6 +71,7 @@ fn config() -> SelectedFleet {
         app: "hello".into(),
         fleet: "demo".into(),
         config: FleetConfig {
+            auth: None,
             network: Network::Mainnet,
             journal: None,
             canisters: BTreeMap::from([("backend".into(), CanisterConfig::default())]),
@@ -179,6 +180,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                 fleets: BTreeMap::from([(
                     selected.fleet.clone(),
                     FleetDeclaration {
+                        auth: None,
                         network: selected.config.network.clone(),
                         journal: selected.config.journal.clone(),
                         canisters: bindings,

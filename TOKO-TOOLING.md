@@ -256,11 +256,21 @@ file or separate review framework.
   publishing and deployment are separate. State the local/delivery status and
   preserve genuinely issue-specific acceptance under the
   [issue closure policy](https://github.com/dragginzgame/toko-tooling/blob/626da7cd9626cc2e152594862a2d82ea82ef51da/rules/agent-maintenance.md#issue-review-and-repair).
-- Run expensive hosted integration/native CI asynchronously for development,
-  PR delivery and separately authorized merges. Report pending runs; do not poll
-  or hold a turn open solely for the matrix. Enforced checks/reviews, known defects,
-  release gates and issue-specific acceptance still apply. Never invent optional
-  GitHub approvals or bypass protections. Synchronous qualification is opt-in.
+- Hosted integration/native CI runs asynchronously for development, PR delivery,
+  separately authorized merges, releases, deployment and registry publication.
+  Routine patches proceed after required local checks and publication admission
+  pass; pending, queued or absent hosted results alone do not block delivery.
+  Report CI separately without polling or holding the turn open for its matrix.
+  Wait only for an enforced branch/release protection or a maintainer-selected,
+  named qualification requirement scoped to the release or changed contract.
+  State that requirement and its source before waiting. A first release, major
+  or significant minor may justify such qualification; the version number alone
+  does not select it, and it must not become a recurring patch-release gate.
+  Known relevant failures still block until resolved or explicitly dispositioned;
+  asynchronous CI is not permission to ignore a discovered defect. Preserve local
+  release gates, archive/source admission and actual protections. A local target
+  named `ci` does not require a successful GitHub Actions run. Do not replace a
+  hosted wait with another local copy of its full matrix or invent approval gates.
 - Toko Tooling owns its general regression matrix. Consumers check snapshot integrity,
   actual caller wiring and their product/native contracts. Do not replay generic
   producer fixtures by default; retain one only for a named missing consumer proof.

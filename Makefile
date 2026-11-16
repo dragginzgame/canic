@@ -14,6 +14,7 @@ help:
 	  'make endpoint-test           Qualify management mounts, guards and reply rollback' \
 	  'make root-test               Qualify Root creation, upgrades and child isolation' \
 	  'make blob-test               Qualify embedded Blob/catalog composition' \
+	  'make auth-test               Qualify optional Auth receiver mounts and rollback' \
 	  'make store-test              Qualify Canic Root/Store integration and maintenance' \
 	  'make store-readiness-test    Qualify Store observation after Root handover' \
 	  'make publication-test        Qualify CLI Store bootstrap and publication' \
@@ -61,9 +62,9 @@ doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --no-deps
 
 # The CLI journey owns product Clippy/Rustdoc coverage, including the shared canic library.
-lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc profile-clippy profile-doc root-clippy root-doc store-clippy blob-clippy blob-doc
+lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc profile-clippy profile-doc root-clippy root-doc store-clippy blob-clippy blob-doc auth-clippy auth-doc
 
-ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test
+ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test
 
 # Routine hosted coverage: product packages only, no signer/server provisioning.
 # Installed journeys remain explicit through the existing qualification runners.
@@ -77,9 +78,9 @@ ci-native:
 	cargo test --locked --workspace
 
 ci-wasm:
-	cargo clippy --locked -p canic-hello -p canic-management -p canic-root -p canic-profile-worker -p canic-profile-entry -p canic-profile-manager --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked -p canic -p canic-hello -p canic-management -p canic-root -p canic-profile-worker -p canic-profile-entry -p canic-profile-manager --target wasm32-unknown-unknown --all-features -- -D warnings
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features blob --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features blob,auth --target wasm32-unknown-unknown --no-deps
 
 # The runner selects the Wasm path from Cargo artifact messages.
 qualification-setup:
@@ -172,6 +173,20 @@ store-test:
 
 store-clippy:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store -- -D warnings
+
+.PHONY: auth-test auth-clippy auth-doc
+auth-test:
+	bash scripts/dev/test-auth.sh
+
+auth-clippy:
+	cargo clippy --locked -p canic --features auth-enrollment --all-targets -- -D warnings
+	cargo clippy --locked -p canic -p canic-root --features canic/auth-enrollment,canic-root/auth --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test auth -- -D warnings
+
+auth-doc:
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features auth-enrollment --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --no-deps
 
 .PHONY: blob-test blob-clippy blob-doc
 blob-test:

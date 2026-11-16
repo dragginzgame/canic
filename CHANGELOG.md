@@ -1,6 +1,62 @@
 # Changelog
 
-## [0.217.0]
+## [0.217.0] - 2026-11-16
+
+### ▶️ Try it
+
+After `make canic`, inspect the new optional Auth commands without sending effects:
+
+```sh
+canic --version
+canic fleet auth --help
+canic fleet status OPERATION --app starter --fleet mainnet
+```
+
+The last command requires an existing fleet configuration and retained operation.
+
+### ➕ Added
+
+Optional Auth receiver mounting in `canic` for
+[#8 — Mount IC Auth receiver contracts](https://github.com/dragginzgame/canic/issues/8).
+Admission, session reads and logout preserve the supplier's Wire contracts,
+captured callers and synchronous rollback. See the [Auth guide](docs/demos/auth.md).
+
+Add the first runtime boundary for
+[#9 — Fleet-authorized Auth enrollment](https://github.com/dragginzgame/canic/issues/9):
+an optional Root authority for one explicit grant, direct receiver pulls with
+IC-generated challenges, terminal revocation and atomic callback publication.
+Refresh preserves original session deadlines. **Both Auth owners stay closed
+after upgrade**; managed Auth preservation and the complete browser journey
+remain unfinished.
+
+Host now compiles an optional fleet `auth` declaration into exact configuration
+and terminal revocation approvals. They reuse the existing journal and signed
+attempts, bind installed Root/receiver code and controllers, and produce historical
+Auth replies rather than deployment/readiness receipts. Known Auth approvals
+fence preservation upgrades. Host consumes passive contracts without the engine.
+
+With an installed Auth-enabled Root/receiver and the explicit grant described in
+the [Auth guide](docs/demos/auth.md), retain and review a plan before submission:
+
+```sh
+canic fleet auth plan --app demo --fleet local \
+  --controller ROOT_CONTROLLER
+canic fleet status CONFIGURATION_OPERATION --app demo --fleet local
+# Requires the original successful configuration reply; sends nothing:
+canic fleet auth plan-revocation CONFIGURATION_OPERATION \
+  --app demo --fleet local
+```
+
+After `make canic`, build and inspect the qualification application without
+deploying or opening a browser:
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml \
+  --package canic-auth-witness --output target/auth/receiver.wasm
+canic artifact build --package canic-root --features auth \
+  --output target/auth/root.wasm
+canic artifact inspect target/auth/receiver.wasm
+```
 
 ### 🧪 Qualification
 
@@ -33,18 +89,25 @@ an independent publication operation (not a nested bootstrap publication), these
 commands retain plans only:
 
 ```sh
-canic fleet artifact plan-removal PUBLICATION_OPERATION --action delete --app starter --fleet mainnet
+canic fleet artifact plan-removal PUBLICATION_OPERATION --action delete \
+  --app starter --fleet mainnet
 canic fleet status REMOVAL_OPERATION --app starter --fleet mainnet
 # After successful removal and expiry of its original dispatch deadline:
-canic fleet artifact plan-restoration REMOVAL_OPERATION --app starter --fleet mainnet
+canic fleet artifact plan-restoration REMOVAL_OPERATION \
+  --app starter --fleet mainnet
 ```
 
 Use `--action cancel` for an incomplete upload. After reviewing each returned
 plan, `canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet`
 sends its approved effects. `fleet reconcile` reuses the original removal attempt;
 it cannot sign a replacement. Restoration retains immutable version/content identity.
-Pinned content remains protected. This is locally qualified; no mainnet effects
-were submitted.
+Pinned content remains protected. The installed CLI witness covers that refusal
+and explicit restoration after both deletion and successful cancellation. This
+is locally qualified; no mainnet effects were submitted.
+
+Update the profile/Store upgrade witness to inspect the versioned preservation
+contract, including the explicit entries scan and exact post-upgrade match.
+The old flat-JSON assertion no longer described current Store evidence.
 
 For an existing configured fleet and retained operation, inspect evidence without
 signing or opening a browser:
@@ -57,8 +120,17 @@ canic fleet status OPERATION --app starter --fleet mainnet
 ### 🔧 Dependencies
 
 Both workspaces and the authenticated tooling snapshot now select published
-Toko Tooling 0.44.5. Existing tooling entrypoints and prepared tool versions are
-preserved.
+Toko Tooling 0.44.6. Existing tooling entrypoints and prepared tool versions are
+preserved. Local release qualification remains required; hosted CI proceeds
+asynchronously after delivery.
+
+Assessed the published Platform replacement (Platform 0.34.3, Runtime 0.23.9,
+Types 0.21.1). Adoption is blocked: the new packages do not supply Canic's current
+Agent/signed-envelope, management/ledger, Ed25519/raw-rand or full CDK lifecycle
+interfaces, and its suppliers still use the earlier Types/Runtime cohort. Keep
+the qualified Platform 0.33.7 / Runtime 0.22.5 / Types 0.20.4 graph until those
+contracts have a qualified migration. No compatibility facade, second runtime
+or bypass of the Platform dependency boundary was added.
 
 Adopt published `ic-host-fs` / `ic-host-artifacts` 0.80.2 and
 `ic-host-process` 0.80.2. Text remains at the current published 0.76.0.

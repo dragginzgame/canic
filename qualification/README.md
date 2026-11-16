@@ -22,8 +22,9 @@ and retains the original request/result.
 `bash scripts/dev/test-publication.sh cli_removal_restoration` separately qualifies
 Host/CLI custody using installed Root/Store and the real ICP signer: shared content,
 publication quiescence, one retained removal signature, reconcile without renewed
-authority, deadline-gated explicit restoration, historical payload replay refusal,
-and cancellation committed remotely with a lost reply that remains blocked.
+authority, deadline-gated explicit restoration after delete and successful cancel,
+pinned-release refusal, historical payload replay refusal, and cancellation
+committed remotely with a lost reply that remains blocked.
 Only independent publication sources and one canonical journal are selected; this
 does not qualify nested removal selection or repair after a refusal/unknown outcome.
 Its packages are named by responsibility, independently of design milestones:
@@ -33,9 +34,26 @@ Its packages are named by responsibility, independently of design milestones:
 | `canic-qualification` | Native harnesses, retained predecessor binaries and explicit shared simulator preparation |
 | `canic-effect-probe` | Small Wasm probe isolating creation/funding commit boundaries and owner rollback |
 | `canic-asset-catalog` | Real embedded Blob/catalog composition with explicit lifecycle and qualification-only failure points |
+| `canic-auth-witness` | Real volatile Auth receiver behind optional Canic mounts, direct Root enrollment and callback/reply rollback |
 | `canic-artifact-probe` | Small Wasm probe isolating retained-byte installation onto an existing target |
 
 Each package lives in its identically named directory under this workspace.
+
+`make auth-test` builds and installs the optional receiver witness through the
+public artifact builder. It qualifies actual callers, protocol guards, ordinary
+refusal charges, session/read/logout/replay behavior, synchronous reply rollback
+and closed admission after volatile state loss on upgrade. It installs an actual
+Auth-enabled Root with one controller-approved Ed25519 test grant and uses real
+IC randomness/direct calls. Refresh preserves session deadlines, callback traps
+preserve both old projections, and in-flight revocation reaches the receiver.
+Root's Auth configuration also stays closed after upgrade. A second installed
+case uses the real CLI and ICP signer: exact fleet grant planning, certified
+controller prerequisites, configuration, receiver refresh, terminal revocation
+and lost local reply recovery with unchanged signed bytes. Native cases cover
+config conflicts, historical plan encoding and preservation-upgrade refusal.
+It does not qualify account issuance, certified proofs, managed Auth preservation
+or browser orchestration. See the
+[Auth guide](../docs/demos/auth.md) for exact inputs and the remaining issue scopes.
 
 M0/M1 package and Make names are retired without aliases. `make qualification-setup`
 prepares the simulator for every suite. Select `make effect-test`,

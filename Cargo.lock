@@ -391,19 +391,24 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
+ "ic-auth",
+ "ic-auth-protocol-types",
+ "ic-auth-wire",
  "ic-blob-storage",
+ "ic-platform",
  "ic-platform-runtime",
  "ic-wire 0.24.1",
  "serde",
  "serde_json",
+ "sha2 0.11.1",
  "toko-tooling",
 ]
 
 [[package]]
 name = "canic-cli"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "canic-host",
  "canic-management-protocol",
@@ -420,7 +425,7 @@ dependencies = [
 
 [[package]]
 name = "canic-hello"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -430,7 +435,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -456,7 +461,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -472,7 +477,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "ic-wasm-store-protocol",
  "ic-wire 0.24.1",
@@ -484,7 +489,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-client"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "canic-management-protocol",
  "canic-profile-protocol",
@@ -499,7 +504,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-entry"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -510,7 +515,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-manager"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -523,7 +528,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "ic-wire 0.24.1",
  "serde",
@@ -532,7 +537,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-worker"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
@@ -544,7 +549,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.216.5"
+version = "0.217.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -800,12 +805,27 @@ dependencies = [
  "cpufeatures 0.2.17",
  "curve25519-dalek-derive",
  "digest 0.10.7",
- "fiat-crypto",
+ "fiat-crypto 0.2.9",
  "group",
  "rand_core 0.6.4",
  "rustc_version",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "curve25519-dalek"
+version = "5.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5eed333089e2e1c1ac8c6c0398e5e2497b4c9926ca6d0365ed1e099afa5bc23"
+dependencies = [
+ "cfg-if",
+ "cpufeatures 0.3.1",
+ "curve25519-dalek-derive",
+ "digest 0.11.3",
+ "fiat-crypto 0.3.0",
+ "rustc_version",
+ "subtle",
 ]
 
 [[package]]
@@ -914,7 +934,7 @@ dependencies = [
  "digest 0.10.7",
  "elliptic-curve",
  "rfc6979",
- "signature",
+ "signature 2.2.0",
  "spki",
 ]
 
@@ -925,7 +945,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "115531babc129696a58c64a4fef0a8bf9e9698629fb97e9e40767d235cfbcd53"
 dependencies = [
  "pkcs8",
- "signature",
+ "signature 2.2.0",
+]
+
+[[package]]
+name = "ed25519"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29fcf32e6c73d1079f83ab4d782de2d81620346a5f38c6237a86a22f8368980a"
+dependencies = [
+ "signature 3.0.0",
 ]
 
 [[package]]
@@ -949,15 +978,27 @@ version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "70e796c081cee67dc755e1a36a0a172b897fab85fc3f6bc48307991f64e4eca9"
 dependencies = [
- "curve25519-dalek",
- "ed25519",
+ "curve25519-dalek 4.1.3",
+ "ed25519 2.2.3",
  "merlin",
  "rand_core 0.6.4",
  "serde",
  "sha2 0.10.9",
- "signature",
+ "signature 2.2.0",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "ed25519-dalek"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ebaa1a2bf1290ab3bfe5a7b771d050ebffab2711c19a81691c683a5144a25de"
+dependencies = [
+ "curve25519-dalek 5.0.0",
+ "ed25519 3.0.0",
+ "sha2 0.11.1",
+ "subtle",
 ]
 
 [[package]]
@@ -1061,6 +1102,12 @@ name = "fiat-crypto"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "28dea519a9695b9977216879a3ebfddf92f1c08c05d984f8996aecd6ecdc811d"
+
+[[package]]
+name = "fiat-crypto"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "64cd1e32ddd350061ae6edb1b082d7c54915b5c672c389143b9a63403a109f24"
 
 [[package]]
 name = "find-msvc-tools"
@@ -1427,6 +1474,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-auth"
+version = "0.46.1"
+source = "git+https://github.com/dragginzgame/ic-auth?rev=b78991e9833320692921bf766e51ad361c9c8c4d#b78991e9833320692921bf766e51ad361c9c8c4d"
+dependencies = [
+ "ic-auth-protocol-types",
+ "ic-platform",
+ "ic-wire 0.24.1",
+ "serde",
+ "sha2 0.11.1",
+]
+
+[[package]]
+name = "ic-auth-protocol-types"
+version = "0.42.0"
+source = "git+https://github.com/dragginzgame/ic-auth?rev=b78991e9833320692921bf766e51ad361c9c8c4d#b78991e9833320692921bf766e51ad361c9c8c4d"
+dependencies = [
+ "ic-platform-types",
+]
+
+[[package]]
+name = "ic-auth-wire"
+version = "0.42.0"
+source = "git+https://github.com/dragginzgame/ic-auth?rev=b78991e9833320692921bf766e51ad361c9c8c4d#b78991e9833320692921bf766e51ad361c9c8c4d"
+dependencies = [
+ "ic-auth-protocol-types",
+ "ic-wire 0.24.1",
+ "serde",
+]
+
+[[package]]
 name = "ic-blob-storage"
 version = "0.100.6"
 source = "git+https://github.com/dragginzgame/ic-blob-storage?rev=decde204acb6d7c8362a0003e904beef72ff89b6#decde204acb6d7c8362a0003e904beef72ff89b6"
@@ -1456,8 +1533,8 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ad3d86f2e35cb99ae7497b3e4fa92ad751a8e8978f0680d37b86dd51ef91714"
 dependencies = [
- "curve25519-dalek",
- "ed25519-dalek",
+ "curve25519-dalek 4.1.3",
+ "ed25519-dalek 2.2.0",
  "hex-literal",
  "hkdf",
  "ic_principal",
@@ -1522,7 +1599,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e07e0565c70df9222016e93d6f488312176ef5e7036ded60db8b4bc3f61c05f"
 dependencies = [
  "crc32fast",
+ "curve25519-dalek 5.0.0",
  "data-encoding",
+ "ed25519-dalek 3.0.0",
  "hex",
  "ic-agent",
  "ic-certification",
@@ -1589,6 +1668,7 @@ dependencies = [
  "data-encoding",
  "serde",
  "serde_bytes",
+ "sha2 0.11.1",
  "thiserror 2.0.21",
 ]
 
@@ -1605,9 +1685,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.45.10"
+version = "0.45.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e9bc6f83f3b47cdfc531fb78ab9fab02781dd5e2709bee1de67829f1395cb2ac"
+checksum = "3b2cc50b49c7fb6f919c05d13ad47b6fcc2cb95718d3d38c48374728e73f8954"
 dependencies = [
  "ic-metrics",
  "ic-platform-runtime",
@@ -1965,7 +2045,7 @@ dependencies = [
  "elliptic-curve",
  "once_cell",
  "sha2 0.10.9",
- "signature",
+ "signature 2.2.0",
 ]
 
 [[package]]
@@ -2858,6 +2938,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "signature"
+version = "3.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "28d567dcbaf0049cb8ac2608a76cd95ff9e4412e1899d389ee400918ca7537f5"
+
+[[package]]
 name = "simd_cesu8"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3143,9 +3229,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.44.5"
+version = "0.44.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aef8ac5d84866cf4ceb5b9d91ce9d458708069fc0c585345f07054186d267199"
+checksum = "c27413bf2875a061354aff385a92c66bdf9f058ac372d28b062aaf982c4229c8"
 
 [[package]]
 name = "toml"

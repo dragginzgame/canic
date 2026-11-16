@@ -61,6 +61,11 @@ pub struct ChildOutcome {
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum ApplyOutcome {
+    /// Exact successful Auth configuration or revocation response.
+    Auth {
+        /// Historical response, never receiver readiness.
+        auth: crate::AuthReceipt,
+    },
     /// Retained Store upgrade progress, without a completion claim.
     StorePending {
         /// Original approval digest.
@@ -266,6 +271,9 @@ pub(crate) async fn reconcile_at(
     icp: &Path,
 ) -> Result<ApplyOutcome> {
     let (plan, bytes) = plan::load(dir, digest)?;
+    if plan.auth().is_some() {
+        return crate::auth::apply(dir, &plan, identity, icp, true).await;
+    }
     if plan.removal().is_some() {
         return crate::publication::removal::apply(dir, &plan, &bytes, identity, icp, true).await;
     }
@@ -278,6 +286,7 @@ pub(crate) async fn reconcile_at(
     if plan.store_root().is_some() {
         return apply_operation(journal, dir, digest, identity, icp, true).await;
     }
+    crate::auth::permit_upgrade(journal, &plan)?;
     let agent = plan.network.agent()?;
     crate::managed::recovery::reconcile(dir, digest, &plan, &bytes, identity, icp, &agent).await
 }
@@ -302,6 +311,10 @@ async fn apply_operation(
     read_only: bool,
 ) -> Result<ApplyOutcome> {
     let (plan, wasm) = plan::load(dir, digest)?;
+    if plan.auth().is_some() {
+        return crate::auth::apply(dir, &plan, identity, icp, read_only).await;
+    }
+    crate::auth::permit_upgrade(journal, &plan)?;
     if plan.removal().is_some() {
         return crate::publication::removal::apply(dir, &plan, &wasm, identity, icp, read_only)
             .await;
@@ -536,6 +549,9 @@ pub(crate) fn status_loaded(
     plan: Plan,
     bytes: &[u8],
 ) -> Result<CanisterStatus> {
+    if plan.auth().is_some() {
+        return crate::auth::status(dir, &plan);
+    }
     if plan.removal().is_some() {
         return crate::publication::removal::status(dir, &plan, bytes);
     }
@@ -547,8 +563,10 @@ pub(crate) fn status_loaded(
     }
     let mut effects = std::collections::BTreeMap::<String, String>::new();
     let effect_names: Vec<_> = match plan.action {
-        crate::PlanAction::Remove(_) | crate::PlanAction::Publish(_) => {
-            unreachable!("publication status selected above")
+        crate::PlanAction::Auth(_)
+        | crate::PlanAction::Remove(_)
+        | crate::PlanAction::Publish(_) => {
+            unreachable!("non-deployment status selected above")
         }
         crate::PlanAction::UpgradeStore { .. } => unreachable!("Store status selected above"),
         crate::PlanAction::MaintainRoot { .. } => crate::maintenance::observations(&plan, false)

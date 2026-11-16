@@ -7,6 +7,183 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## 0.217.0 release qualification and supplier adoption: 2026-11-16
+
+Both workspace catalogs/locks and the authenticated snapshot select Toko Tooling
+0.44.6 (`c27413bf2875a061354aff385a92c66bdf9f058ac372d28b062aaf982c4229c8`).
+All 60 installed files were admitted; only the selected baseline changed bytes.
+Prepared tools, entrypoints and unrelated dependency selections remain intact.
+Product packages advance to 0.217.0; qualification packages remain unpublished
+0.0.0. `make canic` installs and resolves 0.217.0 on the existing PATH.
+
+The requested Platform replacement was inspected at published 0.34.3 and source
+`3f972ec7d43e2fcd087f69bae90767f6bc405c85`, alongside Runtime 0.23.9 and Types
+0.21.1. It lacks required current Canic interfaces and does not migrate the pinned
+supplier cohort. Adoption remains blocked as recorded in the
+[workspace boundary](../design/canic-system-design.md#repository-and-workspace-boundary).
+Retain qualified Platform 0.33.7 / Runtime 0.22.5 / Types 0.20.4; no dual runtime,
+unused replacement dependency or copied facade was added.
+
+The local `make ci` gate found a stale flat-JSON assertion in the profile/Store
+witness. Retained evidence proved Ready, two complete entries and matching
+pre/post-upgrade scans. The assertion now decodes the actual versioned contract,
+requires `Scan::Entries` and compares complete verification evidence. Focused
+Root-harness Clippy and the installed case pass (88.90s). Reuse the earlier passing
+gate targets and other 14 installed Root cases; complete the remaining endpoint,
+Store, publication, Blob and Auth targets separately rather than repeating them.
+All selected checks pass, including 31 Store cases, five publication cases
+(157.25s), five Blob cases and two installed Auth cases (10.02s). Existing ignored
+predecessor-input fixtures remain opt-in. Formatting, tooling/pin admission and
+local release lint/docs pass. Hosted CI is independent and asynchronous.
+
+Release Auth artifacts: Root SHA-256
+`3fda758bb517604204f1e2aa3f083897c2c272b6f745e70dea4ce6c595e9725b`, receiver
+`a768f45b1db18490d780d54551175333cbee81b4cdc4bb704f1c54ce882bd18c`.
+These replace the earlier development-build identities below without rewriting
+their historical evidence. No mainnet canisters or crates.io packages were changed.
+The design's obsolete Git-source Store statement now reflects the already adopted
+registry protocol/runtime archive and packaged-lock build boundary.
+
+## Host Auth approval and exact revocation: 2026-11-16
+
+Host now consumes passive enrollment DTOs through `canic/auth`, without the Auth
+engine. The optional fleet declaration selects exact slots, issuer, public key,
+canonical network/application IDs, role/scopes and original validity. V5 plans
+reuse the existing journal, signer and apply/status/reconcile owners; v1–v4
+field order and omitted options remain unchanged. Revocation binds the original
+complete grant, including at Root's mounted boundary, and requires a retained
+successful configuration reply. Neither receipt establishes receiver readiness.
+Auth approvals are excluded from deployment inventory/reservations. Known Auth
+authority fences preservation upgrades in the same journal; fresh enrollment
+refuses prior upgrade approvals. No parallel configuration file, session store,
+generic workflow engine or adapter crate was added.
+
+`make auth-test` passes: three native enrollment tests and two installed cases
+(10.03s). The new CLI/signer case refuses wrong installed code and wrong actual
+controllers before signing, configures an actual Root, refreshes its real
+receiver, refuses grant widening, revokes the original grant after config edits,
+and recovers a deleted local reply with unchanged signed bytes. The receiver
+remains revoked after recovery; a revoke request for another grant refuses.
+The existing installed caller/rollback/closed-upgrade cases still pass.
+Host native regressions pass (140; one existing ignored external-builder test),
+as do 70 CLI regressions and focused native/Wasm Clippy and Rustdoc. Host's normal
+dependency graph includes only passive Auth types/Wire; default Root has no Auth.
+
+Inputs remain pinned Auth `b78991e9833320692921bf766e51ad361c9c8c4d`, Platform
+0.33.7, Runtime 0.22.5, Types 0.20.4, Wire 0.24.1 and product IC Timers 0.45.11.
+Root is 1,572,287 bytes, SHA-256
+`4128abfb740a480e3153836c36bf8175e9b707e629b7b7ce0a4a13c7680a3945`;
+receiver remains 444,501 bytes, SHA-256
+`1445573e0735051290fda68a9523d317a8b4d9cb8a7e7c8f8c2e8474c76f3f3a`.
+
+Legacy research at `fa92d886ef9beee824de3ec900832722fef85bd2` read
+`crates/canic-host/src/auth_provisioning/workflow/mod.rs` and its `tests/mod.rs`,
+with history `aa02dc0db13d6ae6f2749a09f84de6f7791d0c8f` and
+`e8605c44ffaf77ceb7ddaf85b374f42b7a48703d`. Preserve exact network/caller/code
+binding and refusal of changed authority. Replace invocation-local provisioning
+caches/materialized key config with the rewrite's original signed-attempt
+journal; no cache can authorize a new effect after uncertainty.
+
+This is local composition, not the complete login/provider journey. Issuance,
+browser lifecycle and stable Auth preservation remain pending. The upgrade fence
+does not discover out-of-band Auth or replace custody of the original journal.
+No supplier edits, browser launch, mainnet effects or push occurred.
+
+## Direct Root Auth enrollment: 2026-11-16
+
+The existing optional adapter now has an explicit `auth-enrollment` capability;
+Root's optional `auth` feature uses its existing controller guard to approve one
+immutable receiver/audience/issuer/key/role/scope grant. The receiver uses real IC
+randomness and an opaque consuming direct-call ticket. No relayed snapshot or
+claimed response principal can become authenticated enrollment. Complete bounded
+content and canonical commitments are checked before the real Auth engine's
+metadata and Canic's entry projection publish in the same callback. No ordinary
+fallible work follows metadata publication. A trapped callback retains its
+original pending window; expiry permits a fresh attempt that fences late results.
+
+The installed witness replaces its fixed-enrollment shortcut with an actual
+Auth-enabled Root. `make auth-test` passes: three native contract cases and the
+installed journey (7.10s), including malformed/unauthorized requests, exact replies,
+callback rollback, busy admission, freshness-only refresh preserving the original
+session, real revocation while entropy acquisition is in flight, terminal
+retirement, and separate Root/receiver upgrades remaining closed. Native cases
+also construct otherwise unforgeable response markers to test wrong authority,
+receiver, audience, challenge, deadline, canonical entries and late replies.
+Focused native/Wasm Clippy and Rustdoc pass.
+
+Inputs remain Auth `b78991e9833320692921bf766e51ad361c9c8c4d`, Platform 0.33.7,
+Runtime 0.22.5, Types 0.20.4 and Wire 0.24.1. The maintainer requested preservation
+of the independently changed IC Timers 0.45.11 product lock selection; this Root
+witness includes it. Root Wasm is 1,572,023 bytes, SHA-256
+`492b5086c0a7f6ad0453e5ddb636c3804a13a1eeb5f43c1a897aafffad6fe29d`;
+receiver is 444,501 bytes, SHA-256
+`1445573e0735051290fda68a9523d317a8b4d9cb8a7e7c8f8c2e8474c76f3f3a`.
+
+Additional legacy research at `fa92d886ef9beee824de3ec900832722fef85bd2` covered
+`crates/canic-auth/src/ops/enrollment/receiver/mod.rs`, its prepared tests,
+`crates/canic-auth/src/ops/enrollment/tests/root_refusal/mod.rs`, and
+`crates/canic-core/src/ops/auth/enrollment/authority/mod.rs`; receiver history
+includes `aa02dc0db13d6ae6f2749a09f84de6f7791d0c8f`, `0c4b256f6b9fbd7af4ec8d8924002e7dff9eb112`
+and `e8605c44ffaf77ceb7ddaf85b374f42b7a48703d`. Preserve direct response provenance,
+closed readiness, canonical grants, trusted-clock retention on refusal and
+terminal key retirement. Remove the fixed test shortcut rather than retaining
+two enrollment paths; do not transplant Core, stable registries, a generalized
+registration catalogue or refresh scheduler.
+
+This is the runtime part of the enrollment issue. Host approval/configuration
+wiring, a managed Auth-preserving upgrade path, multi-issuer rotation, issuance
+and browser orchestration remain unfinished. Default fleet recipes do not enable
+Root Auth. Root's management journal reopening cannot establish Auth readiness.
+Revocation after an already-issued snapshot is bounded by its freshness rather
+than instantaneous global propagation; clock disagreement refuses conservatively.
+No supplier edits, publication, push or mainnet effects were performed.
+
+## Store completion and optional Auth receiver: 2026-11-16
+
+The CLI Store witness now additionally covers successful upload cancellation,
+explicit restoration after its original deadline, and a pinned-release refusal
+through CLI → Root → Store. The public supplier pin call only arranges that
+fixture; it is not evidence of Canic pin acquisition. Both the remote lost-reply
+case and successful cancellation remain in the same existing workflow test.
+`bash scripts/dev/test-publication.sh cli_removal_restoration` passes (59.25s),
+as does focused publication-harness Clippy. The Store guide no longer claims
+deletion is absent. No Store product owner or recovery machinery was added.
+
+Auth's first Canic boundary is an optional module in the existing product package,
+with one separate installed qualification application. Root/Host and default
+`canic` normal graphs gain no Auth runtime. The selected feature imports passive
+contracts; only the application witness imports the real receiver engine.
+Both lockfiles pin Auth Git revision `b78991e9833320692921bf766e51ad361c9c8c4d`
+(engine 0.46.1, Wire/types 0.42.0), with Platform 0.33.7, Runtime 0.22.5,
+Types 0.20.4 and Wire 0.24.1. The read-only supplier checkout was clean at that
+revision. No moving source, supplier edit or publication was used.
+
+Legacy research read endpoint mounts and portable refusal tests at
+`canic-legacy` revision `fa92d886ef9beee824de3ec900832722fef85bd2`:
+`crates/canic-auth/src/endpoints/mod.rs` and
+`crates/canic-auth/src/api/portable/tests/mod.rs`, including endpoint history
+through `e8605c44ffaf77ceb7ddaf85b374f42b7a48703d`. Preserve actual caller binding,
+passive protocol identities/budgets and refusal distinctions. Use the rewritten
+supplier/browser export names without legacy `canic_` aliases. Do not bring back
+Core, token modes, copied sessions, stable adapters or endpoint-owned lifecycle.
+
+`make auth-test` passes (6.45s) with a 356,107-byte witness, SHA-256
+`e8790b11882151d4663397c9de1485e758c04547bf46de8cedbfaeb64a01ff90`.
+It qualifies the real mounted Wasm: closed initial admission,
+installer-only fixed enrollment, all three method framing/direction/size guards,
+absent credential-envelope endpoint, caller mismatch, ordinary verification
+refusal charging, exact retry, current authority reads, logout/replay, and
+reply-encoder traps rolling back engine and application mutation. The failure
+point invokes the production encoder with a deliberately failing test serializer;
+it does not claim that a normal SessionView exceeds its response allowance.
+Upgrade loses volatile safety state and stays closed even to fresh enrollment.
+The proof is Ed25519 with a public deterministic test signer, not Fleet enrollment,
+issuer/renewal orchestration, certified proofs or browser lifecycle qualification.
+Focused native/Wasm Clippy, combined adapter compilation, Rustdoc, formatting,
+dependency-pin admission and tooling agreement pass. Default and selected normal
+graphs confirm the optional boundary. See the [Auth guide](../demos/auth.md) for commands
+and the separately owned remaining issues. No browser or mainnet effects ran.
+
 ## Host removal and explicit restoration: 2026-11-16
 
 The existing plan/journal/signed-request owners now cover removal and restoration.

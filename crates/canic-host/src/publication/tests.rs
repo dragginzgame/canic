@@ -10,6 +10,7 @@ pub(super) fn selection() -> SelectedFleet {
         app: "starter".into(),
         fleet: "mainnet".into(),
         config: FleetConfig {
+            auth: None,
             network: Network::Mainnet,
             journal: None,
             canisters: BTreeMap::from([

@@ -2,6 +2,7 @@
 
 mod app_build;
 mod artifact;
+mod auth;
 mod config;
 mod fleet;
 mod fleet_plan;
@@ -30,6 +31,7 @@ mod wallet;
 
 pub use app_build::{BuiltCanister, build_app};
 pub use artifact::{Artifact, build, inspect};
+pub use auth::{AuthApproval, AuthConfig, AuthReceipt, create_auth_plan, create_auth_revocation};
 pub use canic_management_protocol::Phase as ManagementPhase;
 pub use config::{
     AppConfig, BuildInput, CanisterBinding, CanisterConfig, CanisterDefinition, Config,

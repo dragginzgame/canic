@@ -1,6 +1,10 @@
 //! Small contracts and explicitly selected actor adapters.
 //! No host dependencies or management surface enters a Wasm consumer.
 
+/// Optional caller-bound Auth receiver endpoints; lifecycle remains explicit.
+#[cfg(feature = "auth")]
+pub mod auth;
+
 /// Optional Blob endpoint composition; no implicit lifecycle or service activation.
 #[cfg(feature = "blob")]
 pub mod blob;

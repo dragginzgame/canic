@@ -78,6 +78,9 @@ pub struct CanisterBinding {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetDeclaration {
+    /// Optional exact Auth enrollment; never inferred from roles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<crate::AuthConfig>,
     /// Explicit deployment network and trust anchor.
     pub network: Network,
     /// Journal path relative to the config file unless absolute.
@@ -92,6 +95,9 @@ pub struct FleetDeclaration {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetConfig {
+    /// Optional exact Auth enrollment; never inferred from roles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth: Option<crate::AuthConfig>,
     /// Explicit deployment network and trust anchor.
     pub network: Network,
     /// Existing journal, relative to the configuration file unless absolute.
@@ -275,6 +281,7 @@ impl AppConfig {
             })
             .collect();
         Ok(FleetConfig {
+            auth: fleet.auth.clone(),
             network: fleet.network.clone(),
             journal: fleet.journal.clone(),
             canisters,
@@ -307,6 +314,9 @@ fn select<'a, T>(
 
 impl FleetConfig {
     fn validate(&self) -> Result<()> {
+        if let Some(auth) = &self.auth {
+            auth.grant(self)?;
+        }
         self.network.validate()?;
         if self
             .journal
@@ -558,6 +568,7 @@ pub fn init_app(path: &Path, app: &str, fleet: &str, network: Network) -> Result
         fleets: BTreeMap::from([(
             fleet.into(),
             FleetDeclaration {
+                auth: None,
                 network,
                 journal: None,
                 canisters: BTreeMap::new(),
@@ -610,6 +621,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
         definition.fleets.insert(
             fleet.into(),
             FleetDeclaration {
+                auth: None,
                 network,
                 journal: None,
                 canisters: BTreeMap::new(),

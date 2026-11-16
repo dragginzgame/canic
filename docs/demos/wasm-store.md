@@ -94,8 +94,9 @@ upgrades require the retained whole-fleet creation approval and completed predec
 Fresh whole fleets with a declared Store publish immutable child releases before
 admission and support bounded serial upgrades. Existing-fleet migration remains
 unimplemented; retained inline deployments keep their current limits and contracts.
-Canic exposes no deletion/reset or pin-release flow; incomplete uploads keep their
-reservation. No deployment approval or application readiness follows from Store
+The explicit removal/restoration flow above covers independent publications.
+Canic exposes no reset or pin-release flow; incomplete uploads retain their
+reservation until an admitted cancellation succeeds. No deployment approval or application readiness follows from Store
 publication. Host and Store check bounded raw Wasm framing and byte integrity. Full
 executable validation remains with the IC installation boundary.
 

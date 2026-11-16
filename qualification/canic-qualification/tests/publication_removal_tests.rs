@@ -232,6 +232,15 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
         .success()
     );
     let alias = publication(&dir, "shared", &root_hash, &store_hash);
+    deadlines(
+        &dir,
+        &alias,
+        &[
+            "publication/prepare",
+            "publication/chunk-0",
+            "publication/publish",
+        ],
+    );
     apply(&dir, &alias);
     let before = observe(pic, root, supplier, "v1").await.unwrap().manifest;
     expire(deadline).await;
@@ -308,70 +317,139 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
     assert_eq!(reply, Err(wire::Error::Expired));
     assert_eq!(pic.get_stable_memory(root).await, root_stable);
 
-    // A separate incomplete upload is cancelled remotely, but Root traps before its reply commits.
-    let bytes = b"\0asm\x01\0\0\0\0\x01\0";
-    // Match the publication's actual retained Wasm while leaving a chunk outstanding.
-    let bytes = [std::fs::read(&wasm).unwrap(), bytes[8..].to_vec()].concat();
-    std::fs::write(&wasm, &bytes).unwrap();
-    let cancelled = publication(&dir, "cancelled", &root_hash, &store_hash);
-    let manifest = store::Manifest {
-        release: store::Release {
-            name: "app".into(),
-            version: "cancelled".into(),
-        },
-        hash: store::digest(&bytes),
-        bytes: bytes.len() as u64,
-        chunks: bytes
-            .chunks(store::CHUNK_BYTES)
-            .map(store::digest)
-            .collect(),
+    // Arrange a pin through Store's public API; actual refusal is driven by CLI -> Root -> Store.
+    let pin = store::Pin {
+        operation: [91; 32],
+        manifest: observe(pic, root, supplier, "shared")
+            .await
+            .unwrap()
+            .manifest,
     };
-    let prepared: wire::Reply = update(
-        pic,
-        root,
-        "store_publication",
-        wire::EXECUTE,
-        &wire::Request {
-            store: supplier.to_text(),
-            expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
-            command: wire::Command::Prepare(manifest),
+    let pinned = pic
+        .update_call(
+            supplier,
+            root,
+            "pin",
+            ic_wire::encode(
+                &pin,
+                ic_wire::Encoding::Frame {
+                    method: store::PIN,
+                    direction: ic_wire::Direction::Request,
+                },
+                store::LIMITS,
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let pinned: Result<store::PinReceipt, store::Error> = ic_wire::decode(
+        &pinned,
+        ic_wire::Encoding::Frame {
+            method: store::PIN,
+            direction: ic_wire::Direction::Response,
         },
+        store::LIMITS,
     )
-    .await;
-    assert!(!prepared.unwrap().published);
-    let cancellation = remove(&dir, &cancelled, "cancel");
-    let deadline = deadlines(&dir, &cancellation, &["removal"]);
-    fault(pic, root, 12).await;
+    .unwrap();
+    pinned.unwrap();
+    let protected = remove(&dir, &alias, "delete");
+    let unchanged = pic.get_stable_memory(supplier).await;
     assert!(
         !run(
             &dir,
-            &["fleet", "apply", &cancellation, "--identity", "anonymous"]
+            &["fleet", "apply", &protected, "--identity", "anonymous"]
         )
         .status
         .success()
     );
-    fault(pic, root, 0).await;
-    assert_eq!(
-        observe(pic, root, supplier, "cancelled").await,
-        Err(wire::Error::Store(store::Error::NotFound))
+    assert_eq!(pic.get_stable_memory(supplier).await, unchanged);
+    assert!(
+        !run(&dir, &["fleet", "artifact", "plan-restoration", &protected])
+            .status
+            .success()
     );
-    let path = dir.join("journal").join(&cancellation).join("removal");
-    let signed = std::fs::read(path.join("signed.json")).unwrap();
-    expire(deadline).await;
-    for args in [
-        vec!["fleet", "artifact", "plan-restoration", &cancellation],
-        vec![
-            "fleet",
-            "reconcile",
-            &cancellation,
-            "--identity",
-            "anonymous",
-        ],
-    ] {
-        assert!(!run(&dir, &args).status.success());
+
+    for (version, point) in [("cancelled", 0), ("lost", 12)] {
+        // Each incomplete upload has distinct valid bytes, so a published alias cannot satisfy it.
+        let bytes = [std::fs::read(&wasm).unwrap(), vec![0, 2, 0, point]].concat();
+        std::fs::write(&wasm, &bytes).unwrap();
+        let publication = publication(&dir, version, &root_hash, &store_hash);
+        let manifest = store::Manifest {
+            release: store::Release {
+                name: "app".into(),
+                version: version.into(),
+            },
+            hash: store::digest(&bytes),
+            bytes: bytes.len() as u64,
+            chunks: bytes
+                .chunks(store::CHUNK_BYTES)
+                .map(store::digest)
+                .collect(),
+        };
+        let prepared: wire::Reply = update(
+            pic,
+            root,
+            "store_publication",
+            wire::EXECUTE,
+            &wire::Request {
+                store: supplier.to_text(),
+                expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
+                command: wire::Command::Prepare(manifest.clone()),
+            },
+        )
+        .await;
+        assert!(!prepared.unwrap().published);
+        let cancellation = remove(&dir, &publication, "cancel");
+        let deadline = deadlines(&dir, &cancellation, &["removal"]);
+        fault(pic, root, point).await;
+        let outcome = run(
+            &dir,
+            &["fleet", "apply", &cancellation, "--identity", "anonymous"],
+        );
+        assert_eq!(
+            outcome.status.success(),
+            point == 0,
+            "{}",
+            String::from_utf8_lossy(&outcome.stderr)
+        );
+        fault(pic, root, 0).await;
+        assert_eq!(
+            observe(pic, root, supplier, version).await,
+            Err(wire::Error::Store(store::Error::NotFound))
+        );
+        let path = dir.join("journal").join(&cancellation).join("removal");
+        let signed = std::fs::read(path.join("signed.json")).unwrap();
+        expire(deadline).await;
+        if point == 0 {
+            let restored = cli(
+                &dir,
+                &["fleet", "artifact", "plan-restoration", &cancellation],
+            );
+            apply(&dir, restored["operation"].as_str().unwrap());
+            assert_eq!(
+                observe(pic, root, supplier, version)
+                    .await
+                    .unwrap()
+                    .manifest,
+                manifest
+            );
+        } else {
+            for args in [
+                vec!["fleet", "artifact", "plan-restoration", &cancellation],
+                vec![
+                    "fleet",
+                    "reconcile",
+                    &cancellation,
+                    "--identity",
+                    "anonymous",
+                ],
+            ] {
+                assert!(!run(&dir, &args).status.success());
+            }
+            assert!(!path.join("reply.bin").exists());
+        }
+        assert_eq!(std::fs::read(path.join("signed.json")).unwrap(), signed);
     }
-    assert_eq!(std::fs::read(path.join("signed.json")).unwrap(), signed);
-    assert!(!path.join("reply.bin").exists());
     owner.instance_mut().stop_live().await;
     std::fs::remove_dir_all(dir).unwrap();
 }

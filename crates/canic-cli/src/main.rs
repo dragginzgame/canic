@@ -2,6 +2,7 @@
 
 mod args;
 mod artifacts;
+mod auth;
 mod catalog;
 #[cfg(test)]
 mod config_tests;
@@ -189,6 +190,9 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
 }
 
 async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Output> {
+    if let FleetCommand::Auth(command) = command {
+        return auth::run(command, cli.json);
+    }
     if let FleetCommand::Artifact(command) = command {
         return artifacts::run(command, cli.json);
     }
@@ -260,7 +264,8 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         config.check_operation(&state_dir, digest)?;
     }
     let result = match command {
-        FleetCommand::Artifact(_)
+        FleetCommand::Auth(_)
+        | FleetCommand::Artifact(_)
         | FleetCommand::CompareSubnets { .. }
         | FleetCommand::Placements { .. } => {
             unreachable!("artifact and observation commands handled before deployment resolution")

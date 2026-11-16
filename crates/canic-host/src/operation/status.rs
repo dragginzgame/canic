@@ -46,6 +46,11 @@ pub enum ManagementStatus {
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum StatusDetail {
+    /// Exact historical Auth reply; no readiness or enrollment claim.
+    Auth {
+        /// Validated original response, if retained.
+        auth: Option<crate::AuthReceipt>,
+    },
     /// Removal has no deployment receipt.
     Removal {
         /// Exact successful response, if retained.

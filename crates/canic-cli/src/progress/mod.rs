@@ -88,6 +88,19 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
 
 fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {
     match value {
+        ApplyOutcome::Auth { auth } => {
+            writeln!(
+                text,
+                "Auth {} reply retained; receiver readiness is not established.",
+                if auth.revoked {
+                    "revocation"
+                } else {
+                    "configuration"
+                }
+            )
+            .expect("String write");
+            true
+        }
         ApplyOutcome::Removal { removal } => {
             writeln!(text, "Removal result retained: {} / {}\nPreserve this journal; restoration needs a separate plan after the original dispatch deadline.",
                 terminal_text(&removal.manifest.release.name), terminal_text(&removal.manifest.release.version)).expect("String write");

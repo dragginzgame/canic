@@ -97,6 +97,7 @@ remain separate; do not pull optional supplier runtimes into default application
 | `apps/profile/` | Profile protocol/client, discovery entry, persistent worker and autonomous manager | `make profile-test`, `make profile-clippy`, `make profile-doc` |
 | `ic-wasm-store` supplier; Canic's Root/Host integration | Supplier owns artifacts, pins and admission; Canic owns orchestration | `make store-test`, `make store-clippy`; `make root-doc` covers management contracts |
 | `qualification/canic-asset-catalog` | Installed local Blob/catalog composition | `make blob-test`, `make blob-clippy`, `make blob-doc` |
+| `canic::auth`, `qualification/canic-auth-witness` | Optional receiver mounts and installed volatile Auth composition | `make auth-test`, `make auth-clippy`, `make auth-doc` |
 
 The commands above select scope families; choose their affected cases for ordinary
 changes. `make endpoint-test` owns installed mount/authorization/rollback proofs;
@@ -136,6 +137,23 @@ their failure cases have a qualified product owner; renaming is not replacement.
   fleet effects do not own Blob's drain/activation sequence: do not advertise a
   fleet-managed provider journey. Blob remains optional and independently usable.
 
+### Auth boundary
+
+- Auth inputs are pinned to Git revision
+  `b78991e9833320692921bf766e51ad361c9c8c4d`; no moving sibling or old registry
+  substitution. Canic's optional `auth` feature mounts passive Wire contracts;
+  the application selects the independent engine and protected authorities.
+  `auth-enrollment` adds direct, bounded Root enrollment; Root's `auth` feature
+  admits one explicit immutable grant under its existing controller boundary.
+- Capture caller/time at ingress, preserve directional budgets and synchronous
+  reply rollback. Mounting grants no enrollment, readiness, storage or timers.
+  Lost volatile replay/revocation state stays closed; fresh enrollment is not
+  recovery. The current [receiver witness](docs/demos/auth.md) pulls from an actual
+  Auth-enabled Root. Host compiles the optional fleet `auth` declaration into the
+  existing journal's exact configure/revoke plans; it imports passive types only.
+  Retained Auth authority blocks Root/receiver preservation upgrades in that
+  journal. Managed Auth preservation and the complete browser journey are pending.
+
 ## CLI and developer experience
 
 - Group actions under `app`, `artifact` and `fleet`; alphabetize help. Only `--json`
@@ -165,7 +183,8 @@ their failure cases have a qualified product owner; renaming is not replacement.
 - Ordinary changes use focused tests, Clippy and Rustdoc for affected packages/cases.
   Use `make fmt-check` and `make toko-tooling-check` for formatting and snapshot
   agreement. `make lint` aggregates both workspaces' lint/docs/format checks; `make ci`
-  is the full repository gate, reserved for authorized release/full-check work.
+  is the full local repository gate, reserved for authorized release/full-check
+  work. This target does not require waiting for hosted CI completion.
   Tool preparation is explicit: `make install-tools`, then `make tools-check`.
   The formatting hook is installed with `make install-hooks`.
 - After pushes apply the shared [post-push review](TOKO-TOOLING.md#post-push-review)

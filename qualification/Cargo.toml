@@ -2,6 +2,7 @@
 members = [
     "canic-artifact-probe",
     "canic-asset-catalog",
+    "canic-auth-witness",
     "canic-effect-probe",
     "canic-qualification",
 ]
@@ -16,9 +17,12 @@ publish = false
 canic = { path = "../crates/canic" }
 canic-artifact-probe = { path = "canic-artifact-probe" }
 canic-asset-catalog = { path = "canic-asset-catalog" }
+canic-auth-witness = { path = "canic-auth-witness" }
 canic-effect-probe = { path = "canic-effect-probe" }
 canic-management-protocol = { path = "../crates/canic-management-protocol" }
 canic-profile-protocol = { path = "../apps/profile/canic-profile-protocol" }
+ic-auth = { git = "https://github.com/dragginzgame/ic-auth", rev = "b78991e9833320692921bf766e51ad361c9c8c4d", features = ["receiver-memory", "ed25519-verification"] }
+ic-auth-protocol-types = { git = "https://github.com/dragginzgame/ic-auth", rev = "b78991e9833320692921bf766e51ad361c9c8c4d" }
 ic-host-artifacts = { version = "0.80.1", default-features = false }
 ic-platform = { version = "0.33.0", default-features = false, features = ["management-canister-types"] }
 ic-platform-runtime = { version = "0.22.1", default-features = false, features = ["cdk"] }
@@ -32,7 +36,7 @@ serde_bytes = "0.11.19"
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
-toko-tooling = "=0.44.5"
+toko-tooling = "=0.44.6"
 wasmparser = { version = "0.263.0", default-features = false, features = ["std", "validate", "features"] }
 
 [workspace.lints.cargo]

@@ -7,6 +7,8 @@ canic::mount_metrics_endpoint!(canic_management::metrics);
 #[cdk::init]
 fn init() {
     management::open(true, readiness());
+    #[cfg(feature = "auth")]
+    crate::auth::fresh();
 }
 #[cdk::post_upgrade]
 fn post_upgrade() {

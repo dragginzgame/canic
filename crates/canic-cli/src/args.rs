@@ -193,6 +193,9 @@ pub(super) enum ArtifactCommand {
 
 #[derive(Subcommand)]
 pub(super) enum FleetCommand {
+    /// Review exact optional Auth configuration and revocation approvals.
+    #[command(subcommand)]
+    Auth(FleetAuthCommand),
     /// Inspect publications or plan exact removal/restoration; no network calls.
     #[command(subcommand)]
     Artifact(FleetArtifactCommand),
@@ -424,6 +427,7 @@ impl FleetCommand {
             | Self::Call { scope, .. } => Some(scope),
             Self::CompareSubnets { .. }
             | Self::Artifact(_)
+            | Self::Auth(_)
             | Self::Placements { .. }
             | Self::Canister(_)
             | Self::Init { .. }
@@ -431,6 +435,29 @@ impl FleetCommand {
             | Self::View { .. } => None,
         }
     }
+}
+
+#[derive(Subcommand)]
+pub(super) enum FleetAuthCommand {
+    /// Retain the fleet's exact Auth grant; sends nothing.
+    Plan {
+        #[command(flatten)]
+        selection: CanisterConfigArgs,
+        #[arg(long)]
+        state_dir: Option<PathBuf>,
+        /// Actual sole Root controller; this approval grants no application permission.
+        #[arg(long)]
+        controller: String,
+    },
+    /// Retain terminal revocation of an original Auth configuration approval.
+    PlanRevocation {
+        #[arg(value_name = "CONFIGURATION_OPERATION")]
+        operation: String,
+        #[command(flatten)]
+        selection: CanisterConfigArgs,
+        #[arg(long)]
+        state_dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]

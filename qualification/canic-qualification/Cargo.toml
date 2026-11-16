@@ -20,14 +20,19 @@ wasmparser.workspace = true
 canic.workspace = true
 canic-artifact-probe.workspace = true
 canic-asset-catalog.workspace = true
+canic-auth-witness.workspace = true
 canic-effect-probe.workspace = true
 canic-management-protocol.workspace = true
 canic-profile-protocol.workspace = true
+ic-auth.workspace = true
+ic-auth-protocol-types.workspace = true
+ic-platform = { workspace = true, features = ["ed25519"] }
 ic-testkit.workspace = true
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
 tokio.workspace = true
 
 [lints]
