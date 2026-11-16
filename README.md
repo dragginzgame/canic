@@ -684,8 +684,9 @@ macOS 15 Intel. `make ci-native` owns product Clippy, Rustdoc and unit tests;
 `make ci-wasm` owns runtime Clippy and Wasm documentation. Routine CI checks
 formatting and snapshot/pin admission, with one full-history secret scan outside
 the host matrix. It never prepares a signer/server or deploys a fleet. Superseded
-runs are cancelled while the retained run keeps every host. Hosted execution is
-pending in [#3](https://github.com/dragginzgame/canic/issues/3). Toko Tooling 0.44.5
+runs are cancelled while the retained run keeps every host. Hosted Linux and
+policy checks passed; macOS qualification awaits the output-path fix in
+[#3 — Complete hosted CI wiring](https://github.com/dragginzgame/canic/issues/3). Toko Tooling 0.44.5
 is adopted in both workspaces and the snapshot, fixing pin admission for the
 required tooling selection and independent private qualification versions.
 Hosted dependency preparation also requires the repository Actions secret

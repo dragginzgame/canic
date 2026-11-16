@@ -20,13 +20,9 @@ fn resolve_at(path: &Path, base: &Path, depth: usize) -> io::Result<PathBuf> {
             "output base must be absolute",
         ));
     };
-    match absolute.canonicalize() {
-        Ok(path) => return Ok(path),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error),
-    }
     let mut resolved = PathBuf::from("/");
-    // Retain separators and dots: file/., file/.. and file/ must not become files.
+    // Walk even existing paths: macOS canonicalization can erase `file/.` or `file/`.
+    // The same check applies inside symlink targets, before resolving later parts.
     for part in absolute
         .as_os_str()
         .as_bytes()
@@ -48,24 +44,18 @@ fn resolve_at(path: &Path, base: &Path, depth: usize) -> io::Result<PathBuf> {
             _ => {}
         }
         let candidate = resolved.join(OsStr::from_bytes(part));
-        match candidate.canonicalize() {
-            Ok(path) => resolved = path,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => {
-                match fs::symlink_metadata(&candidate) {
-                    Ok(metadata) if metadata.file_type().is_symlink() => {
-                        if depth == 40 {
-                            return Err(io::Error::new(
-                                io::ErrorKind::InvalidInput,
-                                "output alias depth exceeded",
-                            ));
-                        }
-                        resolved = resolve_at(&fs::read_link(&candidate)?, &resolved, depth + 1)?;
-                    }
-                    Ok(_) => return Err(error),
-                    Err(error) if error.kind() == io::ErrorKind::NotFound => resolved = candidate,
-                    Err(error) => return Err(error),
+        match fs::symlink_metadata(&candidate) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                if depth == 40 {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "output alias depth exceeded",
+                    ));
                 }
+                resolved = resolve_at(&fs::read_link(&candidate)?, &resolved, depth + 1)?;
             }
+            Ok(_) => resolved = candidate.canonicalize()?,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => resolved = candidate,
             Err(error) => return Err(error),
         }
     }

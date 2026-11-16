@@ -40,7 +40,7 @@ fn missing_outputs_and_dangling_aliases_share_physical_identity() {
 fn invalid_ancestors_and_cycles_refuse_without_effects() {
     let root = crate::tests::directory().canonicalize().unwrap();
     fs::write(root.join("file"), b"keep").unwrap();
-    for name in [
+    for (index, name) in [
         "file/child",
         "file/.",
         "file/",
@@ -48,10 +48,21 @@ fn invalid_ancestors_and_cycles_refuse_without_effects() {
         "missing/../file/child",
         "missing/../file/.",
         "missing/../file/..",
-    ] {
+    ]
+    .into_iter()
+    .enumerate()
+    {
         assert_eq!(
             resolve(Path::new(name), &root).unwrap_err().kind(),
-            std::io::ErrorKind::NotADirectory
+            std::io::ErrorKind::NotADirectory,
+            "{name}"
+        );
+        let alias = root.join(format!("invalid-{index}"));
+        symlink(name, &alias).unwrap();
+        assert_eq!(
+            resolve(&alias, &root).unwrap_err().kind(),
+            std::io::ErrorKind::NotADirectory,
+            "alias to {name}"
         );
     }
     symlink("b", root.join("a")).unwrap();

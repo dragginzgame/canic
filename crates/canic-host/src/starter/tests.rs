@@ -119,7 +119,7 @@ fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
     )
     .unwrap();
     let original = crate::load_config(&path).unwrap();
-    for case in 0..6 {
+    for case in 0..10 {
         let mut config = original.clone();
         let canisters = &mut config.apps.get_mut("hello").unwrap().canisters;
         let root = canisters.get_mut("root").unwrap();
@@ -129,7 +129,11 @@ fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
             2 => root.wasm = Some("artifacts/app.wasm".into()),
             3 => root.wasm = Some(destination.join("artifacts/app.wasm")),
             4 => root.wasm = Some("./artifacts/./app.wasm".into()),
-            _ => root.wasm = Some("artifacts/missing/../app.wasm".into()),
+            5 => root.wasm = Some("artifacts/missing/../app.wasm".into()),
+            6 => root.wasm = Some("Cargo.toml/.".into()),
+            7 => root.wasm = Some("Cargo.toml/".into()),
+            8 => root.wasm = Some("Cargo.toml/../output.wasm".into()),
+            _ => root.wasm = Some("Cargo.toml/child.wasm".into()),
         }
         std::fs::write(&path, crate::config::encode_config(&config).unwrap()).unwrap();
         assert!(crate::build_app(&path, None, None).is_err());
