@@ -433,31 +433,49 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     ));
     let config = workspace.join("canic.json");
     let executable = std::env::var_os("CANIC_CLI").unwrap();
-    let generated = std::process::Command::new(&executable)
-        .args([
-            "app",
-            "init",
-            "starter",
-            "--fleet",
-            "local",
-            "--network",
-            "local",
-            "--url",
-            &url,
-            "--root-key",
-            &key,
-            "--root-subnet",
-            &owner.client().topology().await.get_nns().unwrap().to_text(),
-            "--routing-canister",
-            &routing.to_text(),
-            "--source",
-            workspace.to_str().unwrap(),
-            "--canic-source",
-            repo().to_str().unwrap(),
-            "--json",
-        ])
-        .output()
-        .unwrap();
+    let generated = {
+        let created = std::process::Command::new(&executable)
+            .args([
+                "app",
+                "init",
+                "starter",
+                "--source",
+                workspace.to_str().unwrap(),
+                "--canic-source",
+                repo().to_str().unwrap(),
+                "--json",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            created.status.success(),
+            "{}",
+            String::from_utf8_lossy(&created.stderr)
+        );
+        std::process::Command::new(&executable)
+            .args([
+                "fleet",
+                "init",
+                "local",
+                "--app",
+                "starter",
+                "--network",
+                "local",
+                "--url",
+                &url,
+                "--root-key",
+                &key,
+                "--root-subnet",
+                &owner.client().topology().await.get_nns().unwrap().to_text(),
+                "--routing-canister",
+                &routing.to_text(),
+                "--config",
+                workspace.join("canic.json").to_str().unwrap(),
+                "--json",
+            ])
+            .output()
+            .unwrap()
+    };
     assert!(
         generated.status.success(),
         "{}",
@@ -1108,29 +1126,47 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             .as_nanos()
     ));
     let executable = std::env::var_os("CANIC_CLI").unwrap();
-    let initialized = std::process::Command::new(&executable)
-        .args([
-            "app",
-            "init",
-            "starter",
-            "--fleet",
-            "first",
-            "--network",
-            "local",
-            "--url",
-            &url,
-            "--root-key",
-            &key,
-            "--root-subnet",
-            &owner.client().topology().await.get_nns().unwrap().to_text(),
-            "--routing-canister",
-            &routing.to_text(),
-            "--source",
-            workspace.to_str().unwrap(),
-            "--json",
-        ])
-        .output()
-        .unwrap();
+    let initialized = {
+        let created = std::process::Command::new(&executable)
+            .args([
+                "app",
+                "init",
+                "starter",
+                "--source",
+                workspace.to_str().unwrap(),
+                "--json",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            created.status.success(),
+            "{}",
+            String::from_utf8_lossy(&created.stderr)
+        );
+        std::process::Command::new(&executable)
+            .args([
+                "fleet",
+                "init",
+                "first",
+                "--app",
+                "starter",
+                "--network",
+                "local",
+                "--url",
+                &url,
+                "--root-key",
+                &key,
+                "--root-subnet",
+                &owner.client().topology().await.get_nns().unwrap().to_text(),
+                "--routing-canister",
+                &routing.to_text(),
+                "--config",
+                workspace.join("canic.json").to_str().unwrap(),
+                "--json",
+            ])
+            .output()
+            .unwrap()
+    };
     assert!(
         initialized.status.success(),
         "{}",

@@ -87,12 +87,14 @@ fn expired_pending_work_cannot_renew_or_replace_newer_admission() {
     let (mut receiver, mut engine, mut authority) = receiver_engine();
     let first = response(&mut receiver, &mut engine, &mut authority, 2, 1);
     let late = duplicate(&first);
+    let after_commit = duplicate(&first);
     assert_eq!(receiver.begin(3), Err(Error::Busy));
     assert_eq!(
         receiver.finish(&mut engine, first, RECEIPT_NS + 2),
         Err(Error::Expired)
     );
     assert!(engine.enrollment().is_none());
+    authority.revoke(RECEIPT_NS + 3).unwrap();
     let next = response(
         &mut receiver,
         &mut engine,
@@ -106,7 +108,17 @@ fn expired_pending_work_cannot_renew_or_replace_newer_admission() {
     );
     assert!(engine.enrollment().is_none());
     receiver.finish(&mut engine, next, RECEIPT_NS + 4).unwrap();
-    assert_eq!(engine.enrollment().unwrap().challenge, [2; 32]);
+    let retained = receiver.current(RECEIPT_NS + 4).unwrap().clone();
+    let metadata = engine.enrollment().unwrap();
+    assert_eq!(metadata.challenge, [2; 32]);
+    assert!(retained.revoked);
+    assert_eq!(retained.request.receipt_deadline_ns, 2 * RECEIPT_NS + 3);
+    assert_eq!(
+        receiver.finish(&mut engine, after_commit, RECEIPT_NS + 5),
+        Err(Error::Conflict)
+    );
+    assert_eq!(engine.enrollment(), Some(metadata));
+    assert_eq!(receiver.current(RECEIPT_NS + 5), Ok(&retained));
 }
 
 fn receiver_engine() -> (

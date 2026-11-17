@@ -43,10 +43,11 @@ pub(crate) fn init() {
                 IssuerConfig {
                     audience: audience(),
                     issuer: api::canister_self(),
-                    max_logins: if cfg!(feature = "profile") { 4 } else { 2 },
+                    max_logins: if cfg!(feature = "profile") { 5 } else { 2 },
                     max_operations: if cfg!(feature = "profile") { 8 } else { 4 },
                     max_operations_per_account: 4,
-                    max_devices_per_account: 2,
+                    // Replacement retains revoked login evidence; it does not reclaim its slot.
+                    max_devices_per_account: if cfg!(feature = "profile") { 3 } else { 2 },
                     max_result_bytes: 16384,
                     issuance_burst: 8,
                     issuance_refill_interval_ns: SECOND,

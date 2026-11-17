@@ -18,11 +18,14 @@ case "$scope" in
     root-maintenance) filter=store_root_tests::root_custody_tests ;;
     *) printf 'Usage: %s [all|readiness|publication|dispatch|custody|admission|quiescence|maintenance|preservation|removal|root-maintenance]\n' "$0" >&2; exit 2 ;;
 esac
+records=$(mktemp target/store/cli.XXXXXX.jsonl)
+cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$records"
+cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected one CLI") end' "$records")
 build() {
     local name=$1 package=$2
     shift 2
     # The public builder owns artifact selection and retained build evidence.
-    canic artifact build --package "$package" "$@" --json > "target/store/$name.json"
+    "$cli" artifact build --package "$package" "$@" --json > "target/store/$name.json"
     cp -- "$(jq -r .wasm "target/store/$name.json")" "target/store/$name.wasm"
 }
 build original ic-wasm-store

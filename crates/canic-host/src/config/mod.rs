@@ -18,7 +18,7 @@ const MAX_CONFIG_BYTES: usize = 32 * 1024;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Config {
-    /// Logical applications; each owns one or more fleets.
+    /// Logical applications; each owns zero or more fleets.
     #[serde(deserialize_with = "unique::map")]
     pub apps: BTreeMap<String, AppConfig>,
 }
@@ -30,8 +30,8 @@ pub struct AppConfig {
     /// Reusable canister definitions shared by every fleet of this app.
     #[serde(deserialize_with = "unique::map")]
     pub canisters: BTreeMap<String, CanisterDefinition>,
-    /// Named deployments of this application.
-    #[serde(deserialize_with = "unique::map")]
+    /// Named deployments; an application can be defined and built without any.
+    #[serde(default, deserialize_with = "unique::map")]
     pub fleets: BTreeMap<String, FleetDeclaration>,
 }
 
@@ -198,8 +198,9 @@ impl Config {
                     }
                 }
             }
-            if definition.fleets.is_empty() || definition.fleets.len() > 16 {
-                return Err(Error::Invalid("each app needs 1–16 fleets".into()));
+            validate_canisters(&definition.resolve_canisters(&BTreeMap::new()))?;
+            if definition.fleets.len() > 16 {
+                return Err(Error::Invalid("each app supports at most 16 fleets".into()));
             }
             for (fleet, config) in &definition.fleets {
                 name(fleet)?;
@@ -263,11 +264,22 @@ impl AppConfig {
                 "fleet binding must name an app canister definition".into(),
             ));
         }
-        let canisters = self
-            .canisters
+        Ok(FleetConfig {
+            auth: fleet.auth.clone(),
+            network: fleet.network.clone(),
+            journal: fleet.journal.clone(),
+            canisters: self.resolve_canisters(&fleet.canisters),
+        })
+    }
+
+    fn resolve_canisters(
+        &self,
+        bindings: &BTreeMap<String, CanisterBinding>,
+    ) -> BTreeMap<String, CanisterConfig> {
+        self.canisters
             .iter()
             .map(|(slot, definition)| {
-                let binding = fleet.canisters.get(slot);
+                let binding = bindings.get(slot);
                 (
                     slot.clone(),
                     CanisterConfig {
@@ -279,13 +291,7 @@ impl AppConfig {
                     },
                 )
             })
-            .collect();
-        Ok(FleetConfig {
-            auth: fleet.auth.clone(),
-            network: fleet.network.clone(),
-            journal: fleet.journal.clone(),
-            canisters,
-        })
+            .collect()
     }
 }
 
@@ -300,6 +306,11 @@ fn select<'a, T>(
         }
     } else if values.len() == 1 {
         return Ok(values.first_key_value().expect("one entry"));
+    }
+    if values.is_empty() {
+        return Err(Error::Invalid(format!(
+            "no {kind}s configured; use {kind} init to add one"
+        )));
     }
     let reason = if selected.is_some() {
         format!("unknown {kind}")
@@ -325,67 +336,69 @@ impl FleetConfig {
         {
             return Err(Error::Invalid("journal path must not be empty".into()));
         }
-        if self.canisters.len() > 32 {
-            return Err(Error::Invalid(
-                "each fleet supports at most 32 canisters".into(),
-            ));
-        }
-        let mut identities = std::collections::BTreeSet::new();
-        let mut managers = 0;
-        for (slot, declaration) in &self.canisters {
-            name(slot)?;
-            if declaration
-                .wasm
-                .as_ref()
-                .is_some_and(|path| path.as_os_str().is_empty() || path.as_os_str().len() > 4096)
-            {
-                return Err(Error::Invalid("Wasm path must contain 1–4096 bytes".into()));
-            }
-            if let Some(role) = &declaration.role {
-                name(role)?;
-            }
-            let mut ancestors = std::collections::BTreeSet::from([slot.as_str()]);
-            let mut parent = declaration.parent.as_deref();
-            while let Some(next) = parent {
-                name(next)?;
-                if !ancestors.insert(next) {
-                    return Err(Error::Invalid(format!(
-                        "canister parent cycle at slot {slot}"
-                    )));
-                }
-                parent = self
-                    .canisters
-                    .get(next)
-                    .ok_or_else(|| {
-                        Error::Invalid(format!("parent slot {next} must exist in the same fleet"))
-                    })?
-                    .parent
-                    .as_deref();
-            }
-            if let Some(id) = &declaration.id {
-                crate::network::principal(id)?;
-                if !identities.insert(id) {
-                    return Err(Error::Invalid(
-                        "canister identity is declared in multiple slots of one fleet".into(),
-                    ));
-                }
-            }
-            if declaration.profile_manager {
-                if declaration.id.is_none() {
-                    return Err(Error::Invalid(
-                        "profile manager observation requires an existing canister id".into(),
-                    ));
-                }
-                managers += 1;
-            }
-        }
-        if managers > 16 {
-            return Err(Error::Invalid("fleet exceeds 16 profile managers".into()));
-        }
-        Ok(())
+        validate_canisters(&self.canisters)
     }
 }
 
+fn validate_canisters(canisters: &BTreeMap<String, CanisterConfig>) -> Result<()> {
+    if canisters.len() > 32 {
+        return Err(Error::Invalid(
+            "each app supports at most 32 canisters".into(),
+        ));
+    }
+    let mut identities = std::collections::BTreeSet::new();
+    let mut managers = 0;
+    for (slot, declaration) in canisters {
+        name(slot)?;
+        if declaration
+            .wasm
+            .as_ref()
+            .is_some_and(|path| path.as_os_str().is_empty() || path.as_os_str().len() > 4096)
+        {
+            return Err(Error::Invalid("Wasm path must contain 1–4096 bytes".into()));
+        }
+        if let Some(role) = &declaration.role {
+            name(role)?;
+        }
+        let mut ancestors = std::collections::BTreeSet::from([slot.as_str()]);
+        let mut parent = declaration.parent.as_deref();
+        while let Some(next) = parent {
+            name(next)?;
+            if !ancestors.insert(next) {
+                return Err(Error::Invalid(format!(
+                    "canister parent cycle at slot {slot}"
+                )));
+            }
+            parent = canisters
+                .get(next)
+                .ok_or_else(|| {
+                    Error::Invalid(format!("parent slot {next} must exist in the same app"))
+                })?
+                .parent
+                .as_deref();
+        }
+        if let Some(id) = &declaration.id {
+            crate::network::principal(id)?;
+            if !identities.insert(id) {
+                return Err(Error::Invalid(
+                    "canister identity is declared in multiple slots of one fleet".into(),
+                ));
+            }
+        }
+        if declaration.profile_manager {
+            if declaration.id.is_none() {
+                return Err(Error::Invalid(
+                    "profile manager observation requires an existing canister id".into(),
+                ));
+            }
+            managers += 1;
+        }
+    }
+    if managers > 16 {
+        return Err(Error::Invalid("fleet exceeds 16 profile managers".into()));
+    }
+    Ok(())
+}
 impl SelectedFleet {
     /// Resolve a named canister's app-owned Wasm input beside the config file.
     ///
@@ -548,7 +561,7 @@ fn lock_path(path: &Path) -> PathBuf {
     value.into()
 }
 
-/// Initialize a new app and its first empty fleet, preserving any existing apps.
+/// Initialize a fleetless app, preserving any existing apps and workspace files.
 ///
 /// Creates a missing config exclusively; edits an existing config under the same
 /// sidecar lock as [`init_fleet`]. Never opens journals or contacts a network.
@@ -556,24 +569,14 @@ fn lock_path(path: &Path) -> PathBuf {
 /// the resulting config before retrying.
 ///
 /// # Errors
-/// Refuses existing app names, invalid names/networks, unreadable or invalid
+/// Refuses existing app names, invalid names, unreadable or invalid
 /// configs, symlinks, config limits and lock contention. A publication sync failure
 /// can leave the complete update visible; inspect the config before retrying.
-pub fn init_app(path: &Path, app: &str, fleet: &str, network: Network) -> Result<Config> {
+pub fn init_app(path: &Path, app: &str) -> Result<Config> {
     name(app)?;
-    name(fleet)?;
-    network.validate()?;
     let definition = AppConfig {
         canisters: BTreeMap::new(),
-        fleets: BTreeMap::from([(
-            fleet.into(),
-            FleetDeclaration {
-                auth: None,
-                network,
-                journal: None,
-                canisters: BTreeMap::new(),
-            },
-        )]),
+        fleets: BTreeMap::new(),
     };
     match std::fs::symlink_metadata(path) {
         Ok(_) => edit_config(path, |config| {

@@ -413,6 +413,24 @@ principal bindings and plan digests; editing source configuration cannot amend a
 already approved operation. Reusable app definitions do not require a generic
 group catalogue or independently deployed group canisters.
 
+An application may have zero fleets. Definition, validation and build require no
+network, signer identity or deployment journal. App owns component recipes,
+service contracts and logical relationships; builds produce artifacts from
+selected source/dependencies; fleets choose deployment policy; deployment state
+retains actual identities, installed versions and operation evidence. Component
+definitions are reusable types, not a permanent promise of one canister each.
+The current named-definition projection remains a bounded implementation; instance
+allocation and deployment topology require their own consumer decisions.
+
+The Toko new-v1 increment admits only its existing workspace shell as one buildable
+component (`apps/toko`, Cargo package `toko-app`). Config initialization preserves
+workspace manifests and application source. Explicit `--source` remains the
+separate greeting-demo generator, not required application scaffolding. Supplied
+Root and Store implementations stay with their owners; this increment neither
+adds them to Toko nor admits a deployment. Greeting/probe success cannot establish
+database/schema admission or authenticated application readiness. Those contracts
+remain deferred until the actual Toko deployment step.
+
 The compiler validates the explicit deployment graph, normalizes sets and produces typed desired state. Service selections have one source of truth; any features or capability descriptions are derived from it. Group expansion is added only if reusable groups are selected. Unknown keys, impossible combinations, unavailable services, contradictory placement and unbounded effects are errors before network mutation. Static policy and mutable deployment policy each have one owner; any override must be explicitly modeled as a narrowing operation.
 
 Keep semantic configuration identity separate from source-file identity. Reformatting a file should not change its meaning; exact source bytes still belong to build evidence when a build can consume them. After approval, the exact compiled plan and selected schema are immutable.
@@ -461,18 +479,20 @@ An autonomous grant is separate from a deployment plan. It permits bounded futur
 
 ### Current command contract
 
-Keep the shipped vocabulary canonical. `canic app init APP --fleet FLEET --network
-NETWORK` adds a new app and its first fleet, creating the config if missing and
-preserving other apps if present. Existing app names are refused.
+Keep the shipped vocabulary canonical. `canic app init APP` adds a fleetless app,
+creating the config if missing and preserving other apps and source if present.
+Existing app names are refused. `canic fleet init FLEET --network NETWORK` is the
+separate deployment declaration step. App initialization rejects fleet/network
+arguments rather than retaining a combined compatibility path.
 `--app APP --fleet FLEET` selects an existing
 deployment; a selector may be omitted only when its choice is unique. See the
 [runnable configuration journey](../../README.md#initialize-an-app-and-fleet).
 
 | Journey | Commands |
 | --- | --- |
-| Initialize and build | `canic app init APP --fleet FLEET --network NETWORK`, `canic app build [--canister SLOT]` from declared recipes, `canic artifact build --package PACKAGE`, `canic artifact inspect WASM_FILE` |
+| Initialize and build | `canic app init APP`, `canic app build [--canister SLOT]` from declared recipes, `canic artifact build --package PACKAGE`, `canic artifact inspect WASM_FILE` |
 | List local declarations | `canic app list`, `canic fleet list`, optionally `--app APP` for fleets |
-| Add another deployment declaration | `canic fleet init FLEET --app APP --network NETWORK` resolves the app definitions with no existing-ID bindings, without creating canisters or journals |
+| Add a deployment declaration | `canic fleet init FLEET --app APP --network NETWORK` resolves the app definitions with no existing-ID bindings, without creating canisters or journals |
 | Define reusable canisters | `canic app canister add SLOT --app APP [--role ROLE] [--parent SLOT] [--wasm PATH]`, `canic app canister list --app APP`; app-owned topology and artifact inputs, shared by all fleets |
 | Bind and list deployment identities | `canic fleet canister bind SLOT --app APP --fleet FLEET --id PRINCIPAL`, `canic fleet canister list --app APP --fleet FLEET`; observation declarations only, never controller or deployment approval; unknown definitions, occupied bindings and conflicting membership refuse |
 | Review and execute a starter fleet or one deployment | `canic fleet plan --controller PRINCIPAL` selects fleet creation, publication or the next installation approval; `--canister SLOT` selects one deployment; `canic fleet apply DIGEST` resumes that exact approval |
@@ -1036,8 +1056,10 @@ contracts and synchronous caller authorization before request decoding; IC DB
 remains an independent library with its own durable codec and fluent semantics.
 The adapter owns no schema, query planner, authority store or lifecycle hooks.
 `make db-test` qualifies the actual library through sparse pages, batch refusal,
-reply rollback, upgrades and maintenance closure. Application CLI access and a
-shared inspection protocol remain future integration work.
+reply rollback, upgrades and maintenance closure. The passive inspection v1
+contract and optional compiled-schema projection are implemented as described
+above. Native application CLI access remains IC DB's separate consumer work;
+query/write DTOs and exposure policy stay application-owned.
 
 This follows the existing Blob mount pattern and retains IcyDB
 `6d421e3601a3d71e42af23ea5fe6b168cb6ef2ac`

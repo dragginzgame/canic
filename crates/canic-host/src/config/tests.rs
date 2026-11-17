@@ -2,18 +2,92 @@ use super::*;
 use crate::tests::{directory, input};
 
 #[test]
+fn fleetless_apps_validate_definitions_and_preserve_existing_workspace() {
+    let root = directory();
+    let path = root.join("canic.json");
+    std::fs::write(root.join("Cargo.toml"), b"existing workspace").unwrap();
+    std::fs::create_dir_all(root.join("apps/toko")).unwrap();
+    std::fs::write(root.join("apps/toko/lib.rs"), b"existing application").unwrap();
+    let config = init_app(&path, "toko").unwrap();
+    assert!(config.select_app(None).unwrap().1.fleets.is_empty());
+    assert!(
+        config
+            .select(None, None)
+            .unwrap_err()
+            .to_string()
+            .contains("no fleets configured")
+    );
+    let definition = CanisterDefinition {
+        wasm: Some("artifacts/toko.wasm".into()),
+        build: Some(BuildInput {
+            manifest: "Cargo.toml".into(),
+            package: "toko-app".into(),
+        }),
+        ..Default::default()
+    };
+    add_app_canister(&path, "toko", "app", definition.clone()).unwrap();
+    let before = std::fs::read(&path).unwrap();
+    for invalid in [
+        CanisterDefinition {
+            role: Some("bad role".into()),
+            ..definition.clone()
+        },
+        CanisterDefinition {
+            parent: Some("missing".into()),
+            ..definition.clone()
+        },
+        CanisterDefinition {
+            parent: Some("invalid".into()),
+            ..definition.clone()
+        },
+        CanisterDefinition {
+            wasm: Some("".into()),
+            ..definition.clone()
+        },
+    ] {
+        assert!(add_app_canister(&path, "toko", "invalid", invalid).is_err());
+        assert_eq!(std::fs::read(&path).unwrap(), before);
+    }
+    let mut omitted: serde_json::Value = serde_json::from_slice(&before).unwrap();
+    omitted["apps"]["toko"]
+        .as_object_mut()
+        .unwrap()
+        .remove("fleets");
+    let decoded: Config = serde_json::from_value(omitted).unwrap();
+    decoded.validate().unwrap();
+    assert!(decoded.apps["toko"].fleets.is_empty());
+    let selected = init_fleet(&path, "toko", "local-demo", Network::Mainnet).unwrap();
+    assert!(selected.config.canisters["app"].id.is_none());
+    assert_eq!(
+        load_config(&path).unwrap().apps["toko"].canisters["app"],
+        definition
+    );
+    assert_eq!(
+        std::fs::read(root.join("Cargo.toml")).unwrap(),
+        b"existing workspace"
+    );
+    assert_eq!(
+        std::fs::read(root.join("apps/toko/lib.rs")).unwrap(),
+        b"existing application"
+    );
+    assert!(!root.join(".canic").exists());
+    std::fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn catalog_and_selection_share_declared_identity_and_reject_duplicates() {
     let dir = directory();
     let local = dir.join("canic.json");
     let nested = dir.join("starter/canic.json");
     std::fs::create_dir(dir.join("starter")).unwrap();
-    init_app(&nested, "starter", "mainnet", Network::Mainnet).unwrap();
+    init_app(&nested, "starter").unwrap();
+    init_fleet(&nested, "starter", "mainnet", Network::Mainnet).unwrap();
     assert_eq!(
         resolve_config_path(&dir, None, Some("starter")).unwrap(),
         nested
     );
     assert_eq!(resolve_config_path(&dir, None, None).unwrap(), nested);
-    init_app(&local, "profile", "mainnet", Network::Mainnet).unwrap();
+    init_app(&local, "profile").unwrap();
     assert_eq!(
         resolve_config_path(&dir, None, Some("starter")).unwrap(),
         nested
@@ -41,7 +115,7 @@ fn catalog_and_selection_share_declared_identity_and_reject_duplicates() {
     );
     assert!(!selected.journal_path(&nested).exists());
     // Duplicate identities never silently choose a different deployment journal.
-    init_app(&local, "starter", "mainnet", Network::Mainnet).unwrap();
+    init_app(&local, "starter").unwrap();
     assert!(resolve_config_path(&dir, None, Some("starter")).is_err());
     std::fs::write(&local, b"malformed").unwrap();
     assert!(resolve_config_path(&dir, None, Some("starter")).is_err());
@@ -57,7 +131,7 @@ fn catalog_and_selection_share_declared_identity_and_reject_duplicates() {
     std::fs::write(&nested, b"malformed").unwrap();
     assert!(resolve_config_path(&dir, None, Some("starter")).is_err());
     std::fs::remove_file(&nested).unwrap();
-    init_app(&nested, "other", "mainnet", Network::Mainnet).unwrap();
+    init_app(&nested, "other").unwrap();
     assert!(resolve_config_path(&dir, None, Some("starter")).is_err());
     assert_eq!(
         resolve_config_path(&dir, None, Some("other")).unwrap(),
@@ -96,13 +170,7 @@ fn discovery_is_bounded_and_does_not_recurse_into_generated_trees() {
     for index in 0..65 {
         let child = dir.join(format!("app-{index}"));
         std::fs::create_dir(&child).unwrap();
-        init_app(
-            &child.join("canic.json"),
-            &format!("app-{index}"),
-            "ic",
-            Network::Mainnet,
-        )
-        .unwrap();
+        init_app(&child.join("canic.json"), &format!("app-{index}")).unwrap();
     }
     assert!(
         discover_configs(&dir, None)
@@ -124,7 +192,7 @@ fn discovery_is_bounded_and_does_not_recurse_into_generated_trees() {
 fn discovery_does_not_follow_child_symlinks() {
     let dir = directory();
     let source = directory();
-    init_app(&source.join("canic.json"), "demo", "ic", Network::Mainnet).unwrap();
+    init_app(&source.join("canic.json"), "demo").unwrap();
     std::os::unix::fs::symlink(&source, dir.join("alias")).unwrap();
     std::fs::create_dir(dir.join("child")).unwrap();
     std::os::unix::fs::symlink(source.join("canic.json"), dir.join("child/canic.json")).unwrap();
@@ -412,7 +480,7 @@ fn nested_unknown_fields_refuse_edits_without_changing_config() {
         std::fs::write(&path, &bytes).unwrap();
         for error in [
             load_config(&path).unwrap_err(),
-            init_app(&path, "another", "mainnet", Network::Mainnet).unwrap_err(),
+            init_app(&path, "another").unwrap_err(),
             init_fleet(&path, "hello", "staging", Network::Mainnet).unwrap_err(),
             add_app_canister(&path, "hello", "worker", CanisterDefinition::default()).unwrap_err(),
         ] {
@@ -435,13 +503,14 @@ fn nested_unknown_fields_refuse_edits_without_changing_config() {
 fn app_and_fleet_initialization_preserve_evidence_and_refuse_conflicts() {
     let root = directory();
     let path = root.join("canic.json");
-    init_app(&path, "hello", "demo", Network::Mainnet).unwrap();
+    init_app(&path, "hello").unwrap();
+    init_fleet(&path, "hello", "demo", Network::Mainnet).unwrap();
     add_app_canister(&path, "hello", "backend", CanisterDefinition::default()).unwrap();
     let before = load_config(&path).unwrap();
     let journal = before.select(None, None).unwrap().journal_path(&path);
     std::fs::create_dir_all(&journal).unwrap();
     std::fs::write(journal.join("evidence"), b"original").unwrap();
-    init_app(&path, "other", "demo", Network::Mainnet).unwrap();
+    init_app(&path, "other").unwrap();
     init_fleet(&path, "hello", "staging", Network::Mainnet).unwrap();
     let after = load_config(&path).unwrap();
     assert_eq!(
@@ -455,8 +524,8 @@ fn app_and_fleet_initialization_preserve_evidence_and_refuse_conflicts() {
         b"original"
     );
     let bytes = std::fs::read(&path).unwrap();
-    for (app, fleet) in [("hello", "demo"), ("../bad", "new"), ("new", "../bad")] {
-        assert!(init_app(&path, app, fleet, Network::Mainnet).is_err());
+    for app in ["hello", "../bad"] {
+        assert!(init_app(&path, app).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
     for (app, fleet) in [("hello", "demo"), ("missing", "new"), ("hello", "../bad")] {
@@ -464,7 +533,7 @@ fn app_and_fleet_initialization_preserve_evidence_and_refuse_conflicts() {
         assert_eq!(std::fs::read(&path).unwrap(), bytes);
     }
     let lock = crate::sidecar_lock::acquire(&lock_path(&path)).unwrap();
-    assert!(init_app(&path, "new", "demo", Network::Mainnet).is_err());
+    assert!(init_app(&path, "new").is_err());
     assert!(init_fleet(&path, "hello", "busy", Network::Mainnet).is_err());
     assert!(add_app_canister(&path, "hello", "busy", CanisterDefinition::default()).is_err());
     assert!(
@@ -498,7 +567,7 @@ fn concurrent_first_app_initializers_cannot_replace_a_winner() {
                 let barrier = &barrier;
                 scope.spawn(move || {
                     barrier.wait();
-                    (app, init_app(path, app, "demo", Network::Mainnet))
+                    (app, init_app(path, app))
                 })
             })
             .collect();
@@ -555,7 +624,7 @@ fn app_limit(root: &Path, many: &Config) {
     };
     let all_path = root.join("all.json");
     init_config(&all_path, &all).unwrap();
-    assert!(init_app(&all_path, "extra", "demo", Network::Mainnet).is_err());
+    assert!(init_app(&all_path, "extra").is_err());
 }
 
 #[cfg(unix)]
@@ -568,14 +637,14 @@ fn fleet_initialization_does_not_follow_config_symlinks() {
     let link = root.join("canic.json");
     std::os::unix::fs::symlink(&original, &link).unwrap();
     assert!(init_fleet(&link, "hello", "new", Network::Mainnet).is_err());
-    assert!(init_app(&link, "other", "demo", Network::Mainnet).is_err());
+    assert!(init_app(&link, "other").is_err());
     assert!(add_app_canister(&link, "hello", "child", CanisterDefinition::default()).is_err());
     assert_eq!(std::fs::read(&original).unwrap(), before);
     assert!(!lock_path(&link).exists());
     let missing = root.join("missing.json");
     let dangling = root.join("dangling.json");
     std::os::unix::fs::symlink(&missing, &dangling).unwrap();
-    assert!(init_app(&dangling, "other", "demo", Network::Mainnet).is_err());
+    assert!(init_app(&dangling, "other").is_err());
     assert!(!missing.exists());
 }
 

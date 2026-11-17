@@ -49,6 +49,18 @@ fn observed<T: DeserializeOwned>(bytes: &[u8]) -> T {
     )
     .unwrap()
 }
+fn enrollment_frame<T: Serialize>(
+    method: u64,
+    direction: ic_wire::Direction,
+    value: &T,
+) -> Vec<u8> {
+    ic_wire::encode(
+        value,
+        ic_wire::Encoding::Frame { method, direction },
+        enrollment::LIMITS,
+    )
+    .unwrap()
+}
 fn profile(seed: u8, user_id: u64, display_name: &str) -> Profile {
     Profile {
         user_id,
@@ -133,6 +145,7 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
     }
     let issuer = actors[0];
     let receivers = &actors[1..];
+    let mut authorities = Vec::new();
     for (root, receiver) in roots.iter().zip(receivers) {
         let grant = enrollment::Grant {
             receiver: Principal::from_slice(receiver.as_slice()),
@@ -153,15 +166,11 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
             not_before_ns: now,
             expires_at_ns: now + 600_000_000_000,
         };
-        let bytes = ic_wire::encode(
-            &grant,
-            ic_wire::Encoding::Frame {
-                method: enrollment::CONFIGURE,
-                direction: ic_wire::Direction::Request,
-            },
-            enrollment::LIMITS,
-        )
-        .unwrap();
+        let bytes = enrollment_frame(enrollment::CONFIGURE, ic_wire::Direction::Request, &grant);
+        authorities.push(json!({
+            "canister": root.to_text(), "configure": bytes,
+            "revoke": enrollment_frame(enrollment::REVOKE, ic_wire::Direction::Request, &grant),
+        }));
         let result = pic
             .update_call(*root, installer, "configure_auth", bytes)
             .await
@@ -191,7 +200,7 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
     let response = ic_wire::Direction::Response;
     let result = |method, value: ProfileResult| frame(method, response, &value);
     let config = json!({ "issuer": issuer.to_text(), "receivers": receivers.iter().map(|id| id.to_text()).collect::<Vec<_>>(),
-        "gateway": gateway.as_str(), "root": trust, "frames": {
+        "gateway": gateway.as_str(), "root": trust, "authorities": authorities, "frames": {
             "putA": frame(PUT, request, &Put { user_id: 1, expected_revision: 0, display_name: "Alice".into() }),
             "putC": frame(PUT, request, &Put { user_id: 2, expected_revision: 0, display_name: "Carol".into() }),
             "remapA": frame(PUT, request, &Put { user_id: 3, expected_revision: 0, display_name: "Alice".into() }),
@@ -202,9 +211,13 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
             "profileAGet": result(GET, Ok(profile(8, 1, "Alice"))),
             "profileC": result(PUT, Ok(profile(10, 2, "Carol"))),
             "unauthGet": result(GET, Err(ProfileError::Unauthenticated)),
+            "unauthPut": result(PUT, Err(ProfileError::Unauthenticated)),
+            "missingGet": result(GET, Err(ProfileError::NotFound)),
             "forbiddenGet": result(GET, Err(ProfileError::Forbidden)),
             "alreadyRegistered": result(PUT, Err(ProfileError::AlreadyRegistered)),
             "revoked": canic::auth::protocol::EstablishSession::encode_response(&Err(canic::auth::protocol::model::AdmissionRefusal::Revoked)).unwrap(),
+            "revokeOk": enrollment_frame(enrollment::REVOKE, response, &Ok::<(), enrollment::Error>(())),
+            "configureOk": enrollment_frame(enrollment::CONFIGURE, response, &Ok::<(), enrollment::Error>(())),
         } });
     let output = repo.join("target/auth-browser-installed");
     std::fs::create_dir_all(&output).unwrap();
@@ -248,16 +261,26 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
         .await
         .unwrap();
     let before = pic.get_stable_memory(receivers[0]).await;
+    let other_writes = pic
+        .query_call(
+            receivers[1],
+            CanisterId::anonymous(),
+            "observe_profile_writes",
+            vec![],
+        )
+        .await
+        .unwrap();
     let upgrade =
         canic_qualification::upgrade_stopped(pic, receivers[0], wasm, vec![], Some(installer))
             .await;
     let after = pic.get_stable_memory(receivers[0]).await;
+    // The replacement was active and could read this owner's profile before upgrade.
     let closed = pic
         .update_call(
             receivers[0],
-            id(key(11)),
+            id(key(15)),
             "profile_get",
-            frame(GET, request, &2_u64),
+            frame(GET, request, &1_u64),
         )
         .await;
     let refresh = pic
@@ -279,12 +302,17 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
     let issuance: IssuerObservation = observed(&issuance);
     assert_eq!(
         (issuance.signatures, issuance.operations, issuance.logins),
-        (5, 5, 4)
+        (6, 6, 5)
     );
     assert_eq!(
         observed::<u32>(&writes),
         2,
         "exactly two successful profile writes; trap rolled back its count"
+    );
+    assert_eq!(
+        observed::<u32>(&other_writes),
+        0,
+        "revoked receiver cannot write"
     );
     upgrade.unwrap();
     assert_eq!(before, after, "upgrade preserved application backing");

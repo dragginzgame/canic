@@ -37,7 +37,6 @@ url.workspace = true
 
 [dev-dependencies]
 ic-platform = { workspace = true, features = ["ed25519"] }
-serde_cbor.workspace = true
 
 [lints]
 workspace = true

@@ -45,8 +45,10 @@ installer, never by editing installed bytes.
   admitted requirements, with general implementations still pending. Keep allocation,
   placement, parentage and controller authority separate.
 - Exclude ICP conversion from Canic; operators fund cycles manually. Application
-  frontend integration and Toko application integration are deferred. The selected
-  consumer remains the Canic profile demo.
+  frontend integration and Toko deployment integration remain deferred. Toko's
+  existing workspace shell is admitted for fleetless definition/build qualification;
+  the managed consumer remains the Canic profile demo. Apps may have zero fleets;
+  initialize apps independently and declare networks only through fleet setup.
 
 ## Ownership and retained-state contracts
 
@@ -127,14 +129,14 @@ The qualification harness owns explicit `make qualification-setup`; simulator se
 and tests share `IC_TESTKIT_SERVER_DIRECTORY`, defaulting to
 `target/qualification/server/prepared`. Tests verify prepared assets. Retire probes only when
 their failure cases have a qualified product owner; renaming is not replacement.
-Testkit 0.108.0 owns client types, selected held replies, prepared assets and
+Testkit 0.109.0 owns client types, selected held replies, prepared assets and
 bounded server/instance ownership. Keep those owners explicit. Successful close
 records a deletion attempt; it does not independently prove remote deletion.
 Missing or corrupt assets refuse offline; only `make qualification-setup` downloads.
 
 ### Blob boundary
 
-- The qualified supplier is registry Blob 0.103.2 in both lockfiles. Keep its
+- The qualified supplier is registry Blob 0.103.3 in both lockfiles. Keep its
   sibling checkout read-only; do not substitute pending supplier work.
   `scripts/dev/blob-inputs.pl` records locked archive identities and
   hashes around installed qualification; changed inputs require requalification.
@@ -158,7 +160,7 @@ Missing or corrupt assets refuse offline; only `make qualification-setup` downlo
 
 ### Auth boundary
 
-- Auth selects registry engine 0.47.2 (`e3ea2c74bbb5fe33f5f07e3aa267699c0ffb6b12`)
+- Auth selects registry engine 0.47.4 (`a85cc80c375349fcc22b1df57e5e7348bacf161b`)
   and Wire/Types 0.43.0. The private browser package remains materialized from
   the qualified 0.47.1 source `a05b5ddd4099a3f64b95deb173a0c16746d98ac5`, never
   the sibling working tree. Both boundaries pass the installed browser journey.

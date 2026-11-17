@@ -70,29 +70,47 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
             .unwrap()
             .as_nanos()
     ));
-    let output = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
-        .args([
-            "app",
-            "init",
-            "starter",
-            "--fleet",
-            "local",
-            "--network",
-            "local",
-            "--url",
-            &url,
-            "--root-key",
-            &key,
-            "--root-subnet",
-            &owner.client().topology().await.get_nns().unwrap().to_text(),
-            "--routing-canister",
-            &routing.to_text(),
-            "--source",
-            workspace.to_str().unwrap(),
-            "--json",
-        ])
-        .output()
-        .unwrap();
+    let output = {
+        let created = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
+            .args([
+                "app",
+                "init",
+                "starter",
+                "--source",
+                workspace.to_str().unwrap(),
+                "--json",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            created.status.success(),
+            "{}",
+            String::from_utf8_lossy(&created.stderr)
+        );
+        std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
+            .args([
+                "fleet",
+                "init",
+                "local",
+                "--app",
+                "starter",
+                "--network",
+                "local",
+                "--url",
+                &url,
+                "--root-key",
+                &key,
+                "--root-subnet",
+                &owner.client().topology().await.get_nns().unwrap().to_text(),
+                "--routing-canister",
+                &routing.to_text(),
+                "--config",
+                workspace.join("canic.json").to_str().unwrap(),
+                "--json",
+            ])
+            .output()
+            .unwrap()
+    };
     assert!(
         output.status.success(),
         "{}",

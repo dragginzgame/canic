@@ -86,16 +86,21 @@ async fn deploy_call_resume_and_upgrade() {
     let icp = repo.join(".tools/ic/bin/icp");
     let config_path = root.join("canic.json");
     let config_path = config_path.to_str().unwrap();
+    let initialized = cli(&root, &["app", "init", "hello", "--config", config_path]);
+    assert_eq!(
+        initialized["configuration"]["apps"]["hello"]["fleets"],
+        serde_json::json!({})
+    );
     let initialized = cli(
         &root,
         &[
-            "app",
+            "fleet",
             "init",
+            "local-demo",
             "--config",
             config_path,
+            "--app",
             "hello",
-            "--fleet",
-            "local-demo",
             "--network",
             "local",
             "--url",
@@ -110,7 +115,7 @@ async fn deploy_call_resume_and_upgrade() {
     );
     assert_eq!(initialized["deployed"], false);
     assert_eq!(
-        initialized["configuration"]["apps"]["hello"]["fleets"]["local-demo"]["canisters"],
+        initialized["configuration"]["config"]["canisters"],
         serde_json::json!({})
     );
     let added = cli(

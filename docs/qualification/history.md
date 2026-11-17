@@ -7,6 +7,324 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Canic 0.220.0 release and Testkit clock adoption — 2026-11-17
+
+Adopt published Testkit 0.109.0, source
+`1fdd03705377c1a74211ec1f4ca9a15440adc0a0`, in the qualification workspace.
+Its exclusive held controller now owns explicit bounded clock progression, with
+uncertain dispatch fencing and original pending-request identity/expiry checks.
+The new installed Auth case crosses the unchanged 30-second receipt boundary on
+one receiver, revokes its real Root grant, and admits a fresh refresh. Releasing
+the old active continuation before or after the new revoked continuation cannot
+clear pending work or replace committed supplier metadata, snapshot or deadline.
+Independent counters retain two reservations/fetches, one installation and zero
+application writes. Reuse the existing barrier fixture; no production bypass,
+forged authenticated response, copied controller or new runtime owner.
+
+The focused new case passes (9.36 seconds). The complete sequential `make ci`
+release gate then passes, including fifteen current Root cases, thirty-one Store
+cases, five CLI publication journeys, ten Blob cases, fourteen Auth cases and
+the DB journey with seven upgrades. The two opt-in historical Root executables
+and existing native expensive build case remain explicitly ignored. Separate
+generated/native browser codec parity, six adapter tests and eleven installed
+headless browser cases pass (36.98 seconds). Pin checks, Make ordering and setup
+diagnostic regressions also pass. Logs and captured inputs are retained in
+`target/release-0.220.0/`; executable source and lockfiles are unchanged throughout
+validation. Reviewed documentation corrections update supplier selections and
+remove the superseded held-clock blocker; the dated earlier evidence is retained.
+
+This supplies the remaining delayed-response acceptance for Canic #9 and delivers
+Canic #18's final oversized inspection reply regression. The complete production
+Auth journey, stable Auth recovery and IC DB's native CLI adoption remain separate.
+All product packages are 0.220.0; qualification packages retain their own versions.
+The installed PATH command reports 0.220.0. GitHub is the release destination;
+all packages remain unpublished and no live fleet is changed.
+
+| Release input | SHA-256 |
+| --- | --- |
+| Product lockfile | `a7659e8443438bd8cf75a8ad63bb0879a6fce3ab1a32bc0ae199d911ba3b9c82` |
+| Qualification lockfile | `507087f9ca8e2e04e556e6748f5103facd60913cb32efbac3a1599b07909754c` |
+| Auth Root executable | `b1771cb43a1b5543971e4d3b24381a1c9769784c56516d63f8fde09c73125929` |
+| Receiver/issuer executable | `0cc2865ae81288bcb095c28b2dc3c52d668ec151905311f4762d7ff27a1eef6e` |
+| Profile/issuer executable | `26453033fb8bb52e416b432f4da06f1c381847b38bfdf93aa71debe277b763a3` |
+
+## Fleetless application definition and real Toko build — 2026-11-17
+
+The maintainer admitted Toko's existing-workspace build as the next consumer and
+explicitly permitted a hard CLI cut. App owns reusable component definitions and
+build inputs; fleets select deployments; journals retain actual operation evidence.
+Remove fleet/network arguments from `app init`, including source generation.
+`fleet init` is the sole deployment declaration command. Zero or omitted fleets
+are valid, but app names, roles, parent graphs, recipe paths and capacity remain
+validated before publication. Reuse the existing projection/validation and locked
+config writer rather than introducing another configuration model or migrator.
+Existing fleet declarations and operation digests remain unchanged.
+
+Reused the recorded scaffold/configuration and Root/Store research at legacy
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` (the generated starter entry below):
+preserve existing source, refuse occupied destinations and keep artifact inputs
+separate from effect authority. The previous mandatory first fleet was a demo
+assumption, not a safety requirement. Reusable types are the design direction;
+multiple-instance allocation, Toko deployment topology and application-specific
+readiness are deferred. No greeting probe is claimed to prove database/schema or
+authenticated-service readiness. No Root/Store implementation was copied to Toko.
+
+Read the consumer at `../toko-new-v1`, then followed its concurrent rename to
+`../toko-new` without changing supplier/application source. Its actual package is
+`toko-app` at `apps/toko`; Canic needs no additional directory layer. Through the
+installed PATH CLI, initialized a scratch app, registered its existing workspace
+recipe and built it offline with zero fleets and no `.canic` journal. The artifact
+is 58,521 bytes, SHA-256
+`3479e0c4feb4f3565ebc0c52cb27d57eae71defc73235d74c96a43acc6baacca`.
+Toko HEAD was `cc62e4d9dd558e3210756e28ec299b07f12293a7` plus its local work;
+the workspace manifest, lockfile, package manifest and shell source hashes were
+unchanged across the build. Evidence stays in `target/toko-fleetless/`; Cargo
+outputs went to Canic's `target/toko-build/`. This is a real build witness, not
+installed Toko, Auth or database qualification.
+
+The generated greeting starter also builds its app with zero fleets (66,711
+bytes), then accepts an explicit `fleet init`. Updated current examples, generated
+guidance and installed fixtures to use the two steps. Host tests pass: 154 cases,
+one existing ignored case. CLI tests pass: 71 cases. The installed CLI journey
+passes (7.93 seconds), covering separate local fleet initialization, deployment,
+receipt recovery and same-principal upgrade. Focused Host/CLI and affected
+qualification Clippy, Host Rustdoc, formatting and tooling agreement pass.
+One enlarged multi-step CLI test initially exceeded its stack; pin its large
+dispatch future on the heap in the existing test helper, without changing runtime
+dispatch or increasing global stack limits. Logs are `target/fleetless-*.log`.
+
+`make canic` installs the new command behavior on the existing PATH. The pending
+changelog becomes 0.220.0 for the removed CLI/API arguments; product package
+versions remain at the delivered 0.219.0 until release. No push, mainnet effect,
+browser launch, supplier edit or dependency change. Both lock hashes match the
+preceding Auth selection. Prior unrelated working changes are preserved.
+
+## Preserved Auth dependency selections — 2026-11-17
+
+Qualify the maintainer-confirmed dependency selections through the existing Auth
+journeys. Registry Auth 0.47.4 source
+`a85cc80c375349fcc22b1df57e5e7348bacf161b` retains the inspected engine contracts;
+its changes since the previously qualified 0.47.2 source move tests into owning
+modules. Read the committed supplier diff without changing its checkout.
+The browser package remains the prepared 0.47.1 source
+`a05b5ddd4099a3f64b95deb173a0c16746d98ac5`; no supplier or browser refresh was made.
+
+The incoming locks also select Runtime/Macros 0.23.17 and Wasm Store 0.3.2.
+Preserve them and test the exact graph. Runtime source is
+`4ed20435b632c108b21a08d3a4855b9c540b751a`; Testkit 0.108.1 remains source
+`02ac139f175069e4809c93aab428ddaee30eca17`. Platform 0.34.13, Protocol 0.3.5,
+Types 0.21.2 and Auth Wire/Types 0.43.0 remain selected. These runs qualify Auth
+composition, not the separate Blob or Store maintenance journeys. The prior DB
+entry records its earlier exact lockfiles; it is not evidence for these later
+Runtime/Store selections.
+
+`CARGO_NET_OFFLINE=true bash scripts/dev/test-auth.sh` passes three native
+enrollment cases and thirteen installed cases (9.73 seconds). The existing
+`--profile-browser` journey passes all eleven browser cases (37.62 seconds),
+using prepared Chromium 1248 headlessly. Coverage includes replacement-login
+isolation, delayed old-key disposal, read-only scope, refreshed Root revocation,
+atomic profile writes and preserved profile state with closed Auth after upgrade.
+`make auth-clippy auth-doc`, formatting and tooling agreement pass. Both lockfile
+hashes remain unchanged across the run. The first offline attempt stopped on an
+uncached locked Store archive; fetching it did not change the resolver selections.
+Logs: `target/auth-adoption-0.47.4.log`,
+`target/auth-browser-adoption-0.47.4.log`, `target/auth-adoption-lint.log`.
+Canic is commit `3d2ef2719450e57484638b4f1db6cb6bcc41d64c` plus pending local work.
+
+| Input | SHA-256 |
+| --- | --- |
+| Product lockfile | `781fcb0487f13cdf64c3123d66c42c7183dd4c89f2048131c1fc442235c85ac8` |
+| Qualification lockfile | `aff7f2ec722a3f619c2d9b506c4bd28e72d5f144ee198a16ba8b49a71dd42f1b` |
+| Auth Root executable | `978b3c453e2d12894642a0422357ead5919360c26a0bb2494ee8cd83a2737578` |
+| Receiver/issuer executable | `1ae82f464d792c923bbbc20be5eeae4af1ce2ac6dcfc2bd06cdc2d67bb46817e` |
+| Profile/issuer executable | `024bb00a566067d19dc819872bd8d2b6cffc8577f439910fa4bdc6d7576ecc2d` |
+
+Read the selected Testkit held controller: 0.108.1 still excludes simulated-time
+changes and automatic progress. Tooling #11 remains open, so Canic #9's installed
+same-receiver supersession and Canic #11's dependent acceptance remain blocked.
+Keep the native stale-result regression and genuine cross-receiver installed
+proof; do not bypass the supplier contract. No new runtime owner, fixture engine,
+dependency override, supplier edit, desktop launch or release was introduced.
+Updated current input references rather than rewriting historical evidence.
+
+## Installed DB inspection reply ceiling — 2026-11-17
+
+Review of Canic #18 found that installed coverage exercised oversized requests
+but not an oversized inspection reply at the final endpoint encoder. Extend the
+existing owner-only fault controls: deliberately expand an admitted projection
+into a bounded synthetic reply larger than 64 KiB. The endpoint traps encoding;
+no partial metadata is returned and the complete stable backing is unchanged.
+Clearing that fault restores the exact catalogue/incarnation and four-row count.
+This is final reply-boundary qualification, not a claim that IC DB admits the
+synthetic schema. Ordinary artifacts contain no fault-control endpoint.
+
+The installed DB journey passes (4.94 seconds), retaining all seven upgrade,
+query/cursor, atomic write/rollback, maintenance/cancellation and incompatible
+state checks. All three native schema-projection cases pass, along with focused
+Wasm/harness Clippy, formatting and tooling agreement. Logs and the script's
+source/feature/artifact capture remain under `target/db/` and
+`target/db-inspection-limits.log`. Reuse the recorded IcyDB typed-mount research;
+no new protocol, allocator, runtime owner, artifact variant or supplier source edit.
+
+Preserve the maintainer-confirmed lockfile changes: qualification selects Testkit
+0.108.1 (source `02ac139f175069e4809c93aab428ddaee30eca17`), Host Process 0.80.5,
+Auth 0.47.4, Blob 0.103.3 and Zeroize 1.9.2. This run qualifies the DB selection;
+it is not new Auth/Blob journey evidence. IC DB remains pinned to
+`950f36807f8ffa7ebe4ca2cff6792fa2bbcbd03e`, Platform 0.34.13 and Storage 0.74.1.
+Both lockfile hashes remain unchanged across the run. Initial offline execution
+stopped on an uncached package; fetching the locked dependencies enabled the run.
+Canic source is 0.219.0 commit `3d2ef2719450e57484638b4f1db6cb6bcc41d64c` plus
+the pending changes captured in the source archive. SHA-256 identities:
+
+| Input | SHA-256 |
+| --- | --- |
+| Ordinary Wasm | `a7f481223c06bf437977e29ea0f11203d2521167b0079868a721c8c10d1a98de` |
+| Fault Wasm | `5c32258e103e34e6ae68870476d4b069678b582324900e0ebcb703f9b8b04b3f` |
+| Incompatible Wasm | `d172e306565a48b7bb325765afd54d085d576e49fa60b30bf3410eae417791e5` |
+| Source archive | `a818a4d5f0274dcb1064acee20c703649f4f239518df8310ee82ee03775eeb8e` |
+| Qualification lockfile | `8bdcaa2c0f1446c677ec4c1d8f5bec76437e75f265c1c34ad53504bbeeccc01e` |
+
+The producer acceptance review is complete locally; Canic #18 remains open for delivery
+of this final installed case. IC DB #4 owns native CLI adoption independently.
+
+## Delivered Auth adapter acceptance review — 2026-11-17
+
+Closed Canic #16 (browser-bound issuer logout) and Canic #17 (generated browser codecs
+and transport adapter) against delivered 0.219.0 commit
+`3d2ef2719450e57484638b4f1db6cb6bcc41d64c`. Reviewed their unchanged implementation
+and the release's three installed logout cases, six browser adapter cases,
+generated/native codec parity and nine installed browser cases. Reused the
+retained release evidence; no unchanged suite was rerun for issue closure.
+The pending eleven-case browser expansion is not needed to claim those delivered
+subtasks complete. Canic #10/#11 and Canic #9 remain open; Tooling #11 owns
+the documented held-clock gap. Canic #18 remains open for its own producer acceptance
+review. Corrected the design's stale claim that its already implemented passive
+inspection protocol was still future work; native CLI adoption remains IC DB-owned.
+
+## Platform-owned signed-fixture encoding — 2026-11-17
+
+Host's signed-request tests now construct and mutate typed Platform envelopes,
+then call `ingress::encode_envelope` with an explicit 4096-byte ceiling. Remove
+the direct `serde_cbor` dev-dependency, unused workspace declaration and raw CBOR
+map mutations. Platform 0.34.13 already owns strict unknown/duplicate/wrong-type
+field regressions; Canic retains its malformed-packet handoff checks for both
+update and status fields, exact original-byte retention, mixed authentication
+refusal, signature tampering and original expiry/authority binding. Reuse the
+legacy retained-custody research recorded for the Platform migration below.
+No runtime signing, dispatch or persisted request bytes change.
+
+All thirteen signed-request tests pass, as do the three Auth and three Store
+removal tests sharing that fixture. The remaining inline test module moves from
+`stored.rs` into `stored/mod.rs` and `stored/tests.rs`; its complete custody test
+passes and a content comparison confirms the move preserves production/test
+content apart from module declaration and formatting. Focused test-target Clippy,
+Rustdoc, formatting and tooling agreement pass. Only the root lockfile's Host
+dependency edge changes; Platform retains its own transitive CBOR implementation.
+
+## Same-receiver stale enrollment boundary — 2026-11-17
+
+Read-only inspection confirms that selected registry Testkit 0.108.0, source
+`78f1d2fbfbda6cac3b39f49dfe8aaa3c26472135`, forbids simulated-time jumps while
+its replies are held. Current remote controller source retains that restriction
+(file blob `6429067970d385492f903244204c740089a25e87`). The producer's explicit
+HTTP-expiry test qualifies refusal only; it does not admit clock progression.
+Canic correctly keeps new admissions busy until its original 30-second receipt
+expires. Wall-time waiting under manual simulator progress does not cross that
+IC deadline, and automatic progress is refused by the held controller.
+
+Filed [Tooling #11](https://github.com/dragginzgame/ic-tooling/issues/11) for a
+supported bounded clock transition with retained genuine callbacks and original
+HTTP expiry. The issue records both required release orders: stale completion
+while a newer attempt is pending, and after its revoked snapshot has committed.
+Canic #9 records that dependency. No installed bypass, shortened production window,
+copied controller, fabricated provenance or sibling source edit was introduced.
+
+The existing native regression now revokes the newer authority and also delivers
+the stale active reply after the new commit. Both stale completions refuse;
+the exact newer snapshot, challenge, deadline and supplier metadata remain intact.
+`cargo test --locked -p canic --features auth-enrollment
+expired_pending_work_cannot_renew_or_replace_newer_admission -- --nocapture`
+passes (one selected case). Test-target Clippy, formatting and tooling agreement
+pass. This changes test code only and does not replace the missing installed
+proof. Prior executable/browser evidence remains unchanged.
+
+## Auth browser scope and current authority — 2026-11-17
+
+All eleven installed browser cases pass (36.68 seconds). The second device admits
+only `read`, then fails a real profile write while retaining its owner's unchanged
+profile. The replacement login independently admits the second receiver. A real
+controller-signed Root revocation followed by the receiver's direct refresh closes
+reads and writes despite cached browser readiness. An exact original configuration
+retry cannot remove revocation; the first receiver remains usable. Native counters
+retain six signatures/operations, five logins, two writes at the first receiver
+and zero at the second. Existing upgrade/persistence assertions also pass.
+
+No product or supplier source changed in this increment. Reuse the login-replacement
+entry below for legacy research, supplier inputs, lockfiles and both executable hashes.
+Only the qualification caller/frames and current documentation change. Enrollment
+frames use their owning contract's limits; the initial run caught accidental use
+of the smaller profile limits before making any browser calls. The failed log is
+`target/auth-browser-authority-initial.log`; the passing log is
+`target/auth-browser-authority.log`. Focused harness Clippy, formatting and tooling
+agreement pass. Qualified source SHA-256 identities:
+
+| Input | SHA-256 |
+| --- | --- |
+| Browser runner | `d8a58bd6bfd5a2882642979e68249adf58073db4bda48c8da796b3ccd803b157` |
+| Browser fixture | `8bd7047f60fe4363c160d0e0ac3c2ce504850b169b3bba376545d25dd1c34d9e` |
+| Native browser harness | `8fbfbe83c330644824acf86b23e9e14dc355b84995b729dce4e931bccefe2ebc` |
+
+Canic #11's selected Ed25519 browser flow now has installed evidence, alongside
+the existing native installed issuer/enrollment cases. Keep it open through
+prerequisite #9's same-receiver expired-held-response supersession proof and
+delivery review. Root revocation is observed after refresh, not instant remote
+invalidation. Certified issuer proofs, production key custody and stable Auth
+preservation remain outside this slice. No new coordination or authority owner
+was added, and no default application or mainnet fleet was changed.
+
+## Auth browser login replacement — 2026-11-17
+
+The pending 0.219.1 work extends Canic #11's existing installed profile journey
+with a tenth case. It uses Auth's actual `disposeLoginKey`, immutable LoginJournal
+and coordinator, Canic's existing HTTP issuer adapter, and both installed owners.
+Reuse the legacy issuer/retry research at `fa92d886ef9beee824de3ec900832722fef85bd2`
+recorded below: retain browser bindings, original results and revocation evidence;
+do not import its Core, global key machinery or parallel login database.
+
+After confirmed logout, the old journal refuses reuse. A fresh journal/key admits
+the same account while delayed old-key disposal remains bound to its predecessor.
+Replaying old issuer/receiver revocations cannot revoke the replacement; old
+coordinator calls remain fenced. Active-login disposal refuses before host custody
+is invoked. Reads preserve the original profile owner and cross-user refusal.
+The fixture retains five issuer logins, with three slots per account; revoked
+logins still consume their slots. This qualifies no reclamation mechanism.
+
+All ten browser cases pass with six observed signatures/operations, five logins
+and two committed profile writes. The receiver upgrade preserves both profiles
+but refuses the previously active replacement reading its own profile; fresh
+enrollment cannot restore lost volatile Auth state. Focused Wasm/native Clippy,
+Rustdoc, formatting and tooling agreement pass. The log is
+`target/auth-browser-replacement.log`.
+
+Inputs are Canic `3d2ef2719450e57484638b4f1db6cb6bcc41d64c` plus this recorded
+working change, registry Auth 0.47.2, Platform 0.34.13 and Testkit 0.108.0, with
+the unchanged private browser source `a05b5ddd4099a3f64b95deb173a0c16746d98ac5`
+and Chromium 156.0.8078.4. Qualified SHA-256 identities:
+
+| Input | SHA-256 |
+| --- | --- |
+| Profile/issuer executable | `64c9057d9adc145ebc36426028e41f6e7bbe95f2c9791c0636fdfc8bc4051891` |
+| Root executable | `898d45d59fae642e3f2044da12f25f85c7dca16e91c1dc3c228e5e930a6bcf13` |
+| Browser runner | `5f80756ca23ab31ad3c8a3fa8377d2d5119bd6126b492829aaf34ff128c9615a` |
+| Native browser harness | `ccfd87539394f67f7f5cb6faf26525dcea77970a13c9f9956f71e93a2b25c6ed` |
+| Qualification lockfile | `ed3491ae0da6d1174fe8a7ecc9a668e089f4c923f297f729b005a7daaf7c8d76` |
+
+The delayed disposal callback uses public fixed-seed fixture custody, not a
+production key store or a guarantee of external deletion. No supplier edits,
+new runtime owner, replacement journal, scheduler or product dependency are added.
+The remaining #11 acceptance review, production custody, certified issuer proofs
+and stable Auth preservation remain separate. No mainnet deployment is performed.
+
 ## Canic 0.219.0 release qualification — 2026-11-17
 
 The complete sequential `make ci` gate passes with the selected locked inputs,

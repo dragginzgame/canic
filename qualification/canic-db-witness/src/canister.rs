@@ -127,7 +127,10 @@ fn inspect(_caller: ic_db::Principal, request: InspectRequest) -> InspectReply {
         Err(Error::IncompatibleSchema) => (Admission::Incompatible, Cardinality::Unavailable),
         Err(_) => (Admission::Unavailable, Cardinality::Unavailable),
     };
-    canic::db::schema::inspect(&schema(), &request, admission, count)
+    let reply = canic::db::schema::inspect(&schema(), &request, admission, count);
+    #[cfg(feature = "fault-injection")]
+    let reply = controls::inspection_reply(reply);
+    reply
 }
 #[expect(
     clippy::needless_pass_by_value,
@@ -217,8 +220,38 @@ mod controls {
     use ic_db::{Maintenance, SchemaTransition};
     use std::cell::Cell;
     thread_local! { static REPLY_FAILURE: Cell<bool> = const { Cell::new(false) }; }
+    thread_local! { static INSPECTION_FAILURE: Cell<bool> = const { Cell::new(false) }; }
     pub(super) fn reply_failure() -> bool {
         REPLY_FAILURE.get()
+    }
+    // Deliberately corrupt an otherwise admitted application reply after projection.
+    // This qualifies the endpoint's final byte ceiling, not a different DB schema.
+    pub(super) fn inspection_reply(
+        mut reply: crate::protocol::InspectReply,
+    ) -> crate::protocol::InspectReply {
+        use canic::db::inspection::{Body, Definition, Selection};
+        if INSPECTION_FAILURE.get()
+            && let Ok(response) = &mut reply
+            && let Selection::Entity(entity) = &mut response.selection
+        {
+            let fields = (0..64)
+                .map(|index| {
+                    let mut field = entity.fields.as_slice()[0].clone();
+                    field.name = ic_wire::Text::new(format!("field{index:059}")).unwrap();
+                    field
+                })
+                .collect::<Vec<_>>();
+            entity.types = ic_wire::List::new(
+                (0..64)
+                    .map(|index| Definition {
+                        name: ic_wire::Text::new(format!("type{index:060}")).unwrap(),
+                        body: Body::Record(ic_wire::List::new(fields.clone()).unwrap()),
+                    })
+                    .collect(),
+            )
+            .unwrap();
+        }
+        reply
     }
     #[ic_db::entity(name="Item", pk(field="id"), index(fields=["score","id"]), fields(
         field(name="id",value(item(prim="Nat64"))),
@@ -234,6 +267,8 @@ mod controls {
         match control {
             0 => REPLY_FAILURE.set(false),
             1 => REPLY_FAILURE.set(true),
+            4 => INSPECTION_FAILURE.set(true),
+            5 => INSPECTION_FAILURE.set(false),
             2 | 3 => {
                 let host = runtime();
                 let target = Schema::new(&[FutureItem::SCHEMA]).unwrap();

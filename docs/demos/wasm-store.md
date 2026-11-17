@@ -126,8 +126,9 @@ Keep `--config`, `--fleet` and any `--state-dir` override when selecting a journ
 Bad records are reported alongside valid rows and exit 1; they are never treated
 as empty or complete. Missing journals remain absent.
 
-`canic app init starter --fleet mainnet --network ic --source starter` generates Root, one `wasm-store` child
-and one application. Custom fresh fleets can declare the same topology with one or two application children,
+`canic app init starter --source starter` generates Root, one `wasm-store` child
+and one application definition, with zero fleets. Declare the deployment separately
+with `canic fleet init mainnet --app starter --network ic`. Custom fresh fleets can declare the same topology with one or two application children,
 with built Wasm inputs and no existing ID bindings. The usual whole-fleet plan
 selects Store delivery automatically. Release names are application canister names;
 versions are full content hashes, frozen with the ordered chunk commitments.

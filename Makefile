@@ -62,10 +62,18 @@ clippy:
 doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --no-deps
 
+# These aggregates share Cargo outputs and installed-test artifact directories.
+# Use the prerequisite-free form supported by the existing GNU Make baseline.
+ifneq ($(filter ci lint,$(MAKECMDGOALS)),)
+.NOTPARALLEL:
+endif
+
 # The CLI journey owns product Clippy/Rustdoc coverage, including the shared canic library.
 lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc profile-clippy profile-doc root-clippy root-doc store-clippy blob-clippy blob-doc auth-clippy auth-doc db-clippy
 
-ci: lint test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
+CI_TEST_TARGETS := test effect-test artifact-custody-test journey-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
+ci: lint
+	$(MAKE) -j1 $(CI_TEST_TARGETS)
 
 # Routine hosted coverage: product packages only, no signer/server provisioning.
 # Installed journeys remain explicit through the existing qualification runners.

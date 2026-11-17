@@ -60,29 +60,47 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
         "target/root/predecessor-{}-{completed}-{untracked}",
         std::process::id()
     ));
-    let initialized = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
-        .args([
-            "app",
-            "init",
-            "transition",
-            "--fleet",
-            "local",
-            "--network",
-            "local",
-            "--url",
-            &url,
-            "--root-key",
-            &key,
-            "--root-subnet",
-            &owner.client().topology().await.get_nns().unwrap().to_text(),
-            "--routing-canister",
-            &routing.to_text(),
-            "--source",
-            workspace.to_str().unwrap(),
-            "--json",
-        ])
-        .output()
-        .unwrap();
+    let initialized = {
+        let created = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
+            .args([
+                "app",
+                "init",
+                "transition",
+                "--source",
+                workspace.to_str().unwrap(),
+                "--json",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            created.status.success(),
+            "{}",
+            String::from_utf8_lossy(&created.stderr)
+        );
+        std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
+            .args([
+                "fleet",
+                "init",
+                "local",
+                "--app",
+                "transition",
+                "--network",
+                "local",
+                "--url",
+                &url,
+                "--root-key",
+                &key,
+                "--root-subnet",
+                &owner.client().topology().await.get_nns().unwrap().to_text(),
+                "--routing-canister",
+                &routing.to_text(),
+                "--config",
+                workspace.join("canic.json").to_str().unwrap(),
+                "--json",
+            ])
+            .output()
+            .unwrap()
+    };
     assert!(
         initialized.status.success(),
         "{}",

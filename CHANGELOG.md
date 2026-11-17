@@ -1,5 +1,95 @@
 # Changelog
 
+## [0.220.0] - 2026-11-17
+
+### 🧩 Changed
+
+Apps can be declared and built with zero fleets. `app init` now rejects `--fleet`
+and network arguments, including with `--source`; use `fleet init` separately.
+Existing app/fleet configs and retained deployment evidence stay readable.
+App validation checks names, recipes and relationships even without a deployment.
+
+From an existing workspace such as Toko (`apps/toko`, package `toko-app`), after
+`make canic` in the Canic checkout:
+
+```sh
+canic app init toko
+canic app canister add app --manifest Cargo.toml --package toko-app --wasm artifacts/toko.wasm
+canic app build
+```
+
+This adds local declarations and builds the existing package without creating
+another workspace, adding infrastructure, selecting an identity or deploying.
+When deployment policy is ready, declare a fleet separately (still no deployment):
+
+```sh
+canic fleet init mainnet --network ic
+canic fleet list
+```
+
+Toko topology, worker allocation and application readiness remain separate work;
+the greeting probe is not database or authenticated-service readiness.
+
+### 🧹 Cleanup
+
+Signed-request fixtures now use Platform's bounded ingress encoder and typed
+envelopes. Remove Canic's direct CBOR dependency and raw CBOR mutation code;
+retain caller-binding, malformed-packet, signature, expiry and exact-byte tests.
+Move the remaining inline Store custody tests into their owning module's test file.
+
+### 🧪 Testing
+
+Adopt Testkit 0.109.0 with Auth 0.47.4 and Runtime 0.23.17. Its bounded
+clock API supplies the missing [Tooling #11](https://github.com/dragginzgame/ic-tooling/issues/11)
+contract: an installed same-receiver test proves an expired active reply cannot
+clear a newer pending refresh or overwrite its committed revocation, in either
+callback order. This completes the delayed-response proof for
+[Canic #9](https://github.com/dragginzgame/canic/issues/9).
+
+[Canic #18](https://github.com/dragginzgame/canic/issues/18) now has an installed oversized-reply check: the endpoint refuses
+encoding, preserves the full stored backing and returns normal inspection after
+clearing the qualification-only fault. After `make canic`, build the ordinary
+witness locally (no deployment):
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml --package canic-db-witness --output target/db/normal.wasm
+canic artifact inspect target/db/normal.wasm
+```
+
+Store qualification now builds and selects the CLI from the current checkout,
+matching the other installed journeys. An older `canic` on PATH can no longer
+silently build its test artifacts. No application or stored-state contract changes.
+The `ci` and `lint` aggregates now serialize their stages under parallel Make,
+so tests wait for lint completion and shared artifacts have one active builder.
+A focused CI wiring check covers lint failure and successful stage ordering.
+
+The installed Auth/profile browser journey now covers replacing a revoked login:
+the new key keeps the same profile owner, delayed old-key disposal cannot remove
+it, and old revocations cannot revoke its session. An active login cannot dispose
+its key through Auth's terminal cleanup hook. Journals and revoked issuer slots
+remain retained; this does not add production wallet custody or enable Auth by default.
+Read-only sessions now have an installed write-refusal check. The browser journey
+also revokes one actual Root grant: after receiver refresh, cached readiness and
+an exact configuration retry cannot restore access; the other receiver stays usable.
+The native enrollment regression now also refuses a stale active reply after a
+newer revoked snapshot commits. Installed same-receiver supersession now exercises the supported Testkit clock boundary.
+
+After `make canic`, build and inspect the optional Auth/profile witness locally:
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --features profile --output target/auth/profile.wasm
+canic artifact inspect target/auth/profile.wasm
+```
+
+These commands neither deploy nor open a browser.
+
+After `make canic`, inspect a locally built Store without deploying it:
+
+```sh
+canic artifact build --package ic-wasm-store --output target/store/local.wasm
+canic artifact inspect target/store/local.wasm
+```
+
 ## [0.219.0] - 2026-11-17
 
 Breaking changes: local network plans require

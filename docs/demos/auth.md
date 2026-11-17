@@ -184,7 +184,7 @@ HTTP gateway with an explicit root key. A separate issuer and two existing
 single-grant Roots admit two independent receivers. No multi-grant Root catalogue
 or new deployment mode is introduced. Qualification keys are public fixed seeds.
 
-Nine browser cases cover lost issuance and admission replies across renderer
+Eleven browser cases cover lost issuance and admission replies across renderer
 reopening, independent device/user logins, profile isolation and immutable IDs,
 reply-encoding failure rolling back actual profile writes, renewal and original
 result lookup, logout/cleanup reopening, retained credential replay refusal,
@@ -195,10 +195,28 @@ deadline across renderer loss; resumed cleanup confirms only authenticated repli
 An attempt timing out at the original cleanup deadline is explicitly resumed from
 that same journal, never assigned a fresh deadline. The late issuer result cannot
 restore readiness, and its unknown issuance remains visible even after confirmed
-cleanup. The native harness independently observes five committed signatures,
-four logins and exactly two successful profile writes.
-It upgrades the receiver and reopens both profiles unchanged; lost volatile Auth
-state stays closed, including to fresh enrollment.
+cleanup. Replacement uses a fresh key and journal; Auth refuses overwriting even
+a finished journal. The old journal and revoked issuer login remain retained.
+The fixture delays terminal key disposal until replacement admission, then checks
+the exact old binding before deletion. Replayed old revocations leave the new
+session and immutable profile owner intact; disposing an active login refuses
+before invoking host custody. These are public fixed-seed custody hooks, not a
+production wallet or key-deletion guarantee. The issuer fixture admits five retained
+logins and three slots per account to include the revoked predecessor; revocation
+does not reclaim its slot. The native harness independently observes six committed
+signatures, five logins and exactly two successful profile writes.
+It upgrades the receiver and reopens both profiles unchanged; the previously active
+replacement login is refused after losing volatile Auth state, including to fresh enrollment.
+
+The independent device requests only `read`: its authenticated profile read succeeds
+while a write is refused without changing the stored profile. The final browser case
+revokes one actual Root grant using a controller-signed HTTP call, then refreshes
+that receiver through its existing direct enrollment pull. Cached browser readiness
+cannot authorize reads or writes after that refresh. An exact configuration retry
+cannot clear revocation, and the independently enrolled receiver remains usable.
+Native observations require zero committed writes at the revoked receiver.
+This checks authority at application execution; it does not claim that Root revocation
+instantly invalidates a receiver's still-fresh earlier snapshot.
 
 The local clock mapping subtracts one second from credential/session deadlines.
 It is an explicit fixture assumption, not production cross-clock synchronization.
@@ -210,8 +228,15 @@ per stream and 90 seconds; the simulator has a separate 180-second lifetime.
 This proves local composition, not a shipped Auth-enabled profile deployment.
 The late-result case holds a real authenticated result after server completion;
 it does not pause the issuer's remote entropy callback. Installed native tests
-cover that callback fence and authority loss separately. Browser device replacement
-and the remaining acceptance cases stay in Canic #11. Production key custody,
+cover that callback fence and authority loss separately. Canic #11 now has installed
+evidence for its selected Ed25519 browser flow. The Canic #9 prerequisite now has
+an installed same-receiver supersession proof using Testkit 0.109.0's bounded
+`advance_time`, supplied by [Tooling #11](https://github.com/dragginzgame/ic-tooling/issues/11).
+The original production receipt window is unchanged. A stale active completion
+cannot clear a newer pending refresh or overwrite its committed revoked snapshot;
+both release orders preserve supplier metadata, deadlines and counters. Raw clock
+changes and automatic progress remain forbidden while replies are held.
+Production key custody,
 certified issuer proofs and stable Auth preservation remain unqualified.
 
 ## Run locally
@@ -241,8 +266,9 @@ responses before publication for two independent receivers. Releasing the revoke
 receiver first cannot install or replace the other's active grant, challenge or
 deadline. The installer alone selects that qualification-only barrier; it supplies
 no snapshot or authenticated marker. There are no simulated-time jumps while held.
-Same-receiver expired/replaced response markers retain native coverage only: this
-does not claim an installed arbitrary network-reordering proof or complete #9.
+A separate same-receiver case uses the bounded Testkit clock operation described
+above and releases the expired continuation before or after the newer revoked
+snapshot. This is controlled callback ordering, not arbitrary network scheduling.
 
 The authority-loss case stops or upgrades a still-active Root after a real
 session is admitted. Both a transport rejection and Root's closed response leave
@@ -266,8 +292,8 @@ not another shipped adapter package or default Canic dependency.
 
 ## Inputs and limits
 
-Both lockfiles select registry engine `ic-auth` 0.47.2 from
-`e3ea2c74bbb5fe33f5f07e3aa267699c0ffb6b12` and passive
+Both lockfiles select registry engine `ic-auth` 0.47.4 from
+`a85cc80c375349fcc22b1df57e5e7348bacf161b` and passive
 `ic-auth-wire` / `ic-auth-protocol-types` 0.43.0. The browser package remains
 pinned to `a05b5ddd4099a3f64b95deb173a0c16746d98ac5` (0.47.1); the installed
 journey qualifies that actual combination. The basic `auth` feature selects
@@ -280,12 +306,12 @@ are required. The exact tested artifact is recorded in
 Application signing and the native test verifier now select registry Platform
 0.34.13's `ed25519` capability as `ic-platform-crypto`. Enrollment and issuer entropy
 use Protocol's `raw_rand` with explicit six-byte request and 42-byte reply budgets.
-Product and qualification select Protocol 0.3.5 with Testkit 0.108.0.
-The witness and its real Root use Runtime 0.23.16, and committed
+Product and qualification select Protocol 0.3.5 with Testkit 0.109.0.
+The witness and its real Root use Runtime 0.23.17, and committed
 Auth source uses the matching Types 0.21.2 boundary. Browser logout and transport
-are tracked by [Canic #16](https://github.com/dragginzgame/canic/issues/16) and
-[Canic #17](https://github.com/dragginzgame/canic/issues/17); production custody
-and the full application journey remain separate.
+shipped in 0.219.0; [Canic #16](https://github.com/dragginzgame/canic/issues/16) and
+[Canic #17](https://github.com/dragginzgame/canic/issues/17) are complete.
+Production custody and the full application journey remain separate.
 
 The witness has a controller-approved Root grant and a public test signer,
 two session slots and bounded volatile replay/verification state. It

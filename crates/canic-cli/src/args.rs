@@ -102,19 +102,13 @@ pub(super) enum AppCommand {
     /// Define or list reusable app canisters; affects declarations for every fleet.
     #[command(subcommand)]
     Canister(AppCanisterCommand),
-    /// Add a new app and its first fleet, creating the config if missing; no deployment.
-    #[command(mut_arg("network", |arg| arg.required(true)))]
+    /// Add a fleetless app, creating the config if missing; preserves existing source.
     Init {
         /// Logical application name.
         #[arg(value_name = "APP")]
         name: String,
         #[command(flatten)]
         config: ConfigArgs,
-        /// Name of the app's first fleet.
-        #[arg(long, value_name = "FLEET")]
-        fleet: String,
-        #[command(flatten)]
-        network: NetworkArgs,
         /// Generate a new standalone source workspace and its config in this directory.
         #[arg(long, value_name = "DIRECTORY", conflicts_with = "config")]
         source: Option<PathBuf>,

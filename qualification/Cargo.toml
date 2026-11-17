@@ -34,7 +34,7 @@ ic-platform-protocol = { version = "0.3.5", default-features = false }
 ic-platform-runtime = { version = "0.23.16", default-features = false, features = ["entrypoint-macros", "system-raw"] }
 ic-platform-types = { version = "0.21.2", default-features = false }
 ic-storage = "0.74.1"
-ic-testkit = { version = "0.108.0", default-features = false, features = ["managed-server"] }
+ic-testkit = { version = "0.109.0", default-features = false, features = ["managed-server"] }
 ic-timers = "0.46.3"
 ic-wasm-store-protocol = "0.3.0"
 ic-wire = { version = "0.24.1", default-features = false }

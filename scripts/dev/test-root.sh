@@ -8,7 +8,8 @@ records=$(mktemp target/root/build.XXXXXX.jsonl)
 cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$records"
 cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected CLI") end' "$records")
 scratch=$(mktemp -d target/root/starter.XXXXXX)
-"$cli" app init starter --fleet mainnet --network ic --source "$scratch/project" --canic-source "$root" --json > "$scratch/initialized.json"
+"$cli" app init starter --source "$scratch/project" --canic-source "$root" --json > "$scratch/initialized.json"
+"$cli" fleet init mainnet --app starter --network ic --config "$scratch/project/canic.json" --json > "$scratch/fleet.json"
 "$cli" fleet canister list --config "$scratch/project/canic.json" --json > "$scratch/definitions.json"
 "$cli" app build --json --config "$scratch/project/canic.json" > "$scratch/built.json"
 cargo fmt --all --manifest-path "$scratch/project/Cargo.toml" -- --check

@@ -12,14 +12,11 @@ fn source() -> PathBuf {
 fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects() {
     let parent = crate::tests::directory();
     let destination = parent.join("starter");
-    let config = create_starter(
-        &destination,
-        "hello",
-        "mainnet",
-        Network::Mainnet,
-        &source(),
-    )
-    .unwrap();
+    let config = create_starter(&destination, "hello", &source()).unwrap();
+    let initial = crate::load_config(&config).unwrap();
+    assert!(initial.apps["hello"].fleets.is_empty());
+    assert!(!destination.join(".canic").exists());
+    crate::init_fleet(&config, "hello", "mainnet", crate::Network::Mainnet).unwrap();
     let loaded = crate::load_config(&config).unwrap();
     let selected = loaded.select(None, None).unwrap();
     assert_eq!(selected.app, "hello");
@@ -68,16 +65,7 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
         Some(false)
     );
     let before = std::fs::read(&config).unwrap();
-    assert!(
-        create_starter(
-            &destination,
-            "other",
-            "mainnet",
-            Network::Mainnet,
-            &source()
-        )
-        .is_err()
-    );
+    assert!(create_starter(&destination, "other", &source()).is_err());
     assert_eq!(std::fs::read(config).unwrap(), before);
     assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 1);
     std::fs::remove_dir_all(parent).unwrap();
@@ -86,21 +74,8 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
 #[test]
 fn invalid_names_or_source_are_refused_before_any_staging() {
     let parent = crate::tests::directory();
-    for (app, fleet, selected_source) in [
-        ("../escape", "mainnet", source()),
-        ("hello", "bad fleet", source()),
-        ("hello", "mainnet", parent.clone()),
-    ] {
-        assert!(
-            create_starter(
-                &parent.join("new"),
-                app,
-                fleet,
-                Network::Mainnet,
-                &selected_source
-            )
-            .is_err()
-        );
+    for (app, selected_source) in [("../escape", source()), ("hello", parent.clone())] {
+        assert!(create_starter(&parent.join("new"), app, &selected_source).is_err());
         assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 0);
     }
     std::fs::remove_dir_all(parent).unwrap();
@@ -110,14 +85,7 @@ fn invalid_names_or_source_are_refused_before_any_staging() {
 fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
     let parent = crate::tests::directory();
     let destination = parent.join("starter");
-    let path = create_starter(
-        &destination,
-        "hello",
-        "mainnet",
-        Network::Mainnet,
-        &source(),
-    )
-    .unwrap();
+    let path = create_starter(&destination, "hello", &source()).unwrap();
     let original = crate::load_config(&path).unwrap();
     for case in 0..10 {
         let mut config = original.clone();
@@ -157,14 +125,7 @@ fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
 fn app_build_refuses_output_aliases_before_creating_a_lock_or_output() {
     let parent = crate::tests::directory();
     let destination = parent.join("starter");
-    let path = create_starter(
-        &destination,
-        "hello",
-        "mainnet",
-        Network::Mainnet,
-        &source(),
-    )
-    .unwrap();
+    let path = create_starter(&destination, "hello", &source()).unwrap();
     std::os::unix::fs::symlink(".", destination.join("alias")).unwrap();
     std::os::unix::fs::symlink("artifacts/app.wasm", destination.join("app-link.wasm")).unwrap();
     for alias in ["alias/artifacts/app.wasm", "app-link.wasm"] {
@@ -205,7 +166,7 @@ fn source_alias_resolves_physically_and_destination_symlinks_are_not_replaced() 
     let alias = parent.join("source with 'quote");
     std::os::unix::fs::symlink(source(), &alias).unwrap();
     let destination = parent.join("starter");
-    create_starter(&destination, "hello", "mainnet", Network::Mainnet, &alias).unwrap();
+    create_starter(&destination, "hello", &alias).unwrap();
     let workspace = manifest(&destination.join("Cargo.toml")).unwrap();
     assert_eq!(
         workspace["workspace"]["dependencies"]["canic"]["path"].as_str(),
@@ -214,7 +175,7 @@ fn source_alias_resolves_physically_and_destination_symlinks_are_not_replaced() 
     for target in [parent.join("absent"), destination] {
         let link = parent.join("occupied");
         std::os::unix::fs::symlink(&target, &link).unwrap();
-        assert!(create_starter(&link, "other", "mainnet", Network::Mainnet, &source()).is_err());
+        assert!(create_starter(&link, "other", &source()).is_err());
         assert_eq!(std::fs::read_link(&link).unwrap(), target);
         std::fs::remove_file(link).unwrap();
     }
@@ -233,7 +194,7 @@ fn concurrent_initializers_publish_one_complete_project() {
             let barrier = barrier.clone();
             std::thread::spawn(move || {
                 barrier.wait();
-                create_starter(&destination, app, "mainnet", Network::Mainnet, &source())
+                create_starter(&destination, app, &source())
             })
         })
         .collect();
@@ -243,7 +204,7 @@ fn concurrent_initializers_publish_one_complete_project() {
         .collect();
     assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     let config = crate::load_config(&destination.join("canic.json")).unwrap();
-    assert_eq!(config.select(None, None).unwrap().config.canisters.len(), 3);
+    assert_eq!(config.select_app(None).unwrap().1.canisters.len(), 3);
     assert!(destination.join("starter-app/src/endpoint.rs").is_file());
     assert!(destination.join("README.md").is_file());
     std::fs::remove_dir_all(parent).unwrap();

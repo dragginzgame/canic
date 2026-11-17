@@ -1,7 +1,5 @@
 //! New source workspace publication; no deployment, signer or journal access.
-use crate::{
-    AppConfig, CanisterDefinition, Config, Error, FleetDeclaration, Network, Result, supplier,
-};
+use crate::{AppConfig, CanisterDefinition, Config, Error, Result, supplier};
 use serde_json::json;
 use std::{
     collections::BTreeMap,
@@ -35,12 +33,7 @@ fn shell_path(path: &Path) -> Result<String> {
     Ok(format!("'{}'", value.replace('\'', "'\"'\"'")))
 }
 
-fn files(
-    app: &str,
-    fleet: &str,
-    network: Network,
-    source: &Path,
-) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
+fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
     let config = Config {
         apps: BTreeMap::from([(
             app.into(),
@@ -83,15 +76,7 @@ fn files(
                         },
                     ),
                 ]),
-                fleets: BTreeMap::from([(
-                    fleet.into(),
-                    FleetDeclaration {
-                        auth: None,
-                        network,
-                        journal: None,
-                        canisters: BTreeMap::new(),
-                    },
-                )]),
+                fleets: BTreeMap::new(),
             },
         )]),
     };
@@ -197,19 +182,13 @@ fn files(
 /// Cargo build, journal opening or network call occurs.
 ///
 /// # Errors
-/// Refuses invalid names/networks, wrong source versions, occupied destinations,
+/// Refuses invalid names, wrong source versions, occupied destinations,
 /// missing parent directories and filesystem failures. Interrupted staging is
 /// retained at the path named in the error; a publication-sync failure can leave
 /// the complete final directory visible. Inspect these paths before retrying.
-pub fn create_starter(
-    destination: &Path,
-    app: &str,
-    fleet: &str,
-    network: Network,
-    source: &Path,
-) -> Result<PathBuf> {
+pub fn create_starter(destination: &Path, app: &str, source: &Path) -> Result<PathBuf> {
     let source = source.canonicalize().map_err(supplier)?;
-    let files = files(app, fleet, network, &source)?;
+    let files = files(app, &source)?;
     let parent = destination
         .parent()
         .filter(|p| !p.as_os_str().is_empty())

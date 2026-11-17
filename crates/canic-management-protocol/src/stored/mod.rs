@@ -1,0 +1,107 @@
+//! Store-backed authority; legacy inline approvals keep their original wire representation.
+use crate::children;
+use ic_wasm_store_protocol::{Manifest, Pin};
+use serde::{Deserialize, Serialize};
+
+/// Admit Store-backed child creation.
+pub const STAGE: u64 = 41;
+/// Reconcile creation with its exact Store binding.
+pub const RECONCILE: u64 = 42;
+/// Admit a Store-backed child upgrade.
+pub const STAGE_UPGRADE: u64 = 43;
+/// Reconcile an upgrade with its exact Store binding.
+pub const RECONCILE_UPGRADE: u64 = 44;
+/// Complete journals and artifact retention evidence.
+pub const CUSTODY: u64 = 45;
+/// Bounded metadata for two children and their eight retained upgrades each.
+pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 65_536,
+    allocation: 4_194_304,
+    nodes: 262_144,
+    depth: 24,
+};
+
+/// Exact published content and its enduring supplier.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Reference {
+    /// Canonical Store canister principal, on the owner's subnet.
+    pub store: String,
+    /// Immutable release and ordered content commitments; never “latest”.
+    pub manifest: Manifest,
+}
+
+/// Approval and artifact supplier form one immutable operation.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Stage<A> {
+    /// Existing effect authority, unchanged in its legacy encoding.
+    pub approval: A,
+    /// Retained before any effect is dispatched.
+    pub reference: Reference,
+}
+impl<A: Serialize> Stage<A> {
+    /// Domain-separated identity for the caller-owned Store pin.
+    /// # Panics
+    /// Panics if the caller supplies metadata outside the bounded contract.
+    #[must_use]
+    pub fn pin(&self, method: u64, slot: children::ChildId) -> Pin {
+        let bytes = ic_wire::encode(&(method, slot, self), ic_wire::Encoding::Payload, LIMITS)
+            .expect("bounded Store operation");
+        Pin {
+            operation: crate::digest(&bytes),
+            manifest: self.reference.manifest.clone(),
+        }
+    }
+}
+
+/// Whether durable retention evidence has committed at the effect owner.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+pub enum PinState {
+    /// No retention request dispatched.
+    #[default]
+    Pending,
+    /// Request committed; reply may have been lost.
+    Issued,
+    /// Exact Store receipt retained or reconstructed through replicated observation.
+    Retained,
+}
+/// Bounded artifact delivery evidence retained independently of the management journal.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Delivery {
+    /// Exact supplier and content.
+    pub reference: Reference,
+    /// Digest of the complete operation; the manifest has one retained owner above.
+    pub operation: [u8; 32],
+    /// Retention progress; an uncertain request is never blindly reissued.
+    pub state: PinState,
+    /// Original cache preparation deadline, retained with the outgoing call.
+    pub cache_deadline: Option<u64>,
+}
+impl Delivery {
+    /// Reconstruct the exact Store request from retained operation and manifest.
+    #[must_use]
+    pub fn pin(&self) -> Pin {
+        Pin {
+            operation: self.operation,
+            manifest: self.reference.manifest.clone(),
+        }
+    }
+}
+/// One child's Store evidence, including all admitted upgrade sources.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Sources {
+    /// Creation source.
+    pub creation: Delivery,
+    /// Upgrade sources in the same order as the complete upgrade journal.
+    pub upgrades: Vec<Delivery>,
+}
+/// Complete maintenance evidence. Legacy custody methods refuse Store-backed children.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct Custody {
+    /// Complete creation and upgrade journals.
+    pub children: children::Custody,
+    /// None denotes an inline child; no raw bytes are exported.
+    pub sources: [Option<Sources>; 2],
+}
+
+#[cfg(test)]
+mod tests;

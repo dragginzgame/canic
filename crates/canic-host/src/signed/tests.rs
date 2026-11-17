@@ -83,7 +83,7 @@ pub(crate) fn signed_fixture(plan: &Plan, call: &Call<'_>, expiry: u64) -> Vec<u
     };
     sign_envelope(&mut update);
     let request_id = update.content.request_id().unwrap();
-    let update_bytes = serde_cbor::to_vec(&update).unwrap();
+    let update_bytes = ingress::encode_envelope(&update, 4096).unwrap();
     let mut status = update;
     status.content = Content::ReadState {
         sender,
@@ -91,7 +91,7 @@ pub(crate) fn signed_fixture(plan: &Plan, call: &Call<'_>, expiry: u64) -> Vec<u
         paths: vec![vec![b"request_status".to_vec(), request_id.to_vec()]],
     };
     sign_envelope(&mut status);
-    let status = serde_cbor::to_vec(&status).unwrap();
+    let status = ingress::encode_envelope(&status, 4096).unwrap();
     let message = serde_json::json!({"format":"icp-signed-message", "version":1,
         "request": {"type":"update", "envelope":BASE64_STANDARD.encode(&update_bytes), "request_id":crate::hex(&request_id), "status_check":BASE64_STANDARD.encode(&status)},
         "network":{"url":plan.network.url(),"root_key":plan.network.root()}, "destination":{"canister":call.effective.to_text()}});
@@ -308,7 +308,7 @@ fn admission_preserves_bytes_and_keeps_authentication_profiles_distinct() {
     anonymous_update.sender_sig = None;
     anonymous_update.sender_pubkey = None;
     let id = anonymous_update.content.request_id().unwrap();
-    let anonymous_update = serde_cbor::to_vec(&anonymous_update).unwrap();
+    let anonymous_update = ingress::encode_envelope(&anonymous_update, 4096).unwrap();
     let mut anonymous_status = ingress::decode_envelope(attempt.status.envelope_bytes(), 4096)
         .unwrap()
         .value;
@@ -322,7 +322,7 @@ fn admission_preserves_bytes_and_keeps_authentication_profiles_distinct() {
     message["request"]["request_id"] = crate::hex(&id).into();
     message["request"]["envelope"] = BASE64_STANDARD.encode(&anonymous_update).into();
     message["request"]["status_check"] = BASE64_STANDARD
-        .encode(serde_cbor::to_vec(&anonymous_status).unwrap())
+        .encode(ingress::encode_envelope(&anonymous_status, 4096).unwrap())
         .into();
     let admitted = admit(
         &serde_json::to_vec(&message).unwrap(),
@@ -333,7 +333,7 @@ fn admission_preserves_bytes_and_keeps_authentication_profiles_distinct() {
     assert_eq!(admitted.update.envelope_bytes(), anonymous_update);
     assert_eq!(
         admitted.status.envelope_bytes(),
-        serde_cbor::to_vec(&anonymous_status).unwrap()
+        ingress::encode_envelope(&anonymous_status, 4096).unwrap()
     );
     assert!(matches!(
         PreparedUpdate::from_bytes(&anonymous_update, effective, 4096),
@@ -344,21 +344,16 @@ fn admission_preserves_bytes_and_keeps_authentication_profiles_distinct() {
             .decode(message["request"][field].as_str().unwrap())
             .unwrap();
         for authentication in ["sender_pubkey", "sender_sig", "sender_delegation"] {
-            let mut packet: serde_cbor::Value = serde_cbor::from_slice(&raw).unwrap();
-            let serde_cbor::Value::Map(ref mut fields) = packet else {
-                unreachable!()
-            };
-            fields.insert(
-                serde_cbor::Value::Text(authentication.into()),
-                if authentication == "sender_delegation" {
-                    serde_cbor::Value::Array(vec![])
-                } else {
-                    serde_cbor::Value::Bytes(vec![])
-                },
-            );
+            let mut packet = ingress::decode_envelope(&raw, 4096).unwrap().value;
+            match authentication {
+                "sender_pubkey" => packet.sender_pubkey = Some(vec![]),
+                "sender_sig" => packet.sender_sig = Some(vec![]),
+                "sender_delegation" => packet.sender_delegation = Some(vec![]),
+                _ => unreachable!(),
+            }
             let mut mixed = message.clone();
             mixed["request"][field] = BASE64_STANDARD
-                .encode(serde_cbor::to_vec(&packet).unwrap())
+                .encode(ingress::encode_envelope(&packet, 4096).unwrap())
                 .into();
             assert!(
                 admit(
@@ -384,7 +379,7 @@ fn tampered_signatures_never_fall_back_to_anonymous_admission() {
         envelope.sender_sig.as_mut().unwrap()[0] ^= 1;
         let mut changed = message.clone();
         changed["request"][field] = BASE64_STANDARD
-            .encode(serde_cbor::to_vec(&envelope).unwrap())
+            .encode(ingress::encode_envelope(&envelope, 4096).unwrap())
             .into();
         assert!(matches!(
             admit(
@@ -411,7 +406,7 @@ fn valid_status_signature_cannot_renew_the_attempt_window() {
     *ingress_expiry += 1;
     sign_envelope(&mut status);
     message["request"]["status_check"] = BASE64_STANDARD
-        .encode(serde_cbor::to_vec(&status).unwrap())
+        .encode(ingress::encode_envelope(&status, 4096).unwrap())
         .into();
     assert!(matches!(
         admit(
@@ -424,7 +419,7 @@ fn valid_status_signature_cannot_renew_the_attempt_window() {
 }
 
 #[test]
-fn packet_admission_retains_bytes_and_refuses_unknown_signed_fields() {
+fn packet_admission_retains_bytes_and_refuses_malformed_packets() {
     let (bytes, plan, call) = fixture();
     let original: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let admitted = admit(&bytes, &super::Authority::from(&plan), &call).unwrap();
@@ -439,39 +434,18 @@ fn packet_admission_retains_bytes_and_refuses_unknown_signed_fields() {
             retained, raw,
             "admission must retain original authentication bytes"
         );
-        for at_content in [false, true] {
-            let mut value: serde_cbor::Value = serde_cbor::from_slice(&raw).unwrap();
-            let serde_cbor::Value::Map(ref mut envelope) = value else {
-                unreachable!()
-            };
-            let map = if at_content {
-                let serde_cbor::Value::Map(map) = envelope
-                    .get_mut(&serde_cbor::Value::Text("content".into()))
-                    .unwrap()
-                else {
-                    unreachable!()
-                };
-                map
-            } else {
-                envelope
-            };
-            map.insert(
-                serde_cbor::Value::Text("unapproved".into()),
-                serde_cbor::Value::Bool(true),
-            );
-            let mut changed = original.clone();
-            changed["request"][field] = BASE64_STANDARD
-                .encode(serde_cbor::to_vec(&value).unwrap())
-                .into();
-            assert!(
-                admit(
-                    &serde_json::to_vec(&changed).unwrap(),
-                    &super::Authority::from(&plan),
-                    &call
-                )
-                .is_err()
-            );
-        }
+        // Platform owns structural CBOR rejection. This consumer check proves
+        // that a malformed original packet in either signed-message field refuses.
+        let mut changed = original.clone();
+        changed["request"][field] = BASE64_STANDARD.encode(&raw[..raw.len() - 1]).into();
+        assert!(
+            admit(
+                &serde_json::to_vec(&changed).unwrap(),
+                &super::Authority::from(&plan),
+                &call
+            )
+            .is_err()
+        );
     }
 }
 

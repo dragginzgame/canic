@@ -20,7 +20,6 @@ command available on PATH:
 make -C {source} canic
 canic app build
 canic app canister list
-canic fleet canister list
 ```
 
 The dependency uses your selected local Canic checkout. If it moves, update
@@ -38,6 +37,8 @@ creation debit allocates 1T to Store and 3T to Root. Root funds the 1T applicati
 attachment from its allocation, leaving room for its 0.5T reserve:
 
 ```sh
+canic fleet init mainnet --network ic
+canic fleet canister list
 canic fleet plan --identity canic-mainnet
 canic fleet status OPERATION
 canic fleet apply OPERATION --identity canic-mainnet

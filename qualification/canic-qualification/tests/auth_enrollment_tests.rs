@@ -19,7 +19,7 @@ async fn refresh_state(pic: &PocketIc, target: CanisterId) -> RefreshObservation
     .unwrap()
 }
 
-async fn configure(f: &super::Fixture) {
+async fn configure(f: &super::Fixture) -> enrollment::Grant {
     let pic = f.owner.client();
     let grant = grant(f.target, pic.get_time().await.as_nanos_since_unix_epoch());
     let bytes = pic
@@ -35,12 +35,11 @@ async fn configure(f: &super::Fixture) {
         enrollment_response::<Result<(), enrollment::Error>>(enrollment::CONFIGURE, &bytes),
         Ok(())
     );
+    grant
 }
 
 #[tokio::test(flavor = "current_thread")]
 async fn held_authenticated_replies_keep_receiver_bindings_and_revocation_isolated() {
-    use ic_testkit::held::{Catalog, Fixture as Held, Limits, Reply};
-
     let f = fixture(false).await;
     configure(&f).await;
     let pic = f.owner.client();
@@ -79,31 +78,7 @@ async fn held_authenticated_replies_keep_receiver_bindings_and_revocation_isolat
         );
     }
 
-    let gate = pic.create_canister().await;
-    let catalog = Catalog::new(
-        &[Reply {
-            method: "hold",
-            bytes: &[],
-        }; 2],
-        Limits {
-            slots: 2,
-            name_bytes: 8,
-            reply_bytes: 0,
-        },
-    )
-    .unwrap();
-    let mut held = Held::new(
-        pic,
-        gate.to_text().parse().unwrap(),
-        &catalog,
-        100_000_000_000,
-        8192,
-    )
-    .await
-    .unwrap();
-    pic.add_cycles(gate, 1_000_000_000_000).await;
-    pic.install_canister(gate, held.wasm().to_vec(), vec![], None)
-        .await;
+    let (gate, mut held) = held_gate(pic).await;
     for receiver in [f.target, second] {
         assert_eq!(
             pic.update_call(
@@ -445,6 +420,152 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
         assert_eq!(state.usage, original.usage);
         assert_eq!(state.enrollment, original.enrollment);
         assert_eq!(refresh_state(pic, f.target).await, second);
+        f.close().await;
+    }
+}
+
+async fn held_gate(pic: &PocketIc) -> (CanisterId, ic_testkit::held::Fixture) {
+    use ic_testkit::held::{Catalog, Fixture as Held, Limits, Reply};
+    let gate = pic.create_canister().await;
+    let catalog = Catalog::new(
+        &[Reply {
+            method: "hold",
+            bytes: &[],
+        }; 2],
+        Limits {
+            slots: 2,
+            name_bytes: 8,
+            reply_bytes: 0,
+        },
+    )
+    .unwrap();
+    let held = Held::new(
+        pic,
+        gate.to_text().parse().unwrap(),
+        &catalog,
+        100_000_000_000,
+        8192,
+    )
+    .await
+    .unwrap();
+    pic.add_cycles(gate, 1_000_000_000_000).await;
+    pic.install_canister(gate, held.wasm().to_vec(), vec![], None)
+        .await;
+    (gate, held)
+}
+
+async fn pending(
+    held: &ic_testkit::held::Fixture,
+    pic: &PocketIc,
+    count: usize,
+) -> Vec<ic_testkit::held::Request> {
+    for _ in 0..30 {
+        let tokens = held.pending(pic).await.unwrap();
+        if tokens.len() == count {
+            return tokens;
+        }
+        pic.tick().await;
+    }
+    panic!("held reply count did not reach {count}");
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn expired_held_response_cannot_clear_newer_pending_or_committed_revocation() {
+    for old_first in [true, false] {
+        let f = fixture(false).await;
+        let grant = configure(&f).await;
+        let pic = f.owner.client();
+        let (gate, mut held) = held_gate(pic).await;
+        assert_eq!(
+            pic.update_call(
+                f.target,
+                f.installer,
+                "set_refresh_barrier",
+                gate.as_slice().to_vec()
+            )
+            .await
+            .unwrap(),
+            [1]
+        );
+        let old_call = pic
+            .submit_call(f.target, f.installer, "control", vec![1])
+            .await
+            .unwrap();
+        let old_token = pending(&held, pic, 1).await.remove(0);
+        let old = refresh_state(pic, f.target).await;
+        assert_eq!(
+            (old.reserved, old.dispatched, old.fetched, old.installed),
+            (1, 1, 1, 0)
+        );
+        assert!(!control(pic, f.target, f.installer, 1).await);
+        assert_eq!(refresh_state(pic, f.target).await, old);
+        let before = pic.get_time().await.as_nanos_since_unix_epoch();
+        let after = held
+            .advance_time(pic, Duration::from_nanos(old.deadline_ns - before + 1))
+            .await
+            .unwrap();
+        assert!(after.as_nanos_since_unix_epoch() > old.deadline_ns);
+        assert_eq!(held.pending(pic).await.unwrap().len(), 1);
+        let bytes = pic
+            .update_call(
+                f.root,
+                f.installer,
+                "revoke_auth",
+                enrollment_request(enrollment::REVOKE, &grant),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            enrollment_response::<Result<(), enrollment::Error>>(enrollment::REVOKE, &bytes),
+            Ok(())
+        );
+        let new_call = pic
+            .submit_call(f.target, f.installer, "control", vec![1])
+            .await
+            .unwrap();
+        let new_token = pending(&held, pic, 2)
+            .await
+            .into_iter()
+            .find(|token| token.slot() == 1)
+            .unwrap();
+        let newer = refresh_state(pic, f.target).await;
+        assert_eq!(
+            (
+                newer.reserved,
+                newer.dispatched,
+                newer.fetched,
+                newer.installed
+            ),
+            (2, 2, 2, 0)
+        );
+        assert!(newer.deadline_ns > old.deadline_ns);
+        assert_eq!(observe(pic, f.target).await.enrollment, None);
+        if old_first {
+            held.release(pic, &old_token).await.unwrap();
+            assert_eq!(pic.await_call(old_call.clone()).await.unwrap(), [0]);
+            assert_eq!(refresh_state(pic, f.target).await, newer);
+            assert_eq!(observe(pic, f.target).await.enrollment, None);
+            assert!(!control(pic, f.target, f.installer, 1).await);
+            assert_eq!(refresh_state(pic, f.target).await, newer);
+        }
+        held.release(pic, &new_token).await.unwrap();
+        assert_eq!(pic.await_call(new_call).await.unwrap(), [1]);
+        let committed = snapshot(pic, f.target).await;
+        assert!(committed.revoked);
+        assert_eq!(committed.grant, grant);
+        assert_eq!(committed.request.receipt_deadline_ns, newer.deadline_ns);
+        let metadata = observe(pic, f.target).await;
+        let counters = refresh_state(pic, f.target).await;
+        assert_eq!(counters.installed, 1);
+        if !old_first {
+            held.release(pic, &old_token).await.unwrap();
+            assert_eq!(pic.await_call(old_call).await.unwrap(), [0]);
+        }
+        assert_eq!(snapshot(pic, f.target).await, committed);
+        assert_eq!(observe(pic, f.target).await, metadata);
+        assert_eq!(refresh_state(pic, f.target).await, counters);
+        assert_eq!(metadata.writes, 0);
+        assert!(held.pending(pic).await.unwrap().is_empty());
         f.close().await;
     }
 }

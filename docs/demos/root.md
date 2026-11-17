@@ -100,8 +100,8 @@ From the Canic checkout, build the CLI and choose an unused directory for a new 
 
 ```sh
 make canic
-canic app init starter --fleet mainnet --network ic \
-  --source starter
+canic app init starter --source starter
+canic fleet init mainnet --app starter --network ic
 canic app build --app starter
 cd starter
 canic app canister list --app starter
@@ -169,7 +169,8 @@ From the Canic checkout, choose an unused project name. This adds a second
 instance of the generated greeting package with its own artifact output:
 
 ```sh
-canic app init siblings --fleet mainnet --network ic --source siblings
+canic app init siblings --source siblings
+canic fleet init mainnet --app siblings --network ic
 canic app canister add worker --app siblings --parent root --role worker --wasm artifacts/worker.wasm --manifest Cargo.toml --package starter-app
 canic app build --app siblings
 canic fleet plan --app siblings --identity canic-mainnet

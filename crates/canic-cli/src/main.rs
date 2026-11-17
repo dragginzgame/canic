@@ -121,24 +121,16 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
         Commands::App(AppCommand::Init {
             name,
             config,
-            fleet,
-            network,
             source,
             canic_source,
         }) => {
             if let Some(source) = source {
                 let default_source = args::checkout();
                 let canic_source = canic_source.as_deref().unwrap_or(&default_source);
-                let path = canic_host::create_starter(
-                    source,
-                    name,
-                    fleet,
-                    network.clone().into_network()?,
-                    canic_source,
-                )?;
+                let path = canic_host::create_starter(source, name, canic_source)?;
                 if !cli.json {
                     return Ok(Output::Text(format!(
-                        "Initialized app {name}\nFleet: {fleet}\nConfig: {}\n\nRoot\n├─ Wasm Store\n└─ Application\n\nSource created; nothing built or deployed. See the generated README for build steps.\n",
+                        "Initialized app {name}\nConfig: {}\n\nRoot\n├─ Wasm Store\n└─ Application\n\nSource created; nothing built or deployed. See the generated README for build steps.\n",
                         ic_host_text::escape(&path.to_string_lossy()),
                     )));
                 }
@@ -150,11 +142,10 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 .config
                 .clone()
                 .unwrap_or_else(|| PathBuf::from("canic.json"));
-            let declaration =
-                canic_host::init_app(&path, name, fleet, network.clone().into_network()?)?;
+            let declaration = canic_host::init_app(&path, name)?;
             if !cli.json {
                 return Ok(Output::Text(format!(
-                    "Initialized app {name}\nFleet: {fleet}\nConfig: {}\nNo canisters defined yet. Use app canister add.\nLocal files only; nothing deployed or funded.\n",
+                    "Initialized app {name}\nConfig: {}\nNo canisters defined yet. Use app canister add.\nLocal files only; nothing deployed or funded.\n",
                     ic_host_text::escape(&path.to_string_lossy()),
                 )));
             }

@@ -1,13 +1,16 @@
 # Canic qualification
 
 This workspace owns installed effect-boundary and product regression tests.
-Actors select Platform Runtime 0.23.16 and Timers 0.46.3. Current upgrade fixtures
+Actors select Platform Runtime 0.23.17 and Timers 0.46.3. Current upgrade fixtures
 stop/drain before replacing an executable, then restart explicitly; application
 admission (including Blob activation) remains separate. `make growth-test` includes
 lost stop/start callbacks and owner reopening. `make journey-test` checks exact
 Host stop/status/start signature retention across lost installation evidence.
 No current-suite pass qualifies the ignored legacy fixtures requiring external
-artifacts. See the dated [Runtime adoption evidence](../docs/qualification/history.md).
+artifacts. The latest preserved Runtime/Testkit selections have focused Auth
+evidence; the DB run records its earlier inputs separately. Neither implies every
+fleet journey was rerun. See the dated
+[Runtime adoption evidence](../docs/qualification/history.md).
 
 Store-native tests and the standalone upload/reopen/version-reuse witness now live
 in `dragginzgame/ic-wasm-store`. The two local workspaces pin its passive protocol;
@@ -59,7 +62,7 @@ case uses the real CLI and ICP signer: exact fleet grant planning, certified
 controller prerequisites, configuration, receiver refresh, terminal revocation
 and lost local reply recovery with unchanged signed bytes. Native cases cover
 config conflicts, historical plan encoding and preservation-upgrade refusal.
-`bash scripts/dev/test-auth.sh auth_enrollment_tests` selects three additional
+`bash scripts/dev/test-auth.sh auth_enrollment_tests` selects five additional
 installed cases: overlapping refreshes retain one reservation/call/deadline,
 and expiry during actual entropy/snapshot awaits cannot publish new authority.
 The latter uses separate Root/receiver subnets to isolate the await boundaries,
@@ -69,6 +72,14 @@ commit boundaries; no production fault switch or substitute snapshot is used.
 The authority-loss case stops or upgrades an active Root. Failed refreshes retain
 their busy windows and cannot renew the last snapshot or session; access refuses
 at and after the original freshness deadline without another application write.
+The fourth case releases genuine held replies in reverse order across two
+independent receivers, preserving their respective active/revoked bindings.
+The fifth case uses Testkit's bounded `advance_time` to cross the original receipt
+deadline while retaining a genuine fetched reply on one receiver. The stale active
+completion cannot clear a newer pending attempt or overwrite its committed revoked
+snapshot; both release orders preserve metadata, counters, deadlines and zero writes.
+This adopts [Tooling #11](https://github.com/dragginzgame/ic-tooling/issues/11); raw
+clock jumps and automatic progress remain excluded while replies are held.
 `bash scripts/dev/test-auth.sh auth_issuer_tests` selects installed local-key
 issuance/renewal and lookup-only reconciliation. Actual ingress account/browser
 separation, independent signature verification/counts, a Root-enrolled receiver,
@@ -78,7 +89,7 @@ closure are covered. The supplier owns the sole intent/result/renewal engine.
 `auth_logout_tests` adds browser-bound revocation, two independent devices,
 in-flight initial/renewal fencing, retained results/deadlines, real pruning,
 malformed input, reply rollback and closed state after upgrade. Registry Auth
-0.47.2 / Wire and Types 0.43.0 supply the sole retained binding engine; the private
+0.47.4 / Wire and Types 0.43.0 supply the sole retained binding engine; the private
 browser package remains the separately pinned 0.47.1 source.
 `make auth-browser-prepare` explicitly prepares the immutable browser supplier;
 `make auth-browser-test` checks generated codecs, native frame parity and the
@@ -87,23 +98,31 @@ small transport/cleanup adapter without opening a browser.
 then runs installed HTTP/IndexedDB qualification in headless Chromium. It uses a
 separate issuer, two Roots and two independently enrolled receivers, composing
 the real profile persistence engine through the witness's optional `profile`
-feature. Nine browser cases cover original issuance/admission recovery across
+feature. Eleven browser cases cover original issuance/admission recovery across
 renderer loss, two users and independent device logins, immutable owner rules,
 reply rollback, renewal, cleanup reopening, retained-proof rejection, actual
 Unconfirmed cleanup, cross-tab logout fencing a suspended SDK signer, and a real
-issuer result delayed until after logout. Network interruption during cleanup
+issuer result delayed until after logout. A replacement login uses a fresh journal
+and key, retaining the revoked login's journal and issuer slot. Delayed old-key
+disposal and replayed old revocations preserve the replacement and profile owner;
+active-login disposal refuses before invoking the fixture's custody callback.
+An admitted read-only session cannot write. Revoking one real Root grant and
+refreshing its receiver defeats cached browser readiness and an exact configuration
+retry without affecting the other receiver. This does not claim instant remote revocation.
+Network interruption during cleanup
 retains the consumed attempt and original deadline across renderer reopening;
 late issuance cannot restore readiness or erase the journal's unknown outcome. The
 native harness independently counts committed signatures/profile writes and
-upgrades a receiver: profile backing reopens unchanged while Auth stays closed.
+upgrades a receiver: profile backing reopens unchanged while the previously active
+replacement login loses access and Auth stays closed.
 These tests do not qualify production key custody, external signer uncertainty,
 certified issuer proofs or managed Auth preservation. Default profile deployment
 still uses its original caller identity path. See the
 [Auth guide](../docs/demos/auth.md) for exact inputs and the remaining issue scopes.
 The qualification application's signer and native verifier use Platform 0.34.13
 Ed25519. Product enrollment and qualification both use Protocol 0.3.5 for
-actual `raw_rand` framing. Testkit 0.108.0 shares Protocol 0.3 for held replies. Actors use
-Runtime 0.23.16. Host uses Platform 0.34.13's native transport; both graphs have
+actual `raw_rand` framing. Testkit 0.109.0 shares Protocol 0.3 for held replies. Actors use
+Runtime 0.23.17. Host uses Platform 0.34.13's native transport; both graphs have
 removed Platform 0.33.7 as part of [Canic #14](https://github.com/dragginzgame/canic/issues/14).
 Host placement/subnet comparison now selects registry Topology 0.109.2, sharing
 published Platform 0.34.13, Protocol 0.3.5 and Types 0.21.2. Its native Host/CLI
@@ -133,7 +152,7 @@ bindings without that identity remain readable with unchanged digests but cannot
 make network requests. No trust is inferred from a routing canister. Fixed wire
 fixtures retain independent legacy codec evidence without linking the old crate.
 
-All simulator client imports select Testkit 0.108.0. The Auth harness additionally
+All simulator client imports select Testkit 0.109.0. The Auth harness additionally
 selects its bounded held-reply feature for actual cross-receiver publication order.
 Its optional `managed-server` capability also owns prepared assets, bounded
 startup/output and server/instance custody. The old lifecycle dependency is removed
@@ -148,9 +167,11 @@ prepares the simulator for every suite. Select `make effect-test`,
 `make artifact-custody-test` or `make journey-test` for the renamed workflows;
 `root-test`, `growth-test`, `profile-test` and `endpoint-test` keep their names.
 `make store-test` qualifies versioned Store custody and Root's Store-backed
-creation/upgrade engine, after `make canic` and simulator preparation. It builds
-Store and Root executables through the public artifact builder, checks bounded
-Wire frames, resumes publication across Store maintenance and verifies byte reuse.
+creation/upgrade engine after simulator preparation. The runner builds and selects
+the checkout's CLI through Cargo artifact records; it does not require an installed
+`canic` on PATH. It builds Store and Root executables through the public artifact
+builder, checks bounded Wire frames, resumes publication across Store maintenance
+and verifies byte reuse.
 Root-mediated publication remains usable after controller handover: incomplete
 uploads resume after Root maintenance without changing Root stable bytes.
 Malformed/unauthorized/expired requests preserve state; lost Root replies retain
@@ -230,7 +251,7 @@ whole-fleet planning of Store maintenance or mainnet use.
 The automatic local path is owned by the installed CLI publication runner:
 `bash scripts/dev/test-publication.sh fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child_plans`.
 It creates an isolated signer, generates the default starter through `app init
---source`, builds all three recipes and bootstraps the normal Root/Store/app with
+--source`, declares its network with `fleet init`, builds all three recipes and bootstraps the normal Root/Store/app with
 the default 4T budget. It installs a qualification-only fault Root through reviewed
 maintenance, selects a changed Store
 artifact, refuses reconcile before admission, pauses before install and activation,
@@ -332,7 +353,7 @@ not invoke signing or continue maintenance.
 Native fleet tests admit both full 8 MiB manifests and
 preserve existing inline fleets with or without Store and their retained digests.
 `make blob-test` builds Blob-only and profile-composed executable pairs using the optional
-Canic adapter and registry Blob 0.103.2. Ten installed cases cover user
+Canic adapter and registry Blob 0.103.3. Ten installed cases cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,
 non-resurrecting replay, drain/reopen/exact activation, reopen refusal and populated
 0.100.6 predecessor compatibility. The optional profile composition shares one
@@ -712,6 +733,13 @@ backing. The original executable then reopens all seven rows. Normal Wasm exclud
 entrypoint. Requests bound results to 1–3 and candidates to 1–4, with 1 KiB engine
 output and a 64 KiB frame envelope; writes contain at most four rows. These are
 application witness bounds, not new engine limits.
+
+The fault artifact also deliberately expands an inspection reply after successful
+schema projection. The installed endpoint must refuse its final encoding rather
+than return truncated metadata, preserve the entire stable backing, and resume
+the original catalogue/incarnation/cardinality after the fault is cleared. This
+tests the final application reply ceiling; the injected metadata is not a claim
+that IC DB admits that compiled schema. Ordinary artifacts have no such control.
 
 Inspection returns a complete catalogue of at most 64 exposed entities and a
 selected entity bound to the observed executable schema fingerprint. Names have

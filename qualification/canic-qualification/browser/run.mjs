@@ -78,14 +78,16 @@ async function qualify() {
     assert.deepEqual(result.result, config.frames.profileA); assert.equal(result.counts.writes, 1);
     assert.equal(result.counts.issue, 0); assert.equal(result.counts.lookup, 0); assert.equal(result.counts.admit, 2);
   });
-  const b = await open({ device: 12 });
+  const b = await open({ device: 12, scopes: ['read'] });
   const c = await open({ device: 11, accountSeed: 10, loseIssue: true });
   await check('independent device and user sessions preserve immutable profile ownership', async () => {
     const bResult = await b.evaluate(async () => {
       await flow.coordinator.ensureSession(flow.targets[0]);
-      return Array.from(await flow.get(flow.targets[0], flow.config.frames.getA));
+      return { deniedWrite: Array.from(await flow.write(flow.targets[0], flow.config.frames.changeA)),
+        own: Array.from(await flow.get(flow.targets[0], flow.config.frames.getA)) };
     });
-    assert.deepEqual(bResult, config.frames.profileAGet);
+    assert.deepEqual(bResult.deniedWrite, config.frames.unauthPut);
+    assert.deepEqual(bResult.own, config.frames.profileAGet);
     const cResult = await c.evaluate(async () => {
       let lost = false;
       try { await flow.coordinator.ensureSession(flow.targets[0]); }
@@ -284,6 +286,92 @@ async function qualify() {
     assert.deepEqual(after.profile, config.frames.unauthGet);
     assert.deepEqual(await pending.evaluate(() => flow.counts), { issue: 1, renew: 0, lookup: 0, admit: 0, writes: 0 });
     await pending.close(); await cleanup.close();
+  });
+  await check('replacement login preserves the owner while delayed old-key disposal stays bound to the old login', async () => {
+    const replaced = await a.evaluate(async () => {
+      const old = flow;
+      const oldBinding = { generation: old.generation, caller: old.browser.getPrincipal().toText() };
+      // Public fixed-seed fixture custody, not a production key store. Conditional
+      // disposal belongs to the host; Auth supplies the exact terminal binding.
+      let currentKey = { ...oldBinding, identity: old.browser };
+      let release, entered, disposedBinding, disposedPhase;
+      const hold = new Promise(resolve => { release = resolve; });
+      const ready = new Promise(resolve => { entered = resolve; });
+      const disposal = canicProfile.disposeLoginKey({ journal: old.journal, generation: old.generation,
+        caller: old.browser.getPrincipal(), dispose: async (binding, status) => {
+          disposedBinding = binding; disposedPhase = status.phase;
+          entered(); await hold;
+          if (currentKey?.generation === binding.generation && currentKey.caller === binding.caller)
+            currentKey = undefined;
+        } });
+      await ready;
+      let reuse;
+      try { await old.journal.start({ generation: 'replacement', caller: canicProfile.key(15).getPrincipal(), issuer: old.issuer }); }
+      catch (error) { reuse = error.code; }
+      await canicProfile.setup(old.config, { device: 15 });
+      currentKey = { generation: flow.generation, caller: flow.browser.getPrincipal().toText(), identity: flow.browser };
+      const receipt = await flow.coordinator.ensureSession(flow.targets[0]);
+      release(); await disposal;
+      let early, invoked = false;
+      try { await canicProfile.disposeLoginKey({ journal: flow.journal, generation: flow.generation,
+        caller: flow.browser.getPrincipal(), dispose: async () => { invoked = true; } }); }
+      catch (error) { early = error.code; }
+      let stale;
+      try { await old.coordinator.ensureSession(old.targets[0]); } catch (error) { stale = error.code; }
+      // Replay actual old revocations after replacement admission. They must not
+      // revoke the new login or its receiver session for the same account.
+      const request = canicProfile.logoutCodec.encodeRequest(null);
+      const issuerReply = await old.adapter.revoke(old.issuer, old.browser, request, AbortSignal.timeout(5000));
+      const receiverReply = await old.adapter.revoke(old.targets[0], old.browser, request, AbortSignal.timeout(5000));
+      return { reuse, oldBinding, disposedBinding, disposedPhase, early, invoked, stale,
+        retained: currentKey?.identity.getPrincipal().toText(), caller: flow.browser.getPrincipal().toText(),
+        subject: canicProfile.Principal.fromUint8Array(receipt.subject).toText(), account: flow.account.getPrincipal().toText(),
+        issuerLogout: canicProfile.logoutCodec.decodeResponse(issuerReply).tag,
+        receiverLogout: canicProfile.logoutCodec.decodeResponse(receiverReply).tag,
+        oldStatus: (await old.journal.inspect()).phase, newStatus: (await flow.journal.inspect()).phase,
+        oldRead: Array.from(await old.raw('profile_get', old.targets[0], old.browser, old.config.frames.getA)),
+        own: Array.from(await flow.get(flow.targets[0], flow.config.frames.getA)),
+        other: Array.from(await flow.get(flow.targets[0], flow.config.frames.getC)),
+        counts: flow.counts };
+    });
+    assert.equal(replaced.reuse, 'login_exists');
+    assert.deepEqual(replaced.disposedBinding, replaced.oldBinding); assert.equal(replaced.disposedPhase, 'finished');
+    assert.equal(replaced.retained, replaced.caller); assert.notEqual(replaced.caller, replaced.oldBinding.caller);
+    assert.equal(replaced.early, 'not_current'); assert.equal(replaced.invoked, false);
+    assert.equal(replaced.stale, 'not_current'); assert.equal(replaced.subject, replaced.account);
+    assert.equal(replaced.issuerLogout, 'Revoked'); assert.equal(replaced.receiverLogout, 'Revoked');
+    assert.equal(replaced.oldStatus, 'finished'); assert.equal(replaced.newStatus, 'active');
+    assert.deepEqual(replaced.oldRead, config.frames.unauthGet);
+    assert.deepEqual(replaced.own, config.frames.profileAGet); assert.deepEqual(replaced.other, config.frames.forbiddenGet);
+    assert.deepEqual(replaced.counts, { issue: 1, renew: 0, lookup: 0, admit: 1, writes: 0 });
+  });
+  await check('current Root revocation overrides cached browser readiness only at its selected receiver', async () => {
+    const result = await a.evaluate(async () => {
+      const target = flow.targets[1], selected = flow.config.authorities[1];
+      const root = canicProfile.Principal.fromText(selected.canister), controller = canicProfile.key(13);
+      await flow.coordinator.ensureSession(target);
+      const before = Array.from(await flow.get(target, flow.config.frames.getA));
+      const revoked = Array.from(await flow.raw('revoke_auth', root, controller, selected.revoke));
+      // Root revocation is not instantly visible across canisters. Refresh through
+      // the receiver's existing direct authority pull before asserting closure.
+      const refreshed = Array.from(await flow.control(target, 1));
+      const admissions = flow.counts.admit;
+      const read = Array.from(await flow.get(target, flow.config.frames.getA));
+      const write = Array.from(await flow.write(target, flow.config.frames.putA));
+      const afterAdmissions = flow.counts.admit;
+      const retry = Array.from(await flow.raw('configure_auth', root, controller, selected.configure));
+      const retried = Array.from(await flow.control(target, 1));
+      const stillClosed = Array.from(await flow.get(target, flow.config.frames.getA));
+      const other = Array.from(await flow.get(flow.targets[0], flow.config.frames.getA));
+      return { before, revoked, refreshed, read, write, admissions, afterAdmissions, retry, retried, stillClosed, other };
+    });
+    assert.deepEqual(result.before, config.frames.missingGet, 'authenticated read reached the empty application store');
+    assert.deepEqual(result.revoked, config.frames.revokeOk); assert.deepEqual(result.refreshed, [1]);
+    assert.deepEqual(result.read, config.frames.unauthGet); assert.deepEqual(result.write, config.frames.unauthPut);
+    assert.equal(result.afterAdmissions, result.admissions, 'cached readiness cannot replace server authorization');
+    assert.deepEqual(result.retry, config.frames.configureOk); assert.deepEqual(result.retried, [1]);
+    assert.deepEqual(result.stillClosed, config.frames.unauthGet);
+    assert.deepEqual(result.other, config.frames.profileAGet);
   });
   await context.close();
   console.log(`${cases} installed Canic profile/browser cases passed`);

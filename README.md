@@ -141,7 +141,7 @@ have no aliases.
 
 | Command | Input and scope |
 | --- | --- |
-| `app init APP --fleet FLEET --network ic` | Declare an app in `--config PATH`, or add `--source DIRECTORY` (checkout override: `--canic-source CHECKOUT`) to generate a new standalone workspace and its own config. No deployment. |
+| `app init APP` | Declare an app in `--config PATH`, or add `--source DIRECTORY` (checkout override: `--canic-source CHECKOUT`) to generate a new standalone workspace and its own config. No deployment. |
 | `app build` | Build the selected app’s declared workspace/package recipes; `--canister NAME` builds only that canister. Prepare missing Cargo locks once and preserve existing locks. |
 | `app list` | List apps in the current/direct-child configs, or only `--config PATH`. Duplicate names require explicit config selection. |
 | `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. `ic-wasm-store` builds from the workspace's locked supplier protocol source. `--output WASM_FILE` atomically replaces a build input at a configured path. App names do not select packages. |
@@ -214,10 +214,25 @@ Listings show each config location from the same catalog used by `--app`. Counts
 declared fleets/canister slots, not proof of deployment or health. Use
 `canic fleet show --app profile --fleet mainnet` for current deployment observations.
 
-In a project without `canic.json`, initialize an app and its first fleet:
+An app can have zero fleets. From an existing workspace, register its application
+package without generating another workspace or changing application code:
 
 ```sh
-canic app init hello --fleet mainnet --network ic
+canic app init toko
+canic app canister add app --manifest Cargo.toml --package toko-app --wasm artifacts/toko.wasm
+canic app build
+```
+
+The package can live at `apps/toko`; Canic uses the explicit Cargo package recipe,
+not a directory-name convention. Builds require no deployment network, signer or
+journal. For an isolated greeting demo, `app init APP --source DIRECTORY` creates
+new source and a fleetless config, and refuses an occupied destination.
+
+In a project without `canic.json`, initialize an app, then declare a fleet when ready:
+
+```sh
+canic app init hello
+canic fleet init mainnet --app hello --network ic
 canic fleet show --app hello --fleet mainnet
 ```
 
@@ -323,10 +338,11 @@ editors; avoid simultaneous manual edits. Do not delete the sidecar while an edi
 is running. A filesystem sync failure can occur after the complete update becomes
 visible; inspect `fleet list` before retrying.
 
-Add another app with its own first fleet through the same command:
+Add another app, then declare its first fleet separately:
 
 ```sh
-canic app init another-app --fleet mainnet --network ic
+canic app init another-app
+canic fleet init mainnet --app another-app --network ic
 canic app list
 canic fleet list --app another-app
 ```
@@ -679,6 +695,11 @@ local fleets must supply all four inputs. Mainnet's trust inputs are compiled in
 Run `make help` for development commands. `make ci` is the aggregate local check;
 the individual targets select narrower checks. `make install-hooks` optionally
 enables the shared formatting hook.
+The `ci` and `lint` aggregates serialize their stages even with `-j`: lint must
+finish before installed tests, whose runners share artifact directories. Cargo
+can still parallelize compilation within each stage. The small wiring check is
+`bash scripts/ci/test-check-order.sh`; it records recipes without running Cargo
+or a simulator.
 
 Run `make lint` to check both product and qualification workspaces against the
 adopted [Toko Tooling lint policy](TOKO-TOOLING.md#common-rust-lint-policy).

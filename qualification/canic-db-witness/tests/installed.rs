@@ -361,6 +361,37 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
     canic_qualification::upgrade_stopped(pic, canister, fault.clone(), vec![], None)
         .await
         .unwrap();
+    let before_limit = client.catalogue().await;
+    let backing = pic.get_stable_memory(canister).await;
+    client.control(4).await;
+    let error = pic
+        .query_call(
+            canister,
+            owner,
+            "db_inspect",
+            frame(
+                INSPECT,
+                &Request::Entity {
+                    schema: before_limit.schema,
+                    name: ic_wire::Text::new("Item".into()).unwrap(),
+                    count: true,
+                },
+                ic_wire::Direction::Request,
+            ),
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        error.reject_message.contains("endpoint refused: Encode("),
+        "oversized inspection must reach the final encoder: {error:?}"
+    );
+    assert_eq!(pic.get_stable_memory(canister).await, backing);
+    client.control(5).await;
+    assert_eq!(client.catalogue().await, before_limit);
+    assert_eq!(
+        client.inspect().await.cardinality,
+        Cardinality::Available(4)
+    );
     client.control(1).await;
     let error = pic
         .update_call(

@@ -1,6 +1,6 @@
 // Fixed consumer of the actual Canic adapter and Auth lifecycle. No journal imitation.
 import { LoginJournal, SessionCoordinator, retrieveCredential, establishSession, cleanupOnce,
-  cleanupUntilFinished, httpUpdateTransport } from '@dragginzgame/ic-auth-client';
+  cleanupUntilFinished, disposeLoginKey, httpUpdateTransport } from '@dragginzgame/ic-auth-client';
 import { Ed25519KeyIdentity } from '@tokostudios/ic-platform/identity';
 import { Principal } from '@tokostudios/ic-platform/principal';
 import { httpIssuerAdapter } from '../../../crates/canic/browser/src/issuer.ts';
@@ -12,7 +12,7 @@ const bounded = () => AbortSignal.timeout(5000);
 const counts = () => ({ issue: 0, renew: 0, lookup: 0, admit: 0, writes: 0 });
 
 async function setup(config, { device = 9, accountSeed = 8, reopen = false,
-  loseIssue = false, loseAdmission = false } = {}) {
+  loseIssue = false, loseAdmission = false, scopes = ['read', 'write'] } = {}) {
   const account = key(accountSeed), browser = key(device), issuer = Principal.fromText(config.issuer);
   const targets = config.receivers.map(value => Principal.fromText(value));
   const generation = `device-${device}`, name = `canic-profile-${device}`;
@@ -40,7 +40,7 @@ async function setup(config, { device = 9, accountSeed = 8, reopen = false,
     reconcile: async (...args) => { flow.counts.lookup++; return adapter.transport.reconcile(...args); },
   };
   const options = { journal, generation, browser, account, issuer, transport,
-    scopes: ['read', 'write'], ttlSecs: 60n,
+    scopes, ttlSecs: 60n,
     admit: async (...args) => {
       flow.counts.admit++;
       flow.admission = new Uint8Array(args[2]);
@@ -64,4 +64,4 @@ async function setup(config, { device = 9, accountSeed = 8, reopen = false,
 }
 
 globalThis.canicProfile = { setup, key, nowNs, retrieveCredential, establishSession, SessionCoordinator,
-  cleanupOnce, cleanupUntilFinished, logoutCodec, Principal };
+  cleanupOnce, cleanupUntilFinished, disposeLoginKey, logoutCodec, Principal };

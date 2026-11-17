@@ -160,7 +160,7 @@ Canic's existing artifact builder and runs ten installed tests with synthetic
 cycles. `make blob-clippy` and `make blob-doc` select the adapter and actual caller.
 The two artifacts and input receipts stay under `target/blob/`; no live IC or
 Caffeine request is issued. Optional feature selection keeps Blob/Storage/Runtime
-out of Canic's default runtime graph. Both workspaces select published Blob 0.103.2,
+out of Canic's default runtime graph. Both workspaces select published Blob 0.103.3,
 archive SHA-256 `559aa9a43ac96817d4c703285007e7bbd3b413b134efc2952d17646c04c52639`,
 from source `ff1aaafc75d80cd51c12f232dd758d4883a7aa21`.
 The current witness uses Runtime 0.23.16 and Types 0.21.2; Storage's older raw-memory

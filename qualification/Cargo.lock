@@ -225,7 +225,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.219.0"
+version = "0.220.0"
 dependencies = [
  "ic-auth",
  "ic-auth-protocol-types",
@@ -233,7 +233,7 @@ dependencies = [
  "ic-blob-storage",
  "ic-db",
  "ic-platform-protocol",
- "ic-platform-runtime 0.23.16",
+ "ic-platform-runtime 0.23.17",
  "ic-wire",
  "serde",
  "sha2 0.11.1",
@@ -244,7 +244,7 @@ name = "canic-artifact-probe"
 version = "0.0.0"
 dependencies = [
  "ic-platform-protocol",
- "ic-platform-runtime 0.23.16",
+ "ic-platform-runtime 0.23.17",
  "ic-platform-types",
  "ic-timers",
  "ic-wire",
@@ -261,7 +261,7 @@ dependencies = [
  "canic",
  "canic-profile-protocol",
  "canic-profile-worker",
- "ic-platform-runtime 0.23.16",
+ "ic-platform-runtime 0.23.17",
  "ic-platform-types",
  "ic-storage",
  "ic-wire",
@@ -280,7 +280,7 @@ dependencies = [
  "ic-auth-protocol-types",
  "ic-platform",
  "ic-platform-protocol",
- "ic-platform-runtime 0.23.16",
+ "ic-platform-runtime 0.23.17",
  "ic-platform-types",
  "ic-storage",
  "ic-wire",
@@ -296,7 +296,7 @@ dependencies = [
  "canic",
  "canic-qualification",
  "ic-db",
- "ic-platform-runtime 0.23.16",
+ "ic-platform-runtime 0.23.17",
  "ic-storage",
  "ic-testkit",
  "ic-wire",
@@ -310,7 +310,7 @@ name = "canic-effect-probe"
 version = "0.0.0"
 dependencies = [
  "ic-platform-protocol",
- "ic-platform-runtime 0.23.16",
+ "ic-platform-runtime 0.23.17",
  "ic-platform-types",
  "ic-wire",
  "serde",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.219.0"
+version = "0.220.0"
 dependencies = [
  "ic-wasm-store-protocol",
  "ic-wire",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-protocol"
-version = "0.219.0"
+version = "0.220.0"
 dependencies = [
  "ic-wire",
  "serde",
@@ -339,7 +339,7 @@ dependencies = [
 
 [[package]]
 name = "canic-profile-worker"
-version = "0.219.0"
+version = "0.220.0"
 dependencies = [
  "canic-profile-protocol",
  "ic-storage",
@@ -1004,9 +1004,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth"
-version = "0.47.2"
+version = "0.47.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08c03a3acc6bf2b0499845d0b255738067405b713b100f0f86132d94c321405a"
+checksum = "aeb54cd597f065b16bc896e7773a18ff47190754ef77df17b4de15ca8a89ef10"
 dependencies = [
  "ic-auth-protocol-types",
  "ic-platform",
@@ -1037,9 +1037,9 @@ dependencies = [
 
 [[package]]
 name = "ic-blob-storage"
-version = "0.103.2"
+version = "0.103.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "559aa9a43ac96817d4c703285007e7bbd3b413b134efc2952d17646c04c52639"
+checksum = "3ffae03a73eeb90b9dd6d83b2d7850b6f05d2610eedec74eb30c5bf6226a1fd3"
 dependencies = [
  "ic-platform-types",
  "ic-storage",
@@ -1107,9 +1107,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-process"
-version = "0.80.4"
+version = "0.80.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a88492b7a656509c3664f4f4ea68d5cf5303c3ec1c22bc64d6f4c41ded6128a3"
+checksum = "73930a7f8d56062e7fa5c8821b5259b355ea841e9137842644619bfbbe8927b2"
 dependencies = [
  "errno",
  "libproc",
@@ -1140,9 +1140,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-macros"
-version = "0.23.16"
+version = "0.23.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "affde65d589d002a963eaaac97538eee39021c805125223076c65f55593cac2b"
+checksum = "8b291d0610822352f1b69e21ec5669b2f2a56b5629c09fd719374b3b5ea9a74e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1171,9 +1171,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-runtime"
-version = "0.23.16"
+version = "0.23.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0724826cb1344a689458e60d0e3ddcc92331ae5b82264ecdaff887923645018d"
+checksum = "dfc857c146215a6f2ae50e724c70b7afffaebeb407c54c283f6860357d5da439"
 dependencies = [
  "ic-platform-macros",
  "ic-platform-runtime-guard",
@@ -1182,9 +1182,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-runtime-guard"
-version = "0.23.16"
+version = "0.23.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "153f322c800d2bb8e428bd597305834e5750d1f52d357b68aadc73fc2a9690a7"
+checksum = "32124ec3fa34eb2a21a2818a8578757057d9fb2eb57f6355f73d925bc46e2258"
 
 [[package]]
 name = "ic-platform-types"
@@ -1213,9 +1213,9 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.108.0"
+version = "0.109.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6fa2e6157d27d15ba1bc93923adc3221e1c09f9f28ec2f8bdde09b04b528cf80"
+checksum = "6405078e5332b34ab898d4c32c41f39b358655bb3d4aae508d3ff17f781cf66c"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -1235,7 +1235,7 @@ version = "0.46.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978acbba1761d3d45e0e8424368ab0ab69b2bfbb996ac1fe3321cc6f8358f2c5"
 dependencies = [
- "ic-platform-runtime 0.23.16",
+ "ic-platform-runtime 0.23.17",
 ]
 
 [[package]]
@@ -1258,9 +1258,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wasm-store-protocol"
-version = "0.3.1"
+version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "475e45c69d6142238e726219ee5c661d70b204f3d3894ff0f133ede8e84d6d69"
+checksum = "35f94c84a51da22d38907575b18456840be135aff385c79a6138427ab1ad8b9b"
 dependencies = [
  "ic-wire",
  "serde",
@@ -3228,9 +3228,9 @@ dependencies = [
 
 [[package]]
 name = "zeroize"
-version = "1.9.1"
+version = "1.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
+checksum = "85ccff8a4805aba1eaa4cd4afcd49f7557dd2cf5fd79ffc37f8959466effc5aa"
 
 [[package]]
 name = "zerotrie"

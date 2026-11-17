@@ -6,11 +6,11 @@ fn local_initialization_requires_explicit_root_subnet() {
     let root_key = "00".repeat(133);
     let args = [
         "canic",
-        "app",
+        "fleet",
         "init",
-        "local-test",
-        "--fleet",
         "local",
+        "--app",
+        "local-test",
         "--network",
         "local",
         "--url",
@@ -39,7 +39,8 @@ fn local_initialization_requires_explicit_root_subnet() {
 async fn json(args: &[&str]) -> serde_json::Value {
     let cli =
         Cli::try_parse_from(["canic", "--json"].into_iter().chain(args.iter().copied())).unwrap();
-    let Output::Json(value) = run(&cli).await.unwrap() else {
+    // Keep the large command-dispatch future off the stack of multi-step journeys.
+    let Output::Json(value) = Box::pin(run(&cli)).await.unwrap() else {
         panic!("expected JSON");
     };
     value
@@ -64,7 +65,7 @@ async fn selectors_infer_only_unique_apps_and_fleets() {
                 .chain(["--config", path.to_str().unwrap()]),
         )
         .unwrap();
-        let Err(error) = run(&cli).await else {
+        let Err(error) = Box::pin(run(&cli)).await else {
             panic!("expected selection refusal");
         };
         assert!(error.to_string().contains(message), "{error}");
@@ -98,12 +99,13 @@ async fn selectors_infer_only_unique_apps_and_fleets() {
         &["fleet", "status", "operation"],
         &["fleet", "call", "operation"],
     ];
+    json(&["app", "init", "hello", "--config", config]).await;
     json(&[
-        "app",
+        "fleet",
         "init",
-        "hello",
-        "--fleet",
         "mainnet",
+        "--app",
+        "hello",
         "--network",
         "ic",
         "--config",
@@ -196,12 +198,13 @@ async fn selectors_infer_only_unique_apps_and_fleets() {
     .await;
     assert_eq!(staging["configuration"]["fleet"], "staging");
 
+    json(&["app", "init", "other", "--config", config]).await;
     json(&[
-        "app",
+        "fleet",
         "init",
-        "other",
-        "--fleet",
         "othernet",
+        "--app",
+        "other",
         "--network",
         "ic",
         "--config",
@@ -266,12 +269,13 @@ async fn app_artifact_and_topology_are_shared_but_fleet_plans_remain_independent
     let path = root.join("canic.json");
     let config = path.to_str().unwrap();
     std::fs::write(root.join("app.wasm"), b"\0asm\x01\0\0\0").unwrap();
+    json(&["app", "init", "hello", "--config", config]).await;
     json(&[
-        "app",
+        "fleet",
         "init",
-        "hello",
-        "--fleet",
         "first",
+        "--app",
+        "hello",
         "--network",
         "ic",
         "--config",
@@ -410,12 +414,13 @@ async fn canister_declarations_retain_roles_and_parents_without_effect_authority
     let root = crate::tests::directory(&parent, "topology").unwrap();
     let path = root.join("canic.json");
     let config = path.to_str().unwrap();
+    json(&["app", "init", "profiles", "--config", config]).await;
     json(&[
-        "app",
+        "fleet",
         "init",
-        "profiles",
-        "--fleet",
         "demo",
+        "--app",
+        "profiles",
         "--network",
         "ic",
         "--config",
@@ -442,7 +447,7 @@ async fn canister_declarations_retain_roles_and_parents_without_effect_authority
         "fleet", "canister", "list", "--app", "profiles", "--fleet", "demo", "--config", config,
     ];
     let cli = Cli::try_parse_from(std::iter::once("canic").chain(args)).unwrap();
-    let Output::Text(text) = run(&cli).await.unwrap() else {
+    let Output::Text(text) = Box::pin(run(&cli)).await.unwrap() else {
         panic!("expected declaration tree");
     };
     assert!(text.contains("└─ child"));
@@ -482,7 +487,7 @@ async fn canister_declarations_retain_roles_and_parents_without_effect_authority
         "--config", config,
     ])
     .unwrap();
-    assert!(run(&cli).await.is_err());
+    assert!(Box::pin(run(&cli)).await.is_err());
     assert_eq!(std::fs::read(&path).unwrap(), bytes);
 }
 
@@ -497,35 +502,39 @@ async fn app_init_adds_a_second_app_and_requires_explicit_selection() {
     let root = crate::tests::directory(&parent, "second-app").unwrap();
     let path = root.join("canic.json");
     let config = path.to_str().unwrap();
-    let first = json(&[
-        "app",
+    json(&["app", "init", "first", "--config", config]).await;
+    json(&[
+        "fleet",
         "init",
-        "first",
-        "--fleet",
         "mainnet",
+        "--app",
+        "first",
         "--network",
         "ic",
         "--config",
         config,
     ])
     .await;
-    let args = [
-        "app",
-        "init",
-        "second",
-        "--fleet",
-        "mainnet",
-        "--network",
-        "ic",
-        "--config",
-        config,
-    ];
+    let first = canic_host::load_config(&path).unwrap().apps["first"].clone();
+    let args = ["app", "init", "second", "--config", config];
     let added = json(&args).await;
     assert_eq!(added["deployed"], false);
     assert_eq!(
         added["configuration"]["apps"]["first"],
-        first["configuration"]["apps"]["first"]
+        serde_json::to_value(first).unwrap()
     );
+    json(&[
+        "fleet",
+        "init",
+        "mainnet",
+        "--app",
+        "second",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
     let listed = json(&["app", "list", "--config", config]).await;
     assert_eq!(
         listed["apps"],
@@ -560,12 +569,13 @@ async fn existing_canister_declaration_lists_exact_id_without_deployment_authori
     let root = crate::tests::directory(&parent, "existing-id").unwrap();
     let path = root.join("canic.json");
     let config = path.to_str().unwrap();
+    json(&["app", "init", "hello", "--config", config]).await;
     json(&[
-        "app",
+        "fleet",
         "init",
-        "hello",
-        "--fleet",
         "demo",
+        "--app",
+        "hello",
         "--network",
         "ic",
         "--config",
@@ -595,7 +605,7 @@ async fn existing_canister_declaration_lists_exact_id_without_deployment_authori
         );
     }
     let cli = Cli::try_parse_from(["canic"].into_iter().chain(args)).unwrap();
-    let Output::Text(output) = run(&cli).await.unwrap() else {
+    let Output::Text(output) = Box::pin(run(&cli)).await.unwrap() else {
         panic!("expected text")
     };
     assert!(output.contains(&format!("Configured ID: {id}")));
@@ -610,7 +620,7 @@ async fn existing_canister_declaration_lists_exact_id_without_deployment_authori
     );
     assert_eq!(listed["scope"], "local configuration only");
     let before = std::fs::read(&path).unwrap();
-    assert!(run(&cli).await.is_err());
+    assert!(Box::pin(run(&cli)).await.is_err());
     assert_eq!(std::fs::read(&path).unwrap(), before);
     let added = json(&[
         "fleet",
@@ -648,7 +658,7 @@ async fn declaration_messages_escape_paths_while_json_retains_original_paths() {
         let path = root.join(format!("config-{structured}-café\n\u{1b}[2J\u{202e}.json"));
         let config = path.to_str().unwrap();
         for args in [
-            vec!["app", "init", "hello", "--fleet", "demo", "--network", "ic"],
+            vec!["app", "init", "hello"],
             vec![
                 "fleet",
                 "init",
@@ -668,7 +678,7 @@ async fn declaration_messages_escape_paths_while_json_retains_original_paths() {
             )
             .unwrap();
             cli.json = structured;
-            match run(&cli).await.unwrap() {
+            match Box::pin(run(&cli)).await.unwrap() {
                 Output::Partial(_) => panic!("local declaration command cannot be partial"),
                 Output::Json(value) => {
                     assert!(structured);
@@ -705,12 +715,13 @@ async fn fleet_init_adds_a_second_fleet_without_journals_or_network_calls() {
     let root = crate::tests::directory(&parent, "second-fleet").unwrap();
     let path = root.join("canic.json");
     let config = path.to_str().unwrap();
+    json(&["app", "init", "hello", "--config", config]).await;
     json(&[
-        "app",
+        "fleet",
         "init",
-        "hello",
-        "--fleet",
         "mainnet",
+        "--app",
+        "hello",
         "--network",
         "ic",
         "--config",
@@ -778,27 +789,17 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     let root = crate::tests::directory(&parent, "fleet").unwrap();
     let config = root.join("canic.json");
     let config = config.to_str().unwrap();
-    let init = [
-        "app",
-        "init",
-        "--config",
-        config,
-        "hello",
-        "--network",
-        "ic",
-        "--fleet",
-        "demo",
-    ];
+    let init = ["app", "init", "--config", config, "hello"];
     let result = json(&init).await;
     assert_eq!(result["deployed"], false);
     assert_eq!(
-        result["configuration"]["apps"]["hello"]["fleets"]["demo"]["canisters"],
+        result["configuration"]["apps"]["hello"]["fleets"],
         serde_json::json!({})
     );
     let apps = json(&["app", "list", "--config", config]).await;
     assert_eq!(
         apps["apps"],
-        serde_json::json!([{"app":"hello", "fleets":1,"config_path":config}])
+        serde_json::json!([{"app":"hello", "fleets":0,"config_path":config}])
     );
     assert!(!root.join(".canic").exists());
     let without_network = Cli::try_parse_from([
@@ -806,7 +807,7 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     ])
     .err()
     .unwrap();
-    assert!(without_network.to_string().contains("network"));
+    assert!(without_network.to_string().contains("--fleet"));
     assert!(
         Cli::try_parse_from(
             ["canic"]
@@ -818,6 +819,26 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     );
     let again = Cli::try_parse_from(["canic"].into_iter().chain(init)).unwrap();
     assert!(run(&again).await.is_err());
+    let no_fleet = Cli::try_parse_from(["canic", "fleet", "show", "--config", config]).unwrap();
+    assert!(
+        run(&no_fleet)
+            .await
+            .err()
+            .unwrap()
+            .to_string()
+            .contains("no fleets configured")
+    );
+    assert!(!root.join(".canic").exists());
+    json(&[
+        "fleet",
+        "init",
+        "demo",
+        "--network",
+        "ic",
+        "--config",
+        config,
+    ])
+    .await;
     let empty = json(&["fleet", "show", "--config", config]).await;
     assert_eq!(empty["configuration"]["fleet"], "demo");
     assert_eq!(empty["canisters"], serde_json::json!([]));
@@ -904,7 +925,7 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
         "canic", "fleet", "show", "--config", config, "--color", "never",
     ])
     .unwrap();
-    let Output::Text(text) = run(&cli).await.unwrap() else {
+    let Output::Text(text) = Box::pin(run(&cli)).await.unwrap() else {
         panic!("expected text");
     };
     assert!(text.contains("hello / demo · IC mainnet"));
@@ -1063,16 +1084,7 @@ fn help_includes_version_and_sorted_commands_at_every_level() {
 
 #[test]
 fn source_generation_defaults_its_checkout_and_owns_its_new_config() {
-    let base = [
-        "canic",
-        "app",
-        "init",
-        "hello",
-        "--fleet",
-        "mainnet",
-        "--network",
-        "ic",
-    ];
+    let base = ["canic", "app", "init", "hello"];
     assert!(
         Cli::try_parse_from(
             base.into_iter()

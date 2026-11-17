@@ -133,29 +133,47 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     let url = owner.client_mut().make_live(None).await.to_string();
     let pic = owner.client();
     let dir = dir.join("project");
-    let initialized = Command::new(std::env::var_os("CANIC_CLI").unwrap())
-        .args([
-            "app",
-            "init",
-            "demo",
-            "--fleet",
-            "local",
-            "--network",
-            "local",
-            "--url",
-            &url,
-            "--root-key",
-            &hex(&pic.root_key().await.unwrap()),
-            "--root-subnet",
-            &pic.topology().await.get_nns().unwrap().to_text(),
-            "--routing-canister",
-            &routing.to_text(),
-            "--source",
-            dir.to_str().unwrap(),
-            "--json",
-        ])
-        .output()
-        .unwrap();
+    let initialized = {
+        let created = Command::new(std::env::var_os("CANIC_CLI").unwrap())
+            .args([
+                "app",
+                "init",
+                "demo",
+                "--source",
+                dir.to_str().unwrap(),
+                "--json",
+            ])
+            .output()
+            .unwrap();
+        assert!(
+            created.status.success(),
+            "{}",
+            String::from_utf8_lossy(&created.stderr)
+        );
+        Command::new(std::env::var_os("CANIC_CLI").unwrap())
+            .args([
+                "fleet",
+                "init",
+                "local",
+                "--app",
+                "demo",
+                "--network",
+                "local",
+                "--url",
+                &url,
+                "--root-key",
+                &hex(&pic.root_key().await.unwrap()),
+                "--root-subnet",
+                &pic.topology().await.get_nns().unwrap().to_text(),
+                "--routing-canister",
+                &routing.to_text(),
+                "--config",
+                dir.join("canic.json").to_str().unwrap(),
+                "--json",
+            ])
+            .output()
+            .unwrap()
+    };
     assert!(
         initialized.status.success(),
         "{}",
