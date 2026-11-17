@@ -1,7 +1,7 @@
 //! This application owns storage, authority, schema and fluent operations.
 use crate::protocol::{
-    Description, InspectReply, InspectRequest, Page, QueryReply, QueryRequest, Receipt, Refusal,
-    Row, WriteReply, WriteRequest,
+    InspectReply, InspectRequest, Page, QueryReply, QueryRequest, Receipt, Refusal, Row,
+    WriteReply, WriteRequest,
 };
 use canic::db::{Operation, endpoint::runtime};
 use ic_db::{Batch, Comparison, Database, Entity, Error, QueryCursor, Schema};
@@ -17,8 +17,19 @@ use std::rc::Rc;
 ))]
 struct Item {}
 
+#[cfg(feature = "incompatible-schema")]
+#[ic_db::entity(name="Item", pk(field="id"), index(fields=["score","id"]), fields(
+    field(name="id",value(item(prim="Nat64"))),
+    field(name="score",value(item(prim="Nat128")))
+))]
+struct UnreadableItem {}
+
 fn schema() -> Schema {
-    Schema::new(&[Item::SCHEMA]).unwrap()
+    #[cfg(not(feature = "incompatible-schema"))]
+    let entity = Item::SCHEMA;
+    #[cfg(feature = "incompatible-schema")]
+    let entity = UnreadableItem::SCHEMA;
+    Schema::new(&[entity]).unwrap()
 }
 fn runtime() -> Rc<MemoryRuntime<DefaultMemoryImpl>> {
     thread_local! {
@@ -86,20 +97,37 @@ fn refusal(error: Error) -> Refusal {
         other => panic!("unexpected database failure: {other:?}"),
     }
 }
-fn inspect(_caller: ic_db::Principal, (): InspectRequest) -> InspectReply {
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the mounted handler owns its decoded request"
+)]
+fn inspect(_caller: ic_db::Principal, request: InspectRequest) -> InspectReply {
+    use canic::db::inspection::{Admission, Cardinality};
     let host = runtime();
-    Description {
-        entity: Item::SCHEMA.name.into(),
-        fields: Item::SCHEMA
-            .fields
-            .iter()
-            .map(|f| (f.name.into(), format!("{:?}", f.value)))
-            .collect(),
-        indexes: Item::SCHEMA.indexes.iter().map(|i| i.name.into()).collect(),
-        rows: open(&host)
-            .and_then(|db| db.query::<Item>().count().map(|count| count.value))
-            .map_err(refusal),
-    }
+    // The pre-decode owner gate also permits this application's cardinality.
+    // Closed/unsupported state is never opened through an alternate reader.
+    let (admission, count) = match open(&host) {
+        Ok(db) => {
+            let count = if matches!(&request, InspectRequest::Entity { name, count: true, .. } if name.as_str() == Item::SCHEMA.name)
+            {
+                db.cardinality::<Item>()
+                    .map(Cardinality::Available)
+                    .unwrap_or(Cardinality::Unavailable)
+            } else {
+                Cardinality::NotExposed
+            };
+            (
+                Admission::Readable {
+                    incarnation: db.incarnation(),
+                },
+                count,
+            )
+        }
+        Err(Error::Maintenance) => (Admission::Maintenance, Cardinality::Unavailable),
+        Err(Error::IncompatibleSchema) => (Admission::Incompatible, Cardinality::Unavailable),
+        Err(_) => (Admission::Unavailable, Cardinality::Unavailable),
+    };
+    canic::db::schema::inspect(&schema(), &request, admission, count)
 }
 #[expect(
     clippy::needless_pass_by_value,

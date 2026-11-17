@@ -113,6 +113,7 @@ fn artifact_listing_preserves_unknown_outcomes_scope_and_corrupt_evidence() {
                 other.config.network = Network::Local {
                     url: "http://127.0.0.1:1/".into(),
                     root_key: "aa".repeat(133),
+                    root_subnet: None,
                     routing_canister: "aaaaa-aa".into(),
                 }
             }

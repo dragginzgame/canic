@@ -246,6 +246,13 @@ Use direct functions and domain modules first. A module may contain its transiti
 
 The generated managed starter has one Root/management owner controlling a Wasm Store and one application canister. The Store is an infrastructure role, separate from application allocation cardinality. Retain an explicit external controller for Root's maintenance and recovery; show that principal as controller metadata outside the canister tree. Qualify the exact graph before deployment. Across subnets, globally scarce budgets and membership changes may justify a coordination owner, while executors retain local custody and finite delegated authority. A Coordinator, when selected, must not be needed for every continuation of previously admitted local work.
 
+Application canisters remain freeform: they own their data model, public methods,
+authorization and lifecycle composition. They may opt into Canic's endpoint mounts,
+service adapters and management participation without becoming infrastructure
+roles. Root and Wasm Store remain separate deployed owners; optional coordination
+does not turn application canisters into a prescribed Canic base class. Managed
+operations still require the explicit readiness and preservation contracts below.
+
 The experimental `canic-root` now qualifies one or two direct greeting children locally,
 using the same bounded management engine as the profile manager. Its controller
 is the external operator; its created application's sole controller is Root.
@@ -290,7 +297,9 @@ custody requires the qualified transition below, not an automatic migration.
 Keep Canic's CLI, Host, management contracts and runtime orchestration in one product workspace. CLI depends on Host, Host depends on passive Contracts, and the application runtime depends on Contracts and selected suppliers. Host communicates with deployed roles through contracts without depending on their runtime implementations. Add role crates when the topology requires separately compiled artifacts, and adapter crates with their first complete consumer journey.
 
 Platform replacement adoption is a cohort migration, not a version-only update.
-Canic 0.218 selects Runtime 0.23.14 and Timers 0.46.0 with one exact executor guard.
+Canic 0.218 introduced Runtime 0.23.14 and Timers 0.46.0 with one exact executor
+guard. The pending patch adoption selects Runtime/Macros/Guard 0.23.16 and Timers
+0.46.3 with the same ownership and stopped-upgrade requirements.
 Product and qualification actors use Platform's explicit query, update and lifecycle
 macros; codecs remain with Wire. Runtime's completion owns the matching refund.
 Submission refusal, remote rejection and unknown outcome remain distinct; no new
@@ -314,25 +323,46 @@ the version, as can subsequent application execution; its observation checks the
 approved code/controller and a later version, without rewriting the installation
 evidence. See the [IC version contract](https://docs.internetcomputer.org/references/ic-interface-spec/canister-interface/#canister-version).
 
-Blob 0.102.0, Store 0.3.0 and committed Auth and DB inputs use Types 0.21.2 at
+Blob 0.103.1, the incoming Store 0.3.1 selection and committed Auth and DB inputs use Types 0.21.2 at
 actual runtime public boundaries. Optional adapters stay optional. The installed
 qualification paths retain predecessor data, interruption and rollback obligations.
 The original artifact probe now schedules through Timers rather than a separate
 heartbeat execution path; issued effects remain blocked after uncertain callbacks.
 
-Full Platform replacement remains tracked by [Canic #14](https://github.com/dragginzgame/canic/issues/14).
-Host still consumes Platform 0.33.7's Agent and passive management/ledger codecs.
-Runtime management DTOs also retain that passive codec boundary with explicit
-Principal byte conversion. Platform 0.34.8 now supports externally signed status
-requests, and Protocol 0.2.7 supplies management/ledger codecs; migrating these
-remaining consumers must preserve exact ICP-signed bytes, request IDs, custody,
-original deadlines and stored formats. Do not retain a parallel dispatcher or
-introduce Canic-owned transport/codec replacements. Keys stay with ICP CLI.
+Platform replacement is qualified locally under [Canic #14](https://github.com/dragginzgame/canic/issues/14).
+Host and runtime engines use Protocol 0.3.5 for management and ledger framing,
+including complete management settings, chunked installation and required status
+versions. Runtime calls use canonical Types directly; legacy codec/principal
+conversion dependencies are removed. Fixed native wire fixtures captured with
+independent old encoders prove retained bytes, including absent fields in type tables.
+Topology 0.109.2 uses the published Platform/Protocol/Types cohort directly;
+Host placement and subnet comparison use canonical Types without conversion.
+Host uses Platform 0.34.13's native transport for certified controller/subnet/module
+observations, queries and retained dispatch/status, with the existing bounded
+polling owner. The legacy Agent and Platform 0.33.7 dependencies are removed.
+Preserve exact ICP-signed bytes, request IDs, custody, original deadlines and stored
+formats. New local bindings explicitly admit `root_subnet`; never infer it from a
+historical routing canister or rewrite an approval. Missing historical trust is
+readable but blocked before network access. Mainnet pins its public DER key and
+root subnet. Platform authenticates observations; Canic owns the five-minute
+staleness limit, existing allowance for certified future time, and finite traversal
+and HTTP budgets. No automatic trust migration or re-signing path exists.
+Host uses Platform 0.34.13's prepared-packet admission for both signed and explicit
+anonymous updates/status reads ([Platform #25](https://github.com/dragginzgame/ic-platform/issues/25)).
+The approved controller selects the profile; failed signature checks cannot select
+anonymous admission. Platform owns authentication and status-path binding; Canic
+owns approved-effect matching and equal original expiries. Retain exact encoded
+bytes and the existing local journey without an unsigned dispatcher or fallback.
+Do not retain a parallel dispatcher or introduce Canic-owned transport/codec
+replacements. Keys stay with ICP CLI.
 
-Testkit 0.107.3 owns bounded server/instance lifecycle. Its exact Protocol 0.2.6
-pin prevents selecting 0.2.7 in qualification; the compatible product lock selects
-0.2.7. Revisit that qualification hold when Testkit supports the newer Protocol.
-Auth signing/verification selects Platform 0.34.9 Ed25519 and bounded Protocol
+Testkit 0.108.0 owns bounded server/instance lifecycle and uses Protocol 0.3 for
+held-reply fixtures. Product and qualification callers share Protocol 0.3.5;
+the old qualification Protocol 0.2 edge is removed. Topology 0.109.2 and Timers 0.46.3 remove the former
+Platform/Runtime patch blockers ([Query #2](https://github.com/dragginzgame/ic-query/issues/2),
+[Scheduling #3](https://github.com/dragginzgame/ic-scheduling/issues/3)). Both
+workspaces resolve the modern cohort through compatible supplier requirements.
+Qualification Auth signing/verification selects Platform 0.34.13 Ed25519 and bounded Protocol
 raw-rand framing without renewing enrollment or issuer reservations.
 
 The maintainer selected extraction of the versioned Wasm Store into
@@ -764,6 +794,17 @@ Deletion requires both data-disposition authority and settled financial/external
 
 The application owns one lifecycle composition root. It declares participants, their checked memory grants, restore order, readiness prerequisites and suspend/restore hooks. Endpoint mounting adds endpoints only. Linking a crate cannot start a timer, allocate a private manager, create an issuer or silently grant permissions.
 
+The optional catalog/profile witness now exercises this boundary with real Blob
+and profile state. Profile contributes stable requests and opens through the
+application's admitted Storage runtime; its standalone bootstrap is a separate
+application policy. The actor creates or strictly reopens all selected owners and
+uses Blob's exact maintenance state to gate its profile endpoints. It does not
+copy an admission flag or infer activation from successful reopening. Adding or
+removing a durable participant is a migration, not a feature-switch shortcut.
+This establishes a concrete composition pattern without a universal plugin trait,
+new allocator or generic lifecycle engine. Auth+DB+Blob composition and shared
+timer participation still require their own installed evidence.
+
 Startup synchronously restores required local state and installs authority fences before scheduling fallible work. Async initialization advances a durable readiness operation with explicit failure and retry. An installed module is not automatically ready for publication. A failed participant cannot be hidden behind an apparently healthy framework status.
 
 Keep lifecycle state distinct from operation progress and scheduler activity. A component may be initializing, ready, draining or suspended while a particular management operation is uncertain. Fleet-wide state changes use a retained target generation and participant acknowledgements; observing the Root in a new state does not prove every descendant has converged. Draining rejects new discretionary work while allowing original-effect reconciliation. Suspension reconstructs explicit participant state on resume rather than treating a restarted timer as application readiness.
@@ -899,10 +940,12 @@ integration awaits its supplier contract; do not add an interim Storage adapter.
 
 ### Optional issuer transport
 
-`canic::auth::issuer` adds bounded passive Issue, Renew, Lookup and Status contracts
+`canic::auth::issuer` adds bounded passive Issue, Renew, Lookup, Status and Logout contracts
 under the existing optional `auth` feature. `mount_auth_issuer_endpoints!` captures
 actual caller/time, applies pre-copy guards and delegates to application handlers.
-Issue and renewal may await; reconciliation is synchronous and lookup-only. Wire
+Issue and renewal may await; reconciliation is synchronous and lookup-only. Browser
+logout synchronously delegates to Auth's retained browser/login binding, preserving
+original results and deadlines and fencing late completion. Wire
 owns the codec and Auth owns canonical signed bytes. No issuer engine, signer,
 store or lifecycle starts when mounting. The original account and the retained
 browser binding are different authorities; request account fields select a login
@@ -915,11 +958,36 @@ test key. It reserves before real IC entropy, rechecks application permission on
 the callback, and commits local signing/result publication with reply encoding.
 A callback trap preserves the earlier unresolved reservation. Renewal uses Auth's
 retained login and sequence owner; no Canic operation database is introduced.
-This implements a narrow portion of [#10](https://github.com/dragginzgame/canic/issues/10).
+This implements a narrow portion of [Canic #10](https://github.com/dragginzgame/canic/issues/10).
 Production key custody, Root-governed issuer lifecycle, external signing effects,
-certified publication and browser integration remain unqualified. In particular,
-the pinned supplier exposes account revocation but no browser-authenticated issuer
-logout contract; do not pass a browser principal as the account to bypass that gap.
+certified publication and the full installed browser journey remain unqualified.
+The optional browser adapter generates codecs from these contracts and implements
+Auth's existing issuer/cleanup transport, with original signer roles, captured
+selectors and explicit clock conversion. It owns no journal, scheduler or wallet;
+Auth's coordinator still owns readiness and guarded calls. Receiver logout remains
+unit-input and separate from issuer login revocation.
+
+The optional installed profile witness reuses the existing profile engine within
+its package, with standalone exports disabled only for that embedding. A protected
+single-issuer namespace supplies the authenticated subject; browser principals,
+controller membership and request fields cannot choose profile ownership. Two
+independently Root-enrolled receivers exercise real HTTP/IndexedDB recovery and
+logout. Profile bytes reopen on upgrade, but missing volatile Auth state remains
+closed. This is a qualified local composition path, not Auth-enabled default
+deployment, production key custody or managed Auth preservation. The broader
+[Canic #11](https://github.com/dragginzgame/canic/issues/11) remains separate.
+
+### Optional DB inspection
+
+The existing typed DB mount admits a passive versioned inspection contract alongside
+application-owned query/write DTOs. Metadata exposure and actual-caller permission
+remain application decisions. The optional compiled-schema projection owns no engine,
+memory, row scan or migration. Complete bounded catalogues and finite named type
+graphs report logical fields/indexes/reference facts; schema identity, readable
+incarnation and closed/incompatible admission remain distinct. Cardinality uses
+the engine's maintained metadata only under ordinary application admission.
+Unsupported state stays intact. See the [installed DB witness](../../qualification/README.md#typed-database-composition)
+for selected inputs, bounds and preservation evidence.
 
 ### Embedded Blob composition witness
 
@@ -1344,6 +1412,9 @@ approvals, reset storage or reinstall to bypass migration. Fresh fleets can use
 the new contract before existing-fleet migration is supported.
 
 ### Direct calls and optional IC Relay
+
+Relay implementation is deferred at the maintainer's request (2026-11-17).
+The optional contract below remains a future consumer choice, not current work.
 
 Support direct platform `call()` and an optional `ic-relay` adapter as explicit application communication choices. Direct calls remain the starting path. Relay batches logical messages over physical IC calls and adds retained delivery state; it is an embedded supplier library, not a required relay canister or a replacement for the management API. Applications select it for named traffic where batching or durable delivery earns its storage and scheduling cost. Applications using only direct calls must not acquire Relay's dependency graph, queues or timers.
 

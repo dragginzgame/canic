@@ -6,7 +6,7 @@ use canic_management_protocol::{
     custody::{self, Custody},
     upgrade,
 };
-use ic_platform::agent::Agent;
+use ic_platform::native::ReadClient;
 use std::path::Path;
 
 #[cfg(test)]
@@ -24,16 +24,14 @@ pub(crate) async fn runtime(
     start: bool,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<()> {
-    use ic_platform::{candid_codec, candid_codec::decoder, management_canister_types as mgmt};
+    use ic_platform_protocol::{candid::Limits, management as mgmt, management_snapshots::Status};
     let target = principal(plan.target().map(String::as_str).ok_or_else(invalid)?)?;
-    let args = candid_codec::encode_one(
-        &mgmt::CanisterIdRecord {
-            canister_id: target,
-        },
-        1024,
-    )
+    let args = mgmt::CanisterArgs {
+        canister_id: ic_platform_types::Principal::from_slice(target.as_slice()),
+    }
+    .encode(1024)
     .map_err(Error::Encode)?;
     let (step, method) = if start {
         ("start", "start_canister")
@@ -41,20 +39,22 @@ pub(crate) async fn runtime(
         ("stop", "stop_canister")
     };
     let call = signed::Call {
-        canister: ic_platform::principal::Principal::management_canister(),
+        canister: ic_platform_types::Principal::management_canister(),
         effective: target,
         method,
         args,
     };
-    let reply = signed::execute(&dir.join(step), plan, &call, identity, icp, agent).await?;
-    let limits = decoder::Limits {
+    let reply = signed::execute(&dir.join(step), plan, &call, identity, icp, client).await?;
+    let limits = Limits {
         bytes: 65_536,
         header: 4096,
         types: 256,
         work: 100_000,
         allocation: 262_144,
+        vector: 65_536,
+        skipping: 100_000,
     };
-    decoder::decode_args::<()>(&reply, limits, decoder::Arity::Exact).map_err(Error::Decode)?;
+    mgmt::decode_empty_response(&reply, limits).map_err(Error::Decode)?;
     if !start {
         let status_call = signed::Call {
             method: "canister_status",
@@ -66,13 +66,12 @@ pub(crate) async fn runtime(
             &status_call,
             identity,
             icp,
-            agent,
+            client,
         )
         .await?;
-        let status: mgmt::CanisterStatusResult =
-            decoder::decode_one(&reply, limits).map_err(Error::Decode)?;
-        if status.status != mgmt::CanisterStatusType::Stopped
-            || status.settings.controllers != [principal(&plan.controller)?]
+        let status = mgmt::decode_canister_status(&reply, limits).map_err(Error::Decode)?;
+        if status.status != Status::Stopped
+            || status.settings.controllers != [plan.controller.parse().map_err(supplier)?]
         {
             return Err(Error::Blocked(
                 "upgrade target is not stopped under the approved controller".into(),
@@ -386,25 +385,25 @@ pub(crate) async fn observe(
     after: bool,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<()> {
     let Some(expected) = plan.maintenance() else {
         return Ok(());
     };
     let target = principal(plan.target().map(String::as_str).ok_or_else(invalid)?)?;
-    operation::controllers(agent, target, &plan.controller).await?;
+    operation::controllers(client, target, &plan.controller).await?;
     let hash = if after {
         &plan.artifact.sha256
     } else {
         plan.previous_module().ok_or_else(invalid)?
     };
-    if operation::module(agent, target).await? != *hash {
+    if operation::module(client, target).await? != *hash {
         return Err(Error::Blocked(
             "Root maintenance code binding changed".into(),
         ));
     }
     if let Some(store) = plan.maintenance_store() {
-        crate::managed::stored::verify_store(agent, &target.to_text(), &store.store).await?;
+        crate::managed::stored::verify_store(client, &target.to_text(), &store.store).await?;
     }
     for (step, method) in observations(plan, after) {
         let call = signed::Call {
@@ -413,7 +412,7 @@ pub(crate) async fn observe(
             method,
             args: observation_args(plan, method)?,
         };
-        let bytes = signed::observe(&dir.join(step), plan, &call, identity, icp, agent).await?;
+        let bytes = signed::observe(&dir.join(step), plan, &call, identity, icp, client).await?;
         if !matches_plan(plan, method, &bytes)? {
             return Err(Error::Blocked(
                 "Root journal differs from approved maintenance custody; retain this operation"
@@ -424,7 +423,7 @@ pub(crate) async fn observe(
     for expected in expected {
         // The child's live identity, code and controller also remain fixed by this window.
         let child = principal(expected.creation.worker.as_deref().ok_or_else(invalid)?)?;
-        operation::controllers(agent, child, &target.to_text()).await?;
+        operation::controllers(client, child, &target.to_text()).await?;
         let module = expected
             .upgrades
             .last()
@@ -438,7 +437,7 @@ pub(crate) async fn observe(
                     .ok_or_else(invalid)?
                     .module_hash,
             );
-        if operation::module(agent, child).await? != crate::hex(&module) {
+        if operation::module(client, child).await? != crate::hex(&module) {
             return Err(Error::Blocked(
                 "child code changed during Root maintenance".into(),
             ));

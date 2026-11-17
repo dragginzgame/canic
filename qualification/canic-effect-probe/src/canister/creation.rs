@@ -5,9 +5,9 @@ use crate::{
     CREATION_CYCLES, Fault, LATER_WORK, LIMITS, MAX_MANAGEMENT_REQUEST_BYTES, Phase, START, STATUS,
     Status,
 };
-use ic_platform::{
-    candid_codec::{self, decoder},
-    management_canister_types::{CanisterIdRecord, CanisterSettings, CreateCanisterArgs},
+use ic_platform_protocol::{
+    candid::Limits,
+    management::{self as mgmt, CanisterSettings, CreateCanisterArgs},
 };
 use ic_platform_runtime::{
     self as runtime,
@@ -108,14 +108,13 @@ async fn start(fault: Fault) -> Status {
     // commands/status use Wire. Default creation controllers name this executor.
     let args = CreateCanisterArgs {
         settings: Some(CanisterSettings {
-            controllers: Some(vec![ic_platform::principal::Principal::from_slice(
-                api::canister_self().as_slice(),
-            )]),
+            controllers: Some(vec![api::canister_self()]),
             ..CanisterSettings::default()
         }),
         sender_canister_version: Some(api::canister_version()),
     };
-    let request = candid_codec::encode_one(&args, MAX_MANAGEMENT_REQUEST_BYTES)
+    let request = args
+        .encode(MAX_MANAGEMENT_REQUEST_BYTES)
         .expect("bounded creation request");
     JOURNAL.with_borrow_mut(|state| {
         state.phase = Phase::Issued;
@@ -131,14 +130,16 @@ async fn start(fault: Fault) -> Status {
     let ic_platform_runtime::call::Outcome::Reply(reply) = reply.into_parts().0 else {
         api::trap("management creation refused");
     };
-    let result: CanisterIdRecord = decoder::decode_one(
+    let result = mgmt::decode_created(
         &reply,
-        decoder::Limits {
+        Limits {
             bytes: 4096,
             header: 1024,
             types: 32,
             work: 8192,
             allocation: 8192,
+            vector: 16_384,
+            skipping: 65_536,
         },
     )
     .expect("management creation principal");

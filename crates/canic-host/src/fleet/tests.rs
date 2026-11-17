@@ -59,6 +59,7 @@ fn replicas_with_equal_principals_keep_separate_trust_bindings() {
                 network: Network::Local {
                     url: "http://127.0.0.1:8080/".into(),
                     root_key: byte.repeat(133),
+                    root_subnet: None,
                     routing_canister: "aaaaa-aa".into(),
                 },
                 target: Some("aaaaa-aa".into()),
@@ -117,6 +118,7 @@ fn automatic_root_observations_keep_exact_networks_and_deduplicate_explicit_sele
     let second = Network::Local {
         url: "http://localhost:8000/".into(),
         root_key: "aa".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     let operations = [
@@ -226,7 +228,7 @@ fn manager_observation_budget_includes_every_network_bound_owner() {
             (
                 (
                     Network::Mainnet.binding_id().unwrap(),
-                    ic_platform::principal::Principal::from_slice(&[value]).to_text(),
+                    ic_platform_types::Principal::from_slice(&[value]).to_text(),
                 ),
                 Network::Mainnet,
             )
@@ -264,6 +266,7 @@ fn upgrade_only_inventory_selects_roots_by_exact_network() {
     let second = Network::Local {
         url: "http://localhost:8000".into(),
         root_key: "ab".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     let operations = [

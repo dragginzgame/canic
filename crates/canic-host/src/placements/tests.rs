@@ -41,6 +41,7 @@ async fn placements_admission_makes_no_reads() {
     local.config.network = Network::Local {
         url: "http://localhost:4943".into(),
         root_key: "00".into(),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     let mut bad = selected();
@@ -113,6 +114,11 @@ async fn placements_keep_partial_evidence_and_slot_declarations() {
     assert_eq!(report.slots[1].parent.as_deref(), Some("root"));
     assert!(report.slots[1].observation_index.is_none());
     let json = serde_json::to_value(report).unwrap();
+    assert_eq!(json["observation"]["schema"], 1);
+    assert_eq!(
+        json["observation"]["canisters"][0]["canister_id"],
+        "ryjl3-tyaaa-aaaaa-aaaba-cai"
+    );
     assert_eq!(
         json["observation"]["canisters"][0]["outcome"]["error"]["kind"],
         "missing_subnet"

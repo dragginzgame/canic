@@ -76,6 +76,7 @@ async fn deploy_call_resume_and_upgrade() {
         .map(|byte| format!("{byte:02x}"))
         .collect();
     let routing_canister = owner.client().create_canister().await.to_text();
+    let root_subnet = owner.client().topology().await.get_nns().unwrap().to_text();
     let root = repo
         .join("target/journey-tests")
         .join(format!("journey-{}", std::process::id()));
@@ -101,6 +102,8 @@ async fn deploy_call_resume_and_upgrade() {
             &url,
             "--root-key",
             &root_key,
+            "--root-subnet",
+            &root_subnet,
             "--routing-canister",
             &routing_canister,
         ],
@@ -162,6 +165,8 @@ async fn deploy_call_resume_and_upgrade() {
             &url,
             "--root-key",
             &root_key,
+            "--root-subnet",
+            &root_subnet,
             "--routing-canister",
             &routing_canister,
             "--controller",
@@ -291,6 +296,8 @@ async fn deploy_call_resume_and_upgrade() {
             &url,
             "--root-key",
             &root_key,
+            "--root-subnet",
+            &root_subnet,
             "--routing-canister",
             &routing_canister,
             "--controller",
@@ -390,6 +397,8 @@ async fn deploy_call_resume_and_upgrade() {
             &url,
             "--root-key",
             &root_key,
+            "--root-subnet",
+            &root_subnet,
             "--routing-canister",
             &routing_canister,
             "--controller",

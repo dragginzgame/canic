@@ -1,10 +1,96 @@
 use super::*;
 use ic_storage::VectorMemory;
+use ic_storage::{AllocationGrants, GenericAllocationPolicy, MemoryAuthority, adapter::StableCell};
+
+#[test]
+fn composed_memory_preserves_other_owner_and_refuses_ungranted_or_missing_profiles() {
+    fn runtime(backing: VectorMemory, authority: &str) -> MemoryRuntime<VectorMemory> {
+        let mut runtime = MemoryRuntime::new(backing).unwrap();
+        let requests = [ROWS, OWNERS].map(|key| MemoryRequest::new(authority, key).unwrap());
+        runtime
+            .bootstrap(
+                &SealedDeclarationSnapshot::new(
+                    requests
+                        .into_iter()
+                        .chain([MemoryRequest::new("catalog", "catalog.record.v1").unwrap()])
+                        .collect(),
+                )
+                .unwrap(),
+                &AllocationGrants::new(vec![
+                    MemoryAuthority::new(authority, STORAGE_PREFIX).unwrap(),
+                    MemoryAuthority::new("catalog", "catalog.").unwrap(),
+                ])
+                .unwrap(),
+                &GenericAllocationPolicy,
+            )
+            .unwrap();
+        runtime
+    }
+    {
+        let backing = VectorMemory::default();
+        let host = runtime(backing.clone(), STORAGE_AUTHORITY);
+        let before = backing.borrow().clone();
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| State::open(&host))).is_err()
+        );
+        assert_eq!(
+            *backing.borrow(),
+            before,
+            "reopen must not initialize missing maps"
+        );
+    }
+    let backing = VectorMemory::default();
+    {
+        let host = runtime(backing.clone(), STORAGE_AUTHORITY);
+        let mut profiles = State::create(&host);
+        let catalog = StableCell::create(
+            host.open_memory(&StableKey::parse("catalog.record.v1").unwrap())
+                .unwrap(),
+            41_u64,
+        )
+        .unwrap();
+        profiles
+            .put(
+                &[1],
+                &Put {
+                    user_id: 1,
+                    expected_revision: 0,
+                    display_name: "shared runtime".into(),
+                },
+            )
+            .unwrap();
+        assert_eq!(*catalog.get(), 41);
+        assert_eq!(host.diagnostics().unwrap().live_leases, 3);
+    }
+    {
+        let host = runtime(backing.clone(), STORAGE_AUTHORITY);
+        let profiles = State::open(&host);
+        assert_eq!(
+            profiles.get(&[1], 1).unwrap().display_name,
+            "shared runtime"
+        );
+        let catalog = StableCell::<u64>::load(
+            host.open_memory(&StableKey::parse("catalog.record.v1").unwrap())
+                .unwrap(),
+            8,
+        )
+        .unwrap();
+        assert_eq!(*catalog.get(), 41);
+    }
+    let before = backing.borrow().clone();
+    let host = runtime(backing.clone(), "unrelated");
+    assert!(std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| State::open(&host))).is_err());
+    assert_eq!(
+        *backing.borrow(),
+        before,
+        "matching keys do not grant profile authority"
+    );
+}
 
 #[test]
 fn ownership_revision_capacity_and_strict_reopen() {
     let backing = VectorMemory::default();
-    let mut state = State::open(backing.clone(), true);
+    let mut state = crate::storage::open(backing.clone(), true);
     let input = Put {
         user_id: 1,
         expected_revision: 0,
@@ -78,7 +164,7 @@ fn ownership_revision_capacity_and_strict_reopen() {
         .unwrap();
     assert_eq!(changed.revision, 2);
     drop(state);
-    let state = State::open(backing, false);
+    let state = crate::storage::open(backing, false);
     assert_eq!(state.get(&[1], 1).unwrap(), changed);
     assert_eq!(state.get(&[2], 1), Err(ProfileError::Forbidden));
 }

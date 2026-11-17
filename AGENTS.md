@@ -7,6 +7,13 @@ installer, never by editing installed bytes.
 
 ## Product and architecture
 
+- Before starting any new subsystem or major mechanism, hold a grilling session
+  with the maintainer. Challenge the user outcome, assumptions, legacy evidence,
+  simpler alternatives, configuration versus runtime ownership, per-instance
+  policy, authority, migration and failure recovery. Resolve scope and material
+  design decisions together, then record the agreed outcome in the existing
+  subsystem notes before implementation. Accepted roadmap scope alone does not
+  replace this session.
 - Derive Canic from user outcomes and platform constraints. Legacy Canic represents
   four years of engineering evidence, not mandatory feature parity. The current
   design is also revisable. Before substantive subsystem work, inspect the relevant
@@ -120,14 +127,14 @@ The qualification harness owns explicit `make qualification-setup`; simulator se
 and tests share `IC_TESTKIT_SERVER_DIRECTORY`, defaulting to
 `target/qualification/server/prepared`. Tests verify prepared assets. Retire probes only when
 their failure cases have a qualified product owner; renaming is not replacement.
-Testkit 0.107.3 owns client types, selected held replies, prepared assets and
+Testkit 0.108.0 owns client types, selected held replies, prepared assets and
 bounded server/instance ownership. Keep those owners explicit. Successful close
 records a deletion attempt; it does not independently prove remote deletion.
 Missing or corrupt assets refuse offline; only `make qualification-setup` downloads.
 
 ### Blob boundary
 
-- The qualified supplier is registry Blob 0.102.0 in both lockfiles. Keep its
+- The qualified supplier is registry Blob 0.103.2 in both lockfiles. Keep its
   sibling checkout read-only; do not substitute pending supplier work.
   `scripts/dev/blob-inputs.pl` records locked archive identities and
   hashes around installed qualification; changed inputs require requalification.
@@ -144,12 +151,18 @@ Missing or corrupt assets refuse offline; only `make qualification-setup` downlo
   Host-driven Root/Store maintenance over these new records remains closed until
   its complete preservation contract is extended. Blob remains independently usable;
   the local fleet witness does not qualify a provider journey.
+  The catalog's optional `profile` feature composes the real profile engine under
+  the same Storage bootstrap. Use its stable request contribution and explicit
+  create/open paths; do not embed the standalone `storage::open` bootstrap in a
+  shared backing. Participant additions/removals require an explicit migration.
 
 ### Auth boundary
 
-- Auth inputs are pinned to Git revision
-  `bfe2e548a997f10a876f01b4c72c4e5fec52c8d6`; no moving sibling or old registry
-  substitution. Canic's optional `auth` feature mounts passive Wire contracts;
+- Auth selects registry engine 0.47.2 (`e3ea2c74bbb5fe33f5f07e3aa267699c0ffb6b12`)
+  and Wire/Types 0.43.0. The private browser package remains materialized from
+  the qualified 0.47.1 source `a05b5ddd4099a3f64b95deb173a0c16746d98ac5`, never
+  the sibling working tree. Both boundaries pass the installed browser journey.
+  Canic's optional `auth` feature mounts passive Wire contracts;
   the application selects the independent engine and protected authorities.
   `auth-enrollment` adds direct, bounded Root enrollment; Root's `auth` feature
   admits one explicit immutable grant under its existing controller boundary.
@@ -164,8 +177,17 @@ Missing or corrupt assets refuse offline; only `make qualification-setup` downlo
 - Issuer mounts stay passive: applications own account authentication, browser
   binding checks, grant policy and key/effect custody; `MemoryIssuer` owns intents,
   renewal sequencing, results and pruning. Reconciliation is lookup-only. The
-  installed local test signer does not qualify production keys, external signing
-  recovery or browser-bound issuer logout, which needs a supplier binding API.
+  installed local test signer does not qualify production keys or external signing
+  recovery. Browser logout passes the captured caller to `revoke_browser`; account
+  fields remain selectors. The optional browser module uses generated Wire codecs
+  and Auth's coordinator/HTTP transport; it owns no journal or cleanup scheduler.
+  Use `make auth-browser-prepare` explicitly, then `make auth-browser-test`.
+  `make auth-profile-test` additionally requires an explicitly prepared Chromium
+  via `CANIC_AUTH_BROWSER_EXECUTABLE`; it runs headless. Its optional witness reuses
+  the actual profile engine with two independently enrolled receivers. The fixed
+  issuer namespace authenticates profile owners; browser/controller identities
+  never substitute for them. Profile state survives upgrades while lost volatile
+  Auth state stays closed. This does not enable Auth on default profile deployments.
 
 ## CLI and developer experience
 

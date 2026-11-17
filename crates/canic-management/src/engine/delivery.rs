@@ -2,15 +2,15 @@
 use super::{MANAGEMENT_LIMITS, STATE, State, failure, management, response};
 use crate::storage::Artifact;
 use canic_management_protocol::{Failure, Refusal, STAGE_LIMITS, children::ChildId, stored};
-use ic_platform::principal::Principal;
-use ic_platform::{
-    candid_codec::{self, decoder},
-    management_canister_types::{CanisterIdRecord, ChunkHash, UploadChunkArgs},
+use ic_platform_protocol::{
+    management::CanisterArgs,
+    management_chunks::{self as chunks, ChunkHash},
 };
 use ic_platform_runtime::{
     call::{Call, Wait},
     system as api,
 };
+use ic_platform_types::Principal;
 use ic_wasm_store_protocol as store;
 use serde::{Serialize, de::DeserializeOwned};
 
@@ -48,7 +48,7 @@ pub(super) fn admit(reference: &stored::Reference, hash: &[u8; 32]) -> Result<()
     let principal = Principal::from_text(&reference.store).map_err(|_| Refusal::Binding)?;
     if principal == Principal::anonymous()
         || principal == Principal::management_canister()
-        || principal == Principal::from_slice(api::canister_self().as_slice())
+        || principal == api::canister_self()
         || principal.to_text() != reference.store
     {
         return Err(Refusal::Binding);
@@ -193,9 +193,7 @@ async fn call<T: Serialize, R: DeserializeOwned>(
     )
     .expect("Store request");
     let reply = Call::new(
-        ic_platform_types::Principal::from_slice(
-            (Principal::from_text(&source.reference.store).expect("Store principal")).as_slice(),
-        ),
+        Principal::from_text(&source.reference.store).expect("Store principal"),
         method,
         Wait::Unbounded,
     )
@@ -231,9 +229,7 @@ pub(super) async fn pin(slot: ChildId, upgrade: bool) -> Result<(), Failure> {
     let receipt: Result<store::PinReceipt, store::Error> =
         call(&source, method, id, &source.pin()).await?;
     let receipt = receipt.map_err(|_| Failure::Mismatch)?;
-    if receipt.pin != source.pin()
-        || receipt.owner != Principal::from_slice(api::canister_self().as_slice()).as_slice()
-    {
+    if receipt.pin != source.pin() || receipt.owner != api::canister_self().as_slice() {
         return Err(Failure::Mismatch);
     }
     mutate(slot, upgrade, |s| s.state = stored::PinState::Retained);
@@ -252,10 +248,7 @@ impl Upload {
     pub(super) async fn send(self) -> Result<(), Failure> {
         if let Some(source) = self.source {
             let reply = Call::new(
-                ic_platform_types::Principal::from_slice(
-                    (Principal::from_text(&source.reference.store).expect("Store principal"))
-                        .as_slice(),
-                ),
+                Principal::from_text(&source.reference.store).expect("Store principal"),
                 "prepare_cache",
                 Wait::Unbounded,
             )
@@ -279,7 +272,7 @@ impl Upload {
             }
         } else {
             let reply = management("upload_chunk", self.bytes, 0).await?;
-            let chunk: ChunkHash = decoder::decode_one(&reply, MANAGEMENT_LIMITS)
+            let chunk = chunks::decode_upload_chunk(&reply, MANAGEMENT_LIMITS)
                 .map_err(|_| Failure::InvalidReply)?;
             if chunk.hash != self.hash {
                 return Err(Failure::Mismatch);
@@ -313,14 +306,8 @@ pub(super) fn upload(slot: ChildId, upgrade: bool, hash: [u8; 32], expires: u64)
                 .wasm(upgrade)
                 .to_vec()
         });
-        candid_codec::encode_one(
-            &UploadChunkArgs {
-                canister_id: Principal::from_slice(api::canister_self().as_slice()),
-                chunk: wasm,
-            },
-            STAGE_LIMITS.bytes,
-        )
-        .expect("upload args")
+        chunks::encode_upload_chunk(api::canister_self(), &wasm, STAGE_LIMITS.bytes)
+            .expect("upload args")
     };
     Upload {
         bytes,
@@ -344,7 +331,7 @@ pub(super) fn layout(slot: ChildId, upgrade: bool, hash: [u8; 32]) -> (Principal
         )
     } else {
         (
-            Principal::from_slice(api::canister_self().as_slice()),
+            api::canister_self(),
             vec![ChunkHash {
                 hash: hash.to_vec(),
             }],
@@ -357,11 +344,12 @@ pub(super) async fn observe_cache(
     hash: [u8; 32],
 ) -> Result<(), Failure> {
     let (canister_id, expected) = layout(slot, upgrade, hash);
-    let bytes = candid_codec::encode_one(&CanisterIdRecord { canister_id }, 1024)
+    let bytes = CanisterArgs { canister_id }
+        .encode(1024)
         .expect("cache observation");
     let reply = management("stored_chunks", bytes, 0).await?;
-    let chunks: Vec<ChunkHash> =
-        decoder::decode_one(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
+    let chunks = chunks::decode_stored_chunks(&reply, MANAGEMENT_LIMITS)
+        .map_err(|_| Failure::InvalidReply)?;
     if expected
         .iter()
         .any(|expected| !chunks.iter().any(|chunk| chunk.hash == expected.hash))

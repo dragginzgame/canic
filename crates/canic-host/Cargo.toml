@@ -21,8 +21,9 @@ ic-host-artifacts.workspace = true
 ic-host-fs.workspace = true
 ic-host-process.workspace = true
 ic-host-text.workspace = true
-ic-platform = { workspace = true, features = ["agent", "ic-protocol", "management-canister-types", "cycles-ledger-types", "icp-ledger-types", "icrc-ledger-types"] }
-ic-platform-ingress.workspace = true
+ic-platform = { workspace = true, features = ["native-signed-secp256k1"] }
+ic-platform-protocol = { workspace = true, features = ["ledger"] }
+ic-platform-types.workspace = true
 ic-topology.workspace = true
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true
@@ -35,6 +36,7 @@ toml.workspace = true
 url.workspace = true
 
 [dev-dependencies]
+ic-platform = { workspace = true, features = ["ed25519"] }
 serde_cbor.workspace = true
 
 [lints]

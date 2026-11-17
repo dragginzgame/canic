@@ -1,5 +1,7 @@
 //! Standalone application storage and lifecycle; Canic owns deployment only.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(target_arch = "wasm32", feature = "canister"))]
 mod canister;
-#[cfg(any(target_arch = "wasm32", test))]
-mod state;
+/// The application's persistent owner/revision rules, independently of its actor exports.
+pub mod state;
+/// Explicit standalone bootstrap, separate from the reusable state engine.
+pub mod storage;

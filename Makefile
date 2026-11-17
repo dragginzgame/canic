@@ -175,15 +175,28 @@ store-test:
 store-clippy:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store -- -D warnings
 
-.PHONY: auth-test auth-clippy auth-doc
+.PHONY: auth-test auth-clippy auth-doc auth-browser-prepare auth-browser-test auth-profile-test
+auth-profile-test:
+	bash scripts/dev/test-auth.sh --profile-browser
+
+auth-browser-prepare:
+	bash scripts/dev/prepare-auth-browser.sh
+	npm --prefix crates/canic/browser ci --ignore-scripts --no-audit --no-fund
+
+auth-browser-test:
+	cargo run --locked -p canic --features auth-browser --example auth-codecs -- target/auth-browser/generated
+	diff -ru crates/canic/browser/src/generated target/auth-browser/generated
+	npm --prefix crates/canic/browser test
+
 auth-test:
 	bash scripts/dev/test-auth.sh
 
 auth-clippy:
-	cargo clippy --locked -p canic --features auth-enrollment --all-targets -- -D warnings
+	cargo clippy --locked -p canic --features auth-enrollment,auth-browser --all-targets -- -D warnings
 	cargo clippy --locked -p canic -p canic-root --features canic/auth-enrollment,canic-root/auth --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --target wasm32-unknown-unknown -- -D warnings
-	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test auth -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --features profile --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test auth --test auth_browser -- -D warnings
 
 auth-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features auth-enrollment --target wasm32-unknown-unknown --no-deps
@@ -209,7 +222,9 @@ db-test:
 	bash scripts/dev/test-db.sh
 
 db-clippy:
-	cargo clippy --locked -p canic --features db --lib --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked -p canic --features db-schema --all-targets -- -D warnings
+	cargo clippy --locked -p canic --features db-schema --lib --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features fault-injection -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features incompatible-schema -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --test installed -- -D warnings

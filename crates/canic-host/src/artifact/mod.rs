@@ -121,19 +121,37 @@ pub fn build(
     destination: Option<&Path>,
 ) -> Result<PathBuf> {
     let workspace_manifest = manifest.canonicalize().map_err(supplier)?;
+    let workspace = workspace_manifest
+        .parent()
+        .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?;
     let manifest = if package == "ic-wasm-store" {
         store_source::manifest(&workspace_manifest)?
     } else {
         workspace_manifest.clone()
     };
+    // Dependencies can also emit cdylib artifacts. Resolve Cargo's exact selected
+    // package identity instead of treating every Wasm in the build as ours.
+    let mut identity = Command::new("cargo");
+    identity
+        .current_dir(workspace)
+        .args(["pkgid", "--locked", "--manifest-path"])
+        .arg(&manifest)
+        .args(["-p", package]);
+    let package_id =
+        crate::process::capture(&mut identity, 65536, 1024 * 1024, Duration::from_secs(60))
+            .map_err(cargo_failure)?;
+    let package_id = std::str::from_utf8(&package_id).map_err(supplier)?.trim();
+    if package_id.is_empty() || package_id.lines().count() != 1 {
+        return Err(Error::Invalid(
+            "Cargo package identity is not one line".into(),
+        ));
+    }
     let mut command = Command::new("cargo");
     command
         .current_dir(
             // Registry archives have no rust-toolchain.toml. Keep the consumer's
             // toolchain selection even when building the standalone Store manifest.
-            workspace_manifest
-                .parent()
-                .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?,
+            workspace,
         )
         .args([
             "build",
@@ -145,16 +163,13 @@ pub fn build(
             "--message-format=json-render-diagnostics",
             "--manifest-path",
         ])
-        .arg(manifest)
+        .arg(&manifest)
         .args(["-p", package]);
     if package == "ic-wasm-store" {
         // Keep compiler output in the consuming workspace, never Cargo's registry source.
-        command.arg("--target-dir").arg(
-            workspace_manifest
-                .parent()
-                .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?
-                .join("target/store-build"),
-        );
+        command
+            .arg("--target-dir")
+            .arg(workspace.join("target/store-build"));
     }
     if !features.is_empty() {
         command.arg("--features").arg(features.join(","));
@@ -166,13 +181,31 @@ pub fn build(
         Duration::from_secs(600),
     )
     .map_err(cargo_failure)?;
+    let path = selected_wasm(&output, package_id)?;
+    inspect(&path)?;
+    if let Some(output) = destination {
+        let bytes =
+            crate::store::read(&path.canonicalize().map_err(supplier)?, MAX_ARTIFACT_BYTES)?;
+        admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
+        crate::output_publication::publish(
+            output,
+            &bytes,
+            ic_host_fs::Destination::Replace,
+            0o700,
+        )?;
+        return Ok(output.into());
+    }
+    Ok(path)
+}
+
+fn selected_wasm(output: &[u8], package_id: &str) -> Result<PathBuf> {
     let mut paths = Vec::new();
     for line in output
         .split(|b| *b == b'\n')
         .filter(|line| !line.is_empty())
     {
         let value: serde_json::Value = serde_json::from_slice(line).map_err(supplier)?;
-        if value["reason"] == "compiler-artifact" {
+        if value["reason"] == "compiler-artifact" && value["package_id"] == package_id {
             let files = value["filenames"]
                 .as_array()
                 .ok_or_else(|| Error::Invalid("Cargo artifact missing filenames".into()))?;
@@ -193,21 +226,7 @@ pub fn build(
             "build must produce exactly one Wasm artifact".into(),
         ));
     }
-    let path = paths.remove(0);
-    inspect(&path)?;
-    if let Some(output) = destination {
-        let bytes =
-            crate::store::read(&path.canonicalize().map_err(supplier)?, MAX_ARTIFACT_BYTES)?;
-        admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
-        crate::output_publication::publish(
-            output,
-            &bytes,
-            ic_host_fs::Destination::Replace,
-            0o700,
-        )?;
-        return Ok(output.into());
-    }
-    Ok(path)
+    Ok(paths.remove(0))
 }
 
 #[cfg(test)]

@@ -1,6 +1,6 @@
 //! Explicit mainnet subnet candidates in fleet context; no placement recommendation.
 use crate::{Error, Network, Result, SelectedFleet, supplier};
-use ic_platform::principal::Principal;
+use ic_platform_types::Principal;
 use ic_topology::subnet::compare::{self, ComparisonError, SubnetComparisonReport};
 use serde::Serialize;
 use std::future::Future;

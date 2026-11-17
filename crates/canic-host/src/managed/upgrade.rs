@@ -11,7 +11,7 @@ use canic_management_protocol::{
     LIMITS, Refusal, STAGE_LIMITS,
     upgrade::{Approval, OBSERVE, Phase, STATUS, Stage, Status},
 };
-use ic_platform::agent::Agent;
+use ic_platform::native::ReadClient;
 use std::path::Path;
 
 pub(crate) fn approval(plan: &Plan) -> Result<Approval> {
@@ -205,12 +205,12 @@ pub(super) async fn apply(
     wasm: &[u8],
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<ApplyOutcome> {
     let owner = plan.management().expect("managed upgrade dispatcher");
     let root = principal(&owner.root)?;
-    operation::controllers(agent, root, &plan.controller).await?;
-    if operation::module(agent, root).await? != owner.root_module {
+    operation::controllers(client, root, &plan.controller).await?;
+    if operation::module(client, root).await? != owner.root_module {
         return Err(Error::Blocked(
             "Root code differs from reviewed upgrade owner".into(),
         ));
@@ -221,9 +221,9 @@ pub(super) async fn apply(
         .as_ref()
         .is_some_and(|status| status.phase == Phase::Ready)
     {
-        return complete(dir, id, plan, child, agent).await;
+        return complete(dir, id, plan, child, client).await;
     }
-    super::stored::verify(plan, agent).await?;
+    super::stored::verify(plan, client).await?;
     let stage = dir.join("stage");
     let call = if owner.source.is_some() {
         Method::StageUpgrade.call(plan, &(), LIMITS)?
@@ -249,8 +249,8 @@ pub(super) async fn apply(
                 "Root upgrade admission time passed; no new attempt signed".into(),
             ));
         }
-        operation::controllers(agent, principal(child)?, &owner.root).await?;
-        if operation::module(agent, principal(child)?).await?
+        operation::controllers(client, principal(child)?, &owner.root).await?;
+        if operation::module(client, principal(child)?).await?
             != *plan.previous_module().expect("old code")
         {
             return Err(Error::Blocked(
@@ -259,7 +259,7 @@ pub(super) async fn apply(
         }
         stage_reply(
             plan,
-            &signed::execute(&stage, plan, &call, identity, icp, agent).await?,
+            &signed::execute(&stage, plan, &call, identity, icp, client).await?,
         )?
     } else {
         let mut path = None;
@@ -275,7 +275,7 @@ pub(super) async fn apply(
         })?;
         let read = super::observation(plan)?;
         super::recovery::require_settled(&path)?;
-        let bytes = signed::observe(&path, plan, &read, identity, icp, agent).await?;
+        let bytes = signed::observe(&path, plan, &read, identity, icp, client).await?;
         let observed: Status = if owner.source.is_some() {
             super::stored::upgraded(plan, &bytes)?
         } else {
@@ -292,7 +292,7 @@ pub(super) async fn apply(
         if observed == Status::default() && retained.is_none() {
             stage_reply(
                 plan,
-                &signed::execute(&stage, plan, &call, identity, icp, agent).await?,
+                &signed::execute(&stage, plan, &call, identity, icp, client).await?,
             )?
         } else {
             observed
@@ -300,7 +300,7 @@ pub(super) async fn apply(
     };
     validate(plan, retained.as_ref(), &status)?;
     if status.phase == Phase::Ready {
-        complete(dir, id, plan, child, agent).await
+        complete(dir, id, plan, child, client).await
     } else {
         Ok(ApplyOutcome::UpgradePending {
             maintenance: super::stored::maintenance_evidence(dir, plan)?.map(Box::new),

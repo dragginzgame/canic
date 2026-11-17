@@ -27,9 +27,12 @@ canic-auth-witness.workspace = true
 canic-effect-probe.workspace = true
 canic-management-protocol.workspace = true
 canic-profile-protocol.workspace = true
+canic-profile-worker.workspace = true
 ic-auth.workspace = true
 ic-auth-protocol-types.workspace = true
+ic-host-process.workspace = true
 ic-platform-crypto.workspace = true
+ic-storage.workspace = true
 ic-testkit = { workspace = true, features = ["held-reply-fixtures"] }
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true
@@ -43,6 +46,9 @@ name = "artifact"
 
 [[test]]
 name = "auth"
+
+[[test]]
+name = "auth_browser"
 
 [[test]]
 name = "blob"

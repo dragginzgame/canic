@@ -1,7 +1,7 @@
 # Canic qualification
 
 This workspace owns installed effect-boundary and product regression tests.
-Actors select Platform Runtime 0.23.14 and Timers 0.46.0. Current upgrade fixtures
+Actors select Platform Runtime 0.23.16 and Timers 0.46.3. Current upgrade fixtures
 stop/drain before replacing an executable, then restart explicitly; application
 admission (including Blob activation) remains separate. `make growth-test` includes
 lost stop/start callbacks and owner reopening. `make journey-test` checks exact
@@ -41,7 +41,7 @@ Its packages are named by responsibility, independently of design milestones:
 | --- | --- |
 | `canic-qualification` | Native harnesses, retained predecessor binaries and explicit shared simulator preparation |
 | `canic-effect-probe` | Small Wasm probe isolating creation/funding commit boundaries and owner rollback |
-| `canic-asset-catalog` | Real embedded Blob/catalog composition with explicit lifecycle and qualification-only failure points |
+| `canic-asset-catalog` | Real embedded Blob/catalog composition, optional shared-runtime profile engine, explicit lifecycle and qualification-only failure points |
 | `canic-auth-witness` | Real volatile Auth issuer/receiver behind optional Canic mounts, direct Root enrollment and callback/reply rollback |
 | `canic-artifact-probe` | Small Wasm probe isolating retained-byte installation onto an existing target |
 
@@ -75,18 +75,65 @@ separation, independent signature verification/counts, a Root-enrolled receiver,
 unchanged login deadlines, duplicate delivery, reply rollback, permission changes
 across awaits, malformed frames, capacity, expiry, real pruning and upgrade-loss
 closure are covered. The supplier owns the sole intent/result/renewal engine.
+`auth_logout_tests` adds browser-bound revocation, two independent devices,
+in-flight initial/renewal fencing, retained results/deadlines, real pruning,
+malformed input, reply rollback and closed state after upgrade. Registry Auth
+0.47.2 / Wire and Types 0.43.0 supply the sole retained binding engine; the private
+browser package remains the separately pinned 0.47.1 source.
+`make auth-browser-prepare` explicitly prepares the immutable browser supplier;
+`make auth-browser-test` checks generated codecs, native frame parity and the
+small transport/cleanup adapter without opening a browser.
+`CANIC_AUTH_BROWSER_EXECUTABLE=/absolute/path/to/chromium make auth-profile-test`
+then runs installed HTTP/IndexedDB qualification in headless Chromium. It uses a
+separate issuer, two Roots and two independently enrolled receivers, composing
+the real profile persistence engine through the witness's optional `profile`
+feature. Nine browser cases cover original issuance/admission recovery across
+renderer loss, two users and independent device logins, immutable owner rules,
+reply rollback, renewal, cleanup reopening, retained-proof rejection, actual
+Unconfirmed cleanup, cross-tab logout fencing a suspended SDK signer, and a real
+issuer result delayed until after logout. Network interruption during cleanup
+retains the consumed attempt and original deadline across renderer reopening;
+late issuance cannot restore readiness or erase the journal's unknown outcome. The
+native harness independently counts committed signatures/profile writes and
+upgrades a receiver: profile backing reopens unchanged while Auth stays closed.
 These tests do not qualify production key custody, external signer uncertainty,
-browser-bound issuer logout, certified proofs, managed Auth preservation or
-browser orchestration. See the
+certified issuer proofs or managed Auth preservation. Default profile deployment
+still uses its original caller identity path. See the
 [Auth guide](../docs/demos/auth.md) for exact inputs and the remaining issue scopes.
-The application's signer and native verifier use Platform 0.34.9 Ed25519.
-Enrollment and issuance use Protocol 0.2.6 for actual `raw_rand` framing in both
-workspaces. Testkit 0.107.3 resolves the former Protocol pin conflict
-([Tooling #7](https://github.com/dragginzgame/ic-tooling/issues/7)). Runtime and
-pinned Auth internals retain their existing older selections; the remaining
-migration belongs to [Canic #14](https://github.com/dragginzgame/canic/issues/14).
+The qualification application's signer and native verifier use Platform 0.34.13
+Ed25519. Product enrollment and qualification both use Protocol 0.3.5 for
+actual `raw_rand` framing. Testkit 0.108.0 shares Protocol 0.3 for held replies. Actors use
+Runtime 0.23.16. Host uses Platform 0.34.13's native transport; both graphs have
+removed Platform 0.33.7 as part of [Canic #14](https://github.com/dragginzgame/canic/issues/14).
+Host placement/subnet comparison now selects registry Topology 0.109.2, sharing
+published Platform 0.34.13, Protocol 0.3.5 and Types 0.21.2. Its native Host/CLI
+tests cover input admission, partial evidence and rendering; the qualification
+workspace does not link Topology. These checks do not establish live mainnet
+availability or qualify Host's replacement signed transport.
+Topology 0.109.2 and Timers 0.46.3 remove the former exact-patch requirements
+([Query #2](https://github.com/dragginzgame/ic-query/issues/2),
+[Scheduling #3](https://github.com/dragginzgame/ic-scheduling/issues/3)). Both
+workspaces resolve the same modern Platform/Protocol cohort without overrides.
+The timer source is unchanged; Root selects Metrics 0.30.9, also unchanged at
+source level. Its installed metrics witness checks bounded
+read access, timer execution and state preservation through upgrade with that graph.
+Host and runtime codec adoption is covered by independent legacy request/reply fixtures,
+`make journey-test` and the installed publication bootstrap/recovery case. These
+preserve exact signed attempts and the approved management arguments.
+Native retained-call fixtures contain real Ed25519 signatures from a public
+synthetic test key. Host now uses Platform's prepared update/status admission,
+including explicit anonymous admission from
+[Platform #25](https://github.com/dragginzgame/ic-platform/issues/25). Tests preserve
+both profiles' original bytes and refuse mixed authentication fields, tampered
+signatures and a validly signed status read that extends the retained expiry.
+Installed CLI tests cover anonymous deploy/recovery/upgrade and real signed Auth
+and Store removal custody through the replacement native transport. The local
+fixtures explicitly bind the simulator's root subnet from its topology. Historical
+bindings without that identity remain readable with unchanged digests but cannot
+make network requests. No trust is inferred from a routing canister. Fixed wire
+fixtures retain independent legacy codec evidence without linking the old crate.
 
-All simulator client imports select Testkit 0.107.3. The Auth harness additionally
+All simulator client imports select Testkit 0.108.0. The Auth harness additionally
 selects its bounded held-reply feature for actual cross-receiver publication order.
 Its optional `managed-server` capability also owns prepared assets, bounded
 startup/output and server/instance custody. The old lifecycle dependency is removed
@@ -284,11 +331,21 @@ canisters' stable bytes and keep all four inventory identities. The report does
 not invoke signing or continue maintenance.
 Native fleet tests admit both full 8 MiB manifests and
 preserve existing inline fleets with or without Store and their retained digests.
-`make blob-test` builds two embedded catalog executables using the optional
-Canic adapter and registry Blob 0.102.0. Seven installed cases cover user
+`make blob-test` builds Blob-only and profile-composed executable pairs using the optional
+Canic adapter and registry Blob 0.103.2. Ten installed cases cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,
 non-resurrecting replay, drain/reopen/exact activation, reopen refusal and populated
-0.100.6 predecessor compatibility. The real CLI/Root/Store path additionally
+0.100.6 predecessor compatibility. The optional profile composition shares one
+Storage bootstrap with Blob, preserves both owners across upgrade, closes profile
+access until exact activation and refuses silent participant addition/removal.
+A separate installed case damages each profile store while keeping the directory,
+Blob and catalog intact: failed candidate reopening preserves the complete backing
+and cannot initialize replacement stores or open readiness.
+Catalog persistence/reply rollback also runs with populated profiles. A full
+catalog still permits profile updates and cleanup; malformed profile requests
+and stale revisions leave the complete shared backing unchanged. These are
+logical capacity checks, not physical memory-exhaustion qualification.
+The real CLI/Root/Store path additionally
 qualifies exact creation arguments, optional Root-owned maintenance, lost effect
 callbacks across Root reopening, explicit activation and stale-attempt refusal.
 Supplier archive/source files and both consumer locks are fingerprinted before/after;
@@ -635,7 +692,10 @@ documentation checks are `make profile-clippy` and `make profile-doc`.
 `Item` schema, stores the installation owner separately, initializes IC DB
 explicitly and supplies synchronous inspect/query/write handlers to
 `canic::mount_db_endpoints!`. The `db` feature adds no IC DB runtime dependency to
-Canic. The witness consumes committed IC DB revision
+Canic. Its passive `db::inspection` contract is versioned independently as
+`method_id("canic.db.inspect.v1")`. The separate optional `db-schema` feature adds
+stateless projection of compiled IC DB metadata, with no database executor,
+storage owner or permission policy. The witness consumes committed IC DB revision
 `950f36807f8ffa7ebe4ca2cff6792fa2bbcbd03e`; transport never becomes its durable codec.
 
 ```sh
@@ -646,14 +706,27 @@ make db-clippy
 
 The installed test checks authorization before malformed decoding, wrong
 method/direction and oversize refusal, atomic batch conflicts, sparse empty pages,
-cursor binding, five upgrades, reply-encoding rollback, frozen ordinary access
-and supported cancellation. Normal Wasm excludes the private fault/maintenance
+cursor binding, seven upgrades, reply-encoding rollback, frozen ordinary access,
+supported cancellation and incompatible-executable refusal without changing stable
+backing. The original executable then reopens all seven rows. Normal Wasm excludes the private fault/maintenance
 entrypoint. Requests bound results to 1–3 and candidates to 1–4, with 1 KiB engine
 output and a 64 KiB frame envelope; writes contain at most four rows. These are
 application witness bounds, not new engine limits.
 
+Inspection returns a complete catalogue of at most 64 exposed entities and a
+selected entity bound to the observed executable schema fingerprint. Names have
+64-byte bounds; fields, indexes, named definitions and enum alternatives are each
+capped at 64, index components at 16, with the shared 64 KiB reply ceiling. Recursive
+types use finite named links. References expose logical target/supporting-index
+facts separately from value types. Limits refuse without truncating complete
+metadata. There is no pagination or snapshot-consistency claim. Executable schema,
+readable incarnation and closed/incompatible admission are distinct facts.
+Cardinality uses `Database::cardinality`, only under application permission and
+ordinary admission; closed/unsupported state never triggers a row scan or repair.
+Native schema cases cover recursion, reference/index projection and capacity.
+
 `target/db/` retains the source archive, lockfile/compiler, Cargo artifact records, selected
-feature graphs, normal/fault Wasm and installed run log. Simulator setup is
+feature graphs, normal/fault/incompatible Wasm and installed run log. Simulator setup is
 explicit and uses the existing `IC_TESTKIT_SERVER_DIRECTORY` selection. This
 qualifies typed composition, not arbitrary remote queries, production authority
 storage, full migration orchestration or a deployed-database CLI. All database

@@ -289,6 +289,10 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     );
     inject(&root, 0).await;
     assert_eq!(observe(&root).await.phase, Phase::UploadIssued);
+    let pending_upload = observe(&root).await;
+    maintain(&root).await;
+    assert_eq!(observe(&root).await, pending_upload); // Preserve the original upload commitment.
+    restore_faults(&root).await;
     let (first, second) = tokio::join!(
         recover_store(&root, &approval),
         recover_store(&root, &approval)

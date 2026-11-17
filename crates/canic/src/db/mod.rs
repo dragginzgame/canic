@@ -2,6 +2,12 @@
 //! schema, query construction and explicit storage/lifecycle hooks.
 //! No database executor, registry or durable transport representation lives here.
 
+/// Passive bounded inspection contract, usable independently of the database engine.
+pub mod inspection;
+/// Optional projection of compiled DB metadata; application authorization stays external.
+#[cfg(feature = "db-schema")]
+pub mod schema;
+
 /// Fixed transport envelope, independent of the application's narrower work bounds.
 pub const RPC_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 65_536,

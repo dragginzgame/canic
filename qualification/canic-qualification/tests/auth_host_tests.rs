@@ -95,7 +95,7 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
     let mut config = json!({"apps":{"demo":{
     "canisters":{"root":{"wasm":root_wasm}, "receiver":{"wasm":receiver_wasm}},
     "fleets":{"local":{
-        "network":{"kind":"Local", "url":url, "root_key":hex(&owner.client().root_key().await.unwrap()), "routing_canister":root.to_text()},
+        "network":{"kind":"Local", "url":url, "root_key":hex(&owner.client().root_key().await.unwrap()), "root_subnet":owner.client().topology().await.get_nns().unwrap().to_text(), "routing_canister":root.to_text()},
         "journal":"journal", "canisters":{"root":{"id":root.to_text()}, "receiver":{"id":receiver.to_text()}},
         "auth":{"root":"root", "receiver":"receiver", "issuer":Principal::from_slice(&[1]).to_text(),
             "key":hex(&KEY), "network_id":hex(&[0x11;32]), "application_id":hex(&[0x22;32]),

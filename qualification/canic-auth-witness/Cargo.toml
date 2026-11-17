@@ -15,16 +15,22 @@ category = "tests"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+profile = ["dep:canic-profile-worker", "dep:canic-profile-protocol", "dep:ic-storage"]
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+canic-profile-worker = { workspace = true, optional = true }
 ic-auth = { workspace = true, features = ["issuer-memory"] }
 ic-platform-crypto.workspace = true
 ic-platform-protocol = { workspace = true, features = ["raw-rand"] }
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
+ic-storage = { workspace = true, optional = true }
 sha2.workspace = true
 
 [dependencies]
 canic = { workspace = true, features = ["auth-enrollment"] }
+canic-profile-protocol = { workspace = true, optional = true }
 ic-auth-protocol-types.workspace = true
 ic-wire.workspace = true
 serde.workspace = true

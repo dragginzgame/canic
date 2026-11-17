@@ -1,12 +1,14 @@
 //! Single-use installation/start/activation under the surviving Root journal. No payload storage.
 use super::{
     Approval, Failure, MANAGEMENT_LIMITS, Phase, Refusal, Status, admission, admission_frame, api,
-    args, candid_codec, change, decoder, digest, dispatch, gate, inspect, inspect_module,
-    management, observe_attempt, preservation, selected, store, target,
+    args, change, digest, dispatch, gate, inspect, inspect_module, management, observe_attempt,
+    preservation, selected, store, target,
 };
 use canic_management_protocol::store_maintenance::{Install, Installation, MAX_MODULE_BYTES};
-use ic_platform::management_canister_types::{
-    CanisterInstallMode, CanisterStatusType, ChunkHash, InstallChunkedCodeArgs, UploadChunkArgs,
+use ic_platform_protocol::{
+    management::{self as mgmt, InstallChunkedCodeArgs, InstallMode},
+    management_chunks::{self as chunks, ChunkHash},
+    management_snapshots::Status as RuntimeStatus,
 };
 
 pub(super) fn validate(record: &Status) {
@@ -105,18 +107,13 @@ pub async fn install(input: Install) -> Result<Status, Refusal> {
     Ok(observe_attempt(&record.approval).expect("retained maintenance"))
 }
 async fn issue(record: &Status, wasm: Vec<u8>) -> Result<(), Failure> {
-    if inspect(&record.approval).await?.status != CanisterStatusType::Stopped {
+    if inspect(&record.approval).await?.status != RuntimeStatus::Stopped {
         return Err(Failure::Mismatch);
     }
     dispatch(record)?;
-    let bytes = candid_codec::encode_one(
-        &UploadChunkArgs {
-            canister_id: target(&record.approval),
-            chunk: wasm,
-        },
-        MAX_MODULE_BYTES + 4096,
-    )
-    .expect("Store install args");
+    let bytes =
+        chunks::encode_upload_chunk(target(&record.approval), &wasm, MAX_MODULE_BYTES + 4096)
+            .expect("Store install args");
     change(&record.approval, Phase::Stopped, |value| {
         value.phase = Phase::UploadIssued;
         value.failure = None;
@@ -132,8 +129,8 @@ async fn issue(record: &Status, wasm: Vec<u8>) -> Result<(), Failure> {
     let result = management("upload_chunk", bytes, 0).await;
     super::super::fault(super::super::ChildId::FIRST, 15); // Callback trap cannot erase issued intent.
     let result = result.and_then(|reply| {
-        let chunk: ChunkHash =
-            decoder::decode_one(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
+        let chunk = chunks::decode_upload_chunk(&reply, MANAGEMENT_LIMITS)
+            .map_err(|_| Failure::InvalidReply)?;
         if chunk.hash != record.approval.module_hash {
             return Err(Failure::Mismatch);
         }
@@ -151,26 +148,24 @@ async fn issue(record: &Status, wasm: Vec<u8>) -> Result<(), Failure> {
     Ok(())
 }
 fn install_args(approval: &Approval, sender_version: u64) -> Vec<u8> {
-    candid_codec::encode_one(
-        &InstallChunkedCodeArgs {
-            mode: CanisterInstallMode::Upgrade(None),
-            target_canister: target(approval),
-            store_canister: Some(target(approval)),
-            chunk_hashes_list: vec![ChunkHash {
-                hash: approval.module_hash.to_vec(),
-            }],
-            wasm_module_hash: approval.module_hash.to_vec(),
-            arg: vec![],
-            sender_canister_version: Some(sender_version),
-        },
-        4096,
-    )
+    InstallChunkedCodeArgs {
+        mode: InstallMode::Upgrade(None),
+        target_canister: target(approval),
+        store_canister: Some(target(approval)),
+        chunk_hashes_list: vec![ChunkHash {
+            hash: approval.module_hash.to_vec(),
+        }],
+        wasm_module_hash: approval.module_hash.to_vec(),
+        arg: vec![],
+        sender_canister_version: Some(sender_version),
+    }
+    .encode(4096)
     .expect("Store install args")
 }
 async fn chunk_present(approval: &Approval) -> Result<(), Failure> {
     let reply = management("stored_chunks", args(approval), 0).await?;
-    let chunks: Vec<ChunkHash> =
-        decoder::decode_one(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
+    let chunks = chunks::decode_stored_chunks(&reply, MANAGEMENT_LIMITS)
+        .map_err(|_| Failure::InvalidReply)?;
     if chunks
         .iter()
         .any(|chunk| chunk.hash == approval.module_hash)
@@ -182,8 +177,7 @@ async fn chunk_present(approval: &Approval) -> Result<(), Failure> {
 }
 fn empty_reply(result: Result<Vec<u8>, Failure>) -> Result<(), Failure> {
     result.and_then(|reply| {
-        decoder::decode_args::<()>(&reply, MANAGEMENT_LIMITS, decoder::Arity::Exact)
-            .map_err(|_| Failure::InvalidReply)
+        mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)
     })
 }
 
@@ -191,7 +185,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
     let approval = &record.approval;
     match record.phase {
         Phase::UploadIssued => {
-            if inspect(approval).await?.status != CanisterStatusType::Stopped {
+            if inspect(approval).await?.status != RuntimeStatus::Stopped {
                 return Err(Failure::Mismatch);
             }
             chunk_present(approval).await?;
@@ -201,7 +195,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
             });
         }
         Phase::Uploaded => {
-            if inspect(approval).await?.status != CanisterStatusType::Stopped {
+            if inspect(approval).await?.status != RuntimeStatus::Stopped {
                 return Err(Failure::Mismatch);
             }
             chunk_present(approval).await?;
@@ -226,7 +220,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
         }
         Phase::InstallIssued => {
             if inspect_module(approval, approval.module_hash).await?.status
-                != CanisterStatusType::Stopped
+                != RuntimeStatus::Stopped
             {
                 return Err(Failure::Mismatch);
             }
@@ -237,7 +231,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
         }
         Phase::Installed => {
             if inspect_module(approval, approval.module_hash).await?.status
-                != CanisterStatusType::Stopped
+                != RuntimeStatus::Stopped
             {
                 return Err(Failure::Mismatch);
             }
@@ -262,7 +256,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
         }
         Phase::StartIssued => {
             if inspect_module(approval, approval.module_hash).await?.status
-                != CanisterStatusType::Running
+                != RuntimeStatus::Running
             {
                 return Err(Failure::Mismatch);
             }
@@ -275,7 +269,7 @@ pub(super) async fn advance(record: &Status) -> Result<(), Failure> {
         Phase::Verifying => preservation::capture(record).await?,
         Phase::ActivateIssued => {
             if inspect_module(approval, approval.module_hash).await?.status
-                != CanisterStatusType::Running
+                != RuntimeStatus::Running
             {
                 return Err(Failure::Mismatch);
             }
@@ -308,7 +302,7 @@ pub async fn activate(approval: Approval) -> Status {
 }
 async fn activate_once(record: &Status) -> Result<(), Failure> {
     let approval = &record.approval;
-    if inspect_module(approval, approval.module_hash).await?.status != CanisterStatusType::Running {
+    if inspect_module(approval, approval.module_hash).await?.status != RuntimeStatus::Running {
         return Err(Failure::Mismatch);
     }
     gate(approval, store::AdmissionCommand::Observe).await?;

@@ -6,12 +6,9 @@ use crate::{
     store::{self, Store},
     supplier,
 };
-use ic_platform::{
-    agent::Agent,
-    candid_codec::{self, decoder},
-    cycles_ledger_types as ledger, management_canister_types as mgmt,
-    principal::Principal,
-};
+use ic_platform::native::ReadClient;
+use ic_platform_protocol::{candid::Limits, ledger, management as mgmt};
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
@@ -26,12 +23,14 @@ mod tests;
 
 const LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 const LEDGER_FEE: u64 = 100_000_000;
-const DECODE: decoder::Limits = decoder::Limits {
+const DECODE: Limits = Limits {
     bytes: 2 * 1024 * 1024,
     header: 4096,
     types: 256,
     work: 100_000,
     allocation: 4 * 1024 * 1024,
+    vector: 2 * 1024 * 1024,
+    skipping: 100_000,
 };
 
 /// Retained outcome verified against the approved artifact and controller.
@@ -134,9 +133,11 @@ fn create_call(plan: &Plan, subnet: Option<Principal>) -> Result<Call<'static>> 
             from_subaccount: None,
             created_at_time: Some(plan.created_at_ns),
             amount: (plan.creation_cycles() - LEDGER_FEE).into(),
-            creation_args: Some(ledger::CmcCreateCanisterArgs {
-                subnet_selection: subnet.map(|subnet| ledger::SubnetSelection::Subnet { subnet }),
-                settings: Some(ledger::CanisterSettings {
+            creation_args: Some(ledger::CmcCreationArgs {
+                subnet_selection: subnet.map(|subnet| {
+                    ledger::SubnetSelection::Subnet(ledger::ExplicitSubnet { subnet })
+                }),
+                settings: Some(mgmt::CreationSettings {
                     controllers: Some(vec![controller]),
                     compute_allocation: Some(0_u64.into()),
                     memory_allocation: Some(0_u64.into()),
@@ -154,16 +155,18 @@ fn create_call(plan: &Plan, subnet: Option<Principal>) -> Result<Call<'static>> 
             canister,
             effective: canister,
             method: "create_canister",
-            args: candid_codec::encode_one(&args, 4096).map_err(Error::Encode)?,
+            args: args.encode(4096).map_err(Error::Encode)?,
         })
     } else {
-        let args = mgmt::ProvisionalCreateCanisterWithCyclesArgs {
+        // Retained signed attempts require the existing complete settings schema.
+        let args = mgmt::ProvisionalCreateArgs {
             amount: Some(plan.creation_cycles().into()),
             settings: Some(mgmt::CanisterSettings {
                 controllers: Some(vec![controller]),
                 ..Default::default()
             }),
-            ..Default::default()
+            specified_id: None,
+            sender_canister_version: None,
         };
         let Network::Local {
             routing_canister, ..
@@ -178,44 +181,38 @@ fn create_call(plan: &Plan, subnet: Option<Principal>) -> Result<Call<'static>> 
                     .map_or(routing_canister.as_str(), |root| root.canister.as_str()),
             )?,
             method: "provisional_create_canister_with_cycles",
-            args: candid_codec::encode_one(&args, 4096).map_err(Error::Encode)?,
+            args: args.encode(4096).map_err(Error::Encode)?,
         })
     }
 }
 
 pub(crate) fn created(plan: &Plan, bytes: &[u8]) -> Result<Principal> {
     if plan.network == Network::Mainnet {
-        let result: ledger::CreateCanisterResult =
-            decoder::decode_one(bytes, DECODE).map_err(Error::Decode)?;
+        let result = ledger::decode_created(bytes, DECODE).map_err(Error::Decode)?;
         match result {
-            Ok(value) => Ok(value.canister_id),
-            Err(ledger::CreateCanisterError::Duplicate {
+            ledger::CreateResult::Ok(value) => Ok(value.canister_id),
+            ledger::CreateResult::Err(ledger::CreateError::Duplicate(ledger::Duplicate {
                 canister_id: Some(id),
                 ..
-            }) => Ok(id),
-            Err(error) => Err(Error::Blocked(format!(
+            })) => Ok(id),
+            ledger::CreateResult::Err(error) => Err(Error::Blocked(format!(
                 "cycles ledger returned {error:?}; creation result retained, no automatic retry"
             ))),
         }
     } else {
-        let result: mgmt::CanisterIdRecord =
-            decoder::decode_one(bytes, DECODE).map_err(Error::Decode)?;
+        let result = mgmt::decode_created(bytes, DECODE).map_err(Error::Decode)?;
         Ok(result.canister_id)
     }
 }
 
 pub(crate) async fn controllers(
-    agent: &Agent,
+    client: &ReadClient,
     canister: Principal,
     controller: &str,
 ) -> Result<()> {
-    let bytes = bounded(
-        agent
-            .read_state_canister_info(canister.to_text().parse().map_err(supplier)?, "controllers"),
-    )
-    .await?;
-    let values = ic_platform::ic_protocol::decode_controllers(&bytes, 4096).map_err(supplier)?;
-    if values != [principal(controller)?] {
+    let (expiry, time) = crate::network::context()?;
+    let observation = bounded(client.read_canister(canister, expiry, time, 10)).await?;
+    if observation.controllers() != [principal(controller)?] {
         return Err(Error::Blocked(
             "certified controllers differ from the approved sole controller".into(),
         ));
@@ -223,13 +220,10 @@ pub(crate) async fn controllers(
     Ok(())
 }
 
-pub(crate) async fn module(agent: &Agent, canister: Principal) -> Result<String> {
+pub(crate) async fn module(client: &ReadClient, canister: Principal) -> Result<String> {
+    let (expiry, time) = crate::network::context()?;
     Ok(crate::hex(
-        &bounded(agent.read_state_canister_info(
-            canister.to_text().parse().map_err(supplier)?,
-            "module_hash",
-        ))
-        .await?,
+        &bounded(client.canister_module_hash(canister, expiry, time)).await?,
     ))
 }
 
@@ -290,8 +284,8 @@ pub(crate) async fn reconcile_at(
         return apply_operation(journal, dir, digest, identity, icp, true).await;
     }
     crate::auth::permit_upgrade(journal, &plan)?;
-    let agent = plan.network.agent()?;
-    crate::managed::recovery::reconcile(dir, digest, &plan, &bytes, identity, icp, &agent).await
+    let client = plan.network.client()?;
+    crate::managed::recovery::reconcile(dir, digest, &plan, &bytes, identity, icp, &client).await
 }
 
 // Caller holds the journal lock; fleet composition uses this same effect owner.
@@ -328,14 +322,14 @@ async fn apply_operation(
     if plan.publication().is_some() {
         return crate::publication::apply(journal, dir, &plan, &wasm, identity, icp, false).await;
     }
-    let agent = plan.network.agent()?;
-    crate::store_bootstrap::verify_root(&agent, &plan).await?;
-    crate::store_bootstrap::prepare_placement(dir, &plan, &agent).await?;
+    let client = plan.network.client()?;
+    crate::store_bootstrap::verify_root(&client, &plan).await?;
+    crate::store_bootstrap::prepare_placement(dir, &plan, &client).await?;
     if matches!(
         plan.action,
         crate::PlanAction::CreateChild(_) | crate::PlanAction::UpgradeChild { .. }
     ) {
-        return crate::managed::apply(dir, digest, &plan, &wasm, identity, icp, &agent).await;
+        return crate::managed::apply(dir, digest, &plan, &wasm, identity, icp, &client).await;
     }
     if dir.join("receipt.json").try_exists().map_err(supplier)? {
         let receipt: Receipt = store::json(&dir.join("receipt.json"))?;
@@ -353,7 +347,7 @@ async fn apply_operation(
             ));
         }
         if plan.store_root().is_some() {
-            crate::store_bootstrap::verify_placement(dir, &plan, expected, &agent).await?;
+            crate::store_bootstrap::verify_placement(dir, &plan, expected, &client).await?;
             store_install_evidence(dir, &plan, &wasm, expected)?;
             signed::validate_retained(
                 &dir.join("handover"),
@@ -362,7 +356,7 @@ async fn apply_operation(
             )?;
             crate::store_bootstrap::retained(dir, &plan, expected)?;
         }
-        verify_receipt(&agent, &plan, digest, &receipt).await?;
+        verify_receipt(&client, &plan, digest, &receipt).await?;
         if !crate::maintenance::retained(dir, &plan)? {
             return Err(Error::Invalid(
                 "maintenance receipt lacks retained custody".into(),
@@ -395,17 +389,11 @@ async fn apply_operation(
                 .try_exists()
                 .map_err(supplier)?
         {
-            let fee_args = candid_codec::arguments::encode_args(&(), 128).map_err(Error::Encode)?;
-            let fee = bounded(
-                agent
-                    .query(&LEDGER.parse().map_err(supplier)?, "icrc1_fee")
-                    .with_arg(fee_args)
-                    .call(),
-            )
-            .await?;
-            let fee: candid_codec::Nat =
-                decoder::decode_one(&fee, DECODE).map_err(Error::Decode)?;
-            if fee != LEDGER_FEE {
+            let fee_args = ledger::encode_fee_args(128).map_err(Error::Encode)?;
+            let fee =
+                crate::network::query(&client, principal(LEDGER)?, "icrc1_fee", &fee_args).await?;
+            let fee = ledger::decode_amount(&fee, DECODE).map_err(Error::Decode)?;
+            if fee != ledger::Nat::from(LEDGER_FEE) {
                 return Err(Error::Blocked(
                     "cycles-ledger fee changed; review a new supported funding contract".into(),
                 ));
@@ -413,14 +401,14 @@ async fn apply_operation(
         }
         let call = create_call(&plan, crate::store_bootstrap::placement(dir, &plan)?)?;
         let reply =
-            signed::execute(&dir.join("create"), &plan, &call, identity, icp, &agent).await?;
+            signed::execute(&dir.join("create"), &plan, &call, identity, icp, &client).await?;
         created(&plan, &reply)?
     };
-    crate::store_bootstrap::verify_placement(dir, &plan, canister, &agent).await?;
+    crate::store_bootstrap::verify_placement(dir, &plan, canister, &client).await?;
     if handover_prepared {
         store_install_evidence(dir, &plan, &wasm, canister)?;
     } else {
-        controllers(&agent, canister, &plan.controller).await?;
+        controllers(&client, canister, &plan.controller).await?;
         // Before the first install signature, enforce the exact old module for an
         // upgrade. On resume, the retained attempt owns settlement; do not replace it.
         if !dir
@@ -428,7 +416,7 @@ async fn apply_operation(
             .try_exists()
             .map_err(supplier)?
             && let Some(expected) = plan.previous_module()
-            && module(&agent, canister).await? != *expected
+            && module(&client, canister).await? != *expected
         {
             return Err(Error::Blocked(
                 "upgrade precondition: previous module hash changed".into(),
@@ -439,7 +427,7 @@ async fn apply_operation(
             .try_exists()
             .map_err(supplier)?
         {
-            crate::maintenance::observe(dir, &plan, false, identity, icp, &agent).await?;
+            crate::maintenance::observe(dir, &plan, false, identity, icp, &client).await?;
         }
         crate::maintenance::require_before(dir, &plan)?;
         if plan.previous_module().is_some() {
@@ -451,19 +439,19 @@ async fn apply_operation(
             {
                 return Err(Error::Blocked("legacy upgrade attempt has no retained stop evidence; retain it for reconciliation, do not replace it".into()));
             }
-            crate::maintenance::runtime(dir, &plan, false, identity, icp, &agent).await?;
+            crate::maintenance::runtime(dir, &plan, false, identity, icp, &client).await?;
         }
         let call = install_call(&plan, &wasm, canister)?;
         let reply =
-            signed::execute(&dir.join("install"), &plan, &call, identity, icp, &agent).await?;
-        decoder::decode_args::<()>(&reply, DECODE, decoder::Arity::Exact).map_err(Error::Decode)?;
+            signed::execute(&dir.join("install"), &plan, &call, identity, icp, &client).await?;
+        mgmt::decode_empty_response(&reply, DECODE).map_err(Error::Decode)?;
         if plan.previous_module().is_some() {
-            crate::maintenance::runtime(dir, &plan, true, identity, icp, &agent).await?;
+            crate::maintenance::runtime(dir, &plan, true, identity, icp, &client).await?;
         }
-        crate::maintenance::observe(dir, &plan, true, identity, icp, &agent).await?;
+        crate::maintenance::observe(dir, &plan, true, identity, icp, &client).await?;
     }
     if plan.store_root().is_some() {
-        crate::store_bootstrap::finish(dir, &plan, canister, identity, icp, &agent, read_only)
+        crate::store_bootstrap::finish(dir, &plan, canister, identity, icp, &client, read_only)
             .await?;
     }
     let receipt = Receipt {
@@ -472,7 +460,7 @@ async fn apply_operation(
         module_hash: plan.artifact.sha256.clone(),
         controller: plan.application_controller().into(),
     };
-    verify_receipt(&agent, &plan, digest, &receipt).await?;
+    verify_receipt(&client, &plan, digest, &receipt).await?;
     store::put_json(&dir.join("receipt.json"), &receipt)?;
     Ok(ApplyOutcome::Complete(receipt))
 }
@@ -480,9 +468,9 @@ async fn apply_operation(
 fn install_call(plan: &Plan, wasm: &[u8], canister: Principal) -> Result<Call<'static>> {
     let args = mgmt::InstallCodeArgs {
         mode: if plan.target().is_some() {
-            mgmt::CanisterInstallMode::Upgrade(None)
+            mgmt::InstallMode::Upgrade(None)
         } else {
-            mgmt::CanisterInstallMode::Install
+            mgmt::InstallMode::Install
         },
         canister_id: canister,
         wasm_module: wasm.to_vec(),
@@ -493,7 +481,7 @@ fn install_call(plan: &Plan, wasm: &[u8], canister: Principal) -> Result<Call<'s
         canister: Principal::management_canister(),
         effective: canister,
         method: "install_code",
-        args: candid_codec::encode_one(&args, 2 * 1024 * 1024).map_err(Error::Encode)?,
+        args: args.encode(2 * 1024 * 1024).map_err(Error::Encode)?,
     })
 }
 
@@ -508,17 +496,16 @@ fn store_install_evidence(dir: &Path, plan: &Plan, wasm: &[u8], canister: Princi
         plan,
         &install_call(plan, wasm, canister)?,
     )?;
-    decoder::decode_args::<()>(
+    mgmt::decode_empty_response(
         &store::read(&dir.join("install/reply.bin"), 2 * 1024 * 1024)?,
         DECODE,
-        decoder::Arity::Exact,
     )
     .map_err(Error::Decode)?;
     Ok(())
 }
 
 pub(crate) async fn verify_receipt(
-    agent: &Agent,
+    client: &ReadClient,
     plan: &Plan,
     digest: &str,
     receipt: &Receipt,
@@ -532,8 +519,8 @@ pub(crate) async fn verify_receipt(
         ));
     }
     let canister = principal(&receipt.canister)?;
-    controllers(agent, canister, plan.application_controller()).await?;
-    if module(agent, canister).await? != plan.artifact.sha256 {
+    controllers(client, canister, plan.application_controller()).await?;
+    if module(client, canister).await? != plan.artifact.sha256 {
         return Err(Error::Blocked(
             "certified module differs from approved artifact".into(),
         ));

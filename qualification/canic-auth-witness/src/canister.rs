@@ -37,6 +37,8 @@ fn decode_init(bytes: &[u8]) -> Result<Principal, std::convert::Infallible> {
 }
 #[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = decode_init, max_bytes = 2097152, on_error = endpoint_error)]
 fn init(authority: Principal) {
+    #[cfg(feature = "profile")]
+    crate::profile::open(true);
     let now = api::time();
     let installer = api::caller();
     crate::issuer::init();
@@ -50,11 +52,11 @@ fn init(authority: Principal) {
             login: LoginLimits {
                 max_device_slots: 8,
                 max_login_ttl_ns: 300 * SECOND,
-                max_admitted_logins: 2,
+                max_admitted_logins: if cfg!(feature = "profile") { 4 } else { 2 },
             },
             capacity: SessionCapacity {
-                max_sessions: 2,
-                max_replays: 4,
+                max_sessions: if cfg!(feature = "profile") { 4 } else { 2 },
+                max_replays: if cfg!(feature = "profile") { 8 } else { 4 },
                 max_replays_per_account: 4,
                 max_encoded_bytes: 8192,
             },
@@ -228,7 +230,7 @@ fn admission_error(error: MemoryError) -> AdmissionRefusal {
 }
 // Invoke the production encoder with a deliberately failing serializer after
 // real engine/application mutation. No production fault switch or alternate mount.
-struct Unencodable;
+pub(crate) struct Unencodable;
 impl Serialize for Unencodable {
     fn serialize<S: Serializer>(&self, _: S) -> Result<S::Ok, S::Error> {
         Err(serde::ser::Error::custom(
@@ -242,6 +244,10 @@ pub(crate) fn reply_fault<const ID: u64>(enabled: bool) {
             api::trap(&format!("qualification reply encoding fault: {error:?}"))
         });
     }
+}
+#[cfg(feature = "profile")]
+pub(crate) fn profile_fault() -> bool {
+    STATE.with_borrow(|state| state.as_ref().is_some_and(|state| state.fault))
 }
 fn admit(
     caller: Principal,
@@ -315,6 +321,13 @@ fn admit(
     })
 }
 fn read(caller: Principal, now: u64) -> Result<SessionView, SessionReadRefusal> {
+    read_scope(caller, now, "read")
+}
+pub(crate) fn read_scope(
+    caller: Principal,
+    now: u64,
+    scope: &str,
+) -> Result<SessionView, SessionReadRefusal> {
     STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(SessionReadRefusal::Unavailable)?;
         let snapshot = s
@@ -342,7 +355,7 @@ fn read(caller: Principal, now: u64) -> Result<SessionView, SessionReadRefusal> 
             subject_admissible: true,
         };
         s.receiver
-            .read(&authority, &["read".parse().unwrap()])
+            .read(&authority, &[scope.parse().unwrap()])
             .map(view)
             .map_err(|error| match error {
                 MemoryError::Closed | MemoryError::Enrollment(_) => SessionReadRefusal::Unavailable,

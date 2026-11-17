@@ -2,8 +2,7 @@ use canic_profile_protocol::{
     LIMITS, MAX_NAME_BYTES, MAX_PROFILES, Profile, ProfileError, ProfileResult, Put,
 };
 use ic_storage::{
-    AllocationGrants, GenericAllocationPolicy, MemoryAuthority, MemoryBacking, MemoryRequest,
-    MemoryRuntime, SealedDeclarationSnapshot, StableKey, StorageConfig,
+    MemoryBacking, MemoryRequest, MemoryRuntime, SealedDeclarationSnapshot, StableKey,
     adapter::{Bound, CodecError, StableBTreeMap, Storable},
 };
 use serde::{Deserialize, Serialize};
@@ -12,7 +11,20 @@ use std::borrow::Cow;
 #[cfg(test)]
 mod tests;
 
-pub(crate) const MAX_PAGES: u64 = 32;
+/// Authority the application must explicitly grant in its Storage bootstrap.
+pub const STORAGE_AUTHORITY: &str = "profile";
+/// Stable namespace reserved for this application's profiles and owner bindings.
+pub const STORAGE_PREFIX: &str = "profile.";
+const ROWS: &str = "profile.rows.v1";
+const OWNERS: &str = "profile.owners.v1";
+
+/// Contribute the existing stable identities to the application's one bootstrap.
+/// # Panics
+/// Panics only if the compile-time authority or stable keys are invalid.
+#[must_use]
+pub fn memory_requests() -> [MemoryRequest; 2] {
+    [ROWS, OWNERS].map(|key| MemoryRequest::new(STORAGE_AUTHORITY, key).expect("constant request"))
+}
 
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 struct Owner(Vec<u8>);
@@ -67,50 +79,44 @@ impl Storable for Record {
     }
 }
 
-pub(crate) struct State<M: MemoryBacking> {
+/// Application-owned profiles with immutable owner/user bindings and bounded storage.
+/// An embedding application must authenticate the supplied owner in one fixed
+/// identity namespace; an ingress caller and an issuer-qualified subject differ.
+pub struct State<M: MemoryBacking> {
     profiles: StableBTreeMap<u64, Record, M>,
     owners: StableBTreeMap<Owner, u64, M>,
-    runtime: MemoryRuntime<M>,
 }
 
 impl<M: MemoryBacking> State<M> {
-    pub fn open(backing: M, fresh: bool) -> Self {
-        let mut runtime = MemoryRuntime::new_with_config(
-            backing,
-            StorageConfig {
-                allocations: 2,
-                extents: 3,
-                pages: MAX_PAGES,
-            },
-        )
-        .expect("admit profile backing");
-        let declarations = SealedDeclarationSnapshot::new(vec![
-            MemoryRequest::new("profile", "profile.rows.v1").expect("constant request"),
-            MemoryRequest::new("profile", "profile.owners.v1").expect("constant request"),
-        ])
-        .expect("constant declarations");
-        let grants = AllocationGrants::new(vec![
-            MemoryAuthority::new("profile", "profile.").expect("constant namespace"),
-        ])
-        .expect("constant grants");
-        if !fresh {
-            // Refuse missing allocation identities before bootstrap can create them.
-            let diagnostics = runtime
-                .diagnostics()
-                .expect("retained allocation integrity");
-            assert_eq!(
-                diagnostics.allocations, 2,
-                "missing retained profile allocations"
-            );
-        }
+    /// Create both stores in empty, explicitly admitted allocations.
+    /// # Panics
+    /// Traps on missing authority, nonempty allocations or storage failure.
+    #[must_use]
+    pub fn create(runtime: &MemoryRuntime<M>) -> Self {
+        Self::load(runtime, true)
+    }
+
+    /// Strictly reopen existing stores; never initialize on missing or invalid state.
+    /// # Panics
+    /// Traps on missing authority, malformed stores or violated retained invariants.
+    #[must_use]
+    pub fn open(runtime: &MemoryRuntime<M>) -> Self {
+        Self::load(runtime, false)
+    }
+
+    fn load(runtime: &MemoryRuntime<M>, fresh: bool) -> Self {
         runtime
-            .bootstrap(&declarations, &grants, &GenericAllocationPolicy)
-            .expect("commit profile admission");
+            .verify_authority(
+                &SealedDeclarationSnapshot::new(memory_requests().to_vec())
+                    .expect("profile declarations"),
+                STORAGE_AUTHORITY,
+            )
+            .expect("explicit profile authority");
         let profiles = runtime
-            .open_memory(&StableKey::parse("profile.rows.v1").expect("constant key"))
+            .open_memory(&StableKey::parse(ROWS).expect("constant key"))
             .expect("profile lease");
         let owners = runtime
-            .open_memory(&StableKey::parse("profile.owners.v1").expect("constant key"))
+            .open_memory(&StableKey::parse(OWNERS).expect("constant key"))
             .expect("owner lease");
         let profiles = if fresh {
             StableBTreeMap::create(profiles)
@@ -124,11 +130,7 @@ impl<M: MemoryBacking> State<M> {
             StableBTreeMap::load(owners)
         }
         .expect("strict owner store opening");
-        let state = Self {
-            profiles,
-            owners,
-            runtime,
-        };
+        let state = Self { profiles, owners };
         state.validate();
         state
     }
@@ -146,15 +148,11 @@ impl<M: MemoryBacking> State<M> {
                 "owner binding"
             );
         }
-        assert!(
-            self.runtime
-                .diagnostics()
-                .expect("storage integrity")
-                .physical_pages
-                <= MAX_PAGES
-        );
     }
 
+    /// Read a profile after the embedding application authenticates its owner.
+    /// # Errors
+    /// Refuses anonymous callers, unknown profiles and other owners.
     pub fn get(&self, caller: &[u8], user_id: u64) -> ProfileResult {
         if caller == [4] {
             return Err(ProfileError::Unauthenticated);
@@ -166,6 +164,11 @@ impl<M: MemoryBacking> State<M> {
         Ok(record.profile)
     }
 
+    /// Commit one owner-bound revision transition or return its exact replay.
+    /// # Errors
+    /// Refuses invalid input, capacity, owner/identity changes and stale revisions.
+    /// # Panics
+    /// Storage failures trap; the IC must roll back this entire message.
     pub fn put(&mut self, caller: &[u8], input: &Put) -> ProfileResult {
         if caller == [4] {
             return Err(ProfileError::Unauthenticated);

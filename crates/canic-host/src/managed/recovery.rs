@@ -3,7 +3,7 @@
 use super::{OBSERVATIONS, upgrade, wire::Method};
 use crate::{ApplyOutcome, Error, Plan, Result, operation, signed, supplier};
 use canic_management_protocol::{LIMITS, Status};
-use ic_platform::agent::Agent;
+use ic_platform::native::ReadClient;
 use std::path::{Path, PathBuf};
 
 pub(crate) fn call(plan: &Plan) -> Result<signed::Call<'static>> {
@@ -56,7 +56,7 @@ pub(crate) async fn reconcile(
     wasm: &[u8],
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<ApplyOutcome> {
     let call = call(plan)?;
     if !dir
@@ -84,9 +84,9 @@ pub(crate) async fn reconcile(
             .as_ref()
             .is_some_and(|s| s.phase == canic_management_protocol::upgrade::Phase::Ready);
     if !ready {
-        super::stored::verify(plan, agent).await?;
-        operation::controllers(agent, call.canister, &plan.controller).await?;
-        if operation::module(agent, call.canister).await?
+        super::stored::verify(plan, client).await?;
+        operation::controllers(client, call.canister, &plan.controller).await?;
+        if operation::module(client, call.canister).await?
             != plan.management().expect("bound call").root_module
         {
             return Err(Error::Blocked(
@@ -94,7 +94,7 @@ pub(crate) async fn reconcile(
             ));
         }
         let path = attempt(dir)?;
-        let bytes = signed::reconcile(&path, plan, identity, icp, agent).await?;
+        let bytes = signed::reconcile(&path, plan, identity, icp, client).await?;
         if let Some(previous) = creation.as_ref() {
             let current: Status = ic_wire::decode(
                 &bytes,
@@ -121,5 +121,5 @@ pub(crate) async fn reconcile(
     }
     // Keep one chronological stream of authenticated progress. Existing apply
     // observes an already signed admission; it cannot create a replacement stage.
-    super::apply(dir, id, plan, wasm, identity, icp, agent).await
+    super::apply(dir, id, plan, wasm, identity, icp, client).await
 }

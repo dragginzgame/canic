@@ -1,8 +1,11 @@
 use super::{Call, admit};
 use crate::{Artifact, Error, Network, Plan, network::principal};
 use base64::{Engine, prelude::BASE64_STANDARD};
-use ic_platform::agent::{Agent, RequestId};
-use ic_platform_ingress::ingress::{self, Content};
+use ic_platform::{
+    ed25519::{Signer, SigningKey},
+    ingress::{self, Content},
+    native::{PreparedRequestStatus, PreparedUpdate, ReadError},
+};
 
 fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
     let time = crate::now().unwrap();
@@ -11,10 +14,11 @@ fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
         version: 1,
         network: Network::Local {
             url: "http://127.0.0.1:8000/".into(),
-            root_key: "00".repeat(133),
+            root_key: crate::hex(include_bytes!("../network/mainnet-root.der")),
+            root_subnet: Some(crate::network::MAINNET_ROOT_SUBNET.into()),
             routing_canister: "aaaaa-aa".into(),
         },
-        controller: "2vxsx-fae".into(),
+        controller: controller(),
         artifact: Artifact {
             sha256: "00".repeat(32),
             bytes: 8,
@@ -43,39 +47,53 @@ fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
     (bytes, plan, call)
 }
 
+// Public synthetic key, with no user identity or production signing path involved.
+pub(crate) fn controller() -> String {
+    ic_platform_types::Principal::self_authenticating(public_key()).to_text()
+}
+
+fn public_key() -> Vec<u8> {
+    let mut der = crate::unhex("302a300506032b6570032100").unwrap();
+    der.extend_from_slice(SigningKey::from_bytes(&[9; 32]).verifying_key().as_bytes());
+    der
+}
+
+fn sign_envelope(envelope: &mut ingress::Envelope) {
+    let signature = SigningKey::from_bytes(&[9; 32]).sign(&envelope.content.signable().unwrap());
+    envelope.sender_sig = Some(signature.to_bytes().to_vec());
+    envelope.sender_pubkey = Some(public_key());
+}
+
 pub(crate) fn signed_fixture(plan: &Plan, call: &Call<'_>, expiry: u64) -> Vec<u8> {
-    let agent = Agent::builder()
-        .with_url(plan.network.url())
-        .build()
-        .unwrap();
-    let mut update = agent
-        .update(&call.canister.to_text().parse().unwrap(), call.method)
-        .with_arg(call.args.as_slice())
-        .sign()
-        .unwrap();
-    {
-        let mut envelope = ingress::decode_envelope(&update.signed_update, 4096)
-            .unwrap()
-            .value;
-        let Content::Call { ingress_expiry, .. } = &mut envelope.content else {
-            unreachable!()
-        };
-        *ingress_expiry = expiry;
-        update.ingress_expiry = *ingress_expiry;
-        update.request_id = RequestId::new(&envelope.content.request_id().unwrap());
-        update.signed_update = serde_cbor::to_vec(&envelope).unwrap();
-    }
-    let mut status = ingress::decode_envelope(&update.signed_update, 4096)
-        .unwrap()
-        .value;
-    status.content = Content::ReadState {
-        sender: update.sender.to_text().parse().unwrap(),
-        ingress_expiry: update.ingress_expiry,
-        paths: vec![vec![b"request_status".to_vec(), update.request_id.to_vec()]],
+    assert_eq!(plan.controller, controller());
+    let sender = principal(&plan.controller).unwrap();
+    let mut update = ingress::Envelope {
+        content: Content::Call {
+            nonce: None,
+            ingress_expiry: expiry,
+            sender,
+            canister_id: call.canister,
+            method_name: call.method.into(),
+            arg: call.args.clone(),
+            sender_info: None,
+        },
+        sender_pubkey: None,
+        sender_sig: None,
+        sender_delegation: None,
     };
+    sign_envelope(&mut update);
+    let request_id = update.content.request_id().unwrap();
+    let update_bytes = serde_cbor::to_vec(&update).unwrap();
+    let mut status = update;
+    status.content = Content::ReadState {
+        sender,
+        ingress_expiry: expiry,
+        paths: vec![vec![b"request_status".to_vec(), request_id.to_vec()]],
+    };
+    sign_envelope(&mut status);
     let status = serde_cbor::to_vec(&status).unwrap();
     let message = serde_json::json!({"format":"icp-signed-message", "version":1,
-        "request": {"type":"update", "envelope":BASE64_STANDARD.encode(&update.signed_update), "request_id":crate::hex(update.request_id.as_slice()), "status_check":BASE64_STANDARD.encode(&status)},
+        "request": {"type":"update", "envelope":BASE64_STANDARD.encode(&update_bytes), "request_id":crate::hex(&request_id), "status_check":BASE64_STANDARD.encode(&status)},
         "network":{"url":plan.network.url(),"root_key":plan.network.root()}, "destination":{"canister":call.effective.to_text()}});
     serde_json::to_vec(&message).unwrap()
 }
@@ -110,7 +128,7 @@ async fn maintenance_observation_cannot_sign_another_root_or_effect() {
             upgrades: vec![],
         }],
     };
-    let agent = plan.network.agent().unwrap();
+    let client = plan.network.client().unwrap();
     let dir = crate::tests::directory();
     for case in 0..4 {
         call.canister = principal(if case == 0 {
@@ -150,7 +168,7 @@ async fn maintenance_observation_cannot_sign_another_root_or_effect() {
                 &call,
                 "must-not-run",
                 std::path::Path::new("must-not-run"),
-                &agent
+                &client
             )
             .await,
             Err(Error::Invalid(_))
@@ -179,11 +197,11 @@ async fn recovery_retains_exact_attempt_and_deadline_after_effect_expiry() {
     let dir = crate::tests::directory();
     crate::store::put_json(&dir.join("authority.json"), &expiry).unwrap();
     crate::store::put(&dir.join("signed.json"), &signed).unwrap();
-    let agent = plan.network.agent().unwrap();
+    let client = plan.network.client().unwrap();
     let signer = std::path::Path::new("must-not-run");
     for _ in 0..2 {
         assert!(matches!(
-            super::reconcile(&dir, &plan, "unused", signer, &agent).await,
+            super::reconcile(&dir, &plan, "unused", signer, &client).await,
             Err(Error::Blocked(_))
         ));
         assert_eq!(std::fs::read(dir.join("signed.json")).unwrap(), signed);
@@ -195,7 +213,7 @@ async fn recovery_retains_exact_attempt_and_deadline_after_effect_expiry() {
     // A result already committed before host interruption can be read after expiry.
     crate::store::put(&dir.join("reply.bin"), b"retained reply").unwrap();
     assert_eq!(
-        super::reconcile(&dir, &plan, "unused", signer, &agent)
+        super::reconcile(&dir, &plan, "unused", signer, &client)
             .await
             .unwrap(),
         b"retained reply"
@@ -203,7 +221,7 @@ async fn recovery_retains_exact_attempt_and_deadline_after_effect_expiry() {
     assert_eq!(plan, before);
     plan.expires_at_ns += 1;
     assert!(matches!(
-        super::reconcile(&dir, &plan, "unused", signer, &agent).await,
+        super::reconcile(&dir, &plan, "unused", signer, &client).await,
         Err(Error::Invalid(_))
     ));
     std::fs::remove_dir_all(dir).unwrap();
@@ -256,6 +274,151 @@ fn status_authority_must_bind_the_same_request() {
             &super::Authority::from(&plan),
             &call
         ),
+        Err(Error::Supplier(_))
+    ));
+}
+
+#[test]
+fn admission_preserves_bytes_and_keeps_authentication_profiles_distinct() {
+    let (bytes, plan, call) = fixture();
+    let attempt = admit(&bytes, &super::Authority::from(&plan), &call).unwrap();
+    let effective = call.effective;
+    let update =
+        PreparedUpdate::from_bytes(attempt.update.envelope_bytes(), effective, 4096).unwrap();
+    let status =
+        PreparedRequestStatus::from_bytes(attempt.status.envelope_bytes(), &update, 4096).unwrap();
+    assert_eq!(update.envelope_bytes(), attempt.update.envelope_bytes());
+    assert_eq!(status.envelope_bytes(), attempt.status.envelope_bytes());
+    assert_eq!(update.request_id(), attempt.update.request_id().as_slice());
+    assert_eq!(update.expiry(), attempt.update.expiry());
+    assert_eq!(status.expiry(), attempt.update.expiry());
+
+    // The installed ICP anonymous journey is a supported existing profile.
+    // The approved controller selects it explicitly, never a failed signature.
+    let mut message: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let mut anonymous_plan = plan;
+    anonymous_plan.controller = "2vxsx-fae".into();
+    let mut anonymous_update = ingress::decode_envelope(attempt.update.envelope_bytes(), 4096)
+        .unwrap()
+        .value;
+    let Content::Call { sender, .. } = &mut anonymous_update.content else {
+        unreachable!()
+    };
+    *sender = anonymous_plan.controller.parse().unwrap();
+    anonymous_update.sender_sig = None;
+    anonymous_update.sender_pubkey = None;
+    let id = anonymous_update.content.request_id().unwrap();
+    let anonymous_update = serde_cbor::to_vec(&anonymous_update).unwrap();
+    let mut anonymous_status = ingress::decode_envelope(attempt.status.envelope_bytes(), 4096)
+        .unwrap()
+        .value;
+    let Content::ReadState { sender, paths, .. } = &mut anonymous_status.content else {
+        unreachable!()
+    };
+    *sender = anonymous_plan.controller.parse().unwrap();
+    paths[0][1] = id.to_vec();
+    anonymous_status.sender_sig = None;
+    anonymous_status.sender_pubkey = None;
+    message["request"]["request_id"] = crate::hex(&id).into();
+    message["request"]["envelope"] = BASE64_STANDARD.encode(&anonymous_update).into();
+    message["request"]["status_check"] = BASE64_STANDARD
+        .encode(serde_cbor::to_vec(&anonymous_status).unwrap())
+        .into();
+    let admitted = admit(
+        &serde_json::to_vec(&message).unwrap(),
+        &super::Authority::from(&anonymous_plan),
+        &call,
+    )
+    .unwrap();
+    assert_eq!(admitted.update.envelope_bytes(), anonymous_update);
+    assert_eq!(
+        admitted.status.envelope_bytes(),
+        serde_cbor::to_vec(&anonymous_status).unwrap()
+    );
+    assert!(matches!(
+        PreparedUpdate::from_bytes(&anonymous_update, effective, 4096),
+        Err(ReadError::Packet)
+    ));
+    for field in ["envelope", "status_check"] {
+        let raw = BASE64_STANDARD
+            .decode(message["request"][field].as_str().unwrap())
+            .unwrap();
+        for authentication in ["sender_pubkey", "sender_sig", "sender_delegation"] {
+            let mut packet: serde_cbor::Value = serde_cbor::from_slice(&raw).unwrap();
+            let serde_cbor::Value::Map(ref mut fields) = packet else {
+                unreachable!()
+            };
+            fields.insert(
+                serde_cbor::Value::Text(authentication.into()),
+                if authentication == "sender_delegation" {
+                    serde_cbor::Value::Array(vec![])
+                } else {
+                    serde_cbor::Value::Bytes(vec![])
+                },
+            );
+            let mut mixed = message.clone();
+            mixed["request"][field] = BASE64_STANDARD
+                .encode(serde_cbor::to_vec(&packet).unwrap())
+                .into();
+            assert!(
+                admit(
+                    &serde_json::to_vec(&mixed).unwrap(),
+                    &super::Authority::from(&anonymous_plan),
+                    &call
+                )
+                .is_err()
+            );
+        }
+    }
+}
+
+#[test]
+fn tampered_signatures_never_fall_back_to_anonymous_admission() {
+    let (bytes, plan, call) = fixture();
+    let message: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    for field in ["envelope", "status_check"] {
+        let original = BASE64_STANDARD
+            .decode(message["request"][field].as_str().unwrap())
+            .unwrap();
+        let mut envelope = ingress::decode_envelope(&original, 4096).unwrap().value;
+        envelope.sender_sig.as_mut().unwrap()[0] ^= 1;
+        let mut changed = message.clone();
+        changed["request"][field] = BASE64_STANDARD
+            .encode(serde_cbor::to_vec(&envelope).unwrap())
+            .into();
+        assert!(matches!(
+            admit(
+                &serde_json::to_vec(&changed).unwrap(),
+                &super::Authority::from(&plan),
+                &call
+            ),
+            Err(Error::Supplier(_))
+        ));
+    }
+}
+
+#[test]
+fn valid_status_signature_cannot_renew_the_attempt_window() {
+    let (bytes, plan, call) = fixture();
+    let mut message: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+    let original = BASE64_STANDARD
+        .decode(message["request"]["status_check"].as_str().unwrap())
+        .unwrap();
+    let mut status = ingress::decode_envelope(&original, 4096).unwrap().value;
+    let Content::ReadState { ingress_expiry, .. } = &mut status.content else {
+        unreachable!()
+    };
+    *ingress_expiry += 1;
+    sign_envelope(&mut status);
+    message["request"]["status_check"] = BASE64_STANDARD
+        .encode(serde_cbor::to_vec(&status).unwrap())
+        .into();
+    assert!(matches!(
+        admit(
+            &serde_json::to_vec(&message).unwrap(),
+            &super::Authority::from(&plan),
+            &call
+        ),
         Err(Error::Invalid(_))
     ));
 }
@@ -266,8 +429,8 @@ fn packet_admission_retains_bytes_and_refuses_unknown_signed_fields() {
     let original: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
     let admitted = admit(&bytes, &super::Authority::from(&plan), &call).unwrap();
     for (field, retained) in [
-        ("envelope", admitted.envelope),
-        ("status_check", admitted.status_check),
+        ("envelope", admitted.update.envelope_bytes()),
+        ("status_check", admitted.status.envelope_bytes()),
     ] {
         let raw = BASE64_STANDARD
             .decode(original["request"][field].as_str().unwrap())
@@ -327,14 +490,14 @@ async fn expired_uncertain_attempt_stays_retained_without_a_new_signature() {
         ));
     crate::output_publication::prepare(&path, 0o700).unwrap();
     crate::store::put(&path.join("signed.json"), &bytes).unwrap();
-    let agent = plan.network.agent().unwrap();
+    let client = plan.network.client().unwrap();
     let result = super::execute(
         &path,
         &plan,
         &call,
         "not-an-identity",
         std::path::Path::new("/missing-signer"),
-        &agent,
+        &client,
     )
     .await;
     assert!(matches!(result, Err(Error::Blocked(_))));
@@ -360,7 +523,7 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
     plan.expires_at_ns = 1;
     call.canister = principal("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
     call.effective = call.canister;
-    let agent = plan.network.agent().unwrap();
+    let client = plan.network.client().unwrap();
     let dir = crate::tests::directory();
     for (upgrade, method) in [
         (false, "stage"),
@@ -392,7 +555,7 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
                 &call,
                 "must-not-run",
                 std::path::Path::new("must-not-run"),
-                &agent
+                &client
             )
             .await,
             Err(Error::Invalid(_))
@@ -407,7 +570,7 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
             &call,
             "must-not-run",
             std::path::Path::new("must-not-run"),
-            &agent
+            &client
         )
         .await,
         Err(Error::Invalid(_))
@@ -428,7 +591,7 @@ async fn scoped_observation_rejects_sibling_and_legacy_payloads_before_signing()
         execute_at_ns: 1,
         slot: Some(canic_management_protocol::children::ChildId::SECOND),
     });
-    let agent = plan.network.agent().unwrap();
+    let client = plan.network.client().unwrap();
     let dir = crate::tests::directory();
     for slot in [
         None,
@@ -447,7 +610,7 @@ async fn scoped_observation_rejects_sibling_and_legacy_payloads_before_signing()
                 &call,
                 "must-not-run",
                 std::path::Path::new("must-not-run"),
-                &agent
+                &client
             )
             .await,
             Err(Error::Invalid(_))
@@ -493,10 +656,10 @@ async fn publication_read_authority_survives_effect_expiry_without_renewing_muta
     )
     .unwrap();
     crate::store::put(&path.join("reply.bin"), &[42]).unwrap();
-    let agent = plan.network.agent().unwrap();
+    let client = plan.network.client().unwrap();
     let absent = path.join("no-signer");
     assert_eq!(
-        super::observe_operation(&path, &plan, "unused", &absent, &agent)
+        super::observe_operation(&path, &plan, "unused", &absent, &client)
             .await
             .unwrap(),
         [42]
@@ -516,7 +679,7 @@ async fn publication_read_authority_survives_effect_expiry_without_renewing_muta
     assert!(super::retained_operation(&path, &plan).is_err());
     std::fs::remove_file(path.join("reply.bin")).unwrap();
     assert!(
-        super::execute(&path, &plan, &mutation, "unused", &absent, &agent)
+        super::execute(&path, &plan, &mutation, "unused", &absent, &client)
             .await
             .is_err()
     );
@@ -553,10 +716,10 @@ async fn store_readiness_authority_cannot_change_target_or_renew_handover() {
     )
     .unwrap();
     crate::store::put(&path.join("reply.bin"), &[42]).unwrap();
-    let agent = plan.network.agent().unwrap();
+    let client = plan.network.client().unwrap();
     let absent = path.join("no-signer");
     assert_eq!(
-        super::observe_store(&path, &plan, canister, "unused", &absent, &agent)
+        super::observe_store(&path, &plan, canister, "unused", &absent, &client)
             .await
             .unwrap(),
         [42]
@@ -580,7 +743,7 @@ async fn store_readiness_authority_cannot_change_target_or_renew_handover() {
     assert!(super::validate_retained(&path, &plan, &handover).is_err());
     std::fs::remove_file(path.join("reply.bin")).unwrap();
     assert!(
-        super::execute(&path, &plan, &handover, "unused", &absent, &agent)
+        super::execute(&path, &plan, &handover, "unused", &absent, &client)
             .await
             .is_err()
     );

@@ -27,7 +27,10 @@ jobs:
           persist-credentials: false
       - uses: ./vendor/toko-tooling/.github/actions/cache-tool-downloads
       - name: Prepare pinned policy tools
+        id: setup
+        shell: perl scripts/ci/setup-diagnostics.pl policy-tools bash --noprofile --norc -e -o pipefail {0}
         run: |
+          echo "TOKO_TOOLING_STORE=$TOKO_TOOLING_STORE" >> "$GITHUB_ENV"
           make install-host-tools host-tools-check
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
@@ -45,6 +48,27 @@ jobs:
           "$ACTIONLINT_BIN" -shellcheck= .github/workflows/ci.yml
       - name: Scan complete repository history once
         run: '"$GITLEAKS_BIN" git --redact=100 --no-banner --no-color --log-level error "$GITHUB_WORKSPACE"'
+      - name: Retain failed setup diagnostics
+        id: setup-evidence
+        if: ${{ failure() && steps.setup.outcome == 'failure' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: canic-setup-policy-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/canic-setup-diagnostics/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Report setup evidence availability
+        if: ${{ always() && steps.setup-evidence.outcome != 'skipped' }}
+        env:
+          ARTIFACT_URL: ${{ steps.setup-evidence.outputs.artifact-url }}
+        run: |
+          if [[ -n "$ARTIFACT_URL" ]]; then
+            printf 'Setup diagnostics: %s\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Setup diagnostics upload failed or no setup evidence was available.' >&2
+            echo 'Setup diagnostics unavailable; inspect the original failed step.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
 
   product:
     strategy:
@@ -61,7 +85,10 @@ jobs:
           persist-credentials: false
       - uses: ./vendor/toko-tooling/.github/actions/cache-tool-downloads
       - name: Prepare pinned compiler and common tools
+        id: setup
+        shell: perl scripts/ci/setup-diagnostics.pl compiler-tools bash --noprofile --norc -e -o pipefail {0}
         run: |
+          echo "TOKO_TOOLING_STORE=$TOKO_TOOLING_STORE" >> "$GITHUB_ENV"
           make install-host-tools host-tools-check
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           bash vendor/toko-tooling/scripts/dev/prepare-rust-toolchain.sh --toolchain-file rust-toolchain.toml
@@ -73,8 +100,31 @@ jobs:
       - name: Admit sources and check formatting
         run: make toko-tooling-check fmt-check
       - name: Prepare locked dependencies
+        id: dependencies
+        shell: perl scripts/ci/setup-diagnostics.pl dependencies bash --noprofile --norc -e -o pipefail {0}
         run: cargo fetch --locked
       - name: Native product checks
         run: make ci-native
       - name: Wasm product checks
         run: make ci-wasm
+      - name: Retain failed setup diagnostics
+        id: setup-evidence
+        if: ${{ failure() && (steps.setup.outcome == 'failure' || steps.dependencies.outcome == 'failure') }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: canic-setup-${{ matrix.os }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/canic-setup-diagnostics/
+          retention-days: 7
+          if-no-files-found: error
+      - name: Report setup evidence availability
+        if: ${{ always() && steps.setup-evidence.outcome != 'skipped' }}
+        env:
+          ARTIFACT_URL: ${{ steps.setup-evidence.outputs.artifact-url }}
+        run: |
+          if [[ -n "$ARTIFACT_URL" ]]; then
+            printf 'Setup diagnostics: %s\n' "$ARTIFACT_URL" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Setup diagnostics upload failed or no setup evidence was available.' >&2
+            echo 'Setup diagnostics unavailable; inspect the original failed step.' >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

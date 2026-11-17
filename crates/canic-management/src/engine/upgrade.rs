@@ -8,18 +8,15 @@ use canic_management_protocol::upgrade::{
     Approval, MAX_UPGRADES, Phase as UpgradePhase, Stage as UpgradeStage, Status as UpgradeStatus,
 };
 use canic_management_protocol::{Failure, Phase, Refusal, digest, stored};
-use ic_platform::principal::Principal;
-use ic_platform::{
-    candid_codec::{self, decoder},
-    management_canister_types::{
-        CanisterIdRecord, CanisterInstallMode, CanisterStatusResult, CanisterStatusType,
-        InstallChunkedCodeArgs,
-    },
+use ic_platform_protocol::{
+    management::{self as mgmt, CanisterArgs, CanisterStatus, InstallChunkedCodeArgs, InstallMode},
+    management_snapshots::Status as RuntimeStatus,
 };
 use ic_platform_runtime::{
     call::{Call, Wait},
     system as api,
 };
+use ic_platform_types::Principal;
 
 /// Read committed upgrade evidence without dispatching work.
 /// # Panics
@@ -385,18 +382,16 @@ pub(super) fn next(slot: ChildId) -> Option<u64> {
         _ => None,
     }
 }
-pub(super) async fn inspect(a: &Approval) -> Result<CanisterStatusResult, Failure> {
-    let args = candid_codec::encode_one(
-        &CanisterIdRecord {
-            canister_id: Principal::from_text(&a.child).map_err(|_| Failure::Mismatch)?,
-        },
-        1024,
-    )
+pub(super) async fn inspect(a: &Approval) -> Result<CanisterStatus, Failure> {
+    let args = CanisterArgs {
+        canister_id: Principal::from_text(&a.child).map_err(|_| Failure::Mismatch)?,
+    }
+    .encode(1024)
     .expect("status args");
     let reply = management("canister_status", args, 0).await?;
-    let value: CanisterStatusResult =
-        decoder::decode_one(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
-    if value.settings.controllers != [Principal::from_slice(api::canister_self().as_slice())] {
+    let value = mgmt::decode_canister_status(&reply, MANAGEMENT_LIMITS)
+        .map_err(|_| Failure::InvalidReply)?;
+    if value.settings.controllers != [api::canister_self()] {
         return Err(Failure::Mismatch);
     }
     Ok(value)
@@ -463,7 +458,7 @@ pub(super) async fn step(slot: ChildId) {
         }
         UpgradePhase::Scheduled | UpgradePhase::Stopped => inspect(a).await.and_then(|value| {
             if value.module_hash.as_deref() != Some(a.previous_module.as_slice())
-                || value.status != CanisterStatusType::Stopped
+                || value.status != RuntimeStatus::Stopped
                 || value.version == u64::MAX
                 || STATE.with_borrow(|state| {
                     state.as_ref().expect("initialized manager").journal.get().0[&slot]
@@ -499,7 +494,7 @@ pub(super) async fn step(slot: ChildId) {
                 Ok(value)
                     if value.module_hash.as_deref() != Some(a.previous_module.as_slice())
                         || Some(value.version) != s.previous_version
-                        || value.status != CanisterStatusType::Stopped =>
+                        || value.status != RuntimeStatus::Stopped =>
                 {
                     Err(Failure::Mismatch)
                 }
@@ -514,19 +509,16 @@ pub(super) async fn step(slot: ChildId) {
                         return;
                     }
                     let (store, chunks) = delivery::layout(slot, true, a.module_hash);
-                    let bytes = candid_codec::encode_one(
-                        &InstallChunkedCodeArgs {
-                            mode: CanisterInstallMode::Upgrade(None),
-                            target_canister: Principal::from_text(&a.child)
-                                .expect("retained child"),
-                            store_canister: Some(store),
-                            chunk_hashes_list: chunks,
-                            wasm_module_hash: a.module_hash.to_vec(),
-                            arg: super::application::arguments(slot, true),
-                            sender_canister_version: Some(api::canister_version()),
-                        },
-                        8192,
-                    )
+                    let bytes = InstallChunkedCodeArgs {
+                        mode: InstallMode::Upgrade(None),
+                        target_canister: Principal::from_text(&a.child).expect("retained child"),
+                        store_canister: Some(store),
+                        chunk_hashes_list: chunks,
+                        wasm_module_hash: a.module_hash.to_vec(),
+                        arg: super::application::arguments(slot, true),
+                        sender_canister_version: Some(api::canister_version()),
+                    }
+                    .encode(8192)
                     .expect("upgrade args");
                     issue(slot, 1, UpgradePhase::InstallIssued, &bytes);
                     fault(slot, 7); // Trap rolls back dispatch and intent together.
@@ -534,12 +526,8 @@ pub(super) async fn step(slot: ChildId) {
                         management("install_chunked_code", bytes, 0)
                             .await
                             .and_then(|bytes| {
-                                decoder::decode_args::<()>(
-                                    &bytes,
-                                    MANAGEMENT_LIMITS,
-                                    decoder::Arity::Exact,
-                                )
-                                .map_err(|_| Failure::InvalidReply)?;
+                                mgmt::decode_empty_response(&bytes, MANAGEMENT_LIMITS)
+                                    .map_err(|_| Failure::InvalidReply)?;
                                 mutate(slot, |s| s.phase = UpgradePhase::Installed);
                                 Ok(())
                             });
@@ -568,12 +556,10 @@ async fn runtime_transition(slot: ChildId, a: &Approval, start: bool) -> Result<
     {
         return Err(Failure::Uncertain);
     }
-    let args = candid_codec::encode_one(
-        &CanisterIdRecord {
-            canister_id: Principal::from_text(&a.child).expect("approved child"),
-        },
-        1024,
-    )
+    let args = CanisterArgs {
+        canister_id: Principal::from_text(&a.child).expect("approved child"),
+    }
+    .encode(1024)
     .expect("bounded management target");
     mutate(slot, |s| {
         s.phase = if start {
@@ -594,16 +580,15 @@ async fn runtime_transition(slot: ChildId, a: &Approval, start: bool) -> Result<
     )
     .await?;
     fault(slot, if start { 25 } else { 24 });
-    decoder::decode_args::<()>(&reply, MANAGEMENT_LIMITS, decoder::Arity::Exact)
-        .map_err(|_| Failure::InvalidReply)?;
+    mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
     observe_runtime(slot, a, start).await
 }
 async fn observe_runtime(slot: ChildId, a: &Approval, start: bool) -> Result<(), Failure> {
     let value = inspect(a).await?;
     let (hash, state) = if start {
-        (a.module_hash, CanisterStatusType::Running)
+        (a.module_hash, RuntimeStatus::Running)
     } else {
-        (a.previous_module, CanisterStatusType::Stopped)
+        (a.previous_module, RuntimeStatus::Stopped)
     };
     if value.module_hash.as_deref() != Some(hash.as_slice()) || value.status != state {
         return Err(Failure::Mismatch);
@@ -678,9 +663,7 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
             let readiness =
                 STATE.with_borrow(|state| state.as_ref().expect("state").readiness.clone());
             let reply = Call::new(
-                ic_platform_types::Principal::from_slice(
-                    (Principal::from_text(&a.child).expect("retained child")).as_slice(),
-                ),
+                Principal::from_text(&a.child).expect("retained child"),
                 readiness.method,
                 Wait::Bounded { seconds: 5 },
             )

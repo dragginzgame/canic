@@ -1,6 +1,6 @@
 //! One-shot mainnet placement diagnostics for explicitly configured bindings.
 use crate::{Error, Network, Result, SelectedFleet, supplier};
-use ic_platform::principal::Principal;
+use ic_platform_types::Principal;
 use ic_topology::placement::collection::{self, PlacementCollectionReport};
 use serde::Serialize;
 use std::{collections::BTreeSet, future::Future};

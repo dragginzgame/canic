@@ -4,29 +4,12 @@ mod canister;
 
 /// Typed protocol for this witness application, not a general dynamic DB frontend.
 pub mod protocol {
+    pub use canic::db::inspection::{INSPECT, Reply as InspectReply, Request as InspectRequest};
     use serde::{Deserialize, Serialize};
-    /// Schema/status Wire identity.
-    pub const INSPECT: u64 = ic_wire::method_id("canic-db-witness.inspect.v1");
     /// Listing Wire identity.
     pub const QUERY: u64 = ic_wire::method_id("canic-db-witness.query.v1");
     /// Atomic insert Wire identity.
     pub const WRITE: u64 = ic_wire::method_id("canic-db-witness.write.v1");
-    /// No caller claims or initialization controls in requests.
-    pub type InspectRequest = ();
-    /// Declared schema and currently admitted entity count.
-    #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-    pub struct Description {
-        /// Logical entity name.
-        pub entity: String,
-        /// Logical fields and declared type descriptions.
-        pub fields: Vec<(String, String)>,
-        /// Logical index names.
-        pub indexes: Vec<String>,
-        /// Number of rows, or an ordinary access refusal during maintenance.
-        pub rows: Result<u64, Refusal>,
-    }
-    /// Bounded information selected by the application.
-    pub type InspectReply = Description;
     /// Fixed application query: ID order, residual minimum score.
     #[derive(Clone, Debug, Serialize, Deserialize)]
     pub struct QueryRequest {

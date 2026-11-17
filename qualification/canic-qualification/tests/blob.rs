@@ -14,6 +14,7 @@ use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{num::NonZeroU128, path::PathBuf};
 mod blob_fleet_tests;
+mod blob_profile_tests;
 mod support;
 
 fn id(n: u128) -> NonZeroU128 {
@@ -385,7 +386,19 @@ async fn catalog_validation_and_post_mutation_traps_preserve_both_owners() {
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
     let client = install(pic).await;
-    first(&client).await;
+    catalog_validation_and_rollback(&client).await;
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    let stopped = server.stop().unwrap();
+    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
+}
+
+// Exercise the same catalog contract with and without another durable participant.
+async fn catalog_validation_and_rollback(client: &Client<'_>) {
+    let pic = client.pic;
+    first(client).await;
     let second = client.draft(2).await;
     let before = pic.get_stable_memory(client.canister).await;
     for point in [1, 2] {
@@ -472,12 +485,6 @@ async fn catalog_validation_and_post_mutation_traps_preserve_both_owners() {
         client.authorize(actor(1), &client.draft(5).await).await,
         Err(app::Error::Capacity)
     );
-    assert_eq!(
-        owner.close(std::time::Duration::from_secs(10)).await,
-        ic_testkit::server::Deletion::Attempted
-    );
-    let stopped = server.stop().unwrap();
-    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
 #[tokio::test(flavor = "current_thread")]

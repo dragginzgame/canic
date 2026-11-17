@@ -146,6 +146,8 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
             &url,
             "--root-key",
             &hex(&pic.root_key().await.unwrap()),
+            "--root-subnet",
+            &pic.topology().await.get_nns().unwrap().to_text(),
             "--routing-canister",
             &routing.to_text(),
             "--source",

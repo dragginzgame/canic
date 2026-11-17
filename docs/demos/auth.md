@@ -112,13 +112,14 @@ and `mount_auth_issuer_endpoints!` for application handlers:
 | `issue_portable_credential` | Independently authenticated account | Reserve one exact intent before entropy/signing |
 | `renew_portable_credential` | Browser authenticated against the original login | Preserve grants, login deadline and exact renewal sequence |
 | `reconcile_portable_credential` | Original account or browser signer role | Lookup only; return original completion or unresolved evidence |
+| `revoke_portable_login` | Browser authenticated against the original login | Revoke through Auth's retained binding, retaining original results/deadline |
 
-All three are replicated updates. Initial requests cannot supply an account,
+All four are replicated updates. Initial requests cannot supply an account,
 issuer key, policy or deadline. Renewal's account is a selector verified through
 Auth's retained browser binding. Input frames are capped at 8 KiB; replies at
 128 KiB, with separate allocation/node/depth bounds. Canonical claims and proof
 bytes remain supplier-owned and are returned unchanged. The application supplies
-async issue/renew handlers and a synchronous reconciliation handler. Mounting
+async issue/renew handlers and synchronous reconciliation/logout handlers. Mounting
 installs no engine, key, storage, enrollment or timer.
 
 The witness uses the real `MemoryIssuer` with two login slots, four operations,
@@ -144,12 +145,74 @@ profile/browser journey. There is no external signer effect in this slice, and
 no claim of external signing recovery or certified proof publication. A trapped
 local signature is rolled back with its result and cannot escape the callback.
 
-The pinned supplier's `MemoryIssuer::revoke` accepts an authenticated account;
-its contract explicitly leaves browser-authenticated issuer logout to a later
-binding API. Canic needs that API to verify the original browser/login and revoke
-that retained account login atomically. It must retain result evidence and fence
-late completion. Canic does not add a parallel login index or reinterpret the
-browser caller as an account to work around it. Receiver logout remains available.
+`MemoryIssuer::revoke_browser` verifies the captured browser against the original
+account/login selectors and atomically revokes that login. Exact repeats return
+the original deadline. Initial/renewal work completing later stays fenced; other
+devices and retained completed results remain available. Missing/pruned or lost
+volatile state refuses. The installed `auth_logout_tests` cover these boundaries,
+malformed input and post-mutation encoding failure rolling back revocation.
+There is no Canic login index or reinterpretation of a browser as an account.
+Receiver logout remains its separate, unchanged unit-input operation.
+
+The [optional browser adapter](../../crates/canic/browser/README.md) now implements
+Auth's issuer transport and adapts this login-specific logout to Auth cleanup.
+It binds immutable intents, account/browser signer roles and explicit clock
+conversion; unresolved lookup cannot become issuance. Its generated codecs come
+from the mounted Rust DTOs. The installed profile slice below advances
+[Canic #11](https://github.com/dragginzgame/canic/issues/11).
+
+## Installed profile/browser composition
+
+The witness's optional `profile` feature reuses `canic-profile-worker::state`
+without the worker's standalone entrypoints. There is one profile persistence
+engine, with the same immutable owner/user binding, revision and capacity rules.
+Auth supplies an authenticated subject under the receiver's one protected issuer
+namespace. A browser is a transport identity; being an operator or controller
+does not give access to a user's profile. The default profile worker remains
+unchanged and does not acquire an Auth dependency.
+
+Prepare the simulator/npm inputs, then select an already installed Chromium:
+
+```sh
+make qualification-setup auth-browser-prepare
+CANIC_AUTH_BROWSER_EXECUTABLE=/absolute/path/to/chromium make auth-profile-test
+```
+
+This downloads no browser and runs headless, with no desktop windows. The browser
+uses the real Platform SDK and Auth coordinator/journal against the simulator's
+HTTP gateway with an explicit root key. A separate issuer and two existing
+single-grant Roots admit two independent receivers. No multi-grant Root catalogue
+or new deployment mode is introduced. Qualification keys are public fixed seeds.
+
+Nine browser cases cover lost issuance and admission replies across renderer
+reopening, independent device/user logins, profile isolation and immutable IDs,
+reply-encoding failure rolling back actual profile writes, renewal and original
+result lookup, logout/cleanup reopening, retained credential replay refusal,
+wrong-scope admission with actual Unconfirmed cleanup, another renderer's logout
+fencing a suspended SDK signer, and logout before an actual issuer result reaches
+the coordinator. A blocked browser HTTP request preserves the cleanup attempt and
+deadline across renderer loss; resumed cleanup confirms only authenticated replies.
+An attempt timing out at the original cleanup deadline is explicitly resumed from
+that same journal, never assigned a fresh deadline. The late issuer result cannot
+restore readiness, and its unknown issuance remains visible even after confirmed
+cleanup. The native harness independently observes five committed signatures,
+four logins and exactly two successful profile writes.
+It upgrades the receiver and reopens both profiles unchanged; lost volatile Auth
+state stays closed, including to fresh enrollment.
+
+The local clock mapping subtracts one second from credential/session deadlines.
+It is an explicit fixture assumption, not production cross-clock synchronization.
+Auth's verification bucket starts empty; the harness allows twenty seconds of
+simulated policy time before real-time browser progression. It does not bypass
+budgets or extend accepted credentials/snapshots. Node output is bounded to 64 KiB
+per stream and 90 seconds; the simulator has a separate 180-second lifetime.
+
+This proves local composition, not a shipped Auth-enabled profile deployment.
+The late-result case holds a real authenticated result after server completion;
+it does not pause the issuer's remote entropy callback. Installed native tests
+cover that callback fence and authority loss separately. Browser device replacement
+and the remaining acceptance cases stay in Canic #11. Production key custody,
+certified issuer proofs and stable Auth preservation remain unqualified.
 
 ## Run locally
 
@@ -203,9 +266,11 @@ not another shipped adapter package or default Canic dependency.
 
 ## Inputs and limits
 
-Both lockfiles select immutable Auth Git revision
-`bfe2e548a997f10a876f01b4c72c4e5fec52c8d6`: engine `ic-auth` 0.46.1 and passive
-`ic-auth-wire` / `ic-auth-protocol-types` 0.42.0. The basic `auth` feature selects
+Both lockfiles select registry engine `ic-auth` 0.47.2 from
+`e3ea2c74bbb5fe33f5f07e3aa267699c0ffb6b12` and passive
+`ic-auth-wire` / `ic-auth-protocol-types` 0.43.0. The browser package remains
+pinned to `a05b5ddd4099a3f64b95deb173a0c16746d98ac5` (0.47.1); the installed
+journey qualifies that actual combination. The basic `auth` feature selects
 only passive contracts; `auth-enrollment` selects `receiver-memory` and
 `ed25519-verification`. Only the qualification application's issuer additionally
 selects `issuer-memory` and Platform's local signing API. No sibling edits, source copies or supplier publication
@@ -213,14 +278,14 @@ are required. The exact tested artifact is recorded in
 [qualification history](../qualification/history.md).
 
 Application signing and the native test verifier now select registry Platform
-0.34.9's `ed25519` capability as `ic-platform-crypto`. Enrollment and issuer entropy
+0.34.13's `ed25519` capability as `ic-platform-crypto`. Enrollment and issuer entropy
 use Protocol's `raw_rand` with explicit six-byte request and 42-byte reply budgets.
-Product selects Protocol 0.2.7; qualification retains Testkit 0.107.3's exact
-0.2.6 selection. The witness and its real Root use Runtime 0.23.14, and committed
-Auth source uses the matching Types 0.21.2 boundary. The later browser-logout
-checkpoint `6d5c9704152cea05d6a095c8765fd74368c7d538` is now committed; its
-adoption belongs to Canic #16/#17 and is deferred to that integration increment.
-Host transport migration remains separate.
+Product and qualification select Protocol 0.3.5 with Testkit 0.108.0.
+The witness and its real Root use Runtime 0.23.16, and committed
+Auth source uses the matching Types 0.21.2 boundary. Browser logout and transport
+are tracked by [Canic #16](https://github.com/dragginzgame/canic/issues/16) and
+[Canic #17](https://github.com/dragginzgame/canic/issues/17); production custody
+and the full application journey remain separate.
 
 The witness has a controller-approved Root grant and a public test signer,
 two session slots and bounded volatile replay/verification state. It
@@ -239,7 +304,7 @@ The production engine remains supplier-owned and standalone. Remaining scopes:
 - [#10 — Auth issuance, renewal and reconciliation](https://github.com/dragginzgame/canic/issues/10).
 - [#11 — Installed profile/browser Auth journey](https://github.com/dragginzgame/canic/issues/11).
 
-Certified proof mounting, browser lifecycle, durable Auth state and recovery are
-not established by this witness. The CLI supports grant configuration and
-revocation through the existing fleet journal. Issuer canister mounts exist;
-issuer CLI commands, browser login and browser-bound issuer logout remain pending.
+Certified proof mounting, durable Auth state and managed recovery are not
+established by this witness. The CLI supports grant configuration and revocation
+through the existing fleet journal. Issuer mounts and the installed profile/browser
+slice exist; issuer CLI commands and the remaining browser acceptance cases are pending.

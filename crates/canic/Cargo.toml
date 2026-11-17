@@ -11,9 +11,11 @@ ignored = ["toko-tooling"]
 
 [features]
 auth = ["dep:ic-auth-protocol-types", "dep:ic-auth-wire", "dep:ic-platform-runtime"]
+auth-browser = ["auth", "ic-auth-wire/typescript", "ic-wire/typescript"]
 auth-enrollment = ["auth", "dep:ic-auth", "dep:ic-platform-protocol", "dep:sha2"]
 blob = ["dep:ic-blob-storage", "dep:ic-platform-runtime"]
 db = ["dep:ic-platform-runtime"]
+db-schema = ["db", "dep:ic-db"]
 metrics = ["dep:ic-platform-runtime"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -25,6 +27,7 @@ ic-auth = { workspace = true, optional = true }
 ic-auth-protocol-types = { workspace = true, optional = true }
 ic-auth-wire = { workspace = true, optional = true }
 ic-blob-storage = { workspace = true, optional = true }
+ic-db = { workspace = true, optional = true }
 ic-wire.workspace = true
 serde.workspace = true
 sha2 = { workspace = true, optional = true }
@@ -35,3 +38,7 @@ toko-tooling.workspace = true
 
 [lints]
 workspace = true
+
+[[example]]
+name = "auth-codecs"
+required-features = ["auth-browser"]

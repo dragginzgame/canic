@@ -4,7 +4,7 @@ use crate::{
     supplier,
 };
 use canic_management_protocol::store_maintenance::{self as wire, Phase, Status};
-use ic_platform::agent::Agent;
+use ic_platform::native::ReadClient;
 use std::path::{Path, PathBuf};
 
 mod continuation;
@@ -157,7 +157,7 @@ async fn observe(
     plan: &Plan,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<(usize, Option<Status>)> {
     let index = next(dir)?;
     if index == OBSERVATIONS {
@@ -165,7 +165,7 @@ async fn observe(
             "Store observation budget exhausted; retain the original operation".into(),
         ));
     }
-    let reply = signed::observe_operation(&path(dir, index), plan, identity, icp, agent).await?;
+    let reply = signed::observe_operation(&path(dir, index), plan, identity, icp, client).await?;
     Ok((index, decode(plan, &reply)?))
 }
 fn retained(dir: &Path, plan: &Plan, index: usize) -> Result<Option<Status>> {
@@ -216,23 +216,23 @@ pub(crate) fn receipt(dir: &Path, plan: &Plan) -> Result<Option<(Receipt, Status
         status,
     )))
 }
-async fn verify(plan: &Plan, agent: &Agent) -> Result<()> {
+async fn verify(plan: &Plan, client: &ReadClient) -> Result<()> {
     let root = plan.store_upgrade_root().ok_or_else(invalid)?;
     let root_id = principal(&root.canister)?;
-    operation::controllers(agent, root_id, &plan.controller).await?;
-    if operation::module(agent, root_id).await? != root.module {
+    operation::controllers(client, root_id, &plan.controller).await?;
+    if operation::module(client, root_id).await? != root.module {
         return Err(Error::Blocked(
             "Store upgrade Root code changed; retain the original approval".into(),
         ));
     }
     let target = plan.target().ok_or_else(invalid)?;
-    operation::controllers(agent, principal(target)?, &root.canister).await?;
-    if crate::network::subnet(agent, target).await?
-        != crate::network::subnet(agent, &root.canister).await?
+    operation::controllers(client, principal(target)?, &root.canister).await?;
+    if crate::network::subnet(client, target).await?
+        != crate::network::subnet(client, &root.canister).await?
     {
         return Err(invalid());
     }
-    let module = operation::module(agent, principal(target)?).await?;
+    let module = operation::module(client, principal(target)?).await?;
     if &module != plan.previous_module().ok_or_else(invalid)? && module != plan.artifact.sha256 {
         return Err(Error::Blocked(
             "Store code differs from both approved executables".into(),
@@ -249,10 +249,10 @@ pub(crate) async fn apply(
     icp: &Path,
     read_only: bool,
 ) -> Result<ApplyOutcome> {
-    let agent = plan.network.agent()?;
-    verify(plan, &agent).await?;
+    let client = plan.network.client()?;
+    verify(plan, &client).await?;
     if let Some((receipt, _)) = receipt(dir, plan)? {
-        operation::verify_receipt(&agent, plan, &plan.digest()?, &receipt).await?;
+        operation::verify_receipt(&client, plan, &plan.digest()?, &receipt).await?;
         return Ok(ApplyOutcome::Complete(receipt));
     }
     let approval = approval(plan)?;
@@ -271,20 +271,20 @@ pub(crate) async fn apply(
     {
         return Err(Error::Blocked("Store reconcile requires its retained admission attempt; apply the approved operation first".into()));
     }
-    let (mut index, mut current) = observe(dir, plan, identity, icp, &agent).await?;
+    let (mut index, mut current) = observe(dir, plan, identity, icp, &client).await?;
     if current.is_none() {
         if read_only {
             return Err(Error::Blocked(
                 "Root has not retained this Store operation; reconcile cannot admit it".into(),
             ));
         }
-        if operation::module(&agent, principal(&approval.store)?).await?
+        if operation::module(&client, principal(&approval.store)?).await?
             != crate::hex(&approval.previous_module)
         {
             return Err(invalid());
         }
         let reply =
-            signed::execute(&dir.join("stage"), plan, &stage, identity, icp, &agent).await?;
+            signed::execute(&dir.join("stage"), plan, &stage, identity, icp, &client).await?;
         let staged: std::result::Result<Status, canic_management_protocol::Refusal> =
             ic_wire::decode(
                 &reply,
@@ -300,7 +300,7 @@ pub(crate) async fn apply(
             &staged
                 .map_err(|r| Error::Blocked(format!("Root refused Store maintenance: {r:?}")))?,
         )?;
-        (index, current) = observe(dir, plan, identity, icp, &agent).await?;
+        (index, current) = observe(dir, plan, identity, icp, &client).await?;
     }
     // A matching remote record cannot invent the local operator's signed admission custody.
     signed::validate_retained(&dir.join("stage"), plan, &stage)?;
@@ -318,10 +318,10 @@ pub(crate) async fn apply(
         {
             break;
         }
-        verify(plan, &agent).await?;
+        verify(plan, &client).await?;
         let action = path(dir, index).join("continue");
         if read_only || matches!(next, StoreContinuation::RecoverIssued { .. }) {
-            let reply = signed::reconcile(&action, plan, identity, icp, &agent).await?;
+            let reply = signed::reconcile(&action, plan, identity, icp, &client).await?;
             let result: Status = ic_wire::decode(
                 &reply,
                 ic_wire::Encoding::Frame {
@@ -371,7 +371,7 @@ pub(crate) async fn apply(
                     false,
                 ),
             };
-            let reply = signed::execute(&action, plan, &request, identity, icp, &agent).await?;
+            let reply = signed::execute(&action, plan, &request, identity, icp, &client).await?;
             let value: Status = if result {
                 ic_wire::decode::<std::result::Result<Status, canic_management_protocol::Refusal>>(
                     &reply,
@@ -396,7 +396,7 @@ pub(crate) async fn apply(
             };
             admit(plan, &value)?;
         }
-        let (observed_index, observed) = observe(dir, plan, identity, icp, &agent).await?;
+        let (observed_index, observed) = observe(dir, plan, identity, icp, &client).await?;
         let observed = observed.ok_or_else(invalid)?;
         let stalled = observed == current || observed.failure.is_some();
         index = observed_index;
@@ -406,7 +406,7 @@ pub(crate) async fn apply(
         }
     }
     if ready(&current) {
-        if operation::module(&agent, principal(&approval.store)?).await? != plan.artifact.sha256 {
+        if operation::module(&client, principal(&approval.store)?).await? != plan.artifact.sha256 {
             return Err(invalid());
         }
         store::put_json(&dir.join("store-completion.json"), &index)?;

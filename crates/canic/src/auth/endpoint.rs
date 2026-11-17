@@ -15,12 +15,14 @@ fn limits<const ID: u64>(direction: Direction) -> Limits {
         (ReadSession::ID, Direction::Response) => ReadSession::RESPONSE_LIMITS,
         (Logout::ID, Direction::Request) => Logout::REQUEST_LIMITS,
         (Logout::ID, Direction::Response) => Logout::RESPONSE_LIMITS,
-        (issuer::ISSUE | issuer::RENEW | issuer::RECONCILE, Direction::Request) => {
-            issuer::REQUEST_LIMITS
-        }
-        (issuer::ISSUE | issuer::RENEW | issuer::RECONCILE, Direction::Response) => {
-            issuer::RESPONSE_LIMITS
-        }
+        (
+            issuer::ISSUE | issuer::RENEW | issuer::RECONCILE | issuer::LOGOUT,
+            Direction::Request,
+        ) => issuer::REQUEST_LIMITS,
+        (
+            issuer::ISSUE | issuer::RENEW | issuer::RECONCILE | issuer::LOGOUT,
+            Direction::Response,
+        ) => issuer::RESPONSE_LIMITS,
         _ => api::trap("unsupported Auth mount identity"),
     }
 }

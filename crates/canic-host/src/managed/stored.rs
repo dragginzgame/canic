@@ -8,7 +8,7 @@ use canic_management_protocol::{
     children::{ChildId, Request},
     stored as wire, upgrade,
 };
-use ic_platform::agent::Agent;
+use ic_platform::native::ReadClient;
 use ic_wasm_store_protocol::Manifest;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -110,23 +110,27 @@ pub(super) fn select(
     })
 }
 
-pub(super) async fn verify(plan: &Plan, agent: &Agent) -> Result<()> {
+pub(super) async fn verify(plan: &Plan, client: &ReadClient) -> Result<()> {
     if let Some(source) = plan.management().and_then(|m| m.source.as_ref()) {
-        verify_store(agent, plan.application_controller(), &source.store).await?;
+        verify_store(client, plan.application_controller(), &source.store).await?;
     }
     Ok(())
 }
-pub(crate) async fn verify_store(agent: &Agent, root: &str, store: &UpgradeTarget) -> Result<()> {
+pub(crate) async fn verify_store(
+    client: &ReadClient,
+    root: &str,
+    store: &UpgradeTarget,
+) -> Result<()> {
     let id = principal(&store.canister)?;
-    operation::controllers(agent, id, root).await?;
-    if crate::network::subnet(agent, &store.canister).await?
-        != crate::network::subnet(agent, root).await?
+    operation::controllers(client, id, root).await?;
+    if crate::network::subnet(client, &store.canister).await?
+        != crate::network::subnet(client, root).await?
     {
         return Err(Error::Blocked(
             "Store delivery requires the approved Root and Store on the same subnet".into(),
         ));
     }
-    if operation::module(agent, id).await? != store.module {
+    if operation::module(client, id).await? != store.module {
         return Err(Error::Blocked(
             "Store code differs from the approved artifact supplier".into(),
         ));

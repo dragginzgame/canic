@@ -74,16 +74,12 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
         store::LIMITS,
     )
     .expect("preservation request");
-    let reply = Call::new(
-        ic_platform_types::Principal::from_slice((target(&record.approval)).as_slice()),
-        name,
-        Wait::Bounded { seconds: 5 },
-    )
-    .owned_args(bytes)
-    .execute()
-    .await
-    .map_err(super::super::failure)
-    .and_then(super::super::response)?;
+    let reply = Call::new(target(&record.approval), name, Wait::Bounded { seconds: 5 })
+        .owned_args(bytes)
+        .execute()
+        .await
+        .map_err(super::super::failure)
+        .and_then(super::super::response)?;
     let encoding = ic_wire::Encoding::Frame {
         method,
         direction: ic_wire::Direction::Response,

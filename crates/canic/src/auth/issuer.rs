@@ -13,6 +13,8 @@ pub const ISSUE: u64 = 0x4341_5554_4810;
 pub const RENEW: u64 = 0x4341_5554_4811;
 /// Lookup only, under the original account or browser signer role.
 pub const RECONCILE: u64 = 0x4341_5554_4812;
+/// Browser-bound revocation of the original issuer login, distinct from receiver logout.
+pub const LOGOUT: u64 = 0x4341_5554_4813;
 /// Selected issuer input ceiling; larger supplier grant sets are not admitted here.
 pub const REQUEST_LIMITS: Limits = Limits {
     bytes: 8192,
@@ -29,6 +31,7 @@ pub const RESPONSE_LIMITS: Limits = Limits {
 };
 
 /// Untrusted initial intent. No account, policy, issuer key or deadline is accepted.
+#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Issue {
     /// Original operation epoch.
@@ -45,6 +48,7 @@ pub struct Issue {
     pub grants: List<DelegatedRoleGrant, 16>,
 }
 /// Browser-authenticated selection. Naming an account grants no account authority.
+#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Renew {
     /// Original account, verified through the retained browser/login binding.
@@ -58,7 +62,26 @@ pub struct Renew {
     /// Original grants; renewal must not widen them.
     pub grants: List<DelegatedRoleGrant, 16>,
 }
+/// Select the original login. Only the captured caller authenticates its browser.
+#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Logout {
+    /// Original account; this field never authenticates an account call.
+    pub account: Principal,
+    /// Original login epoch.
+    pub login_epoch: u64,
+    /// Original login identity.
+    pub login_id: [u8; 32],
+}
+/// Local issuer revocation only. Other receivers still need explicit cleanup.
+#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct Revoked {
+    /// Unchanged original deadline, not proof of expiry or logout at a receiver.
+    pub login_deadline_ns: u64,
+}
 /// Select lookup under the original signer role; never fall back to issuance.
+#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Lookup {
     /// Authenticated account selects its exact initial operation.
@@ -72,6 +95,7 @@ pub enum Lookup {
     Renew(Renew),
 }
 /// Retained evidence, not permission to issue or extend any lifetime.
+#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Status {
     /// Missing, pruned, pending or uncertain evidence; never proven no effect.
@@ -85,6 +109,7 @@ pub enum Status {
     },
 }
 /// Bounded transport refusals; ordinary refusals retain applicable work charges.
+#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Refusal {
     /// Malformed semantic input.
@@ -112,7 +137,8 @@ pub enum Refusal {
 #[cfg(target_arch = "wasm32")]
 #[macro_export]
 macro_rules! mount_auth_issuer_endpoints {
-    (issue = $issue:path, renew = $renew:path, reconcile = $reconcile:path $(,)?) => {
+    (issue = $issue:path, renew = $renew:path, reconcile = $reconcile:path,
+     logout = $logout:path $(,)?) => {
         mod issue_portable_credential {
             use endpoint::{api, runtime};
             use $crate::auth::{
@@ -144,6 +170,14 @@ macro_rules! mount_auth_issuer_endpoints {
             #[runtime::update(runtime = runtime, guard = endpoint::admit::<RECONCILE>, decode = endpoint::decode::<Lookup, RECONCILE>, max_bytes = 8192, on_error = endpoint::fail, name = "reconcile_portable_credential", encode = endpoint::encode::<Result<Status, Refusal>, RECONCILE>)]
             fn reconcile_portable_credential(input: Lookup) -> Result<Status, Refusal> {
                 $reconcile(api::caller(), input, api::time())
+            }
+        }
+        mod revoke_portable_login {
+            use endpoint::{api, runtime};
+            use $crate::auth::{endpoint, issuer::{LOGOUT, Logout, Refusal, Revoked}};
+            #[runtime::update(runtime = runtime, guard = endpoint::admit::<LOGOUT>, decode = endpoint::decode::<Logout, LOGOUT>, max_bytes = 8192, on_error = endpoint::fail, name = "revoke_portable_login", encode = endpoint::encode::<Result<Revoked, Refusal>, LOGOUT>)]
+            fn revoke_portable_login(input: Logout) -> Result<Revoked, Refusal> {
+                $logout(api::caller(), input, api::time())
             }
         }
     };

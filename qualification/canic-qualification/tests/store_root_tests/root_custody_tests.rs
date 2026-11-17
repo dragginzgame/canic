@@ -173,7 +173,7 @@ async fn host_root_maintenance_preserves_stopped_store_operation_and_signed_inst
     std::fs::create_dir(&directory).unwrap();
     let input = directory.join("input.json");
     std::fs::write(&input, serde_json::to_vec(&serde_json::json!({
-        "network": {"kind":"Local", "url":url, "root_key":hex(&pic.root_key().await.unwrap()), "routing_canister":root_id.to_text()},
+        "network": {"kind":"Local", "url":url, "root_key":hex(&pic.root_key().await.unwrap()), "root_subnet":pic.topology().await.get_nns().unwrap().to_text(), "routing_canister":root_id.to_text()},
         "root":root_id.to_text(), "store":store_id.to_text(),
         "expected":expected, "artifacts":artifacts(),
     })).unwrap()).unwrap();

@@ -82,23 +82,22 @@ pub(super) async fn collect(
         } else {
             tokio::time::timeout(budget, async {
                 network::principal(&root)?;
-                let response = network
-                    .agent()?
-                    .query(&root.parse().map_err(supplier)?, "store_maintenance_status")
-                    .with_arg(
-                        ic_wire::encode(
-                            &(),
-                            ic_wire::Encoding::Frame {
-                                method: wire::STATUS,
-                                direction: ic_wire::Direction::Request,
-                            },
-                            wire::LIMITS,
-                        )
-                        .map_err(supplier)?,
-                    )
-                    .call()
-                    .await
-                    .map_err(supplier)?;
+                let args = ic_wire::encode(
+                    &(),
+                    ic_wire::Encoding::Frame {
+                        method: wire::STATUS,
+                        direction: ic_wire::Direction::Request,
+                    },
+                    wire::LIMITS,
+                )
+                .map_err(supplier)?;
+                let response = network::query(
+                    &network.client()?,
+                    network::principal(&root)?,
+                    "store_maintenance_status",
+                    &args,
+                )
+                .await?;
                 decode(&store, &response)
             })
             .await

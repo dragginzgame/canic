@@ -212,6 +212,8 @@ async fn autonomous_growth_and_commit_boundaries() {
             &url,
             "--root-key",
             &key,
+            "--root-subnet",
+            &owner.client().topology().await.get_nns().unwrap().to_text(),
             "--routing-canister",
             &routing,
             "--controller",

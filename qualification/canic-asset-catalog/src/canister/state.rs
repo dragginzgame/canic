@@ -26,6 +26,8 @@ struct Catalog {
 }
 pub(super) struct State {
     pub blob: Service<DefaultMemoryImpl>,
+    #[cfg(feature = "profile")]
+    pub profiles: canic_profile_worker::state::State<DefaultMemoryImpl>,
     catalog: Catalog,
     cell: StableCell<Vec<u8>>,
 }
@@ -40,24 +42,48 @@ impl State {
         let mut runtime = MemoryRuntime::new_with_config(
             backing,
             StorageConfig {
-                allocations: 2,
-                extents: 4,
+                allocations: if cfg!(feature = "profile") { 4 } else { 2 },
+                extents: if cfg!(feature = "profile") { 6 } else { 4 },
                 pages: 64,
             },
         )
         .expect("one application backing");
+        if input.is_none() {
+            assert_eq!(
+                runtime
+                    .diagnostics()
+                    .expect("retained directory")
+                    .allocations,
+                if cfg!(feature = "profile") { 4 } else { 2 },
+                "composition membership requires an explicit migration"
+            );
+        }
+        let requests = vec![
+            MemoryRequest::new("catalog", CATALOG_KEY).unwrap(),
+            MemoryRequest::new(STORAGE_AUTHORITY, STORAGE_KEY).unwrap(),
+        ];
+        let grants = vec![
+            MemoryAuthority::new("catalog", "catalog.").unwrap(),
+            MemoryAuthority::new(STORAGE_AUTHORITY, "blob.").unwrap(),
+        ];
+        #[cfg(feature = "profile")]
+        let requests = requests
+            .into_iter()
+            .chain(canic_profile_worker::state::memory_requests())
+            .collect();
+        #[cfg(feature = "profile")]
+        let grants = grants
+            .into_iter()
+            .chain([MemoryAuthority::new(
+                canic_profile_worker::state::STORAGE_AUTHORITY,
+                canic_profile_worker::state::STORAGE_PREFIX,
+            )
+            .unwrap()])
+            .collect();
         runtime
             .bootstrap(
-                &SealedDeclarationSnapshot::new(vec![
-                    MemoryRequest::new("catalog", CATALOG_KEY).unwrap(),
-                    MemoryRequest::new(STORAGE_AUTHORITY, STORAGE_KEY).unwrap(),
-                ])
-                .unwrap(),
-                &AllocationGrants::new(vec![
-                    MemoryAuthority::new("catalog", "catalog.").unwrap(),
-                    MemoryAuthority::new(STORAGE_AUTHORITY, "blob.").unwrap(),
-                ])
-                .unwrap(),
+                &SealedDeclarationSnapshot::new(requests).unwrap(),
+                &AllocationGrants::new(grants).unwrap(),
                 &GenericAllocationPolicy,
             )
             .expect("combined memory admission");
@@ -90,6 +116,8 @@ impl State {
             .expect("fresh Blob");
             Self {
                 blob,
+                #[cfg(feature = "profile")]
+                profiles: canic_profile_worker::state::State::create(&runtime),
                 cell,
                 catalog,
             }
@@ -104,6 +132,8 @@ impl State {
             assert!(blob.is_drained(), "reopen retains closed admission");
             Self {
                 blob,
+                #[cfg(feature = "profile")]
+                profiles: canic_profile_worker::state::State::open(&runtime),
                 cell,
                 catalog,
             }
@@ -157,7 +187,7 @@ impl State {
             );
         }
     }
-    fn user(&self, caller: Principal) -> Result<(), Error> {
+    pub(super) fn user(&self, caller: Principal) -> Result<(), Error> {
         if self.catalog.users.contains(&caller) {
             Ok(())
         } else {

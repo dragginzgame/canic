@@ -60,13 +60,13 @@ async fn observe(network: &Network, canister: &str) -> Result<Snapshot> {
         metrics::REQUEST_LIMITS,
     )
     .map_err(supplier)?;
-    let response = network
-        .agent()?
-        .query(&canister.parse().map_err(supplier)?, "metrics")
-        .with_arg(bytes)
-        .call()
-        .await
-        .map_err(supplier)?;
+    let response = crate::network::query(
+        &network.client()?,
+        crate::network::principal(canister)?,
+        "metrics",
+        &bytes,
+    )
+    .await?;
     ic_wire::decode(
         &response,
         ic_wire::Encoding::Frame {

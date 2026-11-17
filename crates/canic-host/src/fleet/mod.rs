@@ -244,22 +244,18 @@ fn local_operation_status(
 }
 
 async fn observe(network: &Network, canister: &str) -> Result<(String, Vec<String>)> {
-    let agent = network.agent()?;
-    network::principal(canister)?;
-    let principal = canister.parse().map_err(supplier)?;
-    let module = network::bounded(agent.read_state_canister_info(principal, "module_hash")).await?;
-    let controllers =
-        network::bounded(agent.read_state_canister_info(principal, "controllers")).await?;
-    let controllers =
-        ic_platform::ic_protocol::decode_controllers(&controllers, 4096).map_err(supplier)?;
-    if module.len() != 32 {
-        return Err(Error::Invalid(
-            "certified module hash is not 32 bytes".into(),
-        ));
-    }
+    let client = network.client()?;
+    let principal = network::principal(canister)?;
+    let module = crate::operation::module(&client, principal).await?;
+    let (expiry, time) = network::context()?;
+    let observation = network::bounded(client.read_canister(principal, expiry, time, 10)).await?;
     Ok((
-        crate::hex(&module),
-        controllers.iter().map(|value| value.to_text()).collect(),
+        module,
+        observation
+            .controllers()
+            .iter()
+            .map(|value| value.to_text())
+            .collect(),
     ))
 }
 
@@ -445,7 +441,7 @@ async fn observe_upgrade(
         ))
     } else {
         tokio::time::timeout_at(deadline, async {
-            let agent = network.agent()?;
+            let client = network.client()?;
             let (method, id, bytes) = if let Some(slot) = slot {
                 (
                     "child_upgrade_status",
@@ -477,12 +473,8 @@ async fn observe_upgrade(
                 )
             };
             let bytes = bytes.map_err(supplier)?;
-            let response = agent
-                .query(&manager.parse().map_err(supplier)?, method)
-                .with_arg(bytes)
-                .call()
-                .await
-                .map_err(supplier)?;
+            let response =
+                network::query(&client, network::principal(manager)?, method, &bytes).await?;
             let report = ic_wire::decode(
                 &response,
                 ic_wire::Encoding::Frame {
@@ -714,7 +706,7 @@ pub async fn fleet_with_config(
                 .saturating_duration_since(tokio::time::Instant::now())
                 .min(Duration::from_secs(5));
             let report = tokio::time::timeout(budget, async {
-                let agent = network.agent()?;
+                let client = network.client()?;
                 let (method, id, bytes) = if let Some(slot) = slot {
                     (
                         "child_status",
@@ -743,12 +735,8 @@ pub async fn fleet_with_config(
                     )
                 };
                 let bytes = bytes.map_err(supplier)?;
-                let response = agent
-                    .query(&manager.parse().map_err(supplier)?, method)
-                    .with_arg(bytes)
-                    .call()
-                    .await
-                    .map_err(supplier)?;
+                let response =
+                    network::query(&client, network::principal(&manager)?, method, &bytes).await?;
                 let report: canic_management_protocol::Status = ic_wire::decode(
                     &response,
                     ic_wire::Encoding::Frame {

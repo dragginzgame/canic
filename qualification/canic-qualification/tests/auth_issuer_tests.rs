@@ -15,13 +15,13 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::time::Duration;
 
-fn account() -> CanisterId {
+pub(super) fn account() -> CanisterId {
     CanisterId::self_authenticating(b"canic-auth-account")
 }
-fn principal(id: CanisterId) -> Principal {
+pub(super) fn principal(id: CanisterId) -> Principal {
     Principal::from_slice(id.as_slice())
 }
-fn request(id: u8) -> Issue {
+pub(super) fn request(id: u8) -> Issue {
     Issue {
         epoch: 1,
         operation_id: [id; 32],
@@ -35,16 +35,16 @@ fn request(id: u8) -> Issue {
         .unwrap(),
     }
 }
-fn browser(input: &Issue) -> CanisterId {
+pub(super) fn browser(input: &Issue) -> CanisterId {
     CanisterId::from_slice(browser_principal(&input.browser_public_key).as_slice())
 }
-fn lookup(input: &Issue) -> Lookup {
+pub(super) fn lookup(input: &Issue) -> Lookup {
     Lookup::Issue {
         epoch: input.epoch,
         operation_id: input.operation_id,
     }
 }
-fn renew(input: &Issue, sequence: u64) -> Renew {
+pub(super) fn renew(input: &Issue, sequence: u64) -> Renew {
     Renew {
         account: principal(account()),
         login_epoch: input.login_epoch,
@@ -53,7 +53,7 @@ fn renew(input: &Issue, sequence: u64) -> Renew {
         grants: input.grants.clone(),
     }
 }
-fn frame(id: u64, input: &impl Serialize) -> Vec<u8> {
+pub(super) fn frame(id: u64, input: &impl Serialize) -> Vec<u8> {
     ic_wire::encode(
         input,
         ic_wire::Encoding::Frame {
@@ -64,7 +64,7 @@ fn frame(id: u64, input: &impl Serialize) -> Vec<u8> {
     )
     .unwrap()
 }
-fn response(id: u64, bytes: &[u8]) -> Result<Status, Refusal> {
+pub(super) fn response(id: u64, bytes: &[u8]) -> Result<Status, Refusal> {
     ic_wire::decode(
         bytes,
         ic_wire::Encoding::Frame {
@@ -75,7 +75,7 @@ fn response(id: u64, bytes: &[u8]) -> Result<Status, Refusal> {
     )
     .unwrap()
 }
-async fn call(
+pub(super) async fn call(
     f: &Fixture,
     caller: CanisterId,
     id: u64,
@@ -95,7 +95,7 @@ async fn call(
         .unwrap();
     response(id, &bytes)
 }
-async fn observe(f: &Fixture) -> IssuerObservation {
+pub(super) async fn observe(f: &Fixture) -> IssuerObservation {
     let bytes = f
         .owner
         .client()
@@ -112,7 +112,7 @@ async fn observe(f: &Fixture) -> IssuerObservation {
     )
     .unwrap()
 }
-fn claims(value: &Status) -> ic_auth_protocol_types::PortableClaims {
+pub(super) fn claims(value: &Status) -> ic_auth_protocol_types::PortableClaims {
     let Status::Issued {
         credential,
         admission_deadline_ns,

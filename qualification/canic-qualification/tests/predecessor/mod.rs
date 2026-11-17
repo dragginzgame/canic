@@ -73,6 +73,8 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
             &url,
             "--root-key",
             &key,
+            "--root-subnet",
+            &owner.client().topology().await.get_nns().unwrap().to_text(),
             "--routing-canister",
             &routing.to_text(),
             "--source",

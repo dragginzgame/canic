@@ -1,5 +1,162 @@
 # Changelog
 
+## [0.219.0] - 2026-11-17
+
+Breaking changes: local network plans require
+`--root-subnet`. Applications embedding the profile engine must supply their
+admitted Storage runtime; the standalone bootstrap remains separate.
+Auth issuer mounts now require an explicit `logout` handler for browser-bound
+revocation.
+
+### 🧩 Changed
+
+Make the profile engine reusable within an actor's shared Storage bootstrap.
+The optional catalog/profile witness composes real Blob and profile state under
+one lifecycle, preserving both through upgrades and keeping access closed until
+the matching activation. Participant additions/removals require explicit migration;
+the standalone profile's storage format and capacity remain unchanged.
+Installed corruption checks also prove that a damaged profile store refuses the
+upgrade without recreating state, changing Blob/catalog records or opening readiness.
+Catalog rollback now also covers populated profiles; a full catalog still permits
+profile updates and cleanup, with malformed requests preserving shared state.
+After `make canic`, build and inspect this local composition:
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml --package canic-asset-catalog --features profile --output target/blob/composed.wasm
+canic artifact inspect target/blob/composed.wasm
+```
+
+These commands neither deploy nor open a browser. See the
+[composition example](docs/demos/blob.md#composing-another-durable-module).
+
+Compose the existing persistent profile engine with optional Auth mounts in an
+installed, headless Chromium witness. Two independently enrolled receivers keep
+application ownership separate from browser identity. Lost issuance/admission
+replies, renewal, cross-tab logout and reply rollback exercise the actual Auth
+coordinator and IndexedDB journal. This is qualification, not a new default
+profile deployment or production login service. After `make canic`:
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --features profile --output target/auth/profile.wasm
+canic artifact inspect target/auth/profile.wasm
+```
+
+The artifact builder now selects Cargo's exact requested package identity, so
+a dependency emitting its own Wasm cannot make a composed application ambiguous.
+The profile persistence engine is reused within its existing package; standalone
+canister exports remain enabled by default. See the [Auth guide](docs/demos/auth.md)
+for explicit browser preparation and `make auth-profile-test`.
+The nine-case browser journey now includes network loss during cleanup and a
+late authenticated issuer result arriving after durable logout. Original cleanup
+deadlines/attempts and unknown issuance remain visible; neither path can restore
+readiness or repeat an application write. The [actor excerpt](docs/demos/blob.md#what-the-actor-looks-like)
+shows the current service-mount API using the real catalog actor.
+
+Add optional DB inspection contracts and Auth browser-bound issuer logout plus
+the generated browser transport adapter. DB inspection exposes bounded typed
+schema and maintained cardinality, preserving closed/incompatible state. Auth
+keeps its original login/result owner; Canic adds no session journal or scheduler.
+After `make canic`, build and inspect the local qualification applications:
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --output target/auth/witness.wasm
+canic artifact build --manifest qualification/Cargo.toml --package canic-db-witness --output target/db/witness.wasm
+canic artifact inspect target/db/witness.wasm
+```
+
+These commands build local artifacts, without deploying or opening a browser.
+See the [Auth adapter](crates/canic/browser/README.md) for explicit npm preparation
+and the [installed qualification](qualification/README.md) for real-library tests.
+Qualify registry Auth 0.47.2 with its passive Wire/Types 0.43.0 and the pinned
+0.47.1 browser source. Backup remains admitted,
+with exact signing and manager-route prerequisites retained in
+[Canic #5](https://github.com/dragginzgame/canic/issues/5) and
+[Canic #6](https://github.com/dragginzgame/canic/issues/6). Relay work is deferred
+at the maintainer's request; its optional design remains unchanged.
+
+Remove Platform 0.33.7 from both dependency graphs. Host now uses Platform
+0.34.13 for certified observations, queries and exact retained request dispatch.
+The old Agent and dual-facade alias are gone; fixed wire fixtures preserve the
+legacy codec comparisons without a legacy test dependency.
+
+New local fleets require `--root-subnet` alongside URL, root key and routing
+canister. Old local approvals retain their bytes/digests and refuse network
+access when that trust input is absent; they are never rewritten automatically.
+Mainnet keeps its compiled trust inputs. With an existing configured fleet:
+
+```sh
+canic fleet show --app profile --fleet mainnet
+canic fleet status OPERATION --app profile --fleet mainnet
+```
+
+Use Platform's prepared-packet admission for retained updates and status reads.
+Select signed or anonymous admission from the approved controller, refuse mixed
+authentication fields and tampered signatures, and retain exact bytes and expiry.
+This adopts the anonymous contract in
+[Platform #25](https://github.com/dragginzgame/ic-platform/issues/25). No new
+dispatcher or signing path is added.
+
+Adopt Platform 0.34.13 and Runtime/Macros/Guard 0.23.16 in both workspaces, with
+Timers 0.46.3 and Topology 0.109.2. These published supplier updates remove the
+previous blockers ([Query #2](https://github.com/dragginzgame/ic-query/issues/2),
+[Scheduling #3](https://github.com/dragginzgame/ic-scheduling/issues/3)). Both
+workspaces now select Protocol 0.3.5 through compatible supplier requirements.
+No supplier override or second executor is introduced.
+Root selects Metrics 0.30.9. The timer and metrics implementations are unchanged.
+
+Fix wallet overflow refusal to work in the normal CLI dependency graph without
+relying on a numeric error trait enabled only by development dependencies.
+
+Move Host's publication-removal module to `removal/mod.rs` beside its tests,
+removing the remaining `foo.rs` plus `foo/` layout conflict. Module paths and
+behavior are unchanged.
+
+Retain sanitized CI setup failures before tests can start, including explicitly
+reported hidden Cargo-tool attempt logs. Failure artifacts expire after seven
+days; missing evidence and upload failure remain visible, and collection cannot
+replace the original setup exit status. No application command changes.
+
+Move Host and runtime management
+codecs to Protocol, including local creation, controller handover, chunked
+installation and status-version checks. Remove the runtime's legacy codec
+dependency and redundant principal conversions. Existing request bytes, approvals,
+stable records and recovery deadlines are preserved. This advances
+[Canic #14](https://github.com/dragginzgame/canic/issues/14), including Host's
+transport replacement and explicit local root-subnet admission.
+
+Adopt registry Topology 0.109.2 for read-only fleet placement and subnet comparison.
+Use canonical Types at both caller boundaries and remove the old Git Platform,
+Protocol and Types dependencies. Partial reports, configured-slot order and
+read-only authority remain unchanged. With an existing mainnet fleet configured:
+
+```sh
+canic fleet placements --app profile --fleet mainnet
+canic fleet compare-subnets LEFT_SUBNET RIGHT_SUBNET --app profile --fleet mainnet
+```
+
+Derive an address locally, or inspect an existing retained operation without sending
+effects (the latter needs the matching fleet config and operation):
+
+```sh
+canic wallet OWNER_PRINCIPAL --address-only
+canic fleet status OPERATION --app demo --fleet local
+```
+
+Preserve and qualify published Blob Storage 0.103.2 and Host Process 0.80.4,
+with Host Artifacts/FS 0.80.3. Adopt Testkit 0.108.0; its held-reply fixtures now
+share Protocol 0.3.5 and remove qualification's old Protocol 0.2 dependency.
+Types 0.21.2 remains selected. Blob's local Service implementation and
+retained-state format are unchanged. No optional supplier becomes mandatory.
+
+With development tools prepared, build and inspect the embedded catalog locally;
+these commands do not deploy or open a browser:
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml \
+  --package canic-asset-catalog --output target/blob-catalog.wasm
+canic artifact inspect target/blob-catalog.wasm
+```
+
 ## [0.218.0] - 2026-11-16
 
 ### ⚠️ Breaking

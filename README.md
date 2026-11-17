@@ -41,6 +41,9 @@ such as a newly generated project. Use `--config PATH` when outside that project
 
 The [persistent profile demo](docs/demos/profile.md) adds an application-owned
 worker, discovery entry, Wire contract and native client under `apps/profile/`.
+For a current actor composition example, see the
+[Blob actor excerpt](docs/demos/blob.md#what-the-actor-looks-like): explicit
+application lifecycle plus optional Canic service mounts around local handlers.
 Start with `make profile` and `make profile-test`; the same Canic CLI deploys both
 canisters. The entry resolves the worker while private calls keep the user's identity.
 The [Store-backed profile fleet](docs/demos/profile.md#store-backed-profile-fleet)
@@ -344,7 +347,7 @@ operation access still require membership in the selected app/fleet.
 Names contain 1–64 ASCII letters, digits, hyphens or underscores. Configuration
 admits at most 16 apps, 16 fleets per app, 32 canisters per fleet and 128 canisters
 total, within a 32 KiB file. Local initialization requires `--network local --url
-URL --root-key HEX --routing-canister PRINCIPAL`; it does not start a simulator.
+URL --root-key HEX --root-subnet SUBNET --routing-canister PRINCIPAL`; it does not start a simulator.
 
 Duplicate app, fleet or canister keys are errors. A canister ID under the same
 exact network binding may appear in only one fleet in this config. An external
@@ -659,11 +662,17 @@ retained state directory. Cross-host fencing and concurrent external changes to
 the same canister are not qualified by this first path.
 
 Local plans use `--network local --url http://127.0.0.1:PORT/ --root-key HEX
---routing-canister PRINCIPAL`, with the selected replica's DER trust root and an
-existing local canister for subnet routing. The test harness supplies these;
+--root-subnet SUBNET --routing-canister PRINCIPAL`, with the selected replica's
+DER trust root, independently obtained root-subnet identity and an existing local
+canister for subnet routing. The test harness supplies these;
 local creation uses the replica's provisional API, whereas mainnet uses the
 [cycles ledger's creation API](https://github.com/dfinity/cycles-ledger/blob/main/README.md).
 The local rehearsal does not prove the live ledger/CMC integration.
+
+Historical local approvals without `root_subnet` remain readable with their
+original digests, but cannot make network requests through the new transport.
+Do not edit those approvals to add trust or recreate uncertain effects. New
+local fleets must supply all four inputs. Mainnet's trust inputs are compiled in.
 
 ## Development
 

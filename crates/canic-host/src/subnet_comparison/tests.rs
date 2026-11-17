@@ -37,6 +37,7 @@ async fn subnet_comparison_admits_network_and_ids_before_reading() {
     local.config.network = Network::Local {
         url: "http://localhost:4943".into(),
         root_key: "00".into(),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     for (selection, left, right) in [
@@ -91,6 +92,9 @@ async fn subnet_comparison_retains_candidate_order_and_all_failed_report() {
     assert_eq!(result.app, "app");
     assert!(!result.observation.collection_complete);
     let json = serde_json::to_value(result).unwrap();
+    assert_eq!(json["observation"]["schema"], 1);
+    assert_eq!(json["observation"]["left"]["subnet_id"], "aaaaa-aa");
+    assert_eq!(json["observation"]["right"]["subnet_id"], "2vxsx-fae");
     assert!(json["observation"]["infrastructure_overlap"].is_null());
     assert_eq!(
         json["observation"]["left"]["distribution"]["status"],

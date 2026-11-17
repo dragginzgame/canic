@@ -43,7 +43,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
             "canisters":{"root":{"role":"root","wasm":assets.join("root.wasm")},
                 "app":{"role":"app","parent":"root","wasm":dir.join("app.wasm")}},
             "fleets":{"local":{"network":{"kind":"Local","url":url,
-                "root_key":hex(&owner.client().root_key().await.unwrap()),
+                "root_key":hex(&owner.client().root_key().await.unwrap()), "root_subnet":owner.client().topology().await.get_nns().unwrap().to_text(),
                 "routing_canister":routing.to_text()},"journal":"journal","canisters":{}}}
         }}});
         if stored {

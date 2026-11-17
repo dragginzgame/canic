@@ -5,18 +5,18 @@ use canic_management_protocol::{
     Approval, CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, Stage, Status, digest,
     stored,
 };
-use ic_platform::principal::Principal;
-use ic_platform::{
-    candid_codec::{self, decoder},
-    management_canister_types::{
-        CanisterIdRecord, CanisterInstallMode, CanisterSettings, CanisterStatusResult,
-        CreateCanisterArgs, InstallChunkedCodeArgs,
+use ic_platform_protocol::{
+    candid::Limits,
+    management::{
+        self as mgmt, CanisterArgs, CanisterSettings, CreateCanisterArgs, InstallChunkedCodeArgs,
+        InstallMode,
     },
 };
 use ic_platform_runtime::{
     call::{Call, Completion, Outcome, SubmitError, Wait},
     system as api,
 };
+use ic_platform_types::Principal;
 use ic_storage::{
     AllocationGrants, DefaultMemoryImpl, GenericAllocationPolicy, MemoryAuthority, MemoryRequest,
     MemoryRuntime, SealedDeclarationSnapshot, StableKey, StorageConfig, adapter::StableCell,
@@ -82,12 +82,14 @@ fn journals() -> children::Custody {
 }
 
 const MAX_PAGES: u64 = 64;
-const MANAGEMENT_LIMITS: decoder::Limits = decoder::Limits {
+const MANAGEMENT_LIMITS: Limits = Limits {
     bytes: 16_384,
     header: 4096,
     types: 256,
     work: 65_536,
     allocation: 65_536,
+    vector: 16_384,
+    skipping: 65_536,
 };
 
 struct State {
@@ -237,7 +239,7 @@ fn validate(state: &State, slot: ChildId) {
         assert!(
             worker != Principal::anonymous()
                 && worker != Principal::management_canister()
-                && worker != Principal::from_slice(api::canister_self().as_slice())
+                && worker != api::canister_self()
         );
         assert_eq!(s.attempts[0], 1);
         assert!(s.creation_refund.is_some());
@@ -521,18 +523,14 @@ async fn step(slot: ChildId) {
                 fault(slot, 11); // Lost pin callback is recovered from Store custody.
                 return; // Commit retention evidence before any creation dispatch.
             }
-            let bytes = candid_codec::encode_one(
-                &CreateCanisterArgs {
-                    settings: Some(CanisterSettings {
-                        controllers: Some(vec![Principal::from_slice(
-                            api::canister_self().as_slice(),
-                        )]),
-                        ..Default::default()
-                    }),
-                    sender_canister_version: Some(api::canister_version()),
-                },
-                4096,
-            )
+            let bytes = CreateCanisterArgs {
+                settings: Some(CanisterSettings {
+                    controllers: Some(vec![api::canister_self()]),
+                    ..Default::default()
+                }),
+                sender_canister_version: Some(api::canister_version()),
+            }
+            .encode(4096)
             .expect("create args");
             issue(slot, 0, Phase::CreateIssued, &bytes);
             fault(slot, 1); // Trap rolls back intent and prevents dispatch; original demand survives.
@@ -544,8 +542,7 @@ async fn step(slot: ChildId) {
                 .and_then(Completion::refunded_cycles);
             let reply = completion.map_err(failure).and_then(response);
             match reply.and_then(|bytes| {
-                decoder::decode_one::<CanisterIdRecord>(&bytes, MANAGEMENT_LIMITS)
-                    .map_err(|_| Failure::InvalidReply)
+                mgmt::decode_created(&bytes, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)
             }) {
                 Ok(value) => mutate(slot, |s| {
                     s.worker = Some(value.canister_id.to_text());
@@ -578,24 +575,22 @@ async fn step(slot: ChildId) {
                 false,
                 s.approval.as_ref().expect("approval").module_hash,
             );
-            let bytes = candid_codec::encode_one(
-                &InstallChunkedCodeArgs {
-                    mode: CanisterInstallMode::Install,
-                    target_canister: worker(&s),
-                    store_canister: Some(store),
-                    chunk_hashes_list: chunks,
-                    wasm_module_hash: hash,
-                    arg: application::arguments(slot, false),
-                    sender_canister_version: Some(api::canister_version()),
-                },
-                8192,
-            )
+            let bytes = InstallChunkedCodeArgs {
+                mode: InstallMode::Install,
+                target_canister: worker(&s),
+                store_canister: Some(store),
+                chunk_hashes_list: chunks,
+                wasm_module_hash: hash,
+                arg: application::arguments(slot, false),
+                sender_canister_version: Some(api::canister_version()),
+            }
+            .encode(8192)
             .expect("install args");
             issue(slot, 2, Phase::InstallIssued, &bytes);
             let result = management("install_chunked_code", bytes, 0)
                 .await
                 .and_then(|bytes| {
-                    decoder::decode_args::<()>(&bytes, MANAGEMENT_LIMITS, decoder::Arity::Exact)
+                    mgmt::decode_empty_response(&bytes, MANAGEMENT_LIMITS)
                         .map_err(|_| Failure::InvalidReply)
                 });
             match result {
@@ -635,19 +630,16 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
             });
         }
         Phase::InstallIssued | Phase::Installed => {
-            let bytes = candid_codec::encode_one(
-                &CanisterIdRecord {
-                    canister_id: worker(&before),
-                },
-                1024,
-            )
+            let bytes = CanisterArgs {
+                canister_id: worker(&before),
+            }
+            .encode(1024)
             .expect("status args");
             let reply = management("canister_status", bytes, 0).await?;
-            let value: CanisterStatusResult = decoder::decode_one(&reply, MANAGEMENT_LIMITS)
+            let value = mgmt::decode_canister_status(&reply, MANAGEMENT_LIMITS)
                 .map_err(|_| Failure::InvalidReply)?;
             if value.module_hash.as_deref() != Some(a.module_hash.as_slice())
-                || value.settings.controllers
-                    != [Principal::from_slice(api::canister_self().as_slice())]
+                || value.settings.controllers != [api::canister_self()]
             {
                 return Err(Failure::Mismatch);
             }
@@ -662,7 +654,7 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
                 STATE.with_borrow(|state| state.as_ref().expect("state").readiness.clone());
             let bytes = readiness.request;
             let reply = Call::new(
-                ic_platform_types::Principal::from_slice((worker(&before)).as_slice()),
+                worker(&before),
                 readiness.method,
                 Wait::Bounded { seconds: 5 },
             )

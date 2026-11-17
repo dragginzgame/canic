@@ -544,12 +544,15 @@ pub(super) struct NetworkArgs {
     /// Explicit network; planning otherwise uses the selected fleet's binding.
     #[arg(long, value_enum)]
     pub(super) network: Option<NetworkName>,
-    /// Local replica URL; --network local requires all three trust inputs.
+    /// Local replica URL; --network local requires all four trust inputs.
     #[arg(long, required_if_eq("network", "local"))]
     pub(super) url: Option<String>,
     /// Local replica root key as hex.
     #[arg(long, required_if_eq("network", "local"))]
     pub(super) root_key: Option<String>,
+    /// Independently obtained local root-subnet principal.
+    #[arg(long, required_if_eq("network", "local"))]
+    pub(super) root_subnet: Option<String>,
     /// Local routing canister principal.
     #[arg(long, required_if_eq("network", "local"))]
     pub(super) routing_canister: Option<String>,
@@ -561,11 +564,13 @@ impl NetworkArgs {
             Some(NetworkName::Ic)
                 if self.url.is_none()
                     && self.root_key.is_none()
+                    && self.root_subnet.is_none()
                     && self.routing_canister.is_none() =>
             {
                 Ok(Network::Mainnet)
             }
             Some(NetworkName::Local) => Ok(Network::Local {
+                root_subnet: self.root_subnet,
                 url: self
                     .url
                     .ok_or_else(|| Error::Invalid("local URL required".into()))?,

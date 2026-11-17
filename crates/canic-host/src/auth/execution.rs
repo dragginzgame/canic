@@ -74,7 +74,7 @@ pub(crate) async fn apply(
             "Auth reconciliation needs the original signed attempt; use apply first".into(),
         ));
     }
-    let agent = plan.network.agent()?;
+    let client = plan.network.client()?;
     {
         let approval = plan.auth().expect("Auth caller");
         for (target, controller) in [
@@ -82,15 +82,15 @@ pub(crate) async fn apply(
             (&approval.receiver, approval.root.canister.as_str()),
         ] {
             let id = crate::network::principal(&target.canister)?;
-            operation::controllers(&agent, id, controller).await?;
-            if operation::module(&agent, id).await? != target.module {
+            operation::controllers(&client, id, controller).await?;
+            if operation::module(&client, id).await? != target.module {
                 return Err(Error::Blocked(
                     "Auth installed code differs from approval".into(),
                 ));
             }
         }
     }
-    signed::execute(&path, plan, &call(plan)?, identity, icp, &agent).await?;
+    signed::execute(&path, plan, &call(plan)?, identity, icp, &client).await?;
     let auth = receipt(dir, plan)?
         .ok_or_else(|| Error::Blocked("Auth has no retained response".into()))?;
     Ok(crate::ApplyOutcome::Auth { auth })

@@ -10,13 +10,14 @@ fn source() -> (std::path::PathBuf, SelectedFleet, String, Plan, Vec<u8>) {
     selection.config.network = Network::Local {
         url: "http://127.0.0.1:8000/".into(),
         root_key: "00".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     let (id, plan) = super::super::create_publication_plan(
         &dir,
         &wasm,
         &selection,
-        "2vxsx-fae",
+        &crate::signed::tests::controller(),
         super::super::tests::publication("v1"),
     )
     .unwrap();

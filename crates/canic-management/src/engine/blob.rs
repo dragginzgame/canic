@@ -14,15 +14,15 @@ use canic_management_protocol::{
     children::ChildId,
     upgrade::Approval,
 };
-use ic_platform::principal::Principal;
-use ic_platform::{
-    candid_codec,
-    management_canister_types::{CanisterIdRecord, CanisterStatusType},
+use ic_platform_protocol::{
+    management::{self as mgmt, CanisterArgs},
+    management_snapshots::Status as RuntimeStatus,
 };
 use ic_platform_runtime::{
     call::{Call, Wait},
     system as api,
 };
+use ic_platform_types::Principal;
 
 fn state(slot: ChildId) -> Option<Maintenance> {
     application::lifecycle(slot)?.upgrades.last().cloned()
@@ -64,9 +64,7 @@ fn frame(method: u64, value: &impl serde::Serialize) -> Vec<u8> {
 }
 async fn call(a: &Approval, method: &str, args: Vec<u8>) -> Result<Vec<u8>, Failure> {
     Call::new(
-        ic_platform_types::Principal::from_slice(
-            (Principal::from_text(&a.child).expect("retained child")).as_slice(),
-        ),
+        Principal::from_text(&a.child).expect("retained child"),
         method,
         Wait::Bounded { seconds: 5 },
     )
@@ -91,8 +89,7 @@ async fn inspect(a: &Approval) -> Result<(ManagementView, Arguments), Failure> {
     let child = Principal::from_text(&a.child).expect("retained child");
     if view.installation.as_slice() != child.as_slice()
         || view.configuration.application.as_slice() != child.as_slice()
-        || view.configuration.manager.as_slice()
-            != Principal::from_slice(api::canister_self().as_slice()).as_slice()
+        || view.configuration.manager.as_slice() != api::canister_self().as_slice()
     {
         return Err(Failure::Mismatch);
     }
@@ -155,12 +152,10 @@ async fn runtime(slot: ChildId, a: &Approval, start: bool) -> Result<(), Failure
     {
         return Err(Failure::Uncertain);
     }
-    let bytes = candid_codec::encode_one(
-        &CanisterIdRecord {
-            canister_id: Principal::from_text(&a.child).expect("retained child"),
-        },
-        1024,
-    )
+    let bytes = CanisterArgs {
+        canister_id: Principal::from_text(&a.child).expect("retained child"),
+    }
+    .encode(1024)
     .expect("management args");
     issue(
         slot,
@@ -183,12 +178,8 @@ async fn runtime(slot: ChildId, a: &Approval, start: bool) -> Result<(), Failure
     )
     .await?;
     super::fault(slot, if start { 22 } else { 21 });
-    candid_codec::decoder::decode_args::<()>(
-        &bytes,
-        super::MANAGEMENT_LIMITS,
-        candid_codec::decoder::Arity::Exact,
-    )
-    .map_err(|_| Failure::InvalidReply)?;
+    mgmt::decode_empty_response(&bytes, super::MANAGEMENT_LIMITS)
+        .map_err(|_| Failure::InvalidReply)?;
     observe(slot, a).await
 }
 /// Advance only unissued preparation. Each successful boundary commits before the next timer.
@@ -198,7 +189,7 @@ pub(super) async fn prepare(slot: ChildId, a: &Approval) -> Result<bool, Failure
         Phase::Scheduled => {
             let runtime = upgrade::inspect(a).await?;
             if runtime.module_hash.as_deref() != Some(&a.previous_module)
-                || runtime.status != CanisterStatusType::Running
+                || runtime.status != RuntimeStatus::Running
             {
                 return Err(Failure::Mismatch);
             }
@@ -249,9 +240,9 @@ pub(super) async fn observe(slot: ChildId, a: &Approval) -> Result<(), Failure> 
             if value.module_hash.as_deref() != Some(hash.as_slice())
                 || value.status
                     != if start {
-                        CanisterStatusType::Running
+                        RuntimeStatus::Running
                     } else {
-                        CanisterStatusType::Stopped
+                        RuntimeStatus::Stopped
                     }
             {
                 return Err(Failure::Mismatch);

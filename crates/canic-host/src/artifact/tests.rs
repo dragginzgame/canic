@@ -1,6 +1,20 @@
 use super::*;
 
 #[test]
+fn selected_package_ignores_dependency_wasm_but_refuses_missing_or_ambiguous_outputs() {
+    let records = br#"{"reason":"compiler-artifact","package_id":"dependency","filenames":["dependency.wasm","dependency.rlib"]}
+{"reason":"compiler-artifact","package_id":"selected","filenames":["selected.wasm","selected.rlib"]}
+{"reason":"build-finished","success":true}"#;
+    assert_eq!(
+        selected_wasm(records, "selected").unwrap(),
+        PathBuf::from("selected.wasm")
+    );
+    assert!(selected_wasm(records, "missing").is_err());
+    let ambiguous = br#"{"reason":"compiler-artifact","package_id":"selected","filenames":["first.wasm","second.wasm"]}"#;
+    assert!(selected_wasm(ambiguous, "selected").is_err());
+}
+
+#[test]
 fn cargo_diagnostics_select_compiler_errors_and_escape_controls() {
     let mut stdout = serde_json::to_vec(&serde_json::json!({
             "reason": "compiler-message", "message": {

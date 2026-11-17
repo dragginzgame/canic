@@ -78,10 +78,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub enum Error {
     /// Required external Candid request encoding failed.
     #[error("external request encoding failed: {0:?}")]
-    Encode(ic_platform::candid_codec::Error),
+    Encode(ic_platform_protocol::management::EncodeError),
     /// Required external Candid response decoding failed.
     #[error("external reply decoding failed: {0:?}")]
-    Decode(ic_platform::candid_codec::decoder::Error),
+    Decode(ic_platform_protocol::candid::Error),
     /// Input or retained-state admission failed before the next mutation.
     #[error("invalid input or state: {0}")]
     Invalid(String),

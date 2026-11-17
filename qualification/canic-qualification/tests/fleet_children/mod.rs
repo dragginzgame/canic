@@ -83,6 +83,8 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
             &url,
             "--root-key",
             &key,
+            "--root-subnet",
+            &owner.client().topology().await.get_nns().unwrap().to_text(),
             "--routing-canister",
             &routing.to_text(),
             "--source",

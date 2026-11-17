@@ -11,6 +11,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
     let network = Network::Local {
         url: "http://localhost:8000".into(),
         root_key: "00".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     let mut snapshot = Fleet {

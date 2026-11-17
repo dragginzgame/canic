@@ -1,10 +1,10 @@
 //! One controller-authorized Store call. No catalog, payload persistence or retry owner.
 use canic_management_protocol::publication::{Command, Error, MAX_WINDOW_NS, Reply, Request};
-use ic_platform::principal::Principal;
 use ic_platform_runtime::{
     call::{Call, Wait},
     system as api,
 };
+use ic_platform_types::Principal;
 use ic_wasm_store_protocol as store;
 
 /// Forward one typed publication command under the captured controller's authority.
@@ -75,15 +75,11 @@ pub async fn execute(input: Request) -> Reply {
     };
     // No await separates controller/deadline admission from this one dispatch.
     let bytes = bytes.map_err(|_| Error::Invalid)?;
-    let reply = Call::new(
-        ic_platform_types::Principal::from_slice((target).as_slice()),
-        method,
-        Wait::Bounded { seconds: 5 },
-    )
-    .owned_args(bytes)
-    .execute()
-    .await
-    .map_err(|_| Error::Uncertain)?;
+    let reply = Call::new(target, method, Wait::Bounded { seconds: 5 })
+        .owned_args(bytes)
+        .execute()
+        .await
+        .map_err(|_| Error::Uncertain)?;
     let reply = match reply.into_parts().0 {
         ic_platform_runtime::call::Outcome::Reply(bytes) => bytes,
         _ => return Err(Error::Uncertain),
@@ -112,7 +108,7 @@ fn admit(store: &str, expires_at_ns: u64) -> Result<Principal, Error> {
     if target.to_text() != store
         || target == Principal::anonymous()
         || target == Principal::management_canister()
-        || target == Principal::from_slice(api::canister_self().as_slice())
+        || target == api::canister_self()
     {
         return Err(Error::Invalid);
     }
@@ -252,15 +248,11 @@ async fn store_call<T: serde::Serialize, R: serde::de::DeserializeOwned>(
         store::LIMITS,
     )
     .map_err(|_| Error::Invalid)?;
-    let reply = Call::new(
-        ic_platform_types::Principal::from_slice((target).as_slice()),
-        method,
-        wait,
-    )
-    .owned_args(bytes)
-    .execute()
-    .await
-    .map_err(|_| Error::Uncertain)?;
+    let reply = Call::new(target, method, wait)
+        .owned_args(bytes)
+        .execute()
+        .await
+        .map_err(|_| Error::Uncertain)?;
     let reply = match reply.into_parts().0 {
         ic_platform_runtime::call::Outcome::Reply(bytes) => bytes,
         _ => return Err(Error::Uncertain),

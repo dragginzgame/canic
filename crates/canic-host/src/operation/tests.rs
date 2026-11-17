@@ -1,10 +1,7 @@
-use super::{DECODE, LEDGER_FEE, create_call, created};
+use super::{create_call, created};
+use crate::tests::wire_fixture;
 use crate::{Artifact, Error, Network, Plan};
-use ic_platform::{
-    candid_codec::{self, decoder},
-    cycles_ledger_types as ledger,
-    principal::Principal,
-};
+use ic_platform_types::Principal;
 
 fn plan() -> Plan {
     let input = crate::tests::input();
@@ -26,6 +23,101 @@ fn plan() -> Plan {
 }
 
 #[test]
+fn replacement_codecs_preserve_retained_management_and_ledger_arguments() {
+    let mut value = plan();
+    let call = create_call(&value, None).unwrap();
+    assert_eq!(call.args, wire_fixture("create-mainnet"));
+    value.network = Network::Local {
+        url: "http://127.0.0.1:4943/".into(),
+        root_key: "00".repeat(133),
+        root_subnet: None,
+        routing_canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+    };
+    let call = create_call(&value, None).unwrap();
+    assert_eq!(call.args, wire_fixture("create-local"));
+    let target = Principal::from_slice(&[3; 29]);
+    for upgrade in [false, true] {
+        if upgrade {
+            value.action = crate::PlanAction::Upgrade(crate::UpgradeTarget {
+                canister: target.to_text(),
+                module: "11".repeat(32),
+            });
+        }
+        let call = super::install_call(&value, b"retained exact artifact", target).unwrap();
+        assert_eq!(
+            call.args,
+            wire_fixture(if upgrade { "upgrade" } else { "install" })
+        );
+    }
+    let current = ic_platform_protocol::management::CanisterArgs {
+        canister_id: target,
+    }
+    .encode(1024)
+    .unwrap();
+    assert_eq!(current, wire_fixture("canister-args"));
+    value.action = crate::PlanAction::CreateStore {
+        cycles: 1_000_000_000_000,
+        root: crate::UpgradeTarget {
+            canister: target.to_text(),
+            module: "11".repeat(32),
+        },
+    };
+    let call = crate::store_bootstrap::handover(&value, target).unwrap();
+    assert_eq!(call.args, wire_fixture("handover"));
+}
+
+#[test]
+fn management_requests_match_the_previous_root_wire_schema() {
+    use ic_platform_protocol::{management as mgmt, management_chunks as chunks};
+    let target = ic_platform_types::Principal::from_slice(&[3; 29]);
+    let creation = mgmt::CreateCanisterArgs {
+        settings: Some(mgmt::CanisterSettings {
+            controllers: Some(vec![target]),
+            ..Default::default()
+        }),
+        sender_canister_version: Some(17),
+    }
+    .encode(4096)
+    .unwrap();
+    assert_eq!(creation, wire_fixture("root-create"));
+    for store_canister in [None, Some(target)] {
+        let installation = mgmt::InstallChunkedCodeArgs {
+            mode: mgmt::InstallMode::Upgrade(None),
+            target_canister: target,
+            store_canister,
+            chunk_hashes_list: vec![chunks::ChunkHash { hash: vec![1; 32] }],
+            wasm_module_hash: vec![2; 32],
+            arg: b"retained application arguments".to_vec(),
+            sender_canister_version: Some(17),
+        }
+        .encode(8192)
+        .unwrap();
+        assert_eq!(
+            installation,
+            wire_fixture(if store_canister.is_some() {
+                "chunked-store"
+            } else {
+                "chunked"
+            })
+        );
+    }
+}
+
+#[test]
+fn new_chunk_uploads_preserve_target_and_payload() {
+    // Upload type-table order may differ. Issued upload commitments are retained,
+    // never reconstructed or resent; installed owner-reopen tests cover that boundary.
+    let target = ic_platform_types::Principal::from_slice(&[3; 29]);
+    let bytes = ic_platform_protocol::management_chunks::encode_upload_chunk(
+        target,
+        b"retained chunk",
+        4096,
+    )
+    .unwrap();
+    assert_eq!(bytes, wire_fixture("upload-chunk"));
+}
+
+#[test]
 fn direct_root_installation_has_ingress_headroom_and_a_finite_plan_ceiling() {
     let mut plan = plan();
     plan.artifact.bytes = crate::artifact::MAX_WASM;
@@ -37,16 +129,7 @@ fn direct_root_installation_has_ingress_headroom_and_a_finite_plan_ceiling() {
         call.args.len() < 2 * 1024 * 1024 - 64 * 1024,
         "reserve ingress envelope headroom"
     );
-    let decoded: ic_platform::management_canister_types::InstallCodeArgs = decoder::decode_one(
-        &call.args,
-        decoder::Limits {
-            work: 20 * 1024 * 1024,
-            ..DECODE
-        },
-    )
-    .unwrap();
-    assert_eq!(decoded.wasm_module, bytes);
-    assert_eq!(decoded.canister_id, target);
+    assert!(call.args.windows(bytes.len()).any(|window| window == bytes));
     plan.artifact.bytes += 1;
     assert!(plan.validate().is_err());
 }
@@ -111,17 +194,9 @@ fn typed_status_preserves_json_evidence_and_absent_field_shapes() {
 fn mainnet_provider_request_binds_funding_identity_and_controller() {
     let plan = plan();
     let call = create_call(&plan, None).unwrap();
-    let args: ledger::CreateCanisterArgs = decoder::decode_one(&call.args, DECODE).unwrap();
     assert_eq!(call.canister.to_text(), super::LEDGER);
     assert_eq!(call.method, "create_canister");
-    assert_eq!(args.created_at_time, Some(plan.created_at_ns));
-    assert_eq!(args.amount, plan.creation_cycles() - LEDGER_FEE);
-    assert_eq!(args.from_subaccount, None);
-    let settings = args.creation_args.unwrap().settings.unwrap();
-    assert_eq!(
-        settings.controllers,
-        Some(vec![Principal::from_text(&plan.controller).unwrap()])
-    );
+    assert_eq!(call.args, wire_fixture("create-mainnet"));
 }
 
 #[test]
@@ -138,15 +213,11 @@ fn store_creation_binds_root_subnet_without_changing_direct_placement() {
     let subnet = crate::network::principal("r7inp-6aaaa-aaaaa-aaabq-cai").unwrap();
     assert!(create_call(&value, None).is_err());
     let call = create_call(&value, Some(subnet)).unwrap();
-    let request: ic_platform::cycles_ledger_types::CreateCanisterArgs =
-        ic_platform::candid_codec::decoder::decode_one(&call.args, DECODE).unwrap();
-    assert_eq!(
-        request.creation_args.unwrap().subnet_selection,
-        Some(ic_platform::cycles_ledger_types::SubnetSelection::Subnet { subnet })
-    );
+    assert_eq!(call.args, wire_fixture("store-create"));
     value.network = crate::Network::Local {
         url: "http://127.0.0.1:8000/".into(),
         root_key: "00".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     assert_eq!(
@@ -162,31 +233,19 @@ fn store_creation_binds_root_subnet_without_changing_direct_placement() {
 fn only_a_retained_creation_principal_can_advance_installation() {
     let plan = plan();
     let child = Principal::from_text("rrkah-fqaaa-aaaaa-aaaaq-cai").unwrap();
-    for result in [
-        Ok(ledger::CreateCanisterSuccess {
-            block_id: 1_u64.into(),
-            canister_id: child,
-        }),
-        Err(ledger::CreateCanisterError::Duplicate {
-            duplicate_of: 1_u64.into(),
-            canister_id: Some(child),
-        }),
-    ] {
-        let bytes = candid_codec::encode_one(&result, 4096).unwrap();
-        assert_eq!(created(&plan, &bytes).unwrap(), child);
+    for name in ["created", "created-duplicate"] {
+        let bytes = wire_fixture(name);
+        assert_eq!(created(&plan, &bytes).unwrap().as_slice(), child.as_slice());
+        let mut trailing = bytes.clone();
+        trailing.push(0);
+        assert!(matches!(created(&plan, &trailing), Err(Error::Decode(_))));
+        assert!(matches!(
+            created(&plan, &bytes[..bytes.len() - 1]),
+            Err(Error::Decode(_))
+        ));
     }
-    for error in [
-        ledger::CreateCanisterError::Duplicate {
-            duplicate_of: 1_u64.into(),
-            canister_id: None,
-        },
-        ledger::CreateCanisterError::TooOld,
-        ledger::CreateCanisterError::InsufficientFunds {
-            balance: 0_u64.into(),
-        },
-    ] {
-        let result: ledger::CreateCanisterResult = Err(error);
-        let bytes = candid_codec::encode_one(&result, 4096).unwrap();
+    for name in ["created-no-id", "created-old", "created-no-funds"] {
+        let bytes = wire_fixture(name);
         assert!(matches!(created(&plan, &bytes), Err(Error::Blocked(_))));
     }
 }

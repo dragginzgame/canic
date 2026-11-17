@@ -1,6 +1,41 @@
 use super::*;
 use clap::Parser as _;
 
+#[test]
+fn local_initialization_requires_explicit_root_subnet() {
+    let root_key = "00".repeat(133);
+    let args = [
+        "canic",
+        "app",
+        "init",
+        "local-test",
+        "--fleet",
+        "local",
+        "--network",
+        "local",
+        "--url",
+        "http://127.0.0.1:4943/",
+        "--root-key",
+        &root_key,
+        "--routing-canister",
+        "rrkah-fqaaa-aaaaa-aaaaq-cai",
+    ];
+    assert!(
+        Cli::try_parse_from(args)
+            .err()
+            .expect("missing root subnet")
+            .to_string()
+            .contains("--root-subnet")
+    );
+    assert!(
+        Cli::try_parse_from(args.into_iter().chain([
+            "--root-subnet",
+            "tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe",
+        ]))
+        .is_ok()
+    );
+}
+
 async fn json(args: &[&str]) -> serde_json::Value {
     let cli =
         Cli::try_parse_from(["canic", "--json"].into_iter().chain(args.iter().copied())).unwrap();

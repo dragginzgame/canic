@@ -16,6 +16,7 @@ fn store_selection_requires_retained_owner_and_target_and_keeps_networks_separat
     let second = operation(Network::Local {
         url: "http://localhost:8000/".into(),
         root_key: "aa".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     });
     let duplicate = operation(Network::Mainnet);

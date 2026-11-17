@@ -15,6 +15,8 @@ done
 perl scripts/dev/blob-inputs.pl > target/blob/inputs.before.json
 "$cli" artifact build --manifest qualification/Cargo.toml --package canic-asset-catalog --output target/blob/original.wasm --json > target/blob/original.json
 "$cli" artifact build --manifest qualification/Cargo.toml --package canic-asset-catalog --features maintenance-candidate --output target/blob/candidate.wasm --json > target/blob/candidate.json
+"$cli" artifact build --manifest qualification/Cargo.toml --package canic-asset-catalog --features profile --output target/blob/composed.wasm --json > target/blob/composed.json
+"$cli" artifact build --manifest qualification/Cargo.toml --package canic-asset-catalog --features profile,maintenance-candidate --output target/blob/composed-candidate.wasm --json > target/blob/composed-candidate.json
 CANIC_CLI="$cli" CANIC_EFFECT_PROBE_WASM="$root/target/blob/original.wasm" \
     CANIC_BLOB_ARTIFACT_DIRECTORY="$root/target/blob" \
     cargo test --locked --manifest-path qualification/Cargo.toml \

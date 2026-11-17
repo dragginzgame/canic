@@ -50,7 +50,7 @@ async fn discovers_both_children_without_local_deployment_records() {
     let mut value = serde_json::json!({"apps":{"discovery":{
         "canisters":{"root":{"role":"root"}},
         "fleets":{"local":{
-            "network":{"kind":"Local","url":url,"root_key":key,"routing_canister":root.to_text()},
+            "network":{"kind":"Local","url":url,"root_key":key,"root_subnet":pic.topology().await.get_nns().unwrap().to_text(),"routing_canister":root.to_text()},
             "journal":"journal","canisters":{"root":{"id":root.to_text(),"profile_manager":true}}
         }}
     }}});

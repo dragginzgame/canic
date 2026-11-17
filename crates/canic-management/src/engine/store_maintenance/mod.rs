@@ -1,16 +1,15 @@
 //! Root retains Store maintenance intent and evidence; Host retains replacement bytes.
-use super::{
-    MANAGEMENT_LIMITS, OBSERVING, STATE, State, api, candid_codec, decoder, digest, management,
-};
+use super::{MANAGEMENT_LIMITS, OBSERVING, STATE, State, api, digest, management};
 use canic_management_protocol::{
     Failure, Refusal,
     store_maintenance::{Approval, MAX_UPGRADES, Phase, Scan, Status},
 };
-use ic_platform::management_canister_types::{
-    CanisterIdRecord, CanisterStatusResult, CanisterStatusType,
+use ic_platform_protocol::{
+    management::{self as mgmt, CanisterArgs, CanisterStatus},
+    management_snapshots::Status as RuntimeStatus,
 };
-use ic_platform::principal::Principal;
 use ic_platform_runtime::call::{Call, Wait};
+use ic_platform_types::Principal;
 use ic_wasm_store_protocol as store;
 mod installation;
 mod preservation;
@@ -46,7 +45,7 @@ fn binding(state: &State, approval: &Approval) -> bool {
     target.to_text() == approval.store
         && target != Principal::anonymous()
         && target != Principal::management_canister()
-        && target != Principal::from_slice(api::canister_self().as_slice())
+        && target != api::canister_self()
         && approval.previous_module != [0; 32]
         && approval.module_hash != [0; 32]
         && approval.previous_module != approval.module_hash
@@ -266,26 +265,21 @@ fn target(approval: &Approval) -> Principal {
     Principal::from_text(&approval.store).expect("retained Store")
 }
 fn args(approval: &Approval) -> Vec<u8> {
-    candid_codec::encode_one(
-        &CanisterIdRecord {
-            canister_id: target(approval),
-        },
-        1024,
-    )
+    CanisterArgs {
+        canister_id: target(approval),
+    }
+    .encode(1024)
     .expect("stop args")
 }
-async fn inspect(approval: &Approval) -> Result<CanisterStatusResult, Failure> {
+async fn inspect(approval: &Approval) -> Result<CanisterStatus, Failure> {
     inspect_module(approval, approval.previous_module).await
 }
-async fn inspect_module(
-    approval: &Approval,
-    module: [u8; 32],
-) -> Result<CanisterStatusResult, Failure> {
+async fn inspect_module(approval: &Approval, module: [u8; 32]) -> Result<CanisterStatus, Failure> {
     let reply = management("canister_status", args(approval), 0).await?;
-    let value: CanisterStatusResult =
-        decoder::decode_one(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
+    let value = mgmt::decode_canister_status(&reply, MANAGEMENT_LIMITS)
+        .map_err(|_| Failure::InvalidReply)?;
     if value.module_hash.as_deref() != Some(module.as_slice())
-        || value.settings.controllers != [Principal::from_slice(api::canister_self().as_slice())]
+        || value.settings.controllers != [api::canister_self()]
     {
         return Err(Failure::Mismatch);
     }
@@ -311,16 +305,12 @@ async fn admission(
     closed: bool,
 ) -> Result<(), Failure> {
     let bytes = admission_frame(&command);
-    let reply = Call::new(
-        ic_platform_types::Principal::from_slice((target(approval)).as_slice()),
-        "admission",
-        Wait::Bounded { seconds: 5 },
-    )
-    .owned_args(bytes)
-    .execute()
-    .await
-    .map_err(super::failure)
-    .and_then(super::response)?;
+    let reply = Call::new(target(approval), "admission", Wait::Bounded { seconds: 5 })
+        .owned_args(bytes)
+        .execute()
+        .await
+        .map_err(super::failure)
+        .and_then(super::response)?;
     let result: Result<Option<store::Admission>, store::Error> = ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
@@ -332,9 +322,7 @@ async fn admission(
     .map_err(|_| Failure::InvalidReply)?;
     let expected = store::Admission {
         attempt: approval.attempt.clone(),
-        owner: Principal::from_slice(api::canister_self().as_slice())
-            .as_slice()
-            .to_vec(),
+        owner: api::canister_self().as_slice().to_vec(),
         closed,
     };
     if result != Ok(Some(expected)) {
@@ -386,7 +374,7 @@ async fn step(record: &Status) -> Result<(), Failure> {
     let approval = &record.approval;
     match record.phase {
         Phase::Reserved => {
-            if inspect(approval).await?.status != CanisterStatusType::Running {
+            if inspect(approval).await?.status != RuntimeStatus::Running {
                 return Err(Failure::Mismatch);
             }
             dispatch(record)?;
@@ -422,7 +410,7 @@ async fn step(record: &Status) -> Result<(), Failure> {
             if !record.preservation.as_ref().is_some_and(|p| p.complete) {
                 return preservation::capture(record).await;
             }
-            if inspect(approval).await?.status != CanisterStatusType::Running {
+            if inspect(approval).await?.status != RuntimeStatus::Running {
                 return Err(Failure::Mismatch);
             }
             dispatch(record)?;
@@ -435,7 +423,7 @@ async fn step(record: &Status) -> Result<(), Failure> {
             let result = management("stop_canister", bytes, 0)
                 .await
                 .and_then(|reply| {
-                    decoder::decode_args::<()>(&reply, MANAGEMENT_LIMITS, decoder::Arity::Exact)
+                    mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS)
                         .map_err(|_| Failure::InvalidReply)
                 });
             super::fault(super::ChildId::FIRST, 14);
@@ -446,7 +434,7 @@ async fn step(record: &Status) -> Result<(), Failure> {
             }
         }
         Phase::StopIssued | Phase::Stopped => {
-            if inspect(approval).await?.status != CanisterStatusType::Stopped {
+            if inspect(approval).await?.status != RuntimeStatus::Stopped {
                 return Err(Failure::Uncertain);
             }
             change(&record.approval, record.phase, |value| {

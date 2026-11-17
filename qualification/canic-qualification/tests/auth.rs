@@ -2,6 +2,7 @@
 mod auth_enrollment_tests;
 mod auth_host_tests;
 mod auth_issuer_tests;
+mod auth_logout_tests;
 use canic_auth_witness::{
     KEY, LIMITS, OBSERVE, Observation, audience, enrollment,
     protocol::{

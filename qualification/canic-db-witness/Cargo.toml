@@ -22,9 +22,10 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 fault-injection = []
+incompatible-schema = []
 
 [dependencies]
-canic = { workspace = true, features = ["db"] }
+canic = { workspace = true, features = ["db-schema"] }
 ic-wire.workspace = true
 serde.workspace = true
 

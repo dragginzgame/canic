@@ -360,6 +360,7 @@ fn existing_id_declarations_are_network_scoped_and_do_not_authorize_creation() {
         Network::Local {
             url: "http://127.0.0.1:9".into(),
             root_key: "00".repeat(133),
+            root_subnet: None,
             routing_canister: "aaaaa-aa".into(),
         },
     )
@@ -680,6 +681,7 @@ async fn existing_id_adoption_preserves_legacy_evidence_and_blocks_creation() {
     adopted.config.network = Network::Local {
         url: "http://127.0.0.1:9".into(),
         root_key: "00".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     adopted.config.journal = Some("../retained".into());
@@ -800,6 +802,7 @@ async fn config_edits_do_not_rebind_existing_network_authority() {
     edited.config.network = Network::Local {
         url: "http://localhost:8000".into(),
         root_key: "00".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     let mut changed_input = input();
@@ -890,6 +893,7 @@ async fn legacy_upgrades_follow_retained_named_identity_without_rewriting_eviden
     selected.config.network = Network::Local {
         url: "http://127.0.0.1:9".into(),
         root_key: "00".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     let upgrade = || PlanInput {
@@ -962,6 +966,7 @@ fn one_physical_canister_cannot_belong_to_two_fleets_on_the_same_network() {
         .network = Network::Local {
         url: "http://127.0.0.1:9".into(),
         root_key: "00".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     catalog.validate().unwrap();

@@ -66,7 +66,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
     let config = json!({"apps":{"assets":{
         "canisters":{"root":{"role":"root","wasm":assets.join("root.wasm")}, "store":{"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")},
             "catalog":{"parent":"root","wasm":assets.join("original.wasm")}},
-        "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":root_key,"routing_canister":routing.to_text()},
+        "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":root_key,"root_subnet":owner.client().topology().await.get_nns().unwrap().to_text(),"routing_canister":routing.to_text()},
             "journal":"journal", "canisters":{}}}
     }}});
     std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();

@@ -1,5 +1,7 @@
 /target/
 /qualification/target/
+/crates/canic/browser/node_modules/
+/crates/canic/browser/dist/
 .canic/
 *.canic-lock
 /.tools/

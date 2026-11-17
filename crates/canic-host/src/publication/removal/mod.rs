@@ -385,8 +385,8 @@ pub(crate) async fn apply(
             "removal reconciliation requires its original signed attempt; use apply first".into(),
         ));
     }
-    let agent = plan.network.agent()?;
-    super::verify_binding(&agent, plan, &binding(plan)?.publication).await?;
+    let client = plan.network.client()?;
+    super::verify_binding(&client, plan, &binding(plan)?.publication).await?;
     let deadline = super::step_deadline(&path, plan)?;
     if !path.join("signed.json").try_exists().map_err(supplier)? && crate::now()? >= deadline {
         return Err(Error::Blocked(
@@ -399,7 +399,7 @@ pub(crate) async fn apply(
         &call(plan, bytes, deadline)?,
         identity,
         icp,
-        &agent,
+        &client,
     )
     .await?;
     let removal = receipt(dir, plan, bytes)?

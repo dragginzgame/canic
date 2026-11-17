@@ -4,6 +4,8 @@
 mod canister;
 #[cfg(target_arch = "wasm32")]
 mod issuer;
+#[cfg(all(target_arch = "wasm32", feature = "profile"))]
+mod profile;
 
 pub use canic::auth::enrollment;
 pub use canic::auth::protocol;

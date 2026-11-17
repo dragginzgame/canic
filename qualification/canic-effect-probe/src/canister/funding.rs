@@ -5,9 +5,9 @@ use crate::{
     FUND, FUNDING_LATER, FUNDING_STATUS, Fault, FundingOutcome, FundingRequest, FundingStatus,
     LIMITS, MAX_FUNDING_CYCLES, MAX_MANAGEMENT_REQUEST_BYTES, Phase,
 };
-use ic_platform::{
-    candid_codec::{self, decoder},
-    management_canister_types::CanisterIdRecord,
+use ic_platform_protocol::{
+    candid::Limits,
+    management::{self as mgmt, CanisterArgs},
 };
 use ic_platform_runtime::{
     self as runtime,
@@ -109,12 +109,10 @@ async fn fund(intent: FundingRequest) -> FundingStatus {
         intent.cycles > 0 && intent.cycles <= MAX_FUNDING_CYCLES,
         "funding amount outside fixture bound"
     );
-    let request = candid_codec::encode_one(
-        &CanisterIdRecord {
-            canister_id: ic_platform::principal::Principal::from_slice(&intent.target),
-        },
-        MAX_MANAGEMENT_REQUEST_BYTES,
-    )
+    let request = CanisterArgs {
+        canister_id: ic_platform_types::Principal::from_slice(&intent.target),
+    }
+    .encode(MAX_MANAGEMENT_REQUEST_BYTES)
     .expect("bounded deposit request");
     JOURNAL.with_borrow_mut(|state| {
         state.phase = Phase::Issued;
@@ -132,16 +130,17 @@ async fn fund(intent: FundingRequest) -> FundingStatus {
         .expect("callback refund retained");
     let outcome = match completion.into_parts().0 {
         Outcome::Reply(reply) => {
-            decoder::decode_args::<()>(
+            mgmt::decode_empty_response(
                 &reply,
-                decoder::Limits {
+                Limits {
                     bytes: 4096,
                     header: 1024,
                     types: 32,
                     work: 8192,
                     allocation: 8192,
+                    vector: 16_384,
+                    skipping: 65_536,
                 },
-                decoder::Arity::Exact,
             )
             .expect("management deposit reply");
             assert_eq!(

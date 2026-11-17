@@ -39,6 +39,110 @@ that state. `probe` uses Canic's greeting contract but refuses while drained.
 Only the matching explicit Blob activation can reopen admission. Inspection and
 cleanup remain available under ordinary permissions while drained.
 
+## What the actor looks like
+
+The actor is an ordinary Rust module. This is the composition portion of the
+current [catalog actor](../../qualification/canic-asset-catalog/src/canister/mod.rs),
+with imports, application handlers and lifecycle hooks omitted:
+
+```rust
+canic::mount_blob_endpoints! {
+    execute = crate::canister::execute_blob,
+    inspect = crate::canister::inspect_blob,
+    management = crate::canister::inspect_management,
+}
+
+fn execute_blob(caller: Principal, command: Command, now: u64) -> Result<Outcome, BlobError> {
+    STATE.with_borrow_mut(|state| {
+        state
+            .as_mut()
+            .expect("catalog")
+            .blob
+            .execute(caller, command, now)
+    })
+}
+```
+
+The mount captures the real caller and time, admits and decodes the supplier
+contract, calls this handler locally and encodes the reply in the same transaction.
+The application's `State` owns the real Blob Service and catalog. Its explicit
+Platform `init`, `pre_upgrade` and `post_upgrade` hooks create, drain-check and
+reopen those owners; mounting does not run them.
+
+Auth uses the same composition style through `canic::mount_auth_endpoints!` and
+`canic::mount_auth_issuer_endpoints!`, each with its own typed handlers. Custom
+application methods use Platform's `#[runtime::query(...)]` or
+`#[runtime::update(...)]` with explicit guards and codecs. There is no universal
+actor base class or generic `canic::mount!` API in the current rewrite. Root and
+Store remain separate infrastructure canisters; an application chooses its helpers.
+
+## Composing another durable module
+
+The catalog's optional `profile` feature embeds the existing profile engine
+alongside Blob. Both use one Storage runtime and one application lifecycle. Profile
+contributes its two stable requests to the combined manifest; the application
+explicitly grants its namespace. After bootstrap, the lifecycle selects creation
+or strict reopening:
+
+```rust
+// Fresh installation, after the actor's combined Storage bootstrap:
+let blob = Service::create(
+    blob_memory,
+    installation,
+    Installation {
+        application: installation,
+        manager: input.manager,
+        limits: input.limits,
+    },
+).expect("fresh Blob");
+let profiles = canic_profile_worker::state::State::create(&runtime);
+```
+
+The separate upgrade branch strictly reopens both:
+
+```rust
+let blob = Service::open(blob_memory, installation)
+    .expect("existing Blob; no initialization fallback");
+assert!(blob.is_drained(), "reopen retains closed admission");
+let profiles = canic_profile_worker::state::State::open(&runtime);
+```
+
+The [composition root](../../qualification/canic-asset-catalog/src/canister/state.rs)
+opens catalog, Blob and profile state. Profile owns its existing record format,
+owner rules and revisions; it no longer allocates a private backing runtime.
+Its separate `storage::open` helper preserves the standalone demo's original
+two allocations and 32-page ceiling. This composed application admits four
+allocations under its own 64-page ceiling. No generic participant registry,
+second allocator or lifecycle state machine was added.
+
+Application profile calls check actual catalog-user membership and profile
+ownership. The actor chooses to close those calls while Blob is drained; it reads
+Blob's actual state rather than copying an admission flag. Both profiles reopen
+on upgrade, but access remains closed until the matching explicit activation.
+Changing the durable participant set requires an explicit migration: upgrading
+between Blob-only and profile-composed artifacts is refused without changing state.
+An installed corruption case damages each profile allocation separately, through
+Storage's named leases. The candidate refuses reopening while preserving every
+byte of the damaged backing and the intact Blob/catalog observations; readiness
+stays closed. A healthy sibling component never authorizes replacing failed state.
+The same catalog rollback checks also run with both profiles populated: failed
+Blob/catalog authorization and release preserve the entire backing. Filling the
+four lifetime catalog slots still permits profile updates and asset cleanup.
+Malformed profile frames and stale revisions preserve all three owners. The
+application admits only two profile users, so this witness does not exercise the
+profile engine's separate 16-owner capacity limit or physical memory exhaustion.
+This is a local composition witness, not an Auth+DB+Blob production recipe.
+
+After `make canic`, build the optional composition without deploying it:
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml --package canic-asset-catalog --features profile --output target/blob/composed.wasm
+canic artifact inspect target/blob/composed.wasm
+```
+
+With simulator preparation complete, run its installed boundary checks using
+`bash scripts/dev/test-blob.sh blob_profile_tests`.
+
 ## Run locally
 
 Prerequisites: Rust 1.100.0 with the Wasm target, `make canic`, the prepared ICP
@@ -51,15 +155,15 @@ canic artifact inspect target/blob-catalog.wasm
 make blob-test
 ```
 
-`make blob-test` builds original and maintenance-candidate executables through
-Canic's existing artifact builder and runs seven installed tests with synthetic
+`make blob-test` builds Blob-only and optional profile-composed executables through
+Canic's existing artifact builder and runs ten installed tests with synthetic
 cycles. `make blob-clippy` and `make blob-doc` select the adapter and actual caller.
 The two artifacts and input receipts stay under `target/blob/`; no live IC or
 Caffeine request is issued. Optional feature selection keeps Blob/Storage/Runtime
-out of Canic's default runtime graph. Both workspaces select published Blob 0.102.0,
-archive SHA-256 `cc0eda5382d1e399745e454894d1d16f8e7313429f92b3a0c73881499fcd1a94`,
-from source `548d9c3de7a3a224e66693685634d79cad191406`.
-The current witness uses Runtime 0.23.14 and Types 0.21.2; Storage's older raw-memory
+out of Canic's default runtime graph. Both workspaces select published Blob 0.103.2,
+archive SHA-256 `559aa9a43ac96817d4c703285007e7bbd3b413b134efc2952d17646c04c52639`,
+from source `ff1aaafc75d80cd51c12f232dd758d4883a7aa21`.
+The current witness uses Runtime 0.23.16 and Types 0.21.2; Storage's older raw-memory
 runtime edge has no executor.
 The mutable sibling checkout stays read-only and is not a Cargo input.
 
@@ -68,7 +172,7 @@ the same registry archive in both locks, and records library hashes and consumer
 before/after each installed run. Release evidence is recorded in the
 [qualification history](../qualification/history.md).
 
-Canic and Blob select Wire 0.24.2. Blob still owns its persistence codec.
+Canic and Blob select Wire 0.24.3. Blob still owns its persistence codec.
 `canic::blob::RPC_LIMITS` projects the supplier's numeric budgets into the adapter's
 Wire type; it does not change admission policy or add a codec implementation.
 The installed composition checks qualify that boundary. The older input hashes

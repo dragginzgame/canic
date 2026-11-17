@@ -242,7 +242,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
             "store":{"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")},
             "app":{"role":"app","parent":"root","wasm":dir.join("app.wasm")},
             "worker":{"role":"worker","parent":"root","wasm":dir.join("worker.wasm")}},
-        "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":root_key,"routing_canister":routing.to_text()},"journal":"journal","canisters":{}}}
+        "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":root_key,"root_subnet":owner.client().topology().await.get_nns().unwrap().to_text(),"routing_canister":routing.to_text()},"journal":"journal","canisters":{}}}
     }}});
     std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
     let dispatch = (std::time::SystemTime::now()
@@ -806,7 +806,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     let config = json!({"apps":{"assets":{
         "canisters": {"root":{"role":"root"}, "store":{"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")},
             "app":{"parent":"root","wasm":wasm}},
-        "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":root_key,"routing_canister":root.to_text()},
+        "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":root_key,"root_subnet":owner.client().topology().await.get_nns().unwrap().to_text(),"routing_canister":root.to_text()},
             "journal":"journal", "canisters":{"root":{"id":root.to_text()}}}}
     }}});
     std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();

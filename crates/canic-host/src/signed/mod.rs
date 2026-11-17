@@ -10,10 +10,10 @@ use crate::{
 };
 use base64::{Engine, prelude::BASE64_STANDARD};
 use ic_platform::{
-    agent::{Agent, CallResponse, EffectiveId, RequestId, RequestStatusResponse},
-    principal::Principal,
+    ingress::{self, Content},
+    native::{Dispatch, PreparedRequestStatus, PreparedUpdate, ReadClient, RequestStatus},
 };
-use ic_platform_ingress::ingress::{self, Content};
+use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 use std::{
     path::Path,
@@ -55,10 +55,8 @@ pub(crate) struct Call<'a> {
 }
 
 struct Attempt {
-    envelope: Vec<u8>,
-    status_check: Vec<u8>,
-    id: RequestId,
-    expiry: u64,
+    update: PreparedUpdate,
+    status: PreparedRequestStatus,
 }
 
 struct Authority<'a> {
@@ -102,7 +100,16 @@ fn admit(bytes: &[u8], plan: &Authority<'_>, call: &Call<'_>) -> Result<Attempt>
         .map_err(supplier)?
         .value
         .content;
-    let id = RequestId::new(&content.request_id().map_err(supplier)?);
+    // Select the profile from approved authority, never from a failed signature.
+    // Platform owns authentication and exact status-path binding for both profiles.
+    let anonymous = principal(plan.controller)? == Principal::anonymous();
+    let effective = call.effective;
+    let prepared = if anonymous {
+        PreparedUpdate::from_anonymous_bytes(&envelope, effective, store::MAX_RECORD)
+    } else {
+        PreparedUpdate::from_bytes(&envelope, effective, store::MAX_RECORD)
+    }
+    .map_err(supplier)?;
     let expiry = match content {
         Content::Call {
             sender,
@@ -110,13 +117,11 @@ fn admit(bytes: &[u8], plan: &Authority<'_>, call: &Call<'_>) -> Result<Attempt>
             method_name,
             arg,
             ingress_expiry,
-            sender_info,
             ..
         } if sender.as_slice() == principal(plan.controller)?.as_slice()
             && canister_id.as_slice() == call.canister.as_slice()
             && method_name == call.method
             && arg == call.args
-            && sender_info.is_none()
             && ingress_expiry <= plan.expires_at_ns =>
         {
             ingress_expiry
@@ -127,35 +132,27 @@ fn admit(bytes: &[u8], plan: &Authority<'_>, call: &Call<'_>) -> Result<Attempt>
             ));
         }
     };
-    if crate::hex(id.as_slice()) != message.request.request_id {
+    if crate::hex(prepared.request_id()) != message.request.request_id {
         return Err(Error::Invalid("signed request ID mismatch".into()));
     }
     let status_check = BASE64_STANDARD
         .decode(&message.request.status_check)
         .map_err(supplier)?;
-    let status = ingress::decode_envelope(&status_check, store::MAX_RECORD).map_err(supplier)?;
-    match &status.value.content {
-        Content::ReadState {
-            sender,
-            ingress_expiry,
-            paths,
-        } if sender.as_slice() == principal(plan.controller)?.as_slice()
-            && *ingress_expiry == expiry
-            && paths.len() == 1
-            && paths[0].len() == 2
-            && paths[0][0].as_slice() == b"request_status"
-            && paths[0][1].as_slice() == id.as_slice() => {}
-        _ => {
-            return Err(Error::Invalid(
-                "signed status check does not bind the same attempt".into(),
-            ));
-        }
+    let status = if anonymous {
+        PreparedRequestStatus::from_anonymous_bytes(&status_check, &prepared, store::MAX_RECORD)
+    } else {
+        PreparedRequestStatus::from_bytes(&status_check, &prepared, store::MAX_RECORD)
+    }
+    .map_err(supplier)?;
+    // Read authority cannot extend the original operation's signing window.
+    if status.expiry() != expiry {
+        return Err(Error::Invalid(
+            "signed status check does not bind the same attempt".into(),
+        ));
     }
     Ok(Attempt {
-        envelope,
-        status_check,
-        id,
-        expiry,
+        update: prepared,
+        status,
     })
 }
 
@@ -222,9 +219,9 @@ pub(crate) async fn execute(
     call: &Call<'_>,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<Vec<u8>> {
-    execute_with(path, &Authority::from(plan), call, identity, icp, agent).await
+    execute_with(path, &Authority::from(plan), call, identity, icp, client).await
 }
 
 /// Read only the typed metadata selected by the approved operation.
@@ -234,9 +231,9 @@ pub(crate) async fn observe_operation(
     plan: &Plan,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<Vec<u8>> {
-    observe_metadata(path, plan, None, identity, icp, agent).await
+    observe_metadata(path, plan, None, identity, icp, client).await
 }
 
 pub(crate) async fn observe_store(
@@ -245,9 +242,9 @@ pub(crate) async fn observe_store(
     canister: Principal,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<Vec<u8>> {
-    observe_metadata(path, plan, Some(canister), identity, icp, agent).await
+    observe_metadata(path, plan, Some(canister), identity, icp, client).await
 }
 
 // Only these typed read contracts may obtain fresh authority, never mutation calls.
@@ -264,7 +261,7 @@ async fn observe_metadata(
     store: Option<Principal>,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<Vec<u8>> {
     let directory = crate::output_publication::prepare(path, 0o700)?;
     let authority = path.join("authority.json");
@@ -293,7 +290,7 @@ async fn observe_metadata(
         &call,
         identity,
         icp,
-        agent,
+        client,
     )
     .await
 }
@@ -340,7 +337,7 @@ pub(crate) async fn observe(
     call: &Call<'_>,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<Vec<u8>> {
     let (root, method, args) = if plan.maintenance().is_some() {
         let args = crate::maintenance::observation_args(plan, call.method)?;
@@ -376,7 +373,7 @@ pub(crate) async fn observe(
         call,
         identity,
         icp,
-        agent,
+        client,
     )
     .await
 }
@@ -388,7 +385,7 @@ pub(crate) async fn reconcile(
     plan: &Plan,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<Vec<u8>> {
     let call = if plan.store_upgrade_root().is_some() {
         crate::store_upgrade::recovery(plan)?
@@ -418,7 +415,7 @@ pub(crate) async fn reconcile(
         &call,
         identity,
         icp,
-        agent,
+        client,
     )
     .await
 }
@@ -429,7 +426,7 @@ async fn execute_with(
     call: &Call<'_>,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<Vec<u8>> {
     let directory = crate::output_publication::prepare(path, 0o700)?;
     if path.join("reply.bin").try_exists().map_err(supplier)? {
@@ -463,57 +460,58 @@ async fn execute_with(
         bytes
     };
     let attempt = admit(&bytes, plan, call)?;
-    if now()? >= attempt.expiry {
+    if now()? >= attempt.update.expiry() {
         return Err(Error::Blocked(format!(
             "original signed attempt {} expired without a retained reply; do not re-sign or recreate",
-            attempt.id
+            crate::hex(attempt.update.request_id())
         )));
     }
     // Publish exact bytes before this boundary. Retrying sends only this same
     // request ID within its original validity window; never a fresh signature.
-    let effective = EffectiveId::Canister(call.effective.to_text().parse().map_err(supplier)?);
-    let result = bounded(agent.update_signed(effective, attempt.envelope)).await;
-    if let Ok(CallResponse::Response(reply)) = result {
-        store::put_in(&directory, std::ffi::OsStr::new("reply.bin"), &reply)?;
-        return Ok(reply);
+    let result = bounded(client.dispatch(&attempt.update, crate::network::context()?.1)).await;
+    if let Ok(Dispatch::Observed(observation)) = result
+        && let RequestStatus::Replied(reply) = observation.status()
+    {
+        store::put_in(&directory, std::ffi::OsStr::new("reply.bin"), reply)?;
+        return Ok(reply.clone());
     }
     // Transport failure or acceptance is not effect failure. Read the certified
     // status for the original request using its retained signed read-state call.
     for _ in 0..30 {
-        if now()? >= attempt.expiry {
+        if now()? >= attempt.update.expiry() {
             break;
         }
-        let (status, _) = bounded(agent.request_status_signed(
-            &attempt.id,
-            effective,
-            attempt.status_check.clone(),
+        let observation = bounded(client.observe_prepared_request(
+            &attempt.update,
+            &attempt.status,
+            crate::network::context()?.1,
         ))
         .await?;
-        match status {
-            RequestStatusResponse::Replied(reply) => {
-                store::put_in(&directory, std::ffi::OsStr::new("reply.bin"), &reply.arg)?;
-                return Ok(reply.arg);
+        match observation.status() {
+            RequestStatus::Replied(reply) => {
+                store::put_in(&directory, std::ffi::OsStr::new("reply.bin"), reply)?;
+                return Ok(reply.clone());
             }
-            RequestStatusResponse::Rejected(rejection) => {
+            RequestStatus::Rejected { code, message, .. } => {
                 store::put_json_in(
                     &directory,
                     std::ffi::OsStr::new("rejected.json"),
                     &Rejection {
-                        code: format!("{:?}", rejection.reject_code),
-                        message: rejection.reject_message,
+                        code: code.to_string(),
+                        message: message.clone(),
                     },
                 )?;
                 return Err(Error::Blocked(
                     "original request rejected; retained evidence requires review".into(),
                 ));
             }
-            RequestStatusResponse::Done => break,
+            RequestStatus::Done => break,
             _ => tokio::time::sleep(Duration::from_secs(1)).await,
         }
     }
     Err(Error::Blocked(format!(
         "request {} has no retained terminal reply; resume this operation only",
-        attempt.id
+        crate::hex(attempt.update.request_id())
     )))
 }
 

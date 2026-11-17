@@ -6,9 +6,9 @@ use crate::{
     operation, plan, signed, store, supplier,
 };
 use canic_management_protocol::publication as wire;
-use ic_platform::{
-    agent::Agent, candid_codec, management_canister_types as mgmt, principal::Principal,
-};
+use ic_platform::native::ReadClient;
+use ic_platform_protocol::management as mgmt;
+use ic_platform_types::Principal;
 use ic_wasm_store_protocol::Info;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -80,11 +80,11 @@ pub fn create_store_plan(
     plan::retain_locked(&store::Store::open(journal)?, plan, &bytes)
 }
 
-pub(crate) async fn verify_root(agent: &Agent, plan: &Plan) -> Result<()> {
+pub(crate) async fn verify_root(client: &ReadClient, plan: &Plan) -> Result<()> {
     if let Some(root) = plan.store_root() {
         let id = principal(&root.canister)?;
-        operation::controllers(agent, id, &plan.controller).await?;
-        if operation::module(agent, id).await? != root.module {
+        operation::controllers(client, id, &plan.controller).await?;
+        if operation::module(client, id).await? != root.module {
             return Err(Error::Blocked(
                 "Store bootstrap Root code differs from approval".into(),
             ));
@@ -102,11 +102,11 @@ pub(crate) fn placement(dir: &Path, plan: &Plan) -> Result<Option<Principal>> {
 }
 
 /// Store creation means colocating with the approved Root, never arbitrary CMC placement.
-pub(crate) async fn prepare_placement(dir: &Path, plan: &Plan, agent: &Agent) -> Result<()> {
+pub(crate) async fn prepare_placement(dir: &Path, plan: &Plan, client: &ReadClient) -> Result<()> {
     let Some(root) = plan.store_root() else {
         return Ok(());
     };
-    let current = subnet(agent, &root.canister).await?;
+    let current = subnet(client, &root.canister).await?;
     let path = dir.join("store-subnet.json");
     if path.try_exists().map_err(supplier)? {
         if placement(dir, plan)? != Some(current) {
@@ -133,10 +133,10 @@ pub(crate) async fn verify_placement(
     dir: &Path,
     plan: &Plan,
     canister: Principal,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<()> {
     if plan.store_root().is_some()
-        && placement(dir, plan)? != Some(subnet(agent, &canister.to_text()).await?)
+        && placement(dir, plan)? != Some(subnet(client, &canister.to_text()).await?)
     {
         return Err(Error::Blocked(
             "created Store is not on the approved Root subnet".into(),
@@ -153,17 +153,16 @@ pub(crate) fn handover(plan: &Plan, canister: Principal) -> Result<signed::Call<
         canister: Principal::management_canister(),
         effective: canister,
         method: "update_settings",
-        args: candid_codec::encode_one(
-            &mgmt::UpdateSettingsArgs {
-                canister_id: canister,
-                settings: mgmt::CanisterSettings {
-                    controllers: Some(vec![principal(&root.canister)?]),
-                    ..Default::default()
-                },
-                sender_canister_version: None,
+        // Keep the complete settings schema bound into existing signed attempts.
+        args: mgmt::UpdateSettingsArgs {
+            canister_id: canister,
+            settings: mgmt::CanisterSettings {
+                controllers: Some(vec![root.canister.parse().map_err(supplier)?]),
+                ..Default::default()
             },
-            4096,
-        )
+            sender_canister_version: None,
+        }
+        .encode(4096)
         .map_err(Error::Encode)?,
     })
 }
@@ -246,10 +245,10 @@ pub(crate) async fn finish(
     canister: Principal,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
     read_only: bool,
 ) -> Result<()> {
-    verify_placement(dir, plan, canister, agent).await?;
+    verify_placement(dir, plan, canister, client).await?;
     let path = dir.join("handover");
     let call = handover(plan, canister)?;
     let prepared = path.join("signed.json").try_exists().map_err(supplier)?;
@@ -257,7 +256,7 @@ pub(crate) async fn finish(
         signed::validate_retained(&path, plan, &call)?;
     }
     if !prepared
-        || operation::controllers(agent, canister, plan.application_controller())
+        || operation::controllers(client, canister, plan.application_controller())
             .await
             .is_err()
     {
@@ -266,16 +265,16 @@ pub(crate) async fn finish(
                 "Store handover is not established; reconcile grants no mutation authority".into(),
             ));
         }
-        operation::controllers(agent, canister, &plan.controller).await?;
+        operation::controllers(client, canister, &plan.controller).await?;
         // Module and Root binding are checked before surrendering operator control.
-        if operation::module(agent, canister).await? != plan.artifact.sha256 {
+        if operation::module(client, canister).await? != plan.artifact.sha256 {
             return Err(Error::Blocked("Store code differs before handover".into()));
         }
-        verify_root(agent, plan).await?;
-        signed::execute(&path, plan, &call, identity, icp, agent).await?;
+        verify_root(client, plan).await?;
+        signed::execute(&path, plan, &call, identity, icp, client).await?;
     }
-    operation::controllers(agent, canister, plan.application_controller()).await?;
-    if operation::module(agent, canister).await? != plan.artifact.sha256 {
+    operation::controllers(client, canister, plan.application_controller()).await?;
+    if operation::module(client, canister).await? != plan.artifact.sha256 {
         return Err(Error::Blocked("Store code differs after handover".into()));
     }
     if dir
@@ -292,7 +291,7 @@ pub(crate) async fn finish(
         {
             continue;
         }
-        let reply = signed::observe_store(&path, plan, canister, identity, icp, agent).await?;
+        let reply = signed::observe_store(&path, plan, canister, identity, icp, client).await?;
         let info = decode(&reply)?;
         store::put_json(
             &dir.join("store-ready.json"),

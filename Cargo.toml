@@ -17,7 +17,7 @@ exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.218.0"
+version = "0.219.0"
 edition = "2024"
 rust-version = "1.100.0"
 publish = false
@@ -30,22 +30,22 @@ canic-management = { path = "crates/canic-management" }
 canic-management-protocol = { path = "crates/canic-management-protocol" }
 canic-profile-protocol = { path = "apps/profile/canic-profile-protocol" }
 clap = { version = "4.6.7", features = ["derive"] }
-ic-auth = { git = "https://github.com/dragginzgame/ic-auth", rev = "bfe2e548a997f10a876f01b4c72c4e5fec52c8d6", features = ["receiver-memory", "ed25519-verification"] }
-ic-auth-protocol-types = { git = "https://github.com/dragginzgame/ic-auth", rev = "bfe2e548a997f10a876f01b4c72c4e5fec52c8d6" }
-ic-auth-wire = { git = "https://github.com/dragginzgame/ic-auth", rev = "bfe2e548a997f10a876f01b4c72c4e5fec52c8d6" }
-ic-blob-storage = "0.102.0"
+ic-auth = { version = "0.47.1", features = ["receiver-memory", "ed25519-verification"] }
+ic-auth-protocol-types = "0.43.0"
+ic-auth-wire = "0.43.0"
+ic-blob-storage = "0.103.1"
+ic-db = { git = "https://github.com/dragginzgame/ic-db", rev = "950f36807f8ffa7ebe4ca2cff6792fa2bbcbd03e" }
 ic-host-artifacts = "0.80.1"
 ic-host-fs = { version = "0.80.1", default-features = false }
 ic-host-process = { version = "0.80.2", default-features = false }
 ic-host-text = { version = "0.77.2", default-features = false }
-ic-platform = { version = "0.33.0", default-features = false }
-ic-platform-ingress = { package = "ic-platform", version = "0.34.8", default-features = false, features = ["ingress-packets"] }
-ic-platform-protocol = { version = "0.2.6", default-features = false }
-ic-platform-runtime = { version = "0.23.14", default-features = false }
+ic-platform = { version = "0.34.13", default-features = false, features = ["ingress-packets"] }
+ic-platform-protocol = { version = "0.3.5", default-features = false }
+ic-platform-runtime = { version = "0.23.16", default-features = false }
 ic-platform-types = { version = "0.21.2", default-features = false }
 ic-storage = "0.74.0"
-ic-timers = "0.46.0"
-ic-topology = { git = "https://github.com/dragginzgame/ic-query", rev = "12844b628d96bfd203ffbd900f10d02c4a896988", version = "0.107.0" }
+ic-timers = "0.46.3"
+ic-topology = "0.109.2"
 ic-wasm-store = "0.3.0"
 ic-wasm-store-protocol = "0.3.0"
 ic-wire = { version = "0.24.1", default-features = false }

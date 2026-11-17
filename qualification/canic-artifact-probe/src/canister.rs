@@ -1,16 +1,14 @@
 //! Isolated raw stable-memory and scheduled artifact fixture, not a production integration.
-use ic_platform::principal::Principal;
+use ic_platform_types::Principal;
 
 use crate::{
     ARTIFACT_LIMITS, AdmissionError, Approval, CHECKPOINT, Fault, LIMITS, Phase, RECONCILE,
     Retained, STAGE, STATUS, Status, UPGRADE, artifact_hash,
 };
-use ic_platform::{
-    candid_codec::{self, decoder},
-    management_canister_types::{
-        CanisterIdRecord, CanisterInstallMode, CanisterStatusResult, ChunkHash,
-        InstallChunkedCodeArgs, UploadChunkArgs,
-    },
+use ic_platform_protocol::{
+    candid::Limits,
+    management::{self as mgmt, CanisterArgs, InstallChunkedCodeArgs, InstallMode},
+    management_chunks as chunks,
 };
 use ic_platform_runtime::{
     self as runtime,
@@ -67,12 +65,14 @@ thread_local! {
     static JOURNAL: RefCell<Retained> = RefCell::new(Retained::default());
 }
 
-const MANAGEMENT_LIMITS: decoder::Limits = decoder::Limits {
+const MANAGEMENT_LIMITS: Limits = Limits {
     bytes: 16_384,
     header: 4096,
     types: 256,
     work: 65_536,
     allocation: 65_536,
+    vector: 16_384,
+    skipping: 65_536,
 };
 
 fn guard(limit: usize) -> Result<(), String> {
@@ -127,7 +127,7 @@ fn stage(approval: Approval) -> Result<Status, AdmissionError> {
         };
     }
     approval.validate(api::time())?;
-    if approval.target == Principal::from_slice(api::canister_self().as_slice()).as_slice() {
+    if approval.target == api::canister_self().as_slice() {
         return Err(AdmissionError::Target);
     }
     JOURNAL.with_borrow_mut(|state| {
@@ -191,14 +191,9 @@ async fn install_artifact() {
             .cloned()
     });
     let Some(approval) = approval else { return };
-    let upload = candid_codec::encode_one(
-        &UploadChunkArgs {
-            canister_id: Principal::from_slice(api::canister_self().as_slice()),
-            chunk: approval.wasm,
-        },
-        ARTIFACT_LIMITS.bytes,
-    )
-    .expect("bounded management upload request");
+    let upload =
+        chunks::encode_upload_chunk(api::canister_self(), &approval.wasm, ARTIFACT_LIMITS.bytes)
+            .expect("bounded management upload request");
     JOURNAL.with_borrow_mut(|state| {
         state.phase = Phase::UploadIssued;
         state.upload_attempts = 1;
@@ -216,24 +211,22 @@ async fn install_artifact() {
     let Outcome::Reply(reply) = reply.into_parts().0 else {
         api::trap("chunk upload refused")
     };
-    let chunk: ChunkHash = decoder::decode_one(&reply, MANAGEMENT_LIMITS).expect("chunk hash");
+    let chunk = chunks::decode_upload_chunk(&reply, MANAGEMENT_LIMITS).expect("chunk hash");
     assert_eq!(chunk.hash, approval.sha256, "uploaded chunk hash mismatch");
     JOURNAL.with_borrow_mut(|state| state.chunk_hash = Some(chunk.hash.clone()));
     if approval.fault == Fault::AfterUploadWrite {
         api::trap("injected upload callback trap after result write");
     }
-    let request = candid_codec::encode_one(
-        &InstallChunkedCodeArgs {
-            mode: CanisterInstallMode::Install,
-            target_canister: Principal::from_slice(&approval.target),
-            store_canister: Some(Principal::from_slice(api::canister_self().as_slice())),
-            chunk_hashes_list: vec![chunk],
-            wasm_module_hash: approval.sha256.to_vec(),
-            arg: vec![],
-            sender_canister_version: None,
-        },
-        ARTIFACT_LIMITS.bytes,
-    )
+    let request = InstallChunkedCodeArgs {
+        mode: InstallMode::Install,
+        target_canister: Principal::from_slice(&approval.target),
+        store_canister: Some(api::canister_self()),
+        chunk_hashes_list: vec![chunk],
+        wasm_module_hash: approval.sha256.to_vec(),
+        arg: vec![],
+        sender_canister_version: None,
+    }
+    .encode(ARTIFACT_LIMITS.bytes)
     .expect("bounded management install request");
     JOURNAL.with_borrow_mut(|state| {
         state.phase = Phase::Issued;
@@ -250,8 +243,7 @@ async fn install_artifact() {
     .await;
     match result.map(|completion| completion.into_parts().0) {
         Ok(Outcome::Reply(reply)) => {
-            decoder::decode_args::<()>(&reply, MANAGEMENT_LIMITS, decoder::Arity::Exact)
-                .expect("install success reply");
+            mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS).expect("install success reply");
             JOURNAL.with_borrow_mut(|state| {
                 state.reply_retained = true;
                 state.phase = Phase::Installed;
@@ -283,12 +275,10 @@ async fn verify_target() {
         let approval = state.approval.as_ref().expect("retained approval");
         (Principal::from_slice(&approval.target), approval.sha256)
     });
-    let request = candid_codec::encode_one(
-        &CanisterIdRecord {
-            canister_id: target,
-        },
-        1024,
-    )
+    let request = CanisterArgs {
+        canister_id: target,
+    }
+    .encode(1024)
     .expect("status request");
     let reply = Call::new(
         ic_platform_types::Principal::management_canister(),
@@ -302,8 +292,8 @@ async fn verify_target() {
     let Outcome::Reply(reply) = reply.into_parts().0 else {
         api::trap("management observation refused")
     };
-    let observed: CanisterStatusResult =
-        decoder::decode_one(&reply, MANAGEMENT_LIMITS).expect("bounded management status");
+    let observed =
+        mgmt::decode_canister_status(&reply, MANAGEMENT_LIMITS).expect("bounded management status");
     assert_eq!(
         observed.module_hash.as_deref(),
         Some(expected.as_slice()),
@@ -311,7 +301,7 @@ async fn verify_target() {
     );
     assert_eq!(
         observed.settings.controllers,
-        vec![Principal::from_slice(api::canister_self().as_slice())],
+        vec![api::canister_self()],
         "sole executor controller required"
     );
     JOURNAL.with_borrow_mut(|state| {

@@ -1,6 +1,6 @@
 //! Application-owned, volatile test signer. No production key custody is claimed.
 use crate::{IssuerObservation, KEY, audience};
-use canic::auth::issuer::{Issue, Lookup, Refusal, Renew, Status};
+use canic::auth::issuer::{Issue, Logout, Lookup, Refusal, Renew, Revoked, Status};
 use ic_auth::{
     issuer_memory::{
         IssueRequest, IssuedProof, IssuerAuthority, IssuerConfig, IssuerError, IssuerPolicy,
@@ -43,8 +43,8 @@ pub(crate) fn init() {
                 IssuerConfig {
                     audience: audience(),
                     issuer: api::canister_self(),
-                    max_logins: 2,
-                    max_operations: 4,
+                    max_logins: if cfg!(feature = "profile") { 4 } else { 2 },
+                    max_operations: if cfg!(feature = "profile") { 8 } else { 4 },
                     max_operations_per_account: 4,
                     max_devices_per_account: 2,
                     max_result_bytes: 16384,
@@ -54,7 +54,13 @@ pub(crate) fn init() {
                 now,
             )
             .unwrap(),
-            account: Principal::self_authenticating(b"canic-auth-account"),
+            account: if cfg!(feature = "profile") {
+                ic_auth::verification::browser_principal(
+                    &SigningKey::from_bytes(&[8; 32]).verifying_key().to_bytes(),
+                )
+            } else {
+                Principal::self_authenticating(b"canic-auth-account")
+            },
             authority: IssuerAuthority {
                 signing: IssuerSigning::Ed25519,
                 generation: 1,
@@ -119,13 +125,23 @@ fn grants(
         })
         .collect()
 }
+fn known_account(s: &State, account: Principal) -> bool {
+    account == s.account
+        || (cfg!(feature = "profile")
+            && account
+                == ic_auth::verification::browser_principal(
+                    &SigningKey::from_bytes(&[10; 32]).verifying_key().to_bytes(),
+                ))
+}
 fn permit(s: &State, account: Principal, grants: &[DelegatedRoleGrant]) -> Result<(), Refusal> {
     if !s.allowed
-        || account != s.account
+        || !known_account(s, account)
         || grants.len() != 1
         || grants[0].target.as_str() != "user"
-        || grants[0].scopes.len() != 1
-        || grants[0].scopes[0].as_str() != "read"
+        || grants[0].scopes.is_empty()
+        || grants[0].scopes.iter().any(|scope| {
+            scope.as_str() != "read" && !(cfg!(feature = "profile") && scope.as_str() == "write")
+        })
     {
         return Err(Refusal::Denied);
     }
@@ -277,7 +293,7 @@ fn reconcile(caller: Principal, input: Lookup, _: u64) -> Result<Status, Refusal
                 epoch,
                 operation_id,
             } => {
-                if caller != s.account {
+                if !known_account(s, caller) {
                     return Err(Refusal::Denied);
                 }
                 s.engine
@@ -293,7 +309,31 @@ fn reconcile(caller: Principal, input: Lookup, _: u64) -> Result<Status, Refusal
         }
     })
 }
-canic::mount_auth_issuer_endpoints! { issue = super::issue, renew = super::renew, reconcile = super::reconcile }
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "the mounted handler owns its decoded request"
+)]
+fn logout(caller: Principal, input: Logout, now: u64) -> Result<Revoked, Refusal> {
+    STATE.with_borrow_mut(|state| {
+        let s = state.as_mut().ok_or(Refusal::Unavailable)?;
+        let login_deadline_ns = s
+            .engine
+            .revoke_browser(
+                caller,
+                input.account,
+                input.login_epoch,
+                input.login_id,
+                now,
+            )
+            .map_err(refused)?;
+        crate::canister::reply_fault::<{ canic::auth::issuer::LOGOUT }>(s.reply_fault);
+        Ok(Revoked { login_deadline_ns })
+    })
+}
+canic::mount_auth_issuer_endpoints! {
+    issue = super::issue, renew = super::renew, reconcile = super::reconcile,
+    logout = super::logout,
+}
 
 #[runtime::query(runtime = runtime, guard = lifecycle_guard, decode = crate::canister::decode_observe, max_bytes = 2097152, on_error = endpoint_error, name = "observe_issuer", encode = crate::canister::encode_observe::<IssuerObservation>)]
 fn observe_issuer((): ()) -> IssuerObservation {

@@ -4,7 +4,7 @@ use crate::{
     artifact, network::principal, operation, plan, signed, store, supplier,
 };
 use canic_management_protocol::publication::{self as wire, Command};
-use ic_platform::agent::Agent;
+use ic_platform::native::ReadClient;
 use ic_wasm_store_protocol as protocol;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -311,14 +311,14 @@ fn step_deadline(dir: &Path, plan: &Plan) -> Result<u64> {
     }
     Ok(deadline)
 }
-async fn verify_binding(agent: &Agent, plan: &Plan, publication: &Publication) -> Result<()> {
+async fn verify_binding(client: &ReadClient, plan: &Plan, publication: &Publication) -> Result<()> {
     for (target, controller) in [
         (&publication.root, &plan.controller),
         (&publication.store, &publication.root.canister),
     ] {
         let id = principal(&target.canister)?;
-        operation::controllers(agent, id, controller).await?;
-        if operation::module(agent, id).await? != target.module {
+        operation::controllers(client, id, controller).await?;
+        if operation::module(client, id).await? != target.module {
             return Err(Error::Blocked(
                 "publication Root/Store code differs from approval".into(),
             ));
@@ -332,14 +332,14 @@ async fn observe(
     expected: &protocol::Manifest,
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<(usize, Option<protocol::Status>)> {
     for index in 0..OBSERVATIONS {
         let path = dir.join(format!("publication/observe/{index}"));
         if path.join("reply.bin").try_exists().map_err(supplier)? {
             continue;
         }
-        let reply = signed::observe_operation(&path, plan, identity, icp, agent).await?;
+        let reply = signed::observe_operation(&path, plan, identity, icp, client).await?;
         return Ok((index, decode(&reply, expected)?));
     }
     Err(Error::Blocked(
@@ -357,9 +357,9 @@ pub(crate) async fn apply(
 ) -> Result<ApplyOutcome> {
     let digest = plan.digest()?;
     let digest = digest.as_str();
-    let agent = plan.network.agent()?;
+    let client = plan.network.client()?;
     removal::permit_publication(journal, plan)?;
-    verify_binding(&agent, plan, binding(plan)?).await?;
+    verify_binding(&client, plan, binding(plan)?).await?;
     let expected = manifest(plan, bytes)?;
     if let Some(receipt) = receipt(dir, plan, digest, &expected)? {
         return Ok(ApplyOutcome::Publication {
@@ -367,7 +367,7 @@ pub(crate) async fn apply(
         });
     }
     let (mut observation, mut status) =
-        observe(dir, plan, &expected, identity, icp, &agent).await?;
+        observe(dir, plan, &expected, identity, icp, &client).await?;
     let mut changed = false;
     if !read_only {
         for (index, step) in steps(&expected).iter().enumerate() {
@@ -378,7 +378,7 @@ pub(crate) async fn apply(
             let path = dir.join("publication").join(step);
             let deadline = step_deadline(&path, plan)?;
             let call = call(plan, command, deadline)?;
-            let reply = signed::execute(&path, plan, &call, identity, icp, &agent).await?;
+            let reply = signed::execute(&path, plan, &call, identity, icp, &client).await?;
             status = decode(&reply, &expected)?;
             changed = true;
             if !observed(status.as_ref(), index, expected.chunks.len()) {
@@ -389,7 +389,7 @@ pub(crate) async fn apply(
         }
     }
     if changed {
-        (observation, status) = observe(dir, plan, &expected, identity, icp, &agent).await?;
+        (observation, status) = observe(dir, plan, &expected, identity, icp, &client).await?;
     }
     let value = progress(plan, digest, observation, status)?;
     if value.status.as_ref().is_some_and(|s| s.published) {

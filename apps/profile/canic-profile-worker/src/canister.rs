@@ -1,4 +1,7 @@
-use crate::state::{MAX_PAGES, State};
+use crate::{
+    state::State,
+    storage::{self, MAX_PAGES},
+};
 use canic_profile_protocol::{GET, INFO, Info, LIMITS, MAX_PROFILES, PUT, ProfileResult, Put};
 use ic_platform_runtime::{self as runtime, system as api};
 use ic_storage::DefaultMemoryImpl;
@@ -8,12 +11,13 @@ thread_local! { static STATE: RefCell<Option<State<DefaultMemoryImpl>>> = const 
 
 #[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
 fn init((): ()) {
-    STATE.with_borrow_mut(|state| *state = Some(State::open(DefaultMemoryImpl::default(), true)));
+    STATE.with_borrow_mut(|state| *state = Some(storage::open(DefaultMemoryImpl::default(), true)));
 }
 
 #[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
 fn post_upgrade((): ()) {
-    STATE.with_borrow_mut(|state| *state = Some(State::open(DefaultMemoryImpl::default(), false)));
+    STATE
+        .with_borrow_mut(|state| *state = Some(storage::open(DefaultMemoryImpl::default(), false)));
     #[cfg(feature = "reject-upgrade")]
     api::trap("profile qualification: reject after restoration");
 }

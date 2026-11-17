@@ -1,10 +1,8 @@
 //! Public mainnet default-account observations; no signer or transfer authority.
-use crate::{Error, Network, Result, network, supplier};
-use ic_platform::{
-    agent::Agent,
-    candid_codec::{self, decoder},
-    icrc_ledger_types::Account,
-};
+use crate::{Error, Network, Result, supplier};
+use ic_platform::native::ReadClient;
+use ic_platform_protocol::{candid::Limits, ledger};
+use ic_platform_types::{Account, Principal};
 use serde::Serialize;
 use std::time::Duration;
 
@@ -13,12 +11,14 @@ mod tests;
 
 const ICP_LEDGER: &str = "ryjl3-tyaaa-aaaaa-aaaba-cai";
 const CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
-const LIMITS: decoder::Limits = decoder::Limits {
+const LIMITS: Limits = Limits {
     bytes: 1024,
     header: 256,
     types: 16,
     work: 4096,
     allocation: 4096,
+    vector: 1024,
+    skipping: 4096,
 };
 
 /// A mainnet wallet's default account, selected explicitly by its public principal.
@@ -54,15 +54,16 @@ pub struct WalletBalance {
 }
 
 fn account(principal: &str) -> Result<Account> {
-    let owner = network::principal(principal)?;
-    if owner == ic_platform::Principal::anonymous()
-        || owner == ic_platform::Principal::management_canister()
-    {
+    let owner: Principal = principal.parse().map_err(supplier)?;
+    if owner == Principal::anonymous() || owner == Principal::management_canister() {
         return Err(Error::Invalid(
             "wallet requires an owner other than anonymous or management".into(),
         ));
     }
-    Ok(Account::from(owner))
+    Ok(Account {
+        owner,
+        subaccount: None,
+    })
 }
 
 /// Derive the default ICP receive address locally, without accessing an identity or network.
@@ -71,14 +72,15 @@ fn account(principal: &str) -> Result<Account> {
 /// Refuses malformed, anonymous and management principals.
 pub fn wallet_address(principal: &str) -> Result<String> {
     let account = account(principal)?;
-    Ok(crate::hex(
-        &ic_platform::icp_ledger_types::account_identifier(account.owner, &[0; 32]),
-    ))
+    Ok(crate::hex(&ledger::icp_account_identifier(&account)))
 }
 
 fn amount(bytes: &[u8], decimals: u32, unit: &str) -> Result<(String, String)> {
-    let value: candid_codec::Nat = decoder::decode_one(bytes, LIMITS).map_err(Error::Decode)?;
-    let value: u128 = value.0.try_into().map_err(supplier)?;
+    let value = ledger::decode_amount(bytes, LIMITS).map_err(Error::Decode)?;
+    let value: u128 = value
+        .0
+        .try_into()
+        .map_err(|_| Error::Invalid("ledger amount exceeds the supported u128 range".into()))?;
     let scale = 10_u128.pow(decimals);
     Ok((
         value.to_string(),
@@ -117,19 +119,20 @@ fn report(
 }
 
 async fn balance(
-    agent: &Agent,
+    client: &ReadClient,
     ledger: &'static str,
     args: &[u8],
     decimals: u32,
     unit: &str,
 ) -> Result<WalletBalance> {
     let result = tokio::time::timeout(Duration::from_secs(5), async {
-        agent
-            .query(&ledger.parse().map_err(supplier)?, "icrc1_balance_of")
-            .with_arg(args)
-            .call()
-            .await
-            .map_err(supplier)
+        crate::network::query(
+            client,
+            ledger.parse().map_err(supplier)?,
+            "icrc1_balance_of",
+            args,
+        )
+        .await
     })
     .await
     .map_err(|_| Error::Blocked("wallet balance observation timed out".into()))
@@ -141,16 +144,16 @@ async fn balance(
 /// Uses the fixed IC trust root and anonymous queries; it never signs or updates.
 ///
 /// # Errors
-/// Refuses an invalid owner or local agent/clock failure. Provider failures remain
+/// Refuses an invalid owner or local client/clock failure. Provider failures remain
 /// explicit per-balance unknowns so the receive address and other balance survive.
 pub async fn wallet(principal: &str) -> Result<Wallet> {
     let account = account(principal)?;
     let icp_address = wallet_address(principal)?;
-    let args = candid_codec::encode_one(&account, 256).map_err(Error::Encode)?;
-    let agent = Network::Mainnet.agent()?;
+    let args = ledger::encode_balance_account(&account, 256).map_err(Error::Encode)?;
+    let client = Network::Mainnet.client()?;
     let (icp, cycles) = tokio::join!(
-        balance(&agent, ICP_LEDGER, &args, 8, "ICP"),
-        balance(&agent, CYCLES_LEDGER, &args, 12, "T cycles")
+        balance(&client, ICP_LEDGER, &args, 8, "ICP"),
+        balance(&client, CYCLES_LEDGER, &args, 12, "T cycles")
     );
     Ok(Wallet {
         principal: account.owner.to_text(),

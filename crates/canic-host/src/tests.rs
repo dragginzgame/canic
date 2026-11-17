@@ -33,6 +33,7 @@ fn network_binding_preserves_fleet_encoding_and_separates_trust_inputs() {
     let original = Network::Local {
         url: "http://localhost:8000".into(),
         root_key: "00".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     for network in [Network::Mainnet, original.clone()] {
@@ -45,16 +46,19 @@ fn network_binding_preserves_fleet_encoding_and_separates_trust_inputs() {
         Network::Local {
             url: "http://localhost:8000".into(),
             root_key: "01".repeat(133),
+            root_subnet: None,
             routing_canister: "aaaaa-aa".into(),
         },
         Network::Local {
             url: "http://localhost:8001".into(),
             root_key: "00".repeat(133),
+            root_subnet: None,
             routing_canister: "aaaaa-aa".into(),
         },
         Network::Local {
             url: "http://localhost:8000".into(),
             root_key: "00".repeat(133),
+            root_subnet: None,
             routing_canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         },
     ] {
@@ -125,6 +129,7 @@ fn local_network_cannot_disable_mainnet_trust() {
     let network = Network::Local {
         url: "https://icp-api.io/".into(),
         root_key: "00".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     assert!(matches!(network.validate(), Err(Error::Invalid(_))));
@@ -147,4 +152,13 @@ fn artifact_inspection_uses_store_capacity_without_expanding_direct_install_auth
     assert!(crate::inspect(&wasm).is_err());
     std::fs::write(&wasm, b"not wasm").unwrap();
     assert!(crate::inspect(&wasm).is_err());
+}
+pub(crate) fn wire_fixture(name: &str) -> Vec<u8> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/platform-0.33.7");
+    crate::unhex(
+        std::fs::read_to_string(dir.join(format!("{name}.hex")))
+            .unwrap()
+            .trim(),
+    )
+    .unwrap()
 }

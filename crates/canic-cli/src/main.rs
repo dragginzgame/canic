@@ -376,6 +376,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 if network.network.is_some()
                     || network.url.is_some()
                     || network.root_key.is_some()
+                    || network.root_subnet.is_some()
                     || network.routing_canister.is_some()
                     || root_module.is_some()
                 {
@@ -424,6 +425,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             } else {
                 if network.url.is_some()
                     || network.root_key.is_some()
+                    || network.root_subnet.is_some()
                     || network.routing_canister.is_some()
                 {
                     return Err(Error::Invalid("network options require --network".into()));

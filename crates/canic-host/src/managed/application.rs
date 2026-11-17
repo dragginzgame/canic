@@ -24,12 +24,12 @@ pub async fn activate(
         .ok_or_else(|| {
             Error::Invalid("activation requires the original Blob upgrade operation".into())
         })?;
-    let agent = plan.network.agent()?;
+    let client = plan.network.client()?;
     let child = plan
         .target()
         .ok_or_else(|| Error::Invalid("activation requires a child upgrade".into()))?;
     crate::auth::permit_upgrade(root, &plan)?;
-    let outcome = super::apply(&dir, digest, &plan, &wasm, identity, icp, &agent).await?;
+    let outcome = super::apply(&dir, digest, &plan, &wasm, identity, icp, &client).await?;
     if matches!(outcome, ApplyOutcome::Complete(_)) {
         return Ok(outcome);
     }
@@ -40,7 +40,7 @@ pub async fn activate(
     match maintenance.phase {
         MaintenancePhase::Active => return Ok(outcome),
         MaintenancePhase::ActivateIssued => {
-            return super::recovery::reconcile(&dir, digest, &plan, &wasm, identity, icp, &agent)
+            return super::recovery::reconcile(&dir, digest, &plan, &wasm, identity, icp, &client)
                 .await;
         }
         MaintenancePhase::Inspected => {}
@@ -49,15 +49,16 @@ pub async fn activate(
                 .into(),
         )),
     }
-    operation::controllers(&agent, principal(&owner.root)?, &plan.controller).await?;
-    operation::controllers(&agent, principal(child)?, &owner.root).await?;
-    if operation::module(&agent, principal(child)?).await? != plan.artifact.sha256 {
+    operation::controllers(&client, principal(&owner.root)?, &plan.controller).await?;
+    operation::controllers(&client, principal(child)?, &owner.root).await?;
+    if operation::module(&client, principal(child)?).await? != plan.artifact.sha256 {
         return Err(Error::Blocked(
             "child code changed before activation".into(),
         ));
     }
     let call = super::Method::ActivateUpgrade.call(&plan, &(), application::LIMITS)?;
-    let bytes = signed::execute(&dir.join("activate"), &plan, &call, identity, icp, &agent).await?;
+    let bytes =
+        signed::execute(&dir.join("activate"), &plan, &call, identity, icp, &client).await?;
     let result: std::result::Result<application::Maintenance, canic_management_protocol::Failure> =
         ic_wire::decode(
             &bytes,
@@ -85,5 +86,5 @@ pub async fn activate(
             "activation reply changed the approved maintenance custody".into(),
         ));
     }
-    super::apply(&dir, digest, &plan, &wasm, identity, icp, &agent).await
+    super::apply(&dir, digest, &plan, &wasm, identity, icp, &client).await
 }

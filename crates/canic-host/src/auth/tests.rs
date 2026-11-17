@@ -13,6 +13,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
             network: Network::Local {
                 url: "http://localhost:8000/".into(),
                 root_key: "00".repeat(133),
+                root_subnet: None,
                 routing_canister: "aaaaa-aa".into(),
             },
             journal: None,
@@ -144,8 +145,13 @@ fn auth_approval_keeps_original_authority_and_rejects_conflicting_configuration(
 #[test]
 fn auth_receipts_require_exact_retained_call_and_revocation_does_not_consume_mutable_config() {
     let (dir, mut selected) = fixture();
-    let (id, plan) =
-        create_auth_plan(&dir, &dir.join("canic.json"), &selected, "2vxsx-fae").unwrap();
+    let (id, plan) = create_auth_plan(
+        &dir,
+        &dir.join("canic.json"),
+        &selected,
+        &crate::signed::tests::controller(),
+    )
+    .unwrap();
     let path = retained_reply(&dir, &plan);
     assert!(execution::receipt(&dir.join(&id), &plan).unwrap().is_some());
     selected.config.auth.as_mut().unwrap().issuer = "ryjl3-tyaaa-aaaaa-aaaba-cai".into();

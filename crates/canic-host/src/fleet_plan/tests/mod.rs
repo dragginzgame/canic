@@ -286,7 +286,6 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
 #[test]
 fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority() {
     use canic_management_protocol::{LIMITS, Phase, STATUS, Status};
-    use ic_platform::{candid_codec, cycles_ledger_types as ledger, principal::Principal};
     let (dir, selected) = fixture();
     let (id, fleet) = create(&dir, &selected).unwrap();
     let journal = dir.join("journal");
@@ -298,13 +297,9 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
         controller: fleet.root.controller.clone(),
     };
     std::fs::create_dir(path.join("root/create")).unwrap();
-    let result: ledger::CreateCanisterResult = Ok(ledger::CreateCanisterSuccess {
-        block_id: 1_u64.into(),
-        canister_id: Principal::from_text(&root.canister).unwrap(),
-    });
     store::put(
         &path.join("root/create/reply.bin"),
-        &candid_codec::encode_one(&result, 4096).unwrap(),
+        &crate::tests::wire_fixture("created"),
     )
     .unwrap();
     store::put_json(&path.join("root/receipt.json"), &root).unwrap();
@@ -490,6 +485,7 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
     changed.config.network = Network::Local {
         url: "http://localhost:8000".into(),
         root_key: "00".repeat(133),
+        root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
     };
     assert!(create(&dir, &changed).is_err());

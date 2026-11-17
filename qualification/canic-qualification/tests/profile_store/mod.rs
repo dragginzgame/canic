@@ -223,7 +223,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
             "store":{"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")},
             "worker":{"role":"worker","parent":"root","wasm":assets.join("profile-worker.wasm")}
         },
-        "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":key,"routing_canister":routing.to_text()},"canisters":{}}}
+        "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":key,"root_subnet":pic.topology().await.get_nns().unwrap().to_text(),"routing_canister":routing.to_text()},"canisters":{}}}
     }}});
     std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
     let plan = || cli(&config, &["fleet", "plan", "--controller", &controller]);

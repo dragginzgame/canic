@@ -1,0 +1,24 @@
+{
+  "name": "@dragginzgame/canic-auth-client",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./src/issuer.ts",
+  "engines": {
+    "node": ">=24.21.0 <25"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "npm run check && esbuild tests/issuer.test.ts --bundle --platform=node --format=esm --outfile=dist/issuer.test.mjs && node --test --test-isolation=none --test-reporter=tap dist/issuer.test.mjs"
+  },
+  "dependencies": {
+    "@dragginzgame/ic-auth-client": "file:../../../target/auth-browser/ic-auth-client.tgz",
+    "@tokostudios/ic-platform": "0.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "esbuild": "0.28.2",
+    "playwright-core": "1.65.1",
+    "typescript": "7.0.2"
+  }
+}

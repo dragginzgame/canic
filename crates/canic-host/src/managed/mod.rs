@@ -11,7 +11,7 @@ use crate::{
 };
 pub use application::activate;
 use canic_management_protocol::{Approval, LIMITS, Phase, Refusal, STAGE_LIMITS, Stage, Status};
-use ic_platform::agent::Agent;
+use ic_platform::native::ReadClient;
 use std::path::Path;
 
 pub(crate) mod recovery;
@@ -355,18 +355,18 @@ pub(crate) async fn apply(
     wasm: &[u8],
     identity: &str,
     icp: &Path,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<ApplyOutcome> {
     let owner = match &plan.action {
         crate::PlanAction::CreateChild(owner) => owner,
         crate::PlanAction::UpgradeChild { .. } => {
-            return upgrade::apply(dir, id, plan, wasm, identity, icp, agent).await;
+            return upgrade::apply(dir, id, plan, wasm, identity, icp, client).await;
         }
         _ => return Err(Error::Invalid("expected Root-owned child operation".into())),
     };
     let root = principal(&owner.root)?;
-    operation::controllers(agent, root, &plan.controller).await?;
-    if operation::module(agent, root).await? != owner.root_module {
+    operation::controllers(client, root, &plan.controller).await?;
+    if operation::module(client, root).await? != owner.root_module {
         return Err(Error::Blocked(
             "Root code differs from the reviewed management owner".into(),
         ));
@@ -375,9 +375,9 @@ pub(crate) async fn apply(
     if let Some(status) = &retained
         && status.phase == Phase::Ready
     {
-        return finish(dir, id, plan, status, agent).await;
+        return finish(dir, id, plan, status, client).await;
     }
-    stored::verify(plan, agent).await?;
+    stored::verify(plan, client).await?;
     let stage = dir.join("stage");
     let status = if !stage.join("signed.json").try_exists().map_err(supplier)? {
         if crate::now()?
@@ -389,7 +389,15 @@ pub(crate) async fn apply(
         }
         stage_reply(
             plan,
-            &signed::execute(&stage, plan, &stage_call(plan, wasm)?, identity, icp, agent).await?,
+            &signed::execute(
+                &stage,
+                plan,
+                &stage_call(plan, wasm)?,
+                identity,
+                icp,
+                client,
+            )
+            .await?,
         )?
     } else {
         // A replicated read can recover admission even when the staging response was lost.
@@ -408,14 +416,21 @@ pub(crate) async fn apply(
         })?;
         let call = observation(plan)?;
         recovery::require_settled(&path)?;
-        let bytes = signed::observe(&path, plan, &call, identity, icp, agent).await?;
+        let bytes = signed::observe(&path, plan, &call, identity, icp, client).await?;
         let observed = decode_observation(plan, Method::Observe.id(plan), &bytes)?;
         if observed.phase == Phase::Empty && observed.approval.is_none() && retained.is_none() {
             // Empty is not proof the original staging attempt cannot still execute.
             stage_reply(
                 plan,
-                &signed::execute(&stage, plan, &stage_call(plan, wasm)?, identity, icp, agent)
-                    .await?,
+                &signed::execute(
+                    &stage,
+                    plan,
+                    &stage_call(plan, wasm)?,
+                    identity,
+                    icp,
+                    client,
+                )
+                .await?,
             )?
         } else {
             observed
@@ -423,7 +438,7 @@ pub(crate) async fn apply(
     };
     validate(plan, retained.as_ref(), &status)?;
     if status.phase == Phase::Ready {
-        finish(dir, id, plan, &status, agent).await
+        finish(dir, id, plan, &status, client).await
     } else {
         Ok(ApplyOutcome::Pending {
             operation: id.into(),
@@ -438,13 +453,13 @@ async fn finish(
     id: &str,
     plan: &Plan,
     status: &Status,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<ApplyOutcome> {
     let child = status
         .worker
         .as_ref()
         .ok_or_else(|| Error::Invalid("ready evidence has no child".into()))?;
-    complete(dir, id, plan, child, agent).await
+    complete(dir, id, plan, child, client).await
 }
 
 async fn complete(
@@ -452,7 +467,7 @@ async fn complete(
     id: &str,
     plan: &Plan,
     child: &str,
-    agent: &Agent,
+    client: &ReadClient,
 ) -> Result<ApplyOutcome> {
     let receipt = Receipt {
         operation: id.into(),
@@ -460,7 +475,7 @@ async fn complete(
         module_hash: plan.artifact.sha256.clone(),
         controller: plan.application_controller().into(),
     };
-    operation::verify_receipt(agent, plan, id, &receipt).await?;
+    operation::verify_receipt(client, plan, id, &receipt).await?;
     if dir.join("receipt.json").try_exists().map_err(supplier)? {
         if store::json::<Receipt>(&dir.join("receipt.json"))? != receipt {
             return Err(Error::Invalid(
