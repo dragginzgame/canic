@@ -34,72 +34,95 @@ Run `make store-test` for these and the other installed Store cases.
 
 ### Provision an account on its assigned shard
 
-Put each row declaration in the role’s `lib.rs`, alongside `mount_db_role!`.
-Use `canic/db-store` on both targets and select `canic/provisioning` for Wasm.
-The shared protocol supplies `sharding` and `method` on both targets. Native
-builds check the schema, ID codec and payload mappings, including the app’s
-validation function. Only Wasm resolves the store accessor and hub ID generator.
+For an IC DB hub and shard with the conventional account schema, put one
+`mount_provisioning!` in each crate’s `lib.rs`. Select `db-store`, `method`
+and `sharding` on native and Wasm (the shared protocol can enable the last
+two). Select `provisioning` for the installed actors.
 
-In the shared
-protocol crate, `canic/sharding` and `canic/method` expose the passive
-`Resource`, `Provision`, request, receipt and progress types. The application
-selects its ID representation, name validation, Wire budgets and existing
-placement key namespace. For the Toko consumer the shared declaration is:
+The shared application protocol keeps its published Wire method, budget and
+placement namespace. It validates incoming data and exports the stored payload
+through ordinary Rust functions that both roles use.
 
 ```rust
-use canic::sharding::provisioning::Resource;
+use canic::sharding::provisioning::{ProvisioningPayload, Resource};
 
 pub struct Users;
 
 impl Resource for Users {
-    type Id = [u8; 16]; // Toko's existing ULID in network byte order
+    type Id = [u8; 16];
     type Data = String;
     const METHOD: &'static str = "provision_user";
     const DOMAIN: &'static [u8] = b"toko.user.placement.v1";
     const LIMITS: ic_wire::Limits = super::signup::LIMITS;
 }
+
+impl ProvisioningPayload for Users {
+    type Stored = super::DisplayName;
+    fn normalize(input: String) -> Self::Stored {
+        super::display_name(&input).unwrap_or_else(|error| panic!("{error:?}"))
+    }
+    fn export(value: &Self::Stored) -> String { value.0.clone() }
+}
 ```
 
-In the hub, keep the existing `UserRoute` schema, including its unique
-`issuer,subject` index. Bind the compiled entity to the same store and call
-the helper from the existing authenticated update. Toko's `new_id` returns
-a candidate ULID; `initial` validates the input and returns a `DisplayName` or traps.
+The hub declares its private row and pending/ready enum. The generated
+`register` endpoint uses the same write scope at ingress and after suspension.
+It obtains a candidate from IC DB’s synchronous `Ulid::generate_prand`. For a
+different issuance policy, supply `generator = path::to_function` with signature
+`fn() -> ic_db::Ulid`. The 16-byte Wire representation stays the same.
 
 ```rust
-use canic::sharding::provisioning::{Progress, provision};
-
-canic::declare_provisioning_row! {
-    hub crate::schema::UserRoute, resource = Users, store = crate::database::store::with,
-    id = (Ulid::to_bytes, Ulid::from_bytes, new_id), scope = "write",
-    payload = display_name: DisplayName, validate = initial,
-    export = |name: &DisplayName| name.0.clone(),
-    status = (Status::Pending, Status::Ready),
-}
-
-#[canic::update(scope = "write", limits = LIMITS)]
-async fn register(session: SessionView, name: String) -> Progress {
-    provision::<UserRoute>(&session, name).await
+canic::mount_provisioning! {
+    canic::sharding::provisioning::ProvisioningRole::Hub, schema::UserRoute => toko::user::provisioning::Users,
+    database = "toko.user.hub.principal.v1", config = "toko.user.hub.config.v1",
+    authority = "toko", pages = 65536, payload = display_name, status = toko::user::Status,
 }
 ```
 
-In the shard, bind the existing private table to the same resource. The
-installed parent is checked before decoding. The synchronous handler checks
-the actual shard and returns the original binding on replay. Other private
-profile queries and changes remain ordinary application endpoints.
+The shard exports the parent-only `provision_user` endpoint and validates
+every request before returning a receipt, including retries after a profile edit.
 
 ```rust
-use canic::sharding::provisioning::{Binding, Provision, Request, receive};
-
-canic::declare_provisioning_row! {
-    shard crate::schema::User, resource = Users, store = crate::database::store::with,
-    id = (Ulid::to_bytes, Ulid::from_bytes), payload = display_name, validate = initial,
-}
-
-#[canic::update(contract = Provision<Users>, guard = canic::topology::require_parent)]
-fn provision_user(request: Request<[u8; 16], String>) -> Binding<[u8; 16]> {
-    receive::<User>(request)
+canic::mount_provisioning! {
+    canic::sharding::provisioning::ProvisioningRole::Shard, schema::User => toko::user::provisioning::Users,
+    authority = "user_shard", payload = display_name, prefix = "toko.user.shard.",
+    database = "toko.user.shard.user.v1",
 }
 ```
+
+The first argument is a Rust value of type `ProvisioningRole`. Importing or
+aliasing `Hub` or `Shard` works. Rust rejects a string or a variant that
+disagrees with the declared layout. `canic app build` supplies the selected
+canister’s optional `role` from `canic.toml`. The generated `APPLICATION_ROLE`
+contains that name; for a standalone build, `role_name = MY_ROLE` can provide
+an application string constant. With neither source the name is `None`.
+`PROVISIONING_ROLE` identifies the behavior. Naming grants no authority and
+does not participate in allocation key or Auth role selection.
+
+The [consumer fixture](fixtures/provisioning-roles/canic.toml) builds one Toko
+hub package twice with roles `user_hub` and `project_hub`, and a shard with the
+Rust name `account_archive`. In an isolated Toko checkout using the shared
+resource above and the generated provisioning endpoints, copy the fixture’s
+`hub.rs` and `shard.rs` over the two role crates’ `src/lib.rs`, its TOML to
+`apps/toko/roles.toml`, and its `roles.rs` into the qualification test directory.
+With the candidate CLI and prepared Testkit server, run:
+
+```sh
+canic app build --app roles --config apps/toko/roles.toml
+cargo test --locked --manifest-path qualification/Cargo.toml --test roles
+```
+
+Options can appear in any order. `endpoint` takes a Rust identifier and the
+shard export must match the shared method. `read_scope` defaults to `"read"`;
+the hub’s `write_scope` defaults to `"write"`. Enrollment remains a fleet
+operation. The hub prefix defaults to its explicit authority followed by a dot.
+The shard parent key defaults to its explicit prefix followed by `hub.v1`;
+`parent_storage_key` preserves a different retained name. Shard pages default
+to Storage’s existing layout. Preserve the original page budget when specifying
+`pages`. Keep other application endpoints in their existing modules. Remove the
+two generated endpoint handlers and their old mounts on adoption to avoid
+duplicate IC exports. Custom layouts can implement `Record`, `HubRoute` and
+`ShardRecord` directly.
 
 The named fields in this adapter cover the two qualified IC DB layouts. Its
 indexed lookup reads one row within 1 KiB. Preserve the same database schema,

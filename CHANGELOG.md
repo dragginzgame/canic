@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.229.0] - 2026-11-18
+
+### ✨ Added
+
+`canic::mount_provisioning!` mounts a conventional ULID hub or shard from one
+declaration. The app keeps its private rows, validation and retained storage
+layout. A typed `ProvisioningRole` selects behavior. App builds supply the
+configured role name and standalone builds can use a Rust constant.
+The shard validates retries before acknowledging an existing record.
+[Complete hub and shard declarations](qualification/README.md#provision-an-account-on-its-assigned-shard)
+
+From a consumer app directory using this revision, build the two declared actors:
+
+```sh
+canic app build --canister user_hub
+canic app build --canister user_shard
+```
+
+### 🔧 Changed
+
+The Host and endpoint macros use Syn 3.0.10, already selected in both workspaces.
+
 ## [0.228.0] - 2026-11-18
 
 ### 🔧 Changed

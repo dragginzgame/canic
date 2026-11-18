@@ -72,12 +72,13 @@ pub(super) fn accept<E: ShardRecord>(db: &mut Database, request: Ticket<E>) -> b
         let (account, id) = row.identity();
         account == binding.account && id == binding.id
     };
-    if let Some(row) = find::<E>(db, binding.account) {
-        return matches(&row);
-    }
+    // Validate the submitted payload even when acknowledging an earlier insert.
     let row = E::create(request);
     if !matches(&row) {
         return false;
+    }
+    if let Some(existing) = find::<E>(db, binding.account) {
+        return matches(&existing);
     }
     insert(db, &row);
     true

@@ -104,7 +104,7 @@ macro_rules! declare_db_store {
 #[macro_export]
 macro_rules! mount_db_role {
     (hub, database = $key:literal, config = $config:literal, authority = $owner:literal,
-     pages = $pages:literal, auth_read = $scope:literal $(,)?) => {
+     $(prefix = $prefix:literal,)? pages = $pages:literal, auth_read = $scope:literal $(,)?) => {
         $crate::declare_db_store!(pub mod database, key = $key);
         #[cfg(target_arch = "wasm32")]
         mod actor {
@@ -116,7 +116,7 @@ macro_rules! mount_db_role {
             );
 
             fn open(initial: Option<role::HubConfig>) {
-                role::open_hub(initial, $owner, $key, $config, $pages, super::database::store::attach);
+                role::open_hub(initial, $owner, $crate::mount_db_role!(@prefix $owner $(, $prefix)?), $key, $config, $pages, super::database::store::attach);
             }
 
             $crate::mount_auth_session!(read = $scope);
@@ -125,18 +125,19 @@ macro_rules! mount_db_role {
         }
     };
     (shard, database = $key:literal, authority = $owner:literal,
-     prefix = $prefix:literal, auth_read = $scope:literal $(,)?) => {
+     prefix = $prefix:literal, $(pages = $pages:literal,)? auth_read = $scope:literal $(,)?) => {
         $crate::mount_db_role!(
             shard,
             database = $key,
             parent_storage_key = concat!($prefix, "hub.v1"),
             authority = $owner,
             prefix = $prefix,
+            $(pages = $pages,)?
             auth_read = $scope
         );
     };
     (shard, database = $key:literal, parent_storage_key = $parent:expr, authority = $owner:literal,
-     prefix = $prefix:literal, auth_read = $scope:literal $(,)?) => {
+     prefix = $prefix:literal, $(pages = $pages:literal,)? auth_read = $scope:literal $(,)?) => {
         $crate::declare_db_store!(pub mod database, key = $key);
         #[cfg(target_arch = "wasm32")]
         mod actor {
@@ -149,7 +150,7 @@ macro_rules! mount_db_role {
 
             fn open(initial: Option<role::ShardConfig>) {
                 const PARENT_STORAGE_KEY: &str = $parent;
-                role::open_shard(initial, $owner, $prefix, $key, PARENT_STORAGE_KEY, super::database::store::attach);
+                role::open_shard(initial, $owner, $prefix, $key, PARENT_STORAGE_KEY, $crate::mount_db_role!(@pages $($pages)?), super::database::store::attach);
             }
 
             $crate::mount_auth_session!(read = $scope);
@@ -157,4 +158,8 @@ macro_rules! mount_db_role {
             $crate::mount_readiness_endpoint!($crate::db::role::shard_readiness);
         }
     };
+    (@prefix $owner:literal) => { concat!($owner, ".") };
+    (@prefix $owner:literal, $prefix:literal) => { $prefix };
+    (@pages) => { None };
+    (@pages $pages:literal) => { Some($pages) };
 }

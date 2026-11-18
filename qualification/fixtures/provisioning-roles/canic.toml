@@ -1,0 +1,13 @@
+[apps.roles.canisters.directory]
+role = "user_hub"
+wasm = "artifacts/users.wasm"
+build = { manifest = "../../Cargo.toml", package = "user_hub" }
+
+[apps.roles.canisters.projects]
+role = "project_hub"
+wasm = "artifacts/projects.wasm"
+build = { manifest = "../../Cargo.toml", package = "user_hub" }
+
+[apps.roles.canisters.archive]
+wasm = "artifacts/archive.wasm"
+build = { manifest = "../../Cargo.toml", package = "user_shard" }

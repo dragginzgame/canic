@@ -7,6 +7,33 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Conventional provisioning mount — 2026-11-18
+
+The role-name extension used the same hub package for `user_hub` and
+`project_hub`, with an imported alias for `ProvisioningRole::Hub`. The ordinary
+app builder produced both artifacts from the configured roles. The installed
+fixture read both names, upgraded between them, and compared the full stable
+image and database key. A child using `ProvisioningRole::Shard` read its
+standalone Rust name `account_archive`. Replacing the behavior with `"hub"`
+failed with E0308; selecting Shard for the hub layout failed with E0080.
+
+An isolated Toko working tree at base `bdc2bed7857b` used a single mount in
+each role. The shared resource validated and exported the display name. The hub
+and shard used their existing keys, owners, placement domain and Wire limits.
+Seven native account tests, native and Wasm Clippy, and both release Wasm builds
+passed. A Wasm build also checked an app-owned synchronous ULID generator with
+a custom registration scope.
+
+The installed `signup` and `user_shard` tests passed twice, with fresh actors
+and with `TOKO_PREDECESSOR_FLEET_DIR` selecting Toko’s existing binaries.
+Predecessor SHA-256 was
+`ea5e29e5b47cd655932276d105fff996ee0b94295d93c38fe2a65e4c53a73aad` (hub)
+and `6741e3da61e0708b36a844e2e44d5c3188a3133dffe619862be6ec732378168e` (shard).
+Restoring the pending hub after shard commit simulated a lost receipt. The retry
+confirmed the original route and left the shard bytes intact. The installed
+shard rejected invalid replay data. The separate live II browser case stayed
+outside this run. No supplier or active Toko source changed.
+
 ## Native provisioning declarations — 2026-11-18
 
 An isolated copy of Toko’s working tree at `bdc2bed` used the local Canic

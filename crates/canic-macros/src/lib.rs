@@ -1,5 +1,7 @@
 //! Application endpoint attributes, re-exported by Canic.
 
+mod provisioning;
+
 #[cfg(test)]
 mod tests;
 
@@ -178,4 +180,12 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             }
         };
     })
+}
+
+/// Mount a conventional account provisioning hub or shard with its explicit retained layout.
+#[proc_macro]
+pub fn mount_provisioning(input: TokenStream) -> TokenStream {
+    provisioning::expand(input.into())
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
 }

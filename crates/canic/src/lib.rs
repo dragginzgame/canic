@@ -28,6 +28,9 @@ pub mod lifecycle;
 #[cfg(feature = "method")]
 pub mod method;
 
+#[cfg(all(feature = "method", feature = "db-store", feature = "sharding"))]
+pub use canic_macros::mount_provisioning;
+
 #[cfg(all(feature = "method", target_arch = "wasm32"))]
 pub use canic_macros::{query, update};
 

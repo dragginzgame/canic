@@ -94,17 +94,23 @@ fn incarnation(key: &str, nonce: [u8; 16]) -> [u8; 16] {
 pub fn open_hub(
     initial: Option<HubConfig>,
     authority: &str,
+    prefix: &str,
     key: &str,
     config_key: &str,
     pages: u64,
     attach: Attach,
 ) {
-    let host = storage::bootstrap(
+    let host = storage::bootstrap_with_prefix(
         DefaultMemoryImpl::default(),
         initial.is_some(),
         authority,
+        prefix,
         &[config_key, key],
-        pages,
+        StorageConfig {
+            allocations: 2,
+            pages,
+            ..Default::default()
+        },
     );
     let bytes = initial.as_ref().map(|config| {
         ic_wire::encode(config, ic_wire::Encoding::Payload, CONFIG_LIMITS)
@@ -147,15 +153,20 @@ pub fn open_shard(
     prefix: &str,
     key: &str,
     parent_key: &str,
+    pages: Option<u64>,
     attach: Attach,
 ) {
+    let mut config = StorageConfig::default();
+    if let Some(pages) = pages {
+        config.pages = pages;
+    }
     let host = storage::bootstrap_with_prefix(
         DefaultMemoryImpl::default(),
         initial.is_some(),
         authority,
         prefix,
         &[key, parent_key],
-        StorageConfig::default(),
+        config,
     );
     topology::attach_parent(&host, parent_key, initial.as_ref().map(|i| &i.binding));
     attach(&host, initial.map(|i| incarnation(key, i.nonce)));

@@ -147,6 +147,16 @@ pub fn build_report(
     features: &[String],
     destination: Option<&Path>,
 ) -> Result<BuildReport> {
+    build_for_role(manifest, package, features, destination, None)
+}
+
+pub(crate) fn build_for_role(
+    manifest: &Path,
+    package: &str,
+    features: &[String],
+    destination: Option<&Path>,
+    role: Option<&str>,
+) -> Result<BuildReport> {
     let workspace_manifest = manifest.canonicalize().map_err(supplier)?;
     let workspace = workspace_manifest
         .parent()
@@ -238,6 +248,12 @@ pub fn build_report(
         .arg("--target-dir")
         .arg(private.path())
         .env("CARGO_BUILD_BUILD_DIR", cache);
+    let role_input = format!("CANIC_APP_ROLE_{package}");
+    if let Some(name) = role {
+        command.env(role_input, name);
+    } else {
+        command.env_remove(role_input);
+    }
     if !features.is_empty() {
         command.arg("--features").arg(features.join(","));
     }

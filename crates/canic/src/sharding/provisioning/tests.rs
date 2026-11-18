@@ -55,9 +55,14 @@ crate::declare_provisioning_row! {
     payload = name: String, validate = identity, export = String::clone, status = (PENDING, READY)
 }
 
+fn valid_name(name: String) -> String {
+    assert!(!name.is_empty());
+    name
+}
+
 crate::declare_provisioning_row! {
     shard self::User, resource = Users, store = crate::database::store::with,
-    id = (identity, identity), payload = name, validate = identity
+    id = (identity, identity), payload = name, validate = valid_name
 }
 
 #[test]
@@ -114,6 +119,9 @@ fn racing_id_and_lost_receipt_reopen_the_original_reservation() {
         assert!(accept::<User>(db, ticket(&winner)));
         confirm::<Route>(db, &binding);
         confirm::<Route>(db, &binding);
+        let mut invalid_replay = ticket(&winner);
+        invalid_replay.data.clear();
+        assert!(catch_unwind(AssertUnwindSafe(|| accept::<User>(db, invalid_replay))).is_err());
         assert!(db.get::<Route>(19).unwrap().unwrap().ready());
         assert_eq!(db.get::<User>(19).unwrap().unwrap().name, "Ada");
         assert!(db.get::<User>(20).unwrap().is_none());

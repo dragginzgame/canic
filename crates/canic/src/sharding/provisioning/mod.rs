@@ -44,6 +44,25 @@ fn placement_key<R: Resource>(account: Account) -> super::Key {
     digest.finalize().into()
 }
 
+/// Behavior selected by an application mount, independently of its role name.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ProvisioningRole {
+    /// Reserve, route and confirm accounts.
+    Hub,
+    /// Validate and store an account for the configured parent.
+    Shard,
+}
+
+/// Conventional ULID resource with a validated application-owned payload.
+pub trait ProvisioningPayload: Resource<Id = [u8; 16]> {
+    /// Value stored in the existing application schema.
+    type Stored;
+    /// Normalize the incoming payload or reject it before mutation.
+    fn normalize(input: Self::Data) -> Self::Stored;
+    /// Reconstruct the Wire payload from the retained hub reservation.
+    fn export(value: &Self::Stored) -> Self::Data;
+}
+
 /// The app selects its wire ID, initial payload, method name and key namespace.
 pub trait Resource {
     /// App-owned stable ID in its Wire representation.

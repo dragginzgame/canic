@@ -92,7 +92,7 @@ pub fn build_app(
         {
             return Err(Error::Invalid("app build outputs must be distinct".into()));
         }
-        recipes.push((name, recipe, manifest, output));
+        recipes.push((name, canister.role.as_deref(), recipe, manifest, output));
     }
     // Check the complete app, including recipes not selected for this build.
     // Missing lockfiles are inputs too: Cargo may create them below.
@@ -102,7 +102,7 @@ pub fn build_app(
         ));
     }
     let mut built = Vec::new();
-    for (name, recipe, manifest, output) in recipes {
+    for (name, role, recipe, manifest, output) in recipes {
         if canister.is_some_and(|selected| selected != name) {
             continue;
         }
@@ -126,7 +126,7 @@ pub fn build_app(
             .map_err(crate::artifact::cargo_failure)?;
         }
         let crate::artifact::BuildReport { wasm, artifact } =
-            crate::artifact::build_report(&manifest, &recipe.package, &[], Some(&output))?;
+            crate::artifact::build_for_role(&manifest, &recipe.package, &[], Some(&output), role)?;
         let client = recipe
             .client
             .as_ref()
