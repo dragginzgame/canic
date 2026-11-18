@@ -399,12 +399,13 @@ and upgrades of both owners staying closed. Native contract cases cover forged
 bindings, stale/expired/conflicting replies and terminal revocation. It provides
 no durable session preservation or complete Fleet login qualification.
 
-The production engine remains supplier-owned and standalone. Remaining scopes:
+Canic's installed volatile Ed25519 qualification covers the issuer lifecycle in
+[#10](https://github.com/dragginzgame/canic/issues/10) and the profile browser
+journey in [#11](https://github.com/dragginzgame/canic/issues/11). Two accounts
+can recover independently after choosing the same issuance operation ID. The
+receiver also returns the original receipt when a renderer loses the admission
+reply and reopens its journal. See the [runnable qualification](../../qualification/README.md)
+for enrollment, recovery, device replacement, logout and upgrade coverage.
 
-- [#10 — Auth issuance, renewal and reconciliation](https://github.com/dragginzgame/canic/issues/10).
-- [#11 — Installed profile/browser Auth journey](https://github.com/dragginzgame/canic/issues/11).
-
-Certified proof mounting, durable Auth state and managed recovery are not
-established by this witness. The CLI supports grant configuration and revocation
-through the existing fleet journal. Issuer mounts and the installed profile/browser
-slice exist; issuer CLI commands and the remaining browser acceptance cases are pending.
+Production key custody, certified proofs, durable Auth recovery and Toko's
+Internet Identity sign-in require separate qualification.
