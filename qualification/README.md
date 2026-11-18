@@ -979,6 +979,33 @@ the application. Mounting adds no initialization or lifecycle hooks.
 
 ### Retained application store
 
+For an Auth-enrolled hub or shard, place a single declaration in `src/setup.rs`.
+The role's build script still calls IC DB's `build_schema!(src::schema)`.
+Use `canic/db-store` in native dependencies and add `canic/stateful-role` in
+the Wasm dependency. A role can expose its generated schema to native consumers
+with `pub use setup::database;` in `lib.rs`.
+
+```rust
+canic::mount_db_role! {
+    shard, database = "toko.user.shard.user.v1",
+    parent = "toko.user.shard.hub.v1",
+    authority = "user_shard", prefix = "toko.user.shard.", auth_read = "read",
+}
+```
+
+The hub selects `hub, database = "...", config = "...", authority = "toko",
+pages = 65536, auth_read = "read"` and obtains its retained routing Root from
+`canic::db::role::root()`. The shard uses `canic::topology::require_parent` to
+authorize a parent-only method. Both mounts own their install/upgrade hooks,
+the standard Auth endpoints and a read-only readiness report. Readiness means
+the declared stores opened. Auth admission is independent and stays closed
+after volatile loss. Role selection grants no management authority.
+
+For a generated schema with an application-owned lifecycle,
+`canic::declare_db_store!(pub mod database, key = "app.items.v1");` exposes
+`database::SCHEMA` and `database::DATABASE_KEY` natively and
+`database::store::{attach, with}` on Wasm.
+
 Enable `canic/db-store` in a stateful actor and pass the generated schema function
 directly. A Toko shard can declare its existing allocation:
 

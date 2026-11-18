@@ -6,6 +6,10 @@
 #[cfg(feature = "db-store")]
 pub mod store;
 
+/// Auth-enrolled stateful hub and shard lifecycle.
+#[cfg(all(feature = "stateful-role", target_arch = "wasm32"))]
+pub mod role;
+
 /// Passive bounded inspection contract, usable independently of the database engine.
 pub mod inspection;
 /// Optional projection of compiled DB metadata; application authorization stays external.

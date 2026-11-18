@@ -70,7 +70,7 @@ This is the fresh Canic rewrite. The predecessor is maintained separately as
 [canic-legacy](https://github.com/dragginzgame/canic-legacy).
 
 The rewrite uses versions **0.200.0 and later**, above the legacy crates.io release line.
-The six product crates under `crates/` are licensed under the
+The product crates under `crates/` are licensed under the
 [Toko Studios Network Licence](LICENSE.md) and selected for crates.io publication.
 Demo and qualification packages are private.
 

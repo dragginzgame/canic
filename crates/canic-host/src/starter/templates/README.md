@@ -8,6 +8,11 @@ canic app build --canister app
 canic artifact inspect artifacts/app.wasm
 ```
 
+Keep callable methods under `starter-app/src/endpoints/` and local entities under
+`starter-app/src/schema/`. Put handwritten install/upgrade hooks in `src/lifecycle.rs`
+within the crate, or a declarative database role in `src/setup.rs`. Each crate can
+override `endpoints`, `schema` or `lifecycle` in `[package.metadata.canic.layout]`.
+
 This stateless app reports `Ready` immediately. If you add persistent state,
 update the readiness handler to report when the app can serve requests.
 

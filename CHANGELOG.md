@@ -1,12 +1,33 @@
 # Changelog
 
-## [0.225.1] - Unreleased
+## [0.226.0] - 2026-11-18
+
+### ✨ Added
+
+Declare an application endpoint with `#[canic::query]` or `#[canic::update]`.
+A protected endpoint selects its scope explicitly. An existing protocol can supply
+one shared contract to preserve its method ID and Wire budgets.
+[Migration example](apps/template/README.md#adding-an-application-endpoint) · [Canic #38](https://github.com/dragginzgame/canic/issues/38)
+
+Generated canister crates check method, schema and lifecycle locations during
+build. Each crate can override its own source layout. [Canic #26](https://github.com/dragginzgame/canic/issues/26)
+
+Stateful hub and shard canisters can declare their generated IC DB schema,
+retained keys, Auth receiver and lifecycle together. Native clients can use
+the same compiled schema. [Role setup](qualification/README.md#retained-application-store)
+· [Canic #37](https://github.com/dragginzgame/canic/issues/37)
+
+Build the changed Wasm from a configured app directory:
+
+```sh
+canic app build
+```
 
 ### 🔧 Changed
 
 Fleet placement and subnet comparison now read through the published
 `ic-query-topology` supplier. Existing schema 1 JSON reports retain their
-format. [#36](https://github.com/dragginzgame/canic/issues/36)
+format. [Canic #36](https://github.com/dragginzgame/canic/issues/36)
 
 From an app directory with a configured mainnet fleet, inspect its bound canisters:
 
@@ -17,7 +38,7 @@ canic fleet placements --json
 ### 🧪 Testing
 
 The installed profile route exercises qualified Rust paths for the method ID
-and both Wire budgets. [#29](https://github.com/dragginzgame/canic/issues/29)
+and both Wire budgets. [Canic #29](https://github.com/dragginzgame/canic/issues/29)
 
 ## [0.225.0] - 2026-11-18
 

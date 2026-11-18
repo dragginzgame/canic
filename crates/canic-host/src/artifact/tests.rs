@@ -103,7 +103,7 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
     for (label, decl, expected) in [
         (
             "endpoints",
-            "canic::mount_wire_method!{ query fn who() -> u8 { 1 } }",
+            "#[canic::query] fn who() -> u8 { 1 }",
             "src/endpoints",
         ),
         (
@@ -141,4 +141,40 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
         std::fs::rename(misplaced, proper).unwrap();
         validate(default.clone()).unwrap();
     }
+    // Evolve a generated role while keeping the stateless starter's own policy.
+    let independent = project.join("other");
+    crate::create_starter(&independent, "other", source).unwrap();
+    let other: super::source_layout::Package = serde_json::from_value(serde_json::json!({
+        "id": "other", "name": "other", "manifest_path": independent.join("starter-app/Cargo.toml"),
+        "metadata": default
+    }))
+    .unwrap();
+    let mount = r#"canic::mount_db_role! { hub, database = "app.db", config = "app.config", authority = "app", pages = 8, auth_read = "read" }"#;
+    write(package.join("src/endpoints/role.rs"), mount).unwrap();
+    assert!(
+        validate(default.clone())
+            .unwrap_err()
+            .to_string()
+            .contains("src/setup.rs")
+    );
+    std::fs::rename(
+        package.join("src/endpoints/role.rs"),
+        package.join("src/setup.rs"),
+    )
+    .unwrap();
+    validate(default).unwrap();
+    std::fs::rename(package.join("src/endpoints"), package.join("src/api")).unwrap();
+    validate(serde_json::json!({"canic":{"layout":{"endpoints":"src/api"}}})).unwrap();
+    write(
+        independent.join("starter-app/src/api.rs"),
+        "#[canic::update] fn put() {}",
+    )
+    .unwrap();
+    assert!(
+        other
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("src/endpoints")
+    );
 }

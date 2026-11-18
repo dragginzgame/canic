@@ -14,7 +14,7 @@ toko-tooling.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-canic = { workspace = true, features = ["greeting", "readiness"] }
+canic = { workspace = true, features = ["greeting", "method", "readiness"] }
 
 [lints]
 workspace = true

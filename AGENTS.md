@@ -100,7 +100,7 @@ bytes, recovery boundaries and qualified predecessor paths:
 ## Packages and qualification
 
 Use function-level `#[allow(clippy::needless_pass_by_value)]` on endpoint handlers
-and reply encoders when the runtime supplies an owned value. Named Wire mounts
+and reply encoders when the runtime supplies an owned value. Canic endpoint attributes
 apply this allowance for the application.
 
 Fresh counter and Root installations use Storage named leases. Existing retained
@@ -209,7 +209,7 @@ current journeys and remaining gates; do not substitute sibling working trees.
 - A maintainer request to “deploy” authorizes the GitHub release commit and tag
   and crates.io publication of every eligible product package. A live fleet
   deployment requires a named fleet.
-- Publish only the six product packages under `crates/` under the repository
+- Publish only the product packages under `crates/` listed in the Makefile under the repository
   licence, using the shared Cargo publication adapter. Demo and qualification
   packages stay private. GitHub pushes alone do not authorize registry uploads.
 - Ordinary changes use focused tests, Clippy and Rustdoc for affected packages/cases.

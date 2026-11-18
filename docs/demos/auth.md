@@ -367,11 +367,11 @@ user's scope and account before its next effect with
 scope and receive the admitted identity directly:
 
 ```rust
-canic::mount_wire_method! {
-    query(scope = "read", method = signup::GET_ME)
-    fn get_me(account) -> Option<MyProfile> {
-        profiles::find(account.issuer, account.subject)
-    }
+use canic::auth::protocol::SessionView;
+
+#[canic::query(scope = "read", contract = signup::GetMe)]
+fn get_me(account: SessionView) -> Option<MyProfile> {
+    profiles::find(account.issuer, account.subject)
 }
 ```
 

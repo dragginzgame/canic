@@ -39,19 +39,17 @@ mod ops {
     }
 }
 
-canic::mount_wire_method! {
-    query(method = 20, guard = member) fn get_me() -> Option<Profile> {
-        ops::get()
-    }
+#[canic::query(method = 20, guard = member)]
+fn get_me() -> Option<Profile> {
+    ops::get()
 }
-canic::mount_wire_method! {
-    update(method = 21, limits = REQUEST, reply_limits = REPLY, guard = member)
-    fn set_display_name(name: String) -> Profile {
-        ops::set(name)
-    }
+#[canic::update(method = 21, limits = REQUEST, reply_limits = REPLY, guard = member)]
+fn set_display_name(name: String) -> Profile {
+    ops::set(name)
 }
 
 // A new public endpoint can use every default. Use the same hash in its client.
-canic::mount_wire_method! {
-    query fn protocol_version() -> u8 { 1 }
+#[canic::query]
+fn protocol_version() -> u8 {
+    1
 }

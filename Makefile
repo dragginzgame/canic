@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 FORMAT_RUST_ARGS := --extra-workspace qualification
 IC_TOOLS := icp
-CARGO_PUBLISH_PACKAGES := canic canic-management-protocol canic-management canic-root canic-host canic-cli
+CARGO_PUBLISH_PACKAGES := canic-macros canic canic-management-protocol canic-management canic-root canic-host canic-cli
 CARGO_PUBLISH_REGISTRY := crates-io
 CARGO_PUBLISH_VERIFY_TARGETS := publication-admission
 include vendor/toko-tooling/make/consumer.mk
@@ -159,12 +159,12 @@ journey-test:
 
 journey-clippy:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features backup --test backup -- -D warnings
-	cargo clippy --locked -p canic -p canic-host -p canic-cli -p canic-hello --features canic-host/backup --all-targets -- -D warnings
+	cargo clippy --locked -p canic-macros -p canic -p canic-host -p canic-cli -p canic-hello --features canic-host/backup --all-targets -- -D warnings
 	cargo clippy --locked -p canic-hello --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --lib --example demo --test journey --test publication -- -D warnings
 
 journey-doc:
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic -p canic-host -p canic-hello --features canic-host/backup --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-macros -p canic -p canic-host -p canic-hello --features canic-host/backup --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-qualification --no-deps
 
 .PHONY: profile-test profile-clippy profile-doc
@@ -265,7 +265,7 @@ db-test:
 
 db-clippy:
 	cargo clippy --locked -p canic --features db-schema,db-store --all-targets -- -D warnings
-	cargo clippy --locked -p canic --features db-schema,db-store --lib --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked -p canic --features db-schema,stateful-role --lib --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features fault-injection -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features incompatible-schema -- -D warnings

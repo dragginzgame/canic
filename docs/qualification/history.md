@@ -7,6 +7,61 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Endpoint attributes and generated role layout — 2026-11-18
+
+Compared the profile entry and worker built by `make profile-test` against
+the same fixture, features and build command at release `b2ccf4e1b5ab`.
+The entry shrank from 396,523 to 395,075 bytes and the worker from 313,599 to
+313,553 bytes. Their export names and kinds and their IC imports matched.
+The entry’s Wasm-target normal/build graph replaced the host proc macro `paste`
+with `canic-macros`; both graphs used the same Wire and Platform versions.
+The installed profile test checked complete response frames, caller guards
+and synchronous rollback after a refused reply encoding.
+
+In an isolated Toko checkout the installed `signup` and `user_shard` tests
+passed with scoped hub and shard endpoints, an asynchronous signup and a
+parent-guarded provisioning contract. Additional installed hub probes called
+a bare raw-identifier update with its derived Wire ID and observed an explicit
+refusal before decoding a request for an unscoped session. The browser II
+case has a separate runner.
+
+A fresh `canic app init` and `canic app build --canister app` produced the
+stateless greeting, probe and readiness exports. The same generated project
+then built a hub with one schema entity, role setup, a bare update, one init
+and one post-upgrade. The Host layout regression checks misplaced declarations
+and a per-package override alongside another generated package with defaults.
+Moving the generated hub’s endpoints to `src/api` made the CLI build report
+the expected directory; setting its own `endpoints = "src/api"` restored the build.
+
+## Declarative Toko database roles — 2026-11-18
+
+An isolated Toko working copy based on `417ee72c5852` replaced both handwritten
+lifecycle modules and its shared database declaration with `canic::mount_db_role!`.
+The native builds consumed IC DB 0.23.8's generated schema. All 16 native hub
+and shard tests passed and neither normal native dependency graph included
+IC Platform Runtime. Each Wasm exported exactly one init, one post-upgrade and
+one readiness method.
+
+The installed `signup` and `user_shard` tests passed for fresh binaries and
+again after populating and upgrading the prior handwritten roles. Both complete
+stable images survived upgrade byte-for-byte. The shard preserved its original
+parent and provisioning receipt. The hub's controller refresh remained closed
+after upgrade. Additional probes refused a zero hub nonce, invalid shard
+context, an incorrect installer and failed reopen. Readiness remained an
+observation of successful store attachment.
+
+| Role | Handwritten predecessor SHA-256 | Declarative candidate SHA-256 |
+| --- | --- | --- |
+| Hub | `7a63616eb2140f711cb5bbc8f636cb7c2df4fec19d9193069bf06703230dd03b` | `6553966a42877dfd9334a1261825e418d09b66df23620b96d14c1be00ecebee3` |
+| Shard | `443033daabaab1f124ad4ba3e5c4d7dc70adfcf263a171b356dbf3e7adb340da` | `16ea0091fa2d86669c54980cc544a88dbf299f644ab63370f61ef75d3dfda511` |
+
+The trial ran `cargo build` and `cargo test` with `--locked --offline -p user_hub
+-p user_shard`, then `canic app build --config apps/toko/canic.toml --app toko`.
+The installed command was `cargo test --manifest-path qualification/Cargo.toml
+--locked --offline --test signup --test user_shard`. The handoff selects the
+two prior Wasms using `TOKO_ROLE_PREDECESSOR_HUB` and `TOKO_ROLE_PREDECESSOR_SHARD`.
+Browser II has a separate gate.
+
 ## Fleet diagnostic supplier cutover — 2026-11-18
 
 Starting from Canic `b2ccf4e`, both workspaces resolved crates.io

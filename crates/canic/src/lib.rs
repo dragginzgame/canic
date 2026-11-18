@@ -28,6 +28,9 @@ pub mod lifecycle;
 #[cfg(feature = "method")]
 pub mod method;
 
+#[cfg(all(feature = "method", target_arch = "wasm32"))]
+pub use canic_macros::{query, update};
+
 /// Passive operational reports; the optional `metrics` feature enables endpoint mounting.
 pub mod metrics;
 

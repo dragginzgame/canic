@@ -95,77 +95,73 @@ fn valid_worker(text: &str) -> Result<Principal, RouteError> {
     Ok(principal)
 }
 
-canic::mount_wire_method! {
-    query(method = canic_profile_protocol::ROUTE, limits = canic_profile_protocol::LIMITS, reply_limits = canic_profile_protocol::LIMITS) fn route() -> RouteResult {
-        STATE
-            .with_borrow(|state| {
-                state
-                    .as_ref()
-                    .expect("initialized entry")
-                    .binding
-                    .get()
-                    .0
-                    .clone()
-            })
-            .map(|worker| Route { worker })
-            .ok_or(RouteError::Unbound)
-    }
+#[canic::query(method = canic_profile_protocol::ROUTE, limits = canic_profile_protocol::LIMITS, reply_limits = canic_profile_protocol::LIMITS)]
+fn route() -> RouteResult {
+    STATE
+        .with_borrow(|state| {
+            state
+                .as_ref()
+                .expect("initialized entry")
+                .binding
+                .get()
+                .0
+                .clone()
+        })
+        .map(|worker| Route { worker })
+        .ok_or(RouteError::Unbound)
 }
 
 // Clients use replicated resolution before sending private data to a discovered worker.
-canic::mount_wire_method! {
-    update(name = "resolve", method = ROUTE, limits = LIMITS) fn replicated_route() -> RouteResult {
-        route()
-    }
+#[canic::update(name = "resolve", method = ROUTE, limits = LIMITS)]
+fn replicated_route() -> RouteResult {
+    route()
 }
 
-canic::mount_wire_method! {
-    update(method = BIND, limits = LIMITS) fn bind(input: Route) -> RouteResult {
-        if !api::is_controller(&api::caller()) {
-            return Err(RouteError::Forbidden);
-        }
-        valid_worker(&input.worker)?;
-        STATE.with_borrow_mut(|state| {
-            let state = state.as_mut().expect("initialized entry");
-            if let Some(worker) = &state.binding.get().0 {
-                if worker != &input.worker {
-                    return Err(RouteError::Conflict);
-                }
-            } else {
-                state.binding.set(Binding(Some(input.worker.clone())));
-            }
-            Ok(input)
-        })
+#[canic::update(method = BIND, limits = LIMITS)]
+fn bind(input: Route) -> RouteResult {
+    if !api::is_controller(&api::caller()) {
+        return Err(RouteError::Forbidden);
     }
+    valid_worker(&input.worker)?;
+    STATE.with_borrow_mut(|state| {
+        let state = state.as_mut().expect("initialized entry");
+        if let Some(worker) = &state.binding.get().0 {
+            if worker != &input.worker {
+                return Err(RouteError::Conflict);
+            }
+        } else {
+            state.binding.set(Binding(Some(input.worker.clone())));
+        }
+        Ok(input)
+    })
 }
 
-canic::mount_wire_method! {
-    async update(method = CHECK, limits = LIMITS) fn check() -> CheckResult {
-        if !api::is_controller(&api::caller()) {
-            return Err(RouteError::Forbidden);
-        }
-        let route = route()?;
-        let target = valid_worker(&route.worker)?;
-        STATE.with_borrow_mut(|state| {
-            let state = state.as_mut().expect("initialized entry");
-            if state.checking {
-                return Err(RouteError::Busy);
-            }
-            state.checking = true;
-            Ok(())
-        })?;
-        let response = canic::method::call::<canic_profile_protocol::Probe>(target, 5, &()).await;
-        STATE.with_borrow_mut(|state| state.as_mut().expect("initialized entry").checking = false);
-        let info = response.map_err(|error| match error {
-            canic::method::CallError::Reply(_) => RouteError::InvalidReply,
-            _ => RouteError::Unavailable,
-        })?;
-        // Bound the response encoder even when the selected worker is not our implementation.
-        if info.executable.len() > 128 {
-            return Err(RouteError::InvalidReply);
-        }
-        Ok(WorkerCheck { route, info })
+#[canic::update(method = CHECK, limits = LIMITS)]
+async fn check() -> CheckResult {
+    if !api::is_controller(&api::caller()) {
+        return Err(RouteError::Forbidden);
     }
+    let route = route()?;
+    let target = valid_worker(&route.worker)?;
+    STATE.with_borrow_mut(|state| {
+        let state = state.as_mut().expect("initialized entry");
+        if state.checking {
+            return Err(RouteError::Busy);
+        }
+        state.checking = true;
+        Ok(())
+    })?;
+    let response = canic::method::call::<canic_profile_protocol::Probe>(target, 5, &()).await;
+    STATE.with_borrow_mut(|state| state.as_mut().expect("initialized entry").checking = false);
+    let info = response.map_err(|error| match error {
+        canic::method::CallError::Reply(_) => RouteError::InvalidReply,
+        _ => RouteError::Unavailable,
+    })?;
+    // Bound the response encoder even when the selected worker is not our implementation.
+    if info.executable.len() > 128 {
+        return Err(RouteError::InvalidReply);
+    }
+    Ok(WorkerCheck { route, info })
 }
 
 fn endpoint_error(error: impl std::fmt::Debug) -> ! {

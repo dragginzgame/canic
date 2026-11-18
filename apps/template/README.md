@@ -23,6 +23,32 @@ Generated crates opt into source layout checks with `[package.metadata.canic.lay
 in their Cargo manifest. Canic checks selected packages during `canic app build`
 and `canic artifact build`. Put callable mounts under `src/endpoints/`, IC DB
 entities under `src/schema/`, and install/upgrade hooks in `src/lifecycle.rs`.
-Create those files when the app needs them. To change a location for one crate,
+A stateful role using `canic::mount_db_role!` declares its generated lifecycle in
+`src/setup.rs`. The `lifecycle` override also applies to this declaration. To change a location for one crate,
 set `endpoints`, `schema` or `lifecycle` to its source path in that table.
 Existing crates can adopt the check by adding the table.
+
+### Adding an application endpoint
+
+New apps already enable Canic's `method` feature. Put the function in `src/endpoints/`.
+The function name is the public export and the Wire method ID defaults to the
+hash of that name. The default frame budget is 512 bytes in each direction.
+
+```rust
+#[canic::query]
+fn version() -> u32 {
+    1
+}
+```
+
+Use `#[canic::update]` for an update. For a protected method, enable
+`auth-enrollment`, select the required scope in the attribute and take the
+verified session first. [Scoped endpoints](../../docs/demos/auth.md#opt-in-volatile-receiver)
+
+To migrate from the removed `mount_wire_method!` macro, keep the handler as an
+ordinary typed function and put the query or update attribute above it. Keep any published `name`, `method`,
+`limits`, `reply_limits`, `guard` and `scope` in the attribute. With a named
+`contract`, the contract supplies both directional limits and the method ID.
+Use an ordinary `async fn` for an asynchronous update. Bare handlers admit
+public callers. To require a verified session, select its scope and take the
+session as the first parameter.

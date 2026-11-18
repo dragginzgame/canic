@@ -45,6 +45,14 @@ impl Package {
                     .as_deref()
                     .unwrap_or(Path::new("src/lifecycle.rs")),
             ),
+            // Stateful setup declares the generated hooks; hand-written hooks live in lifecycle.rs.
+            (
+                "lifecycle",
+                layout
+                    .lifecycle
+                    .as_deref()
+                    .unwrap_or(Path::new("src/setup.rs")),
+            ),
         ];
         for (key, root) in &roots {
             if !root.starts_with("src")
@@ -99,7 +107,7 @@ impl Package {
 }
 
 #[derive(Default)]
-struct Declarations([bool; 3]);
+struct Declarations([bool; 4]);
 impl<'ast> Visit<'ast> for Declarations {
     fn visit_attribute(&mut self, attr: &'ast syn::Attribute) {
         if let Some(segment) = attr.path().segments.last() {
@@ -114,13 +122,14 @@ impl<'ast> Visit<'ast> for Declarations {
     fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
         if let Some(segment) = item.mac.path.segments.last() {
             let name = segment.ident.to_string();
+            if name == "mount_db_role" {
+                self.0[3] = true;
+            }
             if matches!(name.as_str(), "mount_auth_lifecycle" | "mount_lifecycle") {
                 self.0[2] = true;
             }
             if name.starts_with("mount_")
-                && (name.contains("endpoint")
-                    || name == "mount_wire_method"
-                    || name == "mount_auth_session")
+                && (name.contains("endpoint") || name == "mount_auth_session")
             {
                 self.0[0] = true;
             }

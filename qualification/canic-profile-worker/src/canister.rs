@@ -130,10 +130,9 @@ fn info((): ()) -> Info {
 }
 
 // Replicated, read-only endpoint for the entry's direct inter-canister check.
-canic::mount_wire_method! {
-    update(contract = canic_profile_protocol::Probe) fn probe(_input) {
-        info(())
-    }
+#[canic::update(contract = canic_profile_protocol::Probe)]
+fn probe() -> Info {
+    info(())
 }
 
 fn endpoint_error(error: impl std::fmt::Debug) -> ! {

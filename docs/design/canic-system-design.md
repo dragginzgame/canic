@@ -1324,10 +1324,29 @@ Previously approved and unselected pools retain their original argument bytes.
 This preserves the immediate-parent check from the frozen legacy user hub/shard
 journey at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` without its role catalogue.
 
+### Stateful hub and shard setup
+
+A stateful role may select the Auth-enrolled hub or child layout in one setup
+declaration. The application selects its private IC DB schema, retained keys,
+Storage authority and role settings. IC DB generates the schema; Canic binds it
+for native use and composes install and strict reopen on Wasm. Preserve the
+hub configuration payload and routing Root, the child's bounded parent cell
+and actual-installer check, both original directory policies and the original
+database incarnation derivation. Readiness reports successful storage attachment
+only. An upgrade reopens application data and leaves the volatile receiver
+closed. This extends the retained-store predecessor review and the qualified
+parent binding without introducing a new allocation or recovery authority.
+
 ### Endpoint ownership and actor composition
 
-An actor can enable Canic's `method` feature and use `mount_wire_method!` for
-one `query`, `update` or `async update`. The Rust function supplies its export name and request/reply types. New methods
+The agreed application interface is a Rust function with `#[canic::query]` or
+`#[canic::update]` and Canic's `method` feature. Public functions use standard
+Wire defaults. A private function selects `scope = "write"` (or its required
+scope) and takes the verified session as its first parameter. This parameter
+comes from the actual caller. An existing shared protocol selects
+`contract = path::Type` to retain its original ID, directional budgets and
+types. Both declarations use the same Canic codec and Platform entrypoint.
+The attributes support synchronous queries and synchronous or asynchronous updates. The Rust function supplies its export name and request/reply types. New methods
 default to the Wire hash of that name, a unit request for an empty argument list,
 and a 512-byte frame budget in each direction. An existing protocol supplies
 its original method ID and any different limits. The default permits ingress;
@@ -1338,7 +1357,7 @@ an async callback cannot undo work committed before its await.
 
 For a direct call the application protocol can implement `canic::method::Contract`.
 It supplies the export, Wire ID, both shapes and both budgets. The receiving
-mount uses `update(contract = ProtocolType)`; the sender selects an admitted
+function uses `#[canic::update(contract = ProtocolType)]`; the sender selects an admitted
 principal and calls `method::call::<ProtocolType>(target, wait_seconds, &input)`.
 One attempt returns a typed reply, dispatch refusal, rejection, unknown outcome
 or codec failure. The application owns its original ticket and reconciliation.
