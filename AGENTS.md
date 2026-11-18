@@ -37,6 +37,11 @@ installer, never by editing installed bytes.
 - Keep one canonical workflow per task. No aliases, convenience shortcuts, duplicate
   configuration mechanisms or generic workflow engines without a demonstrated need.
   Prefer extending existing owners over new packages or parallel paths.
+- Wasm is the product target for canister code. Write actor declarations, schema
+  mappings and helpers as ordinary Rust so they stay visible in VS Code. Use
+  `#[cfg(target_arch = "wasm32")]` only where an actual target difference
+  requires it, preferably once at the module or adapter boundary. Avoid native
+  stubs and extra feature flags solely to make actor code compile on a host.
 - The managed starter uses a Root, separate versioned Wasm Store and application
   children. Root owns effect authority and retained evidence; Store owns durable
   artifact bytes, immutable releases and pins. Do not grow Root into an artifact

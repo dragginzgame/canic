@@ -890,7 +890,9 @@ Root's creation journal still requires the general child-capacity expansion.
 Toko owns login, account identity, user ID generation, payload validation and
 the private user record. The opt-in Canic hub adapter owns provisioning from an
 authenticated session. Its IC DB binding uses the application's existing route
-row as the only reservation. A racing request reads the winner before insertion.
+row as the only reservation. Native and Wasm builds check the same row mappings.
+Only the installed actor resolves the store accessor and application ID generator.
+A racing request reads the winner before insertion.
 The shard admits its installed parent and inserts once. An exact receipt for the
 original user and destination permits marking the same reservation ready.
 

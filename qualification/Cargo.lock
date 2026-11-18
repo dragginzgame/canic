@@ -287,7 +287,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.227.0"
+version = "0.228.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "canic-demo"
-version = "0.227.0"
+version = "0.228.0"
 dependencies = [
  "canic",
  "clap",
@@ -402,7 +402,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.227.0"
+version = "0.228.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -434,7 +434,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.227.0"
+version = "0.228.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -443,7 +443,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.227.0"
+version = "0.228.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -459,7 +459,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.227.0"
+version = "0.228.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -1478,12 +1478,14 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.23.9"
+version = "0.23.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "028a3a19e2517693d0986f4693a3ec4f902d1eeb9e47a9b98b2fe58d16100e36"
+checksum = "d8c0742bc4083f81806e0c3d1f2ee10a7ed7d370609c1c5566a105729817d3dd"
 dependencies = [
  "ethnum",
  "ic-db-macros",
+ "ic-platform-protocol",
+ "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
  "memchr",
@@ -1493,9 +1495,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.23.9"
+version = "0.23.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fa4e8ad6e6d992df0d23f0e7155b2e6bd986396f39260aa0719d8202bf1db00b"
+checksum = "161a7d50e064c89816aa894fdfb11b9a3ada7659b2e68cd8ae2899065fe29431"
 dependencies = [
  "proc-macro2",
  "quote",

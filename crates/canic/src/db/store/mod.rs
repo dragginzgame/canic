@@ -4,17 +4,17 @@
 mod tests;
 
 use ic_db::Schema;
-use ic_storage::{Memory, StableKey};
+use ic_storage::StableKey;
 use std::cell::RefCell;
 
 /// Declare in actor-local state. The key and schema must match the retained database.
-pub struct Store<M: Memory = DefaultMemoryImpl> {
+pub struct Store {
     key: &'static str,
     schema: fn() -> Schema,
-    database: RefCell<Option<Database<M>>>,
+    database: RefCell<Option<Database>>,
 }
 
-impl<M: Memory> Store<M> {
+impl Store {
     /// Declare the store without allocating memory, opening a database or exporting methods.
     pub const fn new(key: &'static str, schema: fn() -> Schema) -> Self {
         Self {
@@ -30,7 +30,7 @@ impl<M: Memory> Store<M> {
     /// # Panics
     /// Traps on duplicate initialization, missing allocation, or any schema or DB refusal.
     /// Call from the lifecycle message so its failure rolls back adjacent state changes.
-    pub fn attach(&self, host: &MemoryRuntime<M>, incarnation: Option<[u8; 16]>) {
+    pub fn attach(&self, host: &MemoryRuntime<DefaultMemoryImpl>, incarnation: Option<[u8; 16]>) {
         let mut slot = self.database.borrow_mut();
         assert!(slot.is_none(), "database already attached: {}", self.key);
         let key = StableKey::parse(self.key).expect("database allocation key");
@@ -46,7 +46,7 @@ impl<M: Memory> Store<M> {
     ///
     /// # Panics
     /// Traps before attachment or on a nested borrow of the same store.
-    pub fn with<R>(&self, operation: impl FnOnce(&mut Database<M>) -> R) -> R {
+    pub fn with<R>(&self, operation: impl FnOnce(&mut Database) -> R) -> R {
         operation(
             self.database
                 .borrow_mut()

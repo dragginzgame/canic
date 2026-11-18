@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.228.0] - 2026-11-18
+
+### 🔧 Changed
+
+Hub and shard provisioning rows can be declared directly in `lib.rs` using
+qualified schema paths. Rust Analyzer can now check their field mappings and
+payload validation on native targets.
+
+The retained store adapter now requires IC DB 0.23.10 within the 0.23 series
+and uses its target-selected database handle. Existing hub and shard stores
+reopen with their original allocation keys and schema. [Canic #40](https://github.com/dragginzgame/canic/issues/40)
+
+From a Toko workspace using this revision, check both roles locally and build
+the installed actors from the app directory.
+
+```sh
+cargo clippy -p user_hub -p user_shard --all-targets -- -D warnings
+(cd apps/toko && canic app build)
+```
+
 ## [0.227.0] - 2026-11-18
 
 ### ✨ Added

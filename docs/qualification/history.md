@@ -7,6 +7,18 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Native provisioning declarations — 2026-11-18
+
+An isolated copy of Toko’s working tree at `bdc2bed` used the local Canic
+candidate and IC DB 0.23.10. Both role crates removed the guards and imports
+from their provisioning declarations. The shared display-name validator used
+portable Rust validation and panic on refusal. The hub’s IC ID generator and
+each actor’s store accessor remained Wasm-only. Both roles passed native
+all-target Clippy with warnings denied and compiled for release Wasm.
+The installed signup test retained the original route on retry and the
+shard test preserved accounts through upgrade. The live II browser fixture
+was outside this run.
+
 ## Blob Storage 0.106.0 — 2026-11-18
 
 Both workspaces selected the registry archive with SHA-256

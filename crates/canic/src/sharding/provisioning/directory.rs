@@ -1,5 +1,5 @@
 use super::{Account, Binding, Request, Resource};
-use ic_db::{Database, Entity};
+use ic_db::Entity;
 use ic_platform_types::Principal;
 
 /// Application schema binding for a unique `issuer,subject` index. The bounded
@@ -9,7 +9,8 @@ pub trait Record: Entity {
     type Resource: Resource;
 
     /// Access this actor's already opened database, synchronously.
-    fn with_store<T>(f: impl FnOnce(&mut Database) -> T) -> T;
+    #[cfg(target_arch = "wasm32")]
+    fn with_store<T>(f: impl FnOnce(&mut ic_db::Database) -> T) -> T;
 
     /// Return the persisted account and ID in the application's Wire representation.
     fn identity(&self) -> (Account, <Self::Resource as Resource>::Id);
@@ -26,6 +27,7 @@ pub trait HubRoute: Record {
     fn normalize(data: Data<Self>) -> Self::Initial;
 
     /// Generate a candidate ID using the application's policy.
+    #[cfg(target_arch = "wasm32")]
     fn new_id() -> impl Future<Output = Id<Self>>;
 
     /// Map a new reservation to the existing pending row.
@@ -60,10 +62,11 @@ pub type Ticket<E> = Request<Id<E>, Data<E>>;
 /// original row. This declaration mounts no endpoint or lifecycle hook.
 #[macro_export]
 macro_rules! declare_provisioning_row {
-    (@record $row:ident, $resource:ty, $store:path, $encode:path) => {
+    (@record $row:path, $resource:ty, $store:path, $encode:path) => {
         impl $crate::sharding::provisioning::Record for $row {
             type Resource = $resource;
 
+            #[cfg(target_arch = "wasm32")]
             fn with_store<T>(f: impl FnOnce(&mut ::ic_db::Database) -> T) -> T { $store(f) }
 
             fn identity(&self) -> ($crate::sharding::provisioning::Account, $crate::sharding::provisioning::Id<Self>) {
@@ -71,7 +74,7 @@ macro_rules! declare_provisioning_row {
             }
         }
     };
-    (hub $row:ident, resource = $resource:ty, store = $store:path,
+    (hub $row:path, resource = $resource:ty, store = $store:path,
      id = ($encode:path, $decode:path, $generate:path), scope = $scope:literal,
      payload = $field:ident: $initial:ty, validate = $validate:path, export = $export:expr,
      status = ($pending:path, $ready:path) $(,)?) => {
@@ -82,6 +85,7 @@ macro_rules! declare_provisioning_row {
 
             fn normalize(data: $crate::sharding::provisioning::Data<Self>) -> Self::Initial { $validate(data) }
 
+            #[cfg(target_arch = "wasm32")]
             async fn new_id() -> $crate::sharding::provisioning::Id<Self> { $encode($generate().await) }
 
             fn pending(binding: $crate::sharding::provisioning::Binding<$crate::sharding::provisioning::Id<Self>>, initial: Self::Initial) -> Self {
@@ -98,7 +102,7 @@ macro_rules! declare_provisioning_row {
             fn mark_ready(&mut self) { self.status = $ready; }
         }
     };
-    (shard $row:ident, resource = $resource:ty, store = $store:path,
+    (shard $row:path, resource = $resource:ty, store = $store:path,
      id = ($encode:path, $decode:path), payload = $field:ident, validate = $validate:path $(,)?) => {
         $crate::declare_provisioning_row!(@record $row, $resource, $store, $encode);
         impl $crate::sharding::provisioning::ShardRecord for $row {

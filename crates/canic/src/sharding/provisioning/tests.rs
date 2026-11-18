@@ -48,24 +48,15 @@ use std::{
 const PENDING: bool = false;
 const READY: bool = true;
 
-async fn new_id() -> u64 {
-    19
-}
-
-thread_local! { static DB: std::cell::RefCell<Option<Database>> = const {std::cell::RefCell::new(None)}; }
-
-fn store<T>(f: impl FnOnce(&mut Database) -> T) -> T {
-    DB.with_borrow_mut(|db| f(db.as_mut().unwrap()))
-}
-
+// The actor paths deliberately have no native implementation.
 crate::declare_provisioning_row! {
-    hub Route, resource = Users, store = store,
-    id = (identity, identity, new_id), scope = "write",
+    hub self::Route, resource = Users, store = crate::database::store::with,
+    id = (identity, identity, crate::registration::new_id), scope = "write",
     payload = name: String, validate = identity, export = String::clone, status = (PENDING, READY)
 }
 
 crate::declare_provisioning_row! {
-    shard User, resource = Users, store = store,
+    shard self::User, resource = Users, store = crate::database::store::with,
     id = (identity, identity), payload = name, validate = identity
 }
 
@@ -84,10 +75,8 @@ fn racing_id_and_lost_receipt_reopen_the_original_reservation() {
         } else {
             Database::open(memory, schema)
         };
-        DB.with_borrow_mut(|slot| *slot = Some(db.unwrap()));
-        host
+        (host, db.unwrap())
     };
-    let host = open(true);
     let account = Account {
         issuer: Principal::from_slice(&[3, 1]),
         subject: Principal::from_slice(&[4, 2]),
@@ -98,18 +87,19 @@ fn racing_id_and_lost_receipt_reopen_the_original_reservation() {
         shard: Principal::from_slice(&[8, 1]),
     };
     let competing = Binding { id: 20, ..binding };
-    Route::with_store(|db| {
+    {
+        let (_host, mut database) = open(true);
+        let db = &mut database;
         let winner = reserve::<Route>(db, &binding, "Ada".into());
         let raced = reserve::<Route>(db, &competing, "replace me".into());
         assert_eq!(ticket(&raced).binding, binding);
         assert_eq!(raced.name, winner.name);
         assert!(accept::<User>(db, ticket(&winner)));
         assert!(!winner.ready());
-    });
-    DB.with_borrow_mut(|slot| *slot = None);
-    drop(host);
-    let _host = open(false);
-    User::with_store(|db| {
+    }
+    {
+        let (_host, mut database) = open(false);
+        let db = &mut database;
         let winner = reserve::<Route>(db, &competing, "late".into());
         assert_eq!(ticket(&winner).binding, binding);
         assert!(!winner.ready());
@@ -127,8 +117,7 @@ fn racing_id_and_lost_receipt_reopen_the_original_reservation() {
         assert!(db.get::<Route>(19).unwrap().unwrap().ready());
         assert_eq!(db.get::<User>(19).unwrap().unwrap().name, "Ada");
         assert!(db.get::<User>(20).unwrap().is_none());
-    });
-    DB.with_borrow_mut(|slot| *slot = None);
+    }
 }
 
 #[test]

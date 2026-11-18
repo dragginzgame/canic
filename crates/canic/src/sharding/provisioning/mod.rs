@@ -1,6 +1,6 @@
 //! Bounded account provisioning through the installed hub and its managed shards.
 
-#[cfg(all(test, feature = "provisioning"))]
+#[cfg(all(test, feature = "provisioning", not(target_arch = "wasm32")))]
 mod tests;
 
 use crate::method::Contract;
@@ -104,12 +104,12 @@ pub enum Progress {
     PlacementUnavailable,
 }
 
-#[cfg(feature = "provisioning")]
+#[cfg(feature = "db-store")]
 mod directory;
 
 #[cfg(all(feature = "provisioning", any(test, target_arch = "wasm32")))]
 mod rows;
-#[cfg(feature = "provisioning")]
+#[cfg(feature = "db-store")]
 pub use directory::{Data, HubRoute, Id, Record, ShardRecord, Ticket};
 #[cfg(all(feature = "provisioning", target_arch = "wasm32"))]
 mod actor;

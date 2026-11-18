@@ -34,7 +34,13 @@ Run `make store-test` for these and the other installed Store cases.
 
 ### Provision an account on its assigned shard
 
-Enable `canic/provisioning` on the installed hub and shard. In the shared
+Put each row declaration in the role’s `lib.rs`, alongside `mount_db_role!`.
+Use `canic/db-store` on both targets and select `canic/provisioning` for Wasm.
+The shared protocol supplies `sharding` and `method` on both targets. Native
+builds check the schema, ID codec and payload mappings, including the app’s
+validation function. Only Wasm resolves the store accessor and hub ID generator.
+
+In the shared
 protocol crate, `canic/sharding` and `canic/method` expose the passive
 `Resource`, `Provision`, request, receipt and progress types. The application
 selects its ID representation, name validation, Wire budgets and existing
@@ -63,7 +69,7 @@ a candidate ULID; `initial` validates the input and returns a `DisplayName` or t
 use canic::sharding::provisioning::{Progress, provision};
 
 canic::declare_provisioning_row! {
-    hub UserRoute, resource = Users, store = crate::database::store::with,
+    hub crate::schema::UserRoute, resource = Users, store = crate::database::store::with,
     id = (Ulid::to_bytes, Ulid::from_bytes, new_id), scope = "write",
     payload = display_name: DisplayName, validate = initial,
     export = |name: &DisplayName| name.0.clone(),
@@ -85,7 +91,7 @@ profile queries and changes remain ordinary application endpoints.
 use canic::sharding::provisioning::{Binding, Provision, Request, receive};
 
 canic::declare_provisioning_row! {
-    shard User, resource = Users, store = crate::database::store::with,
+    shard crate::schema::User, resource = Users, store = crate::database::store::with,
     id = (Ulid::to_bytes, Ulid::from_bytes), payload = display_name, validate = initial,
 }
 
@@ -137,7 +143,7 @@ encoding and allocation. The local counter upgrade and Root snapshot tests run o
 Testkit 0.110.1. Keep deployed 0.76 records with their qualified executable until
 a physical-image migration is separately qualified.
 
-The DB 0.23.9 witness and Blob 0.106.0 catalog use Storage 0.78.3 directly.
+The DB 0.23.10 witness and Blob 0.106.0 catalog use Storage 0.78.3 directly.
 The DB installed suite covers populated upgrades, refused upgrades and damaged storage. The installed Blob suite covers fresh composition, the managed fleet journey and refusal to upgrade the populated 0.100.6 catalog. The refusal preserves
 the predecessor's stable bytes, management report and surviving asset.
 [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8) records the decision to retain the original executable for this directory.
