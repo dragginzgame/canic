@@ -5,7 +5,7 @@ mod tests;
 
 use serde::{Deserialize, Serialize};
 
-#[cfg(all(feature = "metrics", target_arch = "wasm32"))]
+#[cfg(feature = "metrics")]
 pub mod endpoint;
 
 /// Shared read-only metrics query. This version reports aggregate timer counters only.
@@ -90,12 +90,15 @@ pub struct Snapshot {
 
 /// Mount a public, bounded query using an explicitly supplied local snapshot function.
 /// Mounting initializes no provider, storage, timer, sampler or persistent history.
-#[cfg(all(feature = "metrics", target_arch = "wasm32"))]
+#[cfg(feature = "metrics")]
 // Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
 #[rustfmt::skip]
 #[macro_export]
 macro_rules! mount_metrics_endpoint {
     ($snapshot:path) => {
+        const _: fn() -> $crate::metrics::Snapshot = $snapshot;
+
+        #[cfg(target_arch = "wasm32")]
         mod canic_metrics {
             use endpoint::runtime;
             use $crate::metrics::{Snapshot, endpoint};

@@ -40,7 +40,9 @@ installer, never by editing installed bytes.
 - Wasm is the product target for canister code. Write actor declarations, schema
   mappings and helpers as ordinary Rust so they stay visible in VS Code. Use
   `#[cfg(target_arch = "wasm32")]` only where an actual target difference
-  requires it, preferably once at the module or adapter boundary. Avoid native
+  requires it. This also applies to macro output and qualification actors. For
+  clocks and entropy, select the source at the point of acquisition. Keep codecs,
+  storage access and application handlers portable wherever their APIs allow. Avoid native
   stubs and extra feature flags solely to make actor code compile on a host.
 - The managed starter uses a Root, separate versioned Wasm Store and application
   children. Root owns effect authority and retained evidence; Store owns durable

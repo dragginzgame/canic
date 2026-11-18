@@ -1,7 +1,5 @@
 //! Application endpoint attributes, re-exported by Canic.
 
-mod provisioning;
-
 #[cfg(test)]
 mod tests;
 
@@ -29,7 +27,7 @@ pub fn update(options: TokenStream, item: TokenStream) -> TokenStream {
 fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut contract: Option<Path> = None;
     let mut guard: Option<Path> = None;
-    let mut scope: Option<LitStr> = None;
+    let mut scope: Option<Expr> = None;
     let mut name: Option<LitStr> = None;
     let mut method: Option<Expr> = None;
     let mut limits: Option<Expr> = None;
@@ -85,10 +83,14 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             "a scoped endpoint takes the verified session first",
         ));
     }
-    let session = scope.map(|scope| {
+    let scope_constant = scope
+        .as_ref()
+        .map(|value| quote!(const __CANIC_SCOPE: &str = #value;));
+    let session = scope.map(|_| {
         quote!(
-            ::canic::auth::session::authorize(#scope).unwrap_or_else(|error|
-                ::canic::auth::endpoint::api::trap(&format!("user authorization: {error:?}"))),
+            ::canic::auth::session::authorize(__CANIC_SCOPE).unwrap_or_else(|error| {
+                ::canic::auth::endpoint::api::trap(&format!("user authorization: {error:?}"))
+            }),
         )
     });
     let parameter = match (parameters.next(), parameters.next()) {
@@ -137,24 +139,29 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         )
     };
     let guard = guard.map(|g| quote!(#g().map_err(|error| format!("{error:?}"))?;));
+    let session_type = session.as_ref().map(|_| quote!(_,));
+    let input_type = parameter.map(|_| &request);
+    let return_type = if asynchronous.is_some() {
+        quote!(_)
+    } else {
+        reply.clone()
+    };
     let unit = parameter.is_none().then(|| quote!(let () = __canic_input;));
     Ok(quote! {
         #[allow(clippy::needless_pass_by_value)]
         #function
+
         #(#cfg)*
         const _: () = {
-            use ::canic::method::{runtime as platform, wire, fail as __canic_fail};
-            use self::#handler as __canic_handler;
+            use ::canic::method::wire;
+
+            let _: fn(#session_type #input_type) -> #return_type = #handler;
             #check
+
+            #scope_constant
             const __CANIC_ID: u64 = #id;
             const __CANIC_REQUEST: wire::Limits = #request_budget;
             const __CANIC_REPLY: wire::Limits = #reply_budget;
-
-            /// Apply the declared guard before admitting the request frame.
-            fn __canic_admit() -> Result<(), String> {
-                #guard
-                ::canic::method::admit_request::<#request>(__CANIC_REQUEST.bytes)
-            }
 
             fn __canic_decode(bytes: &[u8]) -> Result<#request, wire::Error> {
                 wire::decode(bytes, wire::Encoding::Frame { method: __CANIC_ID, direction: wire::Direction::Request }, __CANIC_REQUEST)
@@ -165,27 +172,31 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 wire::encode(&value, wire::Encoding::Frame { method: __CANIC_ID, direction: wire::Direction::Response }, __CANIC_REPLY)
             }
 
-            #[platform::#kind(
-                runtime = platform,
-                guard = __canic_admit,
-                decode = __canic_decode,
-                max_bytes = 4294967295,
-                on_error = __canic_fail,
-                name = #export,
-                encode = __canic_encode,
-            )]
-            #asynchronous fn __canic_invoke(__canic_input: #request) -> #reply {
-                #unit
-                __canic_handler(#session #argument)#wait
+            #[cfg(target_arch = "wasm32")]
+            {
+                use ::canic::method::{fail as __canic_fail, runtime as platform};
+                use self::#handler as __canic_handler;
+
+                /// Apply the declared guard before admitting the request frame.
+                fn __canic_admit() -> Result<(), String> {
+                    #guard
+                    ::canic::method::admit_request::<#request>(__CANIC_REQUEST.bytes)
+                }
+
+                #[platform::#kind(
+                    runtime = platform,
+                    guard = __canic_admit,
+                    decode = __canic_decode,
+                    max_bytes = 4294967295,
+                    on_error = __canic_fail,
+                    name = #export,
+                    encode = __canic_encode,
+                )]
+                #asynchronous fn __canic_invoke(__canic_input: #request) -> #reply {
+                    #unit
+                    __canic_handler(#session #argument)#wait
+                }
             }
         };
     })
-}
-
-/// Mount a conventional account provisioning hub or shard with its explicit retained layout.
-#[proc_macro]
-pub fn mount_provisioning(input: TokenStream) -> TokenStream {
-    provisioning::expand(input.into())
-        .unwrap_or_else(syn::Error::into_compile_error)
-        .into()
 }

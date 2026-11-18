@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.230.0] - 2026-11-19
+
+### 🔧 Changed
+
+Account provisioning now uses ordinary Rust functions with the application's
+shared IC DB entities. Replace `mount_provisioning!` and
+`declare_provisioning_row!` with the hub or shard mapping and a call to
+`provision` or `receive`. Keep the role’s existing database and lifecycle
+mount. See the [worked example](qualification/README.md#provision-an-account-on-its-assigned-shard).
+
+New apps and the greeting demo compile their application handlers on native
+and Wasm targets. Canic endpoint attributes keep the handler visible to Rust
+Analyzer and generate the IC export on Wasm. The generated Wire codecs and
+provisioning store accessors also compile natively. Both workspaces adopt Toko
+Tooling 0.45.11 and IC DB 0.23.12 (minimum 0.23.11). Provisioning still examines at most one
+candidate and rejects encoded output over 1 KiB after IC DB decodes it.
+
+From a configured app directory, build the fleetless app with `canic app build`.
+To check the starter handlers in the Canic checkout:
+
+```sh
+cargo check -p template
+canic app build --config apps/demo/canic.toml --app demo
+```
+
 ## [0.229.0] - 2026-11-18
 
 ### ✨ Added

@@ -1,31 +1,28 @@
 //! Bounded lookups and atomic updates of application-owned provisioning rows.
-use super::{Account, Binding, HubRoute, Id, Record, Request, ShardRecord, Ticket};
-use ic_db::Database;
+use super::{Account, Binding, HubRoute, Id, Request, ShardRecord, Ticket};
+use ic_db::{Database, Entity};
 
-pub(super) fn find<E: Record>(db: &Database, account: Account) -> Option<E> {
-    db.query::<E>()
-        .using_index(
+pub(super) fn find<E: Entity>(db: &Database, account: Account) -> Option<E> {
+    let row = db
+        .get_by_unique::<E>(
             "issuer,subject",
             &[account.issuer.into(), account.subject.into()],
         )
-        .limit(1)
-        .work_limit(1)
-        .byte_limit(1024)
-        .fetch()
-        .expect("lookup provisioned account")
-        .rows
-        .pop()
+        .expect("lookup provisioned account")?;
+    let encoded = row.encode().expect("encode provisioned account");
+    assert!(encoded.len() <= 1024, "provisioning row exceeds 1 KiB");
+    Some(row)
 }
 
-fn insert<E: Record>(db: &mut Database, row: &E) {
+fn insert<E: Entity>(db: &mut Database, row: &E) {
     let mut batch = ic_db::Batch::new();
     batch.insert(row).expect("insert provisioned account");
     db.commit(batch).expect("commit provisioned account");
 }
 
-pub(super) fn ticket<E: HubRoute>(row: &E) -> Ticket<E> {
-    let (account, id) = row.identity();
-    let (shard, data) = row.retained();
+pub(super) fn ticket<E: HubRoute>(row: &E::Row) -> Ticket<E> {
+    let (account, id) = E::identity(row);
+    let (shard, data) = E::retained(row);
     Request {
         binding: Binding { id, account, shard },
         data,
@@ -36,11 +33,11 @@ pub(super) fn reserve<E: HubRoute>(
     db: &mut Database,
     binding: &Binding<Id<E>>,
     initial: E::Initial,
-) -> E {
-    find::<E>(db, binding.account).unwrap_or_else(|| {
+) -> E::Row {
+    find::<E::Row>(db, binding.account).unwrap_or_else(|| {
         let row = E::pending(binding.clone(), initial);
         assert!(
-            ticket(&row).binding == *binding && !row.ready(),
+            ticket::<E>(&row).binding == *binding && !E::ready(&row),
             "invalid pending row mapping"
         );
         insert(db, &row);
@@ -49,15 +46,15 @@ pub(super) fn reserve<E: HubRoute>(
 }
 
 pub(super) fn confirm<E: HubRoute>(db: &mut Database, expected: &Binding<Id<E>>) {
-    let mut row = find::<E>(db, expected.account).expect("missing retained reservation");
+    let mut row = find::<E::Row>(db, expected.account).expect("missing retained reservation");
     assert!(
-        ticket(&row).binding == *expected,
+        ticket::<E>(&row).binding == *expected,
         "changed provisioning reservation"
     );
-    if !row.ready() {
-        row.mark_ready();
+    if !E::ready(&row) {
+        E::mark_ready(&mut row);
         assert!(
-            row.ready() && ticket(&row).binding == *expected,
+            E::ready(&row) && ticket::<E>(&row).binding == *expected,
             "invalid ready row mapping"
         );
         let mut batch = ic_db::Batch::new();
@@ -68,8 +65,8 @@ pub(super) fn confirm<E: HubRoute>(db: &mut Database, expected: &Binding<Id<E>>)
 
 pub(super) fn accept<E: ShardRecord>(db: &mut Database, request: Ticket<E>) -> bool {
     let binding = request.binding.clone();
-    let matches = |row: &E| {
-        let (account, id) = row.identity();
+    let matches = |row: &E::Row| {
+        let (account, id) = E::identity(row);
         account == binding.account && id == binding.id
     };
     // Validate the submitted payload even when acknowledging an earlier insert.
@@ -77,7 +74,7 @@ pub(super) fn accept<E: ShardRecord>(db: &mut Database, request: Ticket<E>) -> b
     if !matches(&row) {
         return false;
     }
-    if let Some(existing) = find::<E>(db, binding.account) {
+    if let Some(existing) = find::<E::Row>(db, binding.account) {
         return matches(&existing);
     }
     insert(db, &row);

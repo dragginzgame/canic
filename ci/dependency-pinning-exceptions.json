@@ -1,18 +1,1 @@
-[
-  {
-    "rule": "cargo-exact",
-    "file": "Cargo.toml",
-    "subject": "ic-db",
-    "value": "=0.23.10",
-    "reason": "IC DB 0.23.11 removed the provisioning lookup's production output-byte limit.",
-    "evidence": "qualification/README.md#provision-an-account-on-its-assigned-shard"
-  },
-  {
-    "rule": "cargo-exact",
-    "file": "qualification/Cargo.toml",
-    "subject": "ic-db",
-    "value": "=0.23.10",
-    "reason": "IC DB 0.23.11 removed the provisioning lookup's production output-byte limit.",
-    "evidence": "qualification/README.md#provision-an-account-on-its-assigned-shard"
-  }
-]
+[]

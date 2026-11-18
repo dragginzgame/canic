@@ -34,101 +34,53 @@ Run `make store-test` for these and the other installed Store cases.
 
 ### Provision an account on its assigned shard
 
-For an IC DB hub and shard with the conventional account schema, put one
-`mount_provisioning!` in each crate’s `lib.rs`. Select `db-store`, `method`
-and `sharding` on native and Wasm (the shared protocol can enable the last
-two). Select `provisioning` for the installed actors.
-
-The shared application protocol keeps its published Wire method, budget and
-placement namespace. It validates incoming data and exports the stored payload
-through ordinary Rust functions that both roles use.
+Use two ordinary endpoint functions. The hub calls `provision` after Canic has
+admitted the caller's session. It supplies the validated account mapping and a
+candidate ID generator. Canic calls the generator only when it needs to make a
+reservation. The shard calls `receive` under its configured parent guard.
 
 ```rust
-use canic::sharding::provisioning::{ProvisioningPayload, Resource};
-
-pub struct Users;
-
-impl Resource for Users {
-    type Id = [u8; 16];
-    type Data = String;
-    const METHOD: &'static str = "provision_user";
-    const DOMAIN: &'static [u8] = b"toko.user.placement.v1";
-    const LIMITS: ic_wire::Limits = super::signup::LIMITS;
+#[canic::update(scope = Hub::SCOPE, limits = LIMITS)]
+async fn register(session: SessionView, name: String) -> Progress {
+    provision::<Hub>(&session, name, || Ulid::generate_prand().to_bytes()).await
 }
 
-impl ProvisioningPayload for Users {
-    type Stored = super::DisplayName;
-    fn normalize(input: String) -> Self::Stored {
-        super::display_name(&input).unwrap_or_else(|error| panic!("{error:?}"))
-    }
-    fn export(value: &Self::Stored) -> String { value.0.clone() }
+#[canic::update(contract = Provision<Users>, guard = canic::topology::require_parent)]
+fn provision_user(request: Ticket<Shard>) -> Binding<[u8; 16]> {
+    receive::<Shard>(request)
 }
 ```
 
-The hub declares its private row and pending/ready enum. The generated
-`register` endpoint uses the same write scope at ingress and after suspension.
-It obtains a candidate from IC DB’s synchronous `Ulid::generate_prand`. For a
-different issuance policy, supply `generator = path::to_function` with signature
-`fn() -> ic_db::Ulid`. The 16-byte Wire representation stays the same.
+The complete [hub](fixtures/provisioning-roles/hub.rs) and
+[shard](fixtures/provisioning-roles/shard.rs) examples import `UserRoute` and
+`User` from Toko's shared schema library. `HubRoute` maps an application row to
+its pending or ready state. `ShardRecord` constructs a validated private row.
+Both use their role's existing store. The mapping compiles on native and Wasm.
+The two installed endpoint files select the actual IC caller, transport and
+clock through Canic. Keep each role's existing `mount_db_role!` for lifecycle.
+Choose the role's display name independently in the fleetless app build.
 
-```rust
-canic::mount_provisioning! {
-    canic::sharding::provisioning::ProvisioningRole::Hub, schema::UserRoute => toko::user::provisioning::Users,
-    database = "toko.user.hub.principal.v1", config = "toko.user.hub.config.v1",
-    authority = "toko", pages = 65536, payload = display_name, status = toko::user::Status,
-}
-```
-
-The shard exports the parent-only `provision_user` endpoint and validates
-every request before returning a receipt, including retries after a profile edit.
-
-```rust
-canic::mount_provisioning! {
-    canic::sharding::provisioning::ProvisioningRole::Shard, schema::User => toko::user::provisioning::Users,
-    authority = "user_shard", payload = display_name, prefix = "toko.user.shard.",
-    database = "toko.user.shard.user.v1",
-}
-```
-
-The first argument is a Rust value of type `ProvisioningRole`. Importing or
-aliasing `Hub` or `Shard` works. Rust rejects a string or a variant that
-disagrees with the declared layout. `canic app build` supplies the selected
-canister’s optional `role` from `canic.toml`. The generated `APPLICATION_ROLE`
-contains that name; for a standalone build, `role_name = MY_ROLE` can provide
-an application string constant. With neither source the name is `None`.
-`PROVISIONING_ROLE` identifies the behavior. Naming grants no authority and
-does not participate in allocation key or Auth role selection.
-
-The [consumer fixture](fixtures/provisioning-roles/canic.toml) builds one Toko
-hub package twice with roles `user_hub` and `project_hub`, and a shard with the
-Rust name `account_archive`. In an isolated Toko checkout using the shared
-resource above and the generated provisioning endpoints, copy the fixture’s
-`hub.rs` and `shard.rs` over the two role crates’ `src/lib.rs`, its TOML to
-`apps/toko/roles.toml`, and its `roles.rs` into the qualification test directory.
-With the candidate CLI and prepared Testkit server, run:
+To reproduce in an isolated Toko checkout with the shared-schema layout,
+copy the fixture's hub/shard files over the respective `src/lib.rs` files and
+put `register.rs` in the hub's `src` and `provision_user.rs` in the shard's
+`src`. Remove the preceding registration and provisioning handlers and their
+obsolete imports. Keep the other endpoints. Add `roles.toml` from the
+[fixture config](fixtures/provisioning-roles/canic.toml) under `apps/toko`, and
+copy [the installed check](fixtures/provisioning-roles/roles.rs) into the
+qualification tests. With the candidate
+Canic dependency and CLI and the prepared Testkit server, run:
 
 ```sh
 canic app build --app roles --config apps/toko/roles.toml
 cargo test --locked --manifest-path qualification/Cargo.toml --test roles
 ```
 
-Options can appear in any order. `endpoint` takes a Rust identifier and the
-shard export must match the shared method. `read_scope` defaults to `"read"`;
-the hub’s `write_scope` defaults to `"write"`. Enrollment remains a fleet
-operation. The hub prefix defaults to its explicit authority followed by a dot.
-The shard parent key defaults to its explicit prefix followed by `hub.v1`;
-`parent_storage_key` preserves a different retained name. Shard pages default
-to Storage’s existing layout. Preserve the original page budget when specifying
-`pages`. Keep other application endpoints in their existing modules. Remove the
-two generated endpoint handlers and their old mounts on adoption to avoid
-duplicate IC exports. Custom layouts can implement `Record`, `HubRoute` and
-`ShardRecord` directly.
-
-The named fields in this adapter cover the two qualified IC DB layouts. Its
-indexed lookup admits one result row within a 1 KiB output budget. IC DB
-0.23.10 exposes the production query limit. Version 0.23.11 only exposes a
-test-only override. Requalify with `make db-test db-clippy` before lifting the
-0.23.10 pin when equivalent production enforcement is available. Preserve the same database schema,
+The adapter’s
+unique `issuer,subject` lookup examines at most one candidate and refuses a
+non-unique index. IC DB 0.23.11 returns the decoded entity. Canic re-encodes it
+with the entity’s canonical encoder and checks its size before
+returning the row or changing provisioning state; a row over 1 KiB traps.
+Preserve the same database schema,
 key namespace, original Root and pool when adopting it on existing data.
 Root retains the original generation; after suspension the hub checks the
 allocation and principal. A pending row with no corresponding Root claim
@@ -169,7 +121,7 @@ encoding and allocation. The local counter upgrade and Root snapshot tests run o
 Testkit 0.110.1. Keep deployed 0.76 records with their qualified executable until
 a physical-image migration is separately qualified.
 
-The DB 0.23.10 witness and Blob 0.106.0 catalog use Storage 0.78.3 directly.
+The DB 0.23.11 witness and Blob 0.106.0 catalog use Storage 0.78.3 directly.
 The DB installed suite covers populated upgrades, refused upgrades and damaged storage. The installed Blob suite covers fresh composition, the managed fleet journey and refusal to upgrade the populated 0.100.6 catalog. The refusal preserves
 the predecessor's stable bytes, management report and surviving asset.
 [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8) records the decision to retain the original executable for this directory.
@@ -1039,7 +991,7 @@ supported cancellation and incompatible-executable refusal without changing stab
 backing. A rejected upgrade preserves the prior module, stable bytes and a live
 query cursor. Empty and corrupt storage directories both refuse upgrade without
 changing the supplied bytes. The compatible executable reopens all seven rows. Normal Wasm excludes the private fault/maintenance
-entrypoint. Requests bound results to 1–3 and candidates to 1–4, with 1 KiB engine
+entrypoint. Requests bound results to 1–3 and candidates to 1–4, with 1 KiB post-fetch
 output and a 64 KiB frame envelope; writes contain at most four rows. These are
 application witness bounds, not new engine limits.
 

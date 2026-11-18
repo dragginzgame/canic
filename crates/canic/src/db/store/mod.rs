@@ -63,8 +63,8 @@ pub use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
 
 /// Declare an actor-local database module with `attach` and synchronous `with`.
 /// Supply only the allocation key to bind IC DB's generated `OUT_DIR/schema.rs`
-/// from the consuming package. Native callers get the same compiled schema;
-/// only the Wasm actor declares the attached store. With an explicit schema
+/// from the consuming package. All targets use the same compiled schema
+/// and explicitly attached store. With an explicit schema
 /// function, the key and schema paths resolve inside the generated module.
 #[macro_export]
 macro_rules! declare_db_store {
@@ -75,19 +75,23 @@ macro_rules! declare_db_store {
             pub const DATABASE_KEY: &str = $key;
             /// Compiled application schema for native and Wasm consumers.
             pub const SCHEMA: fn() -> ::ic_db::Schema = compiled;
+
             include!(concat!(env!("OUT_DIR"), "/schema.rs"));
-            #[cfg(target_arch = "wasm32")]
+
             $crate::declare_db_store!(pub(crate) mod store, key = super::DATABASE_KEY, schema = super::compiled);
         }
     };
     ($vis:vis mod $name:ident, key = $key:expr, schema = $schema:path $(,)?) => {
         $vis mod $name {
             use $crate::db::store::{Database, DefaultMemoryImpl, MemoryRuntime, Store};
+
             std::thread_local! { static STORE: Store = const { Store::new($key, $schema) }; }
+
             /// Attach using the actor's existing directory and install-only incarnation.
             pub fn attach(host: &MemoryRuntime<DefaultMemoryImpl>, incarnation: Option<[u8; 16]>) {
                 STORE.with(|s| s.attach(host, incarnation));
             }
+
             /// Borrow the attached database for a synchronous operation.
             pub fn with<R>(op: impl FnOnce(&mut Database) -> R) -> R {
                 STORE.with(|s| s.with(op))

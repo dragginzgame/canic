@@ -216,12 +216,14 @@ fn query(_caller: ic_db::Principal, request: QueryRequest) -> QueryReply {
         .query::<Item>()
         .filter("score", Comparison::Ge, request.minimum)
         .limit(usize::from(request.limit))
-        .work_limit(usize::from(request.work))
-        .byte_limit(1024);
+        .work_limit(usize::from(request.work));
     if let Some(cursor) = &cursor {
         query = query.after(cursor);
     }
     let page = query.fetch().map_err(refusal)?;
+    if page.output_bytes > 1024 {
+        return Err(Refusal::Limit);
+    }
     Ok(Page {
         rows: page
             .rows

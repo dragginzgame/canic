@@ -16,7 +16,6 @@ pub const QUERY: u64 = ic_wire::method_id("blob_query");
 /// Replicated management observation, authorized by the supplier's configured manager.
 pub const MANAGEMENT: u64 = ic_wire::method_id("blob_management");
 
-#[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
 pub mod endpoint;
 

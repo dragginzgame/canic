@@ -1,6 +1,5 @@
 //! First hands-on greeting application. Upgrades replace code; no persistent state is claimed.
 
-#[cfg(target_family = "wasm")]
 mod actor;
 
 /// Greeting embedded in the executable; edit this and rebuild to rehearse an upgrade.

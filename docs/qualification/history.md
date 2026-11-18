@@ -7,6 +7,39 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Shared Toko entities and ordinary provisioning functions — 2026-11-19
+
+Canic #43 used an isolated copy of the Toko shared-schema working tree (base
+`bdc2bed`) with IC DB 0.23.12. The hub and shard each imported one external
+entity and checked the fingerprint of the attached database against that
+single-entity schema. Six native application tests passed. Both hosts passed
+native and Wasm Clippy. The installed role-name change preserved the hub's
+stable bytes. The installed signup witness restored a pending hub reservation
+after the shard committed, then confirmed the original ID and shard with
+identical shard bytes on retry. A later retry preserved the renamed profile.
+The shard refused an unauthorized caller. Both signup and shard checks passed
+again with populated hub/shard predecessors (SHA-256 prefixes `ea5e29e5` and
+`6741e3da`). The separate live II case was skipped.
+
+## IC DB 0.23.11 and portable endpoint handlers — 2026-11-19
+
+For Canic #42 the adapter switched to the complete unique-index lookup and
+checked the returned entity's canonical encoding. The Canic workspace locked
+IC DB 0.23.12 and passed 17 native tests with provisioning enabled, including
+refusal of a non-unique account index. The isolated consumer locked 0.23.11,
+built three role artifacts and passed the installed role, signup/retry and
+shard checks, including signup and shard upgrades from populated predecessors.
+
+The provisioning lookup examined at most one candidate. Confirmation accepted
+a 1,024-byte result and left the reservation pending for a 1,025-byte result.
+IC DB reports encoded output size after decoding. Both installed DB witness
+cases passed. The isolated Toko fixture below built all three role artifacts,
+preserved storage through a role-name change, and passed signup and shard
+checks on fresh and predecessor installations. The live II case was skipped.
+
+The starter and greeting actors passed native and Wasm Clippy. The installed
+CLI journey called the greeting and upgraded the same canister to v2.
+
 ## Conventional provisioning mount — 2026-11-18
 
 The role-name extension used the same hub package for `user_hub` and

@@ -17,6 +17,12 @@ impl Contract for Example {
     type Output = String;
 }
 
+/// Return the submitted name using the application's published contract.
+#[canic::update(contract = Example)]
+fn provision_user(name: String) -> String {
+    name
+}
+
 #[test]
 fn named_frames_follow_each_direction_and_budget() {
     let short = "name".to_owned();
@@ -42,7 +48,10 @@ fn named_frames_follow_each_direction_and_budget() {
         )
         .unwrap()
     );
-    assert_eq!(Example::decode_request(&request).unwrap(), short);
+    assert_eq!(
+        provision_user(Example::decode_request(&request).unwrap()),
+        short
+    );
     assert_eq!(Example::decode_reply(&reply).unwrap(), long);
     assert!(Example::encode_request(&long).is_err());
     let too_large = "b".repeat(300);

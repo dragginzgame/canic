@@ -1,39 +1,11 @@
-//! Fixed demo adapter. Applications own the handler; Platform and Wire own execution and framing.
-use crate::{GREET, Greeting, LIMITS, MAX_NAME_BYTES};
-pub use ic_platform_runtime as runtime;
-use ic_platform_runtime::system as api;
+//! Fixed public greeting mount and IC ingress adapter.
+#[cfg(target_arch = "wasm32")]
+mod endpoint;
 
-/// Bound the greeting frame before Platform copies the request.
-/// # Errors
-/// Refuses oversized requests without invoking the application.
-pub fn bounded() -> Result<(), String> {
-    if api::argument_size() > LIMITS.bytes {
-        return Err("greeting frame too large".into());
-    }
-    Ok(())
-}
+use crate::{GREET, Greeting, LIMITS};
 
-/// Decode the existing greeting contract and its bounded UTF-8 name.
-/// # Errors
-/// The return type is infallible; invalid requests trap.
-/// # Panics
-/// Traps on invalid Wire framing or a name exceeding the application limit.
-#[must_use]
-pub fn decode(bytes: &[u8]) -> Result<String, std::convert::Infallible> {
-    let name: String = ic_wire::decode(
-        bytes,
-        ic_wire::Encoding::Frame {
-            method: GREET,
-            direction: ic_wire::Direction::Request,
-        },
-        LIMITS,
-    )
-    .unwrap_or_else(|_| api::trap("invalid greeting frame"));
-    if name.len() > MAX_NAME_BYTES {
-        api::trap("name exceeds 128 UTF-8 bytes");
-    }
-    Ok(name)
-}
+#[cfg(target_arch = "wasm32")]
+pub use endpoint::{bounded, decode, fail, runtime};
 
 /// Encode the fixed response; Platform traps any encoding failure.
 /// # Errors
@@ -50,13 +22,6 @@ pub fn encode(value: Greeting) -> Result<Vec<u8>, ic_wire::Error> {
     )
 }
 
-/// Trap refused endpoint stages within the current message.
-/// # Panics
-/// Always traps.
-pub fn fail(error: impl std::fmt::Debug) -> ! {
-    api::trap(&format!("endpoint refused: {error:?}"))
-}
-
 /// Mount the demo's public `greet` query and replicated `probe` update.
 /// The explicit synchronous handler accepts `&str` and returns `canic::Greeting`.
 /// Mounting starts no storage, timers or lifecycle and grants no authority.
@@ -66,6 +31,9 @@ pub fn fail(error: impl std::fmt::Debug) -> ! {
 #[macro_export]
 macro_rules! mount_greeting_endpoints {
     ($handler:path) => {
+        const _: fn(&str) -> $crate::Greeting = $handler;
+
+        #[cfg(target_arch = "wasm32")]
         mod canic_greeting {
             use endpoint::runtime;
             use $crate::{Greeting, greeting as endpoint};

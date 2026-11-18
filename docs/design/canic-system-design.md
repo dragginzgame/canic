@@ -891,18 +891,22 @@ Toko owns login, account identity, user ID generation, payload validation and
 the private user record. The opt-in Canic hub adapter owns provisioning from an
 authenticated session. Its IC DB binding uses the application's existing route
 row as the only reservation. Native and Wasm builds check the same row mappings.
-Only the installed actor resolves the store accessor and application ID generator.
+Both targets compile the store accessor. The installed actor obtains the candidate
+ID from the configured generator. The adapter selects the complete unique
+issuer/subject index and checks the canonical row size before exposing it.
 App configuration supplies the optional display name when building a provisioning
-component. Standalone Rust builds may supply a constant. The typed Hub or Shard
-choice belongs to the mount. Renaming a role changes neither provisioning
+component. Standalone Rust builds may supply a constant. The hub or shard behavior belongs to its Rust
+implementation. Renaming a role changes neither provisioning
 behavior, Auth enrollment, nor retained keys.
-The conventional provisioning mount binds this role's store and explicit
-allocation layout. Its resource owns normalization and export of the application
-payload; both endpoints validate each request, including retries. The hub
-selects a single registration scope for ingress and post-await authorization.
-The default candidate ID uses IC DB's synchronous pseudorandom ULID generator;
-the application can supply its own synchronous ULID policy. Custom rows retain
-the underlying traits. This reuses the legacy placement decision recorded below.
+For Canic #43 the role binds its existing store to the original shared IC DB
+entity with ordinary Rust functions. The hub implements `HubRoute`; the shard
+implements `ShardRecord`. The IC DB entity may live in a separate application
+crate. Neither host implements or forwards IC DB's Entity trait. Application
+endpoints call `provision` and `receive` directly. Configuration and role names
+do not select a schema by inference. The hub supplies its candidate ID function
+and shares one write-scope constant with post-await authorization. The shard
+validates even a repeated request before acknowledging the existing row.
+This reuses the legacy placement decision recorded below.
 A racing request reads the winner before insertion.
 The shard admits its installed parent and inserts once. An exact receipt for the
 original user and destination permits marking the same reservation ready.

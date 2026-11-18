@@ -13,7 +13,7 @@ toko-tooling.workspace = true
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[dependencies]
 canic = { workspace = true, features = ["greeting", "method", "readiness"] }
 
 [lints]

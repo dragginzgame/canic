@@ -1,8 +1,6 @@
 //! Explicit demo composition. Neither mount initializes a service or owns lifecycle.
 canic::mount_greeting_endpoints!(crate::greeting);
 
-canic::mount_metrics_endpoint!(crate::actor::snapshot);
-
 canic::mount_readiness_endpoint!(crate::actor::readiness);
 
 fn readiness() -> canic::readiness::State {
@@ -10,10 +8,24 @@ fn readiness() -> canic::readiness::State {
     canic::readiness::State::Ready
 }
 
+canic::mount_metrics_endpoint!(crate::actor::snapshot);
+
 fn snapshot() -> canic::metrics::Snapshot {
     canic::metrics::Snapshot {
-        observed_at_ns: ic_platform_runtime::system::time(),
-        // This stateless application has no timer provider; unavailable is not zero.
+        observed_at_ns: now_ns(),
         timers: None,
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+use ic_platform_runtime::system::time as now_ns;
+
+#[cfg(not(target_arch = "wasm32"))]
+fn now_ns() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .expect("clock before Unix epoch")
+        .as_nanos()
+        .try_into()
+        .expect("timestamp outside u64 nanoseconds")
 }

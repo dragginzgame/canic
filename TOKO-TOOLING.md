@@ -735,11 +735,13 @@ Prefer one grouped `use` declaration per crate in each scope. Factor out shared
 path prefixes with nested braces. Group imports that share visibility and
 attributes, and preserve the names each import brings into scope.
 
-Keep shared Rust logic visible on every supported target. When a group of items
-requires Wasm, put it in an ordinary module and apply
-`#[cfg(target_arch = "wasm32")]` once to its module declaration. Keep its
-target-only imports and helpers inside. Use an item-level guard only when the
-target distinction belongs to that individual item.
+Write handwritten and generated Rust to compile on all supported targets by
+default. Use a Wasm or host target condition only when a specific operation
+requires a target-exclusive API or a genuinely different implementation.
+Deployment to the IC alone does not justify a target guard. Reuse a portable
+API when one exists. Where IC and host clock or entropy sources must differ,
+confine target selection to the implementation that obtains the time or random
+bytes. Keep callers and shared application logic unconditional.
 
 In handwritten and generated Rust, leave a blank line between the import block,
 item-level macro invocations and function definitions. Separate adjacent functions

@@ -47,7 +47,11 @@ fn admit<E: HubRoute>(view: &SessionView) {
 /// immutable Root allocation. A completed signup needs no network call.
 /// # Panics
 /// Traps on invalid application data, expired authority, storage errors or conflicting bindings.
-pub async fn provision<E: HubRoute>(view: &SessionView, input: Data<E>) -> Progress {
+pub async fn provision<E: HubRoute>(
+    view: &SessionView,
+    input: Data<E>,
+    new_id: impl FnOnce() -> super::Id<E>,
+) -> Progress {
     // Capture ingress authority before any suspension; callers cannot supply another user's view.
     assert_eq!(api::caller(), view.caller, "session caller mismatch");
     admit::<E>(view);
@@ -57,7 +61,7 @@ pub async fn provision<E: HubRoute>(view: &SessionView, input: Data<E>) -> Progr
     };
     assert!(account.valid(), "invalid provisioning account");
     let input = E::normalize(input);
-    let existing = E::with_store(|db| find::<E>(db, account));
+    let existing = E::with_store(|db| find::<E::Row>(db, account));
     if existing.as_ref().is_some_and(E::ready) {
         return Progress::Ready;
     }
@@ -67,8 +71,8 @@ pub async fn provision<E: HubRoute>(view: &SessionView, input: Data<E>) -> Progr
         return Progress::PlacementUnavailable;
     };
     if existing.is_none() && placement == Placement::Unknown {
-        if let Some(winner) = E::with_store(|db| find::<E>(db, account)) {
-            return if winner.ready() {
+        if let Some(winner) = E::with_store(|db| find::<E::Row>(db, account)) {
+            return if E::ready(&winner) {
                 Progress::Ready
             } else {
                 Progress::PlacementUnavailable
@@ -88,19 +92,19 @@ pub async fn provision<E: HubRoute>(view: &SessionView, input: Data<E>) -> Progr
         row
     } else {
         admit::<E>(view);
-        let id = E::new_id().await;
+        let id = new_id();
         if !still_assigned(root, key, &allocation, shard).await {
             return Progress::PlacementUnavailable;
         }
         admit::<E>(view);
         E::with_store(|db| reserve::<E>(db, &Binding { id, account, shard }, input))
     };
-    let request = ticket(&row);
+    let request = ticket::<E>(&row);
     let expected = request.binding.clone();
     if expected.shard != shard || expected.account != account {
         return Progress::PlacementUnavailable;
     }
-    if row.ready() {
+    if E::ready(&row) {
         return Progress::Ready;
     }
     admit::<E>(view);

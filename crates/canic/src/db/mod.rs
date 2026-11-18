@@ -33,7 +33,7 @@ pub enum Operation {
     /// Application-defined atomic writes.
     Write,
 }
-#[cfg(all(feature = "db", target_arch = "wasm32"))]
+#[cfg(feature = "db")]
 #[doc(hidden)]
 pub mod endpoint;
 

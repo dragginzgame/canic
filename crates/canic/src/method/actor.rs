@@ -53,11 +53,3 @@ pub fn admit_request<T: 'static>(maximum: usize) -> Result<(), String> {
     }
     Ok(())
 }
-
-/// Trap a refused execution stage in its current message.
-/// # Panics
-/// Always traps.
-#[doc(hidden)]
-pub fn fail(error: impl std::fmt::Debug) -> ! {
-    runtime::system::trap(&format!("endpoint refused: {error:?}"))
-}
