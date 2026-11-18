@@ -7,14 +7,8 @@
 
 /// The independent supplier; its DTOs and Service retain their original identities.
 pub use ic_blob_storage as supplier;
-/// Supplier-selected numeric bounds expressed in the adapter's Wire version.
-/// The independent Blob service retains its own codec and persistence owner.
-pub const RPC_LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: supplier::protocol::RPC_LIMITS.bytes,
-    allocation: supplier::protocol::RPC_LIMITS.allocation,
-    nodes: supplier::protocol::RPC_LIMITS.nodes,
-    depth: supplier::protocol::RPC_LIMITS.depth,
-};
+/// Request and reply budgets defined by the Blob protocol.
+pub use supplier::protocol::RPC_LIMITS;
 /// Wire identity for the captured-caller mutation endpoint.
 pub const UPDATE: u64 = ic_wire::method_id("blob_update");
 /// Wire identity for captured-caller inspection.

@@ -7,6 +7,15 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Blob Storage 0.106.0 — 2026-11-18
+
+Both workspaces selected the registry archive with SHA-256
+`dcdcba8e04e4fd043a55d60f4ffce34c8eb47166d6604fe3da30fb96ea563347`.
+Blob and Canic resolved the same Wire 0.25.0 limits type. The default Canic
+dependency graph remained free of Blob. All ten installed catalog cases passed
+with `make blob-test`, including rollback, fenced upgrades and managed creation.
+The supplier and lockfile fingerprints matched before and after the run.
+
 ## Account provisioning on a placed shard — 2026-11-18
 
 An isolated copy of the in-progress Toko tree at base `bdc2bed7857b` bound

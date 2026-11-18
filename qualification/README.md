@@ -132,12 +132,12 @@ including byte-exact replies, caller rejection before decode, wrong direction
 and method, bounded requests, synchronous reply rollback and an async worker check.
 
 Fresh counter and Root installations use named stable cells on registry Storage
-0.78.0. Application codecs retain their payload bounds. Storage owns directory
+0.78.3. Application codecs retain their payload bounds. Storage owns directory
 encoding and allocation. The local counter upgrade and Root snapshot tests run on
-Testkit 0.110.0. Keep deployed 0.76 records with their qualified executable until
+Testkit 0.110.1. Keep deployed 0.76 records with their qualified executable until
 a physical-image migration is separately qualified.
 
-The DB 0.23.2 witness and Blob 0.105.0 catalog use Storage 0.78.0 directly.
+The DB 0.23.9 witness and Blob 0.106.0 catalog use Storage 0.78.3 directly.
 The DB installed suite covers populated upgrades, refused upgrades and damaged storage. The installed Blob suite covers fresh composition, the managed fleet journey and refusal to upgrade the populated 0.100.6 catalog. The refusal preserves
 the predecessor's stable bytes, management report and surviving asset.
 [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8) records the decision to retain the original executable for this directory.
@@ -627,7 +627,7 @@ not invoke signing or continue maintenance.
 Native fleet tests admit both full 8 MiB manifests and
 preserve existing inline fleets with or without Store and their retained digests.
 `make blob-test` builds Blob-only and profile-composed executable pairs using the optional
-Canic adapter. The registry Blob 0.105.0 fixtures cover user
+Canic adapter. The registry Blob 0.106.0 fixtures cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,
 non-resurrecting replay, drain/reopen/exact activation, and reopen refusal. The populated 0.100.6 predecessor must refuse the incompatible upgrade and preserve its original state. The optional profile composition shares one
 Storage bootstrap with Blob, preserves both owners across upgrade, closes profile

@@ -6,7 +6,7 @@ is [canic-asset-catalog](../../qualification/canic-asset-catalog/src/lib.rs), in
 qualification workspace. It is a finite local catalog example, not a provider
 client or a production deployment recipe.
 
-The published 0.105.0 Service accepts the application’s Storage 0.78 lease.
+The published 0.106.0 Service accepts the application’s Storage 0.78 lease.
 Use fresh backing for this Storage generation. The historical 0.100.6 catalog retains its original executable. [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8)
 
 ## Ownership and use
@@ -175,11 +175,9 @@ the same registry archive in both locks, and records library hashes and consumer
 before/after each installed run. Release evidence is recorded in the
 [qualification history](../qualification/history.md).
 
-Canic and Blob select Wire 0.24.3. Blob still owns its persistence codec.
-`canic::blob::RPC_LIMITS` projects the supplier's numeric budgets into the adapter's
-Wire type; it does not change admission policy or add a codec implementation.
-The installed composition checks qualify that boundary. The older input hashes
-below describe their dated run, not the current dependency selection.
+Canic and Blob use Wire 0.25.0. `canic::blob::RPC_LIMITS` re-exports the
+supplier's protocol constant. Blob owns its persistence codec.
+The older input hashes below describe their dated run.
 
 ## Original local qualification evidence — 2026-11-15
 

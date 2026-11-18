@@ -17,6 +17,10 @@ canic app build --canister user_shard
 
 ### 🔧 Changed
 
+Canic’s optional Blob adapter now uses Blob Storage 0.106.0 and shares its
+Wire 0.25 protocol limits directly. Both workspaces include the Host and
+Platform patch updates.
+
 A shard's `mount_db_role!` now derives the parent cell key from its storage prefix.
 Remove `parent = "..."` for the standard Toko layout. For a custom retained
 layout, rename it to `parent_storage_key` and keep the exact value.
@@ -30,7 +34,7 @@ canic app build --canister user_shard
 
 ### 🧪 Testing
 
-Both workspaces use Toko Tooling 0.45.8. Installed counter and recovery
+Both workspaces use Toko Tooling 0.45.9. Installed counter and recovery
 tests share the same application client.
 
 ### 🎯 Qualification
