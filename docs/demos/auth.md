@@ -379,11 +379,20 @@ Controller refresh pulls the individual
 receiver's grant. Repeated install refuses. A post-upgrade handler may reopen the
 application database, but must leave this volatile receiver closed.
 
-Re-admitting users after losing replay evidence is a separate qualification
-gate. IC Auth owns the [recovery contract](https://github.com/dragginzgame/ic-auth/issues/4)
-and [installed proof](https://github.com/dragginzgame/ic-auth/issues/5). Canic's
-[receiver integration](https://github.com/dragginzgame/canic/issues/31) keeps
-the volatile receiver closed across that transition.
+IC Auth 0.48.0 requires the receiver to stay closed after complete loss of its
+volatile state. A live session and a committed logout with a lost acknowledgement
+can leave identical surviving evidence. A controller refresh, a later deadline
+or a newly issued credential cannot distinguish those histories.
+[Supplier decision](https://github.com/dragginzgame/ic-auth/blob/49b3927758828665d887fcb47a280f7e65b56bd6/docs/design/authentication.md#receiver-recovery-after-complete-volatile-loss)
+and [installed witness](https://github.com/dragginzgame/ic-auth/blob/49b3927758828665d887fcb47a280f7e65b56bd6/qualification/ic-auth-host-conformance/README.md#complete-loss-recovery-witness).
+
+Toko can reopen the retained account and shard route on upgrade. To authorize a
+private read on that upgraded receiver, Auth would also need independently
+surviving replay and revocation evidence or an authoritative cutoff for all
+pre-upgrade credentials and outstanding operations. The volatile profile
+supplies neither. Returning on a new browser key after ordinary logout exercises
+a receiver whose safety state survived. The post-upgrade returning-user case
+remains open in [Canic #31](https://github.com/dragginzgame/canic/issues/31).
 
 ## Toko signup and private shard reads
 
