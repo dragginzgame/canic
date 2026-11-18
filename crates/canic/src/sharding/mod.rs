@@ -43,7 +43,30 @@ pub enum Placement {
     GrowthRefused,
 }
 
+impl Placement {
+    /// Return the retained allocation identity and its canonical canister target.
+    /// Other placement states have no usable target; applications retain their original state.
+    /// # Errors
+    /// An invalid assigned principal is an unreadable result. Observe the original key.
+    pub fn assigned_target(
+        &self,
+    ) -> Result<Option<(&Allocation, ic_platform_types::Principal)>, &'static str> {
+        let Self::Assigned(allocation, text) = self else {
+            return Ok(None);
+        };
+        let principal = ic_platform_types::Principal::from_text(text)
+            .map_err(|_| "invalid assigned canister")?;
+        if principal.to_text() != *text || principal.as_slice().last() != Some(&1) {
+            return Err("invalid assigned canister");
+        }
+        Ok(Some((allocation, principal)))
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 mod client;
 #[cfg(target_arch = "wasm32")]
 pub use client::{assign, lookup};
+
+#[cfg(test)]
+mod tests;

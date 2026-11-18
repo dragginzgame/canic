@@ -351,6 +351,14 @@ canic::mount_auth_session!(read = "read");
 canic::mount_auth_lifecycle!(decode = super::decode_install, open = super::open);
 ```
 
+A hub that retains its routing Root can select `decode_context = super::decode_install`.
+Its decoder takes `&canic::auth::install::Install` and validates the app nonce
+alongside the approved Root, issuer and audience before the mount initializes
+the receiver. With a topology-enabled shard pool, decode the inner
+`canic::topology::Install`, call `check_root(input.root)` and use its application
+bytes as the nonce. Attach the parent using the existing bounded principal cell.
+On upgrade the hook accepts empty arguments and reopens only the app's stores.
+
 In a private handler, `canic::auth::session::authorize("read")?` returns the
 admitted issuer and subject for the actual caller. Toko uses them for its account
 lookup and checks ownership. A write that suspends must recheck its captured

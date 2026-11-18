@@ -1,6 +1,6 @@
 //! Install or reopen one typed database after the actor admits its complete Storage directory.
-use ic_db::{Database, Schema};
-use ic_storage::{DefaultMemoryImpl, Memory, MemoryRuntime, StableKey};
+use ic_db::Schema;
+use ic_storage::{Memory, StableKey};
 use std::cell::RefCell;
 
 /// Declare in actor-local state. The key and schema must match the retained database.
@@ -50,6 +50,31 @@ impl<M: Memory> Store<M> {
                 .expect("database lifecycle has not run"),
         )
     }
+}
+
+#[doc(hidden)]
+pub use ic_db::Database;
+#[doc(hidden)]
+pub use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
+
+/// Declare an actor-local database module with `attach` and synchronous `with`.
+/// The key and schema paths resolve inside the generated module.
+#[macro_export]
+macro_rules! declare_db_store {
+    ($vis:vis mod $name:ident, key = $key:expr, schema = $schema:path $(,)?) => {
+        $vis mod $name {
+            use $crate::db::store::{Database, DefaultMemoryImpl, MemoryRuntime, Store};
+            std::thread_local! { static STORE: Store = const { Store::new($key, $schema) }; }
+            /// Attach using the actor's existing directory and install-only incarnation.
+            pub fn attach(host: &MemoryRuntime<DefaultMemoryImpl>, incarnation: Option<[u8; 16]>) {
+                STORE.with(|s| s.attach(host, incarnation));
+            }
+            /// Borrow the attached database for a synchronous operation.
+            pub fn with<R>(op: impl FnOnce(&mut Database) -> R) -> R {
+                STORE.with(|s| s.with(op))
+            }
+        }
+    };
 }
 
 #[cfg(test)]

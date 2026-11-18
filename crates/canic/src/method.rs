@@ -27,6 +27,61 @@ pub trait Contract {
     type Input: serde::Serialize + serde::de::DeserializeOwned;
     /// Public reply shape.
     type Output: serde::Serialize + serde::de::DeserializeOwned;
+    /// Encode the request using this method's directional frame and limits.
+    /// # Errors
+    /// Propagates the Wire codec refusal.
+    fn encode_request(value: &Self::Input) -> Result<Vec<u8>, wire::Error> {
+        wire::encode(
+            value,
+            wire::Encoding::Frame {
+                method: Self::ID,
+                direction: wire::Direction::Request,
+            },
+            Self::REQUEST,
+        )
+    }
+
+    /// Decode the request using this method's directional frame and limits.
+    /// # Errors
+    /// Propagates the Wire codec refusal.
+    fn decode_request(bytes: &[u8]) -> Result<Self::Input, wire::Error> {
+        wire::decode(
+            bytes,
+            wire::Encoding::Frame {
+                method: Self::ID,
+                direction: wire::Direction::Request,
+            },
+            Self::REQUEST,
+        )
+    }
+
+    /// Encode the reply using this method's directional frame and limits.
+    /// # Errors
+    /// Propagates the Wire codec refusal.
+    fn encode_reply(value: &Self::Output) -> Result<Vec<u8>, wire::Error> {
+        wire::encode(
+            value,
+            wire::Encoding::Frame {
+                method: Self::ID,
+                direction: wire::Direction::Response,
+            },
+            Self::REPLY,
+        )
+    }
+
+    /// Decode the reply using this method's directional frame and limits.
+    /// # Errors
+    /// Propagates the Wire codec refusal.
+    fn decode_reply(bytes: &[u8]) -> Result<Self::Output, wire::Error> {
+        wire::decode(
+            bytes,
+            wire::Encoding::Frame {
+                method: Self::ID,
+                direction: wire::Direction::Response,
+            },
+            Self::REPLY,
+        )
+    }
 }
 
 /// Observed failure of one outbound application call.
@@ -56,36 +111,21 @@ pub async fn call<M: Contract>(
     input: &M::Input,
 ) -> Result<M::Output, CallError> {
     use runtime::call::{Call, Outcome, Wait};
-    let request = wire::encode(
-        input,
-        wire::Encoding::Frame {
-            method: M::ID,
-            direction: wire::Direction::Request,
-        },
-        M::REQUEST,
-    )
-    .map_err(CallError::Request)?;
+    let request = M::encode_request(input).map_err(CallError::Request)?;
     let result = Call::new(target, M::NAME, Wait::Bounded { seconds })
         .owned_args(request)
         .execute()
         .await
         .map_err(CallError::Dispatch)?;
     match result.into_parts().0 {
-        Outcome::Reply(bytes) => wire::decode(
-            &bytes,
-            wire::Encoding::Frame {
-                method: M::ID,
-                direction: wire::Direction::Response,
-            },
-            M::REPLY,
-        )
-        .map_err(CallError::Reply),
+        Outcome::Reply(bytes) => M::decode_reply(&bytes).map_err(CallError::Reply),
         Outcome::Rejected(reason) => Err(CallError::Rejected(reason)),
         Outcome::OutcomeUnknown(reason) => Err(CallError::Unknown(reason)),
     }
 }
 
 #[doc(hidden)]
+#[must_use]
 pub const fn same_name(left: &str, right: &str) -> bool {
     let (a, b) = (left.as_bytes(), right.as_bytes());
     if a.len() != b.len() {

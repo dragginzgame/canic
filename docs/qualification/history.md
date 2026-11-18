@@ -7,6 +7,27 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Toko hub and shard adoption — 2026-11-18
+
+An isolated copy of the Toko working tree based on `417ee72c5852` built its
+user hub and shard against the local Canic candidate. Both used declared DB
+stores and lifecycle mounts. The local shard pool opted into topology delivery.
+Fresh signup exercised Root creation of two shards, parent-only provisioning,
+capacity refusal and recovery of an existing route. The installed shard also
+refused a wrong installer, conflicting Root bindings and malformed install
+context. A nonempty upgrade argument was refused.
+
+The same signup and shard tests passed with populated predecessor actors
+upgraded to the candidate. The predecessor hub and shard Wasm SHA-256s were
+`89e8bb9a3915df479468d08bd2b33ea65f66cd577ab4362d8a8e5f3c6300d5d0`
+and `07354bf02d7c814c5dcb4659ca41376eaaef1274a1b872a7db9d16d914ba1c4b`.
+The candidate digests were `ba891d8b16e6ec113890277616f7bef03cdeeaba122989292c6cd59dcdd2fb49`
+and `d2764bcbd7d2d2f9e27605598ed8b3640480e84cc664cee80ab674f370d939db`.
+The command in the trial workspace was
+`cargo test --manifest-path qualification/Cargo.toml --locked --offline --test user_shard --test signup`;
+the predecessor run selected both `TOKO_PREDECESSOR_HUB_WASM` and
+`TOKO_PREDECESSOR_SHARD_WASM`. Browser Internet Identity has a separate gate.
+
 ## Backup recovery after operator disconnection — 2026-11-18
 
 The installed witness on Canic 0.224.0 submitted restore start, acceptance and

@@ -21,6 +21,10 @@ pub mod entropy;
 #[cfg(all(feature = "greeting", target_arch = "wasm32"))]
 pub mod greeting;
 
+/// Explicit lifecycle hooks independent of storage and Auth.
+#[cfg(all(feature = "lifecycle", target_arch = "wasm32"))]
+pub mod lifecycle;
+
 #[cfg(feature = "method")]
 pub mod method;
 
@@ -60,3 +64,7 @@ pub mod storage;
 /// Optional runtime shard assignment and lookup for application hubs.
 #[cfg(feature = "sharding")]
 pub mod sharding;
+
+/// Fleet-approved shard installation context.
+#[cfg(feature = "topology")]
+pub mod topology;

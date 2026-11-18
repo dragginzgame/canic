@@ -19,12 +19,17 @@ fn open(initial: Option<Principal>) {
         Principal::try_from_slice(cell.get()).expect("retained Root"),
     ));
 }
-#[runtime::init(runtime = runtime, guard = allow, decode = principal, max_bytes = 29, on_error = fail)]
-fn init(root: Principal) {
+canic::mount_lifecycle!(
+    input = Principal,
+    max_bytes = 29,
+    decode = principal,
+    install = install,
+    reopen = reopen
+);
+fn install(root: Principal) {
     open(Some(root));
 }
-#[runtime::post_upgrade(runtime = runtime, guard = allow, decode = empty, max_bytes = 0, on_error = fail)]
-fn reopen((): ()) {
+fn reopen() {
     open(None);
 }
 #[runtime::update(runtime = runtime, name = "signup", guard = user, decode = empty, encode = reply, max_bytes = 0, on_error = fail)]
@@ -54,9 +59,6 @@ fn empty(raw: &[u8]) -> Result<(), &'static str> {
     raw.is_empty()
         .then_some(())
         .ok_or("empty argument required")
-}
-fn allow() -> Result<(), std::convert::Infallible> {
-    Ok(())
 }
 #[allow(clippy::needless_pass_by_value)]
 fn reply(value: Placement) -> Result<Vec<u8>, ic_wire::Error> {

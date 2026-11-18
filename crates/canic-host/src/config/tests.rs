@@ -1190,6 +1190,22 @@ expires_at_ns = 1800000000000000000
         selected.config.canisters["store"].role.as_deref(),
         Some("wasm-store")
     );
+    let mut fleet = selected.config;
+    let release = fleet.shard_pool.as_ref().unwrap().release.clone();
+    let manifest = crate::publication::release_manifest(release, b"\0asm\x01\0\0\0");
+    let nonce = canic_management_protocol::application::Arguments::new(vec![7; 16]).unwrap();
+    let old = fleet
+        .shard_pool_approval(manifest.clone(), nonce.clone())
+        .unwrap();
+    assert_eq!(old.arguments, nonce);
+    fleet.shard_pool.as_mut().unwrap().install_topology = true;
+    let approved = fleet.shard_pool_approval(manifest, nonce.clone()).unwrap();
+    let install = canic::topology::Install::decode(approved.arguments.as_slice()).unwrap();
+    assert_eq!(install.root.to_text(), approved.root);
+    assert_eq!(install.parent.to_text(), approved.hub);
+    assert_eq!(install.application, nonce.as_slice());
+    assert!(install.check_root(install.parent).is_err());
+    assert!(canic::topology::Install::decode(old.arguments.as_slice()).is_err());
     for invalid in [
         source.replace("store = { id", "typo = { id"),
         source.replace("ryjl3-tyaaa-aaaaa-aaaba-cai", "rrkah-fqaaa-aaaaa-aaaaq-cai"),

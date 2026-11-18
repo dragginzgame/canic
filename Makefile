@@ -186,6 +186,7 @@ growth-test:
 # Focused management mounting/admission and reply rollback; no CLI journey suite.
 .PHONY: endpoint-test
 endpoint-test:
+	cargo test --locked -p canic --features method --test named_contract
 	bash scripts/dev/test-endpoints.sh
 
 .PHONY: root-test root-clippy root-doc

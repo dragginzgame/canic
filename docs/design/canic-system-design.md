@@ -1310,6 +1310,20 @@ provider journey, certificate, settlement or sustained-history gates.
 
 Domain transitions consume logical bounded values. Endpoint adapters select and invoke supplier-owned codecs, and call adapters own a single attempt. Application operations own retry and consistency. A decode failure after a remote mutation must not trigger a second request using another codec.
 
+### Approved shard parent binding
+
+A pool may opt into `install_topology = true`. Host resolves the declared
+hub and Root in the selected fleet and binds them into the original shard
+installation arguments. With a receiver policy, those arguments sit inside
+the receiver envelope; both Root bindings must agree. The installing Root is
+the management caller for this flow. Each shard reopens its original bounded
+parent-principal cell on upgrade, with the same authority, allocation and bytes.
+The hub reopens its existing routing Root. Parent admission compares the actual
+caller before argument copying. Topology grants no controller or Auth authority.
+Previously approved and unselected pools retain their original argument bytes.
+This preserves the immediate-parent check from the frozen legacy user hub/shard
+journey at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` without its role catalogue.
+
 ### Endpoint ownership and actor composition
 
 An actor can enable Canic's `method` feature and use `mount_wire_method!` for

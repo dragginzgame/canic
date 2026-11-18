@@ -983,21 +983,18 @@ Enable `canic/db-store` in a stateful actor and pass the generated schema functi
 directly. A Toko shard can declare its existing allocation:
 
 ```rust
-use canic::db::store::Store;
-
-thread_local! {
-    static USERS: Store = const { Store::new("toko.user.shard.user.v1", compiled) };
-}
+canic::declare_db_store!(pub(crate) mod users,
+    key = super::DATABASE_KEY, schema = super::compiled);
 ```
 
 Keep the application's existing Storage bootstrap and hub cell. In the lifecycle
 hook, pass `Some(original_incarnation)` on install and `None` on upgrade:
 
 ```rust
-USERS.with(|store| store.attach(&host, incarnation));
+users::attach(&host, incarnation);
 ```
 
-An authorized handler can use `USERS.with(|s| s.with(|db| get_me(db, &identity)))`.
+An authorized handler can use `users::with(|db| get_me(db, &identity))`.
 The application computes the incarnation only on install. A Storage or DB refusal
 traps the lifecycle message. The helper exports no endpoints. Applications that
 need to inspect a fenced database can handle IC DB's open result directly.

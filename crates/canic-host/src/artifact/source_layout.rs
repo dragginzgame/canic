@@ -114,7 +114,7 @@ impl<'ast> Visit<'ast> for Declarations {
     fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
         if let Some(segment) = item.mac.path.segments.last() {
             let name = segment.ident.to_string();
-            if name == "mount_auth_lifecycle" {
+            if matches!(name.as_str(), "mount_auth_lifecycle" | "mount_lifecycle") {
                 self.0[2] = true;
             }
             if name.starts_with("mount_")

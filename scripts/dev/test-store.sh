@@ -30,6 +30,7 @@ build() {
     cp -- "$(jq -r .wasm "target/store/$name.json")" "target/store/$name.wasm"
 }
 if [[ "$scope" == all || "$scope" == sharding ]]; then
+    cargo test --locked -p canic --features sharding sharding::tests
     cargo test --locked -p canic-management --features sharding placement::
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-db-witness --features managed-fixture --output target/store/pool-db.wasm --json > target/store/pool-db.json
     build pool-root canic-root --features sharding

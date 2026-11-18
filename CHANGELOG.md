@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+A shard pool may select `install_topology = true` to include the fleet's resolved
+Root and parent in each newly approved installation. The actor can admit its
+parent before reading the request. Applications can now share native Wire
+codecs with their mounted methods, declare a retained store once per role, and
+read their approved receiver envelope in the installation hook.
+
+With a local Toko checkout using the updated actor adapters:
+
+```sh
+canic app build --config apps/toko/canic.toml --app toko
+```
+
 ## [0.224.0] - 2026-11-18
 
 ### 🔧 Changed

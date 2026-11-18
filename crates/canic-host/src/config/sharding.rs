@@ -22,6 +22,9 @@ pub struct ShardPoolConfig {
     pub release: ic_wasm_store_protocol::Release,
     /// Optional file of exact application initialization bytes, relative to canic.toml.
     pub install_args: Option<PathBuf>,
+    /// Wrap fresh install bytes with the resolved parent and installing Root.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub install_topology: bool,
     /// Maximum lifetime shard count.
     pub max_shards: u8,
     /// Maximum lifetime keys per shard.
@@ -174,6 +177,19 @@ impl FleetConfig {
             ));
         }
         let root = id(&policy.root)?;
+        let hub = id(policy.hub(&self.canisters)?)?;
+        let arguments = if policy.install_topology {
+            let bytes = canic::topology::Install {
+                root: crate::network::principal(&root)?,
+                parent: crate::network::principal(&hub)?,
+                application: arguments.as_slice().to_vec(),
+            }
+            .encode()
+            .map_err(|error| Error::Invalid(error.into()))?;
+            canic_management_protocol::application::Arguments::new(bytes).map_err(supplier)?
+        } else {
+            arguments
+        };
         let arguments = if self.receiver_selected(&policy.component) {
             if self
                 .receiver_policy
@@ -197,7 +213,7 @@ impl FleetConfig {
             arguments,
             pool: policy.component.clone(),
             root,
-            hub: id(policy.hub(&self.canisters)?)?,
+            hub,
             max_shards: policy.max_shards,
             keys_per_shard: policy.keys_per_shard,
             creation_budget: policy.creation_budget,

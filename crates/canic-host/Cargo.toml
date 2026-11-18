@@ -20,7 +20,7 @@ backup = ["canic-management-protocol/backup", "dep:ic-backup", "dep:ic-host-sign
 
 [dependencies]
 base64.workspace = true
-canic = { workspace = true, features = ["auth"] }
+canic = { workspace = true, features = ["auth", "topology"] }
 canic-management-protocol.workspace = true
 ic-backup = { workspace = true, optional = true }
 ic-host-artifacts.workspace = true

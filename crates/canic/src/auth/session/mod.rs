@@ -387,27 +387,32 @@ mod tests;
 
 /// Install a configured receiver and its app in one hook. An upgrade reopens only
 /// the application's retained state. Both hooks trap on decoding or app failure.
-/// The app decoder receives its own bytes. The app opens its store with
+/// Use `decode_context` for a decoder taking the complete `&Install` before receiver
+/// initialization, or `decode` for the inner application bytes. The app opens its store with
 /// `Some(decoded)` on install and `None` on upgrade.
 #[cfg(target_arch = "wasm32")]
 #[macro_export]
 macro_rules! mount_auth_lifecycle {
     (decode = $decode:path, open = $open:path $(,)?) => {
+        $crate::mount_auth_lifecycle!(@mount $decode, $open, application);
+    };
+    (decode_context = $decode:path, open = $open:path $(,)?) => {
+        $crate::mount_auth_lifecycle!(@mount $decode, $open, context);
+    };
+    (@mount $decode:path, $open:path, $mode:ident) => {
         mod canic_auth_lifecycle {
-            use $crate::auth::{endpoint::{runtime, fail}, install::Install, session};
-            fn allow() -> Result<(), std::convert::Infallible> { Ok(()) }
-            fn empty(bytes: &[u8]) -> Result<(), &'static str> {
-                bytes.is_empty().then_some(()).ok_or("expected empty upgrade arguments")
-            }
-            #[runtime::init(runtime = runtime, guard = allow, decode = Install::decode, max_bytes = 4096, on_error = fail)]
+            use $crate::auth::{endpoint::fail, install::Install, session};
+            $crate::mount_lifecycle!(input = Install, max_bytes = 4096, decode = Install::decode,
+                install = install_receiver, reopen = reopen_application);
             #[allow(clippy::needless_pass_by_value)]
-            fn init(input: Install) {
-                let application = $decode(&input.application).unwrap_or_else(|error| fail(error));
+            fn install_receiver(input: Install) {
+                let application = $crate::mount_auth_lifecycle!(@decode $mode, $decode, input).unwrap_or_else(|error| fail(error));
                 session::install(&input);
                 $open(Some(application));
             }
-            #[runtime::post_upgrade(runtime = runtime, guard = allow, decode = empty, max_bytes = 0, on_error = fail)]
-            fn post_upgrade((): ()) { $open(None); }
+            fn reopen_application() { $open(None); }
         }
     };
+    (@decode application, $decode:path, $input:ident) => { $decode(&$input.application) };
+    (@decode context, $decode:path, $input:ident) => { $decode(&$input) };
 }
