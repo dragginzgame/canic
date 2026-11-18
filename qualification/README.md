@@ -258,8 +258,12 @@ small transport/cleanup adapter without opening a browser.
 then runs installed HTTP/IndexedDB qualification in headless Chromium. It uses a
 separate issuer, two Roots and two independently enrolled receivers, composing
 the real profile persistence engine through the witness's optional `profile`
-feature. Eleven browser cases cover original issuance/admission recovery across
-renderer loss, two users and independent device logins, immutable owner rules,
+feature. Two accounts reuse an issuance epoch and operation ID and each recover
+their own credential and original deadline. The first account repeats its lookup
+after the second has recovered. After a lost receiver reply, a reopened renderer
+replays the same admission arguments and receives the original receipt bytes.
+Eleven browser cases cover issuance, renewal and admission recovery across
+renderer loss, independent device logins, immutable owner rules,
 reply rollback, renewal, cleanup reopening, retained-proof rejection, actual
 Unconfirmed cleanup, cross-tab logout fencing a suspended SDK signer, and a real
 issuer result delayed until after logout. A replacement login uses a fresh journal

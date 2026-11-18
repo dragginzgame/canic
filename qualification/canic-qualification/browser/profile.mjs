@@ -11,8 +11,8 @@ const nowNs = () => BigInt(Date.now()) * 1_000_000n;
 const bounded = () => AbortSignal.timeout(5000);
 const counts = () => ({ issue: 0, renew: 0, lookup: 0, admit: 0, writes: 0 });
 
-async function setup(config, { device = 9, accountSeed = 8, reopen = false,
-  loseIssue = false, loseAdmission = false, scopes = ['read', 'write'] } = {}) {
+async function setup(config, { device = 9, accountSeed = 8, operationId = device, reopen = false,
+  loseIssue = false, loseRenew = false, loseAdmission = false, scopes = ['read', 'write'] } = {}) {
   const account = key(accountSeed), browser = key(device), issuer = Principal.fromText(config.issuer);
   const targets = config.receivers.map(value => Principal.fromText(value));
   const generation = `device-${device}`, name = `canic-profile-${device}`;
@@ -21,7 +21,7 @@ async function setup(config, { device = 9, accountSeed = 8, reopen = false,
   const trust = { host: new URL(config.gateway), rootKey: new Uint8Array(config.root) };
   const adapter = httpIssuerAdapter({ issuer, account: account.getPrincipal(), browserKey: browser.getPublicKey(),
     deadlineOffsetNs: -1_000_000_000n,
-    intent: { epoch: 1n, operation_id: new Array(32).fill(device), login_epoch: 1n,
+    intent: { epoch: 1n, operation_id: new Array(32).fill(operationId), login_epoch: 1n,
       login_id: new Array(32).fill(device), browser_public_key: [...browser.getPublicKey().rawKey],
       grants: [{ target: 'user', scopes: ['read', 'write'] }] } }, trust);
   const flow = { config, account, browser, issuer, targets, generation, journal, adapter,
@@ -36,7 +36,16 @@ async function setup(config, { device = 9, accountSeed = 8, reopen = false,
       if (loseIssue) { loseIssue = false; throw new Error('lost issuer reply'); }
       return result;
     },
-    renew: async (...args) => { flow.counts.renew++; return adapter.transport.renew(...args); },
+    renew: async (...args) => {
+      flow.counts.renew++;
+      const result = await adapter.transport.renew(...args);
+      if (loseRenew) {
+        loseRenew = false;
+        flow.original = { bytes: Array.from(result.bytes), untilNs: String(result.untilNs) };
+        throw new Error('lost renewal reply');
+      }
+      return result;
+    },
     reconcile: async (...args) => { flow.counts.lookup++; return adapter.transport.reconcile(...args); },
   };
   const options = { journal, generation, browser, account, issuer, transport,
@@ -45,6 +54,7 @@ async function setup(config, { device = 9, accountSeed = 8, reopen = false,
       flow.counts.admit++;
       flow.admission = new Uint8Array(args[2]);
       const bytes = await raw('establish_portable_session')(...args);
+      flow.admissionReply = Array.from(bytes);
       if (loseAdmission) { loseAdmission = false; throw new Error('lost admission reply'); }
       return bytes;
     },

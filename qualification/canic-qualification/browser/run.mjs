@@ -37,7 +37,7 @@ async function qualify() {
     return page;
   };
   let a = await open({ loseIssue: true });
-  let original;
+  let original, lostAdmission;
   await check('lost issuance retains uncertainty, and a new renderer reconciles the original signature', async () => {
     const pending = await a.evaluate(async () => {
       let lost = false;
@@ -56,30 +56,36 @@ async function qualify() {
       let lost = false;
       try { await flow.coordinator.ensureSession(flow.targets[0]); }
       catch (error) { if (!String(error).includes('lost admission reply')) throw error; lost = true; }
-      return { bytes: Array.from(evidence.bytes), untilNs: String(evidence.untilNs), lost, counts: flow.counts };
+      return { bytes: Array.from(evidence.bytes), untilNs: String(evidence.untilNs), lost, counts: flow.counts,
+        admission: { request: Array.from(flow.admission), reply: flow.admissionReply } };
     });
     assert.deepEqual({ bytes: result.bytes, untilNs: result.untilNs }, original);
     assert.equal(result.lost, true); assert.equal(result.counts.issue, 0); assert.equal(result.counts.lookup, 1);
+    assert.equal(result.counts.writes, 0);
+    lostAdmission = result.admission;
   });
   await check('lost admission reopens exactly, and a second receiver requires independent admission', async () => {
     await a.close(); a = await open({ reopen: true });
     const result = await a.evaluate(async () => {
       const first = await flow.coordinator.ensureSession(flow.targets[0]);
+      const replay = { request: Array.from(flow.admission), reply: flow.admissionReply };
       const before = await flow.raw('profile_get', flow.targets[1], flow.browser, flow.config.frames.getA);
       const second = await flow.coordinator.ensureSession(flow.targets[1]);
       flow.receipt = first;
       const result = await flow.write(flow.targets[0], flow.config.frames.putA);
       return { firstSubject: canicProfile.Principal.fromUint8Array(first.subject).toText(),
         secondSubject: canicProfile.Principal.fromUint8Array(second.subject).toText(),
-        account: flow.account.getPrincipal().toText(), before: Array.from(before), result: Array.from(result), counts: flow.counts };
+        account: flow.account.getPrincipal().toText(), replay, before: Array.from(before), result: Array.from(result), counts: flow.counts };
     });
+    assert.deepEqual(result.replay, lostAdmission, 'reopened admission preserves the original wire request and receipt');
     assert.equal(result.firstSubject, result.account); assert.equal(result.secondSubject, result.account);
     assert.deepEqual(result.before, config.frames.unauthGet);
     assert.deepEqual(result.result, config.frames.profileA); assert.equal(result.counts.writes, 1);
     assert.equal(result.counts.issue, 0); assert.equal(result.counts.lookup, 0); assert.equal(result.counts.admit, 2);
   });
   const b = await open({ device: 12, scopes: ['read'] });
-  const c = await open({ device: 11, accountSeed: 10, loseIssue: true });
+  // Two independent accounts intentionally choose the same initial operation ID.
+  const c = await open({ device: 11, accountSeed: 10, operationId: 9, loseIssue: true });
   await check('independent device and user sessions preserve immutable profile ownership', async () => {
     const bResult = await b.evaluate(async () => {
       await flow.coordinator.ensureSession(flow.targets[0]);
@@ -100,6 +106,13 @@ async function qualify() {
         own: Array.from(await flow.write(flow.targets[0], flow.config.frames.putC)) };
     });
     assert.equal(cResult.lost, true); assert.deepEqual(cResult.recovered, cResult.original);
+    assert.notDeepEqual(cResult.recovered.bytes, original.bytes);
+    // A lookup before C issued cannot detect C overwriting A's completed result.
+    const firstAccountAfterCollision = await a.evaluate(async () => {
+      const result = await flow.adapter.transport.reconcile(flow.account, 0n, AbortSignal.timeout(5000));
+      return { bytes: Array.from(result.bytes), untilNs: String(result.untilNs) };
+    });
+    assert.deepEqual(firstAccountAfterCollision, original);
     assert.equal(cResult.counts.issue, 1); assert.equal(cResult.counts.lookup, 1);
     assert.deepEqual(cResult.forbidden, config.frames.forbiddenGet); assert.deepEqual(cResult.own, config.frames.profileC);
     const wrong = await a.evaluate(async () => ({
@@ -121,16 +134,31 @@ async function qualify() {
     });
     assert.equal(result.trapped, true); assert.deepEqual(result.retained, config.frames.profileAGet);
   });
-  await check('renewal and lookup retain one original result and do not repeat application writes', async () => {
-    const result = await a.evaluate(async () => {
-      const renewed = await canicProfile.retrieveCredential({ ...flow.options, refreshThrough: 0n });
-      const looked = await flow.adapter.transport.reconcile(flow.browser, 1n, AbortSignal.timeout(5000));
-      await flow.coordinator.establish(flow.targets[0]);
-      return { renewed: { bytes: Array.from(renewed.bytes), untilNs: String(renewed.untilNs) },
-        looked: { bytes: Array.from(looked.bytes), untilNs: String(looked.untilNs) },
-        profile: Array.from(await flow.get(flow.targets[0], flow.config.frames.getA)), renews: flow.counts.renew };
+  await check('a reopened renderer recovers a lost renewal using the original browser and sequence', async () => {
+    await a.close();
+    a = await open({ reopen: true, loseRenew: true });
+    const lost = await a.evaluate(async () => {
+      let failed = false;
+      try { await canicProfile.retrieveCredential({ ...flow.options, refreshThrough: 0n }); }
+      catch (error) { if (!String(error).includes('lost renewal reply')) throw error; failed = true; }
+      const journal = await flow.journal.inspect();
+      return { failed, sequence: String(journal.sequence), unknown: journal.issuanceUnknown,
+        original: flow.original, counts: flow.counts };
     });
-    assert.deepEqual(result.renewed, result.looked); assert.equal(result.renews, 1);
+    assert.equal(lost.failed, true); assert.equal(lost.sequence, '1'); assert.equal(lost.unknown, true);
+    assert.deepEqual(lost.counts, { issue: 0, renew: 1, lookup: 0, admit: 0, writes: 0 });
+    await a.close();
+    a = await open({ reopen: true });
+    const result = await a.evaluate(async () => {
+      const recovered = await canicProfile.retrieveCredential(flow.options);
+      const counts = { ...flow.counts };
+      await flow.coordinator.establish(flow.targets[0]);
+      return { evidence: { bytes: Array.from(recovered.bytes), untilNs: String(recovered.untilNs) },
+        sequence: String(recovered.sequence), counts,
+        profile: Array.from(await flow.get(flow.targets[0], flow.config.frames.getA)) };
+    });
+    assert.equal(result.sequence, '1'); assert.deepEqual(result.evidence, lost.original);
+    assert.deepEqual(result.counts, { issue: 0, renew: 0, lookup: 1, admit: 0, writes: 0 });
     assert.deepEqual(result.profile, config.frames.profileAGet);
   });
   const retainedProof = await a.evaluate(() => Array.from(flow.admission));
@@ -225,7 +253,7 @@ async function qualify() {
         () => 'escaped', error => error.code ?? String(error));
       await ready;
     });
-    const c2 = await open({ device: 11, accountSeed: 10, reopen: true });
+    const c2 = await open({ device: 11, accountSeed: 10, operationId: 9, reopen: true });
     assert.equal(await c2.evaluate(async () => (await flow.journal.beginLogout(
       flow.generation, canicProfile.nowNs() + 10_000_000_000n)).phase), 'cleanup');
     assert.equal(await c.evaluate(async () => { flow.resume(); return flow.pending; }), 'not_current');

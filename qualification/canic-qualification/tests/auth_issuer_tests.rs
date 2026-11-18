@@ -602,3 +602,43 @@ async fn issuer_rotation_fences_pending_renewal_and_preserves_original_issue() {
     );
     f.close().await;
 }
+
+#[tokio::test(flavor = "current_thread")]
+async fn pruning_a_renewal_keeps_the_live_logins_consumed_sequence() {
+    let f = fixture(false).await;
+    let pic = f.owner.client();
+    let input = request(1);
+    let caller = browser(&input);
+    let original = call(&f, account(), issuer::ISSUE, &input).await.unwrap();
+    let first = renew(&input, 1);
+    let completed = call(&f, caller, issuer::RENEW, &first).await.unwrap();
+    let lookup = Lookup::Renew(first.clone());
+    pic.advance_time(Duration::from_secs(121)).await;
+    assert_eq!(
+        call(&f, caller, issuer::RECONCILE, &lookup).await,
+        Ok(completed)
+    );
+    assert!(control(pic, f.target, f.installer, 9).await);
+    assert_eq!(
+        call(&f, caller, issuer::RECONCILE, &lookup).await,
+        Ok(Status::Unresolved)
+    );
+    assert_eq!(
+        call(&f, caller, issuer::RENEW, &first).await,
+        Err(Refusal::Conflict)
+    );
+    let after = observe(&f).await;
+    assert_eq!(
+        (after.operations, after.signatures, after.logins),
+        (0, 2, 1)
+    );
+    let next = call(&f, caller, issuer::RENEW, &renew(&input, 2))
+        .await
+        .unwrap();
+    assert_eq!(
+        claims(&next).login_deadline_ns,
+        claims(&original).login_deadline_ns
+    );
+    assert_eq!(observe(&f).await.signatures, 3);
+    f.close().await;
+}
