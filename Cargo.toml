@@ -14,7 +14,7 @@ exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.224.0"
+version = "0.225.0"
 edition = "2024"
 rust-version = "1.100.0"
 repository = "https://github.com/dragginzgame/canic"
@@ -24,9 +24,9 @@ publish = ["crates-io"]
 [workspace.dependencies]
 # Production
 base64 = "0.23.1"
-canic-host = { path = "crates/canic-host", version = "0.224.0" }
-canic-management = { path = "crates/canic-management", version = "0.224.0" }
-canic-management-protocol = { path = "crates/canic-management-protocol", version = "0.224.0" }
+canic-host = { path = "crates/canic-host", version = "0.225.0" }
+canic-management = { path = "crates/canic-management", version = "0.225.0" }
+canic-management-protocol = { path = "crates/canic-management-protocol", version = "0.225.0" }
 clap = { version = "4.6.7", features = ["derive"] }
 ic-auth = { version = "0.48.0", features = ["receiver-memory", "ed25519-verification"] }
 ic-auth-protocol-types = "0.43.0"
@@ -58,7 +58,7 @@ toml_edit = "0.25.19"
 url = "2.5.8"
 
 # Production and tests
-canic = { path = "crates/canic", version = "0.224.0" }
+canic = { path = "crates/canic", version = "0.225.0" }
 ic-platform = { version = "0.34.13", default-features = false, features = ["ingress-packets"] }
 ic-storage = "0.78.0"
 ic-topology = "0.109.2"

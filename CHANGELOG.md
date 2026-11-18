@@ -1,12 +1,16 @@
 # Changelog
 
-## Unreleased
+## [0.225.0] - 2026-11-18
 
-A shard pool may select `install_topology = true` to include the fleet's resolved
-Root and parent in each newly approved installation. The actor can admit its
-parent before reading the request. Applications can now share native Wire
-codecs with their mounted methods, declare a retained store once per role, and
-read their approved receiver envelope in the installation hook.
+### ✨ Added
+
+- A shard pool can opt into `install_topology = true` to deliver the approved Root and parent. The shard checks its actual caller and reopens its retained parent on upgrade. Hubs can resolve an assigned shard while keeping its allocation and generation. [#28](https://github.com/dragginzgame/canic/issues/28) · [#19](https://github.com/dragginzgame/canic/issues/19)
+- Actors can mount bounded install and reopen hooks and declare a retained database once per role. [#27](https://github.com/dragginzgame/canic/issues/27) · [#32](https://github.com/dragginzgame/canic/issues/32)
+- Native callers can encode and decode request and reply frames directly from a named method contract. [#35](https://github.com/dragginzgame/canic/issues/35)
+
+### 🧪 Testing
+
+The installed Backup witness now exercises operator disconnection and controller replacement between restore acceptance and reopening.
 
 With a local Toko checkout using the updated actor adapters:
 
