@@ -105,3 +105,32 @@ pub struct Custody {
 
 #[cfg(test)]
 mod tests;
+
+/// Controller-only approval for Root-managed shard growth from one immutable release.
+/// The selected hub is independent of Root's two managed child identities.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ShardPool {
+    /// Exact application-owned initialization bytes for each created shard.
+    pub arguments: crate::application::Arguments,
+    /// Exact effect owner receiving this approval.
+    pub root: String,
+    /// Stable logical pool name used by legacy HRW slot selection.
+    pub pool: String,
+    /// Only this canister may request or observe private account placement.
+    pub hub: String,
+    /// Maximum admitted children, within Root's qualified child bound.
+    pub max_shards: u8,
+    /// Maximum lifetime keys per child.
+    pub keys_per_shard: u16,
+    /// Lifetime ceiling on creation attachments; ordinary management fees are separate.
+    pub creation_budget: u64,
+    /// Last time a new child management effect may be dispatched.
+    pub expires_at_ns: u64,
+    /// Approved release and supplier.
+    pub reference: Reference,
+}
+/// Controller approval frame for a fresh shard pool.
+pub const CONFIGURE_SHARDS: u64 = 90;
+
+/// Maximum retained account keys per shard in the initial bounded Root layout.
+pub const MAX_KEYS_PER_SHARD: u16 = 64;

@@ -10,6 +10,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
         app: "demo".into(),
         fleet: "local".into(),
         config: FleetConfig {
+            shard_pool: None,
             network: Network::Local {
                 url: "http://localhost:8000/".into(),
                 root_key: "00".repeat(133),
@@ -36,6 +37,8 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
                 ),
             ]),
             auth: Some(AuthConfig {
+                root_wasm: None,
+                receiver_controller: ReceiverController::Root,
                 root: "root".into(),
                 receiver: "receiver".into(),
                 issuer: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
@@ -199,4 +202,55 @@ fn auth_config_requires_bound_distinct_slots_and_canonical_application_grants() 
     let mut bad = selected.config.clone();
     bad.canisters.get_mut("receiver").unwrap().id = None;
     assert!(config.grant(&bad).is_err());
+}
+
+#[test]
+fn operator_controller_is_bound_into_the_plan_and_retained_for_revocation() {
+    let (dir, mut selected) = fixture();
+    let path = dir.join("canic.toml");
+    let signer = crate::signed::tests::controller();
+    let legacy = create_auth_plan(&dir.join("legacy"), &path, &selected, &signer)
+        .unwrap()
+        .1;
+    let legacy_json = serde_json::to_value(&legacy).unwrap();
+    assert!(legacy_json["auth"].get("receiver_controller").is_none());
+    assert_eq!(
+        serde_json::from_slice::<Plan>(&serde_json::to_vec(&legacy).unwrap())
+            .unwrap()
+            .digest()
+            .unwrap(),
+        legacy.digest().unwrap()
+    );
+
+    let config = selected.config.auth.as_mut().unwrap();
+    config.receiver_controller = ReceiverController::Operator;
+    config.root_wasm = Some("root.wasm".into());
+    assert!(
+        create_auth_plan(&dir, &path, &selected, &signer).is_err(),
+        "conflicting artifact sources"
+    );
+    selected.config.canisters.get_mut("root").unwrap().wasm = None;
+    let (id, plan) = create_auth_plan(&dir, &path, &selected, &signer).unwrap();
+    assert_eq!(
+        plan.auth()
+            .unwrap()
+            .expected_receiver_controller(&plan.controller),
+        signer
+    );
+    let mut same_times = plan.clone();
+    same_times.created_at_ns = legacy.created_at_ns;
+    same_times.expires_at_ns = legacy.expires_at_ns;
+    assert_ne!(legacy.digest().unwrap(), same_times.digest().unwrap());
+    retained_reply(&dir, &plan);
+    selected.config.auth.as_mut().unwrap().receiver_controller = ReceiverController::Root;
+    assert!(create_auth_plan(&dir, &path, &selected, &signer).is_err());
+    assert_eq!(
+        create_auth_revocation(&dir, &id, &selected)
+            .unwrap()
+            .1
+            .auth()
+            .unwrap()
+            .receiver_controller,
+        ReceiverController::Operator
+    );
 }

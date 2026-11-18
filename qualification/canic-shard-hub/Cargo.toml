@@ -1,0 +1,28 @@
+[package]
+name = "canic-shard-hub"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish.workspace = true
+description = "Installed consumer of Root shard placement"
+
+[target.'cfg(any())'.dev-dependencies]
+toko-tooling.workspace = true
+
+[package.metadata.toko-tooling.loc]
+category = "tests"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+canic = { workspace = true, features = ["sharding", "storage"] }
+ic-platform-runtime.workspace = true
+ic-platform-types.workspace = true
+ic-storage.workspace = true
+ic-wire.workspace = true
+sha2.workspace = true
+
+[lints]
+workspace = true

@@ -340,7 +340,7 @@ fn root_receipt(dir: &Path, value: &FleetPlan) -> Result<Option<Receipt>> {
 /// Compare declarations with retained completion and approve creation, a child addition, upgrade or maintenance.
 /// Unfinished identical work retains its original schedule, even after expiry. No network calls.
 /// # Errors
-/// Refuses anything other than an unbound Root, optional Store and one or two direct applications, occupied fleet authority,
+/// Pool fleets return an offline review of their bound infrastructure. Fixed-child plans refuse occupied fleet authority,
 /// unavailable artifacts, invalid budgets, journal corruption or concurrent writers.
 pub fn plan_fleet(
     journal: &Path,
@@ -351,6 +351,14 @@ pub fn plan_fleet(
     execute_at_ns: Option<u64>,
 ) -> Result<FleetPlanning> {
     selected.validate()?;
+    if let Some(pool) = &selected.config.shard_pool {
+        if cycles.is_some() || execute_at_ns.is_some() {
+            return Err(Error::Invalid(
+                "pool growth uses its declared budget and deadline".into(),
+            ));
+        }
+        return pool.preview(config_path, selected, controller);
+    }
     let slots = &selected.config.canisters;
     let stores: Vec<_> = slots
         .iter()

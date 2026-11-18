@@ -1,5 +1,47 @@
 # Changelog
 
+## [0.222.0] - 2026-11-18
+
+Install the CLI and list local app declarations:
+
+```sh
+cargo install --locked --version 0.222.0 canic-cli
+canic app list
+```
+
+The optional `db-schema` adapter now uses `ic-db` from crates.io.
+
+### Auth planning for independently installed hubs
+
+Set `receiver_controller = "operator"` in the fleet Auth table when the same
+operator controls Root and the receiver. With bound principals and reviewed
+Wasms, preview the grant and inspect the retained authority:
+
+```sh
+canic fleet auth plan --app toko --fleet local --controller "$CONTROLLER"
+canic fleet status "$OPERATION" --app toko --fleet local
+```
+
+### Runtime shard placement
+
+A hub can use `canic::sharding::assign` and `lookup` with an opaque account key.
+Root retains generation-bound assignments and creates Store-backed shards within
+the controller's approved capacity and cycle limits. The installed test covers
+a hub and two shards, reply loss, concurrent signup and upgrades. A pool can
+carry the application's exact installation bytes so each shard can retain its
+trusted provisioning hub before it reports ready.
+[Canic #19](https://github.com/dragginzgame/canic/issues/19)
+
+With one configured pool fleet, preview the exact Store release, installation
+bytes and growth limits. The JSON includes the complete Root request. Planning
+is offline. The installed test uses synthetic cycles and prepared replica assets.
+
+```sh
+canic fleet plan --app toko --fleet local --controller "$CONTROLLER"
+canic artifact build --package canic-root --features sharding --output target/shard-root.wasm
+bash scripts/dev/test-store.sh sharding
+```
+
 ## [0.221.0] - 2026-11-18
 
 The optional Auth browser adapter now takes the selected device's SDK public

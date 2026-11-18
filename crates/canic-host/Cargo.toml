@@ -3,6 +3,8 @@ name = "canic-host"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+repository.workspace = true
+license-file.workspace = true
 publish.workspace = true
 description = "Reviewed deployment plans and retained signed attempts for Canic"
 

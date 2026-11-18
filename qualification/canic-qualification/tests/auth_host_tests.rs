@@ -30,6 +30,14 @@ fn hex(bytes: &[u8]) -> String {
 
 #[tokio::test]
 async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call() {
+    approval_journey(false).await;
+}
+#[tokio::test]
+async fn cli_operator_controlled_receiver_blocks_controller_drift_before_signing() {
+    approval_journey(true).await;
+}
+
+async fn approval_journey(operator_owned: bool) {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
@@ -101,6 +109,10 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
             "key":hex(&KEY), "network_id":hex(&[0x11;32]), "application_id":hex(&[0x22;32]),
             "role":"user", "scopes":["read"], "not_before_ns":now - SECOND, "expires_at_ns":now + 600 * SECOND}
     }}}}});
+    if operator_owned {
+        config["apps"]["demo"]["fleets"]["local"]["auth"]["receiver_controller"] =
+            json!("operator");
+    }
     std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     let mut wrong_code = config.clone();
     wrong_code["apps"]["demo"]["canisters"]["root"]["wasm"] =
@@ -164,6 +176,13 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
             .status
             .success()
     );
+    if operator_owned {
+        owner
+            .client()
+            .set_controllers(receiver, Some(operator), vec![root, operator])
+            .await
+            .unwrap();
+    }
     // A role/tree declaration cannot replace the actual sole-controller prerequisite.
     assert!(
         !run(&dir, &["fleet", "apply", id, "--identity", "anonymous"])
@@ -177,7 +196,7 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
             receiver,
             Some(operator),
             CanisterSettings {
-                controllers: Some(vec![root]),
+                controllers: Some(vec![if operator_owned { operator } else { root }]),
                 ..Default::default()
             },
         )

@@ -242,7 +242,7 @@ pub(super) enum FleetCommand {
         #[command(flatten)]
         selection: CanisterConfigArgs,
     },
-    /// Plan deployment, Root/Store maintenance or an immutable Store release.
+    /// Plan deployment, maintenance or publication, or preview a configured shard pool.
     #[command(mut_arg("icp_bin", |arg| arg.conflicts_with("controller")))]
     Plan {
         #[command(flatten)]
@@ -525,14 +525,27 @@ pub(super) enum RemovalAction {
     Delete,
 }
 
-pub(super) fn checkout() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
+pub(super) fn checkout() -> Option<PathBuf> {
+    let source = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()?
+        .parent()?;
+    source
+        .join("crates/canic-cli/Cargo.toml")
+        .is_file()
+        .then(|| source.to_owned())
+}
+
+pub(super) fn default_signer() -> PathBuf {
+    checkout().map_or_else(
+        || PathBuf::from("icp"),
+        |source| source.join(".tools/ic/bin/icp"),
+    )
 }
 
 #[derive(Args)]
 pub(super) struct SignerArgs {
-    /// Override the prepared signer in this Canic checkout's .tools/ic/bin/icp.
-    #[arg(long, default_value_os_t = checkout().join(".tools/ic/bin/icp"), hide_default_value = true)]
+    /// Override the checkout signer or the registry installation's icp on PATH.
+    #[arg(long, default_value_os_t = default_signer(), hide_default_value = true)]
     pub(super) icp_bin: PathBuf,
 }
 

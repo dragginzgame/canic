@@ -10,7 +10,23 @@ use crate::{
 use canic::auth::{enrollment as wire, protocol::model};
 pub(crate) use execution::{apply, status};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::path::{Path, PathBuf};
+
+/// Sole controller expected on the enrolled receiver, resolved under the immutable plan.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReceiverController {
+    /// Root controls the receiver (the original v5 contract).
+    #[default]
+    Root,
+    /// The operator named by the plan controls the receiver independently.
+    Operator,
+}
+impl ReceiverController {
+    fn is_root(&self) -> bool {
+        *self == Self::Root
+    }
+}
 
 /// Optional fleet-owned approval input; names select existing app canister definitions.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -18,6 +34,12 @@ use std::path::Path;
 pub struct AuthConfig {
     /// Explicit authority slot, not inferred from a role or tree edge.
     pub root: String,
+    /// Reviewed Root Wasm when supplied by this fleet without an app artifact.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub root_wasm: Option<PathBuf>,
+    /// Controller binding used when the operator approves this fleet's grant.
+    #[serde(default, skip_serializing_if = "ReceiverController::is_root")]
+    pub receiver_controller: ReceiverController,
     /// Exact receiver slot.
     pub receiver: String,
     /// Application-approved issuer principal.
@@ -124,12 +146,25 @@ fn validate_grant(grant: &wire::Grant) -> Result<()> {
 pub struct AuthApproval {
     /// Exact authority executable; retained artifact bytes bind this hash too.
     pub root: UpgradeTarget,
-    /// Exact receiver executable, controlled solely by Root at first dispatch.
+    /// Exact receiver executable.
     pub receiver: UpgradeTarget,
     /// Complete immutable grant, including original validity window.
     pub grant: wire::Grant,
     /// Terminal revocation of this exact grant; false configures a fresh Root.
     pub revoke: bool,
+    /// Omitted for historical Root-owned approvals, preserving their exact bytes.
+    #[serde(default, skip_serializing_if = "ReceiverController::is_root")]
+    pub receiver_controller: ReceiverController,
+}
+impl AuthApproval {
+    /// Resolve the sole receiver controller using the operator retained in the same plan.
+    #[must_use]
+    pub fn expected_receiver_controller<'a>(&'a self, operator: &'a str) -> &'a str {
+        match self.receiver_controller {
+            ReceiverController::Root => &self.root.canister,
+            ReceiverController::Operator => operator,
+        }
+    }
 }
 
 /// Historical successful Root response, not a current readiness observation.
@@ -173,8 +208,12 @@ pub fn create_auth_plan(
         .as_ref()
         .ok_or_else(|| invalid("selected fleet has no Auth declaration"))?;
     let grant = config.grant(&selected.config)?;
+    let supplied = config
+        .root_wasm
+        .as_ref()
+        .map(|path| config_path.with_file_name(path));
     let root_bytes = store::read(
-        &selected.wasm_path(config_path, &config.root, None)?,
+        &selected.wasm_path(config_path, &config.root, supplied.as_deref())?,
         artifact::MAX_ARTIFACT_BYTES,
     )?;
     let root_artifact = artifact::admit_bounded(&root_bytes, artifact::MAX_ARTIFACT_BYTES)?;
@@ -199,6 +238,7 @@ pub fn create_auth_plan(
             },
             grant,
             revoke: false,
+            receiver_controller: config.receiver_controller,
         })),
         artifact: root_artifact,
         deployment: Some(crate::DeploymentName {

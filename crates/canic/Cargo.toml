@@ -3,6 +3,8 @@ name = "canic"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+repository.workspace = true
+license-file.workspace = true
 publish.workspace = true
 description = "Small Canic contracts and optional actor adapters"
 
@@ -19,11 +21,13 @@ db-schema = ["db", "dep:ic-db"]
 greeting = ["dep:ic-platform-runtime"]
 metrics = ["dep:ic-platform-runtime"]
 readiness = ["dep:ic-platform-runtime"]
+sharding = ["dep:ic-platform-runtime", "dep:ic-platform-types"]
 storage = ["dep:ic-storage"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ic-platform-protocol = { workspace = true, optional = true, features = ["raw-rand"] }
 ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
+ic-platform-types = { workspace = true, optional = true }
 
 [dependencies]
 ic-auth = { workspace = true, optional = true }

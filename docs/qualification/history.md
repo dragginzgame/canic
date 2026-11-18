@@ -7,6 +7,57 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Operator-controlled Auth receiver — 2026-11-18
+
+Both controller arrangements passed the installed CLI plan, apply, revocation and
+original-reply recovery tests. Changing the operator-owned receiver to two
+controllers after planning blocked apply before a signed attempt was written.
+The current CLI also read the original v5 revocation receipt at operation
+`745b6d5c08a0d3b38a2a8d6c3102c02d3337d642efe83182b800c7a5d4d8ea8b`.
+
+A local qualification copy of Toko's installed signup journey used the real hub
+Wasm `c55ada8b5aec31b1628149c34806a0e77bb2659644f46e5b45bd563bf2d8ddaa` and synthetic issuer credentials. The test retained its pool
+setup, configured Auth through the installed CLI, restored the approved sole
+controller after exercising drift, refreshed the receiver and completed signup
+and retry on two shards. Toko's source was unchanged. Hub upgrade still left the
+volatile receiver closed.
+
+## Local Toko shard pool planning — 2026-11-18
+
+The installed CLI planned a two-component app with fleet-supplied Root and Store.
+The fixture submitted the exact request from `fleet plan --json`. With Toko's
+`user_shard` Wasm `8cffa0b075ad7a80bb4e11f7ae0999aa1487b4b7ad5decdd246be098a24b8e9a`,
+the approved init bytes carried a nonzero 16-byte fixture nonce and the fixture
+hub principal. Two placements resolved to distinct ready shards. Both refused
+operator provisioning. The third account received `Full`, and the first
+assignment survived upgrades of the qualification hub and Root. The exercise
+covers the Toko shard and Canic planner; Toko account registration has its own
+actor and qualification. The same focused suite passed again with the public
+`canic artifact build` output
+`0ffb813fa7607ef02bab8bc4c64cbc10788357c38e0fb5d8808504c20be9e6e4`.
+
+## Shard installation arguments — 2026-11-18
+
+The two-shard placement witness installed the DB application Wasm
+`7b9294dc9d4898f498fec475feb526c03b7b812a29b1b82dcbc2b77fdac9d492` through
+Root `656f94283d27eaeaef10b1336320930038ad5c705504a50542712380729321f6`.
+Both shards admitted catalogue queries with the configured hub principal and
+refused the operator. Changing only the approved initialization bytes was
+refused. Reconciliation checked the original argument-bound generation.
+This exercises Canic placement and application initialization independently of
+the Toko signup actors.
+
+## Runtime shard placement — 2026-11-18
+
+The Store suite passed 34 installed cases, including three shard-pool cases.
+The fresh Root Wasm was `fef9d23e6baab83507a57a7ed9ad675937e59933074f6f33a1e3ddca69a9cff9`
+and the independently installed hub was `9bfa23c42fbc92ef5b262ef60cf3d61b66e21d3d251d18c1ceac03499ab04cf1`.
+Concurrent requests for one key consumed one slot. After filling both shards,
+upgrading both hub and Root preserved the first assignment. A separate injected
+failure after creation left the original slot pending across upgrade and
+reconciliation, with no second creation. Native tests checked legacy HRW scores,
+tie order, uncertain dispatch and refusal of changed generations or principals.
+
 ## Root-managed Backup capture and restore — 2026-11-18
 
 Both workspaces select registry IC Backup 0.105.5. The installed external-signer

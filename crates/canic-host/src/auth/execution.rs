@@ -79,7 +79,10 @@ pub(crate) async fn apply(
         let approval = plan.auth().expect("Auth caller");
         for (target, controller) in [
             (&approval.root, plan.controller.as_str()),
-            (&approval.receiver, approval.root.canister.as_str()),
+            (
+                &approval.receiver,
+                approval.expected_receiver_controller(&plan.controller),
+            ),
         ] {
             let id = crate::network::principal(&target.canister)?;
             operation::controllers(&client, id, controller).await?;

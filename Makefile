@@ -1,6 +1,9 @@
 .DEFAULT_GOAL := help
 FORMAT_RUST_ARGS := --extra-workspace qualification
 IC_TOOLS := icp
+CARGO_PUBLISH_PACKAGES := canic canic-management-protocol canic-management canic-root canic-host canic-cli
+CARGO_PUBLISH_REGISTRY := crates-io
+CARGO_PUBLISH_VERIFY_TARGETS := ci
 include vendor/toko-tooling/make/consumer.mk
 include vendor/toko-tooling/make/cargo-dependencies.mk
 
@@ -179,13 +182,13 @@ root-test:
 	bash scripts/dev/test-root.sh
 
 root-clippy:
-	cargo clippy --locked -p canic-management-protocol -p canic-management -p canic-root --features backup --all-targets -- -D warnings
+	cargo clippy --locked -p canic-management-protocol -p canic-management -p canic-root --features backup,sharding --all-targets -- -D warnings
 	cargo clippy --locked -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test root --test endpoints -- -D warnings
 
 root-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management-protocol -p canic-management -p canic-root --features backup --no-deps
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --features backup --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --features backup,sharding --target wasm32-unknown-unknown --no-deps
 
 .PHONY: store-test store-readiness-test store-clippy publication-test
 publication-test:
@@ -198,6 +201,7 @@ store-test:
 	bash scripts/dev/test-store.sh
 
 store-clippy:
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-shard-hub --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store -- -D warnings
 
 .PHONY: auth-test auth-clippy auth-doc auth-browser-prepare auth-browser-test auth-profile-test

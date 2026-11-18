@@ -8,3 +8,6 @@ mod canister;
 
 #[cfg(all(target_arch = "wasm32", feature = "auth"))]
 mod auth;
+
+#[cfg(all(target_arch = "wasm32", feature = "sharding"))]
+mod sharding;

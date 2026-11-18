@@ -843,13 +843,104 @@ refusal. Legacy history `dfb42aa675b4fa30b4bff7b4c02ba11ef16b13f7` added release
 to address abandoned claims exhausting pools; therefore a no-release first
 contract must explicitly bound and report exhausted capacity, never reclaim it
 on timeout. Do not copy its global registry, implicit startup or full inventory
-exports. A hub plus multiple managed shards also exceeds today's two-child Root
-qualification; the complete witness needs an admitted identity-preserving
-expansion, not a hidden third-child special case.
+exports. The installed witness uses an independently installed hub and two Root-managed
+shards. Giving the same Root creation authority for all three requires a
+separately qualified expansion of its retained child inventory.
 
-The initial provisioned-versus-autonomous pool scope, release policy and authority
-contract are under maintainer review. These notes record inspected obligations,
-not an implemented allocator or approval for new automatic creation.
+The 2026-11-18 consumer check used `toko-new` HEAD
+`417ee72c58529490b8e3eaf9a7bb13ff67075af1` plus its working-tree
+`apps/toko/canic.toml` and `apps/toko/user_hub/src/lib.rs`. The hub now calls
+`registration_before_placement` to distinguish an existing reservation from a
+signup needing placement. The latter carries the original verified identity
+across the await and rechecks it before reserving a Toko user ID. Toko must
+derive the same opaque placement key for that identity on every retry.
+The declared parent relationship alone supplies no runtime pool authority.
+
+For Toko acceptance, install a hub and two shards. Concurrent first requests
+for one key must consume one slot. Fill the first shard, place the next key on
+the second, then retry the first after losing its reply and upgrading the hub.
+Lookup must recover the original child and generation. A new key at the pool
+limit must get an explicit refusal while existing keys still resolve. Exercise
+an unauthorized growth request and a stale generation separately. Internet
+Identity integration and private account records stay application-owned.
+
+The maintainer selected Root-owned growth on authenticated demand from the
+configured hub. The operator approves the pool, shard capacity, maximum count
+and cycle budget. Root retains each original create/install attempt; uncertainty
+keeps its slot and funding reserved. An account key keeps its first binding for
+the lifetime of the pool, including abandoned signups. Lookup of a replaced
+allocation returns unavailable with the original identity and generation.
+
+Use the frozen legacy highest-random-weight (HRW) selector for **new** keys.
+Its two rankings serve different purposes. Among ready shards with spare
+capacity, score the partition-key bytes followed by the raw shard principal
+bytes. When growth is authorized, score each free slot with the pool name's
+UTF-8 bytes, byte `0xff`, partition-key bytes and the little-endian `u32` slot
+number. Both take the first eight SHA-256 digest bytes as a big-endian `u64`
+and choose the highest score, retaining the first candidate on a tie. Present
+candidates in deterministic order. Reuse identical key bytes on retry.
+Read the retained binding or pending operation before ranking, and recheck
+capacity when committing. This selects placement without rebalancing accounts
+when a new shard appears.
+
+The local installed witness exercises this contract on a fresh Root with the
+`sharding` feature. It uses Root's two existing permanent slots for shards and
+an independently installed hub. Putting the hub and both shards under the same
+Root's creation journal still requires the general child-capacity expansion.
+Toko retains its own login, authorization, user records and provisioning.
+
+In `canic.toml`, configure deployment-specific bounds alongside the network.
+The selected app already declares `user_hub` as the parent of `user_shard`.
+For example, with existing fleet bindings for Root, Store and hub:
+
+```toml
+[apps.toko.fleets.mainnet.shard_pool]
+component = "user_shard"
+root = "root"
+store = "store"
+release = { name = "user_shard", version = "v1" }
+install_args = "shard-init.bin"
+max_shards = 2
+keys_per_shard = 32
+creation_budget = 2000000000000
+expires_at_ns = 1800000000000000000
+```
+
+Supply Root and Store IDs through `fleets.<fleet>.canisters`. Only the two
+infrastructure names selected by the pool may come from outside the app.
+The hub stays an explicitly bound app component and the shard component remains
+unbound. Whole-fleet `canic fleet plan` previews the exact pool grant offline,
+hashing the declared Wasm and reading the optional binary init argument relative
+to the config. It does not create an apply operation or verify publication.
+Choose a real deadline and immutable shard release for each approval. The
+operator obtains a `stored::ShardPool` through
+`FleetConfig::shard_pool_approval(manifest, arguments)` and sends it once to the bound
+Root's controller-only `configure_shards` update. Encode the request with
+`stored::CONFIGURE_SHARDS`, Wire request framing and `stored::LIMITS`.
+The application supplies its bounded installation bytes, for example an encoded
+trusted hub principal. Root retains them in its existing application creation
+journal and binds them to the generation and Store pin. An empty argument
+uses the existing Store-only path. Replaying the exact grant is idempotent. The current API supports one
+nonreplaceable pool per fresh Root, one or two shards, and 1–64 lifetime keys
+per shard. Each creation reserves the engine's fixed creation attachment.
+The deadline restricts new child effects. Existing capacity and lookup persist.
+
+After Toko authenticates a user and derives a stable 32-byte key, its hub can call:
+
+```rust
+let placement = canic::sharding::assign(root, account_key).await?;
+```
+
+Only `Assigned` supplies a usable shard. Persist the allocation generation and
+principal in the application reservation. After a lost reply or `Pending`, use
+`canic::sharding::lookup(root, account_key)`. `Unknown` means Root has no such
+claim. `Busy` reserves nothing for the new key, `Full` exhausts lifetime capacity,
+and `GrowthRefused` denies new creation. `Unavailable` preserves the original
+allocation and its known principal. The configured hub alone can read these
+private results. A controller can observe a child or reconcile its exact
+Store-bound approval; older custody endpoints refuse once pool work is admitted.
+Compatible Root upgrades reopen the pool lease. Existing Root images need a
+separately qualified migration before enabling this feature.
 
 ### Physical placement
 

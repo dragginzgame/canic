@@ -70,3 +70,10 @@ pub mod store_maintenance {
         activate, advance, install, observe, observe_attempt, recover, stage,
     };
 }
+
+/// Operator approval and authenticated hub operations for one Root-owned shard pool.
+#[cfg(all(feature = "sharding", target_arch = "wasm32"))]
+pub use engine::sharding;
+
+#[cfg(all(feature = "sharding", any(target_arch = "wasm32", test)))]
+mod placement;

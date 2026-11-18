@@ -202,15 +202,9 @@ current journeys and remaining gates; do not substitute sibling working trees.
 
 ## Delivery and checks
 
-- Keep `publish = false`; no first-party public licence is selected. Rewrite versions
-  start at 0.200.0. Do not publish to crates.io until maturity and explicit maintainer
-  authorization. GitHub pushes do not authorize publication. There are no local
-  dependency exceptions or release adapters.
-- For a Tooling update, change both exact workspace pins and locks, preview with
-  `make toko-tooling-preview`, then run `make toko-tooling-update`. Verify the
-  installed snapshot and tools with `make toko-tooling-check tools-check` and run
-  the affected consumer checks. If setup fails, fix the reported phase and rerun
-  the shared installer against the same locked archive.
+- Publish only the six product packages under `crates/` under the repository
+  licence, using the shared Cargo publication adapter. Demo and qualification
+  packages stay private. GitHub pushes alone do not authorize registry uploads.
 - Ordinary changes use focused tests, Clippy and Rustdoc for affected packages/cases.
   Use `make fmt-check` and `make toko-tooling-check` for formatting and snapshot
   agreement. `make lint` aggregates both workspaces' lint/docs/format checks; `make ci`

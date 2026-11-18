@@ -3,6 +3,8 @@ name = "canic-management-protocol"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+repository.workspace = true
+license-file.workspace = true
 publish.workspace = true
 description = "Bounded child management authority and evidence"
 

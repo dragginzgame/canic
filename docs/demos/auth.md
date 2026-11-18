@@ -56,15 +56,20 @@ table under `apps.APP.fleets.FLEET` in the existing config. It has these fields:
 
 | Fields | Required meaning |
 | --- | --- |
-| `root`, `receiver` | Distinct app slot names with explicit fleet principal bindings and app-owned Wasm paths matching installed code |
+| `root`, `receiver` | Distinct bound Root and receiver slots with reviewed Wasms matching installed code |
 | `issuer` | Application-approved issuer principal |
 | `key` | Ed25519 verification public key, 64 lowercase hex digits; never a private key |
 | `network_id`, `application_id` | Explicit canonical identities, each 64 lowercase hex digits; not display names or Host's network-binding digest |
 | `role`, `scopes` | Application role and a nonempty, sorted, unique list of application scopes |
 | `not_before_ns`, `expires_at_ns` | Original finite authority window, in Unix nanoseconds |
 
-Root must have the selected operator as its sole controller. The receiver must
-have Root as its sole controller. Roles, tree relationships and membership cannot
+Root must have the selected operator as its sole controller. The receiver's sole
+controller defaults to Root. For an independently installed hub such as Toko's,
+set `receiver_controller = "operator"` in the fleet's Auth table. This binds the
+same operator principal already named in the plan. Both installed code hashes
+and both exact controller sets must match before dispatch. For fleet-supplied
+Root with no app Wasm path, `root_wasm` selects the reviewed file relative to
+`canic.toml`. A declared app Root Wasm cannot be overridden. Roles, tree relationships and membership cannot
 substitute for either check or confer application permission. Planning retains
 the complete grant and exact code/network bindings without a network mutation:
 

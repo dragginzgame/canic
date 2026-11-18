@@ -3,6 +3,7 @@ name = "canic-profile-entry"
 version = "0.0.0"
 edition.workspace = true
 rust-version.workspace = true
+license-file.workspace = true
 publish.workspace = true
 description = "Retained profile discovery qualification fixture"
 

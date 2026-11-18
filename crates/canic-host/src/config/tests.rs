@@ -146,6 +146,7 @@ fn config() -> SelectedFleet {
         app: "hello".into(),
         fleet: "demo".into(),
         config: FleetConfig {
+            shard_pool: None,
             auth: None,
             network: Network::Mainnet,
             journal: None,
@@ -249,6 +250,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                 fleets: BTreeMap::from([(
                     selected.fleet.clone(),
                     FleetDeclaration {
+                        shard_pool: None,
                         auth: None,
                         network: selected.config.network.clone(),
                         journal: selected.config.journal.clone(),
@@ -1155,4 +1157,47 @@ fn declared_upgrade_selection_does_not_create_a_missing_journal() {
     selected.check_target(&root, "aaaaa-aa").unwrap();
     assert!(selected.check_target(&root, "2vxsx-fae").is_err());
     assert!(!root.exists());
+}
+
+#[test]
+fn pool_only_supplies_its_two_declared_infrastructure_bindings() {
+    let source = r#"
+[apps.toko.canisters.hub]
+[apps.toko.canisters.shard]
+parent = "hub"
+[apps.toko.fleets.local]
+network = { kind = "Mainnet" }
+[apps.toko.fleets.local.canisters]
+root = { id = "rrkah-fqaaa-aaaaa-aaaaq-cai" }
+store = { id = "ryjl3-tyaaa-aaaaa-aaaba-cai" }
+hub = { id = "r7inp-6aaaa-aaaaa-aaabq-cai" }
+[apps.toko.fleets.local.shard_pool]
+component = "shard"
+root = "root"
+store = "store"
+release = { name = "shard", version = "v1" }
+keys_per_shard = 1
+max_shards = 2
+creation_budget = 2000000000000
+expires_at_ns = 1800000000000000000
+"#;
+    let config: Config = toml::from_str(source).unwrap();
+    assert_eq!(config.select_app(None).unwrap().1.canisters.len(), 2);
+    let selected = config.select(None, None).unwrap();
+    assert_eq!(
+        selected.config.canisters["store"].role.as_deref(),
+        Some("wasm-store")
+    );
+    for invalid in [
+        source.replace("store = { id", "typo = { id"),
+        source.replace("ryjl3-tyaaa-aaaaa-aaaba-cai", "rrkah-fqaaa-aaaaa-aaaaq-cai"),
+        source.replace("max_shards = 2", "max_shards = 3"),
+    ] {
+        assert!(
+            toml::from_str::<Config>(&invalid)
+                .unwrap()
+                .select(None, None)
+                .is_err()
+        );
+    }
 }

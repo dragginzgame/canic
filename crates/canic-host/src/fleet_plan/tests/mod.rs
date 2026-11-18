@@ -14,6 +14,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
         app: "demo".into(),
         fleet: "local".into(),
         config: FleetConfig {
+            shard_pool: None,
             auth: None,
             network: Network::Mainnet,
             journal: None,

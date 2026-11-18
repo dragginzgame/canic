@@ -12,9 +12,21 @@ pub use ic_wire as wire;
 /// # Errors
 /// Refuses non-controllers on private methods, then oversized request frames.
 #[doc(hidden)]
-pub fn admit(limit: usize, private: bool) -> Result<(), String> {
+pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
     if private && !runtime::system::is_controller(&runtime::system::caller()) {
         return Err("controller required".into());
+    }
+    #[cfg(feature = "sharding")]
+    if crate::sharding::occupied()
+        && !(private
+            && matches!(
+                _method,
+                protocol::stored::RECONCILE
+                    | protocol::application::RECONCILE
+                    | protocol::children::STATUS
+            ))
+    {
+        return Err("shard pool custody required".into());
     }
     #[cfg(feature = "backup")]
     if private && crate::backup::occupied() {
@@ -365,7 +377,7 @@ macro_rules! mount_endpoints {
             type Reply = $reply;
 
             fn admit() -> Result<(), String> {
-                $crate::endpoint::admit(protocol::$($limits)::+.bytes, $private)
+                $crate::endpoint::admit(protocol::$($limits)::+.bytes, $private, protocol::$($id)::+)
             }
             fn decode(bytes: &[u8]) -> Result<($($request)?), wire::Error> {
                 wire::decode(bytes, wire::Encoding::Frame {

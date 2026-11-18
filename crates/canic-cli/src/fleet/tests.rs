@@ -19,6 +19,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
             app: "app".into(),
             fleet: "demo".into(),
             config: FleetConfig {
+                shard_pool: None,
                 auth: None,
                 network: network.clone(),
                 journal: None,

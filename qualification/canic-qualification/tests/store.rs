@@ -86,9 +86,12 @@ impl Client<'_> {
         .unwrap()
     }
     async fn publish_bytes(&self, version: &str, bytes: &[u8]) -> store::Manifest {
+        self.publish_named("greeting", version, bytes).await
+    }
+    async fn publish_named(&self, name: &str, version: &str, bytes: &[u8]) -> store::Manifest {
         let manifest = store::Manifest {
             release: store::Release {
-                name: "greeting".into(),
+                name: name.into(),
                 version: version.into(),
             },
             hash: store::digest(bytes),

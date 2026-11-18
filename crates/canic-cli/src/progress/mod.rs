@@ -51,7 +51,7 @@ pub(crate) fn next(
         | FleetCommand::Apply { signer, .. }
         | FleetCommand::Reconcile { signer, .. }
         | FleetCommand::Activate { signer, .. } = command
-            && signer.icp_bin != crate::args::checkout().join(".tools/ic/bin/icp")
+            && signer.icp_bin != crate::args::default_signer()
         {
             parts.extend(["--icp-bin".into(), quote(&signer.icp_bin.to_string_lossy())]);
         }

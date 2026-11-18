@@ -36,13 +36,16 @@ mod wallet;
 
 pub use app_build::{BuiltCanister, build_app};
 pub use artifact::{Artifact, build, inspect};
-pub use auth::{AuthApproval, AuthConfig, AuthReceipt, create_auth_plan, create_auth_revocation};
+pub use auth::{
+    AuthApproval, AuthConfig, AuthReceipt, ReceiverController, create_auth_plan,
+    create_auth_revocation,
+};
 pub use canic_management_protocol::Phase as ManagementPhase;
 pub use config::{
     AppConfig, BuildInput, CanisterBinding, CanisterConfig, CanisterDefinition, Config,
     DeploymentName, DiscoveredConfig, FleetConfig, FleetDeclaration, SelectedFleet,
-    add_app_canister, bind_canister, create_configured_plan, discover_configs, init_app,
-    init_config, init_fleet, load_config, resolve_config_path,
+    ShardPoolConfig, add_app_canister, bind_canister, create_configured_plan, discover_configs,
+    init_app, init_config, init_fleet, load_config, resolve_config_path,
 };
 pub use fleet::{
     Fleet, FleetCanister, FleetManager, FleetMetrics, FleetOperation, FleetStoreMaintenance,

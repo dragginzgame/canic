@@ -1,5 +1,37 @@
 # Canic qualification
 
+## Runtime shard placement
+
+Run `bash scripts/dev/test-store.sh sharding` after `make qualification-setup`.
+The installed hub uses the public `canic/sharding` feature. Root creates the two
+shards through its existing Store pin, creation, installation and readiness
+journals. The hub is installed independently and retains its configured Root in
+one named cell. The fleet declaration supplies the shard component and its hub
+parent. Only the controller can admit the resulting grant. The approved application
+init bytes bind the hub principal as owner of each installed database shard.
+The test reads each shard's catalogue as that principal, checks the operator is
+refused and checks the original generation against the argument-bound Store pin.
+
+The witness checks same-key concurrent signup, lost replies, separate shard
+principals and generations, pool exhaustion and replay after hub and Root upgrades.
+Set `TOKO_USER_SHARD_WASM` to a built Toko user shard to repeat the same installed
+CLI journey with its actual Wasm and 16-byte installation nonce. The fixture
+hub requests placements and the Toko shard must report readiness and refuse
+unauthorized provisioning. Its release and init bytes are approved through the
+normal `fleet plan` request. Each run closes its local simulator. From the Canic
+checkout with Toko's locked dependencies available locally:
+
+```sh
+canic artifact build --manifest ../toko-new/Cargo.toml --package user_shard --output target/toko-user-shard.wasm
+TOKO_USER_SHARD_WASM="$PWD/target/toko-user-shard.wasm" bash scripts/dev/test-store.sh sharding
+```
+
+Two further cases refuse unauthorized or unfunded growth, and lose Root's create
+callback after the effect. The latter permits observation of the original intent
+and keeps the second slot empty. Native tests check legacy HRW score vectors, first
+candidate tie breaking, and refusal to resolve replaced generations or principals.
+Run `make store-test` for these and the other installed Store cases.
+
 ## Optional Root snapshot executor
 
 `bash scripts/dev/test-root.sh snapshot::` qualifies Canic #6's optional fresh Root
@@ -25,7 +57,7 @@ encoding and allocation. The local counter upgrade and Root snapshot tests run o
 Testkit 0.110.0. Keep deployed 0.76 records with their qualified executable until
 a physical-image migration is separately qualified.
 
-The DB 0.22.2 witness and Blob 0.105.0 catalog use Storage 0.78.0 directly.
+The DB 0.23.2 witness and Blob 0.105.0 catalog use Storage 0.78.0 directly.
 The DB installed suite covers populated upgrades, refused upgrades and damaged storage. The installed Blob suite covers fresh composition, the managed fleet journey and refusal to upgrade the populated 0.100.6 catalog. The refusal preserves
 the predecessor's stable bytes, management report and surviving asset.
 [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8) records the decision to retain the original executable for this directory.
@@ -839,8 +871,7 @@ explicitly and supplies synchronous inspect/query/write handlers to
 Canic. Its passive `db::inspection` contract is versioned independently as
 `method_id("canic.db.inspect.v1")`. The separate optional `db-schema` feature adds
 stateless projection of compiled IC DB metadata, with no database executor,
-storage owner or permission policy. The witness consumes committed IC DB revision
-`97e49f2ef7547cc4413ec75e9cea7d70c56735c1`; transport never becomes its durable codec.
+storage owner or permission policy. The witness consumes crates.io IC DB 0.23.2; transport never becomes its durable codec.
 
 ```sh
 make qualification-setup

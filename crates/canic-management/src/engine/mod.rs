@@ -30,6 +30,8 @@ pub(crate) mod application;
 pub(crate) mod blob;
 mod delivery;
 pub(super) mod metrics;
+#[cfg(feature = "sharding")]
+pub mod sharding;
 pub(crate) mod store_maintenance;
 pub(crate) mod stored_api;
 
@@ -97,6 +99,10 @@ pub(crate) struct State {
     artifact_cell: StableCell<Vec<u8>>,
     #[cfg(feature = "backup")]
     backup_cell: StableCell<Vec<u8>>,
+    #[cfg(feature = "sharding")]
+    pool: StableCell<Vec<u8>>,
+    #[cfg(feature = "sharding")]
+    ledger: Option<sharding::Ledger>,
     readiness: Readiness,
     timer_window: (u64, u64),
     #[cfg(feature = "backup")]
@@ -166,11 +172,22 @@ pub fn open(fresh: bool, readiness: Readiness) {
         crate::backup::CAPACITY,
         fresh.then(|| crate::backup::Ledger::default().encode()),
     );
+    #[cfg(feature = "sharding")]
+    let pool = canic::storage::cell(
+        &runtime,
+        crate::storage::SHARDS_KEY,
+        sharding::BYTES,
+        fresh.then(|| sharding::encode(&None)),
+    );
     let mut state = State {
         journal: Journals::from_bytes(journal_cell.get()).expect("journal custody"),
         artifact: Artifacts::from_bytes(artifact_cell.get().as_slice().into())
             .expect("artifact custody"),
         journal_cell,
+        #[cfg(feature = "sharding")]
+        ledger: sharding::open(pool.get()),
+        #[cfg(feature = "sharding")]
+        pool,
         artifact_cell,
         #[cfg(feature = "backup")]
         backup: crate::backup::Ledger::open(backup_cell.get()),
@@ -666,6 +683,8 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
             .map_err(failure)
             .and_then(response)?;
             (readiness.accept)(&reply)?;
+            #[cfg(feature = "sharding")]
+            sharding::bind_ready(slot, before.worker.as_deref().expect("verified worker"));
             mutate(slot, |s| {
                 s.phase = Phase::Ready;
                 s.failure = None;

@@ -105,6 +105,7 @@ impl Projection {
     }
     fn body(&mut self, value: &TypeBody) -> Result<Body, Refusal> {
         Ok(match value {
+            TypeBody::Wrapped(_) => return Err(Refusal::Unsupported),
             TypeBody::Record(fields) => Body::Record(self.fields(fields, &[])?),
             TypeBody::Enum(variants) => {
                 if variants.len() > 64 {

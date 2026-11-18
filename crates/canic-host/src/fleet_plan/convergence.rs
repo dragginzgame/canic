@@ -13,6 +13,19 @@ use serde::Serialize;
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[serde(tag = "action", rename_all = "snake_case")]
 pub enum FleetPlanning {
+    /// Offline review of a pool grant for supplied infrastructure. Creates no journal operation.
+    ShardPool {
+        /// Application and fleet whose pool would be configured.
+        deployment: crate::DeploymentName,
+        /// Configured replica and trust binding.
+        network: crate::Network,
+        /// Proposed controller, without verification of on-chain authority.
+        controller: String,
+        /// Complete input to the bound Root's configure_shards endpoint.
+        approval: Box<canic_management_protocol::stored::ShardPool>,
+        /// Exact Wire request bytes for the bound Root, ready for local qualification.
+        request: Vec<u8>,
+    },
     /// Create or resume the original Root-plus-child approval.
     Create {
         /// Original approval digest.

@@ -12,6 +12,7 @@ fn selected() -> SelectedFleet {
         app: "app".into(),
         fleet: "mainnet".into(),
         config: FleetConfig {
+            shard_pool: None,
             auth: None,
             network: Network::Mainnet,
             journal: Some("must-not-be-used".into()),

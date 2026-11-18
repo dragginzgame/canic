@@ -10,6 +10,7 @@ pub(super) fn selection() -> SelectedFleet {
         app: "starter".into(),
         fleet: "mainnet".into(),
         config: FleetConfig {
+            shard_pool: None,
             auth: None,
             network: Network::Mainnet,
             journal: None,

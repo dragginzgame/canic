@@ -136,3 +136,14 @@ fn named_definition_capacity_counts_unique_names_including_cycles() {
     );
     assert_eq!(projection.reached.len(), 64);
 }
+
+#[test]
+fn inspection_v1_refuses_unrepresented_wrapped_types() {
+    let mut projection = Projection {
+        reached: BTreeMap::new(),
+    };
+    assert_eq!(
+        projection.body(&TypeBody::Wrapped(FieldType::Bool)),
+        Err(Refusal::Unsupported)
+    );
+}

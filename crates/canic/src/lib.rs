@@ -46,3 +46,7 @@ pub struct Greeting {
 
 #[cfg(feature = "storage")]
 pub mod storage;
+
+/// Optional runtime shard assignment and lookup for application hubs.
+#[cfg(feature = "sharding")]
+pub mod sharding;

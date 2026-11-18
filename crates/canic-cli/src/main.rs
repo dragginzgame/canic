@@ -129,7 +129,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
         }) => {
             if let Some(source) = source {
                 let default_source = args::checkout();
-                let canic_source = canic_source.as_deref().unwrap_or(&default_source);
+                let canic_source = canic_source.as_deref().or(default_source.as_deref()).ok_or_else(|| canic_host::Error::Invalid("generating a source workspace requires --canic-source pointing to a matching Canic checkout".into()))?;
                 let path = canic_host::create_starter(source, name, canic_source)?;
                 if !cli.json {
                     return Ok(Output::Text(format!(
@@ -391,6 +391,8 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 )?;
                 if !cli.json {
                     let (digest, mut text) = match &result {
+                        canic_host::FleetPlanning::ShardPool { deployment, network, controller, approval, .. } =>
+                            return Ok(Output::Text(status::pool_preview(deployment, network, controller, approval)?)),
                         canic_host::FleetPlanning::Create { operation, fleet_plan } =>
                             (operation, status::fleet_preview(operation, fleet_plan, &state_dir)?),
                         canic_host::FleetPlanning::AddChild { operation, .. } | canic_host::FleetPlanning::Upgrade { operation, .. } | canic_host::FleetPlanning::Maintenance { operation, .. } | canic_host::FleetPlanning::Publication { operation, .. } =>
@@ -406,6 +408,11 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                         identity.as_deref(),
                     ));
                     return Ok(Output::Text(text));
+                }
+                if matches!(result, canic_host::FleetPlanning::ShardPool { .. }) {
+                    return Ok(Output::Json(
+                        serde_json::to_value(result).map_err(|e| Error::Invalid(e.to_string()))?,
+                    ));
                 }
                 let mut output =
                     serde_json::to_value(result).map_err(|e| Error::Invalid(e.to_string()))?;

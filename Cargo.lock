@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.221.0"
+version = "0.222.0"
 dependencies = [
  "ic-auth",
  "ic-auth-protocol-types",
@@ -281,6 +281,7 @@ dependencies = [
  "ic-db",
  "ic-platform-protocol",
  "ic-platform-runtime",
+ "ic-platform-types",
  "ic-storage",
  "ic-wire",
  "serde",
@@ -291,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.221.0"
+version = "0.222.0"
 dependencies = [
  "canic-host",
  "canic-management-protocol",
@@ -309,7 +310,7 @@ dependencies = [
 
 [[package]]
 name = "canic-demo"
-version = "0.221.0"
+version = "0.222.0"
 dependencies = [
  "canic",
  "clap",
@@ -324,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "canic-hello"
-version = "0.221.0"
+version = "0.222.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -333,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.221.0"
+version = "0.222.0"
 dependencies = [
  "base64",
  "canic",
@@ -364,7 +365,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.221.0"
+version = "0.222.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -376,12 +377,13 @@ dependencies = [
  "ic-wasm-store-protocol",
  "ic-wire",
  "serde",
+ "sha2 0.11.1",
  "toko-tooling",
 ]
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.221.0"
+version = "0.222.0"
 dependencies = [
  "ic-platform-protocol",
  "ic-wasm-store-protocol",
@@ -394,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.221.0"
+version = "0.222.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -1207,8 +1209,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.22.2"
-source = "git+https://github.com/dragginzgame/ic-db?rev=97e49f2ef7547cc4413ec75e9cea7d70c56735c1#97e49f2ef7547cc4413ec75e9cea7d70c56735c1"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "738b604c7c170d50910bb6fde263e1a3a555dbfd0c210c72429d605cd38e733b"
 dependencies = [
  "ethnum",
  "ic-db-macros",
@@ -1221,8 +1224,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.22.2"
-source = "git+https://github.com/dragginzgame/ic-db?rev=97e49f2ef7547cc4413ec75e9cea7d70c56735c1#97e49f2ef7547cc4413ec75e9cea7d70c56735c1"
+version = "0.23.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a9d00fd5bd52d4015ee35222b298335ff4dd236cf47e27f818e78df9c9da1b6"
 dependencies = [
  "proc-macro2",
  "quote",

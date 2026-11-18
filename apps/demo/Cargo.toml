@@ -3,7 +3,8 @@ name = "canic-demo"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish.workspace = true
+license-file.workspace = true
+publish = false
 description = "Persistent counter application for the Canic demo fleet"
 
 [target.'cfg(any())'.dev-dependencies]

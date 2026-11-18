@@ -3,6 +3,7 @@ name = "canic-profile-worker"
 version = "0.0.0"
 edition.workspace = true
 rust-version.workspace = true
+license-file.workspace = true
 publish.workspace = true
 description = "Retained persistent ownership and composition qualification fixture"
 

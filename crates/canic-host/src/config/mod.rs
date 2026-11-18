@@ -7,6 +7,8 @@ use std::{
 };
 
 mod discovery;
+mod sharding;
+pub use sharding::ShardPoolConfig;
 #[cfg(test)]
 mod tests;
 pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
@@ -78,6 +80,9 @@ pub struct CanisterBinding {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetDeclaration {
+    /// Optional fleet-owned bounds for the declared shard component.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shard_pool: Option<ShardPoolConfig>,
     /// Optional exact Auth enrollment; never inferred from roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth: Option<crate::AuthConfig>,
@@ -94,6 +99,9 @@ pub struct FleetDeclaration {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetConfig {
+    /// Optional fleet-owned bounds for the declared shard component.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shard_pool: Option<ShardPoolConfig>,
     /// Optional exact Auth enrollment; never inferred from roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth: Option<crate::AuthConfig>,
@@ -256,20 +264,36 @@ impl Config {
 
 impl AppConfig {
     fn resolve(&self, fleet: &FleetDeclaration) -> Result<FleetConfig> {
-        if fleet
-            .canisters
-            .keys()
-            .any(|slot| !self.canisters.contains_key(slot))
-        {
-            return Err(Error::Invalid(
-                "fleet binding must name an app canister definition".into(),
-            ));
+        let mut canisters = self.resolve_canisters(&fleet.canisters);
+        for (slot, binding) in &fleet.canisters {
+            if canisters.contains_key(slot) {
+                continue;
+            }
+            let role = match &fleet.shard_pool {
+                Some(pool) if slot == &pool.root => "root",
+                Some(pool) if slot == &pool.store => "wasm-store",
+                _ => return Err(Error::Invalid("fleet binding must name an app canister definition or supplied shard infrastructure".into())),
+            };
+            if binding.profile_manager {
+                return Err(Error::Invalid(
+                    "supplied pool infrastructure cannot be a profile manager".into(),
+                ));
+            }
+            canisters.insert(
+                slot.clone(),
+                CanisterConfig {
+                    id: Some(binding.id.clone()),
+                    role: Some(role.into()),
+                    ..CanisterConfig::default()
+                },
+            );
         }
         Ok(FleetConfig {
+            shard_pool: fleet.shard_pool.clone(),
             auth: fleet.auth.clone(),
             network: fleet.network.clone(),
             journal: fleet.journal.clone(),
-            canisters: self.resolve_canisters(&fleet.canisters),
+            canisters,
         })
     }
 
@@ -326,6 +350,9 @@ fn select<'a, T>(
 
 impl FleetConfig {
     fn validate(&self) -> Result<()> {
+        if let Some(pool) = &self.shard_pool {
+            pool.validate(self)?;
+        }
         if let Some(auth) = &self.auth {
             auth.grant(self)?;
         }
@@ -648,6 +675,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
         definition.fleets.insert(
             fleet.into(),
             FleetDeclaration {
+                shard_pool: None,
                 auth: None,
                 network,
                 journal: None,

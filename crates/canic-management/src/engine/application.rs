@@ -64,6 +64,14 @@ pub fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Statu
         .approval
         .validate(&api::canister_self().to_text(), api::time())?;
     delivery::admit(&input.source.reference, &input.source.approval.module_hash)?;
+    admit_creation(slot, input)
+}
+
+/// Caller has already admitted the effect owner, source and exact nonempty bytes.
+pub(super) fn admit_creation(
+    slot: ChildId,
+    input: application::Stage<Approval>,
+) -> Result<Status, Refusal> {
     let operation = input.pin(application::STAGE, slot).operation;
     let source = stored::Sources {
         creation: stored::Delivery {

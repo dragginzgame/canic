@@ -3,6 +3,8 @@ name = "canic-root"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+repository.workspace = true
+license-file.workspace = true
 publish.workspace = true
 description = "Root for bounded controller-approved application canisters"
 
@@ -14,6 +16,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 backup = ["canic-management/backup", "dep:serde"]
+sharding = ["canic/sharding", "canic-management/sharding"]
 blob = ["canic-management/blob"]
 auth = ["canic/auth-enrollment"]
 fault-injection = ["canic-management/fault-injection"]

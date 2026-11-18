@@ -3,7 +3,8 @@ name = "canic-hello"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
-publish.workspace = true
+license-file.workspace = true
+publish = false
 description = "First deployable Canic greeting application"
 
 [target.'cfg(any())'.dev-dependencies]

@@ -3,6 +3,7 @@ name = "canic-qualification"
 version = "0.0.0"
 edition.workspace = true
 rust-version.workspace = true
+license-file.workspace = true
 publish.workspace = true
 description = "Installed Canic effect and product qualification"
 # Helper modules beside these entrypoints are not standalone test crates.
@@ -29,12 +30,13 @@ ic-testkit.workspace = true
 wasmparser.workspace = true
 
 [dev-dependencies]
-canic.workspace = true
+canic = { workspace = true, features = ["db", "sharding"] }
 canic-artifact-probe.workspace = true
 canic-asset-catalog.workspace = true
 canic-auth-witness.workspace = true
 canic-demo.workspace = true
 canic-effect-probe.workspace = true
+canic-host.workspace = true
 canic-management-protocol = { workspace = true, features = ["backup"] }
 canic-profile-protocol.workspace = true
 clap.workspace = true

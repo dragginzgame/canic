@@ -70,9 +70,9 @@ This is the fresh Canic rewrite. The predecessor is maintained separately as
 [canic-legacy](https://github.com/dragginzgame/canic-legacy).
 
 The rewrite uses versions **0.200.0 and later**, above the legacy crates.io release line.
-Development is shared through GitHub. We will not publish this rewrite to
-crates.io until it is mature; all workspace packages retain `publish = false`.
-Build from this repository in the meantime.
+The six product crates under `crates/` are licensed under the
+[Toko Studios Network Licence](LICENSE.md) and selected for crates.io publication.
+Demo and qualification packages are private.
 
 The accepted [Canic system design](docs/design/canic-system-design.md) defines
 the restart: product scope, architecture, capability ownership, deferred ideas,

@@ -42,9 +42,13 @@ pub(super) const JOURNAL_BYTES: usize = 16_384;
 pub(super) const ARTIFACT_BYTES: usize = 2 * MAX_WASM + 24;
 pub(super) const JOURNAL_KEY: &str = "manager.journal.v2";
 pub(super) const ARTIFACT_KEY: &str = "manager.artifacts.v1";
+#[cfg(feature = "sharding")]
+pub(super) const SHARDS_KEY: &str = "manager.shards.v1";
 pub(super) const KEYS: &[&str] = &[
     JOURNAL_KEY,
     ARTIFACT_KEY,
+    #[cfg(feature = "sharding")]
+    SHARDS_KEY,
     #[cfg(feature = "backup")]
     "manager.snapshot.v1",
 ];

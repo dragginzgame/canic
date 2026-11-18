@@ -16,6 +16,38 @@ pub(crate) mod store;
 #[cfg(test)]
 mod tests;
 
+pub(crate) fn pool_preview(
+    deployment: &canic_host::DeploymentName,
+    network: &Network,
+    controller: &str,
+    approval: &canic_management_protocol::stored::ShardPool,
+) -> Result<String> {
+    let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    let manifest = &approval.reference.manifest;
+    let location = match network {
+        Network::Mainnet => "IC mainnet",
+        Network::Local { url, .. } => url,
+    };
+    Ok(format!(
+        "Shard pool preview · {}/{} · {}\n\nNetwork: {location}\nNetwork binding: {}\nController: {controller}\nRoot: {}\nStore: {}\nHub: {}\nRelease: {} @ {}\nWasm SHA-256: {}\nInit bytes (hex): {}\nCapacity: {} shards × {} lifetime keys per shard\nCreation budget: {} cycles\nGrowth deadline: {} Unix ns\n\nOffline review only. No operation submitted.\n",
+        deployment.app,
+        deployment.fleet,
+        approval.pool,
+        network.binding_id()?,
+        approval.root,
+        approval.reference.store,
+        approval.hub,
+        manifest.release.name,
+        manifest.release.version,
+        hex(&manifest.hash),
+        hex(approval.arguments.as_slice()),
+        approval.max_shards,
+        approval.keys_per_shard,
+        approval.creation_budget,
+        approval.expires_at_ns
+    ))
+}
+
 pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> {
     let state = match state {
         OperationStatus::Fleet(state) => return render_fleet(state, journal),
@@ -77,9 +109,9 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
     .expect("writing to String");
     if let Some(auth) = plan.auth() {
         writeln!(output,
-            "\nAuth action: {}\nRoot: {}\nReceiver: {}\nReceiver module: {}\nIssuer: {}\nPublic key: {}\nCanonical network ID: {}\nApplication ID: {}\nApplication role: {}\nScopes: {}\nGrant window: {}–{} Unix ns\nAuth reply: {} (historical; not receiver readiness)",
+            "\nAuth action: {}\nRoot: {}\nReceiver: {}\nReceiver controller: {}\nReceiver module: {}\nIssuer: {}\nPublic key: {}\nCanonical network ID: {}\nApplication ID: {}\nApplication role: {}\nScopes: {}\nGrant window: {}–{} Unix ns\nAuth reply: {} (historical; not receiver readiness)",
             if auth.revoke { "revoke" } else { "configure" },
-            escape(&auth.root.canister), escape(&auth.receiver.canister), escape(&auth.receiver.module),
+            escape(&auth.root.canister), escape(&auth.receiver.canister), escape(auth.expected_receiver_controller(&plan.controller)), escape(&auth.receiver.module),
             auth.grant.issuer.to_text(),
             auth.grant.key.iter().map(|b| format!("{b:02x}")).collect::<String>(),
             auth.grant.audience.canonical_network_id.iter().map(|b| format!("{b:02x}")).collect::<String>(),

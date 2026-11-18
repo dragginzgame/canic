@@ -1,0 +1,49 @@
+//! Hub-facing placement contract. The application derives one opaque key per account.
+use serde::{Deserialize, Serialize};
+
+/// Assign a key to an admitted shard or reserve its first allocation.
+pub const ASSIGN: u64 = 91;
+/// Observe the original allocation without reserving capacity.
+pub const LOOKUP: u64 = 92;
+/// An application-owned stable key, independent of the current login session.
+pub type Key = [u8; 32];
+/// Small request and reply frames for the hub.
+pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 1024,
+    allocation: 32768,
+    nodes: 1024,
+    depth: 12,
+};
+
+/// Identity scoped to the addressed Root and its immutable pool approval.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Allocation {
+    /// Permanent child slot.
+    pub slot: u32,
+    /// Exact original generation, bound to Root, slot and approved Store creation.
+    pub generation: [u8; 32],
+}
+
+/// Lookup and assignment use the same explicit outcomes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Placement {
+    /// No assignment has been reserved.
+    Unknown,
+    /// A claim already consumes capacity while its exact creation is in progress.
+    Pending(Allocation),
+    /// Root retained the principal and observed code, controllers and readiness.
+    Assigned(Allocation, String),
+    /// The original allocation cannot currently serve this claim.
+    Unavailable(Allocation, Option<String>),
+    /// All approved shard capacity is reserved.
+    Full,
+    /// No claim was admitted while an earlier creation is outstanding.
+    Busy,
+    /// New creation lacks current funding or approval.
+    GrowthRefused,
+}
+
+#[cfg(target_arch = "wasm32")]
+mod client;
+#[cfg(target_arch = "wasm32")]
+pub use client::{assign, lookup};

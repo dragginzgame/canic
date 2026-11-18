@@ -15,6 +15,10 @@ pub fn inputs() -> (Vec<u8>, PathBuf) {
 }
 
 pub async fn instance(directory: &Path) -> (Server, Instance) {
+    instance_with(directory, PocketIcBuilder::new().with_application_subnet()).await
+}
+
+pub async fn instance_with(directory: &Path, builder: PocketIcBuilder) -> (Server, Instance) {
     let server = Server::start(
         PreparedServer::check(directory).expect("run make qualification-setup first"),
         Limits {
@@ -26,10 +30,7 @@ pub async fn instance(directory: &Path) -> (Server, Instance) {
     )
     .unwrap();
     let instance = server
-        .instance(
-            PocketIcBuilder::new().with_application_subnet(),
-            Duration::from_secs(30),
-        )
+        .instance(builder, Duration::from_secs(30))
         .await
         .unwrap();
     (server, instance)

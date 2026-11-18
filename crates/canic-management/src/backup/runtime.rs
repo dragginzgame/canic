@@ -43,6 +43,10 @@ pub fn lookup(binding: &Binding) -> Result<Record, Error> {
 /// Traps on authority failure, failed custody writes or qualification fault injection.
 pub async fn execute(request: Request) -> Result<Record, Error> {
     assert!(api::is_controller(&api::caller()), "controller required");
+    #[cfg(feature = "sharding")]
+    if crate::sharding::occupied() {
+        return Err(Error::Busy);
+    }
     let (binding, bytes) = request.prepare()?;
     match read(|l| l.lookup(&binding)) {
         Ok(r) => return Ok(r),
