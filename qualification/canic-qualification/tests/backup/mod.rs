@@ -1,9 +1,14 @@
 //! Direct, stopped fixture with disposable external secp256k1 custody.
+#[path = "../support/counter.rs"]
+mod counter_client;
 mod gateway;
 mod managed;
 mod signed_bindings;
 mod signer_failures;
-use canic_host::backup::{DirectSigner, SnapshotCodec};
+use canic_demo::{Error as CounterError, Request as CounterRequest};
+use canic_host::backup::{CounterRecoveryGuard, DirectSigner, SnapshotCodec};
+use canic_management_protocol::backup::Step;
+use counter_client::counter;
 use ic_backup::store::OperationStep;
 use ic_backup::store::{
     BackupApplicationGuard, BackupConnection, BackupDigest, BackupHttpTransport, BackupStore,
@@ -26,21 +31,30 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-struct StoppedFixture(BackupTarget);
+enum StoppedFixture {
+    Direct(BackupTarget),
+    Managed(std::rc::Rc<std::cell::RefCell<CounterRecoveryGuard>>),
+}
 impl BackupApplicationGuard for StoppedFixture {
     type Error = ();
     fn protocol(&self) -> [u8; 32] {
-        [9; 32]
+        match self {
+            Self::Direct(_) => [9; 32],
+            Self::Managed(g) => g.borrow().protocol(),
+        }
     }
     fn admit(
         &self,
         plan: OperationPlan<'_>,
-        _: OperationAction,
+        action: OperationAction,
         application: &[u8; 32],
     ) -> Result<(), ()> {
-        (plan.target() == self.0 && *application == [3; 32])
-            .then_some(())
-            .ok_or(())
+        match self {
+            Self::Direct(target) => (plan.target() == *target && *application == [3; 32])
+                .then_some(())
+                .ok_or(()),
+            Self::Managed(g) => g.borrow().admit(plan, action, application).map_err(|_| ()),
+        }
     }
 }
 
@@ -93,7 +107,7 @@ async fn exercise(managed: bool) {
         .await
         .unwrap();
     let pic = instance.client_mut();
-    let (manager, controller, child, wasm, stable) = if managed {
+    let (manager, controller, child, wasm, mut stable) = if managed {
         let (root, child, root_wasm, wasm) = managed::install(pic, caller).await;
         let manager = RootManager {
             root: root.as_slice().try_into().unwrap(),
@@ -104,9 +118,14 @@ async fn exercise(managed: bool) {
             cycle_limit: canic_management_protocol::backup::MAX_CYCLES,
             reply_bytes: 264192,
         };
-        let stable = pic.get_stable_memory(child).await;
-        assert!(!stable.is_empty());
-        (Some(manager), root, child, wasm, stable)
+        assert_eq!(
+            counter(pic, child, caller, CounterRequest::Increment)
+                .await
+                .unwrap()
+                .value,
+            1
+        );
+        (Some(manager), root, child, wasm, Vec::new())
     } else {
         let child = pic
             .create_canister_with_settings(
@@ -125,7 +144,9 @@ async fn exercise(managed: bool) {
             .await;
         (None, caller, child, wasm.to_vec(), stable)
     };
-    pic.stop_canister(child, Some(controller)).await.unwrap();
+    if !managed {
+        pic.stop_canister(child, Some(controller)).await.unwrap();
+    }
     let trust = pic.root_key().await.unwrap();
     let trust_root = BackupDigest::compute(&trust);
     let target = BackupTarget {
@@ -141,6 +162,7 @@ async fn exercise(managed: bool) {
         )
         .await;
     let gateway = gateway::Gateway::start(endpoint.port().unwrap()).await;
+    let guard = std::rc::Rc::new(std::cell::RefCell::new(CounterRecoveryGuard::default()));
     let connect_with = |signer| {
         let connection = BackupConnection::new(
             BackupHttpTransport::new(
@@ -151,7 +173,11 @@ async fn exercise(managed: bool) {
             )
             .unwrap(),
             signer,
-            StoppedFixture(target),
+            if managed {
+                StoppedFixture::Managed(guard.clone())
+            } else {
+                StoppedFixture::Direct(target)
+            },
         );
         if let Some(manager) = &manager {
             connection.with_root_manager(manager.clone(), &SnapshotCodec)
@@ -176,7 +202,11 @@ async fn exercise(managed: bool) {
     };
     let sender = caller.as_slice().try_into().unwrap();
     let options = OperationOptions {
-        application: [3; 32],
+        application: if managed {
+            CounterRecoveryGuard::application(module.as_bytes())
+        } else {
+            [3; 32]
+        },
         snapshot_capacity: 4,
         prepare_duration_ns: 30_000_000_000,
         submit_duration_ns: 120_000_000_000,
@@ -204,7 +234,13 @@ async fn exercise(managed: bool) {
             options,
         )
         .unwrap();
-    if !managed {
+    let checkpoint = OperationPlan::Capture(&plan);
+    if managed {
+        for step in [Step::Fence, Step::Stop] {
+            managed::act(pic, caller, checkpoint, step, &guard).await;
+        }
+        stable = pic.get_stable_memory(child).await;
+    } else {
         let mut changed_sender = plan.request().clone();
         changed_sender.sender = CanisterId::self_authenticating(b"another fixture sender")
             .as_slice()
@@ -274,6 +310,12 @@ async fn exercise(managed: bool) {
         capture.reconcile_observation(&mut connect(changed)).await,
         Err(ic_backup::store::OperationAdvanceError::Binding)
     ));
+    if managed {
+        *guard.borrow_mut() = CounterRecoveryGuard::default();
+        for step in [Step::Fence, Step::Stop] {
+            managed::act(pic, caller, checkpoint, step, &guard).await;
+        }
+    }
     let mut connection = connect(config.clone());
     assert!(matches!(
         capture.advance(&mut connection).await.unwrap(),
@@ -340,30 +382,77 @@ async fn exercise(managed: bool) {
             options,
         )
         .unwrap();
+    let rewind = OperationPlan::Restore(&restore);
     drop(source);
     drop(capture);
-    pic.set_stable_memory(
-        child,
-        vec![42; stable.len()],
-        BlobCompression::NoCompression,
-    )
-    .await;
+    if managed {
+        for step in [Step::Start, Step::Open] {
+            managed::act(pic, caller, checkpoint, step, &guard).await;
+        }
+        assert_eq!(
+            counter(pic, child, caller, CounterRequest::Increment)
+                .await
+                .unwrap()
+                .value,
+            2
+        );
+        *guard.borrow_mut() = CounterRecoveryGuard::default();
+        for step in [Step::Fence, Step::Stop] {
+            managed::act(pic, caller, rewind, step, &guard).await;
+        }
+    } else {
+        pic.set_stable_memory(
+            child,
+            vec![42; stable.len()],
+            BlobCompression::NoCompression,
+        )
+        .await;
+    }
     let mut operation = store
         .create_restore(&restore, restore.digest(), &plan)
         .unwrap();
     if managed {
         while operation.inspect().unwrap().next_call != Some(OperationStep::LoadSnapshot) {
+            if operation.inspect().unwrap().next_call == Some(OperationStep::AllocateSnapshot) {
+                assert!(
+                    guard
+                        .borrow()
+                        .admit(
+                            rewind,
+                            OperationAction::AllocateSnapshot,
+                            &options.application
+                        )
+                        .is_err()
+                );
+                managed::act(pic, caller, rewind, Step::AdmitAllocation, &guard).await;
+            }
             assert!(matches!(
                 operation.advance(&mut connection).await.unwrap(),
                 OperationProgress::Advanced
             ));
         }
+        assert!(
+            guard
+                .borrow()
+                .admit(rewind, OperationAction::LoadSnapshot, &options.application)
+                .is_err()
+        );
+        managed::act(pic, caller, rewind, Step::AdmitLoad, &guard).await;
         gateway.lose_next_reply.store(true, Ordering::SeqCst);
         assert!(operation.advance(&mut connection).await.is_err());
         let retained = operation.inspect().unwrap();
         let sent = gateway.requests.load(Ordering::SeqCst);
         drop(operation);
         drop(connection);
+        *guard.borrow_mut() = CounterRecoveryGuard::default();
+        for step in [
+            Step::Fence,
+            Step::Stop,
+            Step::AdmitAllocation,
+            Step::AdmitLoad,
+        ] {
+            managed::act(pic, caller, rewind, step, &guard).await;
+        }
         connection = connect(config);
         operation = store
             .open_restore(&restore.request().operation_id, restore.digest())
@@ -404,6 +493,40 @@ async fn exercise(managed: bool) {
         ),
         "Stopped"
     );
+    if managed {
+        managed::act(pic, caller, rewind, Step::Start, &guard).await;
+        managed::premature_open(pic, caller, controller, rewind).await;
+        managed::replay_capture_open(pic, caller, controller, &plan).await;
+        let restored = counter(pic, child, caller, CounterRequest::Read)
+            .await
+            .unwrap();
+        assert_eq!((restored.value, restored.fence), (1, Some(1)));
+        assert_eq!(
+            counter(pic, child, caller, CounterRequest::Increment).await,
+            Err(CounterError::Fenced)
+        );
+        assert_eq!(
+            counter(pic, child, caller, CounterRequest::Activate { attempt: 1 }).await,
+            Err(CounterError::NotOwner)
+        );
+        managed::act(pic, caller, rewind, Step::Accept, &guard).await;
+        let accepted = counter(pic, child, caller, CounterRequest::Read)
+            .await
+            .unwrap();
+        assert_eq!((accepted.value, accepted.fence), (1, Some(3)));
+        assert_eq!(
+            counter(pic, child, caller, CounterRequest::Increment).await,
+            Err(CounterError::Fenced)
+        );
+        managed::act(pic, caller, rewind, Step::Open, &guard).await;
+        assert_eq!(
+            counter(pic, child, caller, CounterRequest::Increment)
+                .await
+                .unwrap()
+                .value,
+            2
+        );
+    }
     drop(operation);
     pic.stop_live().await;
     let mut replay = store

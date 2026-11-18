@@ -440,7 +440,7 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
         fleet: "mainnet".into(),
         config: FleetConfig {
             shard_pool: None,
-            auth: None,
+            auth: Vec::new(),
             network: Network::Mainnet,
             journal: None,
             canisters: declarations

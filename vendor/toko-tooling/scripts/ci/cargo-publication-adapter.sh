@@ -57,7 +57,7 @@ printf 'Publication selection evidence: %s\n' "$selection"
 source="$(git rev-parse --verify HEAD)"
 printf '%s\n' "$source" > "$selection/source"
 status=0
-cargo metadata --no-deps --locked --offline --format-version 1 ${metadata_options[@]+"${metadata_options[@]}"} \
+cargo metadata --no-deps --locked --format-version 1 ${metadata_options[@]+"${metadata_options[@]}"} \
     > "$selection/metadata.json" 2> "$selection/metadata.stderr" || status=$?
 cat "$selection/metadata.stderr" >&2 || :
 [[ "$status" == 0 ]] || exit "$status"

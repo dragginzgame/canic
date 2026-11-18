@@ -63,7 +63,7 @@ admit() {
         if [[ "$path" == */* ]]; then mkdir -p "$evidence/inputs/${path%/*}"; fi
         cp -p -- "$root/$path" "$evidence/inputs/$path" || return
     done
-    if (cd "$root" && cargo metadata --locked --offline --format-version 1) \
+    if (cd "$root" && cargo metadata --locked --format-version 1) \
         2>&1 > "$evidence/metadata.json" | tee "$evidence/metadata.stderr" >&2; then :
     else statuses=("${PIPESTATUS[@]}"); fi
     printf '%s\n' "${statuses[0]}" > "$evidence/cargo-status"

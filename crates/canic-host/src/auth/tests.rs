@@ -36,7 +36,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
                     },
                 ),
             ]),
-            auth: Some(AuthConfig {
+            auth: vec![AuthConfig {
                 root_wasm: None,
                 receiver_controller: ReceiverController::Root,
                 root: "root".into(),
@@ -49,7 +49,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
                 scopes: vec!["read".into()],
                 not_before_ns: now - 1,
                 expires_at_ns: now + 600_000_000_000,
-            }),
+            }],
         },
     };
     (dir, selected)
@@ -105,9 +105,9 @@ fn auth_approval_keeps_original_authority_and_rejects_conflicting_configuration(
     );
     let before = std::fs::read(dir.join(&id).join("plan.json")).unwrap();
     assert!(create_auth_revocation(&dir, &id, &selected).is_err());
-    selected.config.auth.as_mut().unwrap().expires_at_ns += 1;
+    selected.config.auth.first_mut().unwrap().expires_at_ns += 1;
     assert!(create_auth_plan(&dir, &input, &selected, "2vxsx-fae").is_err());
-    selected.config.auth.as_mut().unwrap().expires_at_ns -= 1;
+    selected.config.auth.first_mut().unwrap().expires_at_ns -= 1;
     for field in ["creation_cycles", "target", "version"] {
         let mut value = serde_json::to_value(&plan).unwrap();
         value[field] = serde_json::json!(1);
@@ -157,7 +157,7 @@ fn auth_receipts_require_exact_retained_call_and_revocation_does_not_consume_mut
     .unwrap();
     let path = retained_reply(&dir, &plan);
     assert!(execution::receipt(&dir.join(&id), &plan).unwrap().is_some());
-    selected.config.auth.as_mut().unwrap().issuer = "ryjl3-tyaaa-aaaaa-aaaba-cai".into();
+    selected.config.auth.first_mut().unwrap().issuer = "ryjl3-tyaaa-aaaaa-aaaba-cai".into();
     let (revoked, revocation) = create_auth_revocation(&dir, &id, &selected).unwrap();
     assert_eq!(revocation.auth().unwrap().grant, plan.auth().unwrap().grant);
     assert!(revocation.auth().unwrap().revoke);
@@ -180,7 +180,7 @@ fn auth_receipts_require_exact_retained_call_and_revocation_does_not_consume_mut
 #[test]
 fn auth_config_requires_bound_distinct_slots_and_canonical_application_grants() {
     let (_, selected) = fixture();
-    let config = selected.config.auth.as_ref().unwrap();
+    let config = selected.config.auth.first().unwrap();
     for scopes in [
         vec![],
         vec!["read".into(), "read".into()],
@@ -222,7 +222,7 @@ fn operator_controller_is_bound_into_the_plan_and_retained_for_revocation() {
         legacy.digest().unwrap()
     );
 
-    let config = selected.config.auth.as_mut().unwrap();
+    let config = selected.config.auth.first_mut().unwrap();
     config.receiver_controller = ReceiverController::Operator;
     config.root_wasm = Some("root.wasm".into());
     assert!(
@@ -242,7 +242,12 @@ fn operator_controller_is_bound_into_the_plan_and_retained_for_revocation() {
     same_times.expires_at_ns = legacy.expires_at_ns;
     assert_ne!(legacy.digest().unwrap(), same_times.digest().unwrap());
     retained_reply(&dir, &plan);
-    selected.config.auth.as_mut().unwrap().receiver_controller = ReceiverController::Root;
+    selected
+        .config
+        .auth
+        .first_mut()
+        .unwrap()
+        .receiver_controller = ReceiverController::Root;
     assert!(create_auth_plan(&dir, &path, &selected, &signer).is_err());
     assert_eq!(
         create_auth_revocation(&dir, &id, &selected)

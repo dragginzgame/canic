@@ -5,6 +5,31 @@ use ic_backup::store::{
     SnapshotEffect,
 };
 
+pub(super) fn operation(plan: OperationPlan<'_>) -> Option<snapshot::Operation> {
+    let manager = plan.root_manager()?;
+    let mut id = [0; 16];
+    let (chunks, rest) = plan.operation_id().as_bytes().as_chunks::<2>();
+    if chunks.len() != id.len() || !rest.is_empty() {
+        return None;
+    }
+    for (chunk, out) in chunks.iter().zip(&mut id) {
+        *out = u8::from_str_radix(std::str::from_utf8(chunk).ok()?, 16).ok()?;
+    }
+    Some(snapshot::Operation {
+        id,
+        kind: match plan {
+            OperationPlan::Capture(_) => snapshot::Kind::Capture,
+            OperationPlan::Restore(_) => snapshot::Kind::Restore,
+        },
+        approval: *plan.digest().as_bytes(),
+        network: *plan.target().network.as_bytes(),
+        manager: manager.root.to_text(),
+        caller: plan.sender().to_text(),
+        generation: manager.generation,
+        target: plan.target().canister.to_text(),
+    })
+}
+
 /// Codec for the generation-one Canic Root snapshot executor.
 /// Supply the same codec to Backup's live connection and offline store reader.
 #[derive(Debug)]
@@ -40,21 +65,12 @@ impl RootCodec for SnapshotCodec {
             SnapshotEffect::Upload(a) => snapshot::Effect::Upload(a.clone()),
             SnapshotEffect::Load(a) => snapshot::Effect::Load(a.clone()),
         };
-        let manager = input.plan.root_manager()?;
+        let operation = operation(input.plan)?;
+        if operation.id != input.id || operation.generation != input.generation {
+            return None;
+        }
         let request = snapshot::Request {
-            operation: snapshot::Operation {
-                id: input.id,
-                kind: match input.plan {
-                    OperationPlan::Capture(_) => snapshot::Kind::Capture,
-                    OperationPlan::Restore(_) => snapshot::Kind::Restore,
-                },
-                approval: *input.plan.digest().as_bytes(),
-                network: *input.plan.target().network.as_bytes(),
-                manager: manager.root.to_text(),
-                caller: input.plan.sender().to_text(),
-                target: input.plan.target().canister.to_text(),
-                generation: input.generation,
-            },
+            operation,
             step,
             effect,
             arguments_hash: *input.arguments_hash.as_bytes(),

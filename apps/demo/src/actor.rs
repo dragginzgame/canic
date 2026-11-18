@@ -186,3 +186,46 @@ fn lifecycle_decode(_bytes: &[u8]) -> Result<(), std::convert::Infallible> {
 fn fail(error: impl std::fmt::Debug) -> ! {
     api::trap(&format!("counter refused: {error:?}"))
 }
+
+#[runtime::update(runtime = runtime, name = "recovery", guard = bounded, decode = decode_recovery, max_bytes = 128, encode = encode_recovery, on_error = fail)]
+fn recovery(command: canic::recovery::Command) -> canic::recovery::Command {
+    use canic::recovery::Command;
+    let mut record = read();
+    let caller = api::caller();
+    assert_eq!(record.owner, caller, "counter recovery owner");
+    match command {
+        Command::Fence(attempt) => record
+            .apply(Request::Fence { attempt }, caller)
+            .expect("counter fence"),
+        Command::Open(attempt) => {
+            assert_eq!(record.fence, Some(attempt), "counter opening generation");
+            record
+                .apply(Request::Activate { attempt }, caller)
+                .expect("counter opening");
+        }
+        Command::Accept {
+            checkpoint,
+            generation,
+        } => {
+            assert_eq!(record.fence, Some(checkpoint), "counter checkpoint");
+            assert!(generation > record.last_attempt, "fresh counter generation");
+            record.last_attempt = generation;
+            record.fence = Some(generation);
+        }
+    }
+    write(&record);
+    command
+}
+fn decode_recovery(bytes: &[u8]) -> Result<canic::recovery::Command, ic_wire::Error> {
+    ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: canic::recovery::METHOD,
+            direction: ic_wire::Direction::Request,
+        },
+        canic::recovery::LIMITS,
+    )
+}
+fn encode_recovery(command: canic::recovery::Command) -> Result<Vec<u8>, ic_wire::Error> {
+    canic::recovery::encode(command, ic_wire::Direction::Response)
+}

@@ -37,7 +37,7 @@ pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
 pub enum Kind {
     /// Export a stopped application's snapshot.
     Capture,
-    /// Upload and load; never start or activate the application.
+    /// Upload and load. Starting and opening require separate operator-approved slots.
     Restore,
 }
 /// Fixed procedure positions, not arbitrary method dispatch.
@@ -65,6 +65,18 @@ pub enum Step {
     Load,
     /// Final stopped-state observation.
     FinalStatus,
+    /// Close the managed application before this procedure.
+    Fence,
+    /// Operator permits a new allocation for this restore.
+    AdmitAllocation,
+    /// Operator permits the verified destination to be loaded.
+    AdmitLoad,
+    /// Start the child with its retained fence intact.
+    Start,
+    /// Adopt a fresh generation without opening writes.
+    Accept,
+    /// Open only the exact accepted generation.
+    Open,
 }
 /// Immutable values under (kind, operation ID), not additional namespaces.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -103,8 +115,15 @@ pub enum Effect {
     Upload(management::UploadDataArgs),
     /// Load without starting.
     Load(management::LoadSnapshotArgs),
+    /// Lifecycle action bound to the exact source capture approval.
+    Recovery {
+        /// Existing managed child.
+        child: management::CanisterArgs,
+        /// Original capture approval digest.
+        source: [u8; 32],
+    },
 }
-/// Exact inner effect and its finite liabilities.
+/// Exact application, management or local approval step and its finite liabilities.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Request {
     /// Immutable operation binding.
@@ -272,64 +291,75 @@ impl Request {
             return Err(Error::Invalid);
         }
         let id = |v: &[u8]| !v.is_empty() && v.len() <= 256;
-        let (method, target, bytes) = match (&self.effect, self.step, op.kind) {
-            (Effect::Canister(a), Step::Stop, _) => {
-                ("stop_canister", a.canister_id, a.encode(MAX_INNER))
-            }
-            (Effect::Canister(a), Step::InitialStatus | Step::FinalStatus, _)
-            | (Effect::Canister(a), Step::BeforeLoad, Kind::Restore) => {
-                ("canister_status", a.canister_id, a.encode(MAX_INNER))
-            }
-            (Effect::Canister(a), Step::List, _) => (
-                "list_canister_snapshots",
-                a.canister_id,
-                a.encode(MAX_INNER),
-            ),
-            (Effect::Take(a), Step::Take, Kind::Capture)
-                if a.replace_snapshot.is_none() && a.uninstall_code != Some(true) =>
+        let (method, target, bytes) = if let Effect::Recovery { child, source } = &self.effect {
+            if *source == [0; 32]
+                || (op.kind == Kind::Capture && *source != op.approval)
+                || self.cycles != 0
             {
-                ("take_canister_snapshot", a.canister_id, a.encode(MAX_INNER))
+                return Err(Error::Invalid);
             }
-            (Effect::Metadata(a), Step::Metadata, _) if id(&a.snapshot_id) => (
-                "read_canister_snapshot_metadata",
-                a.canister_id,
-                a.encode(MAX_INNER),
-            ),
-            (Effect::Read(a), Step::Read(n), _)
-                if n < MAX_STEPS as u32 && id(&a.snapshot_id) && read_bound(&a.kind) =>
-            {
-                (
-                    "read_canister_snapshot_data",
+            let (method, bytes) = self.step.recovery_payload(op.kind, child)?;
+            (method, child.canister_id, bytes)
+        } else {
+            let (method, target, bytes) = match (&self.effect, self.step, op.kind) {
+                (Effect::Canister(a), Step::Stop, _) => {
+                    ("stop_canister", a.canister_id, a.encode(MAX_INNER))
+                }
+                (Effect::Canister(a), Step::InitialStatus | Step::FinalStatus, _)
+                | (Effect::Canister(a), Step::BeforeLoad, Kind::Restore) => {
+                    ("canister_status", a.canister_id, a.encode(MAX_INNER))
+                }
+                (Effect::Canister(a), Step::List, _) => (
+                    "list_canister_snapshots",
                     a.canister_id,
                     a.encode(MAX_INNER),
-                )
-            }
-            (Effect::Allocate(a), Step::Allocate, Kind::Restore)
-                if a.replace_snapshot.is_none()
-                    && a.certified_data.len() <= 32
-                    && a.globals.len() <= 1024 =>
-            {
-                (
-                    "upload_canister_snapshot_metadata",
+                ),
+                (Effect::Take(a), Step::Take, Kind::Capture)
+                    if a.replace_snapshot.is_none() && a.uninstall_code != Some(true) =>
+                {
+                    ("take_canister_snapshot", a.canister_id, a.encode(MAX_INNER))
+                }
+                (Effect::Metadata(a), Step::Metadata, _) if id(&a.snapshot_id) => (
+                    "read_canister_snapshot_metadata",
                     a.canister_id,
                     a.encode(MAX_INNER),
-                )
-            }
-            (Effect::Upload(a), Step::Upload(n), Kind::Restore)
-                if n < MAX_STEPS as u32 && id(&a.snapshot_id) && a.chunk.len() <= 1_048_576 =>
-            {
-                (
-                    "upload_canister_snapshot_data",
-                    a.canister_id,
-                    a.encode(MAX_INNER),
-                )
-            }
-            (Effect::Load(a), Step::Load, Kind::Restore) if id(&a.snapshot_id) => {
-                ("load_canister_snapshot", a.canister_id, a.encode(MAX_INNER))
-            }
-            _ => return Err(Error::Invalid),
+                ),
+                (Effect::Read(a), Step::Read(n), _)
+                    if n < MAX_STEPS as u32 && id(&a.snapshot_id) && read_bound(&a.kind) =>
+                {
+                    (
+                        "read_canister_snapshot_data",
+                        a.canister_id,
+                        a.encode(MAX_INNER),
+                    )
+                }
+                (Effect::Allocate(a), Step::Allocate, Kind::Restore)
+                    if a.replace_snapshot.is_none()
+                        && a.certified_data.len() <= 32
+                        && a.globals.len() <= 1024 =>
+                {
+                    (
+                        "upload_canister_snapshot_metadata",
+                        a.canister_id,
+                        a.encode(MAX_INNER),
+                    )
+                }
+                (Effect::Upload(a), Step::Upload(n), Kind::Restore)
+                    if n < MAX_STEPS as u32 && id(&a.snapshot_id) && a.chunk.len() <= 1_048_576 =>
+                {
+                    (
+                        "upload_canister_snapshot_data",
+                        a.canister_id,
+                        a.encode(MAX_INNER),
+                    )
+                }
+                (Effect::Load(a), Step::Load, Kind::Restore) if id(&a.snapshot_id) => {
+                    ("load_canister_snapshot", a.canister_id, a.encode(MAX_INNER))
+                }
+                _ => return Err(Error::Invalid),
+            };
+            (method, target, bytes.map_err(|_| Error::Invalid)?)
         };
-        let bytes = bytes.map_err(|_| Error::Invalid)?;
         if target.to_text() != op.target
             || digest(&bytes) != self.arguments_hash
             || bytes.len() != self.arguments_bytes as usize
@@ -363,5 +393,50 @@ fn read_bound(kind: &management::ReadKind) -> bool {
             e.size <= 1_048_576 && e.offset.checked_add(e.size).is_some()
         }
         management::ReadKind::WasmChunk(c) => c.hash.len() == 32,
+    }
+}
+
+impl Step {
+    /// Fixed single-capture/single-restore generations in Root's non-recyclable ledger.
+    #[must_use]
+    pub fn command(self, kind: Kind) -> Option<canic::recovery::Command> {
+        use canic::recovery::Command;
+        match (self, kind) {
+            (Self::Fence, Kind::Capture) => Some(Command::Fence(1)),
+            (Self::Fence, Kind::Restore) => Some(Command::Fence(2)),
+            (Self::Accept, Kind::Restore) => Some(Command::Accept {
+                checkpoint: 1,
+                generation: 3,
+            }),
+            (Self::Open, Kind::Capture) => Some(Command::Open(1)),
+            (Self::Open, Kind::Restore) => Some(Command::Open(3)),
+            _ => None,
+        }
+    }
+    /// Derive the exact inner arguments or local rewind decision for an operator action.
+    /// # Errors
+    /// Refuses steps outside the selected recovery profile.
+    pub fn recovery_payload(
+        self,
+        kind: Kind,
+        child: &management::CanisterArgs,
+    ) -> Result<(&'static str, Vec<u8>), Error> {
+        if let Some(command) = self.command(kind) {
+            return Ok((
+                "recovery",
+                canic::recovery::encode(command, ic_wire::Direction::Request)
+                    .map_err(|_| Error::Invalid)?,
+            ));
+        }
+        match (self, kind) {
+            (Self::Start, _) => Ok((
+                "start_canister",
+                child.encode(MAX_INNER).map_err(|_| Error::Invalid)?,
+            )),
+            (Self::AdmitAllocation | Self::AdmitLoad, Kind::Restore) => {
+                Ok(("admit_rewind", Vec::new()))
+            }
+            _ => Err(Error::Invalid),
+        }
     }
 }

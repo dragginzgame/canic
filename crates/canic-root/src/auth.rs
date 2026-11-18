@@ -1,17 +1,16 @@
-//! Optional, volatile single-grant authority under Root's existing controller guard.
+//! Optional, volatile per-receiver authority under Root's existing controller guard.
 use canic::auth::enrollment::{
     self as enrollment, Authority, Error, Grant, Request, Snapshot, transport,
 };
+use enrollment::types::Principal;
 use ic_platform_runtime::{self as runtime, system as api};
-use std::cell::RefCell;
+use std::{cell::RefCell, collections::BTreeMap};
 
-enum State {
-    Fresh,
-    Configured(Box<Authority>),
+thread_local! {
+    static STATE: RefCell<Option<BTreeMap<Principal, Authority>>> = const { RefCell::new(None) };
 }
-thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
 pub(crate) fn fresh() {
-    STATE.with_borrow_mut(|s| *s = Some(State::Fresh));
+    STATE.with_borrow_mut(|state| *state = Some(BTreeMap::new()));
 }
 // None after upgrade is closed, not an empty configuration to refill.
 fn controller<const ID: u64>() -> Result<(), String> {
@@ -22,14 +21,16 @@ fn controller<const ID: u64>() -> Result<(), String> {
 }
 #[runtime::update(runtime = runtime, guard = controller::<{enrollment::CONFIGURE}>, decode = transport::decode::<Grant, {enrollment::CONFIGURE}>, max_bytes = 8192, on_error = endpoint_error, name = "configure_auth", encode = transport::encode::<Result<(), Error>, {enrollment::CONFIGURE}>)]
 fn configure_auth(grant: Grant) -> Result<(), Error> {
-    STATE.with_borrow_mut(|state| match state {
-        None => Err(Error::Closed),
-        Some(State::Configured(authority)) => authority.matches(&grant),
-        Some(State::Fresh) => {
-            let authority = Authority::new(grant, api::time())?;
-            *state = Some(State::Configured(Box::new(authority)));
-            Ok(())
+    STATE.with_borrow_mut(|state| {
+        let grants = state.as_mut().ok_or(Error::Closed)?;
+        if let Some(authority) = grants.get(&grant.receiver) {
+            return authority.matches(&grant);
         }
+        if grants.len() >= enrollment::MAX_RECEIVERS {
+            return Err(Error::Capacity);
+        }
+        grants.insert(grant.receiver, Authority::new(grant, api::time())?);
+        Ok(())
     })
 }
 #[runtime::update(runtime = runtime, guard = controller::<{enrollment::REVOKE}>, decode = transport::decode::<Grant, {enrollment::REVOKE}>, max_bytes = 8192, on_error = endpoint_error, name = "revoke_auth", encode = transport::encode::<Result<(), Error>, {enrollment::REVOKE}>)]
@@ -38,22 +39,40 @@ fn configure_auth(grant: Grant) -> Result<(), Error> {
     reason = "the IC entrypoint owns its decoded request"
 )]
 fn revoke_auth(grant: Grant) -> Result<(), Error> {
-    STATE.with_borrow_mut(|state| match state {
-        Some(State::Configured(authority)) => {
-            authority.matches(&grant)?;
-            authority.revoke(api::time())
-        }
-        _ => Err(Error::Closed),
+    STATE.with_borrow_mut(|state| {
+        let authority = state
+            .as_mut()
+            .and_then(|g| g.get_mut(&grant.receiver))
+            .ok_or(Error::Closed)?;
+        authority.matches(&grant)?;
+        authority.revoke(api::time())
     })
 }
 #[runtime::update(runtime = runtime, guard = transport::admit::<{enrollment::SNAPSHOT}>, decode = transport::decode::<Request, {enrollment::SNAPSHOT}>, max_bytes = 8192, on_error = endpoint_error, name = "auth_enrollment", encode = transport::encode::<Result<Snapshot, Error>, {enrollment::SNAPSHOT}>)]
 fn auth_enrollment(request: Request) -> Result<Snapshot, Error> {
-    STATE.with_borrow_mut(|state| match state {
-        Some(State::Configured(authority)) => {
-            authority.snapshot(api::caller(), request, api::time())
+    let caller = api::caller();
+    STATE.with_borrow_mut(|state| {
+        let grants = state.as_mut().ok_or(Error::Closed)?;
+        if grants.is_empty() {
+            return Err(Error::Closed);
         }
-        _ => Err(Error::Closed),
+        grants
+            .get_mut(&caller)
+            .ok_or(Error::Binding)?
+            .snapshot(caller, request, api::time())
     })
+}
+
+#[runtime::update(runtime = runtime, guard = controller::<{enrollment::TRIGGER_REFRESH}>, decode = transport::decode::<Principal, {enrollment::TRIGGER_REFRESH}>, max_bytes = 8192, on_error = endpoint_error, name = "refresh_auth_receiver", encode = transport::encode::<Result<(), Error>, {enrollment::TRIGGER_REFRESH}>)]
+async fn refresh_auth_receiver(receiver: Principal) -> Result<(), Error> {
+    STATE.with_borrow(|state| {
+        let grants = state.as_ref().ok_or(Error::Closed)?;
+        grants
+            .contains_key(&receiver)
+            .then_some(())
+            .ok_or(Error::Binding)
+    })?;
+    transport::trigger_refresh(receiver).await
 }
 
 fn endpoint_error(error: impl std::fmt::Debug) -> ! {

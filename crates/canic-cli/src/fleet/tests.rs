@@ -20,7 +20,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
             fleet: "demo".into(),
             config: FleetConfig {
                 shard_pool: None,
-                auth: None,
+                auth: Vec::new(),
                 network: network.clone(),
                 journal: None,
                 canisters: BTreeMap::from([("worker".into(), CanisterConfig::default())]),

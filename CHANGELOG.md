@@ -1,5 +1,71 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.223.0] - 2026-11-18
+
+Both workspaces now select IC Wire 0.25.0 directly. Auth's browser codec uses
+the Wire version exported by IC Auth Wire. The Wasm Store integration reads
+the supplier's byte, allocation, node and depth limits. Build the demo locally
+or exercise a populated counter upgrade on the prepared simulator:
+
+```sh
+canic artifact build --package canic-demo --json
+make counter-test
+```
+
+Concurrent Wasm builds keep their own final Cargo output and share the compiler
+cache. By default each build returns a path containing the Wasm SHA-256. With
+a prepared Rust Wasm target, these commands leave both demo variants available:
+
+```sh
+canic artifact build --package canic-demo --json
+canic artifact build --package canic-demo --features counter-v2 --json
+```
+
+Use `--output PATH` for a replaceable file. Each command reports the digest of
+the bytes it published, including when another build later replaces that path.
+
+The demo counter can recover a checkpoint through its installing Root ([#7](https://github.com/dragginzgame/canic/issues/7)). Root
+retains both rewind approvals, starts the child fenced, and keeps acceptance
+separate from reopening. Build the Backup-enabled Root locally or run the
+installed capture/restore with the prepared simulator and disposable signer:
+
+```sh
+canic artifact build --package canic-root --features backup --json
+make backup-signer-test
+```
+
+One Auth-enabled Root can approve the hub and managed shards independently.
+With both receiver slots bound in the local fleet, these commands retain
+separate plans for operator review:
+
+```sh
+canic fleet auth plan --app toko --fleet local --receiver user_hub --controller "$OPERATOR"
+canic fleet auth plan --app toko --fleet local --receiver user_shard --controller "$OPERATOR"
+canic fleet auth plan-revocation "$APPLIED_SHARD_CONFIGURATION" --app toko --fleet local
+```
+
+The [Auth guide](docs/demos/auth.md#one-root-for-the-hub-and-managed-shards)
+covers the receiver tables, apply steps and protected refresh calls.
+
+Both workspaces now pin Toko Tooling 0.45.6. In a clean release checkout,
+check the locked dependencies, simulator and package gates before publication.
+Repeated Linux runs can reuse verified installed effect tests.
+
+```sh
+make qualification-setup
+make publication-admission
+```
+
+Declare local signup pool capacity before starting a simulator. With the adjacent
+Toko checkout, inspect the declaration or build the application offline:
+
+```sh
+canic fleet list --app toko --config ../toko-new/apps/toko/canic.toml
+canic app build --app toko --config ../toko-new/apps/toko/canic.toml
+```
+
 ## [0.222.0] - 2026-11-18
 
 Install the CLI and list local app declarations:

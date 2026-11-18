@@ -134,3 +134,19 @@ pub const CONFIGURE_SHARDS: u64 = 90;
 
 /// Maximum retained account keys per shard in the initial bounded Root layout.
 pub const MAX_KEYS_PER_SHARD: u16 = 64;
+
+/// Supplier-owned Store chunk budget for the Canic codec.
+pub const STORE_CHUNK_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: ic_wasm_store_protocol::CHUNK_LIMITS.bytes,
+    allocation: ic_wasm_store_protocol::CHUNK_LIMITS.allocation,
+    nodes: ic_wasm_store_protocol::CHUNK_LIMITS.nodes,
+    depth: ic_wasm_store_protocol::CHUNK_LIMITS.depth,
+};
+
+/// Supplier-owned Store metadata budget for the Canic codec.
+pub const STORE_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: ic_wasm_store_protocol::LIMITS.bytes,
+    allocation: ic_wasm_store_protocol::LIMITS.allocation,
+    nodes: ic_wasm_store_protocol::LIMITS.nodes,
+    depth: ic_wasm_store_protocol::LIMITS.depth,
+};

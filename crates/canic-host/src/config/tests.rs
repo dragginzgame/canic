@@ -147,7 +147,7 @@ fn config() -> SelectedFleet {
         fleet: "demo".into(),
         config: FleetConfig {
             shard_pool: None,
-            auth: None,
+            auth: Vec::new(),
             network: Network::Mainnet,
             journal: None,
             canisters: BTreeMap::from([("backend".into(), CanisterConfig::default())]),
@@ -251,8 +251,8 @@ fn declaration(selected: &SelectedFleet) -> Config {
                     selected.fleet.clone(),
                     FleetDeclaration {
                         shard_pool: None,
-                        auth: None,
-                        network: selected.config.network.clone(),
+                        auth: Vec::new(),
+                        network: FleetNetwork::Bound(selected.config.network.clone()),
                         journal: selected.config.journal.clone(),
                         canisters: bindings,
                     },
@@ -1030,12 +1030,12 @@ fn one_physical_canister_cannot_belong_to_two_fleets_on_the_same_network() {
         .fleets
         .get_mut("other")
         .unwrap()
-        .network = Network::Local {
+        .network = FleetNetwork::Bound(Network::Local {
         url: "http://127.0.0.1:9".into(),
         root_key: "00".repeat(133),
         root_subnet: None,
         routing_canister: "aaaaa-aa".into(),
-    };
+    });
     catalog.validate().unwrap();
     catalog.apps.insert(
         "another-app".into(),
@@ -1199,5 +1199,39 @@ expires_at_ns = 1800000000000000000
                 .select(None, None)
                 .is_err()
         );
+    }
+}
+
+#[test]
+fn unbound_local_pool_has_capacity_but_no_deployment_target() {
+    let source = r#"
+[apps.toko.canisters.hub]
+[apps.toko.canisters.shard]
+parent = "hub"
+[apps.toko.fleets.local]
+network = { kind = "Local" }
+[apps.toko.fleets.local.shard_pool]
+component = "shard"
+root = "root"
+store = "store"
+release = { name = "shard", version = "v1" }
+keys_per_shard = 1
+max_shards = 2
+creation_budget = 2000000000000
+"#;
+    let config: Config = toml::from_str(source).unwrap();
+    assert!(config.select_app(Some("toko")).is_ok());
+    assert!(config.select(Some("toko"), Some("local")).is_err());
+    assert_eq!(
+        toml::from_str::<Config>(&toml::to_string(&config).unwrap()).unwrap(),
+        config
+    );
+    for invalid in [
+        source.replace("keys_per_shard = 1", "keys_per_shard = 0"),
+        source.replace("max_shards = 2", "max_shards = 3"),
+        source.replace("kind = \"Local\"", "kind = \"Local\", url = \"http://localhost:8000\""),
+        source.replace("[apps.toko.fleets.local.shard_pool]", "[apps.toko.fleets.local.canisters]\nhub = { id = \"aaaaa-aa\" }\n[apps.toko.fleets.local.shard_pool]"),
+    ] {
+        assert!(toml::from_str::<Config>(&invalid).map_or(true, |c| c.validate().is_err()));
     }
 }

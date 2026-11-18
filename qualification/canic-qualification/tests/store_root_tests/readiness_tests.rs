@@ -1,5 +1,6 @@
 //! Store bootstrap readiness belongs to the actual controller path, not greeting slots.
 use super::{Client, artifacts, custody, inject, maintain, store, support};
+use canic_management_protocol::stored::STORE_LIMITS;
 use canic_management_protocol::{self as management, publication};
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings, nonblocking::PocketIc};
 
@@ -57,7 +58,7 @@ async fn request(root: &Client<'_>, supplier: &Client<'_>) -> publication::InfoR
     }
 }
 async fn observe(root: &Client<'_>, request: &publication::InfoRequest) -> publication::InfoReply {
-    root.update("observe_store", publication::INFO, request, store::LIMITS)
+    root.update("observe_store", publication::INFO, request, STORE_LIMITS)
         .await
 }
 async fn handover(root: &Client<'_>, supplier: &Client<'_>) {
@@ -93,7 +94,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
             "prepare",
             store::PREPARE,
             &second,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -125,7 +126,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
             "observe_custody",
             store::CUSTODY,
             &first.release,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await;
     let expected = expected.unwrap();
@@ -143,7 +144,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
             "prepare",
             store::PREPARE,
             &pending,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -152,7 +153,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
             "observe_custody",
             store::CUSTODY,
             &pending.release,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await;
     let staged = staged.unwrap();
@@ -190,7 +191,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
             "observe_store_custody",
             publication::CUSTODY,
             &input,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
     }
@@ -228,7 +229,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
             method: publication::CUSTODY,
             direction: ic_wire::Direction::Request,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .unwrap();
     assert!(
@@ -252,7 +253,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
                     method: store::CUSTODY,
                     direction: ic_wire::Direction::Request
                 },
-                store::LIMITS
+                STORE_LIMITS
             )
             .unwrap()
         )
@@ -264,7 +265,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
             root.id,
             root.operator,
             "observe_store_custody",
-            vec![0; store::LIMITS.bytes + 1]
+            vec![0; STORE_LIMITS.bytes + 1]
         )
         .await
         .is_err()
@@ -337,7 +338,7 @@ async fn store_readiness_follows_handover_without_reserving_an_application_slot(
     let pic = owner.client();
     let (root, supplier) = fixture(pic).await;
     let expected: store::Info = supplier
-        .update("observe_info", store::INFO, &(), store::LIMITS)
+        .update("observe_info", store::INFO, &(), STORE_LIMITS)
         .await;
     assert_eq!(expected.releases, 0);
     assert_eq!(expected.reserved_bytes, 0);
@@ -371,7 +372,7 @@ async fn store_readiness_follows_handover_without_reserving_an_application_slot(
                     method: store::INFO,
                     direction: ic_wire::Direction::Request
                 },
-                store::LIMITS
+                STORE_LIMITS
             )
             .unwrap()
         )
@@ -392,7 +393,7 @@ async fn store_readiness_follows_handover_without_reserving_an_application_slot(
                     method: publication::INFO,
                     direction: ic_wire::Direction::Request
                 },
-                store::LIMITS
+                STORE_LIMITS
             )
             .unwrap()
         )
@@ -435,7 +436,7 @@ async fn store_readiness_refusals_never_turn_missing_authority_into_ready() {
             method: publication::INFO,
             direction: ic_wire::Direction::Request,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .unwrap();
     assert!(
@@ -504,7 +505,7 @@ async fn store_readiness_refusals_never_turn_missing_authority_into_ready() {
                 method: publication::EXECUTE,
                 direction: ic_wire::Direction::Request,
             },
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .unwrap(),
         ic_wire::encode(
@@ -513,7 +514,7 @@ async fn store_readiness_refusals_never_turn_missing_authority_into_ready() {
                 method: publication::INFO,
                 direction: ic_wire::Direction::Response,
             },
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .unwrap(),
         vec![0; management::LIMITS.bytes + 1],

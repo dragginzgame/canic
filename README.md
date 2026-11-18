@@ -74,6 +74,27 @@ The six product crates under `crates/` are licensed under the
 [Toko Studios Network Licence](LICENSE.md) and selected for crates.io publication.
 Demo and qualification packages are private.
 
+For a release, prepare the simulator with `make qualification-setup` in the
+clean delivery checkout or set `IC_TESTKIT_SERVER_DIRECTORY` to an absolute
+prepared directory. Run `make publication-admission` to exercise the package
+gate locally without uploading. It fetches both locked workspaces, verifies the
+simulator with Testkit and runs the CI coverage for the six eligible packages.
+`CARGO_NET_OFFLINE=true` selects cache-only dependency resolution.
+
+| Published packages | Coverage in the shared gate |
+| --- | --- |
+| `canic` | Library, endpoints, counter and optional Blob, Auth and DB composition |
+| `canic-management-protocol`, `canic-management`, `canic-root` | Creation, funding, maintenance, growth, Root, Store and custody |
+| `canic-host`, `canic-cli` | Planning, journal, CLI journey and installed Store publication |
+
+On Linux, a retry in the same checkout can reuse the successful installed
+creation, funding and maintenance executions. Cargo still selects and builds the
+test binaries and Wasms. Toko Tooling checks their bytes, the simulator and
+linked libraries, both locks, source revision and selected publication options.
+Evidence lives under `target/publication/effect-stages`. Other checks execute
+on every attempt. The publication runner retains final source, package archive,
+registry and interrupted-upload checks. `make ci` runs the ordinary full gate.
+
 The accepted [Canic system design](docs/design/canic-system-design.md) defines
 the restart: product scope, architecture, capability ownership, deferred ideas,
 qualification and delivery milestones. Current evidence is recorded in

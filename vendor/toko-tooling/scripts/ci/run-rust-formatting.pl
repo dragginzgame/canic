@@ -42,7 +42,6 @@ if (@standalone ? (!defined($edition) || $edition !~ /\A(?:2015|2018|2021|2024)\
                 : (defined($edition) || $rustfmt ne 'rustfmt')) {
     die "standalone Rustfmt sources require an explicit supported edition and one Rustfmt executable\n";
 }
-$ENV{CARGO_NET_OFFLINE} = 'true';
 $ENV{RUSTUP_AUTO_INSTALL} = '0';
 my $root = getcwd();
 $cargo = File::Spec->rel2abs($cargo, $root) if $cargo =~ m{/};
@@ -141,7 +140,7 @@ sub tool_identity {
 sub workspace_metadata {
     my ($workspace) = @_;
     chdir $workspace or die "enter formatting workspace: $!\n";
-    my $metadata = decode_json(execute('', 1, $cargo, 'metadata', '--locked', '--offline', '--no-deps', '--format-version', '1'));
+    my $metadata = decode_json(execute('', 1, $cargo, 'metadata', '--locked', '--no-deps', '--format-version', '1'));
     ref($metadata) eq 'HASH' && encode('UTF-8', $metadata->{workspace_root} // '') eq $workspace
         && ref($metadata->{workspace_members}) eq 'ARRAY' && @{$metadata->{workspace_members}}
         && ref($metadata->{packages}) eq 'ARRAY'

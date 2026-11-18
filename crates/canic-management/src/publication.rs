@@ -1,5 +1,6 @@
 //! One controller-authorized Store call. No catalog, payload persistence or retry owner.
 use canic_management_protocol::publication::{Command, Error, MAX_WINDOW_NS, Reply, Request};
+use canic_management_protocol::stored::{STORE_CHUNK_LIMITS, STORE_LIMITS};
 use ic_platform_runtime::{
     call::{Call, Wait},
     system as api,
@@ -29,7 +30,7 @@ pub async fn execute(input: Request) -> Reply {
                     method: store::PREPARE,
                     direction: ic_wire::Direction::Request,
                 },
-                store::LIMITS,
+                STORE_LIMITS,
             ),
             &value.release,
         ),
@@ -42,7 +43,7 @@ pub async fn execute(input: Request) -> Reply {
                     method: store::PUT,
                     direction: ic_wire::Direction::Request,
                 },
-                store::CHUNK_LIMITS,
+                STORE_CHUNK_LIMITS,
             ),
             &value.release,
         ),
@@ -55,7 +56,7 @@ pub async fn execute(input: Request) -> Reply {
                     method: store::PUBLISH,
                     direction: ic_wire::Direction::Request,
                 },
-                store::LIMITS,
+                STORE_LIMITS,
             ),
             value,
         ),
@@ -68,7 +69,7 @@ pub async fn execute(input: Request) -> Reply {
                     method: store::STATUS,
                     direction: ic_wire::Direction::Request,
                 },
-                store::LIMITS,
+                STORE_LIMITS,
             ),
             value,
         ),
@@ -90,7 +91,7 @@ pub async fn execute(input: Request) -> Reply {
             method: id,
             direction: ic_wire::Direction::Response,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .map_err(|_| Error::Uncertain)?;
     let status = reply.map_err(Error::Store)?;
@@ -245,7 +246,7 @@ async fn store_call<T: serde::Serialize, R: serde::de::DeserializeOwned>(
             method: id,
             direction: ic_wire::Direction::Request,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .map_err(|_| Error::Invalid)?;
     let reply = Call::new(target, method, wait)
@@ -263,7 +264,7 @@ async fn store_call<T: serde::Serialize, R: serde::de::DeserializeOwned>(
             method: id,
             direction: ic_wire::Direction::Response,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .map_err(|_| Error::Uncertain)
 }

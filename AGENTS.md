@@ -55,7 +55,7 @@ installer, never by editing installed bytes.
   The counter's local persistence/upgrade witness uses Storage named cells. Managed
   creation/upgrade through separate Root/Store now has a local installed CLI witness;
   named counter commands use an optional app-owned native codec. Backup qualifies local restoration of a stopped counter.
-  Application acceptance and reopening remain pending. `fleet call` signs as the selected user, never proxies through
+  Root mediates separate acceptance and reopening for the installed Backup counter witness. `fleet call` signs as the selected user, never proxies through
   Root and never treats controller membership as application permission. Calls
   retain exact request bytes in the existing journal; resumed signed calls are
   observation-only, and uncertainty blocks replacement calls to that target.

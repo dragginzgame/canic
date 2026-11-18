@@ -47,6 +47,8 @@ jobs:
         run: |
           make toko-tooling-check check-pins
           bash scripts/ci/test-check-order.sh
+          bash scripts/ci/test-publication-preflight.sh
+          bash scripts/ci/test-publication-retry.sh
           "$ACTIONLINT_BIN" -shellcheck= .github/workflows/ci.yml
       - name: Scan complete repository history once
         run: '"$GITLEAKS_BIN" git --redact=100 --no-banner --no-color --log-level error "$GITHUB_WORKSPACE"'

@@ -3,7 +3,7 @@ FORMAT_RUST_ARGS := --extra-workspace qualification
 IC_TOOLS := icp
 CARGO_PUBLISH_PACKAGES := canic canic-management-protocol canic-management canic-root canic-host canic-cli
 CARGO_PUBLISH_REGISTRY := crates-io
-CARGO_PUBLISH_VERIFY_TARGETS := ci
+CARGO_PUBLISH_VERIFY_TARGETS := publication-admission
 include vendor/toko-tooling/make/consumer.mk
 include vendor/toko-tooling/make/cargo-dependencies.mk
 
@@ -97,6 +97,17 @@ lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-cli
 CI_TEST_TARGETS := test effect-test artifact-custody-test journey-test counter-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
 ci: lint
 	$(MAKE) -j1 $(CI_TEST_TARGETS)
+
+# Publication keeps the complete CI roster. Only installed effect executions
+# have a qualified retry contract. Compilation and other checks run normally.
+.PHONY: publication-admission publication-effect-test
+publication-admission:
+	bash scripts/ci/publication-preflight.sh
+	$(MAKE) -j1 lint
+	$(MAKE) -j1 $(subst effect-test,publication-effect-test,$(CI_TEST_TARGETS))
+
+publication-effect-test:
+	bash scripts/dev/test-effects.sh publication
 
 # Routine hosted coverage: product packages only, no signer/server provisioning.
 # Installed journeys remain explicit through the existing qualification runners.

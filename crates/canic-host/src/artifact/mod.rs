@@ -120,6 +120,27 @@ pub fn build(
     features: &[String],
     destination: Option<&Path>,
 ) -> Result<PathBuf> {
+    Ok(build_report(manifest, package, features, destination)?.wasm)
+}
+
+/// Published path and identity of the exact bytes from this Cargo invocation.
+#[derive(Debug, Serialize)]
+pub struct BuildReport {
+    /// Content-addressed default path or the caller's replaceable destination.
+    pub wasm: PathBuf,
+    /// Digest and size measured before atomic publication.
+    pub artifact: Artifact,
+}
+
+/// Build and report the original artifact even if another caller replaces its destination.
+/// # Errors
+/// Returns the same build and publication errors as [`build`].
+pub fn build_report(
+    manifest: &Path,
+    package: &str,
+    features: &[String],
+    destination: Option<&Path>,
+) -> Result<BuildReport> {
     let workspace_manifest = manifest.canonicalize().map_err(supplier)?;
     let workspace = workspace_manifest
         .parent()
@@ -146,6 +167,44 @@ pub fn build(
             "Cargo package identity is not one line".into(),
         ));
     }
+    // Cargo's package/feature-specific intermediates remain cached. Its final
+    // cdylib filename is shared across variants, so isolate only the final links.
+    #[derive(Deserialize)]
+    struct Layout {
+        target_directory: PathBuf,
+        build_directory: PathBuf,
+    }
+    let layout: Layout = serde_json::from_slice(
+        &crate::process::capture(
+            Command::new("cargo")
+                .current_dir(workspace)
+                .args([
+                    "metadata",
+                    "--locked",
+                    "--no-deps",
+                    "--format-version",
+                    "1",
+                    "--manifest-path",
+                ])
+                .arg(&workspace_manifest),
+            8 * 1024 * 1024,
+            1024 * 1024,
+            Duration::from_secs(60),
+        )
+        .map_err(cargo_failure)?,
+    )
+    .map_err(supplier)?;
+    let cache = if package == "ic-wasm-store" {
+        workspace.join("target/store-build")
+    } else {
+        layout.build_directory
+    };
+    let outputs = layout.target_directory.join("canic-artifacts");
+    crate::output_publication::prepare(&outputs, 0o700)?;
+    let private = tempfile::Builder::new()
+        .prefix(".cargo-")
+        .tempdir_in(&outputs)
+        .map_err(supplier)?;
     let mut command = Command::new("cargo");
     command
         .current_dir(
@@ -165,12 +224,10 @@ pub fn build(
         ])
         .arg(&manifest)
         .args(["-p", package]);
-    if package == "ic-wasm-store" {
-        // Keep compiler output in the consuming workspace, never Cargo's registry source.
-        command
-            .arg("--target-dir")
-            .arg(workspace.join("target/store-build"));
-    }
+    command
+        .arg("--target-dir")
+        .arg(private.path())
+        .env("CARGO_BUILD_BUILD_DIR", cache);
     if !features.is_empty() {
         command.arg("--features").arg(features.join(","));
     }
@@ -182,21 +239,23 @@ pub fn build(
     )
     .map_err(cargo_failure)?;
     let path = selected_wasm(&output, package_id)?;
-    inspect(&path)?;
-    if let Some(output) = destination {
-        let bytes =
-            crate::store::read(&path.canonicalize().map_err(supplier)?, MAX_ARTIFACT_BYTES)?;
-        admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
-        crate::output_publication::publish(
-            output,
-            &bytes,
-            ic_host_fs::Destination::Replace,
-            0o700,
-            0o600,
-        )?;
-        return Ok(output.into());
-    }
-    Ok(path)
+    let bytes = crate::store::read(&path, MAX_ARTIFACT_BYTES)?;
+    let artifact = admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
+    let wasm = match destination {
+        Some(path) => path.to_owned(),
+        None => outputs.join(&artifact.sha256).join(
+            path.file_name()
+                .ok_or_else(|| Error::Invalid("Cargo artifact has no filename".into()))?,
+        ),
+    };
+    crate::output_publication::publish(
+        &wasm,
+        &bytes,
+        ic_host_fs::Destination::Replace,
+        0o700,
+        0o600,
+    )?;
+    Ok(BuildReport { wasm, artifact })
 }
 
 fn selected_wasm(output: &[u8], package_id: &str) -> Result<PathBuf> {

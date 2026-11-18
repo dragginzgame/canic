@@ -18,7 +18,7 @@ qualification_admit() {
         [[ "$ordering" != --manifest-order-grouped ]] || sort_arguments+=(--grouped)
         (cd "$directory" && cargo "${sort_arguments[@]}") || return
     fi
-    if (cd "$directory" && cargo metadata --locked --offline --format-version 1) \
+    if (cd "$directory" && cargo metadata --locked --format-version 1) \
         2>&1 > "$evidence/qualification/metadata.json" | tee "$evidence/qualification/metadata.stderr" >&2; then :
     else statuses=("${PIPESTATUS[@]}"); fi
     printf '%s\n' "${statuses[0]}" > "$evidence/qualification/cargo-status"

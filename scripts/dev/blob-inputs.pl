@@ -6,10 +6,15 @@ use warnings;
 use Digest::SHA qw(sha256_hex);
 use File::Find qw(find);
 use JSON::PP;
-open my $metadata_fh, '-|', 'cargo', 'metadata', '--locked', '--offline', '--format-version', '1', '--manifest-path', 'qualification/Cargo.toml' or die "metadata: $!";
-my $metadata;
-{ local $/; $metadata = decode_json(<$metadata_fh>); }
-close $metadata_fh or die 'locked supplier metadata failed';
+open my $metadata_fh, '-|', 'cargo', 'metadata', '--locked', '--format-version', '1', '--manifest-path', 'qualification/Cargo.toml' or die "metadata: $!";
+my $output = do { local $/; <$metadata_fh> };
+unless (close $metadata_fh) {
+    my $status = $?;
+    my $code = $status < 0 ? 1 : ($status & 127) ? 128 + ($status & 127) : $status >> 8;
+    warn "cargo metadata failed for qualification/Cargo.toml (exit $code)\n";
+    exit $code;
+}
+my $metadata = decode_json($output);
 my @packages = grep { $_->{name} eq 'ic-blob-storage' } @{$metadata->{packages}};
 @packages == 1 or die 'expected one Blob supplier';
 my $package = $packages[0];

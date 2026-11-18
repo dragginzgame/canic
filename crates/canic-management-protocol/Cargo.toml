@@ -12,9 +12,10 @@ description = "Bounded child management authority and evidence"
 toko-tooling.workspace = true
 
 [features]
-backup = ["dep:ic-platform-protocol"]
+backup = ["dep:canic", "dep:ic-platform-protocol"]
 
 [dependencies]
+canic = { workspace = true, features = ["recovery"], optional = true }
 ic-platform-protocol = { workspace = true, features = ["management-snapshots"], optional = true }
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true

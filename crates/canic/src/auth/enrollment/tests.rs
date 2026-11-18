@@ -1,4 +1,5 @@
 use super::*;
+use ic_auth_wire::wire;
 
 fn grant() -> Grant {
     Grant {
@@ -14,8 +15,8 @@ fn grant() -> Grant {
             0x14, 0x46, 0xd2, 0x2c,
         ],
         grant: DelegatedRoleGrant {
-            target: ic_wire::Text::new("user".into()).unwrap(),
-            scopes: ic_wire::List::new(vec![ic_wire::Text::new("read".into()).unwrap()]).unwrap(),
+            target: wire::Text::new("user".into()).unwrap(),
+            scopes: wire::List::new(vec![wire::Text::new("read".into()).unwrap()]).unwrap(),
         },
         not_before_ns: 1,
         expires_at_ns: 300_000_000_000,
@@ -223,9 +224,9 @@ fn complete_reply_validation_precedes_atomic_metadata_and_entry_installation() {
             5 => reply.snapshot.issued_at_ns += 1,
             6 => reply.snapshot.expires_at_ns = reply.snapshot.issued_at_ns,
             7 => {
-                reply.snapshot.grant.grant.scopes = ic_wire::List::new(vec![
-                    ic_wire::Text::new("z".into()).unwrap(),
-                    ic_wire::Text::new("a".into()).unwrap(),
+                reply.snapshot.grant.grant.scopes = wire::List::new(vec![
+                    wire::Text::new("z".into()).unwrap(),
+                    wire::Text::new("a".into()).unwrap(),
                 ])
                 .unwrap()
             }

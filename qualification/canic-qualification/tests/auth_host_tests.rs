@@ -204,7 +204,9 @@ async fn approval_journey(operator_owned: bool) {
         .unwrap();
     let configured = cli(&dir, &["fleet", "apply", id, "--identity", "anonymous"]);
     assert_eq!(configured["auth"]["revoked"], false);
-    assert!(control(owner.client(), receiver, operator, 1).await);
+    auth_single_root_tests::refresh(owner.client(), operator, root, receiver, !operator_owned)
+        .await
+        .unwrap();
     let installed = snapshot(owner.client(), receiver).await;
     assert!(!installed.revoked);
     assert_eq!(installed.grant.receiver.as_slice(), receiver.as_slice());
@@ -215,6 +217,103 @@ async fn approval_journey(operator_owned: bool) {
         ),
         planned
     );
+    if operator_owned {
+        let shard = owner
+            .client()
+            .create_canister_with_settings(Some(operator), None)
+            .await;
+        owner
+            .client()
+            .install_canister(
+                shard,
+                std::fs::read(&receiver_wasm).unwrap(),
+                root.as_slice().to_vec(),
+                Some(operator),
+            )
+            .await;
+        owner
+            .client()
+            .set_controllers(shard, Some(operator), vec![root])
+            .await
+            .unwrap();
+        let mut both = config.clone();
+        let app = &mut both["apps"]["demo"];
+        app["canisters"]["shard"] = json!({"wasm":receiver_wasm});
+        let fleet = &mut app["fleets"]["local"];
+        fleet["canisters"]["shard"] = json!({"id":shard.to_text()});
+        let hub_grant = fleet["auth"].clone();
+        let mut shard_grant = hub_grant.clone();
+        shard_grant["receiver"] = json!("shard");
+        shard_grant["receiver_controller"] = json!("root");
+        fleet["auth"] = json!([hub_grant, shard_grant]);
+        std::fs::write(dir.join("canic.toml"), toml::to_string(&both).unwrap()).unwrap();
+        assert!(
+            !run(
+                &dir,
+                &["fleet", "auth", "plan", "--controller", "2vxsx-fae"]
+            )
+            .status
+            .success()
+        );
+        assert_eq!(
+            cli(
+                &dir,
+                &[
+                    "fleet",
+                    "auth",
+                    "plan",
+                    "--receiver",
+                    "receiver",
+                    "--controller",
+                    "2vxsx-fae"
+                ]
+            ),
+            planned
+        );
+        let shard_plan = cli(
+            &dir,
+            &[
+                "fleet",
+                "auth",
+                "plan",
+                "--receiver",
+                "shard",
+                "--controller",
+                "2vxsx-fae",
+            ],
+        );
+        let shard_id = shard_plan["operation"].as_str().unwrap();
+        assert_ne!(shard_id, id);
+        assert_eq!(
+            cli(
+                &dir,
+                &["fleet", "apply", shard_id, "--identity", "anonymous"]
+            )["auth"]["revoked"],
+            false
+        );
+        auth_single_root_tests::refresh(owner.client(), operator, root, shard, true)
+            .await
+            .unwrap();
+        let retirement = cli(&dir, &["fleet", "auth", "plan-revocation", shard_id]);
+        assert_eq!(
+            cli(
+                &dir,
+                &[
+                    "fleet",
+                    "apply",
+                    retirement["operation"].as_str().unwrap(),
+                    "--identity",
+                    "anonymous"
+                ]
+            )["auth"]["revoked"],
+            true
+        );
+        auth_single_root_tests::refresh(owner.client(), operator, root, shard, true)
+            .await
+            .unwrap();
+        assert!(snapshot(owner.client(), shard).await.revoked);
+        assert!(!snapshot(owner.client(), receiver).await.revoked);
+    }
     let signed = std::fs::read(effect.join("signed.json")).unwrap();
     // Edited config cannot widen retained authority or change the revocation's target grant.
     config["apps"]["demo"]["fleets"]["local"]["auth"]["scopes"] = json!(["read", "write"]);
@@ -248,7 +347,9 @@ async fn approval_journey(operator_owned: bool) {
         configured
     );
     assert_eq!(std::fs::read(effect.join("signed.json")).unwrap(), signed);
-    assert!(control(owner.client(), receiver, operator, 1).await);
+    auth_single_root_tests::refresh(owner.client(), operator, root, receiver, !operator_owned)
+        .await
+        .unwrap();
     assert!(snapshot(owner.client(), receiver).await.revoked);
     let mut wrong = installed.grant;
     wrong.key[0] ^= 1;

@@ -125,7 +125,8 @@ pub fn build_app(
             )
             .map_err(crate::artifact::cargo_failure)?;
         }
-        let wasm = crate::artifact::build(&manifest, &recipe.package, &[], Some(&output))?;
+        let crate::artifact::BuildReport { wasm, artifact } =
+            crate::artifact::build_report(&manifest, &recipe.package, &[], Some(&output))?;
         let client = recipe
             .client
             .as_ref()
@@ -140,7 +141,7 @@ pub fn build_app(
             .transpose()?;
         built.push(BuiltCanister {
             canister: name.clone(),
-            artifact: crate::inspect(&wasm)?,
+            artifact,
             wasm,
             client,
         });

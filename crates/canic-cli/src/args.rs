@@ -466,6 +466,9 @@ pub(super) enum FleetAuthCommand {
         selection: CanisterConfigArgs,
         #[arg(long)]
         state_dir: Option<PathBuf>,
+        /// Named receiver slot. Required when several grants are declared.
+        #[arg(long)]
+        receiver: Option<String>,
         /// Actual sole Root controller; this approval grants no application permission.
         #[arg(long)]
         controller: String,

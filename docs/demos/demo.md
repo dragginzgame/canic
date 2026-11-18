@@ -56,7 +56,7 @@ permission. In the installed managed witness that caller is Root. Its separate
 Store publishes the counter; the normal fleet CLI creates and upgrades it while
 preserving value. A counter installed with closed admission stays fenced and
 does not receive a deployment completion receipt. Repeated observations cannot
-activate it. Managed fencing/activation commands and Backup restoration remain pending.
+activate it. The local Backup witness below exercises Root-mediated fencing and reopening.
 
 This is the small Canic-owned companion to Toko development. Both use the same
 app declarations, Cargo build recipes and explicit actor composition. The demo
@@ -107,10 +107,17 @@ It tests two public callers, value and authority preservation, closed admission,
 stale activation, malformed requests, incompatible schemas and rollback after a
 candidate writes then traps. It also refuses empty/corrupt state without creating
 a replacement record. `counter-v2`, `initially-fenced`, `reject-upgrade` and `incompatible-schema` are
-qualification-only build selections, not live deployment features. This does not
-qualify checkpoint restoration: a restored application record cannot itself
-remember authority spent after the checkpoint. Backup still needs the surviving
-management evidence and explicit reopening protocol.
+qualification-only build selections, not live deployment features. For checkpoint recovery, Root retains the generation outside the counter. With
+the disposable Linux signer and simulator prepared, run the installed journey:
+
+```sh
+make backup-signer-test
+```
+
+It restores the counter from 2 to 1, starts it fenced, rejects premature
+opening, and permits writes only after separate operator acceptance and reopening
+through Root. The [qualification guide](../../qualification/README.md) describes
+the original-request custody and the limits of this single-counter deployment.
 
 The managed counter journey uses synthetic cycles and the real fleet CLI:
 

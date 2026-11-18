@@ -11,7 +11,7 @@ fn selection() -> SelectedFleet {
         fleet: "mainnet".into(),
         config: FleetConfig {
             shard_pool: None,
-            auth: None,
+            auth: Vec::new(),
             network: Network::Mainnet,
             journal: None,
             canisters: BTreeMap::from([

@@ -1,5 +1,7 @@
 //! Real Root-originated snapshot calls. This does not substitute for Backup's consumer route.
 use super::*;
+#[path = "../support/counter.rs"]
+mod counter_client;
 use canic_management_protocol::backup::{
     self as protocol, Effect, Error, Kind, Operation, Outcome, Record, Request, Step,
     management as m,
@@ -16,6 +18,7 @@ const DECODE: CandidLimits = CandidLimits {
 };
 fn request(op: &Operation, step: Step, effect: Effect, expiry: u64) -> Request {
     let bytes = match &effect {
+        Effect::Recovery { child, .. } => Ok(step.recovery_payload(op.kind, child).unwrap().1),
         Effect::Canister(a) => a.encode(protocol::MAX_INNER),
         Effect::Take(a) => a.encode(protocol::MAX_INNER),
         Effect::Metadata(a) => a.encode(protocol::MAX_INNER),
@@ -475,21 +478,23 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         "expiry cannot replace the original result"
     );
     // A callback trap after the management effect leaves the original slot pending across upgrade.
-    for point in [1u8, 2u8] {
+    for (point, step) in [(1u8, Step::Take), (2, Step::Take), (1, Step::Fence)] {
         let (broken, worker, expiry) = fixture(pic, wasm.clone()).await;
         let op = operation(broken, worker);
         let args = m::CanisterArgs {
             canister_id: op.target.parse().unwrap(),
         };
-        reply(
-            execute(
-                pic,
-                broken,
-                &request(&op, Step::Stop, Effect::Canister(args), expiry),
-            )
-            .await
-            .unwrap(),
-        );
+        if step == Step::Take {
+            reply(
+                execute(
+                    pic,
+                    broken,
+                    &request(&op, Step::Stop, Effect::Canister(args.clone()), expiry),
+                )
+                .await
+                .unwrap(),
+            );
+        }
         let ack = call(pic, broken, "snapshot_fault", 82, &point).await;
         ic_wire::decode::<()>(
             &ack,
@@ -500,17 +505,29 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
             protocol::LIMITS,
         )
         .unwrap();
-        let lost = request(
-            &op,
-            Step::Take,
-            Effect::Take(m::TakeSnapshotArgs {
-                canister_id: op.target.parse().unwrap(),
-                replace_snapshot: None,
-                uninstall_code: None,
-                sender_canister_version: None,
-            }),
-            expiry,
-        );
+        let lost = if step == Step::Fence {
+            request(
+                &op,
+                step,
+                Effect::Recovery {
+                    child: args,
+                    source: op.approval,
+                },
+                expiry,
+            )
+        } else {
+            request(
+                &op,
+                Step::Take,
+                Effect::Take(m::TakeSnapshotArgs {
+                    canister_id: op.target.parse().unwrap(),
+                    replace_snapshot: None,
+                    uninstall_code: None,
+                    sender_canister_version: None,
+                }),
+                expiry,
+            )
+        };
         let bytes = ic_wire::encode(
             &lost,
             ic_wire::Encoding::Frame {
@@ -536,6 +553,18 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
             execute(pic, broken, &lost).await.unwrap().outcome,
             Outcome::Pending
         );
+        if step == Step::Fence {
+            assert_eq!(
+                counter_client::counter(
+                    pic,
+                    worker,
+                    CanisterId::anonymous(),
+                    canic_demo::Request::Increment
+                )
+                .await,
+                Err(canic_demo::Error::Fenced)
+            );
+        }
         let changed = request(
             &op,
             Step::FinalStatus,
@@ -546,6 +575,38 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         );
         assert_eq!(execute(pic, broken, &changed).await, Err(Error::Busy));
     }
+    // The application can reject Root's requested generation. A valid transport
+    // reply from the executor retains that rejection and grants no stop.
+    let (r, worker, expiry) = fixture(pic, wasm.clone()).await;
+    counter_client::counter(pic, worker, r, canic_demo::Request::Fence { attempt: 4 })
+        .await
+        .unwrap();
+    let op = operation(r, worker);
+    let args = m::CanisterArgs {
+        canister_id: op.target.parse().unwrap(),
+    };
+    let fence = request(
+        &op,
+        Step::Fence,
+        Effect::Recovery {
+            child: args.clone(),
+            source: op.approval,
+        },
+        expiry,
+    );
+    assert!(matches!(
+        execute(pic, r, &fence).await.unwrap().outcome,
+        Outcome::Rejected(_, _)
+    ));
+    assert_eq!(
+        execute(
+            pic,
+            r,
+            &request(&op, Step::Stop, Effect::Canister(args), expiry)
+        )
+        .await,
+        Err(Error::Busy)
+    );
     // An original management rejection is terminal evidence, not an outer rejection.
     let (rejected_root, worker, expiry) = fixture(pic, wasm).await;
     let op = operation(rejected_root, worker);

@@ -62,3 +62,36 @@ pub(super) fn decode_response<T: DeserializeOwned>(method: u64, bytes: &[u8]) ->
     )
     .map_err(|_| Error::Invalid)
 }
+
+/// Require the current IC controller before beginning any refresh work.
+/// # Errors
+/// Returns a binding refusal for an unrelated caller, including a former installer.
+pub fn authorize_refresh() -> Result<(), Error> {
+    use ic_platform_runtime::system;
+    if system::is_controller(&system::caller()) {
+        Ok(())
+    } else {
+        Err(Error::Binding)
+    }
+}
+
+/// Dispatch one fixed, cycle-free refresh request to an approved receiver.
+/// # Errors
+/// A missing reply leaves the refresh outcome unknown. Never retry implicitly.
+pub async fn trigger_refresh(receiver: super::types::Principal) -> Result<(), Error> {
+    use ic_platform_runtime::call::{Call, Outcome, Wait};
+    let request = encode_request(super::REFRESH, &())?;
+    let response = Call::new(
+        receiver,
+        super::REFRESH_METHOD,
+        Wait::Bounded { seconds: 30 },
+    )
+    .args(&request)
+    .execute()
+    .await
+    .map_err(|_| Error::Unavailable)?;
+    let Outcome::Reply(bytes) = response.into_parts().0 else {
+        return Err(Error::Unavailable);
+    };
+    decode_response(super::REFRESH, bytes.as_ref())?
+}

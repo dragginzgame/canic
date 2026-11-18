@@ -1,5 +1,6 @@
 //! Actual Chromium/IndexedDB, Canic issuer mounts and the shared profile engine.
 use canic::auth::enrollment;
+use canic::auth::protocol::wire as auth_wire;
 use canic_auth_witness::{IssuerObservation, KEY, LIMITS, OBSERVE};
 use canic_profile_protocol::{GET, PUT, Profile, ProfileError, ProfileResult, Put};
 use ic_auth::verification::browser_principal;
@@ -156,10 +157,10 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
             issuer: Principal::from_slice(issuer.as_slice()),
             key: KEY,
             grant: canic::auth::protocol::model::DelegatedRoleGrant {
-                target: ic_wire::Text::new("user".into()).unwrap(),
-                scopes: ic_wire::List::new(vec![
-                    ic_wire::Text::new("read".into()).unwrap(),
-                    ic_wire::Text::new("write".into()).unwrap(),
+                target: auth_wire::Text::new("user".into()).unwrap(),
+                scopes: auth_wire::List::new(vec![
+                    auth_wire::Text::new("read".into()).unwrap(),
+                    auth_wire::Text::new("write".into()).unwrap(),
                 ])
                 .unwrap(),
             },

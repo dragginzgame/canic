@@ -1,6 +1,6 @@
 //! Local declaration listings, independent of journals and live observations.
 use crate::Output;
-use canic_host::{Network, Result};
+use canic_host::{FleetNetwork, Network, Result};
 use ic_host_text::{Alignment, plain_table};
 use std::path::Path;
 
@@ -121,8 +121,9 @@ pub(crate) fn list(
             } else {
                 for (fleet, definition) in &definition.fleets {
                     let network = match &definition.network {
-                        Network::Mainnet => "ic / mainnet".into(),
-                        Network::Local { url, .. } => format!("local / {url}"),
+                        FleetNetwork::Bound(Network::Mainnet) => "ic / mainnet".into(),
+                        FleetNetwork::Unbound(_) => "local / unbound".into(),
+                        FleetNetwork::Bound(Network::Local { url, .. }) => format!("local / {url}"),
                     };
                     let count = config.apps[app_name].canisters.len();
                     rows.push(serde_json::json!({"app":app_name, "fleet":fleet, "network":definition.network, "declared_canisters":count, "config_path":item.path}));

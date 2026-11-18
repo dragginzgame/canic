@@ -6,11 +6,12 @@ use canic::auth::{
         model::{LogoutResult, PortableCredential},
     },
 };
-use ic_wire::{
+use ic_auth_wire::wire;
+use std::{fs, path::Path};
+use wire::{
     Bytes, Limits, List, Text,
     typescript::{self, Method, PayloadLimits, SchemaLimits, SchemaRegistry, Wire},
 };
-use std::{fs, path::Path};
 
 fn payload(limits: Limits) -> PayloadLimits {
     PayloadLimits {
@@ -112,20 +113,20 @@ fn main() -> std::io::Result<()> {
         credential,
         admission_deadline_ns: 900,
     });
-    let request_bytes = ic_wire::encode(
+    let request_bytes = wire::encode(
         &input,
-        ic_wire::Encoding::Frame {
+        wire::Encoding::Frame {
             method: issuer::ISSUE,
-            direction: ic_wire::Direction::Request,
+            direction: wire::Direction::Request,
         },
         request,
     )
     .unwrap();
-    let reply_bytes = ic_wire::encode(
+    let reply_bytes = wire::encode(
         &reply,
-        ic_wire::Encoding::Frame {
+        wire::Encoding::Frame {
             method: issuer::ISSUE,
-            direction: ic_wire::Direction::Response,
+            direction: wire::Direction::Response,
         },
         response,
     )

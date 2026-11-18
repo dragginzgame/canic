@@ -1,5 +1,6 @@
 //! Only actual Root calls may close and stop its Store. Lost callbacks retain external intent.
 use super::{Client, artifacts, inject, maintain, readiness_tests, recover_store, store, support};
+use canic_management_protocol::stored::STORE_LIMITS;
 use canic_management_protocol::{
     self as management, publication,
     store_maintenance::{self as wire, Approval, Phase, Status},
@@ -91,7 +92,7 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
             "prepare",
             store::PREPARE,
             &pending,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -142,7 +143,7 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
             "store_admission",
             publication::ADMISSION,
             &raw,
-            store::LIMITS
+            STORE_LIMITS
         )
         .await,
         Err(publication::Error::Maintenance)

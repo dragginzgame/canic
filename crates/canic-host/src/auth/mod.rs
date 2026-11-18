@@ -7,7 +7,13 @@ mod tests;
 use crate::{
     Error, Plan, PlanAction, Result, SelectedFleet, UpgradeTarget, artifact, plan, store, supplier,
 };
-use canic::auth::{enrollment as wire, protocol::model};
+use canic::auth::{
+    enrollment as wire,
+    protocol::{
+        model,
+        wire::{List, Text},
+    },
+};
 pub(crate) use execution::{apply, status};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -60,6 +66,21 @@ pub struct AuthConfig {
     pub expires_at_ns: u64,
 }
 
+pub(crate) fn declarations<'de, D: serde::Deserializer<'de>>(
+    input: D,
+) -> std::result::Result<Vec<AuthConfig>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Declarations {
+        Single(Box<AuthConfig>),
+        Multiple(Vec<AuthConfig>),
+    }
+    Ok(match Declarations::deserialize(input)? {
+        Declarations::Single(grant) => vec![*grant],
+        Declarations::Multiple(grants) => grants,
+    })
+}
+
 fn invalid(message: &str) -> Error {
     Error::Invalid(message.into())
 }
@@ -96,11 +117,11 @@ impl AuthConfig {
                 fleet_id: hex32(&self.application_id)?,
             },
             grant: model::DelegatedRoleGrant {
-                target: ic_wire::Text::new(self.role.clone()).map_err(supplier)?,
-                scopes: ic_wire::List::new(
+                target: Text::new(self.role.clone()).map_err(supplier)?,
+                scopes: List::new(
                     self.scopes
                         .iter()
-                        .map(|scope| ic_wire::Text::new(scope.clone()))
+                        .map(|scope| Text::new(scope.clone()))
                         .collect::<std::result::Result<_, _>>()
                         .map_err(supplier)?,
                 )
@@ -201,12 +222,34 @@ pub fn create_auth_plan(
     selected: &SelectedFleet,
     controller: &str,
 ) -> Result<(String, Plan)> {
+    create_receiver_auth_plan(journal, config_path, selected, controller, None)
+}
+
+/// Retain an approval for a named receiver slot, or infer the only receiver.
+/// # Errors
+/// Rejects ambiguous selection, missing receiver bindings and conflicting approvals.
+pub fn create_receiver_auth_plan(
+    journal: &Path,
+    config_path: &Path,
+    selected: &SelectedFleet,
+    controller: &str,
+    receiver: Option<&str>,
+) -> Result<(String, Plan)> {
     selected.validate()?;
-    let config = selected
-        .config
-        .auth
-        .as_ref()
-        .ok_or_else(|| invalid("selected fleet has no Auth declaration"))?;
+    let grants = &selected.config.auth;
+    let config = match (receiver, grants.as_slice()) {
+        (Some(slot), _) => grants
+            .iter()
+            .find(|g| g.receiver == slot)
+            .ok_or_else(|| invalid("unknown Auth receiver slot"))?,
+        (None, [only]) => only,
+        (None, []) => return Err(invalid("selected fleet has no Auth declaration")),
+        (None, _) => {
+            return Err(invalid(
+                "select --receiver from this fleet's Auth declarations",
+            ));
+        }
+    };
     let grant = config.grant(&selected.config)?;
     let supplied = config
         .root_wasm
@@ -325,7 +368,10 @@ fn retain(held: &store::Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan
         let Some(old) = existing.auth() else {
             continue;
         };
-        if existing.network != plan.network || old.root.canister != approval.root.canister {
+        if existing.network != plan.network
+            || old.root.canister != approval.root.canister
+            || old.receiver.canister != approval.receiver.canister
+        {
             continue;
         }
         let mut comparable = existing.clone();
@@ -334,7 +380,7 @@ fn retain(held: &store::Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan
         }
         if !plan::same_authority(&comparable, &plan) {
             return Err(Error::Blocked(format!(
-                "Root already has a different Auth approval {id}"
+                "Root already has a different Auth approval {id} for this receiver"
             )));
         }
         if old.revoke == approval.revoke && retained.replace((id, existing)).is_some() {

@@ -55,7 +55,7 @@ for my $registry (values %{$manifest->{patch} // {}}) {
             or die "toko-tooling source overrides are not allowed\n";
     }
 }
-my $metadata=command_json('cargo','metadata','--format-version','1','--no-deps','--locked','--offline','--manifest-path',"$root/Cargo.toml");
+my $metadata=command_json('cargo','metadata','--format-version','1','--no-deps','--locked','--manifest-path',"$root/Cargo.toml");
 $metadata->{workspace_root} eq $root or die "Run tooling admission at its Cargo workspace root\n";
 my %members=map {$_=>1} @{$metadata->{workspace_members}};
 my @packages=grep {$members{$_->{id}}} @{$metadata->{packages}};

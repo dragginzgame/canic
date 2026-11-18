@@ -96,14 +96,18 @@ pub(super) async fn exercise(
         .await,
         Err(Error::Request)
     ));
-    response(real.sign(request(status())).await.unwrap());
-    assert!(replay.sign(request(status())).await.is_ok());
-    assert!(matches!(
-        replay
-            .sign(request(Content::Observation {
-                request_id: [9; 32]
-            }))
-            .await,
-        Err(Error::Output)
-    ));
+    let observation = real.sign(request(status())).await.unwrap();
+    response(observation.clone());
+    assert_eq!(replay.sign(request(status())).await.unwrap(), observation);
+    for changed in [
+        request(Content::Observation {
+            request_id: [9; 32],
+        }),
+        Request {
+            expires_ns: expiry + 1,
+            ..request(status())
+        },
+    ] {
+        assert!(matches!(replay.sign(changed).await, Err(Error::Output)));
+    }
 }

@@ -3,6 +3,7 @@ use super::auth_issuer_tests::{
 };
 use super::{Fixture, control, fixture};
 use canic::auth::issuer::{self, Issue, Logout, Refusal, Revoked, Status};
+use canic::auth::protocol::wire as auth_wire;
 use ic_testkit::pocket_ic::{CanisterId, Time};
 
 fn selection(input: &Issue) -> Logout {
@@ -25,11 +26,11 @@ async fn logout(f: &Fixture, caller: CanisterId, input: &Logout) -> Result<Revok
         )
         .await
         .unwrap();
-    ic_wire::decode(
+    auth_wire::decode(
         &bytes,
-        ic_wire::Encoding::Frame {
+        auth_wire::Encoding::Frame {
             method: issuer::LOGOUT,
-            direction: ic_wire::Direction::Response,
+            direction: auth_wire::Direction::Response,
         },
         issuer::RESPONSE_LIMITS,
     )

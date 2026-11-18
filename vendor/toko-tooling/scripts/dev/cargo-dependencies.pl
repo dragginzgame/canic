@@ -55,7 +55,7 @@ eval {
         for my $relative (@selected) {
             chdir dirname("$consumer/$relative") or die $!;
             open my $cargo, '-|', 'cargo', 'metadata', '--no-deps', '--format-version', '1',
-                '--offline', '--locked', '--manifest-path', "$consumer/$relative" or die $!;
+                '--locked', '--manifest-path', "$consumer/$relative" or die $!;
             my $json = do { local $/; <$cargo> };
             close $cargo or die "Cargo metadata failed for $relative\n";
             my $metadata = decode_json($json);

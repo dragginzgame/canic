@@ -3,6 +3,7 @@ use super::{Client, inject, maintain, readiness_tests, store, support};
 use canic_management_protocol::publication::{
     self as wire, Command, Error, Removal, RemovalRequest,
 };
+use canic_management_protocol::stored::STORE_LIMITS;
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
 use std::time::Duration;
 
@@ -20,7 +21,7 @@ async fn request(
     }
 }
 async fn remove(root: &Client<'_>, input: &RemovalRequest) -> wire::RemovalReply {
-    root.update("store_removal", wire::REMOVE, input, store::LIMITS)
+    root.update("store_removal", wire::REMOVE, input, STORE_LIMITS)
         .await
 }
 async fn publish(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> wire::Reply {
@@ -95,7 +96,7 @@ async fn root_removal_keeps_pins_labels_and_exact_identity_before_expired_author
             method: wire::REMOVE,
             direction: ic_wire::Direction::Request,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .unwrap();
     for (caller, args) in [
@@ -131,7 +132,7 @@ async fn root_removal_keeps_pins_labels_and_exact_identity_before_expired_author
                 store: supplier.id.to_text(),
                 expires_at_ns: input.expires_at_ns,
             },
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -224,7 +225,7 @@ async fn root_cancellation_preserves_tombstone_and_lost_reply_never_becomes_a_re
             method: wire::REMOVE,
             direction: ic_wire::Direction::Request,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .unwrap();
     assert!(

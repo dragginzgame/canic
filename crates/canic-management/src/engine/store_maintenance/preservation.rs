@@ -1,6 +1,7 @@
 //! One read per continuation. Root retains a cursor and digest, never Store's catalog or bytes.
 use super::{Call, Failure, Phase, Status, Wait, change, store, target};
 use canic_management_protocol::store_maintenance::{Preservation, Scan};
+use canic_management_protocol::stored::STORE_LIMITS;
 
 pub(super) fn validate(record: &Status) {
     if let Some(value) = record.preservation.as_ref() {
@@ -71,7 +72,7 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
             method,
             direction: ic_wire::Direction::Request,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .expect("preservation request");
     let reply = Call::new(target(&record.approval), name, Wait::Bounded { seconds: 5 })
@@ -88,7 +89,7 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
         ic_wire::decode::<Result<store::preservation::PageV2, store::Error>>(
             &reply,
             encoding,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .map_err(|_| Failure::InvalidReply)?
         .map_err(|_| Failure::Mismatch)?
@@ -96,7 +97,7 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
         let page = ic_wire::decode::<Result<store::preservation::Page, store::Error>>(
             &reply,
             encoding,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .map_err(|_| Failure::InvalidReply)?
         .map_err(|_| Failure::Mismatch)?;
@@ -150,7 +151,7 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
             ic_wire::encode(
                 &(value.digest, entry),
                 ic_wire::Encoding::Payload,
-                store::LIMITS,
+                STORE_LIMITS,
             )
         } else {
             let store::preservation::Entry::Active(custody) = entry else {
@@ -159,7 +160,7 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
             ic_wire::encode(
                 &(value.digest, custody),
                 ic_wire::Encoding::Payload,
-                store::LIMITS,
+                STORE_LIMITS,
             )
         }
         .map_err(|_| Failure::InvalidReply)?;

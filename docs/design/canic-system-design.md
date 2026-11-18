@@ -891,6 +891,12 @@ Toko retains its own login, authorization, user records and provisioning.
 
 In `canic.toml`, configure deployment-specific bounds alongside the network.
 The selected app already declares `user_hub` as the parent of `user_shard`.
+A local simulator fleet may declare `network = { kind = "Local" }` and its pool
+capacity before the simulator starts. App builds and fleet listings read that
+declaration. Selecting a deployment requires the complete local network binding.
+The Toko signup witness binds its fresh simulator, Root, Store, hub and approval
+deadline in memory. Its checked-in policy admits one key per shard and two shards.
+
 For example, with existing fleet bindings for Root, Store and hub:
 
 ```toml
@@ -1170,9 +1176,12 @@ or automatic enrollment, storage, timer or activation hooks are selected.
 
 The installed qualification application uses the real volatile `MemoryReceiver`
 and pulls a protected grant from an actual Root. Root's optional `auth` feature
-admits one immutable receiver/audience/issuer/Ed25519-key/role/scope grant under
-its existing controller boundary. Configuration retries cannot replace that
-grant or clear terminal key revocation. This is not a general issuer catalogue.
+admits up to 32 receiver principals under its existing controller boundary, matching
+the fleet slot limit. Each receiver owns one immutable audience/issuer/Ed25519-key/role/scope
+grant and its own snapshot history. Revocation retains that slot. Configuration
+retries cannot clear it. A controller may ask Root to trigger a registered receiver's
+fixed refresh endpoint. The receiver checks its actual controller and pulls its
+own snapshot directly from Root.
 
 The optional `auth-enrollment` integration reserves a 30-second local receipt
 window before obtaining IC `raw_rand` entropy. A consuming ticket performs one
@@ -1194,7 +1203,8 @@ journal still reopens independently. Its generic maintenance receipt does not
 prove Auth preservation or readiness. Host's optional fleet `auth` declaration
 now compiles into v5 configure/revoke plans in the existing journal. The exact
 grant, network trust, controller, Root code and receiver code are retained; apply
-checks certified code and the operator → Root → receiver controller graph.
+checks certified code and both controller sets. The operator controls Root and
+an independently installed hub. Root controls each managed shard.
 `fleet auth plan` sends nothing; ordinary apply/status/reconcile own execution
 and exact signed-attempt custody. Revocation derives from a configuration's
 successful retained reply, never an edited config or an unknown outcome.
@@ -1809,6 +1819,15 @@ recovery consumer. Capture and restore require explicit operator initiation;
 restoration stays fenced until explicit acceptance/reopening. No automatic
 reopening policy or profile application migration is part of this first slice.
 
+For the counter, the maintainer selected its installing Root as surviving
+recovery authority. The single-use capture and restore each retain their own
+fence and stop. The operator admits allocation and load separately. Starting
+the restored counter leaves the captured fence intact. Root mediates a fresh
+acceptance generation and a separate explicit reopen call. Original slots are
+lookup-only on replay. Reuse the legacy failed-callback and checkpoint research
+in qualification history at revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`.
+This profile covers one counter with no external producers.
+
 The first signer integration is a direct-controller local qualification, not a
 manager-route fallback. [Canic #5](https://github.com/dragginzgame/canic/issues/5)
 owns a small adapter in Host; [Canic #1](https://github.com/dragginzgame/canic/issues/1)
@@ -1970,7 +1989,7 @@ Tests should prove user-visible behavior and recovery boundaries, not preserve t
 
 The OpenChat-class workload is the strategic qualification target, not a chat product to implement. Include shared MultiUser-style workers, user indexes, groups and communities, mixed tenancy, multiple subnets, sustained growth, local funding and governed effects. Exclude the legacy one-User-canister model from this target, following the retained developer feedback. Reported estate sizes and fees in the old idea are historical input, not current benchmark facts.
 
-Use a small synthetic fixture for failure injection and topology, alongside a named application consumer. On 2026-11-17 the maintainer selected a **persistent counter in the fresh Canic demo**, replacing the profile app because the latter obscured the hands-on journey. The counter owns its value and recovery admission; Storage owns retained records. Capture and restore are explicit operator maintenance operations. Restore leaves writes fenced until the operator explicitly accepts and reopens the application. Pin the real inputs and measure the standalone baseline before expanding managed composition. The counter now has an installed Storage 0.78.0 preservation and fencing witness. Managed creation/upgrade and named counter calls now have a Root/Store CLI witness; the interactive local session prepares that managed counter fleet. The Backup witness restores a stopped Root-controlled counter. Application acceptance and reopening remain pending under #7. Toko deployment remains deferred. Passing a synthetic fixture alone does not establish the hands-on application's adoption or complete M2.
+Use a small synthetic fixture for failure injection and topology, alongside a named application consumer. On 2026-11-17 the maintainer selected a **persistent counter in the fresh Canic demo**, replacing the profile app because the latter obscured the hands-on journey. The counter owns its value and recovery admission; Storage owns retained records. Capture and restore are explicit operator maintenance operations. Restore leaves writes fenced until the operator explicitly accepts and reopens the application. Pin the real inputs and measure the standalone baseline before expanding managed composition. The counter now has an installed Storage 0.78.0 preservation and fencing witness. Managed creation/upgrade and named counter calls now have a Root/Store CLI witness; the interactive local session prepares that managed counter fleet. The Backup witness restores a stopped Root-controlled counter. Its installed recovery path starts fenced and requires separate operator acceptance and opening through Root. Toko deployment remains deferred. Passing a synthetic fixture alone does not establish the hands-on application's adoption or complete M2.
 
 The retired profile packages are private fixtures in the separate qualification workspace, preserving the existing ownership, discovery, Auth/Blob composition and management regressions until those cases have qualified replacement owners. They are not the new demo or an additional product requirement. Their recorded mainnet identities and original journal stay available for explicit historical inspection; retirement grants no deletion, controller change or state reset.
 

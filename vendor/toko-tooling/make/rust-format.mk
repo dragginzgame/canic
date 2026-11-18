@@ -28,7 +28,6 @@ endif
 
 .PHONY: format-tools-check fmt fmt-check
 format-tools-check fmt fmt-check: | toko-execution-check
-format-tools-check fmt fmt-check: export CARGO_NET_OFFLINE := true
 format-tools-check fmt fmt-check: export RUSTUP_AUTO_INSTALL := 0
 
 format-tools-check:

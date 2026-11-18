@@ -27,11 +27,14 @@ Mounting does not initialize an engine, enroll authorities or activate readiness
 
 The additional `auth-enrollment` feature uses the supplier engine to validate
 and install a complete, authenticated Root snapshot. Root's optional `auth`
-feature mounts `configure_auth`, `revoke_auth` and `auth_enrollment`. Its existing
+feature mounts `configure_auth`, `revoke_auth`, `auth_enrollment` and
+`refresh_auth_receiver`. Its existing
 controller guard admits configuration and revocation; the snapshot is bound to
 the actual configured receiver. No controller gains browser identity or user
-permission. This first runtime contract permits one explicit immutable receiver,
-audience, issuer, Ed25519 key, role and scope grant with a finite approval deadline.
+permission. Root retains up to 32 receiver principals, each with an immutable audience,
+issuer, Ed25519 key, role, scopes and finite approval deadline. Each principal
+has its own snapshot revisions, challenge history and terminal revocation. A
+revoked grant still occupies its slot.
 An exact configuration retry cannot replace the grant or reenable a revoked key.
 
 Receiver lifecycle explicitly begins refresh, acquiring IC randomness under an
@@ -193,10 +196,10 @@ CANIC_AUTH_BROWSER_EXECUTABLE=/absolute/path/to/chromium make auth-profile-test
 This downloads no browser and runs headless, with no desktop windows. The browser
 uses the real Platform SDK and Auth coordinator/journal against the simulator's
 HTTP gateway with an explicit root key. A separate issuer and two existing
-single-grant Roots admit two independent receivers. No multi-grant Root catalogue
-or new deployment mode is introduced. Qualification keys are public fixed seeds.
+Roots each admit one independent receiver. The single-Root test below exercises
+the hub and shard topology separately. Qualification keys are public fixed seeds.
 
-Eleven browser cases cover lost issuance and admission replies across renderer
+Eleven browser cases cover lost issuance, renewal and admission replies across renderer
 reopening, independent device/user logins, profile isolation and immutable IDs,
 reply-encoding failure rolling back actual profile writes, renewal and original
 result lookup, logout/cleanup reopening, retained credential replay refusal,
@@ -313,6 +316,103 @@ For [Canic #21](https://github.com/dragginzgame/canic/issues/21), the pinned
 Rust reference declares version 0.1.0. During this review Cargo could not
 resolve that package from crates.io. The source example documents the supplier
 contract. A real local II login with Toko's issuer remains unqualified.
+
+## Toko signup and private shard reads
+
+Toko's local signup witness uses the hub as its Auth receiver. A browser with
+an expired hub session can renew at the installed issuer, look up that exact
+renewal and present it to the hub. The hub recovers the original Toko user ID
+and shard for the verified issuer and subject. A route identifies the destination;
+the shard must make its own admission decision for any private read.
+
+From the Toko checkout, with the documented Testkit server prepared:
+
+```sh
+make test-signup
+```
+
+### One Root for the hub and managed shards
+
+Declare one `[[apps.toko.fleets.local.auth]]` table per **bound receiver slot**.
+Each table contains all the grant fields listed above. Use the same `root` slot
+and reviewed Root Wasm for both. For example, the hub table selects
+`receiver = "user_hub"` and `receiver_controller = "operator"`. The shard
+table selects its concrete slot, such as `receiver = "user_shard"`, and
+`receiver_controller = "root"` (the default). Each shard instance needs its
+own principal and approval. Declaring a component or allocating a placement key
+does not enroll future instances. Existing single-table declarations still work.
+
+With the local fleet bound, retain the two plans separately:
+
+```sh
+canic fleet auth plan --app toko --fleet local --receiver user_hub --controller "$OPERATOR"
+canic fleet auth plan --app toko --fleet local --receiver user_shard --controller "$OPERATOR"
+canic fleet apply "$HUB_PLAN" --app toko --fleet local --identity "$IDENTITY"
+canic fleet apply "$SHARD_PLAN" --app toko --fleet local --identity "$IDENTITY"
+```
+
+To retire the shard, use its original configuration operation. Apply the returned
+revocation plan and explicitly refresh the shard to observe the change:
+
+```sh
+canic fleet auth plan-revocation "$SHARD_PLAN" --app toko --fleet local
+canic fleet apply "$SHARD_REVOCATION_PLAN" --app toko --fleet local --identity "$IDENTITY"
+```
+
+Mount `canic::mount_auth_refresh_endpoint!(crate::auth::pull_enrollment);` on
+each receiver with `auth-enrollment` enabled. The async handler returns
+`Result<(), enrollment::Error>` and uses the application's existing receiver
+and its `begin → entropy → prepare → fetch → finish` sequence. The mount checks
+the current IC caller against the canister's controllers before invoking the
+handler. The installer has no residual refresh permission after control transfers.
+
+| Update signed by the operator | Destination | Wire request |
+| --- | --- | --- |
+| `refresh_auth` | Operator-controlled hub | `enrollment::REFRESH` with unit |
+| `refresh_auth_receiver` | Shard's Root | `enrollment::TRIGGER_REFRESH` with the shard principal |
+
+Root accepts the second update only from a controller and only for a registered
+receiver. It sends a single cycle-free `refresh_auth` update to that receiver.
+The shard sees Root as its controller and calls back to its configured Root for
+its own snapshot. The hub never has to proxy this call. Decode each result as
+`Result<(), enrollment::Error>` with its response method ID. A transport
+timeout leaves the refresh outcome unknown. Readiness and grant receipts do
+not authorize automatic retries.
+
+For example, a Rust operator client can encode the shard trigger using the
+existing Wire codec. Submit these bytes in a signed update to Root:
+
+```rust
+use canic::auth::enrollment;
+let bytes = ic_wire::encode(
+    &shard_principal,
+    ic_wire::Encoding::Frame {
+        method: enrollment::TRIGGER_REFRESH,
+        direction: ic_wire::Direction::Request,
+    },
+    enrollment::LIMITS,
+)?;
+```
+
+The prior single-grant Root executable does not support this trigger. Use a
+fresh qualified Auth deployment. An upgrade clears volatile Auth authority and
+cannot migrate a live fleet by replaying its old approvals.
+
+For a direct profile read, Toko's existing `user_shard::get_me` already looks
+up the verified issuer and subject. Keep its input free of account selectors.
+In the installed journey, check each boundary separately: a new shard starts
+closed, an admitted user reads their own record on their assigned shard, the
+other shard returns no record for that user, and an unenrolled caller cannot
+read either. Exercise revocation both before and after the receiver refreshes;
+the last accepted snapshot has a bounded freshness window. Reopening the
+database on upgrade cannot reconstruct volatile sessions or replay protection.
+
+Legacy review at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` covered
+`crates/canic-core/src/domain/policy/pure/auth/root_provisioning/{mod.rs,tests/mod.rs}`
+and its history at `e8605c44ffaf77ceb7ddaf85b374f42b7a48703d`. That policy
+checked the protected fleet audience, allowed role scopes and issuer deadlines.
+Those obligations still apply. The rewrite additionally binds each snapshot
+to the actual receiver principal and an individual refresh challenge.
 
 ## Run locally
 

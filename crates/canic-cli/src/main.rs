@@ -161,11 +161,12 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 package,
                 features,
                 output,
-            } => {
-                let path = canic_host::build(manifest, package, features, output.as_deref())?;
-                let artifact = canic_host::inspect(&path)?;
-                Ok(serde_json::json!({"wasm": path, "artifact": artifact}))
-            }
+            } => Ok(serde_json::json!(canic_host::build_report(
+                manifest,
+                package,
+                features,
+                output.as_deref()
+            )?)),
             ArtifactCommand::Inspect { wasm } => Ok(serde_json::json!(canic_host::inspect(wasm)?)),
         },
         Commands::Fleet(command) => return run_fleet(cli, command).await,

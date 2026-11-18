@@ -124,3 +124,84 @@ impl Ledger {
         }
     }
 }
+
+impl Ledger {
+    /// Existing raw executor operations retain their original profile. A capture fence
+    /// selects the recovery profile for the lifetime of this two-operation ledger.
+    pub(crate) fn admit_recovery(
+        &self,
+        request: &canic_management_protocol::backup::Request,
+    ) -> Result<(), Error> {
+        use canic_management_protocol::backup::{Effect, Kind};
+        let op = &request.operation;
+        let Some(capture) = self
+            .0
+            .iter()
+            .find(|r| r.binding.operation.kind == Kind::Capture && r.binding.step == Step::Fence)
+        else {
+            return match (&request.effect, op.kind, request.step) {
+                (Effect::Recovery { .. }, Kind::Capture, Step::Fence) if self.0.is_empty() => {
+                    Ok(())
+                }
+                (Effect::Recovery { .. }, _, _) => Err(Error::Busy),
+                _ => Ok(()),
+            };
+        };
+        let capture = &capture.binding.operation;
+        if capture.manager != op.manager
+            || capture.caller != op.caller
+            || capture.network != op.network
+            || capture.target != op.target
+            || capture.generation != op.generation
+        {
+            return Err(Error::Conflict);
+        }
+        if let Effect::Recovery { source, .. } = &request.effect
+            && *source != capture.approval
+        {
+            return Err(Error::Conflict);
+        }
+        let done = |kind, step| {
+            self.0.iter().any(|r| {
+                r.binding.operation.kind == kind
+                    && r.binding.step == step
+                    && matches!(r.outcome, Outcome::Reply(_))
+            })
+        };
+        let here = |step| done(op.kind, step);
+        let allowed = match request.step {
+            Step::Fence => op.kind == Kind::Restore && done(Kind::Capture, Step::Open),
+            Step::Stop => here(Step::Fence),
+            Step::Start => here(Step::FinalStatus),
+            Step::Accept => op.kind == Kind::Restore && here(Step::Start),
+            Step::Open => {
+                if op.kind == Kind::Capture {
+                    here(Step::Start)
+                } else {
+                    here(Step::Accept)
+                }
+            }
+            _ if !here(Step::Stop) || here(Step::Start) => false,
+            Step::AdmitAllocation => here(Step::List),
+            Step::Allocate => here(Step::AdmitAllocation),
+            Step::Upload(_) => here(Step::Allocate) && !here(Step::BeforeLoad),
+            Step::BeforeLoad => here(Step::Allocate) && here(Step::Metadata),
+            Step::AdmitLoad => here(Step::BeforeLoad),
+            Step::Load => here(Step::AdmitLoad),
+            Step::FinalStatus => here(if op.kind == Kind::Capture {
+                Step::Take
+            } else {
+                Step::Load
+            }),
+            Step::Read(_) | Step::Metadata => {
+                if op.kind == Kind::Capture {
+                    here(Step::Take)
+                } else {
+                    here(Step::Allocate) && !here(Step::Load)
+                }
+            }
+            Step::InitialStatus | Step::List | Step::Take => true,
+        };
+        if allowed { Ok(()) } else { Err(Error::Busy) }
+    }
+}

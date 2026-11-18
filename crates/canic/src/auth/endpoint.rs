@@ -1,11 +1,12 @@
 //! Platform hooks for fixed Auth contracts with directional codec allowances.
 use super::issuer;
 use super::protocol::{EstablishSession, Logout, ReadSession};
+use ic_auth_wire::wire;
 pub use ic_platform_runtime as runtime;
 use ic_platform_runtime::raw;
 pub use ic_platform_runtime::system as api;
-use ic_wire::{Direction, Encoding, Limits};
 use serde::{Serialize, de::DeserializeOwned};
+use wire::{Direction, Encoding, Limits};
 
 fn limits<const ID: u64>(direction: Direction) -> Limits {
     match (ID, direction) {
@@ -36,14 +37,14 @@ pub fn admit<const ID: u64>() -> Result<(), String> {
     }
     let mut header = [0; 11];
     raw::msg_arg_data_copy(&mut header, 0);
-    ic_wire::validate_request_header(ID, &header).map_err(|error| error.to_string())
+    wire::validate_request_header(ID, &header).map_err(|error| error.to_string())
 }
 
 /// Decode within the selected complete request budget, without inferring authority.
 /// # Errors
 /// Refuses malformed or over-budget input; the endpoint traps this refusal.
-pub fn decode<T: DeserializeOwned, const ID: u64>(bytes: &[u8]) -> Result<T, ic_wire::Error> {
-    ic_wire::decode(
+pub fn decode<T: DeserializeOwned, const ID: u64>(bytes: &[u8]) -> Result<T, wire::Error> {
+    wire::decode(
         bytes,
         Encoding::Frame {
             method: ID,
@@ -56,8 +57,8 @@ pub fn decode<T: DeserializeOwned, const ID: u64>(bytes: &[u8]) -> Result<T, ic_
 /// Encode in the synchronous handler transaction; failure must roll back all owners.
 /// # Errors
 /// Refuses unencodable or over-budget replies; the endpoint traps this refusal.
-pub fn encode<T: Serialize, const ID: u64>(value: T) -> Result<Vec<u8>, ic_wire::Error> {
-    ic_wire::encode(
+pub fn encode<T: Serialize, const ID: u64>(value: T) -> Result<Vec<u8>, wire::Error> {
+    wire::encode(
         &value,
         Encoding::Frame {
             method: ID,

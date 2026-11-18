@@ -9,7 +9,7 @@ if [[ ${1:-} == --help || ${1:-} == -h ]]; then usage; exit 0; fi
 }
 version="$1"
 cargo_bin="${2:-cargo}"
-export CARGO_NET_OFFLINE=true RUSTUP_AUTO_INSTALL=0
+export RUSTUP_AUTO_INSTALL=0
 if ! actual="$("$cargo_bin" sort --version)" || [[ "$actual" != "cargo-sort $version" ]]; then
     echo "Formatting requires prepared cargo-sort $version; install that version with --locked during explicit setup." >&2
     exit 1

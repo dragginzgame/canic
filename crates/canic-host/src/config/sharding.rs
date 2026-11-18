@@ -1,10 +1,11 @@
 //! Resolve an operator's shard-pool declaration against the chosen app and fleet.
-use super::{FleetConfig, name};
+use super::{CanisterConfig, FleetConfig, name};
 use crate::{
     DeploymentName, Error, FleetPlanning, Result, SelectedFleet, artifact, store, supplier,
 };
 use canic_management_protocol::{children::ChildId, stored};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 /// Fleet-specific limits and explicitly named infrastructure for one shard component.
@@ -28,7 +29,7 @@ pub struct ShardPoolConfig {
     /// Total authorized creation attachments in cycles.
     pub creation_budget: u64,
     /// Final deadline for dispatching new creation work, in IC nanoseconds.
-    pub expires_at_ns: u64,
+    pub expires_at_ns: Option<u64>,
 }
 impl ShardPoolConfig {
     pub(crate) fn preview(
@@ -46,7 +47,7 @@ impl ShardPoolConfig {
                 "expected a canonical controller principal".into(),
             ));
         }
-        if self.expires_at_ns <= crate::now()? {
+        if self.deadline()? <= crate::now()? {
             return Err(Error::Invalid("shard growth approval has expired".into()));
         }
         let bytes = store::read(
@@ -92,14 +93,18 @@ impl ShardPoolConfig {
             approval: Box::new(approval),
         })
     }
-    fn hub<'a>(&self, fleet: &'a FleetConfig) -> Result<&'a str> {
-        fleet
-            .canisters
+    fn deadline(&self) -> Result<u64> {
+        self.expires_at_ns.ok_or_else(|| {
+            Error::Invalid("shard growth approval requires an explicit deadline".into())
+        })
+    }
+    fn hub<'a>(&self, slots: &'a BTreeMap<String, CanisterConfig>) -> Result<&'a str> {
+        slots
             .get(&self.component)
             .and_then(|c| c.parent.as_deref())
             .ok_or_else(|| Error::Invalid("shard component must have a declared parent hub".into()))
     }
-    pub(super) fn validate(&self, fleet: &FleetConfig) -> Result<()> {
+    pub(super) fn validate(&self, slots: &BTreeMap<String, CanisterConfig>) -> Result<()> {
         if !self.release.valid()
             || self
                 .install_args
@@ -110,11 +115,11 @@ impl ShardPoolConfig {
                 "invalid shard release label or install argument path".into(),
             ));
         }
-        let hub = self.hub(fleet)?;
+        let hub = self.hub(slots)?;
         let mut names = std::collections::BTreeSet::new();
         for slot in [self.component.as_str(), hub, &self.root, &self.store] {
             name(slot)?;
-            if !fleet.canisters.contains_key(slot) || !names.insert(slot) {
+            if !slots.contains_key(slot) || !names.insert(slot) {
                 return Err(Error::Invalid(
                     "shard, hub, Root and Store must be distinct declared components".into(),
                 ));
@@ -122,7 +127,7 @@ impl ShardPoolConfig {
         }
         if !(1..=ChildId::ALL.len()).contains(&usize::from(self.max_shards))
             || !(1..=stored::MAX_KEYS_PER_SHARD).contains(&self.keys_per_shard)
-            || self.expires_at_ns == 0
+            || self.expires_at_ns == Some(0)
         {
             return Err(Error::Invalid(
                 "shard pool bounds or deadline outside the supported range".into(),
@@ -145,7 +150,7 @@ impl FleetConfig {
             .shard_pool
             .as_ref()
             .ok_or_else(|| Error::Invalid("no shard pool configured".into()))?;
-        policy.validate(self)?;
+        policy.validate(&self.canisters)?;
         if !manifest.valid() || manifest.release != policy.release {
             return Err(Error::Invalid("invalid shard release manifest".into()));
         }
@@ -172,11 +177,11 @@ impl FleetConfig {
             arguments,
             pool: policy.component.clone(),
             root: id(&policy.root)?,
-            hub: id(policy.hub(self)?)?,
+            hub: id(policy.hub(&self.canisters)?)?,
             max_shards: policy.max_shards,
             keys_per_shard: policy.keys_per_shard,
             creation_budget: policy.creation_budget,
-            expires_at_ns: policy.expires_at_ns,
+            expires_at_ns: policy.deadline()?,
             reference: stored::Reference {
                 store: id(&policy.store)?,
                 manifest,

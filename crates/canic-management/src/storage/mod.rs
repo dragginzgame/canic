@@ -274,7 +274,7 @@ impl Journals {
             let (entries, maintenance, history): (Records<Journal>, _, _) =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
                     .map_err(|_| "identified child journals")?;
-            Ok(Self(identified(entries)?, maintenance, history))
+            Ok::<_, &'static str>(Self(identified(entries)?, maintenance, history))
         } else if let Some(payload) = bytes.strip_prefix(b"CUJ7") {
             let (journals, maintenance, history) =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
@@ -423,7 +423,7 @@ impl Artifacts {
             let entries: Records<Artifact> =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, ARTIFACT_LIMITS)
                     .map_err(|_| "identified child artifacts")?;
-            Ok(Self(identified(entries)?))
+            Ok::<_, &'static str>(Self(identified(entries)?))
         } else if let Some(payload) = bytes.strip_prefix(b"CUA3") {
             let length: [u8; 4] = payload
                 .get(..4)

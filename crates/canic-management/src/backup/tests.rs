@@ -71,3 +71,73 @@ fn oversized_results_remain_pending_and_liabilities_never_refund() {
     b.step = Step::FinalStatus;
     assert_eq!(l.reserve(b), Err(Error::Capacity));
 }
+
+#[test]
+fn rewind_admission_uses_the_surviving_capture_and_current_phase() {
+    use canic_management_protocol::backup::{Effect, Request, management::CanisterArgs};
+    let mut capture = binding();
+    capture.step = Step::Fence;
+    let mut ledger = Ledger::default();
+    let mut remember = |b: &Binding| {
+        ledger.reserve(b.clone()).unwrap();
+        ledger.complete(b, Outcome::Reply(vec![]));
+    };
+    remember(&capture);
+    for step in [
+        Step::Stop,
+        Step::Take,
+        Step::FinalStatus,
+        Step::Start,
+        Step::Open,
+    ] {
+        remember(&Binding {
+            step,
+            ..capture.clone()
+        });
+    }
+    let mut restore = capture.operation.clone();
+    restore.kind = Kind::Restore;
+    restore.id = [8; 16];
+    restore.approval = [9; 32];
+    let request = Request {
+        operation: restore,
+        step: Step::Fence,
+        effect: Effect::Recovery {
+            child: CanisterArgs {
+                canister_id: "aaaaa-aa".parse().unwrap(),
+            },
+            source: capture.operation.approval,
+        },
+        arguments_hash: [0; 32],
+        arguments_bytes: 0,
+        expires_at_ns: 50,
+        cycles: 0,
+        cycle_limit: 100,
+        reply_bytes: 128,
+    };
+    let ledger = Ledger::open(&ledger.encode());
+    assert_eq!(ledger.admit_recovery(&request), Ok(()));
+    let mut changed = request.clone();
+    changed.operation.generation += 1;
+    assert_eq!(ledger.admit_recovery(&changed), Err(Error::Conflict));
+    let mut changed = request.clone();
+    if let Effect::Recovery { source, .. } = &mut changed.effect {
+        *source = [0; 32];
+    }
+    assert_eq!(ledger.admit_recovery(&changed), Err(Error::Conflict));
+    for step in [
+        Step::Allocate,
+        Step::Load,
+        Step::Start,
+        Step::Accept,
+        Step::Open,
+    ] {
+        assert_eq!(
+            ledger.admit_recovery(&Request {
+                step,
+                ..request.clone()
+            }),
+            Err(Error::Busy)
+        );
+    }
+}

@@ -3,6 +3,7 @@ use super::{
     CanisterId, CanisterSettings, Duration, Limits, Path, PathBuf, PocketIcBuilder, PreparedServer,
     Server, Value, cli, hex, json, run,
 };
+use canic_management_protocol::stored::STORE_LIMITS;
 use canic_management_protocol::{children, publication as wire};
 use ic_testkit::pocket_ic::nonblocking::PocketIc;
 use ic_wasm_store_protocol as store;
@@ -341,7 +342,7 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
                     method: store::PIN,
                     direction: ic_wire::Direction::Request,
                 },
-                store::LIMITS,
+                STORE_LIMITS,
             )
             .unwrap(),
         )
@@ -353,7 +354,7 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
             method: store::PIN,
             direction: ic_wire::Direction::Response,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .unwrap();
     pinned.unwrap();

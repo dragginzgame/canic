@@ -1,5 +1,6 @@
 //! Explicit Root enrollment around the real volatile engine.
 use crate::{LIMITS, OBSERVE, Observation, RefreshObservation, audience, enrollment, protocol};
+use canic::auth::protocol::wire as auth_wire;
 use ic_auth::{
     receiver_memory::{
         AdmissionHost, EnrollmentBinding, LoginLimits, LogoutError, LogoutReceipt, MemoryConfig,
@@ -130,7 +131,7 @@ fn encode_control(value: bool) -> Result<Vec<u8>, std::convert::Infallible> {
 #[runtime::update(runtime = runtime, guard = control_guard, decode = decode_control, max_bytes = 2097152, on_error = endpoint_error, name = "control", encode = encode_control)]
 async fn control(command: u8) -> bool {
     if command == 1 {
-        return refresh().await.is_ok();
+        return enrollment::transport::authorize_refresh().is_ok() && refresh().await.is_ok();
     }
     STATE.with_borrow_mut(|state| {
         let Some(s) = state else {
@@ -149,12 +150,12 @@ async fn control(command: u8) -> bool {
         true
     })
 }
+canic::mount_auth_refresh_endpoint!(super::refresh);
+
 async fn refresh() -> Result<(), enrollment::Error> {
     let start = STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(enrollment::Error::Closed)?;
-        if api::caller() != s.installer {
-            return Err(enrollment::Error::Binding);
-        }
+
         let now = api::time();
         let start = s.enrollment.begin(now)?;
         s.refresh.reserved += 1;
@@ -263,7 +264,7 @@ fn admit(
             .scopes
             .into_vec()
             .into_iter()
-            .map(ic_wire::Text::into_string)
+            .map(auth_wire::Text::into_string)
             .collect(),
         input.ttl_secs,
     )

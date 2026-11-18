@@ -21,9 +21,17 @@ pub(crate) fn run(command: &FleetAuthCommand, json: bool) -> canic_host::Result<
         .clone()
         .unwrap_or_else(|| selected.journal_path(&path));
     let (operation, plan) = match command {
-        FleetAuthCommand::Plan { controller, .. } => {
-            canic_host::create_auth_plan(&journal, &path, &selected, controller)?
-        }
+        FleetAuthCommand::Plan {
+            controller,
+            receiver,
+            ..
+        } => canic_host::create_receiver_auth_plan(
+            &journal,
+            &path,
+            &selected,
+            controller,
+            receiver.as_deref(),
+        )?,
         FleetAuthCommand::PlanRevocation { operation, .. } => {
             canic_host::create_auth_revocation(&journal, operation, &selected)?
         }

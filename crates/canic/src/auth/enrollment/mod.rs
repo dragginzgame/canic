@@ -37,6 +37,14 @@ pub const CONFIGURE: u64 = 0x4341_5554_4801;
 pub const REVOKE: u64 = 0x4341_5554_4802;
 /// Actual receiver's direct snapshot pull.
 pub const SNAPSHOT: u64 = 0x4341_5554_4803;
+/// Controller asks a registered receiver to perform its own protected pull.
+pub const TRIGGER_REFRESH: u64 = 0x4341_5554_4804;
+/// Controller-only receiver endpoint. Takes unit and replies with a typed result.
+pub const REFRESH: u64 = 0x4341_5554_4805;
+/// Fixed receiver method used by the controller; never supplied by an operator.
+pub const REFRESH_METHOD: &str = "refresh_auth";
+/// Maximum receivers, including revoked slots, retained by a fresh Root.
+pub const MAX_RECEIVERS: usize = 32;
 /// Snapshot exported by an explicitly selected authority.
 pub const SNAPSHOT_METHOD: &str = "auth_enrollment";
 /// Bounded single-role exchange, including the metadata and complete scope list.
@@ -188,4 +196,28 @@ pub enum Error {
     Unavailable,
     /// Supplier refused enrollment metadata; no host entries were installed.
     Refused,
+    /// All receiver slots are occupied. Revocation does not recycle a slot.
+    Capacity,
+}
+
+/// Mount the optional controller-triggered `refresh_auth` update. The application's
+/// async handler owns its existing receiver, reservation, pull and installation.
+/// Mounting does not refresh, create state or authorize application sessions.
+///
+/// ```ignore
+/// canic::mount_auth_refresh_endpoint!(crate::auth::pull_enrollment);
+/// ```
+#[cfg(all(target_arch = "wasm32", feature = "auth-enrollment"))]
+#[macro_export]
+macro_rules! mount_auth_refresh_endpoint {
+    ($pull:path) => {
+        mod refresh_auth {
+            use $crate::auth::{endpoint::{runtime, fail}, enrollment::{Error, REFRESH, transport}};
+            #[runtime::update(runtime = runtime, guard = transport::admit::<REFRESH>, decode = transport::decode::<(), REFRESH>, max_bytes = 8192, on_error = fail, name = "refresh_auth", encode = transport::encode::<Result<(), Error>, REFRESH>)]
+            async fn refresh_auth((): ()) -> Result<(), Error> {
+                transport::authorize_refresh()?;
+                $pull().await
+            }
+        }
+    };
 }

@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.222.0"
+version = "0.223.0"
 dependencies = [
  "ic-auth",
  "ic-auth-protocol-types",
@@ -283,7 +283,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.25.0",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.222.0"
+version = "0.223.0"
 dependencies = [
  "canic-host",
  "canic-management-protocol",
@@ -310,14 +310,14 @@ dependencies = [
 
 [[package]]
 name = "canic-demo"
-version = "0.222.0"
+version = "0.223.0"
 dependencies = [
  "canic",
  "clap",
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.25.0",
  "serde",
  "serde_json",
  "toko-tooling",
@@ -325,7 +325,7 @@ dependencies = [
 
 [[package]]
 name = "canic-hello"
-version = "0.222.0"
+version = "0.223.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -334,7 +334,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.222.0"
+version = "0.223.0"
 dependencies = [
  "base64",
  "canic",
@@ -351,10 +351,11 @@ dependencies = [
  "ic-topology",
  "ic-wasm-store",
  "ic-wasm-store-protocol",
- "ic-wire",
+ "ic-wire 0.25.0",
  "serde",
  "serde_json",
  "sha2 0.11.1",
+ "tempfile",
  "thiserror 2.0.21",
  "tokio",
  "toko-tooling",
@@ -365,7 +366,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.222.0"
+version = "0.223.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -375,7 +376,7 @@ dependencies = [
  "ic-storage",
  "ic-timers",
  "ic-wasm-store-protocol",
- "ic-wire",
+ "ic-wire 0.25.0",
  "serde",
  "sha2 0.11.1",
  "toko-tooling",
@@ -383,11 +384,12 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.222.0"
+version = "0.223.0"
 dependencies = [
+ "canic",
  "ic-platform-protocol",
  "ic-wasm-store-protocol",
- "ic-wire",
+ "ic-wire 0.25.0",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -396,13 +398,13 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.222.0"
+version = "0.223.0"
 dependencies = [
  "canic",
  "canic-management",
  "canic-management-protocol",
  "ic-platform-runtime",
- "ic-wire",
+ "ic-wire 0.25.0",
  "serde",
  "toko-tooling",
 ]
@@ -838,6 +840,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
+name = "fastrand"
+version = "2.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
+
+[[package]]
 name = "ff"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1137,7 +1145,7 @@ checksum = "aeb54cd597f065b16bc896e7773a18ff47190754ef77df17b4de15ca8a89ef10"
 dependencies = [
  "ic-auth-protocol-types",
  "ic-platform",
- "ic-wire",
+ "ic-wire 0.24.6",
  "serde",
  "sha2 0.11.1",
 ]
@@ -1158,7 +1166,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e519b0a4d06930a5158210c0fb8b4222bf85e9770706ba6b9cda3f9ae67aae4"
 dependencies = [
  "ic-auth-protocol-types",
- "ic-wire",
+ "ic-wire 0.24.6",
  "serde",
 ]
 
@@ -1190,7 +1198,7 @@ checksum = "9c30df43913693e3fa7752b8caae0a4ae0eea77347a205b2045590a150c54da3"
 dependencies = [
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.24.6",
  "serde",
  "sha2 0.11.1",
 ]
@@ -1209,9 +1217,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.23.2"
+version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "738b604c7c170d50910bb6fde263e1a3a555dbfd0c210c72429d605cd38e733b"
+checksum = "460b88a831a2b8ecee87c60e38f06576112df22fb48985a8f7caf5810785c371"
 dependencies = [
  "ethnum",
  "ic-db-macros",
@@ -1224,9 +1232,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.23.2"
+version = "0.23.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a9d00fd5bd52d4015ee35222b298335ff4dd236cf47e27f818e78df9c9da1b6"
+checksum = "4d75c8a31fe40d4a2d5c04e51a357ea38d89f370866e34f6663a06873be7b990"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1394,9 +1402,9 @@ dependencies = [
 
 [[package]]
 name = "ic-storage"
-version = "0.78.1"
+version = "0.78.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a1c0763bc875711db48da5a4a046bd1e21f2faf93c5c4025239a97d199a1102"
+checksum = "2f92a5e8b6e284e5de24ed7eee39d6a55b9a3c5bc81d3a53f6c0fad3828eff73"
 dependencies = [
  "ic-platform",
  "ic-platform-runtime",
@@ -1470,7 +1478,7 @@ dependencies = [
  "ic-platform-types",
  "ic-storage",
  "ic-wasm-store-protocol",
- "ic-wire",
+ "ic-wire 0.24.6",
  "serde",
  "sha2 0.11.1",
 ]
@@ -1481,7 +1489,7 @@ version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63fc2ca887d9b4354c23c3ec433f28888b7b8351bcc515c3b095d1088e730d19"
 dependencies = [
- "ic-wire",
+ "ic-wire 0.24.6",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -1500,6 +1508,18 @@ dependencies = [
  "serde",
  "serde_bytes",
  "serde_json",
+]
+
+[[package]]
+name = "ic-wire"
+version = "0.25.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e6060f57a051fb12d02f6140a8751fc122c1c23925ee6412ee600743f5c664eb"
+dependencies = [
+ "bytemuck",
+ "postcard",
+ "serde",
+ "serde_bytes",
 ]
 
 [[package]]
@@ -2156,9 +2176,9 @@ checksum = "63b8176103e19a2643978565ca18b50549f6101881c443590420e4dc998a3c69"
 
 [[package]]
 name = "rand_pcg"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "caa0f4137e1c0a72f4c651489402276c8e8e1cf081f3b0ba156d2cbeef09e86a"
+checksum = "eb95882a1e14462c69aea9984bb261293ccfe6022ef8de0eda18bd5afb0052df"
 dependencies = [
  "rand_core 0.10.1",
 ]
@@ -2664,6 +2684,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "tempfile"
+version = "3.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
+dependencies = [
+ "fastrand",
+ "once_cell",
+ "rustix",
+ "windows-sys 0.61.2",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.69"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2787,9 +2819,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.45.3"
+version = "0.45.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "41141f3a04bea22cacdaa5e36774d69e1335f5461098311eb6bb2731ee113da5"
+checksum = "85a1ec2a953eb8c41f66fdb121591c64e7ae3b6d77196a982740e790f0ed021a"
 
 [[package]]
 name = "toml"

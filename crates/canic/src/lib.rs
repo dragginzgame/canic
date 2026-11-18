@@ -23,6 +23,9 @@ pub mod metrics;
 /// Application-owned readiness; the optional feature enables an explicit replicated mount.
 pub mod readiness;
 
+#[cfg(feature = "recovery")]
+pub mod recovery;
+
 use serde::{Deserialize, Serialize};
 
 /// Identity of the greeting RPC, including its Wire request/response envelope.

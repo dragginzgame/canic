@@ -4,8 +4,9 @@
 //! login; a request's account is only a selector. Missing evidence is unresolved.
 use super::protocol::model::{DelegatedRoleGrant, PortableCredential};
 use ic_auth_protocol_types::Principal;
-use ic_wire::{Limits, List};
+use ic_auth_wire::wire;
 use serde::{Deserialize, Serialize};
+use wire::{Limits, List};
 
 /// Account-authenticated initial issuance.
 pub const ISSUE: u64 = 0x4341_5554_4810;
@@ -31,7 +32,11 @@ pub const RESPONSE_LIMITS: Limits = Limits {
 };
 
 /// Untrusted initial intent. No account, policy, issuer key or deadline is accepted.
-#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(
+    feature = "auth-browser",
+    derive(wire::typescript::Wire),
+    wire(crate = "ic_auth_wire::wire")
+)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Issue {
     /// Original operation epoch.
@@ -48,7 +53,11 @@ pub struct Issue {
     pub grants: List<DelegatedRoleGrant, 16>,
 }
 /// Browser-authenticated selection. Naming an account grants no account authority.
-#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(
+    feature = "auth-browser",
+    derive(wire::typescript::Wire),
+    wire(crate = "ic_auth_wire::wire")
+)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Renew {
     /// Original account, verified through the retained browser/login binding.
@@ -63,7 +72,11 @@ pub struct Renew {
     pub grants: List<DelegatedRoleGrant, 16>,
 }
 /// Select the original login. Only the captured caller authenticates its browser.
-#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(
+    feature = "auth-browser",
+    derive(wire::typescript::Wire),
+    wire(crate = "ic_auth_wire::wire")
+)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Logout {
     /// Original account; this field never authenticates an account call.
@@ -74,14 +87,22 @@ pub struct Logout {
     pub login_id: [u8; 32],
 }
 /// Local issuer revocation only. Other receivers still need explicit cleanup.
-#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(
+    feature = "auth-browser",
+    derive(wire::typescript::Wire),
+    wire(crate = "ic_auth_wire::wire")
+)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Revoked {
     /// Unchanged original deadline, not proof of expiry or logout at a receiver.
     pub login_deadline_ns: u64,
 }
 /// Select lookup under the original signer role; never fall back to issuance.
-#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(
+    feature = "auth-browser",
+    derive(wire::typescript::Wire),
+    wire(crate = "ic_auth_wire::wire")
+)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Lookup {
     /// Authenticated account selects its exact initial operation.
@@ -95,7 +116,11 @@ pub enum Lookup {
     Renew(Renew),
 }
 /// Retained evidence, not permission to issue or extend any lifetime.
-#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(
+    feature = "auth-browser",
+    derive(wire::typescript::Wire),
+    wire(crate = "ic_auth_wire::wire")
+)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Status {
     /// Missing, pruned, pending or uncertain evidence; never proven no effect.
@@ -109,7 +134,11 @@ pub enum Status {
     },
 }
 /// Bounded transport refusals; ordinary refusals retain applicable work charges.
-#[cfg_attr(feature = "auth-browser", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(
+    feature = "auth-browser",
+    derive(wire::typescript::Wire),
+    wire(crate = "ic_auth_wire::wire")
+)]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Refusal {
     /// Malformed semantic input.

@@ -15,7 +15,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
         fleet: "local".into(),
         config: FleetConfig {
             shard_pool: None,
-            auth: None,
+            auth: Vec::new(),
             network: Network::Mainnet,
             journal: None,
             canisters: BTreeMap::from([

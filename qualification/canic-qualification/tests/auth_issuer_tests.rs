@@ -1,5 +1,6 @@
 use super::{Fixture, control, enrollment_request, enrollment_response, fixture, grant};
 use canic::auth::issuer::{self, Issue, Lookup, Refusal, Renew, Status};
+use canic::auth::protocol::wire as auth_wire;
 use canic_auth_witness::{
     IssuerObservation, KEY, LIMITS, OBSERVE, enrollment,
     protocol::{
@@ -31,9 +32,10 @@ pub(super) fn request(id: u8) -> Issue {
         login_epoch: 1,
         login_id: [1; 32],
         browser_public_key: SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes(),
-        grants: ic_wire::List::new(vec![DelegatedRoleGrant {
-            target: ic_wire::Text::new("user".into()).unwrap(),
-            scopes: ic_wire::List::new(vec![ic_wire::Text::new("read".into()).unwrap()]).unwrap(),
+        grants: auth_wire::List::new(vec![DelegatedRoleGrant {
+            target: auth_wire::Text::new("user".into()).unwrap(),
+            scopes: auth_wire::List::new(vec![auth_wire::Text::new("read".into()).unwrap()])
+                .unwrap(),
         }])
         .unwrap(),
     }
@@ -57,22 +59,22 @@ pub(super) fn renew(input: &Issue, sequence: u64) -> Renew {
     }
 }
 pub(super) fn frame(id: u64, input: &impl Serialize) -> Vec<u8> {
-    ic_wire::encode(
+    auth_wire::encode(
         input,
-        ic_wire::Encoding::Frame {
+        auth_wire::Encoding::Frame {
             method: id,
-            direction: ic_wire::Direction::Request,
+            direction: auth_wire::Direction::Request,
         },
         issuer::REQUEST_LIMITS,
     )
     .unwrap()
 }
 pub(super) fn response(id: u64, bytes: &[u8]) -> Result<Status, Refusal> {
-    ic_wire::decode(
+    auth_wire::decode(
         bytes,
-        ic_wire::Encoding::Frame {
+        auth_wire::Encoding::Frame {
             method: id,
-            direction: ic_wire::Direction::Response,
+            direction: auth_wire::Direction::Response,
         },
         issuer::RESPONSE_LIMITS,
     )
@@ -179,8 +181,8 @@ async fn issuer_real_calls_bind_accounts_renewals_and_exact_results() {
         );
     }
     let mut denied = input.clone();
-    denied.grants = ic_wire::List::new(vec![DelegatedRoleGrant {
-        target: ic_wire::Text::new("admin".into()).unwrap(),
+    denied.grants = auth_wire::List::new(vec![DelegatedRoleGrant {
+        target: auth_wire::Text::new("admin".into()).unwrap(),
         scopes: input.grants.as_slice()[0].scopes.clone(),
     }])
     .unwrap();
@@ -251,7 +253,8 @@ async fn issuer_real_calls_bind_accounts_renewals_and_exact_results() {
     };
     let admission = SessionInput {
         credential,
-        scopes: ic_wire::List::new(input.grants.as_slice()[0].scopes.as_slice().to_vec()).unwrap(),
+        scopes: auth_wire::List::new(input.grants.as_slice()[0].scopes.as_slice().to_vec())
+            .unwrap(),
         ttl_secs: Some(30),
     };
     let bytes = pic
@@ -422,11 +425,11 @@ async fn issuer_bounds_expiry_and_pruning_never_create_replacement_results() {
         trailing.push(0);
         let mut oversized = bytes.clone();
         oversized.resize(issuer::REQUEST_LIMITS.bytes + 1, 0);
-        let wrong = ic_wire::encode(
+        let wrong = auth_wire::encode(
             &(),
-            ic_wire::Encoding::Frame {
+            auth_wire::Encoding::Frame {
                 method: id,
-                direction: ic_wire::Direction::Response,
+                direction: auth_wire::Direction::Response,
             },
             issuer::REQUEST_LIMITS,
         )

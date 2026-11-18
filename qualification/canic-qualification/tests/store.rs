@@ -1,4 +1,5 @@
 //! Canic application installation and Root integration with the standalone Store.
+use canic_management_protocol::stored::{STORE_CHUNK_LIMITS, STORE_LIMITS};
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
 use ic_wasm_store_protocol as store;
 use serde::{Serialize, de::DeserializeOwned};
@@ -59,7 +60,7 @@ impl Client<'_> {
                         method: store::INFO,
                         direction: ic_wire::Direction::Request,
                     },
-                    store::LIMITS,
+                    STORE_LIMITS,
                 )
                 .unwrap(),
             )
@@ -71,7 +72,7 @@ impl Client<'_> {
                 method: store::INFO,
                 direction: ic_wire::Direction::Response,
             },
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .unwrap()
     }
@@ -80,7 +81,7 @@ impl Client<'_> {
             "observe",
             store::STATUS,
             release,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap()
@@ -105,7 +106,7 @@ impl Client<'_> {
             "prepare",
             store::PREPARE,
             &manifest,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -118,7 +119,7 @@ impl Client<'_> {
                     index: index as u32,
                     bytes: bytes.to_vec(),
                 },
-                store::CHUNK_LIMITS,
+                STORE_CHUNK_LIMITS,
             )
             .await
             .unwrap();
@@ -127,7 +128,7 @@ impl Client<'_> {
             "publish",
             store::PUBLISH,
             &manifest.release,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -138,7 +139,7 @@ impl Client<'_> {
             "pin",
             store::PIN,
             pin,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap()
@@ -152,7 +153,7 @@ impl Client<'_> {
                 expires_at_ns: self.pic.get_time().await.as_nanos_since_unix_epoch()
                     + 300_000_000_000,
             },
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap()
@@ -191,7 +192,7 @@ async fn pins_survive_maintenance_and_cache_reconstruction_supports_install_and_
             "prepare_cache",
             store::PREPARE_CACHE,
             &request,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await;
     assert_eq!(absent, Err(store::CacheError::Pin(store::Error::NotFound)));
@@ -200,7 +201,7 @@ async fn pins_survive_maintenance_and_cache_reconstruction_supports_install_and_
     let mut changed = pin.clone();
     changed.manifest.hash[0] ^= 1;
     let refused: Result<store::PinReceipt, store::Error> = client
-        .update("pin", store::PIN, &changed, store::LIMITS)
+        .update("pin", store::PIN, &changed, STORE_LIMITS)
         .await;
     assert_eq!(refused, Err(store::Error::Conflict));
     assert!(
@@ -214,7 +215,7 @@ async fn pins_survive_maintenance_and_cache_reconstruction_supports_install_and_
                     method: store::PREPARE_CACHE,
                     direction: ic_wire::Direction::Request
                 },
-                store::LIMITS
+                STORE_LIMITS
             )
             .unwrap()
         )
@@ -230,7 +231,7 @@ async fn pins_survive_maintenance_and_cache_reconstruction_supports_install_and_
             "prepare_cache",
             store::PREPARE_CACHE,
             &expired,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await;
     assert_eq!(refused, Err(store::CacheError::Expired));
@@ -257,7 +258,7 @@ async fn pins_survive_maintenance_and_cache_reconstruction_supports_install_and_
         .unwrap();
     pic.start_canister(id, Some(operator)).await.unwrap();
     let observed: Result<store::PinReceipt, store::Error> = client
-        .update("observe_pin", store::OBSERVE_PIN, &pin, store::LIMITS)
+        .update("observe_pin", store::OBSERVE_PIN, &pin, STORE_LIMITS)
         .await;
     assert_eq!(observed.unwrap(), receipt);
     assert_eq!(

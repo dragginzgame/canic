@@ -1,6 +1,7 @@
 //! Root is the real admission caller; the fixture retains direct upgrade control explicitly.
 use super::{Client, artifacts, inject, maintain, readiness_tests, store, support};
 use canic_management_protocol::publication::{self, AdmissionRequest, Error};
+use canic_management_protocol::stored::STORE_LIMITS;
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
 use store::{AdmissionCommand as Command, MaintenanceAttempt};
 
@@ -36,7 +37,7 @@ async fn admission_fences_an_in_flight_cache_repair_without_losing_pins() {
                     method: store::PREPARE_CACHE,
                     direction: ic_wire::Direction::Request,
                 },
-                store::LIMITS,
+                STORE_LIMITS,
             )
             .unwrap(),
         )
@@ -54,7 +55,7 @@ async fn admission_fences_an_in_flight_cache_repair_without_losing_pins() {
                 "admission",
                 store::ADMISSION,
                 &command,
-                store::LIMITS,
+                STORE_LIMITS,
             )
             .await
             .unwrap();
@@ -66,7 +67,7 @@ async fn admission_fences_an_in_flight_cache_repair_without_losing_pins() {
             method: store::PREPARE_CACHE,
             direction: ic_wire::Direction::Response,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .unwrap();
     assert!(matches!(
@@ -76,7 +77,7 @@ async fn admission_fences_an_in_flight_cache_repair_without_losing_pins() {
         ))
     ));
     let ready: Result<store::CacheReady, store::CacheError> = supplier
-        .update("prepare_cache", store::PREPARE_CACHE, &input, store::LIMITS)
+        .update("prepare_cache", store::PREPARE_CACHE, &input, STORE_LIMITS)
         .await;
     assert_eq!(ready.unwrap().pin, pin);
     assert_eq!(
@@ -99,7 +100,7 @@ async fn send(root: &Client<'_>, input: &AdmissionRequest) -> publication::Admis
         "store_admission",
         publication::ADMISSION,
         input,
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .await
 }
@@ -121,7 +122,7 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
             "observe_custody",
             store::CUSTODY,
             &manifest.release,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await;
     let mut pending = manifest.clone();
@@ -133,7 +134,7 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
             "prepare",
             store::PREPARE,
             &pending,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -167,7 +168,7 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
             method: publication::ADMISSION,
             direction: ic_wire::Direction::Request,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .unwrap();
     assert!(
@@ -212,7 +213,7 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
     assert_eq!(send(&root, &close).await.unwrap(), Some(closed.clone()));
     let store_closed = pic.get_stable_memory(supplier.id).await;
     let blocked: Result<store::Status, store::Error> = supplier
-        .update("publish", store::PUBLISH, &manifest.release, store::LIMITS)
+        .update("publish", store::PUBLISH, &manifest.release, STORE_LIMITS)
         .await;
     assert_eq!(blocked, Err(store::Error::Closed));
     let cache: Result<store::CacheReady, store::CacheError> = supplier
@@ -223,7 +224,7 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
                 pin: pin.clone(),
                 expires_at_ns: close.expires_at_ns,
             },
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await;
     assert_eq!(cache, Err(store::CacheError::Pin(store::Error::Closed)));
@@ -232,7 +233,7 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
             "admission",
             store::ADMISSION,
             &Command::Activate(first.clone()),
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await;
     assert_eq!(wrong_owner, Err(store::Error::Conflict));
@@ -259,7 +260,7 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
             "observe_custody",
             store::CUSTODY,
             &manifest.release,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await;
     assert_eq!(after, custody);

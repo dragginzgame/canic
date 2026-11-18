@@ -1,6 +1,7 @@
 //! Application-owned, volatile test signer. No production key custody is claimed.
 use crate::{IssuerObservation, audience};
 use canic::auth::issuer::{Issue, Logout, Lookup, Refusal, Renew, Revoked, Status};
+use canic::auth::protocol::wire as auth_wire;
 use ic_auth::{
     issuer_memory::{
         IssueRequest, IssuedProof, IssuerAuthority, IssuerConfig, IssuerError, IssuerPolicy,
@@ -120,7 +121,7 @@ fn refused(error: IssuerError) -> Refusal {
     }
 }
 fn grants(
-    input: ic_wire::List<canic::auth::protocol::model::DelegatedRoleGrant, 16>,
+    input: auth_wire::List<canic::auth::protocol::model::DelegatedRoleGrant, 16>,
 ) -> Result<Vec<DelegatedRoleGrant>, Refusal> {
     input
         .into_vec()
@@ -179,9 +180,9 @@ fn status(value: Option<IssuerStatus<'_>>) -> Status {
     // Any representation failure after mutation traps the whole callback.
     Status::Issued {
         credential: canic::auth::protocol::model::PortableCredential {
-            claims: ic_wire::Bytes::new(result.claims.to_vec()).expect("bounded supplier claims"),
+            claims: auth_wire::Bytes::new(result.claims.to_vec()).expect("bounded supplier claims"),
             proof: canic::auth::protocol::model::PortableProof::Ed25519(
-                ic_wire::Bytes::new(signature.to_vec()).unwrap(),
+                auth_wire::Bytes::new(signature.to_vec()).unwrap(),
             ),
         },
         admission_deadline_ns: result.admission_deadline_ns,

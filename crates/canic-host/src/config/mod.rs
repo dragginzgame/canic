@@ -76,6 +76,25 @@ pub struct CanisterBinding {
     pub profile_manager: bool,
 }
 
+/// A local simulator can be declared before it has an address or trust anchor.
+/// Only a fully bound network can enter a deployment plan or journal.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(untagged)]
+pub enum FleetNetwork {
+    /// Existing network and trust data, with the same encoding as retained plans.
+    Bound(Network),
+    /// A local simulator that has not been started.
+    Unbound(UnboundLocal),
+}
+
+/// Exact declaration of a local fleet without runtime bindings.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "kind", deny_unknown_fields)]
+pub enum UnboundLocal {
+    /// Empty by design. Partial trust data is invalid.
+    Local {},
+}
+
 /// Deployment inputs for one instance of an app's shared definitions.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -83,15 +102,20 @@ pub struct FleetDeclaration {
     /// Optional fleet-owned bounds for the declared shard component.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shard_pool: Option<ShardPoolConfig>,
-    /// Optional exact Auth enrollment; never inferred from roles.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auth: Option<crate::AuthConfig>,
+    /// Exact receiver enrollments. A historical single table is also accepted.
+    #[serde(
+        default,
+        deserialize_with = "crate::auth::declarations",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub auth: Vec<crate::AuthConfig>,
     /// Explicit deployment network and trust anchor.
-    pub network: Network,
+    pub network: FleetNetwork,
     /// Journal path relative to the config file unless absolute.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub journal: Option<PathBuf>,
     /// Existing identities by app definition name; absent entries remain unbound.
+    #[serde(default)]
     pub canisters: BTreeMap<String, CanisterBinding>,
 }
 
@@ -102,9 +126,13 @@ pub struct FleetConfig {
     /// Optional fleet-owned bounds for the declared shard component.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shard_pool: Option<ShardPoolConfig>,
-    /// Optional exact Auth enrollment; never inferred from roles.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub auth: Option<crate::AuthConfig>,
+    /// Exact receiver enrollments. A historical single table is also accepted.
+    #[serde(
+        default,
+        deserialize_with = "crate::auth::declarations",
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub auth: Vec<crate::AuthConfig>,
     /// Explicit deployment network and trust anchor.
     pub network: Network,
     /// Existing journal, relative to the configuration file unless absolute.
@@ -213,6 +241,21 @@ impl Config {
             }
             for (fleet, config) in &definition.fleets {
                 name(fleet)?;
+                if matches!(config.network, FleetNetwork::Unbound(_)) {
+                    if !config.canisters.is_empty() || !config.auth.is_empty() {
+                        return Err(Error::Invalid(
+                            "bind the local network before adding identities or Auth enrollment"
+                                .into(),
+                        ));
+                    }
+                    let slots = definition.resolve_slots(config)?;
+                    validate_canisters(&slots)?;
+                    if let Some(pool) = &config.shard_pool {
+                        pool.validate(&slots)?;
+                    }
+                    total += slots.len();
+                    continue;
+                }
                 let config = definition.resolve(config)?;
                 config.validate()?;
                 total += config.canisters.len();
@@ -264,37 +307,51 @@ impl Config {
 
 impl AppConfig {
     fn resolve(&self, fleet: &FleetDeclaration) -> Result<FleetConfig> {
-        let mut canisters = self.resolve_canisters(&fleet.canisters);
-        for (slot, binding) in &fleet.canisters {
-            if canisters.contains_key(slot) {
-                continue;
-            }
-            let role = match &fleet.shard_pool {
-                Some(pool) if slot == &pool.root => "root",
-                Some(pool) if slot == &pool.store => "wasm-store",
-                _ => return Err(Error::Invalid("fleet binding must name an app canister definition or supplied shard infrastructure".into())),
-            };
-            if binding.profile_manager {
-                return Err(Error::Invalid(
-                    "supplied pool infrastructure cannot be a profile manager".into(),
-                ));
-            }
-            canisters.insert(
-                slot.clone(),
-                CanisterConfig {
-                    id: Some(binding.id.clone()),
-                    role: Some(role.into()),
-                    ..CanisterConfig::default()
-                },
-            );
-        }
+        let FleetNetwork::Bound(network) = &fleet.network else {
+            return Err(Error::Invalid(
+                "local fleet requires its simulator URL, trust anchor and routing binding".into(),
+            ));
+        };
         Ok(FleetConfig {
             shard_pool: fleet.shard_pool.clone(),
             auth: fleet.auth.clone(),
-            network: fleet.network.clone(),
+            network: network.clone(),
             journal: fleet.journal.clone(),
-            canisters,
+            canisters: self.resolve_slots(fleet)?,
         })
+    }
+
+    fn resolve_slots(&self, fleet: &FleetDeclaration) -> Result<BTreeMap<String, CanisterConfig>> {
+        let mut canisters = self.resolve_canisters(&fleet.canisters);
+        if let Some(pool) = &fleet.shard_pool {
+            for (slot, role) in [(&pool.root, "root"), (&pool.store, "wasm-store")] {
+                if self.canisters.contains_key(slot) {
+                    continue;
+                }
+                let binding = fleet.canisters.get(slot);
+                if binding.is_some_and(|b| b.profile_manager) {
+                    return Err(Error::Invalid(
+                        "supplied pool infrastructure cannot be a profile manager".into(),
+                    ));
+                }
+                canisters.insert(
+                    slot.clone(),
+                    CanisterConfig {
+                        role: Some(role.into()),
+                        id: binding.map(|b| b.id.clone()),
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+        if fleet
+            .canisters
+            .keys()
+            .any(|slot| !canisters.contains_key(slot))
+        {
+            return Err(Error::Invalid("fleet binding must name an app canister definition or supplied shard infrastructure".into()));
+        }
+        Ok(canisters)
     }
 
     fn resolve_canisters(
@@ -351,10 +408,16 @@ fn select<'a, T>(
 impl FleetConfig {
     fn validate(&self) -> Result<()> {
         if let Some(pool) = &self.shard_pool {
-            pool.validate(self)?;
+            pool.validate(&self.canisters)?;
         }
-        if let Some(auth) = &self.auth {
-            auth.grant(self)?;
+        if self.auth.len() > canic::auth::enrollment::MAX_RECEIVERS {
+            return Err(Error::Invalid("too many Auth receiver declarations".into()));
+        }
+        let mut receivers = std::collections::BTreeSet::new();
+        for auth in &self.auth {
+            if !receivers.insert(auth.grant(self)?.receiver) {
+                return Err(Error::Invalid("duplicate Auth receiver binding".into()));
+            }
         }
         self.network.validate()?;
         if self
@@ -676,8 +739,8 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
             fleet.into(),
             FleetDeclaration {
                 shard_pool: None,
-                auth: None,
-                network,
+                auth: Vec::new(),
+                network: FleetNetwork::Bound(network),
                 journal: None,
                 canisters: BTreeMap::new(),
             },

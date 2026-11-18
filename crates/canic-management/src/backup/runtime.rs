@@ -84,13 +84,27 @@ pub async fn execute(request: Request) -> Result<Record, Error> {
     if !found || !engine::snapshot_idle() || engine::store_maintenance::observe().is_some() {
         return Err(Error::Busy);
     }
-    let call = Call::new(
-        Principal::management_canister(),
-        &binding.method,
-        Wait::Unbounded,
-    )
-    .owned_args(bytes)
-    .cycles(u128::from(binding.cycles));
+    read(|ledger| ledger.admit_recovery(&request))?;
+    if matches!(
+        binding.step,
+        canic_management_protocol::backup::Step::AdmitAllocation
+            | canic_management_protocol::backup::Step::AdmitLoad
+    ) {
+        return mutate(|ledger| {
+            ledger.reserve(binding.clone())?;
+            ledger.complete(&binding, Outcome::Reply(Vec::new()));
+            ledger.lookup(&binding)
+        });
+    }
+    let command = binding.step.command(op.kind);
+    let recipient = if command.is_some() {
+        Principal::from_text(&op.target).map_err(|_| Error::Invalid)?
+    } else {
+        Principal::management_canister()
+    };
+    let call = Call::new(recipient, &binding.method, Wait::Unbounded)
+        .owned_args(bytes)
+        .cycles(u128::from(binding.cycles));
     let required = call.required_cycles().map_err(|_| Error::Capacity)?;
     if required > u128::from(binding.cycle_limit)
         || ic_platform_runtime::raw::liquid_cycle_balance() < engine::reserved_cycles() + required
@@ -105,7 +119,19 @@ pub async fn execute(request: Request) -> Result<Record, Error> {
     fault(1);
     let outcome = match completion {
         Ok(c) => match c.into_parts().0 {
-            CallOutcome::Reply(bytes) => Outcome::Reply(bytes),
+            CallOutcome::Reply(bytes) => {
+                if command.is_some_and(|c| {
+                    canic::recovery::encode(c, ic_wire::Direction::Response)
+                        .ok()
+                        .as_ref()
+                        != Some(&bytes)
+                }) {
+                    // The child may have applied the command despite a bad acknowledgement.
+                    Outcome::Pending
+                } else {
+                    Outcome::Reply(bytes)
+                }
+            }
             CallOutcome::Rejected(r) => Outcome::Rejected(r.code(), r.message().into()),
             CallOutcome::OutcomeUnknown(_) => Outcome::Pending,
         },

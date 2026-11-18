@@ -226,7 +226,7 @@ if ! metadata="$(
     RUSTUP_AUTO_INSTALL=0 cargo metadata \
         --format-version 1 \
         --manifest-path "${manifest_path}" \
-        --locked --offline \
+        --locked \
         --no-deps
 )"; then
     echo "error: unable to resolve Cargo workspace metadata" >&2

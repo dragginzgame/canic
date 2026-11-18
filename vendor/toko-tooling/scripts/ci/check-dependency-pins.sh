@@ -113,7 +113,7 @@ while IFS= read -r -d '' path; do
         "$temporary/document" >> "$temporary/findings"
     if [[ "$kind" == cargo ]]; then
         command -v cargo >/dev/null || fail 'Cargo is required for workspace discovery'
-        workspace="$(CARGO_NET_OFFLINE=true RUSTUP_AUTO_INSTALL=0 cargo locate-project --workspace --message-format plain --manifest-path "$path")" || fail "cannot locate Cargo workspace for $path; prepare its selected toolchain explicitly"
+        workspace="$(RUSTUP_AUTO_INSTALL=0 cargo locate-project --workspace --message-format plain --manifest-path "$path")" || fail "cannot locate Cargo workspace for $path; prepare its selected toolchain explicitly"
         workspace_root="$(cd -P "${workspace%/*}" && printf '%s/.' "$PWD")"
         workspace_root="${workspace_root%/.}"
         case "$workspace_root/" in "$ROOT/"*) ;; *) fail "workspace root escapes consumer: $path" ;; esac
@@ -138,9 +138,9 @@ while IFS= read -r -d '' path; do
                 elif [[ "$workspace_root" == "$ROOT/qualification" && ! -e "$ROOT/ci/cargo-release-groups.json" ]]; then
                     # No release groups are required for a private qualification workspace.
                     # Admit Cargo's membership/privacy and reverse local edges, not a path label.
-                    CARGO_NET_OFFLINE=true RUSTUP_AUTO_INSTALL=0 cargo metadata --no-deps --format-version 1 \
+                    RUSTUP_AUTO_INSTALL=0 cargo metadata --no-deps --format-version 1 \
                         --manifest-path "$ROOT/Cargo.toml" > "$temporary/product.json" || fail 'product workspace admission failed'
-                    CARGO_NET_OFFLINE=true RUSTUP_AUTO_INSTALL=0 cargo metadata --no-deps --format-version 1 \
+                    RUSTUP_AUTO_INSTALL=0 cargo metadata --no-deps --format-version 1 \
                         --manifest-path "$workspace" > "$temporary/qualification.json" || fail 'qualification workspace admission failed'
                     group_versions="$(jq -ce -L "$SCRIPT_DIR" --slurpfile product "$temporary/product.json" \
                         --arg directory "$workspace_root" 'include "dependency-pins"; independent_qualification_versions($product[0]; $directory)' \

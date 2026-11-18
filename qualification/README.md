@@ -94,7 +94,24 @@ and `with_root_codec` store. The codec binds each step to its original managemen
 arguments and checks the returned binding before exposing the retained result.
 The fixture drops the take and load replies, reopens the operations, uses one
 explicit lookup apiece, restores the original bytes and checks stopped completion.
-The restore journal is reopened again with the replica gateway stopped.
+Root fences and stops the counter for each operation. The app checkpoints value
+1 under fence 1, advances to value 2, and closes under fence 2 before rewind.
+Host derives operator calls with `canic_host::backup::recovery_request`.
+Its `CounterRecoveryGuard` checks authenticated Root receipts locally. Root
+checks its ledger at dispatch. Allocation and load need separate operator
+admissions. After start, the restored counter reports value 1 and fence 1.
+Replaying the old successful opening leaves writes closed. The operator accepts
+generation 3, verifies the counter is still fenced, then opens it explicitly.
+Only then does the next public increment succeed. The fixture reconstructs
+guard evidence by looking up the original requests and reopens the completed
+Backup journal with the gateway stopped.
+
+The test uses Testkit operator ingress for these lifecycle calls and the
+external signer for Backup's snapshot procedure. The one-capture/one-restore
+ledger has no reusable generation slots. Unresolved callbacks stay blocked.
+The snapshot fault test also exercises application rejection and a child fence
+whose acknowledgement was lost across a Root upgrade. The app has no timers,
+outbound work or other participants to reconcile.
 
 These are local Linux qualification routes. The provider requires a
 keyring-backed identity. Password-encrypted ICP identities use a different
@@ -103,6 +120,9 @@ provider death, deadline expiry and cancellation after launch. Each failed captu
 retains one signing reservation, sends zero replica requests and refuses to sign
 again after journal reopen. Real signed envelopes also exercise method, argument,
 expiry, sender and original-status binding checks for [Canic #5](https://github.com/dragginzgame/canic/issues/5).
+For an original-request status lookup, the adapter returns the exact signed
+envelope when the request matches. It rejects a different request ID and also
+rejects a one-nanosecond change to the requested ingress expiry.
 Root-managed execution and application fencing/reopening have their own
 acceptance in [Canic #6](https://github.com/dragginzgame/canic/issues/6) and
 [Canic #7](https://github.com/dragginzgame/canic/issues/7).
@@ -270,6 +290,18 @@ issuer result delayed until after logout. A replacement login uses a fresh journ
 and key, retaining the revoked login's journal and issuer slot. Delayed old-key
 disposal and replayed old revocations preserve the replacement and profile owner;
 active-login disposal refuses before invoking the fixture's custody callback.
+The separate single-Root installed cases transfer the shard's sole controller
+to Root and keep the hub under its operator. Each receiver explicitly pulls
+its grant. Both revocation orders reject reads and fresh admissions at the
+refreshed receiver while the other keeps its original session. The CLI journey
+plans and applies both grants in one journal and targets revocation by original
+operation. The full-Root case includes revoked slots in the capacity limit.
+
+```sh
+bash scripts/dev/test-auth.sh single_root
+bash scripts/dev/test-auth.sh cli_operator_controlled_receiver
+```
+
 An admitted read-only session cannot write. Revoking one real Root grant and
 refreshing its receiver defeats cached browser readiness and an exact configuration
 retry without affecting the other receiver. This does not claim instant remote revocation.

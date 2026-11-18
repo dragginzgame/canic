@@ -7,6 +7,144 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## IC Wire 0.25.0 — 2026-11-18
+
+Canic and its qualification workspace now depend directly on registry IC Wire
+0.25.0. Their lockfiles also select 0.24.6 through IC Auth 0.47.4, IC Auth Wire
+0.43.0, Blob 0.105.0 and the Wasm Store protocol 0.4.1. Auth's supplier types
+and TypeScript schema registry use the same re-exported Wire crate. Regenerating
+the browser sources yielded an empty diff. Canic projects the Store's complete
+metadata and chunk budgets from the published constants into its codec.
+
+The installed counter preservation test also ran with the retained 0.24.6
+counter as its original executable (SHA-256
+`79419fc0e85e89c112e86be122a0eaa7041a03ded0ee0f20edb68e9aa74198f3`)
+and the 0.25.0 v2 candidate
+(`02d0fd388cb1521535380a17b5fdb5ddbabd60f7886ea86ba401ab804bddb2e7`).
+The populated value, installation authority and closed fence survived.
+The rejected and incompatible candidates preserved the original state.
+Installed validation passed both Backup routes, the Root callback-loss and
+upgrade case, 34 Store tests, 20 Auth tests and 10 Blob tests. All seven
+browser-client tests and the repository lint gate also passed.
+
+## Concurrent Wasm build outputs — 2026-11-18
+
+Cargo 1.100 reports the same final cdylib path for different feature selections.
+Canic now gives each Cargo invocation a private target directory for its final
+outputs and shares Cargo's configured build directory for intermediates. The
+artifact report and publication use the same bounded read. The installed
+`make counter-test` launches the base and incompatible variants together, then
+independently inspects both returned paths and compares their hashes with the
+build receipts. The installed counter accepts its compatible upgrade and refuses
+the incompatible one.
+
+## Fenced recovery of the managed counter — 2026-11-18
+
+The maintainer selected the installing Root to retain generations and mediate
+explicit operator acceptance and opening. Reused the legacy checkpoint and
+failed-callback research recorded under **First Root-owned child upgrade**.
+The local checkout based on `1e1bb59` selected IC Backup 0.105.6, IC Host Sign
+0.1.0, IC Storage 0.78.2 and IC Testkit 0.110.0. The existing bounded snapshot
+ledger holds original application and management outcomes outside the counter.
+
+`make backup-signer-test` passed both installed routes. The counter started
+at restored value 1, refused an increment after replay of the old capture
+opening, remained fenced after acceptance, and incremented to 2 only after the
+explicit restore opening. `bash scripts/dev/test-root.sh snapshot::` passed
+9 engine tests, 3 protocol tests and the installed fault rehearsal, including
+rejected application maintenance and an applied fence with a lost callback
+whose unresolved slot survived Root upgrade.
+
+`make counter-test` passed serially. During overlapping fixture builds the
+base and incompatible outputs had the same SHA-256; a serial rebuild produced
+distinct artifacts and the incompatible upgrade was refused. Concurrent
+variant build isolation remains a separate artifact-builder concern.
+The installed CLI counter regression also passed. This evidence covers one
+operator, one existing child, and one capture/restore pair. The demo counter
+has no timers, outbound effects or distributed participants.
+
+## Independent hub and shard grants under one Root — 2026-11-18
+
+On the local working tree based on `1e1bb590`, the installed Auth suite passed
+20 cases. The new single-Root witnesses transferred a shard to Root as sole
+controller, leaving the hub under the operator. The former installer could
+no longer refresh the shard directly. A distinct caller could neither
+configure nor revoke grants nor trigger a protected refresh. Neither receiver
+acquired a session from the other's admission. After either grant was revoked
+and its receiver refreshed, a fresh login and the existing session both
+returned authority-unavailable there. The other receiver still served its
+existing session and admitted the fresh login.
+
+The capacity witness filled 32 slots, revoked one, and checked exact retries,
+conflict refusal and refusal of a 33rd principal. The CLI witness loaded the
+old single-table declaration, retained the same hub operation when a second
+table was added, and independently applied and revoked the shard approval.
+The existing two-Root Chromium 156.0.8078.4 journey passed all eleven cases.
+
+| Installed Wasm | SHA-256 |
+| --- | --- |
+| Auth-enabled Root | `bb39c89659b6599aacd18f04e9ebc0f06e9b84da4ff9169eabc0d951859d01b2` |
+| Auth receiver witness | `c684a67b60b41d92bd34043722b21ed73c0545ed40e1f807a17a00f42da21e42` |
+| Auth profile browser witness | `94e87583688cebd84bfa78edf08c69e78711545beb250b793fe57d7642ff6561` |
+
+## Auth admission reply recovery — 2026-11-18
+
+The installed Ed25519 profile journey passed eleven cases in 37.31 seconds
+with headless Chromium 156.0.8078.4. The fixture dropped an authenticated
+receiver reply before the coordinator saw it and closed the renderer. With
+the same IndexedDB journal, the next renderer sent byte-identical admission
+arguments and received the original receipt bytes, including the session
+expiry. The first renderer performed zero profile writes. The second wrote
+once after recovery. The independent canister observations still counted six
+signatures, six issuer operations, five logins and two committed writes across
+the complete journey.
+
+Root and profile Wasms matched the hashes in the renewal recovery entry.
+The updated browser fixture SHA-256 was
+`8e26abe661b57c85d8edf2e7ec1f53444d8805552061f177fa7c52078122b6c6`
+and its runner was
+`404853804e5daec7c0bb4d5279d059d0d1cd5b5e8b1807f4ac3b86ecae2372a4`.
+
+## Package publication admission and retry — 2026-11-18
+
+A clean local checkout with an empty Cargo home fetched both committed locks
+and passed Testkit's prepared-server check. Missing and non-directory simulator
+paths failed before fetch. A substituted executable failed Testkit's checksum.
+An explicit offline cold cache reported the missing `ic-wire` dependency.
+The Blob metadata command retained Cargo's diagnostic and exit 101.
+
+On Linux with prepared Cargo build outputs, the installed effect group took
+98.24 seconds to run creation, funding and maintenance before an injected
+pre-upload exit 42. The retry took 7.15 seconds, including Cargo preparation
+and verification of all three reused proofs. These timings cover the effect
+group only. A separate CI regression failed a stage, retried it with the
+same executable, and verified fresh execution after a changed input and after
+damage to a successful proof. Full CI and registry uploads were outside this
+rehearsal.
+
+## Auth renewal recovery — 2026-11-18
+
+On the 0.222.0 working tree, `make auth-test` passed 17 installed cases and
+three native enrollment cases. Pruning removed both completed issuer operations
+while their login remained live. Lookup of renewal sequence one returned
+unresolved, replay was refused, and the signature count stayed at two. Sequence
+two produced the third signature under the original login deadline.
+
+The installed profile journey passed all eleven cases in headless Chromium
+156.0.8078.4. After the renewal reply was discarded, a new renderer opened the
+same IndexedDB journal and performed one lookup for sequence one, with zero
+issue or renew calls. Its recovered bytes and admission deadline matched the
+discarded response. The independent installed counters remained six signatures,
+six operations, five logins and two committed profile writes.
+
+| Qualified input | SHA-256 |
+| --- | --- |
+| Root Wasm | `8cf76c00ea1f3066768add391fc447e89d27ed096144e823f41bb4eeef4a923a` |
+| Profile Wasm | `4d099363b7cc84639ea43fb7fe2e06a717d448d830d9fc019ce0d36d75344ee5` |
+| Receiver Wasm | `b4274228d29d0b494081bfd03ef3d2c7343d290e5663668929706e5682537e6e` |
+| Browser fixture profile.mjs | `d1e2cb9655589606358e0d7f9ae16af95727c47f7bee94af24a23aa4bd6df35e` |
+| Browser runner run.mjs | `25cf72555aa98e40faa8d287687f6657f714875feb81de4ebeef20f7c40d2954` |
+
 ## Operator-controlled Auth receiver — 2026-11-18
 
 Both controller arrangements passed the installed CLI plan, apply, revocation and

@@ -74,3 +74,159 @@ pub(super) async fn install(
     );
     (root, child, root_wasm, child_wasm)
 }
+
+/// Retain the original request before submission. After restart only ask Root for
+/// its original outcome; absence of that outcome cannot authorize replacement.
+pub(super) async fn act(
+    pic: &PocketIc,
+    caller: CanisterId,
+    plan: OperationPlan<'_>,
+    step: Step,
+    guard: &std::cell::RefCell<CounterRecoveryGuard>,
+) {
+    use canic_management_protocol::backup as snapshot;
+    use std::io::Write;
+    let directory = PathBuf::from(std::env::var_os("CANIC_BACKUP_FIXTURE").unwrap());
+    let path = directory.join(format!("{}-{step:?}.wire", plan.operation_id()));
+    let frame = |direction| ic_wire::Encoding::Frame {
+        method: snapshot::EXECUTE,
+        direction,
+    };
+    let first = !path.exists();
+    if first {
+        let expiry = pic.get_time().await.as_nanos_since_unix_epoch() + 120_000_000_000;
+        let request = canic_host::backup::recovery_request(plan, step, expiry).unwrap();
+        let mut file = fs::File::create_new(&path).unwrap();
+        file.write_all(
+            &ic_wire::encode(
+                &request,
+                frame(ic_wire::Direction::Request),
+                snapshot::LIMITS,
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        file.sync_all().unwrap();
+        fs::File::open(&directory).unwrap().sync_all().unwrap();
+    }
+    let bytes = fs::read(path).unwrap();
+    let original: snapshot::Request =
+        ic_wire::decode(&bytes, frame(ic_wire::Direction::Request), snapshot::LIMITS).unwrap();
+    let binding = original.prepare().unwrap().0;
+    let root = CanisterId::from_text(&binding.operation.manager).unwrap();
+    if first {
+        let reply = pic
+            .update_call(root, caller, "snapshot_execute", bytes)
+            .await
+            .unwrap();
+        assert!(
+            snapshot::Exchange::Execute
+                .decode_response(&binding, &reply)
+                .unwrap()
+                .is_ok(),
+            "Root refused {step:?}"
+        );
+    }
+    let lookup = ic_wire::encode(
+        &binding,
+        ic_wire::Encoding::Frame {
+            method: snapshot::LOOKUP,
+            direction: ic_wire::Direction::Request,
+        },
+        snapshot::LIMITS,
+    )
+    .unwrap();
+    let bytes = pic
+        .update_call(root, caller, "snapshot_lookup", lookup)
+        .await
+        .unwrap();
+    let record = snapshot::Exchange::Lookup
+        .decode_response(&binding, &bytes)
+        .unwrap()
+        .unwrap();
+    guard
+        .borrow_mut()
+        .observe(plan, &original, &record)
+        .unwrap();
+}
+
+/// Resubmit the original capture opening to Root after rollback. A retained
+/// successful receipt must have no new effect on the running child.
+pub(super) async fn replay_capture_open(
+    pic: &PocketIc,
+    caller: CanisterId,
+    root: CanisterId,
+    plan: &ic_backup::store::CapturePlan,
+) {
+    use canic_management_protocol::backup as s;
+    let directory = PathBuf::from(std::env::var_os("CANIC_BACKUP_FIXTURE").unwrap());
+    let bytes =
+        fs::read(directory.join(format!("{}-Open.wire", plan.request().operation_id))).unwrap();
+    let original: s::Request = ic_wire::decode(
+        &bytes,
+        ic_wire::Encoding::Frame {
+            method: s::EXECUTE,
+            direction: ic_wire::Direction::Request,
+        },
+        s::LIMITS,
+    )
+    .unwrap();
+    let binding = original.prepare().unwrap().0;
+    let result = pic
+        .update_call(root, caller, "snapshot_execute", bytes)
+        .await
+        .unwrap();
+    assert!(matches!(
+        s::Exchange::Execute
+            .decode_response(&binding, &result)
+            .unwrap()
+            .unwrap()
+            .outcome,
+        s::Outcome::Reply(_)
+    ));
+}
+
+/// A new opening cannot be issued before acceptance, even by the correct operator.
+pub(super) async fn premature_open(
+    pic: &PocketIc,
+    caller: CanisterId,
+    root: CanisterId,
+    restore: OperationPlan<'_>,
+) {
+    use canic_management_protocol::backup as s;
+    let req = canic_host::backup::recovery_request(
+        restore,
+        Step::Open,
+        pic.get_time().await.as_nanos_since_unix_epoch() + 60_000_000_000,
+    )
+    .unwrap();
+    let frame = ic_wire::encode(
+        &req,
+        ic_wire::Encoding::Frame {
+            method: s::EXECUTE,
+            direction: ic_wire::Direction::Request,
+        },
+        s::LIMITS,
+    )
+    .unwrap();
+    assert!(
+        pic.update_call(
+            root,
+            CanisterId::anonymous(),
+            "snapshot_execute",
+            frame.clone()
+        )
+        .await
+        .is_err()
+    );
+    let result = pic
+        .update_call(root, caller, "snapshot_execute", frame)
+        .await
+        .unwrap();
+    assert_eq!(
+        s::Exchange::Execute
+            .decode_response(&req.prepare().unwrap().0, &result)
+            .unwrap(),
+        Err(s::Error::Busy)
+    );
+}

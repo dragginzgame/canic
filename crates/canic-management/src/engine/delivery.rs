@@ -1,6 +1,7 @@
 //! Artifact delivery under the existing child journal. Store bytes never enter Root.
 use super::{MANAGEMENT_LIMITS, STATE, State, failure, management, response};
 use crate::storage::Artifact;
+use canic_management_protocol::stored::STORE_LIMITS;
 use canic_management_protocol::{Failure, Refusal, STAGE_LIMITS, children::ChildId, stored};
 use ic_platform_protocol::{
     management::CanisterArgs,
@@ -189,7 +190,7 @@ async fn call<T: Serialize, R: DeserializeOwned>(
             method: id,
             direction: ic_wire::Direction::Request,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .expect("Store request");
     let reply = Call::new(
@@ -208,7 +209,7 @@ async fn call<T: Serialize, R: DeserializeOwned>(
             method: id,
             direction: ic_wire::Direction::Response,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .map_err(|_| Failure::InvalidReply)
 }
@@ -263,7 +264,7 @@ impl Upload {
                     method: store::PREPARE_CACHE,
                     direction: ic_wire::Direction::Response,
                 },
-                store::LIMITS,
+                STORE_LIMITS,
             )
             .map_err(|_| Failure::InvalidReply)?;
             let ready = ready.map_err(|_| Failure::Uncertain)?;
@@ -297,7 +298,7 @@ pub(super) fn upload(slot: ChildId, upgrade: bool, hash: [u8; 32], expires: u64)
                 method: store::PREPARE_CACHE,
                 direction: ic_wire::Direction::Request,
             },
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .expect("Store cache request")
     } else {

@@ -7,9 +7,9 @@ pub const EXECUTE: u64 = 46;
 /// Last-dispatch window, independent of any child deployment approval.
 pub const MAX_WINDOW_NS: u64 = 300_000_000_000;
 /// One transient chunk plus target/deadline metadata; no durable Root payload.
-pub const REQUEST_LIMITS: ic_wire::Limits = store::CHUNK_LIMITS;
+pub const REQUEST_LIMITS: ic_wire::Limits = crate::stored::STORE_CHUNK_LIMITS;
 /// Store metadata with an explicit transport-uncertainty result.
-pub const RESPONSE_LIMITS: ic_wire::Limits = store::LIMITS;
+pub const RESPONSE_LIMITS: ic_wire::Limits = crate::stored::STORE_LIMITS;
 
 /// Fixed publication operations, not arbitrary methods or management forwarding.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -100,7 +100,7 @@ pub type AdmissionReply = Result<Option<store::Admission>, Error>;
 /// One exact removal through Root; no retry, restoration or pin-release authority.
 pub const REMOVE: u64 = 60;
 /// One full manifest plus target/deadline; no transient Wasm bytes.
-pub const REMOVAL_LIMITS: ic_wire::Limits = store::LIMITS;
+pub const REMOVAL_LIMITS: ic_wire::Limits = RESPONSE_LIMITS;
 /// Published deletion and incomplete-upload cancellation have different supplier contracts.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Removal {

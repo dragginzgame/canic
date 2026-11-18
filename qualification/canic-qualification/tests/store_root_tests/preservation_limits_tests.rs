@@ -3,6 +3,7 @@ use super::{
     Client, artifacts, maintain, maintenance_tests, quiescence_tests, readiness_tests,
     recover_store, store, support,
 };
+use canic_management_protocol::stored::STORE_LIMITS;
 use canic_management_protocol::{self as management, store_maintenance as wire};
 use ic_testkit::pocket_ic::CanisterSettings;
 
@@ -18,7 +19,7 @@ async fn page(
                 attempt: attempt.clone(),
                 after: None,
             },
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap()
@@ -36,7 +37,7 @@ async fn versioned_page(
                 attempt: attempt.clone(),
                 after: None,
             },
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap()
@@ -70,7 +71,7 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
                 "prepare",
                 store::PREPARE,
                 manifest,
-                store::LIMITS,
+                STORE_LIMITS,
             )
             .await
             .unwrap();
@@ -80,7 +81,7 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
             "cancel",
             store::CANCEL,
             &removed,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -93,7 +94,7 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
             "admission",
             store::ADMISSION,
             &store::AdmissionCommand::Close(attempt.clone()),
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -111,7 +112,7 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
             "admission",
             store::ADMISSION,
             &store::AdmissionCommand::Activate(attempt),
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -120,7 +121,7 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
             "prepare",
             store::PREPARE,
             &removed,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -133,7 +134,7 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
             "admission",
             store::ADMISSION,
             &store::AdmissionCommand::Close(attempt.clone()),
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -153,7 +154,7 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
             "tombstones",
             store::TOMBSTONES,
             &None::<store::Release>,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -184,7 +185,7 @@ async fn historical_scan_keeps_its_refusal_and_digest_after_refused_root_upgrade
             "delete",
             store::DELETE,
             &removed,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -248,7 +249,7 @@ async fn root_preserves_removed_entries_and_cursor_across_both_owner_upgrades() 
             "delete",
             store::DELETE,
             &removed,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -267,7 +268,7 @@ async fn root_preserves_removed_entries_and_cursor_across_both_owner_upgrades() 
             "prepare",
             store::PREPARE,
             &pending,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -276,7 +277,7 @@ async fn root_preserves_removed_entries_and_cursor_across_both_owner_upgrades() 
             "cancel",
             store::CANCEL,
             &pending,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();

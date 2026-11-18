@@ -1,5 +1,6 @@
 //! Root retains Store maintenance intent and evidence; Host retains replacement bytes.
 use super::{MANAGEMENT_LIMITS, OBSERVING, STATE, State, api, digest, management};
+use canic_management_protocol::stored::STORE_LIMITS;
 use canic_management_protocol::{
     Failure, Refusal,
     store_maintenance::{Approval, MAX_UPGRADES, Phase, Scan, Status},
@@ -292,7 +293,7 @@ fn admission_frame(command: &store::AdmissionCommand) -> Vec<u8> {
             method: store::ADMISSION,
             direction: ic_wire::Direction::Request,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .expect("admission request")
 }
@@ -314,7 +315,7 @@ async fn admission(
             method: store::ADMISSION,
             direction: ic_wire::Direction::Response,
         },
-        store::LIMITS,
+        STORE_LIMITS,
     )
     .map_err(|_| Failure::InvalidReply)?;
     let expected = store::Admission {

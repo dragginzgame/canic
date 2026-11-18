@@ -3,6 +3,7 @@ use super::{
     Client, artifacts, inject, maintain, quiescence_tests, readiness_tests, recover_store, store,
     support,
 };
+use canic_management_protocol::stored::STORE_LIMITS;
 use canic_management_protocol::{
     self as management, publication,
     store_maintenance::{self as wire, Approval, Phase, Status},
@@ -222,7 +223,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
             "prepare",
             store::PREPARE,
             &alias,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -252,7 +253,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
             "prepare",
             store::PREPARE,
             &pending,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap();
@@ -355,7 +356,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
             "store_admission",
             publication::ADMISSION,
             &raw,
-            store::LIMITS
+            STORE_LIMITS
         )
         .await,
         Err(publication::Error::Maintenance)
@@ -448,7 +449,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
             "store_admission",
             publication::ADMISSION,
             &raw,
-            store::LIMITS,
+            STORE_LIMITS,
         )
         .await
         .unwrap()
@@ -463,7 +464,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
             "store_admission",
             publication::ADMISSION,
             &raw,
-            store::LIMITS
+            STORE_LIMITS
         )
         .await
         .unwrap(),

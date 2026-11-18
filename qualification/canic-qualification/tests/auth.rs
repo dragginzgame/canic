@@ -3,6 +3,8 @@ mod auth_enrollment_tests;
 mod auth_host_tests;
 mod auth_issuer_tests;
 mod auth_logout_tests;
+mod auth_single_root_tests;
+use canic::auth::protocol::wire as auth_wire;
 use canic_auth_witness::{
     KEY, LIMITS, OBSERVE, Observation, audience, enrollment,
     protocol::{
@@ -26,9 +28,14 @@ use std::{path::PathBuf, time::Duration};
 const SECOND: u64 = 1_000_000_000;
 
 fn input(now: u64) -> (CanisterId, SessionInput) {
+    input_for_device(now, 9, 0)
+}
+fn input_for_device(now: u64, device: u8, slot: u8) -> (CanisterId, SessionInput) {
     let key = SigningKey::from_bytes(&[7; 32]);
     assert_eq!(key.verifying_key().to_bytes(), KEY);
-    let browser = SigningKey::from_bytes(&[9; 32]).verifying_key().to_bytes();
+    let browser = SigningKey::from_bytes(&[device; 32])
+        .verifying_key()
+        .to_bytes();
     let claims = encode_claims(&PortableClaims {
         mechanism: PortableMechanism::Ed25519,
         audience: audience(),
@@ -36,13 +43,13 @@ fn input(now: u64) -> (CanisterId, SessionInput) {
         key_binding_id: Ed25519Key::new(KEY).unwrap().binding(),
         browser_public_key: browser,
         account_subject: Principal::from_slice(&[2]),
-        device_slot: 0,
+        device_slot: slot,
         device_generation: 1,
         login_started_at_ns: now,
         login_deadline_ns: now + 300 * SECOND,
         issued_at_ns: now,
         admission_expires_at_ns: now + 60 * SECOND,
-        nonce: [0; 16],
+        nonce: [slot; 16],
         grants: vec![DelegatedRoleGrant {
             target: "user".parse().unwrap(),
             scopes: vec!["read".parse().unwrap()],
@@ -54,10 +61,10 @@ fn input(now: u64) -> (CanisterId, SessionInput) {
         CanisterId::from_slice(browser_principal(&browser).as_slice()),
         SessionInput {
             credential: PortableCredential {
-                claims: ic_wire::Bytes::new(claims).unwrap(),
-                proof: PortableProof::Ed25519(ic_wire::Bytes::new(signature.to_vec()).unwrap()),
+                claims: auth_wire::Bytes::new(claims).unwrap(),
+                proof: PortableProof::Ed25519(auth_wire::Bytes::new(signature.to_vec()).unwrap()),
             },
-            scopes: ic_wire::List::new(vec![ic_wire::Text::new("read".to_owned()).unwrap()])
+            scopes: auth_wire::List::new(vec![auth_wire::Text::new("read".to_owned()).unwrap()])
                 .unwrap(),
             ttl_secs: Some(60),
         },
@@ -215,8 +222,9 @@ fn grant(target: CanisterId, now: u64) -> enrollment::Grant {
         issuer: Principal::from_slice(&[1]),
         key: KEY,
         grant: canic_auth_witness::protocol::model::DelegatedRoleGrant {
-            target: ic_wire::Text::new("user".into()).unwrap(),
-            scopes: ic_wire::List::new(vec![ic_wire::Text::new("read".into()).unwrap()]).unwrap(),
+            target: auth_wire::Text::new("user".into()).unwrap(),
+            scopes: auth_wire::List::new(vec![auth_wire::Text::new("read".into()).unwrap()])
+                .unwrap(),
         },
         not_before_ns: now,
         expires_at_ns: now + 600 * SECOND,
@@ -376,7 +384,8 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     pic.advance_time(Duration::from_secs(20)).await;
     let mut bad = input.clone();
     let signature = SigningKey::from_bytes(&[8; 32]).sign(&[0; 32]).to_bytes();
-    bad.credential.proof = PortableProof::Ed25519(ic_wire::Bytes::new(signature.to_vec()).unwrap());
+    bad.credential.proof =
+        PortableProof::Ed25519(auth_wire::Bytes::new(signature.to_vec()).unwrap());
     let before = observe(pic, target).await;
     let refused = pic
         .update_call(
