@@ -42,6 +42,7 @@ impl FleetPlan {
             maintenance: None,
         }))
     }
+
     fn publication(&self, root: &Receipt, store: Option<&Receipt>, slot: ChildId) -> Result<Plan> {
         let child = self.child_plan(root, store, slot)?;
         let source = child

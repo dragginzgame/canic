@@ -80,6 +80,7 @@ impl CounterRecoveryGuard {
             .concat(),
         )
     }
+
     /// Consume a reply from the authenticated Root execute or lookup for this original request.
     /// A restarted host reconstructs custody from the same original requests and receipts.
     /// # Errors
@@ -118,9 +119,11 @@ impl CounterRecoveryGuard {
 }
 impl BackupApplicationGuard for CounterRecoveryGuard {
     type Error = snapshot::Error;
+
     fn protocol(&self) -> [u8; 32] {
         digest(b"canic.counter.recovery.guard.v1")
     }
+
     fn admit(
         &self,
         plan: OperationPlan<'_>,

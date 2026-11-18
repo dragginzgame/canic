@@ -20,6 +20,7 @@ backup = ["dep:canic-host", "dep:ic-backup", "dep:ic-host-sign"]
 profile-state = ["dep:canic-profile-worker", "dep:ic-storage"]
 
 [dependencies]
+canic-demo.workspace = true
 canic-host = { workspace = true, features = ["backup"], optional = true }
 canic-profile-worker = { workspace = true, optional = true }
 ic-backup = { workspace = true, optional = true }
@@ -27,6 +28,7 @@ ic-host-artifacts.workspace = true
 ic-host-sign = { workspace = true, optional = true }
 ic-storage = { workspace = true, optional = true }
 ic-testkit.workspace = true
+ic-wire.workspace = true
 wasmparser.workspace = true
 
 [dev-dependencies]
@@ -34,7 +36,6 @@ canic = { workspace = true, features = ["db", "sharding"] }
 canic-artifact-probe.workspace = true
 canic-asset-catalog.workspace = true
 canic-auth-witness.workspace = true
-canic-demo.workspace = true
 canic-effect-probe.workspace = true
 canic-host.workspace = true
 canic-management-protocol = { workspace = true, features = ["backup"] }
@@ -47,7 +48,6 @@ ic-platform-crypto.workspace = true
 ic-platform-protocol = { workspace = true, features = ["management-snapshots"] }
 ic-testkit = { workspace = true, features = ["held-reply-fixtures"] }
 ic-wasm-store-protocol.workspace = true
-ic-wire.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true

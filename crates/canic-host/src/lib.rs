@@ -2,6 +2,9 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(test)]
+mod tests;
+
 mod app_build;
 pub mod application;
 mod artifact;
@@ -30,8 +33,6 @@ mod store;
 mod store_bootstrap;
 mod store_upgrade;
 pub mod subnet_comparison;
-#[cfg(test)]
-mod tests;
 mod wallet;
 
 pub use app_build::{BuiltCanister, build_app};
@@ -64,12 +65,10 @@ pub use operation::{
 pub use plan::{
     ManagedOwner, Plan, PlanAction, PlanInput, StoreMaintenance, UpgradeTarget, create_plan,
 };
-pub use publication::list::{FleetArtifact, FleetArtifacts, fleet_artifacts};
-pub use publication::removal::{
-    PublicationRemoval, RemovalReceipt, create_removal_plan, create_restoration_plan,
-};
 pub use publication::{
     Publication, PublicationInput, PublicationProgress, create_publication_plan,
+    list::{FleetArtifact, FleetArtifacts, fleet_artifacts},
+    removal::{PublicationRemoval, RemovalReceipt, create_removal_plan, create_restoration_plan},
 };
 pub use signed::signing_principal;
 pub use starter::create_starter;

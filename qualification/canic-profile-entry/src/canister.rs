@@ -16,14 +16,17 @@ impl Storable for Binding {
         max_size: 128,
         is_fixed_size: false,
     };
+
     fn to_bytes(&self) -> Cow<'_, [u8]> {
         ic_wire::encode(&self.0, ic_wire::Encoding::Payload, LIMITS)
             .map(Cow::Owned)
             .expect("entry binding")
     }
+
     fn into_bytes(self) -> Vec<u8> {
         self.to_bytes().into_owned()
     }
+
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
         let value: Option<String> =
             ic_wire::decode(&bytes, ic_wire::Encoding::Payload, LIMITS).expect("entry binding");
@@ -74,11 +77,26 @@ fn open(fresh: bool) {
     });
 }
 
-#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+/// Initialize the profile entry state for this installation.
+#[runtime::init(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn init((): ()) {
     open(true);
 }
-#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+
+/// Reopen the profile entry state from the preceding executable.
+#[runtime::post_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn post_upgrade((): ()) {
     open(false);
 }
@@ -95,7 +113,12 @@ fn valid_worker(text: &str) -> Result<Principal, RouteError> {
     Ok(principal)
 }
 
-#[canic::query(method = canic_profile_protocol::ROUTE, limits = canic_profile_protocol::LIMITS, reply_limits = canic_profile_protocol::LIMITS)]
+/// Read the retained worker route.
+#[canic::query(
+    method = canic_profile_protocol::ROUTE,
+    limits = canic_profile_protocol::LIMITS,
+    reply_limits = canic_profile_protocol::LIMITS,
+)]
 fn route() -> RouteResult {
     STATE
         .with_borrow(|state| {
@@ -112,12 +135,21 @@ fn route() -> RouteResult {
 }
 
 // Clients use replicated resolution before sending private data to a discovered worker.
-#[canic::update(name = "resolve", method = ROUTE, limits = LIMITS)]
+/// Read the retained route in replicated execution.
+#[canic::update(
+    name = "resolve",
+    method = ROUTE,
+    limits = LIMITS,
+)]
 fn replicated_route() -> RouteResult {
     route()
 }
 
-#[canic::update(method = BIND, limits = LIMITS)]
+/// Set the entry canister's worker route under the caller's controller authority.
+#[canic::update(
+    method = BIND,
+    limits = LIMITS,
+)]
 fn bind(input: Route) -> RouteResult {
     if !api::is_controller(&api::caller()) {
         return Err(RouteError::Forbidden);
@@ -136,7 +168,11 @@ fn bind(input: Route) -> RouteResult {
     })
 }
 
-#[canic::update(method = CHECK, limits = LIMITS)]
+/// Check the bound worker from the entry canister on a controller's request.
+#[canic::update(
+    method = CHECK,
+    limits = LIMITS,
+)]
 async fn check() -> CheckResult {
     if !api::is_controller(&api::caller()) {
         return Err(RouteError::Forbidden);
@@ -168,6 +204,7 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
+/// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
 }

@@ -1,4 +1,8 @@
 //! Stable original-result ledger, independent of application rollback and Host journals.
+
+#[cfg(test)]
+mod tests;
+
 use canic_management_protocol::backup::{
     Binding, Error, MAX_RETAINED, MAX_STEPS, Outcome, Record, Step,
 };
@@ -6,8 +10,6 @@ use serde::Serialize;
 
 #[cfg(target_arch = "wasm32")]
 mod runtime;
-#[cfg(test)]
-mod tests;
 #[cfg(all(target_arch = "wasm32", feature = "fault-injection"))]
 #[doc(hidden)]
 pub use runtime::inject;
@@ -29,6 +31,7 @@ impl Ledger {
     pub(crate) fn encode(&self) -> Vec<u8> {
         ic_wire::encode(self, ic_wire::Encoding::Payload, LIMITS).expect("bounded snapshot ledger")
     }
+
     pub(crate) fn open(bytes: &[u8]) -> Self {
         let records: ic_wire::List<Record, MAX_STEPS> =
             ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS)
@@ -45,9 +48,11 @@ impl Ledger {
         );
         ledger
     }
+
     pub(crate) fn occupied(&self) -> bool {
         !self.0.is_empty()
     }
+
     pub(crate) fn lookup(&self, b: &Binding) -> Result<Record, Error> {
         for r in self.0.iter() {
             let a = &r.binding.operation;
@@ -66,6 +71,7 @@ impl Ledger {
         }
         Err(Error::Missing)
     }
+
     pub(crate) fn reserve(&mut self, b: Binding) -> Result<(), Error> {
         match self.lookup(&b) {
             Err(Error::Missing) => (),
@@ -112,6 +118,7 @@ impl Ledger {
         });
         Ok(())
     }
+
     pub(crate) fn complete(&mut self, b: &Binding, outcome: Outcome) {
         let r = self
             .0

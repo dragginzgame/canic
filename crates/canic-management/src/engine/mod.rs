@@ -1,11 +1,14 @@
-use crate::Readiness;
-use crate::storage::{
-    ARTIFACT_BYTES, ARTIFACT_KEY, Artifact, Artifacts, JOURNAL_BYTES, JOURNAL_KEY, Journals, KEYS,
+use crate::{
+    Readiness,
+    storage::{
+        ARTIFACT_BYTES, ARTIFACT_KEY, Artifact, Artifacts, JOURNAL_BYTES, JOURNAL_KEY, Journals,
+        KEYS,
+    },
 };
-use canic_management_protocol::children::{self, ChildId};
 use canic_management_protocol::{
-    Approval, CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, Stage, Status, digest,
-    stored,
+    Approval, CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, Stage, Status,
+    children::{self, ChildId},
+    digest, stored,
 };
 use ic_platform_protocol::{
     candid::Limits,
@@ -49,6 +52,7 @@ pub fn custody() -> canic_management_protocol::custody::Custody {
     );
     first
 }
+
 /// Read complete owner custody, including empty slots.
 /// # Panics
 /// Traps when lifecycle has not opened the engine.
@@ -65,6 +69,7 @@ pub fn owner_custody() -> children::Custody {
     );
     journals()
 }
+
 fn journals() -> children::Custody {
     STATE.with_borrow(|state| {
         let journals = &state.as_ref().expect("open engine").journal.0;
@@ -114,6 +119,7 @@ impl State {
         let bytes = self.backup.encode();
         self.backup_cell.set(bytes);
     }
+
     fn set_journal(&mut self, journal: Journals) {
         let bytes = journal.to_bytes().expect("encode management journal");
         self.journal_cell.set(bytes.into_owned());
@@ -126,6 +132,7 @@ impl State {
         self.artifact = artifact;
     }
 }
+
 thread_local! {
     pub(crate) static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
     static TIMER: RefCell<BTreeMap<ChildId, Once>> = const { RefCell::new(BTreeMap::new()) };
@@ -290,6 +297,7 @@ fn snapshot(slot: ChildId) -> Status {
             .clone()
     })
 }
+
 fn mutate(slot: ChildId, f: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
@@ -298,6 +306,7 @@ fn mutate(slot: ChildId, f: impl FnOnce(&mut Status)) {
         state.set_journal(journal);
     });
 }
+
 fn next(s: &Status) -> Option<u64> {
     if s.failure.is_some() {
         return None;
@@ -308,6 +317,7 @@ fn next(s: &Status) -> Option<u64> {
         _ => None,
     }
 }
+
 fn schedule(slot: ChildId) {
     let desired = next(&snapshot(slot))
         .or_else(|| upgrade::next(slot))
@@ -375,6 +385,7 @@ fn resume_after_reconciliation(slot: ChildId) {
     });
     schedule(slot);
 }
+
 /// Read committed evidence without resuming work.
 /// # Panics
 /// Traps if lifecycle initialization has not completed.
@@ -385,6 +396,7 @@ pub fn status(slot: ChildId) -> Status {
     value.maintenance_candidate = cfg!(feature = "maintenance-candidate");
     value
 }
+
 /// Retain one exact controller-approved artifact before scheduling effects.
 /// # Errors
 /// Refuses changed authority, invalid artifact/binding/time or inadequate reserve.
@@ -409,6 +421,7 @@ pub fn stage(slot: ChildId, input: Stage) -> Result<Status, Refusal> {
         Artifact::Inline(crate::storage::Inline(input.wasm, vec![])),
     )
 }
+
 fn admit(slot: ChildId, approval: Approval, artifact: Artifact) -> Result<Status, Refusal> {
     if ic_platform_runtime::raw::liquid_cycle_balance()
         < reserved_cycles() + u128::from(CREATION_CYCLES)
@@ -438,6 +451,7 @@ fn fault(slot: ChildId, point: u8) {
     #[cfg(not(feature = "fault-injection"))]
     let _ = (slot, point);
 }
+
 #[cfg(feature = "fault-injection")]
 /// Select a test-only interrupted-message boundary.
 /// # Panics
@@ -476,6 +490,7 @@ pub(crate) fn reply_fault(method: u64) -> bool {
 fn failure(_error: SubmitError) -> Failure {
     Failure::Uncertain
 }
+
 fn response(completion: Completion) -> Result<Vec<u8>, Failure> {
     match completion.into_parts().0 {
         Outcome::Reply(bytes) => Ok(bytes),
@@ -483,6 +498,7 @@ fn response(completion: Completion) -> Result<Vec<u8>, Failure> {
         Outcome::OutcomeUnknown(_) => Err(Failure::Uncertain),
     }
 }
+
 async fn management_completion(
     method: &str,
     bytes: Vec<u8>,
@@ -498,12 +514,14 @@ async fn management_completion(
     .execute()
     .await
 }
+
 async fn management(method: &str, bytes: Vec<u8>, cycles: u128) -> Result<Vec<u8>, Failure> {
     management_completion(method, bytes, cycles)
         .await
         .map_err(failure)
         .and_then(response)
 }
+
 fn issue(slot: ChildId, index: usize, phase: Phase, bytes: &[u8]) {
     mutate(slot, |s| {
         assert_eq!(s.attempts[index], 0);
@@ -513,6 +531,7 @@ fn issue(slot: ChildId, index: usize, phase: Phase, bytes: &[u8]) {
         s.failure = None;
     });
 }
+
 fn worker(s: &Status) -> Principal {
     Principal::from_text(s.worker.as_ref().expect("retained principal")).expect("valid principal")
 }
@@ -694,6 +713,7 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
     }
     Ok(())
 }
+
 /// Reconstruct observable outcomes without reissuing uncertain effects.
 /// # Panics
 /// Traps for noncontrollers, mismatched approvals, uninitialized storage or failed durable writes.
@@ -705,6 +725,7 @@ pub async fn reconcile(slot: ChildId, expected: canic_management_protocol::Appro
     );
     reconcile_bound(slot, expected).await
 }
+
 async fn reconcile_bound(slot: ChildId, expected: Approval) -> Status {
     assert!(!store_maintenance::active(), "Store maintenance active");
     assert_eq!(
@@ -739,10 +760,12 @@ pub(crate) fn reserved_cycles() -> u128 {
                 .sum::<u128>()
     })
 }
+
 #[cfg(feature = "backup")]
 pub(crate) fn snapshot_idle() -> bool {
     OBSERVING.with_borrow(BTreeSet::is_empty)
 }
+
 // The executor drops the suspended future during callback-trap cleanup. Keep
 // this heap exclusion owned by that future; durable effect intent stays intact.
 fn observing(slot: ChildId) -> Option<impl Drop> {

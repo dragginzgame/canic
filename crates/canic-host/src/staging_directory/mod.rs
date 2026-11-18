@@ -1,9 +1,15 @@
 //! Canic staging names and collision budget; custody belongs to FS.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{Result, supplier};
 use ic_host_fs::Directory;
-use std::ffi::OsString;
-use std::io;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    ffi::OsString,
+    io,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 static SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -45,6 +51,3 @@ struct AllocationFailure {
     #[source]
     cause: ic_host_fs::Error,
 }
-
-#[cfg(test)]
-mod tests;

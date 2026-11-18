@@ -1,5 +1,7 @@
-use crate::{FUND, FUNDING_STATUS, FundingOutcome, FundingRequest, FundingStatus};
-use crate::{Fault, LIMITS, MAX_MANAGEMENT_REQUEST_BYTES, Phase, START, STATUS, Status};
+use crate::{
+    FUND, FUNDING_STATUS, Fault, FundingOutcome, FundingRequest, FundingStatus, LIMITS,
+    MAX_MANAGEMENT_REQUEST_BYTES, Phase, START, STATUS, Status,
+};
 
 #[test]
 fn maximum_retained_evidence_remains_observable() {

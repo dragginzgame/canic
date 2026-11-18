@@ -1,7 +1,18 @@
+#[cfg(test)]
+mod lock_tests;
+#[cfg(test)]
+mod parent_tests;
+#[cfg(test)]
+mod publication_tests;
+#[cfg(test)]
+mod read_tests;
+
 use crate::{Error, Result, supplier};
 use serde::{Serialize, de::DeserializeOwned};
-use std::ffi::OsStr;
-use std::path::{Path, PathBuf};
+use std::{
+    ffi::OsStr,
+    path::{Path, PathBuf},
+};
 
 pub(crate) const MAX_RECORD: usize = 12 * 1024 * 1024;
 
@@ -124,13 +135,3 @@ pub(crate) fn json<T: DeserializeOwned>(path: &Path) -> Result<T> {
 pub(crate) fn put_json(path: &Path, value: &impl Serialize) -> Result<()> {
     put(path, &serde_json::to_vec_pretty(value).map_err(supplier)?)
 }
-
-#[cfg(test)]
-mod parent_tests;
-#[cfg(test)]
-mod publication_tests;
-#[cfg(test)]
-mod read_tests;
-
-#[cfg(test)]
-mod lock_tests;

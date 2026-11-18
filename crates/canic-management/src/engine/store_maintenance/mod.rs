@@ -1,9 +1,9 @@
 //! Root retains Store maintenance intent and evidence; Host retains replacement bytes.
 use super::{MANAGEMENT_LIMITS, OBSERVING, STATE, State, api, digest, management};
-use canic_management_protocol::stored::STORE_LIMITS;
 use canic_management_protocol::{
     Failure, Refusal,
     store_maintenance::{Approval, MAX_UPGRADES, Phase, Scan, Status},
+    stored::STORE_LIMITS,
 };
 use ic_platform_protocol::{
     management::{self as mgmt, CanisterArgs, CanisterStatus},
@@ -27,6 +27,7 @@ pub(crate) fn active() -> bool {
             .is_some_and(|record| record.phase != Phase::Ready)
     })
 }
+
 fn quiescent(state: &State) -> bool {
     state.journal.0.values().all(|journal| {
         matches!(
@@ -38,6 +39,7 @@ fn quiescent(state: &State) -> bool {
             && journal.1.failure.is_none()
     })
 }
+
 fn binding(state: &State, approval: &Approval) -> bool {
     let Ok(target) = Principal::from_text(&approval.store) else {
         return false;
@@ -61,6 +63,7 @@ fn binding(state: &State, approval: &Approval) -> bool {
                 .is_none_or(|s| s.creation.reference.store == approval.store)
         })
 }
+
 pub(super) fn validate(state: &State) {
     let journals = &state.journal;
     assert!(journals.2.len() < MAX_UPGRADES, "Store history bound");
@@ -121,6 +124,7 @@ pub(super) fn validate(state: &State) {
 pub fn observe() -> Option<Status> {
     STATE.with_borrow(|state| state.as_ref().expect("open engine").journal.1.clone())
 }
+
 fn successor(previous: &Status, approval: &Approval) -> bool {
     previous.phase == Phase::Ready
         && previous.failure.is_none()
@@ -216,6 +220,7 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
         Ok(record)
     })
 }
+
 fn selected(approval: &Approval) -> Status {
     let value = observe_attempt(approval).expect("retained Store maintenance");
     assert_eq!(&value.approval, approval, "maintenance approval mismatch");
@@ -227,6 +232,7 @@ fn selected(approval: &Approval) -> Status {
     assert!(api::is_controller(&api::caller()), "controller required");
     value
 }
+
 fn change(approval: &Approval, expected: Phase, update: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
@@ -239,6 +245,7 @@ fn change(approval: &Approval, expected: Phase, update: impl FnOnce(&mut Status)
         }
     });
 }
+
 fn dispatch(record: &Status) -> Result<(), Failure> {
     let current = observe().expect("retained maintenance");
     if current.approval != record.approval
@@ -259,9 +266,11 @@ fn dispatch(record: &Status) -> Result<(), Failure> {
     }
     Ok(())
 }
+
 fn target(approval: &Approval) -> Principal {
     Principal::from_text(&approval.store).expect("retained Store")
 }
+
 fn args(approval: &Approval) -> Vec<u8> {
     CanisterArgs {
         canister_id: target(approval),
@@ -269,9 +278,11 @@ fn args(approval: &Approval) -> Vec<u8> {
     .encode(1024)
     .expect("stop args")
 }
+
 async fn inspect(approval: &Approval) -> Result<CanisterStatus, Failure> {
     inspect_module(approval, approval.previous_module).await
 }
+
 async fn inspect_module(approval: &Approval, module: [u8; 32]) -> Result<CanisterStatus, Failure> {
     let reply = management("canister_status", args(approval), 0).await?;
     let value = mgmt::decode_canister_status(&reply, MANAGEMENT_LIMITS)
@@ -283,9 +294,11 @@ async fn inspect_module(approval: &Approval, module: [u8; 32]) -> Result<Caniste
     }
     Ok(value)
 }
+
 async fn gate(approval: &Approval, command: store::AdmissionCommand) -> Result<(), Failure> {
     admission(approval, command, true).await
 }
+
 fn admission_frame(command: &store::AdmissionCommand) -> Vec<u8> {
     ic_wire::encode(
         command,
@@ -297,6 +310,7 @@ fn admission_frame(command: &store::AdmissionCommand) -> Vec<u8> {
     )
     .expect("admission request")
 }
+
 async fn admission(
     approval: &Approval,
     command: store::AdmissionCommand,
@@ -368,6 +382,7 @@ async fn run_step(record: Status) -> Status {
     }
     observe_attempt(&record.approval).expect("retained maintenance")
 }
+
 async fn step(record: &Status) -> Result<(), Failure> {
     let approval = &record.approval;
     match record.phase {

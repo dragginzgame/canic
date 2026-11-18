@@ -34,6 +34,7 @@ impl StoredArtifact {
         }
     }
 }
+
 fn invalid() -> Error {
     Error::Invalid(
         "Store release differs from the approved child, supplier or retained custody".into(),
@@ -116,6 +117,7 @@ pub(super) async fn verify(plan: &Plan, client: &ReadClient) -> Result<()> {
     }
     Ok(())
 }
+
 pub(crate) async fn verify_store(
     client: &ReadClient,
     root: &str,
@@ -148,11 +150,13 @@ fn stage<A>(plan: &Plan, approval: A) -> Result<wire::Stage<A>> {
             .reference(),
     })
 }
+
 fn slot(plan: &Plan) -> ChildId {
     plan.management()
         .and_then(|m| m.slot)
         .unwrap_or(ChildId::FIRST)
 }
+
 pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
     match method {
         application::STAGE_UPGRADE | application::RECONCILE_UPGRADE | application::ACTIVATE => {
@@ -228,6 +232,7 @@ pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
         _ => Err(invalid()),
     }
 }
+
 fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
     let source = plan
         .management()
@@ -294,6 +299,7 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
     }
     Ok(value)
 }
+
 pub(crate) fn delivery<A: Serialize>(
     slot: ChildId,
     expected: &wire::Stage<A>,
@@ -321,6 +327,7 @@ fn application_stage<A>(plan: &Plan, approval: A) -> Result<application::Stage<A
         .map_err(supplier)?,
     })
 }
+
 fn application_upgrade(plan: &Plan) -> Result<application::Upgrade> {
     Ok(application::Upgrade {
         source: application_stage(plan, super::upgrade::approval(plan)?)?,
@@ -330,6 +337,7 @@ fn application_upgrade(plan: &Plan) -> Result<application::Upgrade> {
             .ok_or_else(invalid)?,
     })
 }
+
 pub(super) fn maintenance(plan: &Plan, bytes: &[u8]) -> Result<Option<application::Maintenance>> {
     custody(plan, bytes)?;
     let value: application::Custody = ic_wire::decode(
@@ -434,6 +442,7 @@ pub(super) fn retain_delivery(
 pub(super) fn creation(plan: &Plan, bytes: &[u8]) -> Result<Status> {
     creation_evidence(plan, bytes).map(|(status, _)| status)
 }
+
 pub(super) fn creation_evidence(
     plan: &Plan,
     bytes: &[u8],
@@ -465,9 +474,11 @@ pub(super) fn creation_evidence(
     }
     Ok((status.clone(), Some(source.creation.clone())))
 }
+
 pub(super) fn upgraded(plan: &Plan, bytes: &[u8]) -> Result<upgrade::Status> {
     upgrade_evidence(plan, bytes).map(|(status, _)| status)
 }
+
 pub(super) fn upgrade_evidence(
     plan: &Plan,
     bytes: &[u8],

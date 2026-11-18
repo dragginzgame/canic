@@ -1,9 +1,9 @@
 //! Layout of the declared application tree, independent of controller observations.
 
-use std::collections::{BTreeMap, BTreeSet};
-
 #[cfg(test)]
 mod tests;
+
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Slots and branch prefixes in stable parent-before-child order.
 pub(crate) fn rows<'a>(

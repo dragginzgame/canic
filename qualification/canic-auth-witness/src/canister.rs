@@ -31,12 +31,21 @@ struct State {
     refresh: RefreshObservation,
     refresh_barrier: Option<Principal>,
 }
+
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
 
 fn decode_init(bytes: &[u8]) -> Result<Principal, std::convert::Infallible> {
     Ok({ Principal::try_from_slice(bytes).expect("installed authority principal") })
 }
-#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = decode_init, max_bytes = 2097152, on_error = endpoint_error)]
+
+/// Initialize the auth witness state for this installation.
+#[runtime::init(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode_init,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+)]
 fn init(authority: Principal) {
     #[cfg(feature = "profile")]
     crate::profile::open(true);
@@ -103,7 +112,16 @@ fn init(authority: Principal) {
 
 // Qualification-only pause after the real Root reply, before local publication.
 // The barrier supplies no snapshot or authentication marker.
-#[runtime::update(runtime = runtime, guard = lifecycle_guard, decode = decode_init, max_bytes = 2097152, on_error = endpoint_error, name = "set_refresh_barrier", encode = encode_control)]
+/// Let the installer hold receiver refresh at the selected fixture barrier.
+#[runtime::update(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode_init,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "set_refresh_barrier",
+    encode = encode_control,
+)]
 fn set_refresh_barrier(barrier: Principal) -> bool {
     STATE.with_borrow_mut(|state| {
         let Some(s) = state else { return false };
@@ -115,6 +133,7 @@ fn set_refresh_barrier(barrier: Principal) -> bool {
     })
 }
 
+/// Require a single command byte. The handler checks installer authority.
 fn control_guard() -> Result<(), String> {
     if raw::msg_arg_data_size() == 1 {
         Ok(())
@@ -122,13 +141,25 @@ fn control_guard() -> Result<(), String> {
         Err("fixture command length".into())
     }
 }
+
 fn decode_control(bytes: &[u8]) -> Result<u8, std::convert::Infallible> {
     Ok(bytes[0])
 }
+
 fn encode_control(value: bool) -> Result<Vec<u8>, std::convert::Infallible> {
     Ok({ vec![u8::from(value)] })
 }
-#[runtime::update(runtime = runtime, guard = control_guard, decode = decode_control, max_bytes = 2097152, on_error = endpoint_error, name = "control", encode = encode_control)]
+
+/// Apply the installer's selected Auth witness control.
+#[runtime::update(
+    runtime = runtime,
+    guard = control_guard,
+    decode = decode_control,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "control",
+    encode = encode_control,
+)]
 fn control(command: u8) -> bool {
     STATE.with_borrow_mut(|state| {
         let Some(s) = state else {
@@ -147,6 +178,7 @@ fn control(command: u8) -> bool {
         true
     })
 }
+
 canic::mount_auth_refresh_endpoint!(super::refresh);
 
 async fn refresh() -> Result<(), enrollment::Error> {
@@ -200,6 +232,7 @@ async fn refresh() -> Result<(), enrollment::Error> {
         Ok(())
     })
 }
+
 fn view(receipt: SessionReceipt) -> SessionView {
     SessionView {
         caller: receipt.caller,
@@ -208,6 +241,7 @@ fn view(receipt: SessionReceipt) -> SessionView {
         expires_at_ns: receipt.expires_at_ns,
     }
 }
+
 fn admission_error(error: MemoryError) -> AdmissionRefusal {
     match error {
         MemoryError::Closed | MemoryError::Enrollment(_) => AdmissionRefusal::Unavailable,
@@ -236,6 +270,7 @@ impl Serialize for Unencodable {
         ))
     }
 }
+
 pub(crate) fn reply_fault<const ID: u64>(enabled: bool) {
     if enabled {
         let _ = canic::auth::endpoint::encode::<_, ID>(Unencodable).unwrap_or_else(|error| {
@@ -243,10 +278,12 @@ pub(crate) fn reply_fault<const ID: u64>(enabled: bool) {
         });
     }
 }
+
 #[cfg(feature = "profile")]
 pub(crate) fn profile_fault() -> bool {
     STATE.with_borrow(|state| state.as_ref().is_some_and(|state| state.fault))
 }
+
 fn admit(
     caller: Principal,
     input: SessionInput,
@@ -318,9 +355,11 @@ fn admit(
         Ok(view(outcome.receipt))
     })
 }
+
 fn read(caller: Principal, now: u64) -> Result<SessionView, SessionReadRefusal> {
     read_scope(caller, now, "read")
 }
+
 pub(crate) fn read_scope(
     caller: Principal,
     now: u64,
@@ -368,6 +407,7 @@ pub(crate) fn read_scope(
             })
     })
 }
+
 fn logout(caller: Principal, now: u64) -> LogoutResult {
     STATE.with_borrow_mut(|state| {
         let Some(s) = state else {
@@ -390,9 +430,23 @@ fn logout(caller: Principal, now: u64) -> LogoutResult {
         result
     })
 }
-canic::mount_auth_endpoints! { admit = super::admit, read = super::read, logout = super::logout }
 
-#[runtime::query(runtime = runtime, guard = lifecycle_guard, decode = decode_observe, max_bytes = 2097152, on_error = endpoint_error, name = "observe_enrollment", encode = enrollment::transport::encode::<Result<enrollment::Snapshot, enrollment::Error>, {enrollment::SNAPSHOT}>)]
+canic::mount_auth_endpoints! {
+    admit = super::admit,
+    read = super::read,
+    logout = super::logout,
+}
+
+/// Read the receiver's current enrollment evidence.
+#[runtime::query(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode_observe,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "observe_enrollment",
+    encode = enrollment::transport::encode::<Result<enrollment::Snapshot, enrollment::Error>, {enrollment::SNAPSHOT}>,
+)]
 fn observe_enrollment((): ()) -> Result<enrollment::Snapshot, enrollment::Error> {
     STATE.with_borrow(|state| {
         state
@@ -408,6 +462,7 @@ pub(crate) fn decode_observe(bytes: &[u8]) -> Result<(), std::convert::Infallibl
     assert!(bytes.is_empty());
     Ok(())
 }
+
 pub(crate) fn encode_observe<T: Serialize>(value: T) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
@@ -418,7 +473,17 @@ pub(crate) fn encode_observe<T: Serialize>(value: T) -> Result<Vec<u8>, ic_wire:
         LIMITS,
     )
 }
-#[runtime::query(runtime = runtime, guard = lifecycle_guard, decode = decode_observe, max_bytes = 2097152, on_error = endpoint_error, name = "observe", encode = encode_observe::<Observation>)]
+
+/// Read the receiver's fixture state and call counts.
+#[runtime::query(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode_observe,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "observe",
+    encode = encode_observe::<Observation>,
+)]
 fn observe((): ()) -> Observation {
     STATE.with_borrow(|state| {
         let Some(s) = state else {
@@ -449,7 +514,16 @@ fn observe((): ()) -> Observation {
     })
 }
 
-#[runtime::query(runtime = runtime, guard = lifecycle_guard, decode = decode_observe, max_bytes = 2097152, on_error = endpoint_error, name = "observe_refresh", encode = encode_observe::<RefreshObservation>)]
+/// Read the witness's recorded refresh progress.
+#[runtime::query(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode_observe,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "observe_refresh",
+    encode = encode_observe::<RefreshObservation>,
+)]
 fn observe_refresh((): ()) -> RefreshObservation {
     STATE.with_borrow(|state| state.as_ref().expect("original fixture must exist").refresh)
 }
@@ -458,6 +532,7 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
+/// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
 }

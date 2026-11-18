@@ -153,6 +153,7 @@ fn artifact_inspection_uses_store_capacity_without_expanding_direct_install_auth
     std::fs::write(&wasm, b"not wasm").unwrap();
     assert!(crate::inspect(&wasm).is_err());
 }
+
 pub(crate) fn wire_fixture(name: &str) -> Vec<u8> {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures/platform-0.33.7");
     crate::unhex(

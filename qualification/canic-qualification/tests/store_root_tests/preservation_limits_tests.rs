@@ -3,8 +3,9 @@ use super::{
     Client, artifacts, maintain, maintenance_tests, quiescence_tests, readiness_tests,
     recover_store, store, support,
 };
-use canic_management_protocol::stored::STORE_LIMITS;
-use canic_management_protocol::{self as management, store_maintenance as wire};
+use canic_management_protocol::{
+    self as management, store_maintenance as wire, stored::STORE_LIMITS,
+};
 use ic_testkit::pocket_ic::CanisterSettings;
 
 async fn page(

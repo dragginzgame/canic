@@ -1,4 +1,8 @@
 //! Resolve the registry Store artifact input without linking its runtime into Host.
+
+#[cfg(test)]
+mod tests;
+
 use super::cargo_failure;
 use crate::{Error, Result, supplier};
 use serde::Deserialize;
@@ -88,6 +92,3 @@ fn selected(metadata: &Metadata) -> Result<&Package> {
     }
     Ok(runtime)
 }
-
-#[cfg(test)]
-mod tests;

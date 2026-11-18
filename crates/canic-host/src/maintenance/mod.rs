@@ -1,4 +1,10 @@
 //! Root maintenance checks around the existing direct installation owner.
+
+#[cfg(test)]
+mod installed_tests;
+#[cfg(test)]
+mod tests;
+
 use crate::{Error, Plan, Result, network::principal, operation, signed, store, supplier};
 use canic_management_protocol::{
     LIMITS, Phase, STATUS, Status,
@@ -9,11 +15,7 @@ use canic_management_protocol::{
 use ic_platform::native::ReadClient;
 use std::path::Path;
 
-#[cfg(test)]
-mod installed_tests;
 mod stored;
-#[cfg(test)]
-mod tests;
 
 /// Stop/drain or restart the approved upgrade target through the existing signer.
 /// Successful stop plus retained management status precedes installation. Lost

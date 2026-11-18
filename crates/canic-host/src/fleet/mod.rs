@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 mod report;
 use crate::{Error, Network, Result, network, operation, store, supplier};
 use canic_management_protocol::children::{self, ChildId};
@@ -8,8 +11,6 @@ use std::{collections::BTreeMap, path::Path, time::Duration};
 mod metrics;
 mod stores;
 pub use metrics::FleetMetrics;
-#[cfg(test)]
-mod tests;
 pub use stores::FleetStoreMaintenance;
 
 const MAX_OPERATIONS: usize = 128;

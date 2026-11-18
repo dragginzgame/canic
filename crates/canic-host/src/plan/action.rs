@@ -92,6 +92,7 @@ impl super::Plan {
             _ => None,
         }
     }
+
     /// Exact Auth approval, separate from deployment and readiness.
     #[must_use]
     pub fn auth(&self) -> Option<&crate::AuthApproval> {
@@ -100,6 +101,7 @@ impl super::Plan {
             _ => None,
         }
     }
+
     /// Exact removal authority, separate from publication and deployment.
     #[must_use]
     pub fn removal(&self) -> Option<&crate::PublicationRemoval> {
@@ -108,6 +110,7 @@ impl super::Plan {
             _ => None,
         }
     }
+
     /// Explicit Store maintenance sequence, absent in historical first-upgrade plans.
     #[must_use]
     pub fn store_upgrade_sequence(&self) -> Option<u64> {
@@ -116,6 +119,7 @@ impl super::Plan {
             _ => None,
         }
     }
+
     /// Enduring Store upgrade owner, independent of child slot authority.
     #[must_use]
     pub fn store_upgrade_root(&self) -> Option<&UpgradeTarget> {
@@ -124,6 +128,7 @@ impl super::Plan {
             _ => None,
         }
     }
+
     /// Approved Store controller, only for infrastructure bootstrap.
     #[must_use]
     pub fn store_root(&self) -> Option<&UpgradeTarget> {
@@ -132,6 +137,7 @@ impl super::Plan {
             _ => None,
         }
     }
+
     /// Exact publication authority, independent of deployment slots and receipts.
     #[must_use]
     pub fn publication(&self) -> Option<&crate::Publication> {
@@ -146,11 +152,13 @@ impl super::Plan {
     pub fn target(&self) -> Option<&String> {
         self.upgrade_target().map(|t| &t.canister)
     }
+
     /// Predecessor code, only for an upgrade.
     #[must_use]
     pub fn previous_module(&self) -> Option<&String> {
         self.upgrade_target().map(|t| &t.module)
     }
+
     fn upgrade_target(&self) -> Option<&UpgradeTarget> {
         match &self.action {
             PlanAction::Upgrade(target)
@@ -166,6 +174,7 @@ impl super::Plan {
             | PlanAction::Publish(_) => None,
         }
     }
+
     /// Creation debit/attachment; upgrades have no creation authority.
     #[must_use]
     pub fn creation_cycles(&self) -> u64 {
@@ -175,6 +184,7 @@ impl super::Plan {
             _ => 0,
         }
     }
+
     /// Enduring effect owner, only for child operations.
     #[must_use]
     pub fn management(&self) -> Option<&ManagedOwner> {
@@ -183,6 +193,7 @@ impl super::Plan {
             _ => None,
         }
     }
+
     /// Complete child custody, only for Root maintenance.
     #[must_use]
     pub fn maintenance(&self) -> Option<&[Custody]> {
@@ -191,6 +202,7 @@ impl super::Plan {
             _ => None,
         }
     }
+
     /// Complete Store artifact evidence, only for Store-aware Root maintenance.
     #[must_use]
     pub fn maintenance_store(&self) -> Option<&StoreMaintenance> {

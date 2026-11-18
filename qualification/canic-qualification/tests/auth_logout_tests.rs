@@ -1,9 +1,14 @@
-use super::auth_issuer_tests::{
-    account, browser, call, claims, frame, lookup, observe, principal, renew, request, response,
+use super::{
+    Fixture,
+    auth_issuer_tests::{
+        account, browser, call, claims, frame, lookup, observe, principal, renew, request, response,
+    },
+    control, fixture,
 };
-use super::{Fixture, control, fixture};
-use canic::auth::issuer::{self, Issue, Logout, Refusal, Revoked, Status};
-use canic::auth::protocol::wire as auth_wire;
+use canic::auth::{
+    issuer::{self, Issue, Logout, Refusal, Revoked, Status},
+    protocol::wire as auth_wire,
+};
 use ic_testkit::pocket_ic::{CanisterId, Time};
 
 fn selection(input: &Issue) -> Logout {

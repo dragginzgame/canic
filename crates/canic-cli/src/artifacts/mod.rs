@@ -1,4 +1,8 @@
 //! Artifact evidence and explicit local plans; no live availability inference.
+
+#[cfg(test)]
+mod tests;
+
 use crate::Output;
 use canic_host::FleetArtifacts;
 use ic_host_text::{bordered_table, escape};
@@ -154,6 +158,3 @@ fn render(report: &FleetArtifacts, details: bool) -> String {
     }
     output
 }
-
-#[cfg(test)]
-mod tests;

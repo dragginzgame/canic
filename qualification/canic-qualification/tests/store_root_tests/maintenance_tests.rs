@@ -3,10 +3,10 @@ use super::{
     Client, artifacts, inject, maintain, quiescence_tests, readiness_tests, recover_store, store,
     support,
 };
-use canic_management_protocol::stored::STORE_LIMITS;
 use canic_management_protocol::{
     self as management, publication,
     store_maintenance::{self as wire, Approval, Phase, Status},
+    stored::STORE_LIMITS,
 };
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
 use std::time::Duration;
@@ -62,6 +62,7 @@ pub(super) async fn observe(root: &Client<'_>) -> Status {
     assert_eq!(complete.store_operation.as_ref(), Some(&retained));
     retained
 }
+
 pub(super) async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
     root.update(
         "advance_store_maintenance",
@@ -71,6 +72,7 @@ pub(super) async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
     )
     .await
 }
+
 pub(super) async fn activate(root: &Client<'_>, approval: &Approval) -> Status {
     root.update(
         "activate_store_maintenance",
@@ -80,6 +82,7 @@ pub(super) async fn activate(root: &Client<'_>, approval: &Approval) -> Status {
     )
     .await
 }
+
 pub(super) async fn install(
     root: &Client<'_>,
     input: &wire::Install,
@@ -92,6 +95,7 @@ pub(super) async fn install(
     )
     .await
 }
+
 pub(super) async fn stopped(
     root: &Client<'_>,
     supplier: &Client<'_>,
@@ -139,6 +143,7 @@ pub(super) async fn stopped(
     }
     panic!("bounded closure/scan/stop: {:?}", observe(root).await);
 }
+
 async fn lost_advance(root: &Client<'_>, approval: &Approval, point: u8, phase: Phase) {
     inject(root, point).await;
     assert!(
@@ -163,6 +168,7 @@ async fn lost_advance(root: &Client<'_>, approval: &Approval, point: u8, phase: 
     inject(root, 0).await;
     assert_eq!(observe(root).await.phase, phase);
 }
+
 async fn restore_faults(root: &Client<'_>) {
     canic_qualification::upgrade_stopped(
         root.pic,

@@ -15,6 +15,7 @@ fn run(dir: &Path, args: &[&str]) -> Output {
         .output()
         .unwrap()
 }
+
 fn cli(dir: &Path, args: &[&str]) -> Value {
     let result = run(dir, args);
     assert!(
@@ -24,6 +25,7 @@ fn cli(dir: &Path, args: &[&str]) -> Value {
     );
     serde_json::from_slice(&result.stdout).unwrap()
 }
+
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -32,6 +34,7 @@ fn hex(bytes: &[u8]) -> String {
 async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call() {
     approval_journey(false).await;
 }
+
 #[tokio::test]
 async fn cli_operator_controlled_receiver_blocks_controller_drift_before_signing() {
     approval_journey(true).await;

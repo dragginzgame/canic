@@ -4,14 +4,30 @@ use ic_platform_runtime as runtime;
 
 canic::mount_metrics_endpoint!(canic_management::metrics);
 
-#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+/// Initialize the profile manager state for this installation.
+#[runtime::init(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn init((): ()) {
     management::open(true, readiness());
 }
-#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+
+/// Reopen the profile manager state from the preceding executable.
+#[runtime::post_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn post_upgrade((): ()) {
     management::open(false, readiness());
 }
+
 management::mount_endpoints! {
     store_publication, observe_store, observe_store_custody, store_admission,
     stage_store_maintenance, advance_store_maintenance, observe_store_maintenance,
@@ -61,6 +77,7 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
+/// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
 }

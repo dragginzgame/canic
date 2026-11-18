@@ -1,7 +1,9 @@
 //! Exercise the shipped CLI process, with PocketIC confined to its own graph.
 
-use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder};
-use ic_testkit::server::{Limits, PreparedServer, Server};
+use ic_testkit::{
+    pocket_ic::{CanisterId, PocketIcBuilder},
+    server::{Limits, PreparedServer, Server},
+};
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},

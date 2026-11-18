@@ -27,6 +27,7 @@ use ic_platform_types::Principal;
 fn state(slot: ChildId) -> Option<Maintenance> {
     application::lifecycle(slot)?.upgrades.last().cloned()
 }
+
 fn mutate(slot: ChildId, f: impl FnOnce(&mut Maintenance)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
@@ -39,6 +40,7 @@ fn mutate(slot: ChildId, f: impl FnOnce(&mut Maintenance)) {
         state.set_artifact(artifacts);
     });
 }
+
 pub(super) fn waiting(slot: ChildId) -> bool {
     state(slot).is_some_and(|s| {
         matches!(
@@ -51,6 +53,7 @@ pub(super) fn waiting(slot: ChildId) -> bool {
         )
     })
 }
+
 fn frame(method: u64, value: &impl serde::Serialize) -> Vec<u8> {
     ic_wire::encode(
         value,
@@ -62,6 +65,7 @@ fn frame(method: u64, value: &impl serde::Serialize) -> Vec<u8> {
     )
     .expect("bounded Blob control request")
 }
+
 async fn call(a: &Approval, method: &str, args: Vec<u8>) -> Result<Vec<u8>, Failure> {
     Call::new(
         Principal::from_text(&a.child).expect("retained child"),
@@ -74,6 +78,7 @@ async fn call(a: &Approval, method: &str, args: Vec<u8>) -> Result<Vec<u8>, Fail
     .map_err(super::failure)
     .and_then(super::response)
 }
+
 async fn inspect(a: &Approval) -> Result<(ManagementView, Arguments), Failure> {
     let bytes = call(a, "blob_management", frame(blob::MANAGEMENT, &())).await?;
     let view: Result<ManagementView, Error> = ic_wire::decode(
@@ -98,6 +103,7 @@ async fn inspect(a: &Approval) -> Result<(ManagementView, Arguments), Failure> {
         Arguments::new(bytes).map_err(|_| Failure::InvalidReply)?,
     ))
 }
+
 fn issue(slot: ChildId, phase: Phase, index: usize, bytes: &[u8]) {
     mutate(slot, |s| {
         assert!(s.requests[index].is_none(), "one maintenance dispatch");
@@ -108,6 +114,7 @@ fn issue(slot: ChildId, phase: Phase, index: usize, bytes: &[u8]) {
         s.phase = phase;
     });
 }
+
 async fn command(slot: ChildId, a: &Approval, activate: bool) -> Result<(), Failure> {
     let s = state(slot).expect("maintenance");
     let input = if activate {
@@ -144,6 +151,7 @@ async fn command(slot: ChildId, a: &Approval, activate: bool) -> Result<(), Fail
         _ => Err(Failure::Mismatch),
     }
 }
+
 async fn runtime(slot: ChildId, a: &Approval, start: bool) -> Result<(), Failure> {
     // Restart is a new effect too; observing a completed installation cannot
     // renew its original deadline or consume the other children's reserve.
@@ -182,6 +190,7 @@ async fn runtime(slot: ChildId, a: &Approval, start: bool) -> Result<(), Failure
         .map_err(|_| Failure::InvalidReply)?;
     observe(slot, a).await
 }
+
 /// Advance only unissued preparation. Each successful boundary commits before the next timer.
 pub(super) async fn prepare(slot: ChildId, a: &Approval) -> Result<bool, Failure> {
     let s = state(slot).expect("maintenance");
@@ -215,6 +224,7 @@ pub(super) async fn prepare(slot: ChildId, a: &Approval) -> Result<bool, Failure
     }
     Ok(false)
 }
+
 /// Reconstruct evidence only. No effect is authorized by missing/failed observations.
 pub(super) async fn observe(slot: ChildId, a: &Approval) -> Result<(), Failure> {
     let s = state(slot).expect("maintenance");
@@ -280,6 +290,7 @@ pub(super) async fn observe(slot: ChildId, a: &Approval) -> Result<(), Failure> 
     }
     Ok(())
 }
+
 /// Start and inspect after the existing owner has verified the installed code/version.
 pub(super) async fn resume(slot: ChildId, a: &Approval) -> Result<bool, Failure> {
     match state(slot).expect("maintenance").phase {
@@ -303,6 +314,7 @@ pub(super) async fn resume(slot: ChildId, a: &Approval) -> Result<bool, Failure>
     }
     Ok(false)
 }
+
 /// Explicit activation under the original operation. This endpoint never upgrades or renews it.
 /// # Panics
 /// Traps for changed/unauthorized authority or failed durable writes.

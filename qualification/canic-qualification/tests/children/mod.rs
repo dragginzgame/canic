@@ -36,6 +36,7 @@ async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
     )
     .unwrap()
 }
+
 async fn admit(
     pic: &PocketIc,
     root: CanisterId,
@@ -69,6 +70,7 @@ async fn admit(
     )
     .unwrap()
 }
+
 pub(super) fn input(root: CanisterId, wasm: Vec<u8>, now: u64) -> Stage {
     Stage {
         approval: Approval {
@@ -81,6 +83,7 @@ pub(super) fn input(root: CanisterId, wasm: Vec<u8>, now: u64) -> Stage {
         wasm,
     }
 }
+
 pub(super) fn artifact(name: &str) -> Vec<u8> {
     std::fs::read(repo().join("target/root").join(name)).unwrap()
 }
@@ -733,6 +736,7 @@ async fn child_admission_reserves_siblings_unissued_attachment() {
 fn padded_artifact(name: &str) -> Vec<u8> {
     pad_artifact(name, children::MAX_ARTIFACT_BYTES / 4)
 }
+
 fn pad_artifact(name: &str, maximum: usize) -> Vec<u8> {
     let mut bytes = artifact(name);
     let mut length = maximum - bytes.len() - 4;

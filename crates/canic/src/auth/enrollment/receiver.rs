@@ -58,6 +58,7 @@ impl Receiver {
             observed_at_ns: now_ns,
         })
     }
+
     /// Reserve the original receipt window before awaiting entropy. An unexpired
     /// attempt stays busy, including after a transport failure or callback trap.
     pub fn begin(&mut self, now_ns: u64) -> Result<Start, Error> {
@@ -73,6 +74,7 @@ impl Receiver {
         self.pending = Some((start.sequence, start.deadline_ns));
         Ok(start)
     }
+
     /// Bind real entropy to the pending admission and the supplier's exact window.
     pub fn prepare(
         &mut self,
@@ -93,6 +95,7 @@ impl Receiver {
             start: challenge.start,
         })
     }
+
     /// Validate the complete authenticated response before supplier publication.
     /// No fallible host work follows successful metadata installation. A later
     /// application persistence/encoding failure must trap the whole IC callback.
@@ -147,6 +150,7 @@ impl Receiver {
         self.pending = None;
         Ok(())
     }
+
     /// Borrow current protected content without extending freshness or any session.
     pub fn current(&self, now_ns: u64) -> Result<&Snapshot, Error> {
         if now_ns < self.observed_at_ns {
@@ -158,6 +162,7 @@ impl Receiver {
         }
         Ok(snapshot)
     }
+
     fn check(&mut self, start: &Start, now_ns: u64) -> Result<(), Error> {
         self.observe(now_ns)?;
         if self.pending != Some((start.sequence, start.deadline_ns)) {
@@ -168,6 +173,7 @@ impl Receiver {
         }
         Ok(())
     }
+
     fn observe(&mut self, now_ns: u64) -> Result<(), Error> {
         if now_ns < self.observed_at_ns {
             return Err(Error::Invalid);

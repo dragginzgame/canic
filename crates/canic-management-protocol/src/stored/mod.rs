@@ -1,4 +1,8 @@
 //! Store-backed authority; legacy inline approvals keep their original wire representation.
+
+#[cfg(test)]
+mod tests;
+
 use crate::children;
 use ic_wasm_store_protocol::{Manifest, Pin};
 use serde::{Deserialize, Serialize};
@@ -102,9 +106,6 @@ pub struct Custody {
     /// None denotes an inline child; no raw bytes are exported.
     pub sources: [Option<Sources>; 2],
 }
-
-#[cfg(test)]
-mod tests;
 
 /// Controller-only approval for Root-managed shard growth from one immutable release.
 /// The selected hub is independent of Root's two managed child identities.

@@ -1,5 +1,9 @@
 //! Shared preparation paths for installed Canic qualification; no product API.
 
+mod counter;
+
+pub use counter::counter;
+
 /// Apply Canic's Runtime upgrade contract to a running installed fixture.
 /// A successful stop reply establishes callback drain. Restart the original
 /// executable even when the candidate traps, so callers can inspect rollback.
@@ -54,6 +58,7 @@ pub fn isolated_signer(
     identity: &str,
 ) -> (std::path::PathBuf, String) {
     use std::{os::unix::fs::PermissionsExt, process::Command};
+
     fn quoted(path: &std::path::Path) -> String {
         format!(
             "'{}'",

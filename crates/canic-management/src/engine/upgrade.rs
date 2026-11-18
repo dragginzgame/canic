@@ -3,11 +3,15 @@ use super::{
     Artifact, MANAGEMENT_LIMITS, OBSERVING, STATE, State, delivery, failure, fault, management,
     observing, reserved_cycles, response, schedule, snapshot,
 };
-use canic_management_protocol::children::ChildId;
-use canic_management_protocol::upgrade::{
-    Approval, MAX_UPGRADES, Phase as UpgradePhase, Stage as UpgradeStage, Status as UpgradeStatus,
+use canic_management_protocol::{
+    Failure, Phase, Refusal,
+    children::ChildId,
+    digest, stored,
+    upgrade::{
+        Approval, MAX_UPGRADES, Phase as UpgradePhase, Stage as UpgradeStage,
+        Status as UpgradeStatus,
+    },
 };
-use canic_management_protocol::{Failure, Phase, Refusal, digest, stored};
 use ic_platform_protocol::{
     management::{self as mgmt, CanisterArgs, CanisterStatus, InstallChunkedCodeArgs, InstallMode},
     management_snapshots::Status as RuntimeStatus,
@@ -29,6 +33,7 @@ pub fn status(slot: ChildId) -> UpgradeStatus {
             .clone()
     })
 }
+
 fn mutate(slot: ChildId, f: impl FnOnce(&mut UpgradeStatus)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
@@ -37,6 +42,7 @@ fn mutate(slot: ChildId, f: impl FnOnce(&mut UpgradeStatus)) {
         state.set_journal(value);
     });
 }
+
 /// Lookup never dispatches, replaces or reopens a historical operation.
 /// # Panics
 /// Traps if lifecycle initialization has not completed.
@@ -194,6 +200,7 @@ impl Input {
             Self::Application(s) => &s.source.source.approval,
         }
     }
+
     fn validate(
         &self,
         manager: &str,
@@ -225,6 +232,7 @@ impl Input {
         }
     }
 }
+
 pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, Refusal> {
     assert!(api::is_controller(&api::caller()), "controller required");
     if super::store_maintenance::active() {
@@ -360,6 +368,7 @@ pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, 
     schedule(slot);
     Ok(status(slot))
 }
+
 pub(super) fn next(slot: ChildId) -> Option<u64> {
     let s = status(slot);
     #[cfg(feature = "blob")]
@@ -380,6 +389,7 @@ pub(super) fn next(slot: ChildId) -> Option<u64> {
         _ => None,
     }
 }
+
 pub(super) async fn inspect(a: &Approval) -> Result<CanisterStatus, Failure> {
     let args = CanisterArgs {
         canister_id: Principal::from_text(&a.child).map_err(|_| Failure::Mismatch)?,
@@ -394,6 +404,7 @@ pub(super) async fn inspect(a: &Approval) -> Result<CanisterStatus, Failure> {
     }
     Ok(value)
 }
+
 fn issue(slot: ChildId, index: usize, phase: UpgradePhase, bytes: &[u8]) {
     mutate(slot, |s| {
         assert_eq!(s.attempts[index], 0, "no effect replay");
@@ -402,6 +413,7 @@ fn issue(slot: ChildId, index: usize, phase: UpgradePhase, bytes: &[u8]) {
         s.phase = phase;
     });
 }
+
 pub(super) async fn step(slot: ChildId) {
     let s = status(slot);
     let Some(a) = &s.approval else {
@@ -546,6 +558,7 @@ pub(super) async fn step(slot: ChildId) {
         mutate(slot, |s| s.failure = Some(error));
     }
 }
+
 // Stop/start have no caller-supplied payload beyond the immutable approved child.
 // Their issued phases are durable fences. No observation path can reissue them.
 async fn runtime_transition(slot: ChildId, a: &Approval, start: bool) -> Result<(), Failure> {
@@ -581,6 +594,7 @@ async fn runtime_transition(slot: ChildId, a: &Approval, start: bool) -> Result<
     mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
     observe_runtime(slot, a, start).await
 }
+
 async fn observe_runtime(slot: ChildId, a: &Approval, start: bool) -> Result<(), Failure> {
     let value = inspect(a).await?;
     let (hash, state) = if start {
@@ -610,6 +624,7 @@ async fn observe_runtime(slot: ChildId, a: &Approval, start: bool) -> Result<(),
     });
     Ok(())
 }
+
 async fn observation(slot: ChildId) -> Result<(), Failure> {
     let s = status(slot);
     let Some(a) = &s.approval else {
@@ -680,6 +695,7 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
     }
     Ok(())
 }
+
 /// Recover observations and resume only effects that were never issued.
 /// # Panics
 /// Traps for noncontrollers, mismatched approvals, uninitialized storage or failed durable writes.
@@ -694,6 +710,7 @@ pub async fn reconcile(
     );
     reconcile_bound(slot, expected).await
 }
+
 pub(super) async fn reconcile_bound(slot: ChildId, expected: Approval) -> UpgradeStatus {
     assert!(
         !super::store_maintenance::active(),

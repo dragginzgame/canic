@@ -44,6 +44,7 @@ pub(super) fn selection() -> SelectedFleet {
         },
     }
 }
+
 pub(super) fn publication(version: &str) -> PublicationInput {
     PublicationInput {
         canister: "app".into(),
@@ -158,6 +159,7 @@ fn artifact_listing_preserves_unknown_outcomes_scope_and_corrupt_evidence() {
     assert!(report.publications.is_empty());
     assert_eq!(report.issues.len(), 2);
 }
+
 #[test]
 fn immutable_release_plans_retain_deadlines_without_reserving_deployment_slots() {
     let dir = directory();
@@ -202,6 +204,7 @@ fn immutable_release_plans_retain_deadlines_without_reserving_deployment_slots()
     .unwrap();
     assert!(!dir.join(&id).join("receipt.json").exists());
 }
+
 #[test]
 fn publication_rejects_conflicting_authority_and_retains_an_exact_read_contract() {
     let dir = directory();
@@ -255,6 +258,7 @@ fn publication_rejects_conflicting_authority_and_retains_an_exact_read_contract(
         before
     );
 }
+
 #[test]
 fn publication_evidence_cannot_become_an_installation_receipt_or_change_the_manifest() {
     let dir = directory();

@@ -14,6 +14,7 @@ async fn history(root: &Client<'_>) -> custody::RootHistory {
     )
     .await
 }
+
 async fn stage(root: &Client<'_>, approval: &wire::Approval) -> Result<wire::Status, Refusal> {
     root.update(
         "stage_store_maintenance",
@@ -23,6 +24,7 @@ async fn stage(root: &Client<'_>, approval: &wire::Approval) -> Result<wire::Sta
     )
     .await
 }
+
 async fn finish(root: &Client<'_>, approval: &wire::Approval, wasm: &[u8]) -> wire::Status {
     first::install(
         root,

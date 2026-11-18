@@ -61,20 +61,38 @@ pub fn fail(error: impl std::fmt::Debug) -> ! {
 /// The explicit synchronous handler accepts `&str` and returns `canic::Greeting`.
 /// Mounting starts no storage, timers or lifecycle and grants no authority.
 /// This fixed greeting probe does not establish readiness for other applications.
+// Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
+#[rustfmt::skip]
 #[macro_export]
 macro_rules! mount_greeting_endpoints {
     ($handler:path) => {
         mod canic_greeting {
-            use $crate::{Greeting, greeting as endpoint};
             use endpoint::runtime;
+            use $crate::{Greeting, greeting as endpoint};
 
-            #[runtime::query(runtime = runtime, guard = endpoint::bounded, decode = endpoint::decode, max_bytes = 4096, on_error = endpoint::fail, name = "greet", encode = endpoint::encode)]
+            #[runtime::query(
+                runtime = runtime,
+                guard = endpoint::bounded,
+                decode = endpoint::decode,
+                max_bytes = 4096,
+                on_error = endpoint::fail,
+                name = "greet",
+                encode = endpoint::encode,
+            )]
             #[allow(clippy::needless_pass_by_value)]
             fn greet(name: String) -> Greeting {
                 $handler(&name)
             }
 
-            #[runtime::update(runtime = runtime, guard = endpoint::bounded, decode = endpoint::decode, max_bytes = 4096, on_error = endpoint::fail, name = "probe", encode = endpoint::encode)]
+            #[runtime::update(
+                runtime = runtime,
+                guard = endpoint::bounded,
+                decode = endpoint::decode,
+                max_bytes = 4096,
+                on_error = endpoint::fail,
+                name = "probe",
+                encode = endpoint::encode,
+            )]
             #[allow(clippy::needless_pass_by_value)]
             fn probe(name: String) -> Greeting {
                 $handler(&name)

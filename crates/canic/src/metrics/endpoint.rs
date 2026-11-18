@@ -15,6 +15,7 @@ pub fn admit() -> Result<(), String> {
     raw::msg_arg_data_copy(&mut header, 0);
     ic_wire::validate_request_header(METHOD, &header).map_err(|e| e.to_string())
 }
+
 /// Decode the empty request; callers cannot select labels, authority or providers.
 /// # Errors
 /// Refuses malformed or over-budget input; the endpoint traps this refusal.
@@ -28,6 +29,7 @@ pub fn decode(bytes: &[u8]) -> Result<(), ic_wire::Error> {
         REQUEST_LIMITS,
     )
 }
+
 /// Encode the bounded observation without recording or scheduling work.
 /// # Errors
 /// Refuses a report exceeding its contract; the endpoint traps this refusal.

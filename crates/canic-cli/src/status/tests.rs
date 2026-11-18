@@ -104,6 +104,7 @@ fn fixture(value: &serde_json::Value) -> Result<CanisterStatus> {
         detail,
     })
 }
+
 fn render(value: &serde_json::Value, journal: &Path) -> Result<String> {
     super::render(
         &OperationStatus::Canister(Box::new(fixture(value)?)),
@@ -591,6 +592,7 @@ fn ready_root_evidence_requires_a_separate_receipt_and_unknown_evidence_stays_un
     state["management"]["failure"] = "future-unknown-failure".into();
     assert!(render(&state, Path::new("journal")).is_err());
 }
+
 #[test]
 fn fleet_budget_and_utc_labels_preserve_exact_boundaries() {
     assert_eq!(

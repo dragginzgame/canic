@@ -1,4 +1,8 @@
 //! Explicit mainnet subnet candidates in fleet context; no placement recommendation.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{Error, Network, Result, SelectedFleet, supplier};
 use ic_platform_types::Principal;
 use ic_query_topology::subnet::compare::{self, ComparisonError, SubnetComparisonReport};
@@ -61,6 +65,3 @@ where
         observation,
     })
 }
-
-#[cfg(test)]
-mod tests;

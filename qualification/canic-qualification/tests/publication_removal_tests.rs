@@ -3,8 +3,7 @@ use super::{
     CanisterId, CanisterSettings, Duration, Limits, Path, PathBuf, PocketIcBuilder, PreparedServer,
     Server, Value, cli, hex, json, run,
 };
-use canic_management_protocol::stored::STORE_LIMITS;
-use canic_management_protocol::{children, publication as wire};
+use canic_management_protocol::{children, publication as wire, stored::STORE_LIMITS};
 use ic_testkit::pocket_ic::nonblocking::PocketIc;
 use ic_wasm_store_protocol as store;
 
@@ -16,6 +15,7 @@ fn time() -> u64 {
         .try_into()
         .unwrap()
 }
+
 fn deadlines(dir: &Path, operation: &str, steps: &[&str]) -> u64 {
     let deadline = time() + 12_000_000_000;
     for step in steps {
@@ -26,12 +26,14 @@ fn deadlines(dir: &Path, operation: &str, steps: &[&str]) -> u64 {
     }
     deadline
 }
+
 async fn expire(deadline: u64) {
     tokio::time::sleep(Duration::from_nanos(
         deadline.saturating_sub(time()) + 250_000_000,
     ))
     .await;
 }
+
 fn publication(dir: &Path, version: &str, root_hash: &str, store_hash: &str) -> String {
     cli(
         dir,
@@ -56,6 +58,7 @@ fn publication(dir: &Path, version: &str, root_hash: &str, store_hash: &str) -> 
         .unwrap()
         .into()
 }
+
 fn remove(dir: &Path, operation: &str, action: &str) -> String {
     cli(
         dir,
@@ -72,12 +75,14 @@ fn remove(dir: &Path, operation: &str, action: &str) -> String {
         .unwrap()
         .into()
 }
+
 fn apply(dir: &Path, operation: &str) -> Value {
     cli(
         dir,
         &["fleet", "apply", operation, "--identity", "anonymous"],
     )
 }
+
 async fn update<T: serde::Serialize, R: serde::de::DeserializeOwned>(
     pic: &PocketIc,
     canister: CanisterId,
@@ -108,6 +113,7 @@ async fn update<T: serde::Serialize, R: serde::de::DeserializeOwned>(
     )
     .unwrap()
 }
+
 async fn observe(
     pic: &PocketIc,
     root: CanisterId,
@@ -130,6 +136,7 @@ async fn observe(
     )
     .await
 }
+
 async fn fault(pic: &PocketIc, root: CanisterId, value: u8) {
     update::<_, ()>(
         pic,

@@ -170,6 +170,7 @@ pub fn hub_readiness() -> State {
         State::Unavailable
     }
 }
+
 #[doc(hidden)]
 #[must_use]
 pub fn shard_readiness() -> State {

@@ -2,13 +2,16 @@
 
 #![forbid(unsafe_code)]
 
+#[cfg(test)]
+mod config_tests;
+#[cfg(test)]
+mod tests;
+
 mod application;
 mod args;
 mod artifacts;
 mod auth;
 mod catalog;
-#[cfg(test)]
-mod config_tests;
 mod fleet;
 mod placements;
 mod progress;
@@ -662,6 +665,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
     };
     result.map(Output::Json)
 }
+
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> std::process::ExitCode {
     let cli =
@@ -691,6 +695,3 @@ async fn main() -> std::process::ExitCode {
         }
     }
 }
-
-#[cfg(test)]
-mod tests;

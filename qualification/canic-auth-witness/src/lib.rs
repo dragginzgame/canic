@@ -7,8 +7,7 @@ mod issuer;
 #[cfg(all(target_arch = "wasm32", feature = "profile"))]
 mod profile;
 
-pub use canic::auth::enrollment;
-pub use canic::auth::protocol;
+pub use canic::auth::{enrollment, protocol};
 use ic_auth_protocol_types::{AudienceId, CanonicalId};
 use serde::{Deserialize, Serialize};
 

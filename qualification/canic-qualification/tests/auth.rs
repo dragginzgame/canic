@@ -20,8 +20,10 @@ use ic_auth::{
 };
 use ic_auth_protocol_types::{DelegatedRoleGrant, PortableClaims, PortableMechanism, Principal};
 use ic_platform_crypto::ed25519::{Signer, SigningKey};
-use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc};
-use ic_testkit::server::{Instance, Limits, PreparedServer, Server};
+use ic_testkit::{
+    pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc},
+    server::{Instance, Limits, PreparedServer, Server},
+};
 use sha2::{Digest, Sha256};
 use std::{path::PathBuf, time::Duration};
 
@@ -30,6 +32,7 @@ const SECOND: u64 = 1_000_000_000;
 fn input(now: u64) -> (CanisterId, SessionInput) {
     input_for_device(now, 9, 0)
 }
+
 fn input_for_device(now: u64, device: u8, slot: u8) -> (CanisterId, SessionInput) {
     let key = SigningKey::from_bytes(&[7; 32]);
     assert_eq!(key.verifying_key().to_bytes(), KEY);
@@ -70,6 +73,7 @@ fn input_for_device(now: u64, device: u8, slot: u8) -> (CanisterId, SessionInput
         },
     )
 }
+
 async fn receiver_refresh(
     pic: &PocketIc,
     receiver: CanisterId,
@@ -86,12 +90,14 @@ async fn receiver_refresh(
         .unwrap();
     enrollment::decode_refresh_response(&bytes).unwrap()
 }
+
 async fn control(pic: &PocketIc, target: CanisterId, caller: CanisterId, command: u8) -> bool {
     pic.update_call(target, caller, "control", vec![command])
         .await
         .unwrap()
         == [1]
 }
+
 async fn observe(pic: &PocketIc, target: CanisterId) -> Observation {
     let bytes = pic
         .query_call(target, CanisterId::anonymous(), "observe", vec![])
@@ -119,6 +125,7 @@ fn enrollment_request(method: u64, value: &impl serde::Serialize) -> Vec<u8> {
     )
     .unwrap()
 }
+
 fn enrollment_response<T: serde::de::DeserializeOwned>(method: u64, bytes: &[u8]) -> T {
     ic_wire::decode(
         bytes,
@@ -130,6 +137,7 @@ fn enrollment_response<T: serde::de::DeserializeOwned>(method: u64, bytes: &[u8]
     )
     .unwrap()
 }
+
 async fn snapshot(pic: &PocketIc, receiver: CanisterId) -> enrollment::Snapshot {
     let bytes = pic
         .query_call(

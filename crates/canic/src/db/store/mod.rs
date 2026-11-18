@@ -1,4 +1,8 @@
 //! Install or reopen one typed database after the actor admits its complete Storage directory.
+
+#[cfg(test)]
+mod tests;
+
 use ic_db::Schema;
 use ic_storage::{Memory, StableKey};
 use std::cell::RefCell;
@@ -92,12 +96,11 @@ macro_rules! declare_db_store {
     };
 }
 
-#[cfg(test)]
-mod tests;
-
 /// Declare the generated database and install one Auth-enrolled hub or shard.
 /// Put this in the role setup module. IC DB's build script owns schema generation.
 /// Native builds need only `db-store`; Wasm builds select `stateful-role`.
+/// A shard retains its approved parent in `<prefix>hub.v1`. For a predecessor
+/// using a different allocation, specify its exact `parent_storage_key`.
 #[macro_export]
 macro_rules! mount_db_role {
     (hub, database = $key:literal, config = $config:literal, authority = $owner:literal,
@@ -106,25 +109,51 @@ macro_rules! mount_db_role {
         #[cfg(target_arch = "wasm32")]
         mod actor {
             use $crate::db::role;
-            $crate::mount_auth_lifecycle!(decode_context = $crate::db::role::decode_hub, open = super::open);
+
+            $crate::mount_auth_lifecycle!(
+                decode_context = $crate::db::role::decode_hub,
+                open = super::open,
+            );
+
             fn open(initial: Option<role::HubConfig>) {
                 role::open_hub(initial, $owner, $key, $config, $pages, super::database::store::attach);
             }
+
             $crate::mount_auth_session!(read = $scope);
+
             $crate::mount_readiness_endpoint!($crate::db::role::hub_readiness);
         }
     };
-    (shard, database = $key:literal, parent = $parent:literal, authority = $owner:literal,
+    (shard, database = $key:literal, authority = $owner:literal,
+     prefix = $prefix:literal, auth_read = $scope:literal $(,)?) => {
+        $crate::mount_db_role!(
+            shard,
+            database = $key,
+            parent_storage_key = concat!($prefix, "hub.v1"),
+            authority = $owner,
+            prefix = $prefix,
+            auth_read = $scope
+        );
+    };
+    (shard, database = $key:literal, parent_storage_key = $parent:expr, authority = $owner:literal,
      prefix = $prefix:literal, auth_read = $scope:literal $(,)?) => {
         $crate::declare_db_store!(pub mod database, key = $key);
         #[cfg(target_arch = "wasm32")]
         mod actor {
             use $crate::db::role;
-            $crate::mount_auth_lifecycle!(decode_context = $crate::db::role::decode_shard, open = super::open);
+
+            $crate::mount_auth_lifecycle!(
+                decode_context = $crate::db::role::decode_shard,
+                open = super::open,
+            );
+
             fn open(initial: Option<role::ShardConfig>) {
-                role::open_shard(initial, $owner, $prefix, $key, $parent, super::database::store::attach);
+                const PARENT_STORAGE_KEY: &str = $parent;
+                role::open_shard(initial, $owner, $prefix, $key, PARENT_STORAGE_KEY, super::database::store::attach);
             }
+
             $crate::mount_auth_session!(read = $scope);
+
             $crate::mount_readiness_endpoint!($crate::db::role::shard_readiness);
         }
     };

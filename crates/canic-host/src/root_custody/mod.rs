@@ -1,5 +1,9 @@
 //! Decode an explicitly selected historical contract into identity-keyed Host evidence.
 //! This projection grants no authority and never probes or falls back to another endpoint.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{Error, Result, supplier};
 use canic_management_protocol::{children::ChildId, custody, store_maintenance, stored};
 use std::collections::BTreeMap;
@@ -77,6 +81,3 @@ pub(crate) fn decode(method: u64, bytes: &[u8]) -> Result<Snapshot> {
         store_history,
     })
 }
-
-#[cfg(test)]
-mod tests;

@@ -5,9 +5,7 @@ use canic_management_protocol::{Phase, stored};
 use ic_testkit::pocket_ic::nonblocking::PocketIc;
 use ic_wire::{Direction, Encoding};
 
-#[path = "../support/counter.rs"]
-mod counter_client;
-use counter_client::counter;
+use canic_qualification::counter;
 
 async fn custody(pic: &PocketIc, root: CanisterId) -> stored::Custody {
     let reply = pic

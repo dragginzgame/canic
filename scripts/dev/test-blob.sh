@@ -9,7 +9,7 @@ cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "
 for entry in root:canic-root store:ic-wasm-store; do
     name=${entry%%:*}
     features=()
-    if [[ "$name" == root ]]; then features=(--features blob,fault-injection); fi
+    if [[ "$name" == root ]]; then features=(--features "blob,fault-injection"); fi
     "$cli" artifact build --package "${entry#*:}" "${features[@]}" --output "target/blob/$name.wasm" --json > "target/blob/$name.json"
 done
 perl scripts/dev/blob-inputs.pl > target/blob/inputs.before.json

@@ -1,13 +1,14 @@
 //! Public mainnet default-account observations; no signer or transfer authority.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{Error, Network, Result, supplier};
 use ic_platform::native::ReadClient;
 use ic_platform_protocol::{candid::Limits, ledger};
 use ic_platform_types::{Account, Principal};
 use serde::Serialize;
 use std::time::Duration;
-
-#[cfg(test)]
-mod tests;
 
 const ICP_LEDGER: &str = "ryjl3-tyaaa-aaaaa-aaaba-cai";
 const CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";

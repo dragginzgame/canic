@@ -1,9 +1,14 @@
 //! Canic output comparison only; never an authority for opening or publication.
-use std::ffi::OsStr;
-use std::fs;
-use std::io;
-use std::os::unix::ffi::OsStrExt;
-use std::path::{Path, PathBuf};
+
+#[cfg(test)]
+mod tests;
+
+use std::{
+    ffi::OsStr,
+    fs, io,
+    os::unix::ffi::OsStrExt,
+    path::{Path, PathBuf},
+};
 
 pub(crate) fn resolve(path: &Path, base: &Path) -> io::Result<PathBuf> {
     resolve_at(path, base, 0)
@@ -61,6 +66,3 @@ fn resolve_at(path: &Path, base: &Path, depth: usize) -> io::Result<PathBuf> {
     }
     Ok(resolved)
 }
-
-#[cfg(test)]
-mod tests;

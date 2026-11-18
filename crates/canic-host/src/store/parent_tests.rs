@@ -1,6 +1,8 @@
 use super::Store;
-use std::fs;
-use std::os::unix::fs::{PermissionsExt, symlink};
+use std::{
+    fs,
+    os::unix::fs::{PermissionsExt, symlink},
+};
 
 #[test]
 fn private_parent_creation_preserves_existing_modes() {

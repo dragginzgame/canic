@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use crate::{
     Artifact, Error, Network, Result, artifact,
     network::principal,
@@ -9,8 +12,6 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 mod action;
 mod record;
-#[cfg(test)]
-mod tests;
 pub use action::{PlanAction, StoreMaintenance, UpgradeTarget};
 
 /// One explicit effect approval, including application calls. No implicit funding conversions.
@@ -87,6 +88,7 @@ impl Plan {
             artifact::MAX_WASM
         }
     }
+
     pub(crate) fn validate(&self) -> Result<()> {
         self.network.validate()?;
         let controller = principal(&self.controller)?;

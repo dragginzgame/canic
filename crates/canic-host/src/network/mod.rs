@@ -1,15 +1,14 @@
+#[cfg(test)]
+mod tests;
+
 use crate::{Error, Result, supplier, unhex};
 use ic_platform::{
     certificate::{PreparedRootKey, TimePolicy, TimeWindow, VerificationLimits},
-    native::ReadClient,
-    native::ReadConfig,
+    native::{ReadClient, ReadConfig},
 };
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
-
-#[cfg(test)]
-mod tests;
 
 /// Network and trust anchor are part of the approved plan.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

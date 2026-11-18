@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use crate::{
     Error, Network, Plan, Result,
     network::{bounded, principal},
@@ -17,9 +20,6 @@ pub use status::{
     CanisterStatus, FleetChildStatus, FleetStatus, FleetStepStatus, ManagementStatus,
     OperationStatus, StatusDetail,
 };
-
-#[cfg(test)]
-mod tests;
 
 const LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 const LEDGER_FEE: u64 = 100_000_000;

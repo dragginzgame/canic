@@ -1,6 +1,5 @@
 use super::{CYCLES_LEDGER, ICP_LEDGER, amount, report};
-use crate::tests::wire_fixture;
-use crate::{Error, wallet_address};
+use crate::{Error, tests::wire_fixture, wallet_address};
 
 #[test]
 fn default_receive_address_matches_the_icp_cli() {

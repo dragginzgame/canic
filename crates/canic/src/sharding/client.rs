@@ -15,6 +15,7 @@ pub async fn assign(root: Principal, key: Key) -> Result<Placement, &'static str
 pub async fn lookup(root: Principal, key: Key) -> Result<Placement, &'static str> {
     call(root, "lookup_shard", LOOKUP, key).await
 }
+
 async fn call(
     root: Principal,
     name: &str,

@@ -6,6 +6,7 @@ async fn user(pic: &PocketIc, hub: CanisterId, caller: CanisterId, method: &str)
     let reply = pic.update_call(hub, caller, method, vec![]).await.unwrap();
     ic_wire::decode(&reply, ic_wire::Encoding::Payload, sharding::LIMITS).unwrap()
 }
+
 #[tokio::test(flavor = "current_thread")]
 async fn signup_retains_the_first_shard_across_reply_loss_growth_and_hub_upgrade() {
     exercise_pool(None).await;

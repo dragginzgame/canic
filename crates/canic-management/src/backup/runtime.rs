@@ -15,9 +15,11 @@ use ic_platform_types::Principal;
 pub(crate) fn occupied() -> bool {
     STATE.with_borrow(|s| s.as_ref().is_some_and(|s| s.backup.occupied()))
 }
+
 fn read<T>(f: impl FnOnce(&Ledger) -> T) -> T {
     STATE.with_borrow(|s| f(&s.as_ref().expect("open manager").backup))
 }
+
 fn mutate<T>(f: impl FnOnce(&mut Ledger) -> T) -> T {
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().expect("open manager");
@@ -26,6 +28,7 @@ fn mutate<T>(f: impl FnOnce(&mut Ledger) -> T) -> T {
         value
     })
 }
+
 /// Return only the exact retained original record; never issue management work.
 /// # Errors
 /// Refuses a missing or conflicting original binding.
@@ -35,6 +38,7 @@ pub fn lookup(binding: &Binding) -> Result<Record, Error> {
     assert!(api::is_controller(&api::caller()), "controller required");
     read(|l| l.lookup(binding))
 }
+
 /// Issue one admitted snapshot effect and durably retain its bounded original outcome.
 /// Duplicate execution is lookup-only, including after expiry and compatible upgrade.
 /// # Errors
@@ -142,14 +146,17 @@ pub async fn execute(request: Request) -> Result<Record, Error> {
     fault(2);
     read(|l| l.lookup(&binding))
 }
+
 #[cfg(feature = "fault-injection")]
 thread_local! { static FAULT: std::cell::Cell<u8> = const { std::cell::Cell::new(0) }; }
+
 #[cfg(feature = "fault-injection")]
 fn fault(point: u8) {
     if FAULT.with(|f| f.get()) == point {
         api::trap("snapshot callback fault");
     }
 }
+
 /// Select a callback-only qualification fault; never mounted by production Root.
 #[cfg(feature = "fault-injection")]
 pub fn inject(point: u8) {

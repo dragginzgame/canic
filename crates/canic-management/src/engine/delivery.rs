@@ -1,8 +1,9 @@
 //! Artifact delivery under the existing child journal. Store bytes never enter Root.
 use super::{MANAGEMENT_LIMITS, STATE, State, failure, management, response};
 use crate::storage::Artifact;
-use canic_management_protocol::stored::STORE_LIMITS;
-use canic_management_protocol::{Failure, Refusal, STAGE_LIMITS, children::ChildId, stored};
+use canic_management_protocol::{
+    Failure, Refusal, STAGE_LIMITS, children::ChildId, stored, stored::STORE_LIMITS,
+};
 use ic_platform_protocol::{
     management::CanisterArgs,
     management_chunks::{self as chunks, ChunkHash},
@@ -26,9 +27,11 @@ pub(super) fn source(slot: ChildId, upgrade: bool) -> Option<stored::Delivery> {
         .cloned()
     })
 }
+
 pub(super) fn is_stored(slot: ChildId) -> bool {
     source(slot, false).is_some()
 }
+
 fn mutate(slot: ChildId, upgrade: bool, f: impl FnOnce(&mut stored::Delivery)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
@@ -45,6 +48,7 @@ fn mutate(slot: ChildId, upgrade: bool, f: impl FnOnce(&mut stored::Delivery)) {
         state.set_artifact(artifacts);
     });
 }
+
 pub(super) fn admit(reference: &stored::Reference, hash: &[u8; 32]) -> Result<(), Refusal> {
     let principal = Principal::from_text(&reference.store).map_err(|_| Refusal::Binding)?;
     if principal == Principal::anonymous()
@@ -59,6 +63,7 @@ pub(super) fn admit(reference: &stored::Reference, hash: &[u8; 32]) -> Result<()
     }
     Ok(())
 }
+
 pub(super) fn retained<A: Serialize>(
     slot: ChildId,
     method: u64,
@@ -71,6 +76,7 @@ pub(super) fn retained<A: Serialize>(
         cache_deadline: None,
     }
 }
+
 pub(super) fn validate(state: &State, slot: ChildId) {
     let Some(sources) = state.artifact.0[&slot].sources() else {
         return;
@@ -159,6 +165,7 @@ pub(super) fn validate(state: &State, slot: ChildId) {
         );
     }
 }
+
 fn validate_source(
     source: &stored::Delivery,
     pin: &store::Pin,
@@ -178,6 +185,7 @@ fn validate_source(
         assert_eq!(source.state, stored::PinState::Retained);
     }
 }
+
 async fn call<T: Serialize, R: DeserializeOwned>(
     source: &stored::Delivery,
     method: &str,
@@ -213,6 +221,7 @@ async fn call<T: Serialize, R: DeserializeOwned>(
     )
     .map_err(|_| Failure::InvalidReply)
 }
+
 /// Pending pins dispatch once. Issued pins can only be reconstructed by observation.
 pub(super) async fn pin(slot: ChildId, upgrade: bool) -> Result<(), Failure> {
     let Some(source) = source(slot, upgrade) else {
@@ -236,6 +245,7 @@ pub(super) async fn pin(slot: ChildId, upgrade: bool) -> Result<(), Failure> {
     mutate(slot, upgrade, |s| s.state = stored::PinState::Retained);
     Ok(())
 }
+
 pub(super) fn needs_pin(slot: ChildId, upgrade: bool) -> bool {
     source(slot, upgrade).is_some_and(|s| s.state != stored::PinState::Retained)
 }
@@ -282,6 +292,7 @@ impl Upload {
         Ok(())
     }
 }
+
 pub(super) fn upload(slot: ChildId, upgrade: bool, hash: [u8; 32], expires: u64) -> Upload {
     let source = source(slot, upgrade);
     let bytes = if let Some(source) = &source {
@@ -316,6 +327,7 @@ pub(super) fn upload(slot: ChildId, upgrade: bool, hash: [u8; 32], expires: u64)
         hash,
     }
 }
+
 pub(super) fn layout(slot: ChildId, upgrade: bool, hash: [u8; 32]) -> (Principal, Vec<ChunkHash>) {
     if let Some(source) = source(slot, upgrade) {
         (
@@ -339,6 +351,7 @@ pub(super) fn layout(slot: ChildId, upgrade: bool, hash: [u8; 32]) -> (Principal
         )
     }
 }
+
 pub(super) async fn observe_cache(
     slot: ChildId,
     upgrade: bool,

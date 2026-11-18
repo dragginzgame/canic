@@ -1,7 +1,8 @@
-use std::fs;
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::symlink;
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    os::unix::{ffi::OsStrExt, fs::symlink},
+    path::{Path, PathBuf},
+};
 
 use super::resolve;
 

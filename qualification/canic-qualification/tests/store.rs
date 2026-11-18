@@ -47,6 +47,7 @@ impl Client<'_> {
         )
         .unwrap()
     }
+
     async fn info(&self) -> store::Info {
         let reply = self
             .pic
@@ -76,6 +77,7 @@ impl Client<'_> {
         )
         .unwrap()
     }
+
     async fn status(&self, release: &store::Release) -> store::Status {
         self.update::<_, Result<store::Status, store::Error>>(
             "observe",
@@ -86,9 +88,11 @@ impl Client<'_> {
         .await
         .unwrap()
     }
+
     async fn publish_bytes(&self, version: &str, bytes: &[u8]) -> store::Manifest {
         self.publish_named("greeting", version, bytes).await
     }
+
     async fn publish_named(&self, name: &str, version: &str, bytes: &[u8]) -> store::Manifest {
         let manifest = store::Manifest {
             release: store::Release {
@@ -134,6 +138,7 @@ impl Client<'_> {
         .unwrap();
         manifest
     }
+
     async fn pin(&self, pin: &store::Pin) -> store::PinReceipt {
         self.update::<_, Result<store::PinReceipt, store::Error>>(
             "pin",
@@ -144,6 +149,7 @@ impl Client<'_> {
         .await
         .unwrap()
     }
+
     async fn cache(&self, pin: &store::Pin) -> store::CacheReady {
         self.update::<_, Result<store::CacheReady, store::CacheError>>(
             "prepare_cache",

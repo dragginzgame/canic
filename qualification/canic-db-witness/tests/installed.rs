@@ -1,14 +1,20 @@
 //! Installed application + Canic mount + actual IC DB. Expected rows are literal
 //! application outcomes; no engine codec/query implementation in this host.
 mod managed;
-use canic::db::RPC_LIMITS;
-use canic::db::inspection::{Admission, Cardinality, Entity, Kind, Request, Selection};
+use canic::db::{
+    RPC_LIMITS,
+    inspection::{Admission, Cardinality, Entity, Kind, Request, Selection},
+};
 use canic_db_witness::protocol::{
     INSPECT, InspectReply, QUERY, QueryReply, QueryRequest, Refusal, Row, WRITE, WriteReply,
 };
-use ic_testkit::pocket_ic::common::rest::BlobCompression;
-use ic_testkit::pocket_ic::{CanisterId as Principal, PocketIcBuilder, nonblocking::PocketIc};
-use ic_testkit::server::{Limits, PreparedServer, Server};
+use ic_testkit::{
+    pocket_ic::{
+        CanisterId as Principal, PocketIcBuilder, common::rest::BlobCompression,
+        nonblocking::PocketIc,
+    },
+    server::{Limits, PreparedServer, Server},
+};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{path::PathBuf, time::Duration};
 
@@ -55,6 +61,7 @@ impl Client<'_> {
         )
         .unwrap()
     }
+
     async fn update<T: Serialize, R: DeserializeOwned>(
         &self,
         method: &str,
@@ -81,11 +88,13 @@ impl Client<'_> {
         )
         .unwrap()
     }
+
     async fn catalogue(&self) -> canic::db::inspection::Response {
         self.query::<_, InspectReply>("db_inspect", INSPECT, &Request::Catalogue)
             .await
             .unwrap()
     }
+
     async fn inspect(&self) -> Entity {
         let catalog = self.catalogue().await;
         let reply = self
@@ -105,19 +114,24 @@ impl Client<'_> {
         };
         entity
     }
+
     async fn page(&self, request: &QueryRequest) -> QueryReply {
         self.query("db_query", QUERY, request).await
     }
+
     async fn write(&self, rows: &[Row]) -> WriteReply {
         self.update("db_write", WRITE, &rows).await
     }
+
     async fn control(&self, command: u8) {
         self.update::<_, ()>("db_test_control", 991, &command).await;
     }
 }
+
 fn row(id: u64, score: u64) -> Row {
     Row { id, score }
 }
+
 fn wasm(name: &str) -> Vec<u8> {
     std::fs::read(std::env::var_os(name).expect("run integration script")).unwrap()
 }

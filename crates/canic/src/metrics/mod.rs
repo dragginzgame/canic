@@ -1,10 +1,12 @@
 //! Bounded public diagnostics, independent of recording engines and durable authority.
+
+#[cfg(test)]
+mod tests;
+
 use serde::{Deserialize, Serialize};
 
 #[cfg(all(feature = "metrics", target_arch = "wasm32"))]
 pub mod endpoint;
-#[cfg(test)]
-mod tests;
 
 /// Shared read-only metrics query. This version reports aggregate timer counters only.
 pub const METHOD: u64 = 2;
@@ -44,6 +46,7 @@ mod total {
             serializer.serialize_u128(*value)
         }
     }
+
     pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<u128, D::Error> {
         if deserializer.is_human_readable() {
             String::deserialize(deserializer)?
@@ -88,13 +91,24 @@ pub struct Snapshot {
 /// Mount a public, bounded query using an explicitly supplied local snapshot function.
 /// Mounting initializes no provider, storage, timer, sampler or persistent history.
 #[cfg(all(feature = "metrics", target_arch = "wasm32"))]
+// Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
+#[rustfmt::skip]
 #[macro_export]
 macro_rules! mount_metrics_endpoint {
     ($snapshot:path) => {
         mod canic_metrics {
             use endpoint::runtime;
             use $crate::metrics::{Snapshot, endpoint};
-            #[runtime::query(runtime = runtime, guard = endpoint::admit, decode = endpoint::decode, max_bytes = 32, on_error = endpoint::fail, name = "metrics", encode = endpoint::encode)]
+
+            #[runtime::query(
+                runtime = runtime,
+                guard = endpoint::admit,
+                decode = endpoint::decode,
+                max_bytes = 32,
+                on_error = endpoint::fail,
+                name = "metrics",
+                encode = endpoint::encode,
+            )]
             fn metrics((): ()) -> Snapshot {
                 $snapshot()
             }

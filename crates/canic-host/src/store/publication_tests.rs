@@ -1,6 +1,5 @@
 use crate::store;
-use std::fs;
-use std::os::unix::fs::PermissionsExt;
+use std::{fs, os::unix::fs::PermissionsExt};
 
 #[test]
 fn oversize_refuses_before_parent_creation() {

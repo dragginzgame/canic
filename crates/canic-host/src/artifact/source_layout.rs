@@ -69,7 +69,19 @@ impl Package {
             .manifest_path
             .parent()
             .ok_or_else(|| Error::Invalid("Cargo manifest has no parent".into()))?;
-        let mut pending = vec![PathBuf::from("src")];
+        let src = PathBuf::from("src");
+        if base
+            .join(&src)
+            .symlink_metadata()
+            .map_err(supplier)?
+            .is_symlink()
+        {
+            return Err(Error::Invalid(format!(
+                "{}: cannot validate symlink src",
+                self.name
+            )));
+        }
+        let mut pending = vec![src];
         while let Some(dir) = pending.pop() {
             for entry in std::fs::read_dir(base.join(&dir)).map_err(supplier)? {
                 let entry = entry.map_err(supplier)?;
@@ -84,6 +96,13 @@ impl Package {
                         path.display()
                     )));
                 } else if path.extension().is_some_and(|ext| ext == "rs") {
+                    if !kind.is_file() {
+                        return Err(Error::Invalid(format!(
+                            "{}: expected a regular Rust source file at {}",
+                            self.name,
+                            path.display()
+                        )));
+                    }
                     let bytes = crate::store::read(&base.join(&path), 1024 * 1024)?;
                     let syntax = syn::parse_file(std::str::from_utf8(&bytes).map_err(supplier)?)
                         .map_err(supplier)?;
@@ -119,6 +138,7 @@ impl<'ast> Visit<'ast> for Declarations {
             }
         }
     }
+
     fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
         if let Some(segment) = item.mac.path.segments.last() {
             let name = segment.ident.to_string();

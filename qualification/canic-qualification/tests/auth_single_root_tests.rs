@@ -72,6 +72,7 @@ async fn read(
 async fn single_root_revokes_shard_independently() {
     journey(true).await;
 }
+
 #[tokio::test]
 async fn single_root_revokes_hub_independently() {
     journey(false).await;

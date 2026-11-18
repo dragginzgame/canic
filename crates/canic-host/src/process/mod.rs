@@ -1,4 +1,8 @@
 //! Bounded native command capture; diagnostic disclosure remains with each caller.
+
+#[cfg(test)]
+mod tests;
+
 use ic_host_process::{Input, Ownership, Policy, Report, Stderr, Stream};
 use std::{io, process::Command, sync::atomic::AtomicBool, time::Duration};
 
@@ -79,6 +83,3 @@ pub(crate) fn capture_input(
     }
     Ok(stdout)
 }
-
-#[cfg(test)]
-mod tests;

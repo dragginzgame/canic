@@ -1,7 +1,5 @@
 use super::{MAX_ARTIFACT_BYTES, inspect};
-use std::fs;
-use std::os::unix::fs::symlink;
-use std::path::Path;
+use std::{fs, os::unix::fs::symlink, path::Path};
 
 #[test]
 fn exact_wasm_identity_follows_file_and_parent_aliases() {

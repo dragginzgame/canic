@@ -1,5 +1,7 @@
-use ic_testkit::pocket_ic::PocketIcBuilder;
-use ic_testkit::server::{Instance, Limits, PreparedServer, Server};
+use ic_testkit::{
+    pocket_ic::PocketIcBuilder,
+    server::{Instance, Limits, PreparedServer, Server},
+};
 use std::{
     path::{Path, PathBuf},
     time::Duration,

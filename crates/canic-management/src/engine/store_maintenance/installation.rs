@@ -106,6 +106,7 @@ pub async fn install(input: Install) -> Result<Status, Refusal> {
     }
     Ok(observe_attempt(&record.approval).expect("retained maintenance"))
 }
+
 async fn issue(record: &Status, wasm: Vec<u8>) -> Result<(), Failure> {
     if inspect(&record.approval).await?.status != RuntimeStatus::Stopped {
         return Err(Failure::Mismatch);
@@ -147,6 +148,7 @@ async fn issue(record: &Status, wasm: Vec<u8>) -> Result<(), Failure> {
     }
     Ok(())
 }
+
 fn install_args(approval: &Approval, sender_version: u64) -> Vec<u8> {
     InstallChunkedCodeArgs {
         mode: InstallMode::Upgrade(None),
@@ -162,6 +164,7 @@ fn install_args(approval: &Approval, sender_version: u64) -> Vec<u8> {
     .encode(4096)
     .expect("Store install args")
 }
+
 async fn chunk_present(approval: &Approval) -> Result<(), Failure> {
     let reply = management("stored_chunks", args(approval), 0).await?;
     let chunks = chunks::decode_stored_chunks(&reply, MANAGEMENT_LIMITS)
@@ -175,6 +178,7 @@ async fn chunk_present(approval: &Approval) -> Result<(), Failure> {
         Err(Failure::Uncertain)
     }
 }
+
 fn empty_reply(result: Result<Vec<u8>, Failure>) -> Result<(), Failure> {
     result.and_then(|reply| {
         mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)
@@ -300,6 +304,7 @@ pub async fn activate(approval: Approval) -> Status {
     }
     observe_attempt(&record.approval).expect("retained maintenance")
 }
+
 async fn activate_once(record: &Status) -> Result<(), Failure> {
     let approval = &record.approval;
     if inspect_module(approval, approval.module_hash).await?.status != RuntimeStatus::Running {

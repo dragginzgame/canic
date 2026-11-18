@@ -13,6 +13,7 @@ pub(super) fn lifecycle(slot: ChildId) -> Option<application::Lifecycle> {
         },
     )
 }
+
 pub(super) fn arguments(slot: ChildId, upgrade: bool) -> Vec<u8> {
     lifecycle(slot).map_or_else(Vec::new, |value| {
         if upgrade {
@@ -28,6 +29,7 @@ pub(super) fn arguments(slot: ChildId, upgrade: bool) -> Vec<u8> {
         }
     })
 }
+
 pub(super) fn require_legacy() {
     assert!(
         ChildId::ALL
@@ -36,6 +38,7 @@ pub(super) fn require_legacy() {
         "application custody required"
     );
 }
+
 /// Retain exact initialization bytes under the existing Store creation authority.
 /// # Errors
 /// Refuses changed arguments, invalid authority or exhausted custody.
@@ -94,6 +97,7 @@ pub(super) fn admit_creation(
         ),
     )
 }
+
 /// Reconcile the original complete creation without renewing authority.
 /// # Panics
 /// Traps for noncontrollers or changed bindings.
@@ -111,6 +115,7 @@ pub async fn reconcile(slot: ChildId, input: application::Stage<Approval>) -> St
     );
     super::reconcile_bound(slot, input.source.approval).await
 }
+
 /// Complete Root and application custody; this read never schedules effects.
 /// # Panics
 /// Traps if storage has not opened.
@@ -157,6 +162,7 @@ pub fn stage_upgrade(
 ) -> Result<canic_management_protocol::upgrade::Status, Refusal> {
     super::upgrade::stage_input(slot, super::upgrade::Input::Application(input))
 }
+
 /// Reconcile only this complete maintenance operation; never activate implicitly.
 /// # Panics
 /// Traps for unauthorized or mismatched input.

@@ -20,7 +20,15 @@ use std::cell::RefCell;
 thread_local! {
     static TIMER: RefCell<Option<ic_timers::Once>> = const { RefCell::new(None) };
 }
-#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+
+/// Initialize the artifact timer runtime.
+#[runtime::init(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn init((): ()) {
     open_timer();
 }
@@ -42,6 +50,7 @@ fn open_timer() {
     TIMER.with_borrow_mut(|slot| *slot = Some(timer));
     schedule();
 }
+
 fn schedule() {
     let desired = JOURNAL.with_borrow(|state| {
         state
@@ -75,6 +84,7 @@ const MANAGEMENT_LIMITS: Limits = Limits {
     skipping: 65_536,
 };
 
+/// Check controller authority before admitting a frame of the selected size.
 fn guard(limit: usize) -> Result<(), String> {
     if !api::is_controller(&api::caller()) {
         return Err("controller required".into());
@@ -85,10 +95,12 @@ fn guard(limit: usize) -> Result<(), String> {
     Ok(())
 }
 
+/// Require a controller within the status and reconciliation frame budget.
 fn controller() -> Result<(), String> {
     guard(LIMITS.bytes)
 }
 
+/// Require a controller within the artifact upload budget.
 fn uploader() -> Result<(), String> {
     guard(ARTIFACT_LIMITS.bytes)
 }
@@ -116,7 +128,16 @@ fn encode_stage(value: Result<Status, AdmissionError>) -> Result<Vec<u8>, ic_wir
     )
 }
 
-#[runtime::update(runtime = runtime, guard = uploader, decode = decode_stage, max_bytes = 2097152, on_error = endpoint_error, name = "stage", encode = encode_stage)]
+/// Stage the controller's approved artifact for upload.
+#[runtime::update(
+    runtime = runtime,
+    guard = uploader,
+    decode = decode_stage,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "stage",
+    encode = encode_stage,
+)]
 fn stage(approval: Approval) -> Result<Status, AdmissionError> {
     let previous = JOURNAL.with_borrow(|state| state.approval.clone());
     if let Some(previous) = previous {
@@ -161,7 +182,16 @@ fn encode_status(value: Status) -> Result<Vec<u8>, ic_wire::Error> {
     )
 }
 
-#[runtime::query(runtime = runtime, guard = controller, decode = decode_status, max_bytes = 2097152, on_error = endpoint_error, name = "status", encode = encode_status)]
+/// Read the original artifact attempt and its recorded outcome.
+#[runtime::query(
+    runtime = runtime,
+    guard = controller,
+    decode = decode_status,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "status",
+    encode = encode_status,
+)]
 fn status((): ()) -> Status {
     JOURNAL.with_borrow(|state| Status {
         phase: state.phase,
@@ -333,13 +363,29 @@ fn encode_reconcile(value: Status) -> Result<Vec<u8>, ic_wire::Error> {
     )
 }
 
-#[runtime::update(runtime = runtime, guard = controller, decode = decode_reconcile, max_bytes = 2097152, on_error = endpoint_error, name = "reconcile", encode = encode_reconcile)]
+/// Observe the staged artifact's retained management outcome.
+#[runtime::update(
+    runtime = runtime,
+    guard = controller,
+    decode = decode_reconcile,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "reconcile",
+    encode = encode_reconcile,
+)]
 async fn reconcile((): ()) -> Status {
     verify_target().await;
     status(())
 }
 
-#[runtime::pre_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+/// Checkpoint the retained attempt evidence before upgrade.
+#[runtime::pre_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn pre_upgrade((): ()) {
     let bytes = JOURNAL
         .with_borrow(|state| {
@@ -378,7 +424,14 @@ fn decode_upgrade(bytes: &[u8]) -> Result<bool, ic_wire::Error> {
     )
 }
 
-#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = decode_upgrade, max_bytes = 2097152, on_error = endpoint_error)]
+/// Reopen the artifact probe state from the preceding executable.
+#[runtime::post_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode_upgrade,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+)]
 fn post_upgrade(trap_after_restore: bool) {
     assert!(
         ic_platform_runtime::raw::stable64_size() > 0,
@@ -418,6 +471,7 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
+/// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
 }

@@ -1,9 +1,15 @@
 //! Human command outcomes and explicit, shell-safe continuations.
+
+#[cfg(test)]
+mod tests;
+
 use crate::args::FleetCommand;
 use canic_host::{ApplyOutcome, BuiltCanister};
 use ic_host_text::{Alignment, escape, plain_table};
-use std::fmt::Write as _;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    fmt::Write as _,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 fn quote(value: &str) -> String {
     if !value.is_empty()
@@ -242,6 +248,3 @@ pub(crate) fn applied(value: &ApplyOutcome, command: &FleetCommand) -> String {
     text.push_str(&next(command, digest, action, Some(identity)));
     text
 }
-
-#[cfg(test)]
-mod tests;

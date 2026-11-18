@@ -1,12 +1,14 @@
 //! One explicitly approved Ed25519 issuer grant and direct authority pulls.
 //! Root's controller boundary admits configuration; application handlers own
 //! permission. Lost volatile authority or receiver state must remain closed.
+
+#[cfg(all(test, feature = "auth-enrollment"))]
+pub(super) mod tests;
+
 #[cfg(feature = "auth-enrollment")]
 mod authority;
 #[cfg(feature = "auth-enrollment")]
 mod receiver;
-#[cfg(all(test, feature = "auth-enrollment"))]
-pub(super) mod tests;
 #[cfg(all(target_arch = "wasm32", feature = "auth-enrollment"))]
 pub mod transport;
 
@@ -82,6 +84,7 @@ fn encode_request(method: u64, value: &impl Serialize) -> Result<Vec<u8>, Error>
     )
     .map_err(|_| Error::Invalid)
 }
+
 fn decode_response<T: DeserializeOwned>(method: u64, bytes: &[u8]) -> Result<T, Error> {
     ic_wire::decode(
         bytes,
@@ -122,6 +125,7 @@ impl Grant {
             fleet_id: CanonicalId::from_bytes(self.audience.fleet_id),
         }
     }
+
     /// Validate role/scope grammar and canonical order at the owning supplier.
     #[cfg(feature = "auth-enrollment")]
     pub fn grants(&self) -> Result<AuthorityGrants, Error> {
@@ -142,6 +146,7 @@ impl Grant {
         };
         AuthorityGrants::new(vec![grant]).map_err(|_| Error::Invalid)
     }
+
     #[cfg(feature = "auth-enrollment")]
     fn validate(&self) -> Result<(), Error> {
         if [self.receiver, self.issuer]
@@ -156,6 +161,7 @@ impl Grant {
         Ok(())
     }
 }
+
 #[cfg(feature = "auth-enrollment")]
 fn valid_principal(p: Principal) -> bool {
     p != Principal::anonymous() && p != Principal::management_canister()
@@ -207,6 +213,7 @@ impl Snapshot {
         })
     }
 }
+
 #[cfg(feature = "auth-enrollment")]
 fn digest(value: &impl Serialize) -> Result<[u8; 32], Error> {
     let bytes = ic_wire::encode(value, Encoding::Payload, LIMITS).map_err(|_| Error::Invalid)?;
@@ -243,12 +250,26 @@ pub enum Error {
 /// canic::mount_auth_refresh_endpoint!(crate::auth::pull_enrollment);
 /// ```
 #[cfg(all(target_arch = "wasm32", feature = "auth-enrollment"))]
+// Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
+#[rustfmt::skip]
 #[macro_export]
 macro_rules! mount_auth_refresh_endpoint {
     ($pull:path) => {
         mod refresh_auth {
-            use $crate::auth::{endpoint::{runtime, fail}, enrollment::{Error, REFRESH, transport}};
-            #[runtime::update(runtime = runtime, guard = transport::admit::<REFRESH>, decode = transport::decode::<(), REFRESH>, max_bytes = 8192, on_error = fail, name = "refresh_auth", encode = transport::encode::<Result<(), Error>, REFRESH>)]
+            use $crate::auth::{
+                endpoint::{fail, runtime},
+                enrollment::{Error, REFRESH, transport},
+            };
+
+            #[runtime::update(
+                runtime = runtime,
+                guard = transport::admit::<REFRESH>,
+                decode = transport::decode::<(), REFRESH>,
+                max_bytes = 8192,
+                on_error = fail,
+                name = "refresh_auth",
+                encode = transport::encode::<Result<(), Error>, REFRESH>,
+            )]
             async fn refresh_auth((): ()) -> Result<(), Error> {
                 transport::authorize_refresh()?;
                 $pull().await

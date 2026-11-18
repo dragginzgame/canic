@@ -7,6 +7,64 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Account provisioning on a placed shard — 2026-11-18
+
+An isolated copy of the in-progress Toko tree at base `bdc2bed7857b` bound
+its existing hub and shard entities to Canic provisioning. The hub kept
+Toko’s ULID generator, account key domain and display-name validation. Both
+tables, their stable keys and public method frames stayed intact. Root still
+owns the original generation. Legacy `canic-core/src/domain/policy/pure/placement/sharding/hrw.rs`
+(last selector change `c0f1dd414673`) and the legacy storage sharding tests
+support retaining the existing selector and capacity owner.
+
+The installed `signup` and `user_shard` suites exercised two managed shards,
+pool exhaustion, caller isolation, an unrelated parent, retry after rename and
+populated upgrade. The application builds used `canic app build --app toko`
+with its config. The native test command in the isolated Toko workspace was
+`cargo test --locked --offline --manifest-path qualification/Cargo.toml --test signup --test user_shard`.
+The new hub also passed signup against the unmodified, registry-built
+0.226.0 predecessor shard identified below. The separate browser II case
+remained outside this gate.
+
+Two simulator-only variants exercised the message boundaries. Two simultaneous
+signup requests saw unusable acknowledgements after the shard committed. Both
+returned pending. Retrying with a different name retained the first ID, route
+and original payload. An upgrade with that reservation pending preserved the
+entire hub stable image and refused the stale user's retry under closed Auth.
+In the second variant Root reported a different generation at confirmation
+with the same principal. The hub kept the route pending; a subsequent exact
+observation permitted confirmation. No fault path is compiled into the product.
+
+The native IC DB regression reopens the populated allocation and completes
+the retained reservation, refuses mismatched IDs and receipts, and checks
+compatibility with the previous placement key and flat Wire frame. Run
+`make db-test db-clippy` and `bash scripts/dev/test-store.sh sharding`.
+A successful authenticated user retry after a volatile-receiver upgrade
+still depends on the separate Auth recovery contract.
+
+## Shard parent allocation — 2026-11-18
+
+For [Canic #37](https://github.com/dragginzgame/canic/issues/37), an isolated copy
+of Toko's in-progress shard at base `bdc2bed7857b` built first against crates.io
+Canic 0.226.0 with its explicit `toko.user.shard.hub.v1` allocation, then
+against the candidate with that argument removed. Wasm SHA-256 digests:
+
+- Published-library predecessor: `8c9b7bb0d449f87d047a0c900c5c42ecf723610c01de9a15072577602bc5a9ff`.
+- Default-key candidate: `057cef84dcbf2e56bcd02e4310afa280e5c3b25f690881db743cd1deded4cac1`.
+
+The isolated `user_shard` installed test ran once with a fresh candidate and
+again with `TOKO_PREDECESSOR_FLEET_DIR` selecting the populated predecessor.
+Both preserved the entire stable image and original provisioning receipt.
+Calls through the approved hub succeeded. An unrelated canister and anonymous
+ingress were refused. Corrupting either the original cell header or its principal
+on separate simulator copies trapped during upgrade and left the damaged
+images untouched.
+
+A second registry-built predecessor used `toko.user.shard.original.v1`.
+The matching `parent_storage_key` reopened it. The default-key candidate
+refused that image, preserved its bytes and left the original hub route usable.
+All eight native shard tests also passed. The Toko checkout was read-only.
+
 ## Endpoint attributes and generated role layout — 2026-11-18
 
 Compared the profile entry and worker built by `make profile-test` against

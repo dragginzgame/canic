@@ -1,10 +1,11 @@
 //! Pure placement decisions shared by the installed owner and its regression tests.
-use canic::sharding::{Allocation, Placement};
-use canic_management_protocol::{Failure, Phase, Status, children::ChildId};
-use sha2::{Digest, Sha256};
 
 #[cfg(test)]
 mod tests;
+
+use canic::sharding::{Allocation, Placement};
+use canic_management_protocol::{Failure, Phase, Status, children::ChildId};
+use sha2::{Digest, Sha256};
 
 pub(crate) fn resolve(
     allocation: Allocation,
@@ -44,6 +45,7 @@ pub(crate) fn score(parts: &[&[u8]]) -> u64 {
     }
     u64::from_be_bytes(hash.finalize()[..8].try_into().unwrap())
 }
+
 pub(crate) fn select(best: &mut Option<(u64, ChildId)>, score: u64, slot: ChildId) {
     if best.is_none_or(|(previous, _)| score > previous) {
         *best = Some((score, slot));

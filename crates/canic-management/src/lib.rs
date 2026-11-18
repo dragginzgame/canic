@@ -27,10 +27,12 @@ pub use single::{
 pub mod children {
     #[cfg(feature = "fault-injection")]
     pub use crate::engine::inject_fault;
-    pub use crate::engine::upgrade::{
-        observe as observe_upgrade, reconcile as reconcile_upgrade, stage as stage_upgrade,
+    pub use crate::engine::{
+        owner_custody as custody, reconcile, stage, status,
+        upgrade::{
+            observe as observe_upgrade, reconcile as reconcile_upgrade, stage as stage_upgrade,
+        },
     };
-    pub use crate::engine::{owner_custody as custody, reconcile, stage, status};
 }
 
 /// Application-owned bounded readiness request and response admission.

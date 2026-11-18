@@ -1,6 +1,5 @@
 use super::{create_call, created};
-use crate::tests::wire_fixture;
-use crate::{Artifact, Error, Network, Plan};
+use crate::{Artifact, Error, Network, Plan, tests::wire_fixture};
 use ic_platform_types::Principal;
 
 fn plan() -> Plan {

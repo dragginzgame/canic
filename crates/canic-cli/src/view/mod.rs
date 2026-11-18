@@ -1,10 +1,11 @@
 //! Loopback-only viewer for one retained report; no directory or journal serving.
-use canic_host::{Error, Result};
-use std::{fs::File, io::Read as _, net::Ipv4Addr, path::Path, process::Command};
-use tiny_http::{Header, Method, Request, Response, Server};
 
 #[cfg(test)]
 mod tests;
+
+use canic_host::{Error, Result};
+use std::{fs::File, io::Read as _, net::Ipv4Addr, path::Path, process::Command};
+use tiny_http::{Header, Method, Request, Response, Server};
 
 pub(crate) const MAX_REPORT_BYTES: usize = 4 * 1024 * 1024;
 

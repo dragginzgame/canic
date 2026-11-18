@@ -1,5 +1,6 @@
 use super::*;
 use canic_management_protocol::backup::{Kind, Operation};
+
 fn binding() -> Binding {
     Binding {
         operation: Operation {
@@ -23,6 +24,7 @@ fn binding() -> Binding {
         reply_bytes: 1024,
     }
 }
+
 #[test]
 fn original_slots_survive_reopen_and_conflicts_never_replace() {
     let b = binding();
@@ -50,6 +52,7 @@ fn original_slots_survive_reopen_and_conflicts_never_replace() {
     assert_eq!(l.lookup(&b).unwrap().outcome, Outcome::Reply(vec![8, 9]));
     l.reserve(next).unwrap();
 }
+
 #[test]
 fn oversized_results_remain_pending_and_liabilities_never_refund() {
     let b = binding();

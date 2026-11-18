@@ -1,6 +1,8 @@
 use super::*;
-use std::fs;
-use std::os::unix::fs::{PermissionsExt, symlink};
+use std::{
+    fs,
+    os::unix::fs::{PermissionsExt, symlink},
+};
 
 #[test]
 fn collisions_preserve_foreign_entries_and_stop_at_budget() {

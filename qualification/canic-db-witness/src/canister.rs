@@ -9,6 +9,7 @@ use ic_storage::{DefaultMemoryImpl, MemoryRuntime, RuntimeMemory, StableKey, Sto
 use std::{cell::OnceCell, rc::Rc};
 
 type Host = MemoryRuntime<DefaultMemoryImpl>;
+
 thread_local! { static HOST: OnceCell<Rc<Host>> = const { OnceCell::new() }; }
 
 #[ic_db::entity(pk(field="id"), index(fields=["score","id"]), fields(
@@ -31,6 +32,7 @@ fn schema() -> Schema {
     let entity = UnreadableItem::SCHEMA;
     Schema::new(&[entity]).unwrap()
 }
+
 fn bootstrap(fresh: bool) -> Rc<Host> {
     let host = Rc::new(canic::storage::bootstrap(
         DefaultMemoryImpl::default(),
@@ -42,17 +44,22 @@ fn bootstrap(fresh: bool) -> Rc<Host> {
     HOST.with(|slot| assert!(slot.set(Rc::clone(&host)).is_ok(), "duplicate bootstrap"));
     host
 }
+
 fn runtime() -> Rc<Host> {
     HOST.with(|slot| Rc::clone(slot.get().expect("DB lifecycle bootstrap")))
 }
+
 fn memory(host: &MemoryRuntime<DefaultMemoryImpl>, key: &str) -> RuntimeMemory<DefaultMemoryImpl> {
     host.open_memory(&StableKey::parse(key).unwrap()).unwrap()
 }
+
 fn open(host: &MemoryRuntime<DefaultMemoryImpl>) -> Result<Database, Error> {
     Database::open(memory(host, "app.db.v1"), schema())
 }
+
 #[cfg(feature = "managed-fixture")]
 canic::mount_readiness_endpoint!(crate::canister::readiness);
+
 #[cfg(feature = "managed-fixture")]
 fn readiness() -> canic::readiness::State {
     use canic::readiness::State;
@@ -62,6 +69,7 @@ fn readiness() -> canic::readiness::State {
         Err(_) => State::Unavailable,
     }
 }
+
 fn decode_owner(bytes: &[u8]) -> Result<ic_db::Principal, std::convert::Infallible> {
     // The managed test artifact pins a synthetic user independently of its controller.
     #[cfg(feature = "managed-fixture")]
@@ -74,7 +82,15 @@ fn decode_owner(bytes: &[u8]) -> Result<ic_db::Principal, std::convert::Infallib
     }
     Ok({ ic_db::Principal::try_from_slice(bytes).expect("installation owner") })
 }
-#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = decode_owner, max_bytes = 2097152, on_error = endpoint_error)]
+
+/// Initialize the db witness state for this installation.
+#[runtime::init(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode_owner,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+)]
 fn initialize(owner: ic_db::Principal) {
     assert_ne!(owner, ic_db::Principal::anonymous());
     let host = bootstrap(true);
@@ -89,6 +105,7 @@ fn initialize(owner: ic_db::Principal) {
     // Fresh fixture installation identity; no init hook on upgrade.
     Database::create(memory(&host, "app.db.v1"), schema(), [91; 16]).unwrap();
 }
+
 fn retained_owner(host: &Host) -> ic_db::Principal {
     let owner_memory = memory(host, "app.owner.v1");
     let mut bytes = [0; 34];
@@ -104,6 +121,7 @@ fn retained_owner(host: &Host) -> ic_db::Principal {
     );
     owner
 }
+
 fn decode_upgrade(bytes: &[u8]) -> Result<(), &'static str> {
     if bytes.is_empty() {
         Ok(())
@@ -111,7 +129,15 @@ fn decode_upgrade(bytes: &[u8]) -> Result<(), &'static str> {
         Err("unexpected DB upgrade arguments")
     }
 }
-#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = decode_upgrade, max_bytes = 0, on_error = endpoint_error)]
+
+/// Reopen the db witness state from the preceding executable.
+#[runtime::post_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode_upgrade,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn reopen((): ()) {
     let host = bootstrap(false);
     retained_owner(&host);
@@ -120,6 +146,7 @@ fn reopen((): ()) {
         Err(error) => panic!("retained database unavailable: {error:?}"),
     }
 }
+
 fn authorize(caller: ic_db::Principal, _operation: Operation) -> Result<(), String> {
     if caller == retained_owner(&runtime()) {
         Ok(())
@@ -127,6 +154,7 @@ fn authorize(caller: ic_db::Principal, _operation: Operation) -> Result<(), Stri
         Err("denied".into())
     }
 }
+
 fn refusal(error: Error) -> Refusal {
     match error {
         Error::Limit => Refusal::Limit,
@@ -137,6 +165,7 @@ fn refusal(error: Error) -> Refusal {
         other => panic!("unexpected database failure: {other:?}"),
     }
 }
+
 #[allow(clippy::needless_pass_by_value)]
 fn inspect(_caller: ic_db::Principal, request: InspectRequest) -> InspectReply {
     use canic::db::inspection::{Admission, Cardinality};
@@ -169,6 +198,7 @@ fn inspect(_caller: ic_db::Principal, request: InspectRequest) -> InspectReply {
     let reply = controls::inspection_reply(reply);
     reply
 }
+
 #[allow(clippy::needless_pass_by_value)]
 fn query(_caller: ic_db::Principal, request: QueryRequest) -> QueryReply {
     if !(1..=3).contains(&request.limit) || !(1..=4).contains(&request.work) {
@@ -205,6 +235,7 @@ fn query(_caller: ic_db::Principal, request: QueryRequest) -> QueryReply {
         examined: page.examined as u32,
     })
 }
+
 fn write(_caller: ic_db::Principal, rows: WriteRequest, _time: u64) -> WriteReply {
     if rows.is_empty() || rows.len() > 4 {
         return Err(Refusal::Limit);
@@ -237,6 +268,7 @@ fn write(_caller: ic_db::Principal, rows: WriteRequest, _time: u64) -> WriteRepl
     };
     Ok(receipt)
 }
+
 canic::mount_db_endpoints! {
     protocol = crate::protocol,
     authorize = crate::canister::authorize,
@@ -253,11 +285,15 @@ mod controls {
     use endpoint::api;
     use ic_db::{Maintenance, SchemaTransition};
     use std::cell::Cell;
+
     thread_local! { static REPLY_FAILURE: Cell<bool> = const { Cell::new(false) }; }
+
     thread_local! { static INSPECTION_FAILURE: Cell<bool> = const { Cell::new(false) }; }
+
     pub(super) fn reply_failure() -> bool {
         REPLY_FAILURE.get()
     }
+
     // Deliberately corrupt an otherwise admitted application reply after projection.
     // This qualifies the endpoint's final byte ceiling, not a different DB schema.
     pub(super) fn inspection_reply(
@@ -292,11 +328,23 @@ mod controls {
         field(name="score",value(item(prim="Nat128")))
     ))]
     struct FutureItem {}
+
+    /// Require write access before admitting the bounded fault-control frame.
     fn admit() -> Result<(), String> {
         authorize(api::caller(), Operation::Write)?;
         endpoint::admit::<991>()
     }
-    #[runtime::update(runtime = runtime, guard = admit, decode = endpoint::decode::<u8, 991>, max_bytes = 2097152, on_error = endpoint::fail, name = "db_test_control", encode = endpoint::encode::<EmptyReply, 991>)]
+
+    /// Select a database failure point for the installed rollback witness.
+    #[runtime::update(
+        runtime = runtime,
+        guard = admit,
+        decode = endpoint::decode::<u8, 991>,
+        max_bytes = 2097152,
+        on_error = endpoint::fail,
+        name = "db_test_control",
+        encode = endpoint::encode::<EmptyReply, 991>,
+    )]
     fn db_test_control(control: u8) -> EmptyReply {
         match control {
             0 => REPLY_FAILURE.set(false),
@@ -325,6 +373,7 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
+/// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
 }

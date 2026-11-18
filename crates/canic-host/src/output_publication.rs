@@ -1,10 +1,12 @@
 //! Canic output destination policy; filesystem custody belongs to IC Host FS.
 use crate::{Error, Result, supplier};
 use ic_host_fs::{Commit, Destination, Directory, Policy, Retention};
-use std::ffi::{OsStr, OsString};
-use std::os::unix::ffi::OsStrExt;
-use std::path::{Component, Path};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::{
+    ffi::{OsStr, OsString},
+    os::unix::ffi::OsStrExt,
+    path::{Component, Path},
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 static STAGE: AtomicU64 = AtomicU64::new(0);
 

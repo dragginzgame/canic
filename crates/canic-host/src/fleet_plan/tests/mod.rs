@@ -41,6 +41,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
     };
     (dir, selected)
 }
+
 fn create(dir: &Path, selected: &SelectedFleet) -> Result<(String, FleetPlan)> {
     let result = plan_fleet(
         &dir.join("journal"),

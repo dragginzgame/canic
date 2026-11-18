@@ -35,6 +35,7 @@ method = [
 ]
 metrics = ["dep:ic-platform-runtime"]
 recovery = []
+provisioning = ["sharding", "stateful-role", "method"]
 readiness = ["dep:ic-platform-runtime"]
 sharding = ["dep:ic-platform-runtime", "dep:ic-platform-types"]
 stateful-role = ["auth-enrollment", "db-store", "readiness", "topology"]

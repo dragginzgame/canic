@@ -1,4 +1,8 @@
 //! Local application declarations. Names describe deployments; they grant no authority.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{Error, Network, Plan, PlanInput, Result, plan, store, supplier};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -8,10 +12,8 @@ use std::{
 
 mod discovery;
 mod sharding;
-pub use sharding::ShardPoolConfig;
-#[cfg(test)]
-mod tests;
 pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
+pub use sharding::ShardPoolConfig;
 
 const MAX_CONFIG_BYTES: usize = 32 * 1024;
 

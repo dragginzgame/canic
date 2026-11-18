@@ -1,12 +1,14 @@
 //! One application Storage bootstrap, two independently owned durable records.
 use super::super::protocol::{self, Asset, Draft, Entry, Error, Publication};
-use canic::blob::RPC_LIMITS;
-use canic::blob::supplier::{
-    local::{
-        ReferenceStatus,
-        persistence::{STORAGE_AUTHORITY, STORAGE_KEY, Service},
+use canic::blob::{
+    RPC_LIMITS,
+    supplier::{
+        local::{
+            ReferenceStatus,
+            persistence::{STORAGE_AUTHORITY, STORAGE_KEY, Service},
+        },
+        protocol::{Command, Inspection, Installation, Observation},
     },
-    protocol::{Command, Inspection, Installation, Observation},
 };
 use ic_platform_types::Principal;
 use ic_storage::{
@@ -143,6 +145,7 @@ impl State {
         state.validate(installation);
         state
     }
+
     fn validate(&self, installation: Principal) {
         assert_eq!(self.catalog.version, 1, "catalog version");
         assert_eq!(
@@ -189,6 +192,7 @@ impl State {
             );
         }
     }
+
     pub(super) fn user(&self, caller: Principal) -> Result<(), Error> {
         if self.catalog.users.contains(&caller) {
             Ok(())
@@ -196,6 +200,7 @@ impl State {
             Err(Error::Denied)
         }
     }
+
     fn owned(&self, caller: Principal, reference: std::num::NonZeroU128) -> Result<usize, Error> {
         self.user(caller)?;
         let index = self
@@ -209,6 +214,7 @@ impl State {
         }
         Ok(index)
     }
+
     fn persist(&mut self, fault: u8) {
         // Failure after Blob mutation must trap, never return an ordinary Result error.
         let limits = if fault == 1 {
@@ -223,6 +229,7 @@ impl State {
             .expect("catalog persistence encoding");
         self.cell.set(bytes);
     }
+
     pub fn authorize(
         &mut self,
         caller: Principal,
@@ -278,6 +285,7 @@ impl State {
         self.persist(fault);
         Ok(entry)
     }
+
     pub fn publish(
         &mut self,
         caller: Principal,
@@ -300,6 +308,7 @@ impl State {
         self.persist(fault);
         Ok(self.catalog.entries[index].clone())
     }
+
     pub fn remove(
         &mut self,
         caller: Principal,
@@ -315,6 +324,7 @@ impl State {
         self.persist(fault);
         Ok(self.catalog.entries[index].clone())
     }
+
     fn reference(
         &self,
         reference: std::num::NonZeroU128,
@@ -328,6 +338,7 @@ impl State {
             _ => unreachable!("typed supplier reply"),
         }
     }
+
     pub fn inspect(
         &self,
         caller: Principal,
@@ -352,16 +363,19 @@ impl State {
         })
     }
 }
+
 fn valid_name(name: &str) -> bool {
     !name.is_empty()
         && name.len() <= 32
         && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
 }
+
 fn collides(a: &Entry, b: &Entry) -> bool {
     a.name == b.name
         || a.request.id == b.request.id
         || a.request.first_reference == b.request.first_reference
 }
+
 fn validate_users(users: [Principal; 2], installation: Principal) {
     assert_ne!(users[0], users[1]);
     assert!(

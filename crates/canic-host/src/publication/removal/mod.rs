@@ -1,4 +1,8 @@
 //! Removal reuses the plan lock and exact signed-attempt owner. No Store catalog copy.
+
+#[cfg(test)]
+mod tests;
+
 use super::{Publication, manifest};
 use crate::{
     Error, Plan, PlanAction, Result, SelectedFleet, operation, plan, signed, store, supplier,
@@ -48,12 +52,14 @@ fn binding(plan: &Plan) -> Result<&PublicationRemoval> {
     plan.removal()
         .ok_or_else(|| Error::Invalid("removal plan required".into()))
 }
+
 fn expected(plan: &Plan, bytes: &[u8]) -> Result<ic_wasm_store_protocol::Manifest> {
     Ok(super::release_manifest(
         binding(plan)?.publication.release.clone(),
         bytes,
     ))
 }
+
 fn same_release(left: &Plan, right: &Plan, publication: &Publication) -> bool {
     left.network == right.network
         && left.removal().is_some_and(|r| {
@@ -325,6 +331,7 @@ fn call(plan: &Plan, bytes: &[u8], deadline: u64) -> Result<signed::Call<'static
         .map_err(supplier)?,
     })
 }
+
 fn decode(reply: &[u8], expected: &ic_wasm_store_protocol::Manifest) -> Result<()> {
     let reply: wire::RemovalReply = ic_wire::decode(
         reply,
@@ -422,6 +429,3 @@ pub(crate) fn status(dir: &Path, plan: &Plan, bytes: &[u8]) -> Result<crate::Can
         },
     })
 }
-
-#[cfg(test)]
-mod tests;

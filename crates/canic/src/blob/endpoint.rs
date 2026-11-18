@@ -17,6 +17,7 @@ pub fn admit<const ID: u64>() -> Result<(), String> {
     raw::msg_arg_data_copy(&mut header, 0);
     ic_wire::validate_request_header(ID, &header).map_err(|error| error.to_string())
 }
+
 /// Decode the supplier DTO without adding caller claims.
 /// # Errors
 /// Refuses malformed or over-budget input; the endpoint traps this refusal.
@@ -30,6 +31,7 @@ pub fn decode<T: DeserializeOwned, const ID: u64>(bytes: &[u8]) -> Result<T, ic_
         RPC_LIMITS,
     )
 }
+
 /// Encode after the synchronous handler; failure rolls back all local owners.
 /// # Errors
 /// Refuses unencodable or over-budget replies; the endpoint traps this refusal.

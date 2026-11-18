@@ -22,6 +22,7 @@ pub(in crate::auth) fn grant() -> Grant {
         expires_at_ns: 300_000_000_000,
     }
 }
+
 #[test]
 fn authority_retains_exact_windows_and_terminal_revocation() {
     let grant = grant();
@@ -137,6 +138,7 @@ fn receiver_engine() -> (
         Authority::new(grant, 1).unwrap(),
     )
 }
+
 pub(in crate::auth) fn response(
     receiver: &mut Receiver,
     engine: &mut supplier::receiver_memory::MemoryReceiver,
@@ -160,6 +162,7 @@ pub(in crate::auth) fn response(
         .unwrap();
     Authenticated { pull, snapshot }
 }
+
 fn duplicate(response: &Authenticated) -> Authenticated {
     Authenticated {
         pull: Pull {
@@ -170,6 +173,7 @@ fn duplicate(response: &Authenticated) -> Authenticated {
         snapshot: response.snapshot.clone(),
     }
 }
+
 #[test]
 fn complete_reply_validation_precedes_atomic_metadata_and_entry_installation() {
     // These deliberately forged authenticated markers are private unit-test

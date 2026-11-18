@@ -54,6 +54,7 @@ impl Install {
     pub fn encode(&self) -> Result<Vec<u8>, ic_wire::Error> {
         ic_wire::encode(self, FRAME, LIMITS)
     }
+
     /// Decode only this versioned install frame.
     /// # Errors
     /// Refuses wrong directions, identities, malformed or oversized payloads.

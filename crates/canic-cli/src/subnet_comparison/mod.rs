@@ -1,4 +1,8 @@
 //! Fleet-context projection of Query evidence; no ranking or deployment decision.
+
+#[cfg(test)]
+mod tests;
+
 use crate::Output;
 use canic_host::subnet_comparison::FleetSubnetComparison;
 use ic_host_text::{bordered_table, escape};
@@ -138,6 +142,3 @@ fn render(report: &FleetSubnetComparison) -> String {
     text.push_str("\nIndependent Registry declarations and certified metrics; no atomic snapshot.\nUnknown coverage is not zero infrastructure; zero observed overlap does not prove independent failure domains.\nNo headroom, capacity ranking or merge-feasibility conclusion.\nUse --json for original sources, component failures and shared identity details.\n");
     text
 }
-
-#[cfg(test)]
-mod tests;

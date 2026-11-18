@@ -700,6 +700,9 @@ repository budget; raw output belongs under `target/evidence/`. See the
 [retention contract](https://github.com/dragginzgame/toko-tooling/blob/626da7cd9626cc2e152594862a2d82ea82ef51da/rules/engineering-details.md#changelogs-and-artifact-preservation)
 for exceptions, historical cleanup and protected release/recovery records.
 
+Use `### 🎯 Qualification` for results such as cursor behavior across an upgrade
+or the workload budget at which an operation completes. Use `### 🧪 Testing`
+for changes to test tooling or coverage.
 Use IcyDB-style emoji category sections in the owning release changelog; read the
 [changelog rules](https://github.com/dragginzgame/toko-tooling/blob/626da7cd9626cc2e152594862a2d82ea82ef51da/rules/changelogs.md) when updating them. Every issue fixed must
 have a direct link in that changelog before handoff, except legal and licensing
@@ -732,13 +735,23 @@ Prefer one grouped `use` declaration per crate in each scope. Factor out shared
 path prefixes with nested braces. Group imports that share visibility and
 attributes, and preserve the names each import brings into scope.
 
+Keep shared Rust logic visible on every supported target. When a group of items
+requires Wasm, put it in an ordinary module and apply
+`#[cfg(target_arch = "wasm32")]` once to its module declaration. Keep its
+target-only imports and helpers inside. Use an item-level guard only when the
+target distinction belongs to that individual item.
+
 In handwritten and generated Rust, leave a blank line between the import block,
-item-level macro invocations and function definitions. Keep comments and
+item-level macro invocations and function definitions. Separate adjacent functions
+with a blank line, including methods, tests and test helpers. Keep comments and
 attributes attached to their item. Write endpoint mounts and endpoint attributes
 with several named arguments on multiple lines, one argument per line.
 Document each endpoint's caller-visible purpose, each guard's access policy and
 each mount's role. A shared mount needs one comment for the group.
 
+Place `mod tests;` with the module declarations at the top of its parent file,
+after module documentation and inner attributes and before implementation items.
+Keep its conditional compilation attributes attached to the declaration.
 Keep Rust tests and test-only helpers in `tests.rs`, `*_tests.rs` or `tests/`;
 declare fixture-only package roles explicitly. Adopt the naming layout as a
 hard cut, including references, under the

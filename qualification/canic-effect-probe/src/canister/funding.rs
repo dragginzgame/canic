@@ -77,7 +77,16 @@ fn decode_later(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     )
 }
 
-#[runtime::query(runtime = runtime, guard = controller, decode = decode_status, max_bytes = 2097152, on_error = endpoint_error, name = "funding_status", encode = encode_status)]
+/// Read the original funding attempt and its recorded outcome.
+#[runtime::query(
+    runtime = runtime,
+    guard = controller,
+    decode = decode_status,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "funding_status",
+    encode = encode_status,
+)]
 pub(super) fn funding_status((): ()) -> FundingStatus {
     JOURNAL.with_borrow(Clone::clone)
 }
@@ -86,7 +95,16 @@ pub(super) fn restore(state: FundingStatus) {
     JOURNAL.with_borrow_mut(|journal| *journal = state);
 }
 
-#[runtime::update(runtime = runtime, guard = controller, decode = decode_fund, max_bytes = 2097152, on_error = endpoint_error, name = "fund", encode = encode_fund)]
+/// Submit the bounded funding attempt under its retained approval.
+#[runtime::update(
+    runtime = runtime,
+    guard = controller,
+    decode = decode_fund,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "fund",
+    encode = encode_fund,
+)]
 async fn fund(intent: FundingRequest) -> FundingStatus {
     let previous = funding_status(());
     if previous.phase != Phase::Empty {
@@ -193,7 +211,15 @@ async fn fund(intent: FundingRequest) -> FundingStatus {
     funding_status(())
 }
 
-#[runtime::update(runtime = runtime, guard = private_continuation, decode = decode_later, max_bytes = 2097152, on_error = endpoint_error, name = "funding_later", manual_reply)]
+/// Trap in a subsequent message to exercise the funding commit boundary.
+#[runtime::update(
+    runtime = runtime,
+    guard = private_continuation,
+    decode = decode_later,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "funding_later", manual_reply,
+)]
 async fn funding_later((): ()) {
     JOURNAL.with_borrow_mut(|state| state.later_work_entered = true);
     api::trap("injected later-work trap");

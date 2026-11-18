@@ -5,8 +5,10 @@ use crate::{
 };
 use canic_management_protocol::{children::ChildId, stored};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+};
 
 /// Fleet-specific limits and explicitly named infrastructure for one shard component.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -96,17 +98,20 @@ impl ShardPoolConfig {
             approval: Box::new(approval),
         })
     }
+
     fn deadline(&self) -> Result<u64> {
         self.expires_at_ns.ok_or_else(|| {
             Error::Invalid("shard growth approval requires an explicit deadline".into())
         })
     }
+
     fn hub<'a>(&self, slots: &'a BTreeMap<String, CanisterConfig>) -> Result<&'a str> {
         slots
             .get(&self.component)
             .and_then(|c| c.parent.as_deref())
             .ok_or_else(|| Error::Invalid("shard component must have a declared parent hub".into()))
     }
+
     pub(super) fn validate(&self, slots: &BTreeMap<String, CanisterConfig>) -> Result<()> {
         if !self.release.valid()
             || self

@@ -1,8 +1,10 @@
 use super::{
     Fixture, control, enrollment_request, enrollment_response, fixture, grant, receiver_refresh,
 };
-use canic::auth::issuer::{self, Issue, Lookup, Refusal, Renew, Status};
-use canic::auth::protocol::wire as auth_wire;
+use canic::auth::{
+    issuer::{self, Issue, Lookup, Refusal, Renew, Status},
+    protocol::wire as auth_wire,
+};
 use canic_auth_witness::{
     IssuerObservation, KEY, LIMITS, OBSERVE, enrollment,
     protocol::{
@@ -24,9 +26,11 @@ use std::time::Duration;
 pub(super) fn account() -> CanisterId {
     CanisterId::self_authenticating(b"canic-auth-account")
 }
+
 pub(super) fn principal(id: CanisterId) -> Principal {
     Principal::from_slice(id.as_slice())
 }
+
 pub(super) fn request(id: u8) -> Issue {
     Issue {
         epoch: 1,
@@ -42,15 +46,18 @@ pub(super) fn request(id: u8) -> Issue {
         .unwrap(),
     }
 }
+
 pub(super) fn browser(input: &Issue) -> CanisterId {
     CanisterId::from_slice(browser_principal(&input.browser_public_key).as_slice())
 }
+
 pub(super) fn lookup(input: &Issue) -> Lookup {
     Lookup::Issue {
         epoch: input.epoch,
         operation_id: input.operation_id,
     }
 }
+
 pub(super) fn renew(input: &Issue, sequence: u64) -> Renew {
     Renew {
         account: principal(account()),
@@ -60,6 +67,7 @@ pub(super) fn renew(input: &Issue, sequence: u64) -> Renew {
         grants: input.grants.clone(),
     }
 }
+
 pub(super) fn frame(id: u64, input: &impl Serialize) -> Vec<u8> {
     auth_wire::encode(
         input,
@@ -71,6 +79,7 @@ pub(super) fn frame(id: u64, input: &impl Serialize) -> Vec<u8> {
     )
     .unwrap()
 }
+
 pub(super) fn response(id: u64, bytes: &[u8]) -> Result<Status, Refusal> {
     auth_wire::decode(
         bytes,
@@ -82,6 +91,7 @@ pub(super) fn response(id: u64, bytes: &[u8]) -> Result<Status, Refusal> {
     )
     .unwrap()
 }
+
 pub(super) async fn call(
     f: &Fixture,
     caller: CanisterId,
@@ -102,6 +112,7 @@ pub(super) async fn call(
         .unwrap();
     response(id, &bytes)
 }
+
 pub(super) async fn observe(f: &Fixture) -> IssuerObservation {
     let bytes = f
         .owner
@@ -119,9 +130,11 @@ pub(super) async fn observe(f: &Fixture) -> IssuerObservation {
     )
     .unwrap()
 }
+
 pub(super) fn claims(value: &Status) -> ic_auth_protocol_types::PortableClaims {
     verified_claims(value, &KEY)
 }
+
 fn verified_claims(
     value: &Status,
     verification_key: &[u8; 32],

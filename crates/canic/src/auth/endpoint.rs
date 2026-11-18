@@ -1,6 +1,8 @@
 //! Platform hooks for fixed Auth contracts with directional codec allowances.
-use super::issuer;
-use super::protocol::{EstablishSession, Logout, ReadSession};
+use super::{
+    issuer,
+    protocol::{EstablishSession, Logout, ReadSession},
+};
 use ic_auth_wire::wire;
 pub use ic_platform_runtime as runtime;
 use ic_platform_runtime::raw;

@@ -1,13 +1,14 @@
 //! New source workspace publication; no deployment, signer or journal access.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{AppConfig, CanisterDefinition, Config, Error, Result, supplier};
 use serde_json::json;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-
-#[cfg(test)]
-mod tests;
 
 #[derive(Debug, thiserror::Error)]
 #[error(

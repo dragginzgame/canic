@@ -1,4 +1,8 @@
 //! Host drives explicit Store endpoints; Root alone owns management effects and recovery.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     ApplyOutcome, Error, Plan, Receipt, Result, network::principal, operation, signed, store,
     supplier,
@@ -9,8 +13,6 @@ use std::path::{Path, PathBuf};
 
 mod continuation;
 pub use continuation::{StoreContinuation, store_continuation};
-#[cfg(test)]
-mod tests;
 
 const OBSERVATIONS: usize = 4096;
 const STEPS_PER_APPLY: usize = 32;
@@ -39,11 +41,13 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
     }
     Ok(())
 }
+
 fn invalid() -> Error {
     Error::Invalid(
         "Store upgrade requires exact Root, Store, code and retained operation evidence".into(),
     )
 }
+
 fn hash(value: &str) -> Result<[u8; 32]> {
     crate::unhex(value)?.try_into().map_err(|_| invalid())
 }
@@ -61,6 +65,7 @@ pub(crate) fn approval(plan: &Plan) -> Result<wire::Approval> {
         expires_at_ns: plan.expires_at_ns,
     })
 }
+
 fn call<T: serde::Serialize>(
     plan: &Plan,
     method: &'static str,
@@ -84,6 +89,7 @@ fn call<T: serde::Serialize>(
         .map_err(supplier)?,
     })
 }
+
 pub(crate) fn observation(plan: &Plan) -> Result<signed::Call<'static>> {
     validate(plan)?;
     if plan.store_upgrade_sequence().is_some() {
@@ -103,6 +109,7 @@ pub(crate) fn observation(plan: &Plan) -> Result<signed::Call<'static>> {
         wire::LIMITS,
     )
 }
+
 pub(crate) fn recovery(plan: &Plan) -> Result<signed::Call<'static>> {
     call(
         plan,
@@ -112,12 +119,14 @@ pub(crate) fn recovery(plan: &Plan) -> Result<signed::Call<'static>> {
         wire::LIMITS,
     )
 }
+
 fn admit(plan: &Plan, value: &Status) -> Result<()> {
     if value.approval != approval(plan)? || value.operator != plan.controller {
         return Err(invalid());
     }
     Ok(())
 }
+
 fn decode(plan: &Plan, bytes: &[u8]) -> Result<Option<Status>> {
     let value: Option<Status> = ic_wire::decode(
         bytes,
@@ -137,9 +146,11 @@ fn decode(plan: &Plan, bytes: &[u8]) -> Result<Option<Status>> {
     }
     Ok(value)
 }
+
 fn path(dir: &Path, index: usize) -> PathBuf {
     dir.join("store-upgrade").join(index.to_string())
 }
+
 fn next(dir: &Path) -> Result<usize> {
     for index in 0..OBSERVATIONS {
         if !path(dir, index)
@@ -152,6 +163,7 @@ fn next(dir: &Path) -> Result<usize> {
     }
     Ok(OBSERVATIONS)
 }
+
 async fn observe(
     dir: &Path,
     plan: &Plan,
@@ -168,12 +180,14 @@ async fn observe(
     let reply = signed::observe_operation(&path(dir, index), plan, identity, icp, client).await?;
     Ok((index, decode(plan, &reply)?))
 }
+
 fn retained(dir: &Path, plan: &Plan, index: usize) -> Result<Option<Status>> {
     if index >= OBSERVATIONS {
         return Err(invalid());
     }
     decode(plan, &signed::retained_operation(&path(dir, index), plan)?)
 }
+
 pub(crate) fn ready(value: &Status) -> bool {
     value.phase == Phase::Ready
         && value.failure.is_none()
@@ -185,6 +199,7 @@ pub(crate) fn ready(value: &Status) -> bool {
                 && i.verification == value.preservation
         })
 }
+
 pub(crate) fn receipt(dir: &Path, plan: &Plan) -> Result<Option<(Receipt, Status)>> {
     let completion = dir.join("store-completion.json");
     if !completion.try_exists().map_err(supplier)? {
@@ -216,6 +231,7 @@ pub(crate) fn receipt(dir: &Path, plan: &Plan) -> Result<Option<(Receipt, Status
         status,
     )))
 }
+
 async fn verify(plan: &Plan, client: &ReadClient) -> Result<()> {
     let root = plan.store_upgrade_root().ok_or_else(invalid)?;
     let root_id = principal(&root.canister)?;

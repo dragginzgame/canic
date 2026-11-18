@@ -1,9 +1,9 @@
 //! Only actual Root calls may close and stop its Store. Lost callbacks retain external intent.
 use super::{Client, artifacts, inject, maintain, readiness_tests, recover_store, store, support};
-use canic_management_protocol::stored::STORE_LIMITS;
 use canic_management_protocol::{
     self as management, publication,
     store_maintenance::{self as wire, Approval, Phase, Status},
+    stored::STORE_LIMITS,
 };
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
 use std::time::Duration;
@@ -24,6 +24,7 @@ pub(super) async fn approval(root: &Client<'_>, supplier: &Client<'_>) -> Approv
         expires_at_ns: root.pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
     }
 }
+
 async fn observe(root: &Client<'_>) -> Option<Status> {
     root.update(
         "observe_store_maintenance",
@@ -33,6 +34,7 @@ async fn observe(root: &Client<'_>) -> Option<Status> {
     )
     .await
 }
+
 async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
     root.update(
         "advance_store_maintenance",
@@ -42,6 +44,7 @@ async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
     )
     .await
 }
+
 pub(super) async fn child_stage(
     root: &Client<'_>,
 ) -> Result<management::Status, management::Refusal> {

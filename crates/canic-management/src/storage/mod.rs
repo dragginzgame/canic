@@ -1,5 +1,9 @@
 //! Versioned payloads in two bounded Storage records.
 //! Logical predecessor codecs do not import an older Storage backing format.
+
+#[cfg(test)]
+mod tests;
+
 use canic_management_protocol::{
     LIMITS, MAX_WASM, Status, children::ChildId, store_maintenance, upgrade,
 };
@@ -7,9 +11,6 @@ use canic_management_protocol::{
 use ic_wire::{Bytes, BytesRef, List};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::BTreeMap};
-
-#[cfg(test)]
-mod tests;
 
 // Persist identities explicitly. The protocol remains the admission ceiling;
 // accepting a new record shape never creates capacity or drops unknown entries.
@@ -162,6 +163,7 @@ impl Artifact {
             Self::Stored(value) | Self::Application(value, _) => Some(value),
         }
     }
+
     pub(super) fn wasm(&self, upgrade: bool) -> &[u8] {
         match self {
             Self::Inline(value) => {
@@ -174,6 +176,7 @@ impl Artifact {
             Self::Stored(_) | Self::Application(..) => panic!("Store bytes never belong to Root"),
         }
     }
+
     pub(super) fn hash(&self, upgrade: bool) -> Option<[u8; 32]> {
         match self {
             Self::Inline(_) => {
@@ -188,6 +191,7 @@ impl Artifact {
             .map(|source| source.reference.manifest.hash),
         }
     }
+
     fn decode(bytes: Cow<'_, [u8]>) -> Result<Self, &'static str> {
         if let Some(payload) = bytes.strip_prefix(b"CUS1") {
             let value: canic_management_protocol::stored::Sources = ic_wire::decode(
@@ -266,6 +270,7 @@ impl Journals {
         bytes.extend_from_slice(&payload);
         Ok(Cow::Owned(bytes))
     }
+
     pub(super) fn from_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
         let value = if let Some(payload) = bytes
             .strip_prefix(b"CUJ9")
@@ -358,6 +363,7 @@ impl Artifacts {
             ic_wire::encoded_len(&entries, ic_wire::Encoding::Payload, ARTIFACT_LIMITS).is_ok()
         })
     }
+
     fn entries(&self) -> Result<Vec<(u8, &Artifact)>, &'static str> {
         let inline_bytes: usize = self
             .0
@@ -414,6 +420,7 @@ impl Artifacts {
         );
         Ok(Cow::Owned(bytes))
     }
+
     pub(super) fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, &'static str> {
         let historical = bytes.starts_with(b"CUA4");
         let value = if let Some(payload) = bytes

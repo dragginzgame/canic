@@ -14,6 +14,7 @@ fn decode<T: DeserializeOwned, const ID: u64>(bytes: &[u8]) -> Result<T, ic_wire
         LIMITS,
     )
 }
+
 fn encode<T: Serialize, const ID: u64>(value: T) -> Result<Vec<u8>, ic_wire::Error> {
     // Reuse the catalog's actual reply-encoding fault boundary for rollback proof.
     let limits = if super::FAILURE.get() == 2 {
@@ -31,7 +32,16 @@ fn encode<T: Serialize, const ID: u64>(value: T) -> Result<Vec<u8>, ic_wire::Err
     )
 }
 
-#[runtime::update(runtime = runtime, guard = lifecycle_guard, decode = decode::<Put, PUT>, max_bytes = 4096, on_error = endpoint_error, name = "profile_put", encode = encode::<ProfileResult, PUT>)]
+/// Apply the profile write under the witness's user policy.
+#[runtime::update(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode::<Put, PUT>,
+    max_bytes = 4096,
+    on_error = endpoint_error,
+    name = "profile_put",
+    encode = encode::<ProfileResult, PUT>,
+)]
 #[allow(clippy::needless_pass_by_value)]
 fn put(input: Put) -> ProfileResult {
     let caller = api::caller();
@@ -46,7 +56,16 @@ fn put(input: Put) -> ProfileResult {
     })
 }
 
-#[runtime::query(runtime = runtime, guard = lifecycle_guard, decode = decode::<u64, GET>, max_bytes = 4096, on_error = endpoint_error, name = "profile_get", encode = encode::<ProfileResult, GET>)]
+/// Read the profile under the witness's user policy.
+#[runtime::query(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode::<u64, GET>,
+    max_bytes = 4096,
+    on_error = endpoint_error,
+    name = "profile_get",
+    encode = encode::<ProfileResult, GET>,
+)]
 fn get(user_id: u64) -> ProfileResult {
     let caller = api::caller();
     STATE.with_borrow(|state| {

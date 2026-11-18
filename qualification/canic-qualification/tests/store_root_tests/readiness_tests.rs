@@ -1,7 +1,6 @@
 //! Store bootstrap readiness belongs to the actual controller path, not greeting slots.
 use super::{Client, artifacts, custody, inject, maintain, store, support};
-use canic_management_protocol::stored::STORE_LIMITS;
-use canic_management_protocol::{self as management, publication};
+use canic_management_protocol::{self as management, publication, stored::STORE_LIMITS};
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings, nonblocking::PocketIc};
 
 pub(super) async fn fixture(pic: &PocketIc) -> (Client<'_>, Client<'_>) {
@@ -11,6 +10,7 @@ pub(super) async fn fixture(pic: &PocketIc) -> (Client<'_>, Client<'_>) {
     )
     .await
 }
+
 pub(super) async fn fixture_with_root(
     pic: &PocketIc,
     root_wasm: Vec<u8>,
@@ -22,6 +22,7 @@ pub(super) async fn fixture_with_root(
     )
     .await
 }
+
 pub(super) async fn fixture_with_code(
     pic: &PocketIc,
     root_wasm: Vec<u8>,
@@ -51,16 +52,19 @@ pub(super) async fn fixture_with_code(
         },
     )
 }
+
 async fn request(root: &Client<'_>, supplier: &Client<'_>) -> publication::InfoRequest {
     publication::InfoRequest {
         store: supplier.id.to_text(),
         expires_at_ns: root.pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
     }
 }
+
 async fn observe(root: &Client<'_>, request: &publication::InfoRequest) -> publication::InfoReply {
     root.update("observe_store", publication::INFO, request, STORE_LIMITS)
         .await
 }
+
 async fn handover(root: &Client<'_>, supplier: &Client<'_>) {
     root.pic
         .update_canister_settings(
@@ -183,6 +187,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
         release: first.release.clone(),
     };
+
     async fn read(
         root: &Client<'_>,
         input: publication::CustodyRequest,

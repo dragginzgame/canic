@@ -1,7 +1,5 @@
 //! Real Root-originated snapshot calls. This does not substitute for Backup's consumer route.
 use super::*;
-#[path = "../support/counter.rs"]
-mod counter_client;
 use canic_management_protocol::backup::{
     self as protocol, Effect, Error, Kind, Operation, Outcome, Record, Request, Step,
     management as m,
@@ -16,6 +14,7 @@ const DECODE: CandidLimits = CandidLimits {
     vector: protocol::MAX_INNER,
     skipping: 8_000_000,
 };
+
 fn request(op: &Operation, step: Step, effect: Effect, expiry: u64) -> Request {
     let bytes = match &effect {
         Effect::Recovery { child, .. } => Ok(step.recovery_payload(op.kind, child).unwrap().1),
@@ -44,6 +43,7 @@ fn request(op: &Operation, step: Step, effect: Effect, expiry: u64) -> Request {
         },
     }
 }
+
 async fn call<T: serde::Serialize>(
     pic: &PocketIc,
     root: CanisterId,
@@ -64,6 +64,7 @@ async fn call<T: serde::Serialize>(
         .await
         .unwrap()
 }
+
 async fn execute(pic: &PocketIc, root: CanisterId, r: &Request) -> Result<Record, Error> {
     let bytes = call(pic, root, "snapshot_execute", protocol::EXECUTE, r).await;
     match r.prepare() {
@@ -85,6 +86,7 @@ async fn execute(pic: &PocketIc, root: CanisterId, r: &Request) -> Result<Record
         }
     }
 }
+
 async fn lookup(pic: &PocketIc, root: CanisterId, r: &Request) -> Result<Record, Error> {
     let binding = r.prepare().unwrap().0;
     let bytes = call(pic, root, "snapshot_lookup", protocol::LOOKUP, &binding).await;
@@ -92,12 +94,14 @@ async fn lookup(pic: &PocketIc, root: CanisterId, r: &Request) -> Result<Record,
         .decode_response(&binding, &bytes)
         .unwrap()
 }
+
 fn reply(record: Record) -> Vec<u8> {
     match record.outcome {
         Outcome::Reply(bytes) => bytes,
         other => panic!("inner outcome: {other:?}"),
     }
 }
+
 async fn fixture(pic: &PocketIc, wasm: Vec<u8>) -> (CanisterId, CanisterId, u64) {
     let root = pic.create_canister().await;
     pic.add_cycles(root, 5_000_000_000_000).await;
@@ -124,6 +128,7 @@ async fn fixture(pic: &PocketIc, wasm: Vec<u8>) -> (CanisterId, CanisterId, u64)
         now + 250_000_000_000,
     )
 }
+
 fn operation(root: CanisterId, child: CanisterId) -> Operation {
     Operation {
         id: [1; 16],
@@ -136,6 +141,7 @@ fn operation(root: CanisterId, child: CanisterId) -> Operation {
         target: child.to_text(),
     }
 }
+
 #[tokio::test]
 async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failure() {
     let mut server = Server::start(
@@ -555,7 +561,7 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         );
         if step == Step::Fence {
             assert_eq!(
-                counter_client::counter(
+                canic_qualification::counter(
                     pic,
                     worker,
                     CanisterId::anonymous(),
@@ -578,7 +584,7 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
     // The application can reject Root's requested generation. A valid transport
     // reply from the executor retains that rejection and grants no stop.
     let (r, worker, expiry) = fixture(pic, wasm.clone()).await;
-    counter_client::counter(pic, worker, r, canic_demo::Request::Fence { attempt: 4 })
+    canic_qualification::counter(pic, worker, r, canic_demo::Request::Fence { attempt: 4 })
         .await
         .unwrap();
     let op = operation(r, worker);

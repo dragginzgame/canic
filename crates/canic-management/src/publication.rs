@@ -1,6 +1,8 @@
 //! One controller-authorized Store call. No catalog, payload persistence or retry owner.
-use canic_management_protocol::publication::{Command, Error, MAX_WINDOW_NS, Reply, Request};
-use canic_management_protocol::stored::{STORE_CHUNK_LIMITS, STORE_LIMITS};
+use canic_management_protocol::{
+    publication::{Command, Error, MAX_WINDOW_NS, Reply, Request},
+    stored::{STORE_CHUNK_LIMITS, STORE_LIMITS},
+};
 use ic_platform_runtime::{
     call::{Call, Wait},
     system as api,

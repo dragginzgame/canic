@@ -1,5 +1,8 @@
 //! Human projection of retained operation evidence; never a live status check.
 
+#[cfg(test)]
+mod tests;
+
 use canic_host::{
     CanisterStatus, Error, ManagementStatus, Network, OperationStatus, Result, StatusDetail,
 };
@@ -13,8 +16,6 @@ use std::{
 
 pub(crate) mod management;
 pub(crate) mod store;
-#[cfg(test)]
-mod tests;
 
 pub(crate) fn pool_preview(
     deployment: &canic_host::DeploymentName,

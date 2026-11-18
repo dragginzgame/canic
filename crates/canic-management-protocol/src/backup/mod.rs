@@ -1,10 +1,12 @@
 //! Finite snapshot executor exchange. Backup owns procedure admission and host evidence.
 //! Platform owns inner DTOs/codecs; the manager owns original effect/result custody.
+
+#[cfg(test)]
+mod tests;
+
 use crate::digest;
 pub use ic_platform_protocol::management_snapshots as management;
 use serde::{Deserialize, Serialize};
-#[cfg(test)]
-mod tests;
 
 /// Execute one original slot; no implicit resubmission.
 pub const EXECUTE: u64 = 80;
@@ -385,6 +387,7 @@ impl Request {
         ))
     }
 }
+
 fn read_bound(kind: &management::ReadKind) -> bool {
     match kind {
         management::ReadKind::WasmModule(e)
@@ -413,6 +416,7 @@ impl Step {
             _ => None,
         }
     }
+
     /// Derive the exact inner arguments or local rewind decision for an operator action.
     /// # Errors
     /// Refuses steps outside the selected recovery profile.

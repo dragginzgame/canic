@@ -55,6 +55,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
     };
     (dir, selected)
 }
+
 fn retained_reply(dir: &Path, plan: &Plan) -> std::path::PathBuf {
     let approval = plan.auth().unwrap();
     let root = crate::network::principal(&approval.root.canister).unwrap();

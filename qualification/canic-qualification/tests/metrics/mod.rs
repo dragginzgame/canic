@@ -13,6 +13,7 @@ fn request() -> Vec<u8> {
     )
     .unwrap()
 }
+
 pub(super) async fn read(pic: &PocketIc, owner: CanisterId) -> Snapshot {
     let bytes = pic
         .query_call(

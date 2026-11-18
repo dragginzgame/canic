@@ -1,3 +1,8 @@
+#[cfg(test)]
+mod inspection_tests;
+#[cfg(test)]
+mod tests;
+
 use crate::{Error, Result, hex, supplier};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -293,9 +298,3 @@ fn selected_wasm(output: &[u8], package_id: &str) -> Result<PathBuf> {
     }
     Ok(paths.remove(0))
 }
-
-#[cfg(test)]
-mod tests;
-
-#[cfg(test)]
-mod inspection_tests;

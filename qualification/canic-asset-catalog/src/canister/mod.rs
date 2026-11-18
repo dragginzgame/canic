@@ -23,11 +23,27 @@ thread_local! {
     // This package is a qualification application; the product adapter has no fault mode.
     static FAILURE: Cell<u8> = const { Cell::new(0) };
 }
-#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = endpoint::decode::<protocol::Installation, INIT>, max_bytes = 2097152, on_error = endpoint_error)]
+
+/// Initialize the asset catalog state for this installation.
+#[runtime::init(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = endpoint::decode::<protocol::Installation, INIT>,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+)]
 fn init(input: protocol::Installation) {
     STATE.with_borrow_mut(|state| *state = Some(State::open(Some(input), api::canister_self())));
 }
-#[runtime::pre_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+
+/// Refuse upgrade until the embedded Blob service is drained.
+#[runtime::pre_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn pre_upgrade((): ()) {
     STATE.with_borrow(|state| {
         assert!(
@@ -41,15 +57,25 @@ fn pre_upgrade((): ()) {
         )
     });
 }
-#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = endpoint::decode::<(), UPGRADE>, max_bytes = 2097152, on_error = endpoint_error)]
+
+/// Reopen the asset catalog state from the preceding executable.
+#[runtime::post_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = endpoint::decode::<(), UPGRADE>,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+)]
 fn post_upgrade((): ()) {
     STATE.with_borrow_mut(|state| *state = Some(State::open(None, api::canister_self())));
 }
+
 canic::mount_blob_endpoints! {
     execute = crate::canister::execute_blob,
     inspect = crate::canister::inspect_blob,
     management = crate::canister::inspect_management,
 }
+
 fn execute_blob(caller: Principal, command: Command, now: u64) -> Result<Outcome, BlobError> {
     STATE.with_borrow_mut(|state| {
         state
@@ -59,9 +85,11 @@ fn execute_blob(caller: Principal, command: Command, now: u64) -> Result<Outcome
             .execute(caller, command, now)
     })
 }
+
 fn inspect_blob(caller: Principal, input: Inspection) -> Result<Observation, BlobError> {
     STATE.with_borrow(|state| state.as_ref().expect("catalog").blob.inspect(caller, input))
 }
+
 fn inspect_management(caller: Principal) -> Result<ManagementView, BlobError> {
     STATE.with_borrow(|state| {
         state
@@ -71,7 +99,17 @@ fn inspect_management(caller: Principal) -> Result<ManagementView, BlobError> {
             .inspect_management(caller)
     })
 }
-#[runtime::update(runtime = runtime, guard = endpoint::admit::<AUTHORIZE>, decode = endpoint::decode::<Draft, AUTHORIZE>, max_bytes = 2097152, on_error = endpoint_error, name = "catalog_authorize", encode = encode::<Result<Entry, Error>, AUTHORIZE>)]
+
+/// Authorize the caller's draft under the catalog policy.
+#[runtime::update(
+    runtime = runtime,
+    guard = endpoint::admit::<AUTHORIZE>,
+    decode = endpoint::decode::<Draft, AUTHORIZE>,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "catalog_authorize",
+    encode = encode::<Result<Entry, Error>, AUTHORIZE>,
+)]
 fn catalog_authorize(input: Draft) -> Result<Entry, Error> {
     STATE.with_borrow_mut(|state| {
         state
@@ -80,7 +118,17 @@ fn catalog_authorize(input: Draft) -> Result<Entry, Error> {
             .authorize(api::caller(), input, api::time(), FAILURE.get())
     })
 }
-#[runtime::update(runtime = runtime, guard = endpoint::admit::<PUBLISH>, decode = endpoint::decode::<std::num::NonZeroU128, PUBLISH>, max_bytes = 2097152, on_error = endpoint_error, name = "catalog_publish", encode = encode::<Result<Entry, Error>, PUBLISH>)]
+
+/// Publish the selected catalog reference under its owner's policy.
+#[runtime::update(
+    runtime = runtime,
+    guard = endpoint::admit::<PUBLISH>,
+    decode = endpoint::decode::<std::num::NonZeroU128, PUBLISH>,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "catalog_publish",
+    encode = encode::<Result<Entry, Error>, PUBLISH>,
+)]
 fn catalog_publish(reference: std::num::NonZeroU128) -> Result<Entry, Error> {
     STATE.with_borrow_mut(|state| {
         state
@@ -89,7 +137,17 @@ fn catalog_publish(reference: std::num::NonZeroU128) -> Result<Entry, Error> {
             .publish(api::caller(), reference, FAILURE.get())
     })
 }
-#[runtime::update(runtime = runtime, guard = endpoint::admit::<REMOVE>, decode = endpoint::decode::<std::num::NonZeroU128, REMOVE>, max_bytes = 2097152, on_error = endpoint_error, name = "catalog_remove", encode = encode::<Result<Entry, Error>, REMOVE>)]
+
+/// Release the selected catalog use.
+#[runtime::update(
+    runtime = runtime,
+    guard = endpoint::admit::<REMOVE>,
+    decode = endpoint::decode::<std::num::NonZeroU128, REMOVE>,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "catalog_remove",
+    encode = encode::<Result<Entry, Error>, REMOVE>,
+)]
 fn catalog_remove(reference: std::num::NonZeroU128) -> Result<Entry, Error> {
     STATE.with_borrow_mut(|state| {
         state.as_mut().expect("catalog").remove(
@@ -100,7 +158,17 @@ fn catalog_remove(reference: std::num::NonZeroU128) -> Result<Entry, Error> {
         )
     })
 }
-#[runtime::query(runtime = runtime, guard = endpoint::admit::<INSPECT>, decode = endpoint::decode::<std::num::NonZeroU128, INSPECT>, max_bytes = 2097152, on_error = endpoint_error, name = "catalog_inspect", encode = endpoint::encode::<Result<Asset, Error>, INSPECT>)]
+
+/// Inspect the asset through its catalog reference.
+#[runtime::query(
+    runtime = runtime,
+    guard = endpoint::admit::<INSPECT>,
+    decode = endpoint::decode::<std::num::NonZeroU128, INSPECT>,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "catalog_inspect",
+    encode = endpoint::encode::<Result<Asset, Error>, INSPECT>,
+)]
 fn catalog_inspect(reference: std::num::NonZeroU128) -> Result<Asset, Error> {
     STATE.with_borrow(|state| {
         state
@@ -110,12 +178,23 @@ fn catalog_inspect(reference: std::num::NonZeroU128) -> Result<Asset, Error> {
     })
 }
 type Ack = ();
-#[runtime::update(runtime = runtime, guard = endpoint::admit::<FAULT>, decode = endpoint::decode::<u8, FAULT>, max_bytes = 2097152, on_error = endpoint_error, name = "catalog_fault", encode = endpoint::encode::<(), FAULT>)]
+
+/// Select the controller's failure point for catalog rollback qualification.
+#[runtime::update(
+    runtime = runtime,
+    guard = endpoint::admit::<FAULT>,
+    decode = endpoint::decode::<u8, FAULT>,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "catalog_fault",
+    encode = endpoint::encode::<(), FAULT>,
+)]
 fn catalog_fault(point: u8) -> Ack {
     assert!(api::is_controller(&api::caller()));
     assert!(point <= 2);
     FAILURE.set(point);
 }
+
 canic::mount_readiness_endpoint!(crate::canister::readiness);
 
 fn readiness() -> canic::readiness::State {
@@ -126,6 +205,7 @@ fn readiness() -> canic::readiness::State {
         Some(_) => Ready,
     })
 }
+
 fn encode<T: serde::Serialize, const ID: u64>(
     value: T,
 ) -> Result<Vec<u8>, std::convert::Infallible> {
@@ -154,6 +234,7 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
+/// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
 }

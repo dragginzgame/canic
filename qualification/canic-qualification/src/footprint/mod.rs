@@ -1,4 +1,8 @@
 //! Qualification-only core Wasm measurements; installed execution remains the witness.
+
+#[cfg(test)]
+mod tests;
+
 use wasmparser::{Encoding, Parser, Payload};
 
 /// Complete measurements after bounded parsing and validation.
@@ -52,6 +56,3 @@ pub fn measure(bytes: &[u8]) -> Result<Footprint, Box<dyn std::error::Error>> {
     wasmparser::Validator::new().validate_all(&bytes)?;
     Ok(facts)
 }
-
-#[cfg(test)]
-mod tests;

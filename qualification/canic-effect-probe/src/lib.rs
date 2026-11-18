@@ -3,12 +3,13 @@
 //! This is a single-attempt experiment, not the Canic runtime. The maintenance
 //! rehearsal preserves both slots as separately bounded stable-memory frames.
 
+#[cfg(test)]
+mod tests;
+
 use serde::{Deserialize, Serialize};
 
 #[cfg(target_family = "wasm")]
 mod canister;
-#[cfg(test)]
-mod tests;
 
 /// Wire identity of the sole creation attempt.
 pub const START: u64 = 1;

@@ -887,7 +887,21 @@ The local installed witness exercises this contract on a fresh Root with the
 `sharding` feature. It uses Root's two existing permanent slots for shards and
 an independently installed hub. Putting the hub and both shards under the same
 Root's creation journal still requires the general child-capacity expansion.
-Toko retains its own login, authorization, user records and provisioning.
+Toko owns login, account identity, user ID generation, payload validation and
+the private user record. The opt-in Canic hub adapter owns provisioning from an
+authenticated session. Its IC DB binding uses the application's existing route
+row as the only reservation. A racing request reads the winner before insertion.
+The shard admits its installed parent and inserts once. An exact receipt for the
+original user and destination permits marking the same reservation ready.
+
+Root already retains the immutable allocation generation for each placement key
+and reports a replaced generation as unavailable. For a pending predecessor row,
+use lookup only and require the original principal; never assign on a miss.
+Compare the full allocation before confirming across the shard call. A ready
+route can acknowledge an existing registration locally. It grants no new effect
+or shard access. A lost Auth session after upgrade cannot resume private work
+until the application's receiver admits it. This reuses the frozen HRW and
+capacity evidence above; provisioning adds no selector or stable directory.
 
 In `canic.toml`, configure deployment-specific bounds alongside the network.
 The selected app already declares `user_hub` as the parent of `user_shard`.
@@ -1336,6 +1350,10 @@ database incarnation derivation. Readiness reports successful storage attachment
 only. An upgrade reopens application data and leaves the volatile receiver
 closed. This extends the retained-store predecessor review and the qualified
 parent binding without introducing a new allocation or recovery authority.
+The child mount derives the parent allocation key by appending `hub.v1` to the
+declared storage prefix. A predecessor with another allocation name supplies
+that exact `parent_storage_key`. The approved install context supplies the
+principal, and upgrade strictly reopens the same cell.
 
 ### Endpoint ownership and actor composition
 

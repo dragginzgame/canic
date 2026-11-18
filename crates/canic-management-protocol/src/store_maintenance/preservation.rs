@@ -79,6 +79,7 @@ impl From<Legacy> for Preservation {
 }
 impl TryFrom<&Preservation> for Legacy {
     type Error = &'static str;
+
     fn try_from(value: &Preservation) -> Result<Self, Self::Error> {
         if value.after_removed {
             return Err("historical scan cannot encode a removed cursor");

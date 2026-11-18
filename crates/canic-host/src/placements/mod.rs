@@ -1,4 +1,8 @@
 //! One-shot mainnet placement diagnostics for explicitly configured bindings.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{Error, Network, Result, SelectedFleet, supplier};
 use ic_platform_types::Principal;
 use ic_query_topology::placement::collection::{self, PlacementCollectionReport};
@@ -117,6 +121,3 @@ where
         observation,
     })
 }
-
-#[cfg(test)]
-mod tests;

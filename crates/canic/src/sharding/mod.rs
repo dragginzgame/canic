@@ -1,4 +1,8 @@
 //! Hub-facing placement contract. The application derives one opaque key per account.
+
+#[cfg(test)]
+mod tests;
+
 use serde::{Deserialize, Serialize};
 
 /// Assign a key to an admitted shard or reserve its first allocation.
@@ -68,5 +72,6 @@ mod client;
 #[cfg(target_arch = "wasm32")]
 pub use client::{assign, lookup};
 
-#[cfg(test)]
-mod tests;
+/// Optional hub and shard composition for an issuer-qualified account.
+#[cfg(feature = "method")]
+pub mod provisioning;

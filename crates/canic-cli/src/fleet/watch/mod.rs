@@ -1,11 +1,12 @@
 //! One read-only collector at a time, independent of browser request frequency.
+
+#[cfg(test)]
+mod tests;
+
 use super::{declared_routes, escape, render};
 use crate::view::{MAX_REPORT_BYTES, Viewer};
 use canic_host::{Error, Fleet, Result};
 use std::{future::Future, path::Path, time::Duration};
-
-#[cfg(test)]
-mod tests;
 
 const INTERVAL: Duration = Duration::from_secs(30);
 

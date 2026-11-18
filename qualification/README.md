@@ -32,6 +32,78 @@ and keeps the second slot empty. Native tests check legacy HRW score vectors, fi
 candidate tie breaking, and refusal to resolve replaced generations or principals.
 Run `make store-test` for these and the other installed Store cases.
 
+### Provision an account on its assigned shard
+
+Enable `canic/provisioning` on the installed hub and shard. In the shared
+protocol crate, `canic/sharding` and `canic/method` expose the passive
+`Resource`, `Provision`, request, receipt and progress types. The application
+selects its ID representation, name validation, Wire budgets and existing
+placement key namespace. For the Toko consumer the shared declaration is:
+
+```rust
+use canic::sharding::provisioning::Resource;
+
+pub struct Users;
+
+impl Resource for Users {
+    type Id = [u8; 16]; // Toko's existing ULID in network byte order
+    type Data = String;
+    const METHOD: &'static str = "provision_user";
+    const DOMAIN: &'static [u8] = b"toko.user.placement.v1";
+    const LIMITS: ic_wire::Limits = super::signup::LIMITS;
+}
+```
+
+In the hub, keep the existing `UserRoute` schema, including its unique
+`issuer,subject` index. Bind the compiled entity to the same store and call
+the helper from the existing authenticated update. Toko's `new_id` returns
+a candidate ULID; `initial` validates the input and returns a `DisplayName` or traps.
+
+```rust
+use canic::sharding::provisioning::{Progress, provision};
+
+canic::declare_provisioning_row! {
+    hub UserRoute, resource = Users, store = crate::database::store::with,
+    id = (Ulid::to_bytes, Ulid::from_bytes, new_id), scope = "write",
+    payload = display_name: DisplayName, validate = initial,
+    export = |name: &DisplayName| name.0.clone(),
+    status = (Status::Pending, Status::Ready),
+}
+
+#[canic::update(scope = "write", limits = LIMITS)]
+async fn register(session: SessionView, name: String) -> Progress {
+    provision::<UserRoute>(&session, name).await
+}
+```
+
+In the shard, bind the existing private table to the same resource. The
+installed parent is checked before decoding. The synchronous handler checks
+the actual shard and returns the original binding on replay. Other private
+profile queries and changes remain ordinary application endpoints.
+
+```rust
+use canic::sharding::provisioning::{Binding, Provision, Request, receive};
+
+canic::declare_provisioning_row! {
+    shard User, resource = Users, store = crate::database::store::with,
+    id = (Ulid::to_bytes, Ulid::from_bytes), payload = display_name, validate = initial,
+}
+
+#[canic::update(contract = Provision<Users>, guard = canic::topology::require_parent)]
+fn provision_user(request: Request<[u8; 16], String>) -> Binding<[u8; 16]> {
+    receive::<User>(request)
+}
+```
+
+The named fields in this adapter cover the two qualified IC DB layouts. Its
+indexed lookup reads one row within 1 KiB. Preserve the same database schema,
+key namespace, original Root and pool when adopting it on existing data.
+Root retains the original generation; after suspension the hub checks the
+allocation and principal. A pending row with no corresponding Root claim
+cannot allocate a replacement. Only the exact original receipt can mark a
+reservation ready. A ready acknowledgement is a local read. When an upgrade
+closes the Auth receiver, its normal authorization rules still apply.
+
 ## Optional Root snapshot executor
 
 `bash scripts/dev/test-root.sh snapshot::` qualifies Canic #6's optional fresh Root
@@ -988,7 +1060,6 @@ with `pub use setup::database;` in `lib.rs`.
 ```rust
 canic::mount_db_role! {
     shard, database = "toko.user.shard.user.v1",
-    parent = "toko.user.shard.hub.v1",
     authority = "user_shard", prefix = "toko.user.shard.", auth_read = "read",
 }
 ```
@@ -996,7 +1067,13 @@ canic::mount_db_role! {
 The hub selects `hub, database = "...", config = "...", authority = "toko",
 pages = 65536, auth_read = "read"` and obtains its retained routing Root from
 `canic::db::role::root()`. The shard uses `canic::topology::require_parent` to
-authorize a parent-only method. Both mounts own their install/upgrade hooks,
+authorize a parent-only method. Declare `parent = "user_hub"` once in the
+shard's app definition in `canic.toml`. With `install_topology = true`, Host
+resolves that parent component's fleet binding and puts its principal in the approved install
+envelope. The shard mount retains it under the declared prefix plus `hub.v1`,
+which reopens Toko’s original allocation. If an older app used a different key,
+supply `parent_storage_key = "…"` immediately after `database`. Use the original
+key on upgrade. Both mounts own their install/upgrade hooks,
 the standard Auth endpoints and a read-only readiness report. Readiness means
 the declared stores opened. Auth admission is independent and stays closed
 after volatile loss. Role selection grants no management authority.

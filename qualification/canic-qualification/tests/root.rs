@@ -3,8 +3,10 @@ use canic_management_protocol::{
     Approval, CREATION_CYCLES, LIMITS, Phase, Refusal, STAGE, STAGE_LIMITS, STATUS, Stage, Status,
     digest,
 };
-use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc};
-use ic_testkit::server::{Limits, PreparedServer, Server};
+use ic_testkit::{
+    pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc},
+    server::{Limits, PreparedServer, Server},
+};
 use std::{path::PathBuf, time::Duration};
 
 mod children;

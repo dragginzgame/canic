@@ -22,6 +22,7 @@ use std::{path::PathBuf, time::Duration};
 fn artifacts() -> PathBuf {
     PathBuf::from(std::env::var_os("CANIC_STORE_APP_DIRECTORY").expect("make store-test"))
 }
+
 async fn recover_store(
     root: &Client<'_>,
     approval: &store_maintenance::Approval,
@@ -34,12 +35,14 @@ async fn recover_store(
     )
     .await
 }
+
 async fn settle(pic: &PocketIc) {
     for _ in 0..100 {
         pic.advance_time(Duration::from_millis(100)).await;
         pic.tick().await;
     }
 }
+
 async fn custody(root: &Client<'_>) -> stored::Custody {
     root.update(
         "observe_stored_children",
@@ -49,6 +52,7 @@ async fn custody(root: &Client<'_>) -> stored::Custody {
     )
     .await
 }
+
 async fn inject(root: &Client<'_>, point: u8) {
     root.update::<_, ()>(
         "inject_child_fault",
@@ -61,6 +65,7 @@ async fn inject(root: &Client<'_>, point: u8) {
     )
     .await;
 }
+
 async fn maintain(root: &Client<'_>) {
     root.pic
         .stop_canister(root.id, Some(root.operator))
@@ -80,6 +85,7 @@ async fn maintain(root: &Client<'_>) {
         .await
         .unwrap();
 }
+
 /// A rejected layout transition must leave the original executable and all records intact.
 async fn refuse_old_backing(root: &Client<'_>) {
     let before = root.pic.get_stable_memory(root.id).await;
@@ -103,6 +109,7 @@ async fn refuse_old_backing(root: &Client<'_>) {
     assert_eq!(status().await.unwrap().module_hash, Some(module));
     assert_eq!(root.pic.get_stable_memory(root.id).await, before);
 }
+
 fn padded(mut wasm: Vec<u8>) -> Vec<u8> {
     // A valid custom section makes the actual executable larger than Root's former byte limit.
     let payload = 1_048_577_u32;
@@ -120,6 +127,7 @@ fn padded(mut wasm: Vec<u8>) -> Vec<u8> {
     wasm.resize(wasm.len() + payload as usize - 1, 42);
     wasm
 }
+
 async fn fixture<'a>(
     pic: &'a PocketIc,
     fault: bool,
@@ -210,6 +218,7 @@ async fn fixture<'a>(
         second,
     )
 }
+
 async fn stage(
     root: &Client<'_>,
     input: &stored::Stage<management::Approval>,
@@ -225,6 +234,7 @@ async fn stage(
     )
     .await
 }
+
 async fn reconcile(
     root: &Client<'_>,
     input: &stored::Stage<management::Approval>,

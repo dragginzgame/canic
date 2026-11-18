@@ -1,6 +1,7 @@
 use super::*;
-use ic_storage::VectorMemory;
-use ic_storage::{AllocationGrants, GenericAllocationPolicy, MemoryAuthority, adapter::StableCell};
+use ic_storage::{
+    AllocationGrants, GenericAllocationPolicy, MemoryAuthority, VectorMemory, adapter::StableCell,
+};
 
 #[test]
 fn composed_memory_preserves_other_owner_and_refuses_ungranted_or_missing_profiles() {

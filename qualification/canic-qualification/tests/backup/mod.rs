@@ -1,6 +1,4 @@
 //! Direct, stopped fixture with disposable external secp256k1 custody.
-#[path = "../support/counter.rs"]
-mod counter_client;
 mod gateway;
 mod managed;
 mod signed_bindings;
@@ -8,14 +6,13 @@ mod signer_failures;
 use canic_demo::{Error as CounterError, Request as CounterRequest};
 use canic_host::backup::{CounterRecoveryGuard, DirectSigner, SnapshotCodec};
 use canic_management_protocol::backup::Step;
-use counter_client::counter;
-use ic_backup::store::OperationStep;
+use canic_qualification::counter;
 use ic_backup::store::{
     BackupApplicationGuard, BackupConnection, BackupDigest, BackupHttpTransport, BackupStore,
     BackupTarget, CaptureRequest, CaptureTiming, OperationAction, OperationLimits,
-    OperationOptions, OperationPlan, OperationProgress, RestoreRequest,
+    OperationOptions, OperationPlan, OperationProgress, OperationStep, RestoreRequest, RootCodec,
+    RootManager,
 };
-use ic_backup::store::{RootCodec, RootManager};
 use ic_host_sign::{
     Signer,
     protocol::{Configuration, tool_hash},
@@ -24,10 +21,10 @@ use ic_testkit::{
     pocket_ic::{CanisterId, CanisterSettings, PocketIcBuilder, common::rest::BlobCompression},
     server::{Limits, PreparedServer, Server},
 };
-use std::sync::atomic::Ordering;
 use std::{
     fs,
     path::PathBuf,
+    sync::atomic::Ordering,
     time::{Duration, SystemTime},
 };
 
@@ -37,12 +34,14 @@ enum StoppedFixture {
 }
 impl BackupApplicationGuard for StoppedFixture {
     type Error = ();
+
     fn protocol(&self) -> [u8; 32] {
         match self {
             Self::Direct(_) => [9; 32],
             Self::Managed(g) => g.borrow().protocol(),
         }
     }
+
     fn admit(
         &self,
         plan: OperationPlan<'_>,
@@ -67,6 +66,7 @@ async fn external_signer_captures_and_restores_direct_child() {
 async fn root_managed_backup_recovers_original_take_and_load() {
     exercise(true).await;
 }
+
 async fn exercise(managed: bool) {
     let dir = PathBuf::from(
         std::env::var_os("CANIC_BACKUP_FIXTURE").expect("use make backup-signer-test"),

@@ -1,9 +1,10 @@
 //! Actual Host Root replacement preserves the separate, still-closed Store operation.
 use super::{Client, artifacts, fixture, quiescence_tests, recover_store, settle, stage, support};
 use canic_management_protocol::{self as management, custody, store_maintenance as maintenance};
-use ic_testkit::pocket_ic::PocketIcBuilder;
-use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
-use ic_testkit::server::{Limits, Server};
+use ic_testkit::{
+    pocket_ic::{CanisterId, CanisterSettings, PocketIcBuilder},
+    server::{Limits, Server},
+};
 use std::{
     path::Path,
     process::Command,
@@ -13,6 +14,7 @@ use std::{
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
+
 async fn complete(root: &Client<'_>) -> custody::Root {
     root.update(
         "observe_root_custody",
@@ -22,6 +24,7 @@ async fn complete(root: &Client<'_>) -> custody::Root {
     )
     .await
 }
+
 #[tokio::test(flavor = "current_thread")]
 async fn host_root_maintenance_preserves_stopped_store_operation_and_signed_install() {
     let (_, binary) = support::inputs();

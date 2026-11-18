@@ -1,4 +1,8 @@
 //! Pure presentation of configured slots and Query's independent observations.
+
+#[cfg(test)]
+mod tests;
+
 use crate::Output;
 use canic_host::placements::{FleetPlacements, PlacementOutcome};
 use ic_host_text::{bordered_table, escape};
@@ -82,6 +86,3 @@ fn render(report: &FleetPlacements) -> String {
         )
     )
 }
-
-#[cfg(test)]
-mod tests;

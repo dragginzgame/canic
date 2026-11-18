@@ -23,6 +23,7 @@ fn source() -> (std::path::PathBuf, SelectedFleet, String, Plan, Vec<u8>) {
     .unwrap();
     (dir, selection, id, plan, bytes)
 }
+
 fn retain_reply(dir: &Path, plan: &Plan, bytes: &[u8], deadline: u64, reply: &wire::RemovalReply) {
     let path = dir.join(plan.digest().unwrap()).join("removal");
     std::fs::create_dir_all(&path).unwrap();

@@ -1,6 +1,8 @@
 //! Explicit demo composition. Neither mount initializes a service or owns lifecycle.
 canic::mount_greeting_endpoints!(crate::greeting);
+
 canic::mount_metrics_endpoint!(crate::actor::snapshot);
+
 canic::mount_readiness_endpoint!(crate::actor::readiness);
 
 fn readiness() -> canic::readiness::State {

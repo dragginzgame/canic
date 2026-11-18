@@ -166,6 +166,7 @@ fn expected(plan: &Plan) -> Result<wire::Custody> {
             .clone(),
     })
 }
+
 pub(super) fn matches(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
     if method != super::observations(plan, false)[0].1 {
         return Err(invalid());

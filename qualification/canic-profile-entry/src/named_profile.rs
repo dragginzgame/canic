@@ -11,8 +11,10 @@ const REPLY: ic_wire::Limits = ic_wire::Limits {
     bytes: 72,
     ..LIMITS
 };
+
 thread_local! { static RECORD: RefCell<Option<Profile>> = const { RefCell::new(None) }; }
 
+/// Admit only the fixed member principal used by this witness.
 fn member() -> Result<(), &'static str> {
     if system::caller() == ic_platform_types::Principal::from_slice(&[42, 2]) {
         Ok(())
@@ -27,6 +29,7 @@ mod ops {
     pub(super) fn get() -> Option<Profile> {
         RECORD.with_borrow(Clone::clone)
     }
+
     pub(super) fn set(display_name: String) -> Profile {
         let record = Profile {
             user_id: 1,
@@ -39,16 +42,27 @@ mod ops {
     }
 }
 
-#[canic::query(method = 20, guard = member)]
+/// Return the admitted member's profile if present.
+#[canic::query(
+    method = 20,
+    guard = member,
+)]
 fn get_me() -> Option<Profile> {
     ops::get()
 }
-#[canic::update(method = 21, limits = REQUEST, reply_limits = REPLY, guard = member)]
+
+/// Store the admitted member's display name and return the resulting profile.
+#[canic::update(
+    method = 21,
+    limits = REQUEST,
+    reply_limits = REPLY,
+    guard = member,
+)]
 fn set_display_name(name: String) -> Profile {
     ops::set(name)
 }
 
-// A new public endpoint can use every default. Use the same hash in its client.
+/// Return the protocol version using the default public endpoint and Wire ID.
 #[canic::query]
 fn protocol_version() -> u8 {
     1

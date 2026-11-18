@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.227.0] - 2026-11-18
+
+### ✨ Added
+
+An authenticated hub can provision an account on its assigned shard with
+`sharding::provisioning::provision`. The app supplies its ID and private
+schema. [Hub and shard example](qualification/README.md#provision-an-account-on-its-assigned-shard)
+
+Build both declared roles from the app directory:
+
+```sh
+canic app build --canister user_hub
+canic app build --canister user_shard
+```
+
+### 🔧 Changed
+
+A shard's `mount_db_role!` now derives the parent cell key from its storage prefix.
+Remove `parent = "..."` for the standard Toko layout. For a custom retained
+layout, rename it to `parent_storage_key` and keep the exact value.
+[Canic #37](https://github.com/dragginzgame/canic/issues/37)
+
+Rebuild the shard from its app directory:
+
+```sh
+canic app build --canister user_shard
+```
+
+### 🧪 Testing
+
+Both workspaces use Toko Tooling 0.45.8. Installed counter and recovery
+tests share the same application client.
+
+### 🎯 Qualification
+
+Host rejects a symlink at the root of a declared `src` tree and refuses a
+named pipe with a `.rs` extension before opening it. The starter's Canic
+dependency is scoped to its Wasm target.
+
+The installed database upgrade tests preserve populated records through a refused
+upgrade and recover a lost install reply against the original operation.
+[Canic #20](https://github.com/dragginzgame/canic/issues/20)
+
 ## [0.226.0] - 2026-11-18
 
 ### ✨ Added
@@ -174,6 +217,7 @@ covers the receiver tables, apply steps and protected refresh calls.
 Both workspaces now pin Toko Tooling 0.45.6. In a clean release checkout,
 check the locked dependencies, simulator and package gates before publication.
 Repeated Linux runs can reuse verified installed effect tests.
+[Preflight #22](https://github.com/dragginzgame/canic/issues/22) · [Retry #23](https://github.com/dragginzgame/canic/issues/23)
 
 ```sh
 make qualification-setup

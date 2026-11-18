@@ -1,6 +1,8 @@
 use super::Store;
-use std::fs;
-use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
+use std::{
+    fs,
+    os::unix::fs::{MetadataExt, PermissionsExt, symlink},
+};
 
 #[test]
 fn sidecar_preserves_inode_bytes_modes_and_legacy_contention() {

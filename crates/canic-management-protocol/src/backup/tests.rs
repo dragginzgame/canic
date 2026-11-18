@@ -1,4 +1,5 @@
 use super::*;
+
 fn request() -> Request {
     let args = management::UploadDataArgs {
         canister_id: "rrkah-fqaaa-aaaaa-aaaaq-cai".parse().unwrap(),
@@ -28,6 +29,7 @@ fn request() -> Request {
         reply_bytes: 1024,
     }
 }
+
 #[test]
 fn full_extent_fits_wire_and_preserves_exact_platform_bytes() {
     let request = request();
@@ -55,6 +57,7 @@ fn full_extent_fits_wire_and_preserves_exact_platform_bytes() {
     assert_eq!(binding.arguments_hash, digest(&bytes));
     assert_eq!(binding.arguments_bytes, bytes.len() as u32);
 }
+
 #[test]
 fn changed_bytes_target_kind_and_bounds_refuse_before_dispatch() {
     let original = request();

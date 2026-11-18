@@ -1,7 +1,9 @@
 //! Real CLI approval and Root-to-catalog installation, using the existing Store owner.
 use super::{Client, actor, app, directory, frame, initialization};
-use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder};
-use ic_testkit::server::{Limits, PreparedServer, Server};
+use ic_testkit::{
+    pocket_ic::{CanisterId, PocketIcBuilder},
+    server::{Limits, PreparedServer, Server},
+};
 use serde_json::{Value, json};
 use std::{
     path::Path,
@@ -17,6 +19,7 @@ fn run(dir: &Path, args: &[&str]) -> Output {
         .output()
         .unwrap()
 }
+
 fn cli(dir: &Path, args: &[&str]) -> Value {
     let output = run(dir, args);
     assert!(
@@ -26,6 +29,7 @@ fn cli(dir: &Path, args: &[&str]) -> Value {
     );
     serde_json::from_slice(&output.stdout).unwrap()
 }
+
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }

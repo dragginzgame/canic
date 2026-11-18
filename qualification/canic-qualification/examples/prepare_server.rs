@@ -1,8 +1,7 @@
 //! Explicit server preparation, separate from offline test admission.
 
 use ic_testkit::server::{PreparedServer, host_asset, prepare};
-use std::os::unix::fs::DirBuilderExt;
-use std::path::Path;
+use std::{os::unix::fs::DirBuilderExt, path::Path};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<_> = std::env::args_os().skip(1).collect();

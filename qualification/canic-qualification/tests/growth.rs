@@ -4,10 +4,10 @@ use canic_management_protocol::{
     STATUS, Stage, Status, digest,
 };
 use canic_profile_protocol::{PUT, ProfileResult, Put};
-use ic_testkit::pocket_ic::{
-    CanisterId, CreateCanisterParams, PocketIcBuilder, nonblocking::PocketIc,
+use ic_testkit::{
+    pocket_ic::{CanisterId, CreateCanisterParams, PocketIcBuilder, nonblocking::PocketIc},
+    server::{Limits, PreparedServer, Server},
 };
-use ic_testkit::server::{Limits, PreparedServer, Server};
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},
@@ -30,6 +30,7 @@ fn cli(root: &Path, args: &[&str]) -> Value {
     );
     serde_json::from_slice(&output.stdout).unwrap()
 }
+
 fn client(args: &[&str]) -> Value {
     let output = Command::new(std::env::var_os("CANIC_PROFILE_CLIENT").unwrap())
         .args(args)
@@ -42,6 +43,7 @@ fn client(args: &[&str]) -> Value {
     );
     serde_json::from_slice(&output.stdout).unwrap()
 }
+
 async fn status(pic: &PocketIc, manager: CanisterId) -> Status {
     let reply = pic
         .query_call(
@@ -70,6 +72,7 @@ async fn status(pic: &PocketIc, manager: CanisterId) -> Status {
     )
     .unwrap()
 }
+
 async fn reconcile(pic: &PocketIc, manager: CanisterId) -> Status {
     let reply = pic
         .update_call(
@@ -98,6 +101,7 @@ async fn reconcile(pic: &PocketIc, manager: CanisterId) -> Status {
     )
     .unwrap()
 }
+
 async fn stage(pic: &PocketIc, manager: CanisterId, input: &Stage) -> Result<Status, Refusal> {
     let reply = pic
         .update_call(
@@ -126,18 +130,21 @@ async fn stage(pic: &PocketIc, manager: CanisterId, input: &Stage) -> Result<Sta
     )
     .unwrap()
 }
+
 async fn settle(pic: &PocketIc) {
     for _ in 0..30 {
         pic.advance_time(Duration::from_millis(100)).await;
         pic.tick().await;
     }
 }
+
 async fn count(pic: &PocketIc, manager: CanisterId) -> u64 {
     pic.get_subnet_metrics(pic.get_subnet(manager).await.unwrap())
         .await
         .unwrap()
         .num_canisters
 }
+
 fn approval(manager: CanisterId, wasm: &[u8], now: u64) -> Stage {
     Stage {
         approval: Approval {
@@ -565,6 +572,7 @@ async fn upgrade_status(
     )
     .unwrap()
 }
+
 async fn stage_upgrade(
     pic: &PocketIc,
     manager: CanisterId,
@@ -597,6 +605,7 @@ async fn stage_upgrade(
     )
     .unwrap()
 }
+
 async fn reconcile_upgrade(pic: &PocketIc, manager: CanisterId) {
     let retained = upgrade_status(pic, manager).await;
     let mut other = retained.approval.clone().unwrap();
@@ -649,6 +658,7 @@ async fn reconcile_upgrade(pic: &PocketIc, manager: CanisterId) {
     .await
     .unwrap();
 }
+
 async fn profile_get(pic: &PocketIc, worker: CanisterId, caller: CanisterId) -> ProfileResult {
     let reply = pic
         .query_call(

@@ -36,6 +36,7 @@ impl Child {
             execute_at_ns: self.execute_at_ns,
         }
     }
+
     fn from_child(c: &FleetChild) -> Self {
         Self {
             deployment: c.deployment.clone(),
@@ -95,6 +96,7 @@ impl<'de> Deserialize<'de> for FleetPlan {
         Ok(value)
     }
 }
+
 // Existing journal paths never move, including records with retained signed attempts.
 pub(super) fn child_leaf(slot: ChildId) -> &'static str {
     match slot {

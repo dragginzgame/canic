@@ -260,12 +260,12 @@ blob-doc:
 
 .PHONY: db-test db-clippy
 db-test:
-	cargo test --locked -p canic --features db-store db::store
+	cargo test --locked -p canic --features provisioning --lib
 	bash scripts/dev/test-db.sh
 
 db-clippy:
-	cargo clippy --locked -p canic --features db-schema,db-store --all-targets -- -D warnings
-	cargo clippy --locked -p canic --features db-schema,stateful-role --lib --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked -p canic --features db-schema,provisioning --all-targets -- -D warnings
+	cargo clippy --locked -p canic --features db-schema,provisioning --lib --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features fault-injection -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features incompatible-schema -- -D warnings

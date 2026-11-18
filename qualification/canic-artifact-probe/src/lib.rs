@@ -1,13 +1,14 @@
 //! Test-only custody of one approved artifact and one autonomous installation.
 //! No creation, funding, artifact catalogue or production scheduler is supplied.
 
+#[cfg(test)]
+mod tests;
+
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 #[cfg(target_family = "wasm")]
 mod canister;
-#[cfg(test)]
-mod tests;
 
 /// Stage one exact artifact and its installation authority.
 pub const STAGE: u64 = 1;

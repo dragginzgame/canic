@@ -1,6 +1,5 @@
 //! Actual Chromium/IndexedDB, Canic issuer mounts and the shared profile engine.
-use canic::auth::enrollment;
-use canic::auth::protocol::wire as auth_wire;
+use canic::auth::{enrollment, protocol::wire as auth_wire};
 use canic_auth_witness::{IssuerObservation, KEY, LIMITS, OBSERVE};
 use canic_profile_protocol::{GET, PUT, Profile, ProfileError, ProfileResult, Put};
 use ic_auth::verification::browser_principal;
@@ -28,9 +27,11 @@ fn key(seed: u8) -> Principal {
             .to_bytes(),
     )
 }
+
 fn id(principal: Principal) -> CanisterId {
     CanisterId::from_slice(principal.as_slice())
 }
+
 fn frame<T: Serialize>(method: u64, direction: ic_wire::Direction, value: &T) -> Vec<u8> {
     ic_wire::encode(
         value,
@@ -39,6 +40,7 @@ fn frame<T: Serialize>(method: u64, direction: ic_wire::Direction, value: &T) ->
     )
     .unwrap()
 }
+
 fn observed<T: DeserializeOwned>(bytes: &[u8]) -> T {
     ic_wire::decode(
         bytes,
@@ -50,6 +52,7 @@ fn observed<T: DeserializeOwned>(bytes: &[u8]) -> T {
     )
     .unwrap()
 }
+
 fn enrollment_frame<T: Serialize>(
     method: u64,
     direction: ic_wire::Direction,
@@ -62,6 +65,7 @@ fn enrollment_frame<T: Serialize>(
     )
     .unwrap()
 }
+
 fn profile(seed: u8, user_id: u64, display_name: &str) -> Profile {
     Profile {
         user_id,

@@ -15,6 +15,7 @@ struct Input {
     expected: custody::Root,
     artifacts: PathBuf,
 }
+
 fn retain(journal: &Path, plan: &Plan, wasm: &[u8]) -> String {
     let store = crate::store::Store::open(journal).unwrap();
     crate::plan::publish_locked(&store, plan.clone(), wasm)

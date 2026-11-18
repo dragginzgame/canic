@@ -110,9 +110,11 @@ impl RootBinding for Bound {
     fn execute(&self) -> &[u8] {
         &self.execute
     }
+
     fn lookup(&self) -> &[u8] {
         &self.lookup
     }
+
     fn decode(&self, exchange: RootExchange, payload: &[u8]) -> Option<RootOutcome> {
         let exchange = match exchange {
             RootExchange::Execute => snapshot::Exchange::Execute,

@@ -1,4 +1,8 @@
 //! Diagnostic reads selected by retained Store authority, never role-based discovery.
+
+#[cfg(test)]
+mod tests;
+
 use super::{FleetOperation, Network};
 use crate::{Error, Result, network, supplier};
 use canic_management_protocol::store_maintenance as wire;
@@ -118,6 +122,3 @@ pub(super) async fn collect(
     }
     Ok(reports)
 }
-
-#[cfg(test)]
-mod tests;

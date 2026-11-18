@@ -268,6 +268,7 @@ fn metadata_call(plan: &Plan, store: Option<Principal>, deadline: u64) -> Result
         None => crate::publication::observation(plan, deadline),
     }
 }
+
 async fn observe_metadata(
     path: &Path,
     plan: &Plan,
@@ -313,9 +314,11 @@ async fn observe_metadata(
 pub(crate) fn retained_operation(path: &Path, plan: &Plan) -> Result<Vec<u8>> {
     retained_metadata(path, plan, None)
 }
+
 pub(crate) fn retained_store(path: &Path, plan: &Plan, canister: Principal) -> Result<Vec<u8>> {
     retained_metadata(path, plan, Some(canister))
 }
+
 fn retained_metadata(path: &Path, plan: &Plan, store: Option<Principal>) -> Result<Vec<u8>> {
     let expires_at_ns: u64 = store::json(&path.join("authority.json"))?;
     let deadline = expires_at_ns

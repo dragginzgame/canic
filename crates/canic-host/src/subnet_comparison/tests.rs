@@ -21,6 +21,7 @@ fn selected() -> SelectedFleet {
         },
     }
 }
+
 fn candidate(subnet_id: Principal) -> Candidate {
     Candidate {
         subnet_id,

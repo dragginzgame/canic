@@ -1,8 +1,10 @@
 //! Real fleet planner, isolated signer and Root-owned Store replacement on a local replica.
 use super::{cli, hex, run};
 use canic_management_protocol::{children, store_maintenance as wire};
-use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder};
-use ic_testkit::server::{Limits, PreparedServer, Server};
+use ic_testkit::{
+    pocket_ic::{CanisterId, PocketIcBuilder},
+    server::{Limits, PreparedServer, Server},
+};
 use serde_json::{Value, json};
 use std::{
     os::unix::fs::PermissionsExt,
@@ -14,6 +16,7 @@ use std::{
 fn quoted(path: &Path) -> String {
     format!("'{}'", path.to_str().unwrap().replace('\'', "'\\''"))
 }
+
 fn call(dir: &Path, method: &str, id: &str, signer: &Path) -> Value {
     cli(
         dir,
@@ -28,9 +31,11 @@ fn call(dir: &Path, method: &str, id: &str, signer: &Path) -> Value {
         ],
     )
 }
+
 fn write_config(dir: &Path, config: &Value) {
     std::fs::write(dir.join("canic.toml"), toml::to_string(config).unwrap()).unwrap();
 }
+
 async fn retained(
     pic: &ic_testkit::pocket_ic::nonblocking::PocketIc,
     root: CanisterId,
@@ -64,6 +69,7 @@ async fn retained(
     .unwrap()
     .unwrap()
 }
+
 async fn inject(
     pic: &ic_testkit::pocket_ic::nonblocking::PocketIc,
     root: CanisterId,
@@ -90,6 +96,7 @@ async fn inject(
     .await
     .unwrap();
 }
+
 fn pause(dir: &Path, signer: &Path, method: &str) -> PathBuf {
     let path = dir.join(format!("pause-{method}"));
     std::fs::write(&path, format!("#!/bin/sh\nfor arg in \"$@\"; do\n if [ \"$arg\" = '{method}' ]; then exit 73; fi\ndone\nexec {} \"$@\"\n", quoted(signer))).unwrap();

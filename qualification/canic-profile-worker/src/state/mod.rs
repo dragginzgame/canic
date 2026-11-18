@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use canic_profile_protocol::{
     LIMITS, MAX_NAME_BYTES, MAX_PROFILES, Profile, ProfileError, ProfileResult, Put,
 };
@@ -7,9 +10,6 @@ use ic_storage::{
 };
 use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
-
-#[cfg(test)]
-mod tests;
 
 /// Authority the application must explicitly grant in its Storage bootstrap.
 pub const STORAGE_AUTHORITY: &str = "profile";
@@ -34,12 +34,15 @@ impl Storable for Owner {
         max_size: 29,
         is_fixed_size: false,
     };
+
     fn to_bytes(&self) -> Cow<'_, [u8]> {
         Cow::Borrowed(&self.0)
     }
+
     fn into_bytes(self) -> Vec<u8> {
         self.to_bytes().into_owned()
     }
+
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
         if bytes.len() > 29 || bytes.as_ref() == [4] {
             panic!("owner principal");
@@ -59,14 +62,17 @@ impl Storable for Record {
         max_size: 512,
         is_fixed_size: false,
     };
+
     fn to_bytes(&self) -> Cow<'_, [u8]> {
         ic_wire::encode(self, ic_wire::Encoding::Payload, LIMITS)
             .map(Cow::Owned)
             .expect("profile encoding")
     }
+
     fn into_bytes(self) -> Vec<u8> {
         self.to_bytes().into_owned()
     }
+
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
         let record: Self =
             ic_wire::decode(&bytes, ic_wire::Encoding::Payload, LIMITS).expect("profile encoding");

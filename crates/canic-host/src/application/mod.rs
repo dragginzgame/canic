@@ -1,4 +1,8 @@
 //! App-owned command codecs; Canic owns direct ingress custody, never application permission.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     Artifact, Error, Plan, PlanAction, Result, SelectedFleet, artifact, plan, signed, store,
     supplier,
@@ -7,8 +11,6 @@ use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::Path};
 
 pub mod codec;
-#[cfg(test)]
-mod tests;
 
 /// Transport request ceiling, independent of the application's codec budget.
 pub const MAX_REQUEST_BYTES: usize = 65_536;

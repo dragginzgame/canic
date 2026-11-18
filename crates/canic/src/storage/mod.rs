@@ -1,4 +1,8 @@
 //! Named allocations for Canic actors with a fixed storage composition.
+
+#[cfg(test)]
+mod tests;
+
 use ic_storage::{
     AllocationGrants, GenericAllocationPolicy, MemoryAuthority, MemoryBacking, MemoryRequest,
     MemoryRuntime, RuntimeMemory, SealedDeclarationSnapshot, StableKey, StorageConfig,
@@ -101,6 +105,3 @@ pub fn cell<M: MemoryBacking>(
         StableCell::load(lease).expect("load retained cell")
     }
 }
-
-#[cfg(test)]
-mod tests;

@@ -112,6 +112,7 @@ fn named_definition_capacity_counts_unique_names_including_cycles() {
         }));
         projection.reached.insert(name, definition);
     }
+
     fn another() -> &'static TypeSchema {
         static VALUE: TypeSchema = TypeSchema {
             name: "Another",

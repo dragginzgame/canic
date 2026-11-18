@@ -1,5 +1,9 @@
 //! Bounded projection of admitted compiled schemas. No database open, storage read,
 //! row scan, permission decision, lifecycle action or mutation occurs here.
+
+#[cfg(test)]
+mod tests;
+
 use super::inspection::{
     Admission, Body, Cardinality, Definition, Entity, Field, INSPECT, Index, Kind, Name, Reference,
     Refusal, Reply, Request, Response, Selection, Value, Variant,
@@ -8,12 +12,10 @@ use ic_db::{FieldSchema, FieldType, Schema, TypeBody, TypeSchema};
 use ic_wire::List;
 use std::collections::BTreeMap;
 
-#[cfg(test)]
-mod tests;
-
 fn name(value: &str) -> Result<Name, Refusal> {
     Name::new(value.into()).map_err(|_| Refusal::Limit)
 }
+
 fn list<T, const N: usize>(values: Vec<T>) -> Result<List<T, N>, Refusal> {
     List::new(values).map_err(|_| Refusal::Limit)
 }
@@ -62,12 +64,14 @@ impl Projection {
             }
         })
     }
+
     fn value(&mut self, value: FieldType, optional: bool) -> Result<Value, Refusal> {
         Ok(Value {
             kind: self.kind(value)?,
             optional,
         })
     }
+
     fn fields(
         &mut self,
         fields: &[FieldSchema],
@@ -103,6 +107,7 @@ impl Projection {
                 .collect::<Result<_, Refusal>>()?,
         )
     }
+
     fn body(&mut self, value: &TypeBody) -> Result<Body, Refusal> {
         Ok(match value {
             TypeBody::Wrapped(_) => return Err(Refusal::Unsupported),
@@ -141,6 +146,7 @@ impl Projection {
             },
         })
     }
+
     fn definitions(&mut self) -> Result<List<Definition, 64>, Refusal> {
         let mut done = BTreeMap::new();
         while let Some((&id, &definition)) =

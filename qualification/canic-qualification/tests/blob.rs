@@ -1,11 +1,9 @@
 //! Installed Canic adapter + real Blob Service + application-owned catalog.
-use canic::blob::RPC_LIMITS;
 use canic::blob::{
-    self,
+    self, RPC_LIMITS,
     supplier::{
         caffeine::ManifestLimits,
-        local::Limits,
-        local::{Error as BlobError, ReferenceStatus, UploadState},
+        local::{Error as BlobError, Limits, ReferenceStatus, UploadState},
         protocol::{Command, Inspection, Installation, ManagementView, Observation, Outcome},
     },
 };
@@ -20,12 +18,15 @@ mod support;
 fn id(n: u128) -> NonZeroU128 {
     n.try_into().unwrap()
 }
+
 fn actor(n: u8) -> CanisterId {
     CanisterId::self_authenticating([n])
 }
+
 fn directory() -> PathBuf {
     PathBuf::from(std::env::var_os("CANIC_BLOB_ARTIFACT_DIRECTORY").expect("make blob-test"))
 }
+
 fn initialization() -> app::Installation {
     app::Installation {
         users: [
@@ -47,6 +48,7 @@ fn initialization() -> app::Installation {
         },
     }
 }
+
 fn frame<T: Serialize>(method: u64, input: &T) -> Vec<u8> {
     ic_wire::encode(
         input,
@@ -85,6 +87,7 @@ impl Client<'_> {
         )
         .unwrap()
     }
+
     async fn query<T: Serialize, R: DeserializeOwned>(
         &self,
         caller: CanisterId,
@@ -107,10 +110,12 @@ impl Client<'_> {
         )
         .unwrap()
     }
+
     async fn command(&self, caller: CanisterId, input: Command) -> Result<Outcome, BlobError> {
         self.update(caller, "blob_update", blob::UPDATE, &input)
             .await
     }
+
     async fn authorize(
         &self,
         caller: CanisterId,
@@ -119,18 +124,22 @@ impl Client<'_> {
         self.update(caller, "catalog_authorize", app::AUTHORIZE, draft)
             .await
     }
+
     async fn asset(&self, caller: CanisterId, n: u128) -> Result<app::Asset, app::Error> {
         self.query(caller, "catalog_inspect", app::INSPECT, &id(n))
             .await
     }
+
     async fn remove(&self, caller: CanisterId, n: u128) -> Result<app::Entry, app::Error> {
         self.update(caller, "catalog_remove", app::REMOVE, &id(n))
             .await
     }
+
     async fn publish(&self, caller: CanisterId, n: u128) -> Result<app::Entry, app::Error> {
         self.update(caller, "catalog_publish", app::PUBLISH, &id(n))
             .await
     }
+
     async fn management(&self) -> ManagementView {
         self.update::<_, Result<ManagementView, BlobError>>(
             actor(8),
@@ -141,6 +150,7 @@ impl Client<'_> {
         .await
         .unwrap()
     }
+
     async fn draft(&self, n: u128) -> app::Draft {
         app::Draft {
             id: id(n),
@@ -153,10 +163,12 @@ impl Client<'_> {
             headers: vec![],
         }
     }
+
     async fn fault(&self, point: u8) {
         self.update::<_, ()>(actor(9), "catalog_fault", app::FAULT, &point)
             .await;
     }
+
     async fn inspect_upload(&self, caller: CanisterId, n: u128) -> Result<Observation, BlobError> {
         self.query(
             caller,
@@ -166,6 +178,7 @@ impl Client<'_> {
         )
         .await
     }
+
     async fn upgrade(&self, artifact: &str, args: Vec<u8>) -> Result<(), String> {
         canic_qualification::upgrade_stopped(
             self.pic,
@@ -177,6 +190,7 @@ impl Client<'_> {
         .await
         .map_err(|e| e.to_string())
     }
+
     async fn ready(&self) -> bool {
         let state: canic::readiness::State = self
             .update(actor(8), "readiness", canic::readiness::METHOD, &())
@@ -184,6 +198,7 @@ impl Client<'_> {
         state == canic::readiness::State::Ready
     }
 }
+
 async fn install(pic: &PocketIc) -> Client<'_> {
     install_bytes(
         pic,
@@ -191,6 +206,7 @@ async fn install(pic: &PocketIc) -> Client<'_> {
     )
     .await
 }
+
 async fn install_bytes(pic: &PocketIc, wasm: Vec<u8>) -> Client<'_> {
     let canister = pic
         .create_canister_with_settings(Some(actor(9)), None)
@@ -261,6 +277,7 @@ async fn registry_blob_refuses_incompatible_populated_predecessor() {
     let stopped = server.stop().unwrap();
     assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
+
 async fn first(client: &Client<'_>) -> app::Draft {
     let draft = client.draft(1).await;
     client.authorize(actor(1), &draft).await.unwrap();

@@ -4,8 +4,10 @@ mod fleet_growth;
 mod greeting;
 mod publication_removal_tests;
 mod store_upgrade_tests;
-use ic_testkit::pocket_ic::{CanisterId, CanisterSettings, PocketIcBuilder};
-use ic_testkit::server::{Limits, PreparedServer, Server};
+use ic_testkit::{
+    pocket_ic::{CanisterId, CanisterSettings, PocketIcBuilder},
+    server::{Limits, PreparedServer, Server},
+};
 use serde_json::{Value, json};
 use std::{
     os::unix::fs::PermissionsExt,
@@ -22,6 +24,7 @@ fn run(dir: &Path, args: &[&str]) -> Output {
         .output()
         .unwrap()
 }
+
 fn cli(dir: &Path, args: &[&str]) -> Value {
     let output = run(dir, args);
     assert!(
@@ -31,6 +34,7 @@ fn cli(dir: &Path, args: &[&str]) -> Value {
     );
     serde_json::from_slice(&output.stdout).unwrap()
 }
+
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
@@ -66,6 +70,7 @@ fn publication_payload(dir: &Path, operation: &str) -> (usize, usize) {
     }
     (chunks, bytes)
 }
+
 fn padded(mut bytes: Vec<u8>) -> Vec<u8> {
     // Valid custom section: more than one transfer, without changing executable behavior.
     let payload = 2_000_000_u32;

@@ -30,6 +30,7 @@ fn call(plan: &Plan) -> Result<signed::Call<'static>> {
         .map_err(supplier)?,
     })
 }
+
 pub(super) fn receipt(dir: &Path, plan: &Plan) -> Result<Option<AuthReceipt>> {
     let path = dir.join("auth");
     if !path.join("reply.bin").try_exists().map_err(supplier)? {
@@ -57,6 +58,7 @@ pub(super) fn receipt(dir: &Path, plan: &Plan) -> Result<Option<AuthReceipt>> {
         revoked,
     }))
 }
+
 pub(crate) async fn apply(
     dir: &Path,
     plan: &Plan,
@@ -98,6 +100,7 @@ pub(crate) async fn apply(
         .ok_or_else(|| Error::Blocked("Auth has no retained response".into()))?;
     Ok(crate::ApplyOutcome::Auth { auth })
 }
+
 pub(crate) fn status(dir: &Path, plan: &Plan) -> Result<crate::CanisterStatus> {
     Ok(crate::CanisterStatus {
         operation: plan.digest()?,

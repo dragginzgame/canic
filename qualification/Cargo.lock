@@ -287,7 +287,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.226.0"
+version = "0.227.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -375,7 +375,7 @@ dependencies = [
 
 [[package]]
 name = "canic-demo"
-version = "0.226.0"
+version = "0.227.0"
 dependencies = [
  "canic",
  "clap",
@@ -402,7 +402,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.226.0"
+version = "0.227.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -434,7 +434,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.226.0"
+version = "0.227.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -443,7 +443,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.226.0"
+version = "0.227.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -459,7 +459,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.226.0"
+version = "0.227.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -1400,9 +1400,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth"
-version = "0.48.0"
+version = "0.48.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ee4380ddb65ed44bdb4665840f9d8be77e0b50fe182746b92c0715a3eabaeb0"
+checksum = "774373e7e1d7190fba4e7960d5716b283991cdea16d4e7c7431a3331f32a7d71"
 dependencies = [
  "ic-auth-protocol-types",
  "ic-platform",
@@ -1422,9 +1422,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth-wire"
-version = "0.44.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71cd06f1dbfef721060df4671600a93736f51d64ad20122f6bde1152754d3ecb"
+checksum = "62984c9e778f1751a172e5aff7467042eeafc494eb398327001fa073f374ccb8"
 dependencies = [
  "ic-auth-protocol-types",
  "ic-wire 0.25.0",
@@ -1433,9 +1433,9 @@ dependencies = [
 
 [[package]]
 name = "ic-backup"
-version = "0.105.6"
+version = "0.105.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc99dc21176ef5640cda1201a6322148ec09f457667994299d9ce72ae44e62f9"
+checksum = "5ce9be8b85d1b32ab5974684fd3ba31ab81ae1dc9c6eff8adee76c2c525316d9"
 dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
@@ -1478,9 +1478,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.23.8"
+version = "0.23.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1182a4055fb62c0c5bbd759555af85986e90a4fef0cde8dadf69d189f5edf137"
+checksum = "028a3a19e2517693d0986f4693a3ec4f902d1eeb9e47a9b98b2fe58d16100e36"
 dependencies = [
  "ethnum",
  "ic-db-macros",
@@ -1493,9 +1493,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.23.8"
+version = "0.23.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ca44484886557b045abd74edd0e51872a706003c0265a5575df10d6c9ddf38c"
+checksum = "fa4e8ad6e6d992df0d23f0e7155b2e6bd986396f39260aa0719d8202bf1db00b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1582,9 +1582,9 @@ dependencies = [
 
 [[package]]
 name = "ic-metrics"
-version = "0.30.13"
+version = "0.30.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6a7392a38636946c8d717f715062b5f8c1797eb37a548b56357e23e8930d7dc"
+checksum = "9e8a3b60fb25c50dc3d46021af953901d36c56d7d09aa5f14ca3e57d6ba69087"
 
 [[package]]
 name = "ic-platform"
@@ -1688,9 +1688,9 @@ dependencies = [
 
 [[package]]
 name = "ic-storage"
-version = "0.78.2"
+version = "0.78.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2f92a5e8b6e284e5de24ed7eee39d6a55b9a3c5bc81d3a53f6c0fad3828eff73"
+checksum = "71f944acc53d41720d70856cb5f81b0b3af9491833b70d22e836772899ac12de"
 dependencies = [
  "ic-platform",
  "ic-platform-runtime",
@@ -1759,27 +1759,27 @@ dependencies = [
 
 [[package]]
 name = "ic-wasm-store"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db6f1c1dd20098a7be92d31be9a9ef6e1eef3df3f65cb92cfed2c645f3b7860f"
+checksum = "6ed0163092d85288ea0ece8ce46c663417732dc6499ebb6de0ba13a819896529"
 dependencies = [
  "ic-platform-protocol",
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
  "ic-wasm-store-protocol",
- "ic-wire 0.24.6",
+ "ic-wire 0.25.0",
  "serde",
  "sha2 0.11.1",
 ]
 
 [[package]]
 name = "ic-wasm-store-protocol"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63fc2ca887d9b4354c23c3ec433f28888b7b8351bcc515c3b095d1088e730d19"
+checksum = "c2cc9513a2f21b25c5d05ba926a701cea38f8f068b4bba95f0d8959abd89fae7"
 dependencies = [
- "ic-wire 0.24.6",
+ "ic-wire 0.25.0",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -3362,9 +3362,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.45.7"
+version = "0.45.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81d14bd09e3a2cc71dc12c17af6221eeae4377030bee77848496d00eb7f505b7"
+checksum = "adbc76769b2231de6704851c363550ddc486bb6204a0f89c2ad365eb7cf740a3"
 
 [[package]]
 name = "toml"

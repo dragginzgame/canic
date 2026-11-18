@@ -48,6 +48,7 @@ fn invalid() -> Error {
 
 impl TryFrom<PlanRecord> for Plan {
     type Error = Error;
+
     fn try_from(record: PlanRecord) -> Result<Self> {
         let PlanRecord {
             version,
@@ -226,6 +227,7 @@ impl TryFrom<PlanRecord> for Plan {
 }
 impl TryFrom<Plan> for PlanRecord {
     type Error = Error;
+
     fn try_from(plan: Plan) -> Result<Self> {
         let target = plan.target().cloned();
         let previous_module = plan.previous_module().cloned();

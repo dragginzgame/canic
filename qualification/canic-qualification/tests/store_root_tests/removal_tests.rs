@@ -1,9 +1,9 @@
 //! Real Root forwarding. The publication harness separately qualifies CLI settlement/resumption.
 use super::{Client, inject, maintain, readiness_tests, store, support};
-use canic_management_protocol::publication::{
-    self as wire, Command, Error, Removal, RemovalRequest,
+use canic_management_protocol::{
+    publication::{self as wire, Command, Error, Removal, RemovalRequest},
+    stored::STORE_LIMITS,
 };
-use canic_management_protocol::stored::STORE_LIMITS;
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
 use std::time::Duration;
 
@@ -20,10 +20,12 @@ async fn request(
         manifest,
     }
 }
+
 async fn remove(root: &Client<'_>, input: &RemovalRequest) -> wire::RemovalReply {
     root.update("store_removal", wire::REMOVE, input, STORE_LIMITS)
         .await
 }
+
 async fn publish(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> wire::Reply {
     root.update(
         "store_publication",
@@ -37,6 +39,7 @@ async fn publish(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> 
     )
     .await
 }
+
 async fn handover(root: &Client<'_>, supplier: &Client<'_>) {
     root.pic
         .update_canister_settings(

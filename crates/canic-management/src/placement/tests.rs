@@ -12,6 +12,7 @@ fn legacy_hrw_inputs_and_first_candidate_tie_break_are_stable() {
     select(&mut best, 0, ChildId::FIRST);
     assert_eq!(best, Some((0, ChildId::SECOND)));
 }
+
 #[test]
 fn replacement_never_resolves_an_original_account() {
     let original = Allocation {

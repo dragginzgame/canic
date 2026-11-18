@@ -1,9 +1,10 @@
 //! Bounded serial child upgrades, independent of the original creation approval.
-use crate::{Failure, MAX_WASM, Refusal, digest};
-use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod tests;
+
+use crate::{Failure, MAX_WASM, Refusal, digest};
+use serde::{Deserialize, Serialize};
 
 /// Admit one immutable upgrade and its bytes.
 pub const STAGE: u64 = 24;

@@ -12,6 +12,7 @@ use ic_platform_runtime::{
 };
 use std::{future::Future, pin::pin, task::Poll};
 
+/// Require a controller and reject oversized frames before decoding.
 fn controller() -> Result<(), String> {
     if !api::is_controller(&api::caller()) {
         return Err("controller required".into());
@@ -22,6 +23,7 @@ fn controller() -> Result<(), String> {
     Ok(())
 }
 
+/// Allow only a continuation dispatched by this canister.
 fn private_continuation() -> Result<(), String> {
     if api::caller() == api::canister_self() {
         Ok(())

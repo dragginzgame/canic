@@ -24,6 +24,7 @@ impl Authority {
             last: None,
         })
     }
+
     /// Exact configuration retry never replaces a grant or revives its key.
     pub fn matches(&self, grant: &Grant) -> Result<(), Error> {
         if self.grant == *grant {
@@ -32,12 +33,14 @@ impl Authority {
             Err(Error::Conflict)
         }
     }
+
     /// Terminal retirement, authorized by the containing Root's real controller.
     pub fn revoke(&mut self, now_ns: u64) -> Result<(), Error> {
         self.observe(now_ns)?;
         self.revoked = true;
         Ok(())
     }
+
     /// Construct for the actual calling receiver. Exact retries retain their
     /// bytes and deadline unless revocation superseded the original authority.
     pub fn snapshot(
@@ -97,6 +100,7 @@ impl Authority {
         self.revision = revision;
         Ok(snapshot)
     }
+
     fn observe(&mut self, now_ns: u64) -> Result<(), Error> {
         if now_ns < self.observed_at_ns {
             return Err(Error::Invalid);

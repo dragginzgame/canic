@@ -1,7 +1,9 @@
 //! One read per continuation. Root retains a cursor and digest, never Store's catalog or bytes.
 use super::{Call, Failure, Phase, Status, Wait, change, store, target};
-use canic_management_protocol::store_maintenance::{Preservation, Scan};
-use canic_management_protocol::stored::STORE_LIMITS;
+use canic_management_protocol::{
+    store_maintenance::{Preservation, Scan},
+    stored::STORE_LIMITS,
+};
 
 pub(super) fn validate(record: &Status) {
     if let Some(value) = record.preservation.as_ref() {
@@ -29,6 +31,7 @@ pub(super) fn validate(record: &Status) {
         validate_scan(value);
     }
 }
+
 fn validate_scan(value: &Preservation) {
     assert!(value.catalog.quota.valid());
     assert!(value.observed <= value.catalog.releases);

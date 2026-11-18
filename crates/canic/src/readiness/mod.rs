@@ -1,10 +1,12 @@
 //! Bounded application observations, independent of lifecycle and recovery authority.
+
+#[cfg(test)]
+mod tests;
+
 use serde::{Deserialize, Serialize};
 
 #[cfg(all(feature = "readiness", target_arch = "wasm32"))]
 pub mod endpoint;
-#[cfg(test)]
-mod tests;
 
 /// Identity of the replicated, observational `readiness` method.
 pub const METHOD: u64 = 3;
@@ -42,14 +44,24 @@ pub enum State {
 /// The handler returns `readiness::State` without changing application state.
 /// Mounting initializes no storage, timers or services and grants no activation authority.
 #[cfg(all(feature = "readiness", target_arch = "wasm32"))]
+// Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
+#[rustfmt::skip]
 #[macro_export]
 macro_rules! mount_readiness_endpoint {
     ($snapshot:path) => {
         mod canic_readiness {
-            use $crate::readiness::{State, endpoint};
             use endpoint::runtime;
+            use $crate::readiness::{State, endpoint};
 
-            #[runtime::update(runtime = runtime, guard = endpoint::admit, decode = endpoint::decode, max_bytes = 32, on_error = endpoint::fail, name = "readiness", encode = endpoint::encode)]
+            #[runtime::update(
+                runtime = runtime,
+                guard = endpoint::admit,
+                decode = endpoint::decode,
+                max_bytes = 32,
+                on_error = endpoint::fail,
+                name = "readiness",
+                encode = endpoint::encode,
+            )]
             fn readiness((): ()) -> State {
                 $snapshot()
             }

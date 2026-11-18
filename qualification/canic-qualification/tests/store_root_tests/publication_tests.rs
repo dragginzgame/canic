@@ -1,7 +1,9 @@
 //! Store owns remote commits even when Root's reply callback traps.
 use super::{Client, artifacts, custody, fixture, inject, maintain, padded, store, support};
-use canic_management_protocol::publication::{self, Command, Error, Reply, Request};
-use canic_management_protocol::stored::STORE_LIMITS;
+use canic_management_protocol::{
+    publication::{self, Command, Error, Reply, Request},
+    stored::STORE_LIMITS,
+};
 use ic_testkit::pocket_ic::CanisterId;
 
 async fn request(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> Request {
@@ -11,6 +13,7 @@ async fn request(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> 
         command,
     }
 }
+
 async fn send(root: &Client<'_>, input: &Request) -> Reply {
     let bytes = root
         .pic
@@ -40,6 +43,7 @@ async fn send(root: &Client<'_>, input: &Request) -> Reply {
     )
     .unwrap()
 }
+
 fn manifest(version: &str, bytes: &[u8]) -> store::Manifest {
     store::Manifest {
         release: store::Release {

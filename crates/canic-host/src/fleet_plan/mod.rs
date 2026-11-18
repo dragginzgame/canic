@@ -1,4 +1,8 @@
 //! One immutable Root-and-children approval composed from the existing effect owners.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     ApplyOutcome, Artifact, DeploymentName, Error, ManagedOwner, Plan, Receipt, Result,
     SelectedFleet, artifact, operation, plan,
@@ -14,8 +18,6 @@ mod convergence;
 mod history;
 mod record;
 mod releases;
-#[cfg(test)]
-mod tests;
 pub use cancellation::{Cancellation, cancel_fleet_plan};
 pub use convergence::FleetPlanning;
 pub(crate) use history::permits_upgrade;
@@ -82,6 +84,7 @@ impl FleetPlan {
     pub fn creation_cycles(&self) -> u64 {
         self.root.creation_cycles() + self.store.as_ref().map_or(0, |s| s.creation_cycles)
     }
+
     /// Digest of bounded Wire-encoded authority, independent of JSON formatting.
     /// # Errors
     /// Rejects invalid authority, output references or unbounded inputs.
@@ -103,15 +106,18 @@ impl FleetPlan {
         domain.extend(bytes);
         Ok(artifact::digest(&domain))
     }
+
     pub(crate) fn children(&self) -> impl Iterator<Item = (ChildId, &FleetChild)> {
         self.children.iter().map(|child| (child.slot, child))
     }
+
     fn child(&self, slot: ChildId) -> Result<&FleetChild> {
         self.children
             .iter()
             .find(|child| child.slot == slot)
             .ok_or_else(invalid)
     }
+
     fn validate(&self) -> Result<()> {
         self.root.validate()?;
         let root = self.root.deployment.as_ref().ok_or_else(invalid)?;
@@ -191,6 +197,7 @@ impl FleetPlan {
         }
         Ok(())
     }
+
     pub(crate) fn belongs(&self, selection: &SelectedFleet) -> bool {
         self.root.deployment.as_ref().is_some_and(|name| {
             name.app == selection.app
@@ -198,12 +205,14 @@ impl FleetPlan {
                 && self.root.network == selection.config.network
         })
     }
+
     pub(crate) fn reserves(&self, name: &DeploymentName) -> bool {
         self.root
             .deployment
             .as_ref()
             .is_some_and(|root| root.app == name.app && root.fleet == name.fleet)
     }
+
     fn child_plan(
         &self,
         receipt: &Receipt,
@@ -233,6 +242,7 @@ impl FleetPlan {
         plan.validate()?;
         Ok(plan)
     }
+
     fn store_plan(&self, receipt: &Receipt) -> Result<Plan> {
         let store = self.store.as_ref().ok_or_else(invalid)?;
         // The same Root receipt checks bind both kinds of dependent operation.
@@ -252,6 +262,7 @@ impl FleetPlan {
         plan.validate()?;
         Ok(plan)
     }
+
     fn verify_root_receipt(&self, receipt: &Receipt) -> Result<()> {
         if receipt.operation != self.root.digest()?
             || receipt.module_hash != self.root.artifact.sha256
@@ -262,6 +273,7 @@ impl FleetPlan {
         Ok(())
     }
 }
+
 fn invalid() -> Error {
     Error::Invalid("invalid Root-and-children fleet approval or retained output binding".into())
 }
@@ -317,6 +329,7 @@ pub(crate) fn load(dir: &Path, id: &str) -> Result<FleetPlan> {
     cancellation::read(dir, id)?;
     Ok(value)
 }
+
 fn root_receipt(dir: &Path, value: &FleetPlan) -> Result<Option<Receipt>> {
     if !dir
         .join("root/receipt.json")

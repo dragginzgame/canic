@@ -33,6 +33,7 @@ impl Install {
         }
         Ok(())
     }
+
     /// Encode a bounded, structurally valid install frame.
     /// # Errors
     /// Refuses invalid bindings or excessive application bytes.
@@ -40,6 +41,7 @@ impl Install {
         self.validate()?;
         ic_wire::encode(self, FRAME, LIMITS).map_err(|_| "shard install frame")
     }
+
     /// Decode and check the context required by an opted-in shard.
     /// # Errors
     /// Refuses absent or malformed bindings.
@@ -49,6 +51,7 @@ impl Install {
         input.validate()?;
         Ok(input)
     }
+
     /// Check the enclosing receiver policy when the application selects Auth.
     /// # Errors
     /// Refuses disagreement between the two approved Root bindings.
@@ -70,6 +73,7 @@ mod actor {
         adapter::{StableCell, storable::Blob},
     };
     use std::cell::Cell;
+
     thread_local! { static PARENT: Cell<Option<Principal>> = const {Cell::new(None)}; }
 
     /// Create the bounded parent cell on install or strictly reopen its predecessor format.
@@ -108,11 +112,13 @@ mod actor {
         );
         PARENT.set(Some(parent));
     }
+
     /// Parent recovered from this actor's own admitted storage.
     #[must_use]
     pub fn parent() -> Option<Principal> {
         PARENT.get()
     }
+
     /// Pre-decode guard for a parent-only endpoint.
     /// # Errors
     /// Refuses a missing binding or a caller other than this actor's parent.

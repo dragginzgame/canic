@@ -6,7 +6,14 @@ use ic_platform_runtime::{self as runtime, raw as stable, system as api};
 
 const FUNDING_OFFSET: u64 = LIMITS.bytes as u64 + 4;
 
-#[runtime::pre_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+/// Checkpoint the retained attempt evidence before upgrade.
+#[runtime::pre_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn pre_upgrade((): ()) {
     let creation = ic_wire::encode(
         &creation::status(()),
@@ -56,7 +63,14 @@ fn decode_upgrade(bytes: &[u8]) -> Result<bool, std::convert::Infallible> {
     })
 }
 
-#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = decode_upgrade, max_bytes = 2097152, on_error = endpoint_error)]
+/// Reopen the effect probe state from the preceding executable.
+#[runtime::post_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = decode_upgrade,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+)]
 fn post_upgrade(trap_after_restore: bool) {
     assert!(
         ic_platform_runtime::raw::stable64_size() > 0,
@@ -124,7 +138,16 @@ fn encode_executable(value: bool) -> Result<Vec<u8>, ic_wire::Error> {
     )
 }
 
-#[runtime::query(runtime = runtime, guard = controller, decode = decode_executable, max_bytes = 2097152, on_error = endpoint_error, name = "executable", encode = encode_executable)]
+/// Identify whether the installed executable is the maintenance candidate.
+#[runtime::query(
+    runtime = runtime,
+    guard = controller,
+    decode = decode_executable,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "executable",
+    encode = encode_executable,
+)]
 fn executable((): ()) -> bool {
     cfg!(feature = "maintenance-candidate")
 }
@@ -133,6 +156,7 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
+/// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
 }

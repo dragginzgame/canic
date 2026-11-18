@@ -1,4 +1,8 @@
 //! Store handover and readiness extend the existing direct deployment owner.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     DeploymentName, Error, Plan, PlanAction, PlanInput, Result, SelectedFleet, UpgradeTarget,
     artifact,
@@ -13,8 +17,6 @@ use ic_wasm_store_protocol::Info;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-#[cfg(test)]
-mod tests;
 pub(crate) const OBSERVATIONS: usize = 32;
 
 /// Create a separately controlled Store under an explicitly bound existing Root.

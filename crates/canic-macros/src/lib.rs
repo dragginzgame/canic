@@ -1,4 +1,8 @@
 //! Application endpoint attributes, re-exported by Canic.
+
+#[cfg(test)]
+mod tests;
+
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as Tokens;
 use quote::quote;
@@ -143,19 +147,31 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             const __CANIC_ID: u64 = #id;
             const __CANIC_REQUEST: wire::Limits = #request_budget;
             const __CANIC_REPLY: wire::Limits = #reply_budget;
+
+            /// Apply the declared guard before admitting the request frame.
             fn __canic_admit() -> Result<(), String> {
                 #guard
                 ::canic::method::admit_request::<#request>(__CANIC_REQUEST.bytes)
             }
+
             fn __canic_decode(bytes: &[u8]) -> Result<#request, wire::Error> {
                 wire::decode(bytes, wire::Encoding::Frame { method: __CANIC_ID, direction: wire::Direction::Request }, __CANIC_REQUEST)
             }
+
             #[allow(clippy::needless_pass_by_value)]
             fn __canic_encode(value: #reply) -> Result<Vec<u8>, wire::Error> {
                 wire::encode(&value, wire::Encoding::Frame { method: __CANIC_ID, direction: wire::Direction::Response }, __CANIC_REPLY)
             }
-            #[platform::#kind(runtime = platform, guard = __canic_admit, decode = __canic_decode, max_bytes = 4294967295,
-                on_error = __canic_fail, name = #export, encode = __canic_encode)]
+
+            #[platform::#kind(
+                runtime = platform,
+                guard = __canic_admit,
+                decode = __canic_decode,
+                max_bytes = 4294967295,
+                on_error = __canic_fail,
+                name = #export,
+                encode = __canic_encode,
+            )]
             #asynchronous fn __canic_invoke(__canic_input: #request) -> #reply {
                 #unit
                 __canic_handler(#session #argument)#wait
@@ -163,6 +179,3 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         };
     })
 }
-
-#[cfg(test)]
-mod tests;

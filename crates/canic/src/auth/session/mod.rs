@@ -8,6 +8,16 @@
 //! reader and `logout`. Mount `refresh` through the controller-guarded refresh
 //! endpoint. Call `init` only from the IC install hook. Recreating the receiver
 //! after an upgrade would discard its replay and logout history.
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(target_arch = "wasm32")]
+mod actor;
+
+#[cfg(target_arch = "wasm32")]
+pub use actor::{authorize, init, install, reauthorize, refresh};
+
 use super::{
     enrollment::{
         self, supplier as ic_auth,
@@ -26,8 +36,6 @@ use ic_auth::{
     session_request::{SessionRequest, SessionTtlPolicy},
     verification::{Ed25519Key, VerificationContext, VerificationProfile},
 };
-#[cfg(target_arch = "wasm32")]
-use ic_platform_runtime::system as api;
 use std::cell::RefCell;
 
 struct State {
@@ -36,6 +44,7 @@ struct State {
     policy: Policy,
     max_login_ttl_ns: u64,
 }
+
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
 
 /// Installed acceptance policy for credentials from one issuer and role.
@@ -48,14 +57,6 @@ pub struct Policy {
     pub session_ttl: SessionTtlPolicy,
     /// Upper bound on the credential proof lifetime.
     pub max_proof_ttl_ns: u64,
-}
-
-/// Initialize only during fresh installation. Upgrade must leave volatile state closed.
-/// # Panics
-/// Traps on invalid configuration or if an active receiver already exists.
-#[cfg(target_arch = "wasm32")]
-pub fn init(memory: MemoryConfig, policy: Policy) {
-    initialize(memory, policy, api::canister_self(), api::time());
 }
 
 pub(super) fn initialize(memory: MemoryConfig, policy: Policy, own_id: Principal, now: u64) {
@@ -84,60 +85,6 @@ pub(super) fn initialize(memory: MemoryConfig, policy: Policy, own_id: Principal
         });
     });
 }
-/// Open Auth's bounded starting profile from the approved fresh-install envelope.
-#[cfg(target_arch = "wasm32")]
-#[doc(hidden)]
-pub fn install(input: &super::install::Install) {
-    use enrollment::types::{AudienceId, CanonicalId};
-    use ic_auth::receiver_memory::EnrollmentBinding;
-    let binding = EnrollmentBinding {
-        authority: input.root,
-        receiver: api::canister_self(),
-    };
-    let audience = AudienceId {
-        canonical_network_id: CanonicalId::from_bytes(input.network),
-        fleet_id: CanonicalId::from_bytes(input.audience),
-    };
-    let mut memory = MemoryConfig::starting_profile(audience, binding);
-    if let Some(max) = input.limits.max_sessions {
-        memory.capacity.max_sessions = max as usize;
-    }
-    init(
-        memory,
-        Policy {
-            issuer: input.issuer,
-            role: input.role.parse().expect("installed Auth role"),
-            session_ttl: SessionTtlPolicy::new(
-                input.limits.default_session_secs,
-                input.limits.max_session_secs,
-            )
-            .expect("installed session TTL"),
-            max_proof_ttl_ns: input.limits.max_proof_ttl_ns,
-        },
-    );
-}
-
-/// Refresh the Root grant for the installed receiver after controller admission.
-#[cfg(target_arch = "wasm32")]
-pub async fn refresh() -> Result<(), enrollment::Error> {
-    let start = STATE.with_borrow_mut(|s| {
-        s.as_mut()
-            .ok_or(enrollment::Error::Closed)?
-            .enrollment
-            .begin(api::time())
-    })?;
-    let challenge = start.entropy().await?;
-    let pull = STATE.with_borrow_mut(|s| {
-        let s = s.as_mut().ok_or(enrollment::Error::Closed)?;
-        s.enrollment
-            .prepare(&mut s.receiver, challenge, api::time())
-    })?;
-    let response = pull.fetch().await?;
-    STATE.with_borrow_mut(|s| {
-        let s = s.as_mut().ok_or(enrollment::Error::Closed)?;
-        s.enrollment.finish(&mut s.receiver, response, api::time())
-    })
-}
 
 fn view(receipt: SessionReceipt) -> SessionView {
     SessionView {
@@ -147,6 +94,7 @@ fn view(receipt: SessionReceipt) -> SessionView {
         expires_at_ns: receipt.expires_at_ns,
     }
 }
+
 fn admission_error(error: MemoryError) -> AdmissionRefusal {
     match error {
         MemoryError::Closed | MemoryError::Enrollment(_) => AdmissionRefusal::Unavailable,
@@ -168,6 +116,7 @@ fn admission_error(error: MemoryError) -> AdmissionRefusal {
         }
     }
 }
+
 /// Admit a browser-bound session against the current enrollment grant.
 ///
 /// # Panics
@@ -249,6 +198,7 @@ pub fn admit(
         Ok(view(outcome.receipt))
     })
 }
+
 /// Read this caller's session with the application-selected scope.
 /// # Panics
 /// Panics if an installed grant violates validated key or grants invariants.
@@ -312,6 +262,7 @@ pub fn read_scope(
             })
     })
 }
+
 /// Revoke this caller’s receiver session and return its replay denial deadline.
 #[must_use]
 pub fn logout(caller: Principal, now: u64) -> LogoutResult {
@@ -335,28 +286,6 @@ pub fn logout(caller: Principal, now: u64) -> LogoutResult {
     })
 }
 
-/// Authorize the actual caller for this operation using the current time.
-/// After an await, use [`reauthorize`] with the originally admitted session.
-/// # Errors
-/// Returns the current enrollment or session refusal for this scope.
-#[cfg(target_arch = "wasm32")]
-pub fn authorize(scope: &str) -> Result<SessionView, SessionReadRefusal> {
-    read_scope(api::caller(), api::time(), scope)
-}
-
-/// Check the original browser and account again before a subsequent effect.
-/// # Errors
-/// Refuses stale sessions, a changed account or insufficient current scope.
-#[cfg(target_arch = "wasm32")]
-pub fn reauthorize(original: &SessionView, scope: &str) -> Result<(), SessionReadRefusal> {
-    let current = read_scope(original.caller, api::time(), scope)?;
-    if current.issuer == original.issuer && current.subject == original.subject {
-        Ok(())
-    } else {
-        Err(SessionReadRefusal::AuthorityUnavailable)
-    }
-}
-
 /// Mount the standard volatile receiver and its controller-only refresh.
 /// The application selects the read endpoint's scope and explicitly initializes on install.
 #[cfg(target_arch = "wasm32")]
@@ -369,21 +298,21 @@ macro_rules! mount_auth_session {
                 protocol::{SessionView, model::SessionReadRefusal},
                 session,
             };
+
             fn read(caller: Principal, now: u64) -> Result<SessionView, SessionReadRefusal> {
                 session::read_scope(caller, now, $scope)
             }
+
             $crate::mount_auth_endpoints! {
                 admit = $crate::auth::session::admit,
                 read = super::read,
                 logout = $crate::auth::session::logout,
             }
+
             $crate::mount_auth_refresh_endpoint!($crate::auth::session::refresh);
         }
     };
 }
-
-#[cfg(test)]
-mod tests;
 
 /// Install a configured receiver and its app in one hook. An upgrade reopens only
 /// the application's retained state. Both hooks trap on decoding or app failure.
@@ -402,14 +331,22 @@ macro_rules! mount_auth_lifecycle {
     (@mount $decode:path, $open:path, $mode:ident) => {
         mod canic_auth_lifecycle {
             use $crate::auth::{endpoint::fail, install::Install, session};
-            $crate::mount_lifecycle!(input = Install, max_bytes = 4096, decode = Install::decode,
-                install = install_receiver, reopen = reopen_application);
+
+            $crate::mount_lifecycle!(
+                input = Install,
+                max_bytes = 4096,
+                decode = Install::decode,
+                install = install_receiver,
+                reopen = reopen_application,
+            );
+
             #[allow(clippy::needless_pass_by_value)]
             fn install_receiver(input: Install) {
                 let application = $crate::mount_auth_lifecycle!(@decode $mode, $decode, input).unwrap_or_else(|error| fail(error));
                 session::install(&input);
                 $open(Some(application));
             }
+
             fn reopen_application() { $open(None); }
         }
     };

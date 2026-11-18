@@ -12,6 +12,7 @@ const KEY: &str = if cfg!(feature = "incompatible-schema") {
 } else {
     "counter.state.v1"
 };
+
 thread_local! {
     static COUNTER: RefCell<Option<StableCell<Vec<u8>>>> = const { RefCell::new(None) };
 }
@@ -113,6 +114,7 @@ fn write(record: &Record) {
 }
 
 canic::mount_readiness_endpoint!(crate::actor::readiness);
+
 fn readiness() -> Readiness {
     if COUNTER.with_borrow(Option::is_none) {
         Readiness::Unavailable
@@ -123,12 +125,26 @@ fn readiness() -> Readiness {
     }
 }
 
-#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = fail)]
+/// Create the counter and bind its fence authority to the installer.
+#[runtime::init(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = fail,
+)]
 fn init((): ()) {
     open(true);
 }
 
-#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = fail)]
+/// Reopen the demo state from the preceding executable.
+#[runtime::post_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = fail,
+)]
 fn post_upgrade((): ()) {
     open(false);
     #[cfg(feature = "reject-upgrade")]
@@ -140,7 +156,16 @@ fn post_upgrade((): ()) {
     }
 }
 
-#[runtime::update(runtime = runtime, guard = bounded, decode = decode, max_bytes = 256, on_error = fail, name = "counter", encode = encode)]
+/// Read or increment the public counter, or change its fence as the recorded owner.
+#[runtime::update(
+    runtime = runtime,
+    guard = bounded,
+    decode = decode,
+    max_bytes = 256,
+    on_error = fail,
+    name = "counter",
+    encode = encode,
+)]
 fn counter(request: Request) -> Result<Snapshot, Error> {
     let mut record = read();
     record.apply(request, api::caller())?;
@@ -151,12 +176,14 @@ fn counter(request: Request) -> Result<Snapshot, Error> {
     Ok(snapshot)
 }
 
+/// Reject oversized frames before copying the request. The handler owns operation-specific checks.
 fn bounded() -> Result<(), &'static str> {
     if api::argument_size() > LIMITS.bytes {
         return Err("counter frame too large");
     }
     Ok(())
 }
+
 fn decode(bytes: &[u8]) -> Result<Request, ic_wire::Error> {
     ic_wire::decode(
         bytes,
@@ -167,6 +194,7 @@ fn decode(bytes: &[u8]) -> Result<Request, ic_wire::Error> {
         LIMITS,
     )
 }
+
 fn encode(value: Result<Snapshot, Error>) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
@@ -177,17 +205,30 @@ fn encode(value: Result<Snapshot, Error>) -> Result<Vec<u8>, ic_wire::Error> {
         LIMITS,
     )
 }
+
+/// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
 }
+
 fn lifecycle_decode(_bytes: &[u8]) -> Result<(), std::convert::Infallible> {
     Ok(())
 }
+
 fn fail(error: impl std::fmt::Debug) -> ! {
     api::trap(&format!("counter refused: {error:?}"))
 }
 
-#[runtime::update(runtime = runtime, name = "recovery", guard = bounded, decode = decode_recovery, max_bytes = 128, encode = encode_recovery, on_error = fail)]
+/// Apply the recovery command under the counter's retained ownership and fence.
+#[runtime::update(
+    runtime = runtime,
+    name = "recovery",
+    guard = bounded,
+    decode = decode_recovery,
+    max_bytes = 128,
+    encode = encode_recovery,
+    on_error = fail,
+)]
 fn recovery(command: canic::recovery::Command) -> canic::recovery::Command {
     use canic::recovery::Command;
     let mut record = read();
@@ -216,6 +257,7 @@ fn recovery(command: canic::recovery::Command) -> canic::recovery::Command {
     write(&record);
     command
 }
+
 fn decode_recovery(bytes: &[u8]) -> Result<canic::recovery::Command, ic_wire::Error> {
     ic_wire::decode(
         bytes,
@@ -226,6 +268,7 @@ fn decode_recovery(bytes: &[u8]) -> Result<canic::recovery::Command, ic_wire::Er
         canic::recovery::LIMITS,
     )
 }
+
 fn encode_recovery(command: canic::recovery::Command) -> Result<Vec<u8>, ic_wire::Error> {
     canic::recovery::encode(command, ic_wire::Direction::Response)
 }

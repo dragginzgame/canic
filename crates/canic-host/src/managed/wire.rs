@@ -20,6 +20,7 @@ impl Method {
     pub(super) fn id(self, plan: &Plan) -> u64 {
         self.contract(plan).1
     }
+
     fn contract(self, plan: &Plan) -> (&'static str, u64) {
         if plan.management().is_some_and(|m| m.arguments.is_some()) {
             use protocol::application;
@@ -82,6 +83,7 @@ impl Method {
             }
         }
     }
+
     pub(super) fn call<T: Serialize>(
         self,
         plan: &Plan,
@@ -132,6 +134,7 @@ impl Method {
         })
     }
 }
+
 pub(crate) fn observation(plan: &Plan) -> Result<Call<'static>> {
     match plan.action {
         crate::PlanAction::UpgradeChild { .. } => {
@@ -143,6 +146,7 @@ pub(crate) fn observation(plan: &Plan) -> Result<Call<'static>> {
         )),
     }
 }
+
 // None is the historical First slot, but must retain its original wire contract.
 pub(crate) fn same_slot(left: Option<ChildId>, right: Option<ChildId>) -> bool {
     left.unwrap_or(ChildId::FIRST) == right.unwrap_or(ChildId::FIRST)

@@ -1,6 +1,7 @@
 //! Real counter persistence and admission; no Root or Backup recovery claim.
 use canic::readiness;
 use canic_demo::{Error, LIMITS, METHOD, Request, Snapshot};
+use canic_qualification::counter;
 use ic_testkit::{
     pocket_ic::{
         CanisterId, CanisterSettings, PocketIcBuilder, common::rest::BlobCompression,
@@ -17,27 +18,6 @@ fn encode(request: &impl serde::Serialize) -> Vec<u8> {
         Encoding::Frame {
             method: METHOD,
             direction: Direction::Request,
-        },
-        LIMITS,
-    )
-    .unwrap()
-}
-
-async fn call(
-    pic: &PocketIc,
-    id: CanisterId,
-    caller: CanisterId,
-    request: Request,
-) -> Result<Snapshot, Error> {
-    let bytes = pic
-        .update_call(id, caller, "counter", encode(&request))
-        .await
-        .unwrap();
-    ic_wire::decode(
-        &bytes,
-        Encoding::Frame {
-            method: METHOD,
-            direction: Direction::Response,
         },
         LIMITS,
     )
@@ -122,14 +102,14 @@ async fn counter_preserves_value_authority_and_fence_across_upgrade() {
     assert_eq!(readiness(pic, id).await, readiness::State::Ready);
     for value in 1..=8 {
         assert_eq!(
-            call(pic, id, users[value as usize % 2], Request::Increment)
+            counter(pic, id, users[value as usize % 2], Request::Increment)
                 .await
                 .unwrap()
                 .value,
             value
         );
     }
-    let initial = call(pic, id, users[0], Request::Read).await.unwrap();
+    let initial = counter(pic, id, users[0], Request::Read).await.unwrap();
     assert_eq!(
         initial,
         Snapshot {
@@ -171,32 +151,32 @@ async fn counter_preserves_value_authority_and_fence_across_upgrade() {
                 .is_err()
         );
         assert_eq!(
-            call(pic, id, users[0], Request::Read).await.unwrap(),
+            counter(pic, id, users[0], Request::Read).await.unwrap(),
             initial
         );
         assert_eq!(pic.get_stable_memory(id).await, stable);
     }
     assert_eq!(
-        call(pic, id, users[0], Request::Fence { attempt: 1 }).await,
+        counter(pic, id, users[0], Request::Fence { attempt: 1 }).await,
         Err(Error::NotOwner)
     );
     assert_eq!(
-        call(pic, id, operator, Request::Fence { attempt: 0 }).await,
+        counter(pic, id, operator, Request::Fence { attempt: 0 }).await,
         Err(Error::Attempt)
     );
     assert_eq!(pic.get_stable_memory(id).await, stable);
-    let fenced = call(pic, id, operator, Request::Fence { attempt: 1 })
+    let fenced = counter(pic, id, operator, Request::Fence { attempt: 1 })
         .await
         .unwrap();
     let retained = pic.get_stable_memory(id).await;
     for _ in 0..3 {
         assert_eq!(readiness(pic, id).await, readiness::State::Fenced);
         assert_eq!(
-            call(pic, id, users[1], Request::Increment).await,
+            counter(pic, id, users[1], Request::Increment).await,
             Err(Error::Fenced)
         );
         assert_eq!(
-            call(pic, id, operator, Request::Fence { attempt: 1 })
+            counter(pic, id, operator, Request::Fence { attempt: 1 })
                 .await
                 .unwrap(),
             fenced
@@ -234,7 +214,7 @@ async fn counter_preserves_value_authority_and_fence_across_upgrade() {
         .unwrap();
     pic.start_canister(id, Some(operator)).await.unwrap();
     assert_eq!(
-        call(pic, id, users[0], Request::Read).await.unwrap(),
+        counter(pic, id, users[0], Request::Read).await.unwrap(),
         Snapshot {
             executable: 2,
             ..fenced
@@ -243,28 +223,28 @@ async fn counter_preserves_value_authority_and_fence_across_upgrade() {
     assert_eq!(readiness(pic, id).await, readiness::State::Fenced);
     assert_eq!(pic.get_stable_memory(id).await, retained);
     assert_eq!(
-        call(pic, id, users[0], Request::Activate { attempt: 1 }).await,
+        counter(pic, id, users[0], Request::Activate { attempt: 1 }).await,
         Err(Error::NotOwner)
     );
     assert_eq!(
-        call(pic, id, operator, Request::Activate { attempt: 0 }).await,
+        counter(pic, id, operator, Request::Activate { attempt: 0 }).await,
         Err(Error::Attempt)
     );
-    call(pic, id, operator, Request::Activate { attempt: 1 })
+    counter(pic, id, operator, Request::Activate { attempt: 1 })
         .await
         .unwrap();
-    call(pic, id, operator, Request::Activate { attempt: 1 })
+    counter(pic, id, operator, Request::Activate { attempt: 1 })
         .await
         .unwrap();
     assert_eq!(
-        call(pic, id, operator, Request::Fence { attempt: 1 }).await,
+        counter(pic, id, operator, Request::Fence { attempt: 1 }).await,
         Err(Error::Attempt)
     );
-    call(pic, id, operator, Request::Fence { attempt: 2 })
+    counter(pic, id, operator, Request::Fence { attempt: 2 })
         .await
         .unwrap();
     assert_eq!(
-        call(pic, id, operator, Request::Activate { attempt: 1 }).await,
+        counter(pic, id, operator, Request::Activate { attempt: 1 }).await,
         Err(Error::Attempt)
     );
     assert_eq!(readiness(pic, id).await, readiness::State::Fenced);
@@ -274,19 +254,19 @@ async fn counter_preserves_value_authority_and_fence_across_upgrade() {
         .unwrap();
     pic.start_canister(id, Some(operator)).await.unwrap();
     assert_eq!(
-        call(pic, id, users[0], Request::Read).await.unwrap(),
+        counter(pic, id, users[0], Request::Read).await.unwrap(),
         Snapshot {
             value: 8,
             fence: Some(2),
             executable: 1
         }
     );
-    call(pic, id, operator, Request::Activate { attempt: 2 })
+    counter(pic, id, operator, Request::Activate { attempt: 2 })
         .await
         .unwrap();
     assert_eq!(readiness(pic, id).await, readiness::State::Ready);
     assert_eq!(
-        call(pic, id, users[1], Request::Increment)
+        counter(pic, id, users[1], Request::Increment)
             .await
             .unwrap()
             .value,

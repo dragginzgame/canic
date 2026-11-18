@@ -41,6 +41,7 @@ pub fn stage(slot: ChildId, input: stored::Stage<Approval>) -> Result<Status, Re
         }),
     )
 }
+
 /// Admit a Store-backed successor under the existing bounded upgrade journal.
 /// # Errors
 /// Refuses changed bindings, incomplete prior work, time or capacity.
@@ -52,6 +53,7 @@ pub fn stage_upgrade(
 ) -> Result<canic_management_protocol::upgrade::Status, Refusal> {
     upgrade::stage_input(slot, upgrade::Input::Stored(input))
 }
+
 pub(super) fn upgrade_source(
     slot: ChildId,
     approval: &canic_management_protocol::upgrade::Approval,
@@ -71,6 +73,7 @@ pub(super) fn upgrade_source(
             .cloned()
     })
 }
+
 /// Reconcile only the exact admitted Store-backed creation.
 /// # Panics
 /// Traps for noncontrollers or mismatched complete authority.
@@ -89,6 +92,7 @@ pub async fn reconcile(slot: ChildId, input: stored::Stage<Approval>) -> Status 
     );
     super::reconcile_bound(slot, input.approval).await
 }
+
 /// Reconcile only the exact admitted Store-backed upgrade, including history lookup.
 /// # Panics
 /// Traps for noncontrollers or mismatched complete authority.
@@ -106,6 +110,7 @@ pub async fn reconcile_upgrade(
     );
     upgrade::reconcile_bound(slot, input.approval).await
 }
+
 /// Observe all journals and Store sources without scheduling work.
 /// # Panics
 /// Traps if lifecycle has not opened storage.
@@ -118,6 +123,7 @@ pub fn custody() -> stored::Custody {
     );
     stored_journals()
 }
+
 /// Observe both child slots, all artifact references and the surviving Store operation.
 /// # Panics
 /// Traps if lifecycle has not opened storage.
@@ -130,6 +136,7 @@ pub fn root_custody() -> canic_management_protocol::custody::Root {
     );
     current_root_custody()
 }
+
 /// Read all child custody and every retained Store maintenance attempt synchronously.
 /// # Panics
 /// Traps if lifecycle has not opened storage.
@@ -138,6 +145,7 @@ pub fn root_history() -> canic_management_protocol::custody::RootHistory {
     super::application::require_legacy();
     root_history_complete()
 }
+
 pub(super) fn root_history_complete() -> canic_management_protocol::custody::RootHistory {
     canic_management_protocol::custody::RootHistory {
         current: current_root_custody(),
@@ -145,12 +153,14 @@ pub(super) fn root_history_complete() -> canic_management_protocol::custody::Roo
             .with_borrow(|state| state.as_ref().expect("open engine").journal.2.clone()),
     }
 }
+
 fn current_root_custody() -> canic_management_protocol::custody::Root {
     canic_management_protocol::custody::Root {
         stored: stored_journals(),
         store_operation: super::store_maintenance::observe(),
     }
 }
+
 fn stored_journals() -> stored::Custody {
     let children: children::Custody = super::journals();
     let sources = STATE.with_borrow(|state| {

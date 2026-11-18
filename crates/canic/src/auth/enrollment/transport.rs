@@ -13,6 +13,7 @@ pub fn admit<const ID: u64>() -> Result<(), String> {
     raw::msg_arg_data_copy(&mut header, 0);
     ic_wire::validate_request_header(ID, &header).map_err(|e| e.to_string())
 }
+
 /// Decode an admitted complete request; malformed input traps before mutation.
 /// # Errors
 /// Refuses malformed or over-budget input; the endpoint traps this refusal.
@@ -26,6 +27,7 @@ pub fn decode<T: DeserializeOwned, const ID: u64>(bytes: &[u8]) -> Result<T, ic_
         LIMITS,
     )
 }
+
 /// Encode in the handler's transaction. Failure traps rather than returning a
 /// successful mutation with an ordinary serialization refusal.
 /// # Errors
@@ -40,6 +42,7 @@ pub fn encode<T: Serialize, const ID: u64>(value: T) -> Result<Vec<u8>, ic_wire:
         LIMITS,
     )
 }
+
 /// Require the current IC controller before beginning any refresh work.
 /// # Errors
 /// Returns a binding refusal for an unrelated caller, including a former installer.

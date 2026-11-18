@@ -1,7 +1,9 @@
 //! One controller-approved pool over the existing Store-backed child effects.
 use super::{STATE, api, delivery, snapshot};
-use crate::placement::{self, score, select};
-use crate::storage::Artifact;
+use crate::{
+    placement::{self, score, select},
+    storage::Artifact,
+};
 use canic::sharding::{Allocation, Key, Placement};
 use canic_management_protocol::{
     Approval, CREATION_CYCLES, Phase, Refusal,
@@ -32,6 +34,7 @@ pub(super) struct Ledger {
 pub(super) fn encode(value: &Option<Ledger>) -> Vec<u8> {
     ic_wire::encode(value, ic_wire::Encoding::Payload, LIMITS).expect("bounded shard ledger")
 }
+
 pub(super) fn open(bytes: &[u8]) -> Option<Ledger> {
     let ledger: Option<Ledger> =
         ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS).expect("shard ledger");
@@ -58,15 +61,18 @@ pub(super) fn open(bytes: &[u8]) -> Option<Ledger> {
     }
     ledger
 }
+
 fn valid_limits(a: &ShardPool) -> bool {
     (1..=ChildId::ALL.len()).contains(&usize::from(a.max_shards))
         && (1..=stored::MAX_KEYS_PER_SHARD).contains(&a.keys_per_shard)
         && !a.pool.is_empty()
         && a.pool.len() <= 64
 }
+
 pub(crate) fn occupied() -> bool {
     STATE.with_borrow(|s| s.as_ref().is_some_and(|s| s.ledger.is_some()))
 }
+
 /// Ingress guard before accepting an account key.
 /// # Errors
 /// Refuses any principal other than the approved hub.
@@ -79,6 +85,7 @@ pub fn hub() -> Result<(), &'static str> {
             .ok_or("configured shard hub required")
     })
 }
+
 /// Approve the exact hub, retained artifact and lifetime ceilings once.
 /// # Errors
 /// An occupied owner or invalid approval cannot reserve a pool.
@@ -148,6 +155,7 @@ fn resolve(slot: ChildId, generation: [u8; 32]) -> Placement {
         placement::resolve(allocation, principal, generation, &state.journal.0[&slot].0)
     })
 }
+
 /// Record the first verified worker in the same callback that commits readiness.
 pub(super) fn bind_ready(slot: ChildId, pid: &str) {
     STATE.with_borrow_mut(|s| {
@@ -164,6 +172,7 @@ pub(super) fn bind_ready(slot: ChildId, pid: &str) {
         }
     });
 }
+
 /// Observe an existing claim, including pending claims, without issuing effects.
 /// # Panics
 /// Requires the configured hub.

@@ -178,3 +178,39 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
             .contains("src/endpoints")
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn source_layout_requires_real_source_directory_and_regular_rust_files() {
+    let project = tempfile::tempdir().unwrap();
+    let external = tempfile::tempdir().unwrap();
+    std::os::unix::fs::symlink(external.path(), project.path().join("src")).unwrap();
+    let package: super::source_layout::Package = serde_json::from_value(serde_json::json!({
+        "id": "demo", "name": "demo", "manifest_path": project.path().join("Cargo.toml"),
+        "metadata": {"canic":{"layout":{}}}
+    }))
+    .unwrap();
+    assert!(
+        package
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("cannot validate symlink src")
+    );
+    std::fs::remove_file(project.path().join("src")).unwrap();
+    std::fs::create_dir(project.path().join("src")).unwrap();
+    assert!(
+        std::process::Command::new("mkfifo")
+            .arg(project.path().join("src/pipe.rs"))
+            .status()
+            .unwrap()
+            .success()
+    );
+    assert!(
+        package
+            .validate()
+            .unwrap_err()
+            .to_string()
+            .contains("expected a regular Rust source file at src/pipe.rs")
+    );
+}

@@ -4,8 +4,7 @@ use super::{
     history::{Child, History, store_custody},
     invalid,
 };
-use crate::{Error, Plan, Result, plan, store::Store};
-use crate::{PlanAction, UpgradeTarget};
+use crate::{Error, Plan, PlanAction, Result, UpgradeTarget, plan, store::Store};
 use serde::Serialize;
 
 /// Result of comparing declared artifacts with this fleet's retained operations.
@@ -387,6 +386,7 @@ fn publication(
     }
     Ok(None)
 }
+
 fn changed_children<'a>(
     children: &'a [Child],
     desired: &'a FleetPlan,

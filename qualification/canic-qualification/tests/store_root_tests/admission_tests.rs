@@ -1,7 +1,9 @@
 //! Root is the real admission caller; the fixture retains direct upgrade control explicitly.
 use super::{Client, artifacts, inject, maintain, readiness_tests, store, support};
-use canic_management_protocol::publication::{self, AdmissionRequest, Error};
-use canic_management_protocol::stored::STORE_LIMITS;
+use canic_management_protocol::{
+    publication::{self, AdmissionRequest, Error},
+    stored::STORE_LIMITS,
+};
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
 use store::{AdmissionCommand as Command, MaintenanceAttempt};
 
@@ -95,6 +97,7 @@ async fn request(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> 
         expires_at_ns: root.pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
     }
 }
+
 async fn send(root: &Client<'_>, input: &AdmissionRequest) -> publication::AdmissionReply {
     root.update(
         "store_admission",

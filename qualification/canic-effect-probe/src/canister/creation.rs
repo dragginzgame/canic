@@ -78,7 +78,16 @@ fn decode_later(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     )
 }
 
-#[runtime::query(runtime = runtime, guard = controller, decode = decode_status, max_bytes = 2097152, on_error = endpoint_error, name = "status", encode = encode_status)]
+/// Read the original creation attempt and its recorded outcome.
+#[runtime::query(
+    runtime = runtime,
+    guard = controller,
+    decode = decode_status,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "status",
+    encode = encode_status,
+)]
 pub(super) fn status((): ()) -> Status {
     JOURNAL.with_borrow(Clone::clone)
 }
@@ -87,7 +96,16 @@ pub(super) fn restore(state: Status) {
     JOURNAL.with_borrow_mut(|journal| *journal = state);
 }
 
-#[runtime::update(runtime = runtime, guard = controller, decode = decode_start, max_bytes = 2097152, on_error = endpoint_error, name = "start", encode = encode_start)]
+/// Start the approved creation attempt.
+#[runtime::update(
+    runtime = runtime,
+    guard = controller,
+    decode = decode_start,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "start",
+    encode = encode_start,
+)]
 async fn start(fault: Fault) -> Status {
     let previous = status(());
     if previous.phase != Phase::Empty {
@@ -177,7 +195,15 @@ async fn start(fault: Fault) -> Status {
     status(())
 }
 
-#[runtime::update(runtime = runtime, guard = private_continuation, decode = decode_later, max_bytes = 2097152, on_error = endpoint_error, name = "later_work", manual_reply)]
+/// Trap in a subsequent message to exercise the creation commit boundary.
+#[runtime::update(
+    runtime = runtime,
+    guard = private_continuation,
+    decode = decode_later,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "later_work", manual_reply,
+)]
 async fn later_work((): ()) {
     JOURNAL.with_borrow_mut(|state| state.later_work_entered = true);
     api::trap("injected later-work trap");

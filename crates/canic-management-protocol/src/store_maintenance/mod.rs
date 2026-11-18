@@ -1,4 +1,8 @@
 //! Root-owned Store maintenance intent, separate from application slots and Store-local admission.
+
+#[cfg(test)]
+mod tests;
+
 use serde::{Deserialize, Serialize};
 
 /// Retain one immutable maintenance approval before remote effects.
@@ -130,6 +134,3 @@ pub struct Installation {
 
 mod preservation;
 pub use preservation::{Preservation, Scan};
-
-#[cfg(test)]
-mod tests;

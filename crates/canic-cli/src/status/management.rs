@@ -161,6 +161,7 @@ pub(crate) fn upgrade_continuation(
 fn version(value: Option<u64>) -> String {
     value.map_or_else(|| "unknown".into(), |value| value.to_string())
 }
+
 fn failure(output: &mut String, failure: Option<&Failure>) {
     let Some(failure) = failure else {
         return;
@@ -177,6 +178,7 @@ fn failure(output: &mut String, failure: Option<&Failure>) {
     )
     .expect("String write");
 }
+
 fn dispatches<const N: usize>(
     labels: &[&str; N],
     attempts: &[u8; N],

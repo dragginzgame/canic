@@ -32,6 +32,7 @@ pub(crate) fn approval(plan: &Plan) -> Result<Approval> {
         expires_at_ns: plan.expires_at_ns,
     })
 }
+
 pub(super) fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) -> Result<()> {
     if status.approval.as_ref() != Some(&approval(plan)?)
         || status.phase == Phase::Empty
@@ -82,6 +83,7 @@ pub(super) fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) 
     }
     Ok(())
 }
+
 // Codec discriminants preserve historical bytes; appended stop/start variants
 // occur earlier in execution. Observation ordering must not use their encoding.
 fn progress(phase: Phase) -> u8 {
@@ -102,6 +104,7 @@ fn progress(phase: Phase) -> u8 {
         Phase::Expired | Phase::ReserveBlocked => 13,
     }
 }
+
 fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
     let reply: std::result::Result<Status, Refusal> = ic_wire::decode(
         bytes,
@@ -118,9 +121,11 @@ fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
         ))
     })
 }
+
 pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
     evidence_with_source(dir, plan).map(|value| value.map(|(status, _)| status))
 }
+
 pub(crate) fn evidence_with_source(
     dir: &Path,
     plan: &Plan,

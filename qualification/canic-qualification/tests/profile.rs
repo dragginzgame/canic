@@ -3,8 +3,10 @@ use canic_profile_protocol::{
     BIND, CHECK, CheckResult, GET, INFO, Info, LIMITS, MAX_PROFILES, PUT, ProfileError,
     ProfileResult, Put, ROUTE, Route, RouteError, RouteResult,
 };
-use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc};
-use ic_testkit::server::{Limits, PreparedServer, Server};
+use ic_testkit::{
+    pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc},
+    server::{Limits, PreparedServer, Server},
+};
 use serde_json::Value;
 use std::{
     path::{Path, PathBuf},

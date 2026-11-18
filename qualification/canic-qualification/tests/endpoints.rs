@@ -3,10 +3,10 @@ use canic_management_protocol::{
     Approval, CREATION_CYCLES, INJECT, LIMITS, Phase, RECONCILE, Refusal, STAGE, STAGE_LIMITS,
     STATUS, Stage, Status, digest, upgrade,
 };
-use ic_testkit::pocket_ic::{
-    CanisterId, PocketIcBuilder, RejectCode, RejectResponse, nonblocking::PocketIc,
+use ic_testkit::{
+    pocket_ic::{CanisterId, PocketIcBuilder, RejectCode, RejectResponse, nonblocking::PocketIc},
+    server::{Limits, PreparedServer, Server},
 };
-use ic_testkit::server::{Limits, PreparedServer, Server};
 use std::{path::PathBuf, time::Duration};
 
 async fn call(

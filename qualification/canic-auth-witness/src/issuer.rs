@@ -1,7 +1,9 @@
 //! Application-owned, volatile test signer. No production key custody is claimed.
 use crate::{IssuerObservation, audience};
-use canic::auth::issuer::{Issue, Logout, Lookup, Refusal, Renew, Revoked, Status};
-use canic::auth::protocol::wire as auth_wire;
+use canic::auth::{
+    issuer::{Issue, Logout, Lookup, Refusal, Renew, Revoked, Status},
+    protocol::wire as auth_wire,
+};
 use ic_auth::{
     issuer_memory::{
         IssueRequest, IssuedProof, IssuerAuthority, IssuerConfig, IssuerError, IssuerPolicy,
@@ -36,7 +38,9 @@ struct State {
     signatures: u32,
     reply_fault: bool,
 }
+
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
+
 pub(crate) fn init() {
     let now = api::time();
     let signer = SigningKey::from_bytes(&[7; 32]);
@@ -80,6 +84,7 @@ pub(crate) fn init() {
         })
     });
 }
+
 // No upgrade initializer: missing volatile intent/replay state stays unavailable.
 pub(crate) fn control(command: u8) -> bool {
     STATE.with_borrow_mut(|state| {
@@ -106,6 +111,7 @@ pub(crate) fn control(command: u8) -> bool {
         true
     })
 }
+
 fn refused(error: IssuerError) -> Refusal {
     match error {
         IssuerError::Invalid => Refusal::Invalid,
@@ -120,6 +126,7 @@ fn refused(error: IssuerError) -> Refusal {
         | IssuerError::Closed => Refusal::Unavailable,
     }
 }
+
 fn grants(
     input: auth_wire::List<canic::auth::protocol::model::DelegatedRoleGrant, 16>,
 ) -> Result<Vec<DelegatedRoleGrant>, Refusal> {
@@ -139,6 +146,7 @@ fn grants(
         })
         .collect()
 }
+
 fn known_account(s: &State, account: Principal) -> bool {
     account == s.account
         || (cfg!(feature = "profile")
@@ -147,6 +155,7 @@ fn known_account(s: &State, account: Principal) -> bool {
                     &SigningKey::from_bytes(&[10; 32]).verifying_key().to_bytes(),
                 ))
 }
+
 fn permit(s: &State, account: Principal, grants: &[DelegatedRoleGrant]) -> Result<(), Refusal> {
     if !s.allowed
         || !known_account(s, account)
@@ -161,6 +170,7 @@ fn permit(s: &State, account: Principal, grants: &[DelegatedRoleGrant]) -> Resul
     }
     Ok(())
 }
+
 fn renewal(input: Renew) -> Result<RenewRequest, Refusal> {
     Ok(RenewRequest {
         account: input.account,
@@ -170,6 +180,7 @@ fn renewal(input: Renew) -> Result<RenewRequest, Refusal> {
         grants: grants(input.grants)?,
     })
 }
+
 fn status(value: Option<IssuerStatus<'_>>) -> Status {
     let Some(IssuerStatus::Completed(result)) = value else {
         return Status::Unresolved;
@@ -188,12 +199,14 @@ fn status(value: Option<IssuerStatus<'_>>) -> Status {
         admission_deadline_ns: result.admission_deadline_ns,
     }
 }
+
 fn retained(s: &State, ticket: IssuerTicket) -> Result<Status, Refusal> {
     s.engine
         .reconcile(ticket.account(), ticket.epoch(), ticket.operation_id())
         .map(status)
         .map_err(refused)
 }
+
 async fn issue(caller: Principal, input: Issue, now: u64) -> Result<Status, Refusal> {
     let request = IssueRequest {
         epoch: input.epoch,
@@ -219,6 +232,7 @@ async fn issue(caller: Principal, input: Issue, now: u64) -> Result<Status, Refu
     })?;
     finish::<{ canic::auth::issuer::ISSUE }>(ticket, existing).await
 }
+
 async fn renew(caller: Principal, input: Renew, now: u64) -> Result<Status, Refusal> {
     let request = renewal(input)?;
     let (ticket, existing) = STATE.with_borrow_mut(|state| {
@@ -241,6 +255,7 @@ async fn renew(caller: Principal, input: Renew, now: u64) -> Result<Status, Refu
     })?;
     finish::<{ canic::auth::issuer::RENEW }>(ticket, existing).await
 }
+
 async fn finish<const ID: u64>(ticket: IssuerTicket, existing: bool) -> Result<Status, Refusal> {
     if existing {
         return STATE
@@ -297,6 +312,7 @@ async fn finish<const ID: u64>(ticket: IssuerTicket, existing: bool) -> Result<S
         Ok(result)
     })
 }
+
 fn reconcile(caller: Principal, input: Lookup, _: u64) -> Result<Status, Refusal> {
     STATE.with_borrow(|state| {
         let s = state.as_ref().ok_or(Refusal::Unavailable)?;
@@ -321,6 +337,7 @@ fn reconcile(caller: Principal, input: Lookup, _: u64) -> Result<Status, Refusal
         }
     })
 }
+
 #[allow(clippy::needless_pass_by_value)]
 fn logout(caller: Principal, input: Logout, now: u64) -> Result<Revoked, Refusal> {
     STATE.with_borrow_mut(|state| {
@@ -339,12 +356,24 @@ fn logout(caller: Principal, input: Logout, now: u64) -> Result<Revoked, Refusal
         Ok(Revoked { login_deadline_ns })
     })
 }
+
 canic::mount_auth_issuer_endpoints! {
-    issue = super::issue, renew = super::renew, reconcile = super::reconcile,
+    issue = super::issue,
+    renew = super::renew,
+    reconcile = super::reconcile,
     logout = super::logout,
 }
 
-#[runtime::query(runtime = runtime, guard = lifecycle_guard, decode = crate::canister::decode_observe, max_bytes = 2097152, on_error = endpoint_error, name = "observe_issuer", encode = crate::canister::encode_observe::<IssuerObservation>)]
+/// Read the issuer witness's retained observations.
+#[runtime::query(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = crate::canister::decode_observe,
+    max_bytes = 2097152,
+    on_error = endpoint_error,
+    name = "observe_issuer",
+    encode = crate::canister::encode_observe::<IssuerObservation>,
+)]
 fn observe_issuer((): ()) -> IssuerObservation {
     STATE.with_borrow(|state| match state {
         None => IssuerObservation {
@@ -368,6 +397,7 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
+/// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
 }

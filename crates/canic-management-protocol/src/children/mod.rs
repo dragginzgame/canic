@@ -1,7 +1,9 @@
 //! Two independently retained child slots under one management owner.
-use serde::{Deserialize, Serialize};
+
 #[cfg(test)]
 mod tests;
+
+use serde::{Deserialize, Serialize};
 
 /// Stable numeric identity scoped to one management owner, never a canister principal.
 /// Admission order and configuration sorting cannot change it. The current protocol

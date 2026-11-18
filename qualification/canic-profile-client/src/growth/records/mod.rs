@@ -1,4 +1,8 @@
 //! Private immutable approval records retained before invoking ICP.
+
+#[cfg(test)]
+mod tests;
+
 use ic_host_fs::{Commit, Destination, Directory, Policy, Retention};
 use std::{
     ffi::OsStr,
@@ -84,6 +88,3 @@ pub(super) fn write_in(parent: &Directory, name: &OsStr, bytes: &[u8]) -> Result
         Commit::PublishedUnconfirmed {receipt, phase, cause, sync_error} => Err(format!("approval visible but unconfirmed: {receipt:?}; {phase:?}; {cause}; sync: {sync_error:?}").into()),
     }
 }
-
-#[cfg(test)]
-mod tests;

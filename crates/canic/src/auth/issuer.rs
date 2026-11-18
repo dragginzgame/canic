@@ -164,6 +164,8 @@ pub enum Refusal {
 /// actual caller and ingress time. Reply encoding traps its final transaction;
 /// earlier async commits remain retained. Volatile loss must stay closed.
 #[cfg(target_arch = "wasm32")]
+// Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
+#[rustfmt::skip]
 #[macro_export]
 macro_rules! mount_auth_issuer_endpoints {
     (issue = $issue:path, renew = $renew:path, reconcile = $reconcile:path,
@@ -174,7 +176,16 @@ macro_rules! mount_auth_issuer_endpoints {
                 endpoint,
                 issuer::{ISSUE, Issue, Refusal, Status},
             };
-            #[runtime::update(runtime = runtime, guard = endpoint::admit::<ISSUE>, decode = endpoint::decode::<Issue, ISSUE>, max_bytes = 8192, on_error = endpoint::fail, name = "issue_portable_credential", encode = endpoint::encode::<Result<Status, Refusal>, ISSUE>)]
+
+            #[runtime::update(
+                runtime = runtime,
+                guard = endpoint::admit::<ISSUE>,
+                decode = endpoint::decode::<Issue, ISSUE>,
+                max_bytes = 8192,
+                on_error = endpoint::fail,
+                name = "issue_portable_credential",
+                encode = endpoint::encode::<Result<Status, Refusal>, ISSUE>,
+            )]
             async fn issue_portable_credential(input: Issue) -> Result<Status, Refusal> {
                 $issue(api::caller(), input, api::time()).await
             }
@@ -185,7 +196,16 @@ macro_rules! mount_auth_issuer_endpoints {
                 endpoint,
                 issuer::{RENEW, Refusal, Renew, Status},
             };
-            #[runtime::update(runtime = runtime, guard = endpoint::admit::<RENEW>, decode = endpoint::decode::<Renew, RENEW>, max_bytes = 8192, on_error = endpoint::fail, name = "renew_portable_credential", encode = endpoint::encode::<Result<Status, Refusal>, RENEW>)]
+
+            #[runtime::update(
+                runtime = runtime,
+                guard = endpoint::admit::<RENEW>,
+                decode = endpoint::decode::<Renew, RENEW>,
+                max_bytes = 8192,
+                on_error = endpoint::fail,
+                name = "renew_portable_credential",
+                encode = endpoint::encode::<Result<Status, Refusal>, RENEW>,
+            )]
             async fn renew_portable_credential(input: Renew) -> Result<Status, Refusal> {
                 $renew(api::caller(), input, api::time()).await
             }
@@ -196,15 +216,36 @@ macro_rules! mount_auth_issuer_endpoints {
                 endpoint,
                 issuer::{Lookup, RECONCILE, Refusal, Status},
             };
-            #[runtime::update(runtime = runtime, guard = endpoint::admit::<RECONCILE>, decode = endpoint::decode::<Lookup, RECONCILE>, max_bytes = 8192, on_error = endpoint::fail, name = "reconcile_portable_credential", encode = endpoint::encode::<Result<Status, Refusal>, RECONCILE>)]
+
+            #[runtime::update(
+                runtime = runtime,
+                guard = endpoint::admit::<RECONCILE>,
+                decode = endpoint::decode::<Lookup, RECONCILE>,
+                max_bytes = 8192,
+                on_error = endpoint::fail,
+                name = "reconcile_portable_credential",
+                encode = endpoint::encode::<Result<Status, Refusal>, RECONCILE>,
+            )]
             fn reconcile_portable_credential(input: Lookup) -> Result<Status, Refusal> {
                 $reconcile(api::caller(), input, api::time())
             }
         }
         mod revoke_portable_login {
             use endpoint::{api, runtime};
-            use $crate::auth::{endpoint, issuer::{LOGOUT, Logout, Refusal, Revoked}};
-            #[runtime::update(runtime = runtime, guard = endpoint::admit::<LOGOUT>, decode = endpoint::decode::<Logout, LOGOUT>, max_bytes = 8192, on_error = endpoint::fail, name = "revoke_portable_login", encode = endpoint::encode::<Result<Revoked, Refusal>, LOGOUT>)]
+            use $crate::auth::{
+                endpoint,
+                issuer::{LOGOUT, Logout, Refusal, Revoked},
+            };
+
+            #[runtime::update(
+                runtime = runtime,
+                guard = endpoint::admit::<LOGOUT>,
+                decode = endpoint::decode::<Logout, LOGOUT>,
+                max_bytes = 8192,
+                on_error = endpoint::fail,
+                name = "revoke_portable_login",
+                encode = endpoint::encode::<Result<Revoked, Refusal>, LOGOUT>,
+            )]
             fn revoke_portable_login(input: Logout) -> Result<Revoked, Refusal> {
                 $logout(api::caller(), input, api::time())
             }

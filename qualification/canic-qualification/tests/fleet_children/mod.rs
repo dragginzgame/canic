@@ -24,6 +24,7 @@ fn rejected(config: &std::path::Path, args: &[&str]) -> serde_json::Value {
         )
     })
 }
+
 async fn advance(pic: &PocketIc) {
     pic.stop_progress().await;
     pic.advance_time(Duration::from_secs(65)).await;

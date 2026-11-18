@@ -40,6 +40,8 @@ pub mod endpoint;
 /// }
 /// ```
 #[cfg(target_arch = "wasm32")]
+// Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
+#[rustfmt::skip]
 #[macro_export]
 macro_rules! mount_auth_endpoints {
     (admit = $admit:path, read = $read:path, logout = $logout:path $(,)?) => {
@@ -50,7 +52,16 @@ macro_rules! mount_auth_endpoints {
                 protocol::{EstablishSession, SessionInput, SessionView, model::AdmissionRefusal},
             };
             const ID: u64 = EstablishSession::ID;
-            #[runtime::update(runtime = runtime, guard = endpoint::admit::<ID>, decode = endpoint::decode::<SessionInput, ID>, max_bytes = 2097152, on_error = endpoint::fail, name = "establish_portable_session", encode = endpoint::encode::<Result<SessionView, AdmissionRefusal>, ID>)]
+
+            #[runtime::update(
+                runtime = runtime,
+                guard = endpoint::admit::<ID>,
+                decode = endpoint::decode::<SessionInput, ID>,
+                max_bytes = 2097152,
+                on_error = endpoint::fail,
+                name = "establish_portable_session",
+                encode = endpoint::encode::<Result<SessionView, AdmissionRefusal>, ID>,
+            )]
             fn establish_portable_session(
                 input: SessionInput,
             ) -> Result<SessionView, AdmissionRefusal> {
@@ -64,7 +75,16 @@ macro_rules! mount_auth_endpoints {
                 protocol::{ReadSession, SessionView, model::SessionReadRefusal},
             };
             const ID: u64 = ReadSession::ID;
-            #[runtime::query(runtime = runtime, guard = endpoint::admit::<ID>, decode = endpoint::decode::<(), ID>, max_bytes = 2097152, on_error = endpoint::fail, name = "portable_session_read", encode = endpoint::encode::<Result<SessionView, SessionReadRefusal>, ID>)]
+
+            #[runtime::query(
+                runtime = runtime,
+                guard = endpoint::admit::<ID>,
+                decode = endpoint::decode::<(), ID>,
+                max_bytes = 2097152,
+                on_error = endpoint::fail,
+                name = "portable_session_read",
+                encode = endpoint::encode::<Result<SessionView, SessionReadRefusal>, ID>,
+            )]
             fn portable_session_read((): ()) -> Result<SessionView, SessionReadRefusal> {
                 $read(api::caller(), api::time())
             }
@@ -76,7 +96,16 @@ macro_rules! mount_auth_endpoints {
                 protocol::{Logout, model::LogoutResult},
             };
             const ID: u64 = Logout::ID;
-            #[runtime::update(runtime = runtime, guard = endpoint::admit::<ID>, decode = endpoint::decode::<(), ID>, max_bytes = 2097152, on_error = endpoint::fail, name = "logout_portable_session", encode = endpoint::encode::<LogoutResult, ID>)]
+
+            #[runtime::update(
+                runtime = runtime,
+                guard = endpoint::admit::<ID>,
+                decode = endpoint::decode::<(), ID>,
+                max_bytes = 2097152,
+                on_error = endpoint::fail,
+                name = "logout_portable_session",
+                encode = endpoint::encode::<LogoutResult, ID>,
+            )]
             fn logout_portable_session((): ()) -> LogoutResult {
                 $logout(api::caller(), api::time())
             }

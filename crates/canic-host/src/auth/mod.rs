@@ -1,10 +1,12 @@
 //! Optional explicit Auth approvals; the existing journal owns signed attempts.
 //! These records prove configuration replies, never receiver enrollment or readiness.
+
+#[cfg(test)]
+mod tests;
+
 mod execution;
 mod policy;
 pub use policy::ReceiverPolicy;
-#[cfg(test)]
-mod tests;
 
 use crate::{
     Error, Plan, PlanAction, Result, SelectedFleet, UpgradeTarget, artifact, plan, store, supplier,
@@ -91,6 +93,7 @@ pub(crate) fn declarations<'de, D: serde::Deserializer<'de>>(
 fn invalid(message: &str) -> Error {
     Error::Invalid(message.into())
 }
+
 fn hex32(value: &str) -> Result<[u8; 32]> {
     if value.len() != 64 || value != value.to_ascii_lowercase() {
         return Err(invalid(
@@ -101,6 +104,7 @@ fn hex32(value: &str) -> Result<[u8; 32]> {
         .try_into()
         .map_err(|_| invalid("Auth identity must be 32 bytes"))
 }
+
 fn principal(value: &str) -> Result<wire::types::Principal> {
     let id = crate::network::principal(value)?;
     if id.to_text() != value || id.as_slice().is_empty() || value == "2vxsx-fae" {
@@ -140,6 +144,7 @@ impl AuthConfig {
         validate_grant(&grant)?;
         Ok(grant)
     }
+
     fn canister<'a>(&self, fleet: &'a crate::FleetConfig, slot: &str) -> Result<&'a str> {
         fleet
             .canisters
@@ -148,6 +153,7 @@ impl AuthConfig {
             .ok_or_else(|| invalid("Auth requires explicitly bound Root and receiver slots"))
     }
 }
+
 fn validate_grant(grant: &wire::Grant) -> Result<()> {
     principal(&grant.receiver.to_text())?;
     principal(&grant.issuer.to_text())?;
@@ -360,6 +366,7 @@ fn plans(journal: &Path) -> Result<Vec<(String, Plan)>> {
     }
     Ok(plans)
 }
+
 fn retain(held: &store::Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan)> {
     let approval = plan.auth().expect("Auth caller");
     let mut retained = None;

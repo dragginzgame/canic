@@ -9,12 +9,26 @@ use std::cell::RefCell;
 
 thread_local! { static STATE: RefCell<Option<State<DefaultMemoryImpl>>> = const { RefCell::new(None) }; }
 
-#[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+/// Initialize the profile worker state for this installation.
+#[runtime::init(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn init((): ()) {
     STATE.with_borrow_mut(|state| *state = Some(storage::open(DefaultMemoryImpl::default(), true)));
 }
 
-#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = lifecycle_decode, max_bytes = 0, on_error = endpoint_error)]
+/// Reopen the profile worker state from the preceding executable.
+#[runtime::post_upgrade(
+    runtime = runtime,
+    guard = lifecycle_guard,
+    decode = lifecycle_decode,
+    max_bytes = 0,
+    on_error = endpoint_error,
+)]
 fn post_upgrade((): ()) {
     STATE
         .with_borrow_mut(|state| *state = Some(storage::open(DefaultMemoryImpl::default(), false)));
@@ -22,6 +36,7 @@ fn post_upgrade((): ()) {
     api::trap("profile qualification: reject after restoration");
 }
 
+/// Reject oversized frames before copying the request. The handler owns operation-specific checks.
 fn bounded() -> Result<(), String> {
     if ic_platform_runtime::system::argument_size() > LIMITS.bytes {
         return Err("profile frame too large".into());
@@ -39,6 +54,7 @@ fn decode_put(bytes: &[u8]) -> Result<Put, ic_wire::Error> {
         LIMITS,
     )
 }
+
 fn decode_get(bytes: &[u8]) -> Result<u64, ic_wire::Error> {
     ic_wire::decode(
         bytes,
@@ -49,6 +65,7 @@ fn decode_get(bytes: &[u8]) -> Result<u64, ic_wire::Error> {
         LIMITS,
     )
 }
+
 fn decode_info(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     ic_wire::decode::<()>(
         bytes,
@@ -59,6 +76,7 @@ fn decode_info(bytes: &[u8]) -> Result<(), ic_wire::Error> {
         LIMITS,
     )
 }
+
 #[allow(clippy::needless_pass_by_value)]
 fn encode_put(value: ProfileResult) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
@@ -70,6 +88,7 @@ fn encode_put(value: ProfileResult) -> Result<Vec<u8>, ic_wire::Error> {
         LIMITS,
     )
 }
+
 #[allow(clippy::needless_pass_by_value)]
 fn encode_get(value: ProfileResult) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
@@ -81,6 +100,7 @@ fn encode_get(value: ProfileResult) -> Result<Vec<u8>, ic_wire::Error> {
         LIMITS,
     )
 }
+
 #[allow(clippy::needless_pass_by_value)]
 fn encode_info(value: Info) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
@@ -93,7 +113,15 @@ fn encode_info(value: Info) -> Result<Vec<u8>, ic_wire::Error> {
     )
 }
 
-#[runtime::update(runtime = runtime, guard = bounded, decode = decode_put, max_bytes = 4096, on_error = endpoint_error, name = "put", encode = encode_put)]
+#[runtime::update(
+    runtime = runtime,
+    guard = bounded,
+    decode = decode_put,
+    max_bytes = 4096,
+    on_error = endpoint_error,
+    name = "put",
+    encode = encode_put,
+)]
 #[allow(clippy::needless_pass_by_value)]
 fn put(input: Put) -> ProfileResult {
     STATE.with_borrow_mut(|state| {
@@ -104,7 +132,15 @@ fn put(input: Put) -> ProfileResult {
     })
 }
 
-#[runtime::query(runtime = runtime, guard = bounded, decode = decode_get, max_bytes = 4096, on_error = endpoint_error, name = "get", encode = encode_get)]
+#[runtime::query(
+    runtime = runtime,
+    guard = bounded,
+    decode = decode_get,
+    max_bytes = 4096,
+    on_error = endpoint_error,
+    name = "get",
+    encode = encode_get,
+)]
 fn get(user_id: u64) -> ProfileResult {
     STATE.with_borrow(|state| {
         state
@@ -114,7 +150,16 @@ fn get(user_id: u64) -> ProfileResult {
     })
 }
 
-#[runtime::query(runtime = runtime, guard = bounded, decode = decode_info, max_bytes = 4096, on_error = endpoint_error, name = "info", encode = encode_info)]
+/// Report the installed worker's executable and state information.
+#[runtime::query(
+    runtime = runtime,
+    guard = bounded,
+    decode = decode_info,
+    max_bytes = 4096,
+    on_error = endpoint_error,
+    name = "info",
+    encode = encode_info,
+)]
 fn info((): ()) -> Info {
     Info {
         executable: if cfg!(feature = "profile-v2") {
@@ -130,6 +175,7 @@ fn info((): ()) -> Info {
 }
 
 // Replicated, read-only endpoint for the entry's direct inter-canister check.
+/// Read worker information in replicated execution.
 #[canic::update(contract = canic_profile_protocol::Probe)]
 fn probe() -> Info {
     info(())
@@ -139,6 +185,7 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
+/// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
 }

@@ -1,4 +1,8 @@
 //! Publication uses the existing plan journal and signed-attempt owner, not deployment receipts.
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     ApplyOutcome, DeploymentName, Error, Plan, PlanAction, Result, SelectedFleet, UpgradeTarget,
     artifact, network::principal, operation, plan, signed, store, supplier,
@@ -11,8 +15,6 @@ use std::path::Path;
 
 pub(crate) mod list;
 pub(crate) mod removal;
-#[cfg(test)]
-mod tests;
 const OBSERVATIONS: usize = 32;
 
 /// Exact canister/code identities and immutable release label; no deployment authority.
@@ -167,9 +169,11 @@ fn binding(plan: &Plan) -> Result<&Publication> {
     plan.publication()
         .ok_or_else(|| Error::Invalid("publication plan required".into()))
 }
+
 pub(crate) fn manifest(plan: &Plan, bytes: &[u8]) -> Result<protocol::Manifest> {
     Ok(release_manifest(binding(plan)?.release.clone(), bytes))
 }
+
 pub(crate) fn release_manifest(release: protocol::Release, bytes: &[u8]) -> protocol::Manifest {
     protocol::Manifest {
         release,
@@ -181,6 +185,7 @@ pub(crate) fn release_manifest(release: protocol::Release, bytes: &[u8]) -> prot
             .collect(),
     }
 }
+
 pub(crate) fn call(plan: &Plan, command: Command, deadline: u64) -> Result<signed::Call<'static>> {
     let publication = binding(plan)?;
     let root = principal(&publication.root.canister)?;
@@ -203,6 +208,7 @@ pub(crate) fn call(plan: &Plan, command: Command, deadline: u64) -> Result<signe
         .map_err(supplier)?,
     })
 }
+
 pub(crate) fn observation(plan: &Plan, deadline: u64) -> Result<signed::Call<'static>> {
     call(
         plan,
@@ -210,6 +216,7 @@ pub(crate) fn observation(plan: &Plan, deadline: u64) -> Result<signed::Call<'st
         deadline,
     )
 }
+
 fn decode(bytes: &[u8], expected: &protocol::Manifest) -> Result<Option<protocol::Status>> {
     let reply: wire::Reply = ic_wire::decode(
         bytes,
@@ -241,6 +248,7 @@ fn decode(bytes: &[u8], expected: &protocol::Manifest) -> Result<Option<protocol
         )),
     }
 }
+
 fn progress(
     plan: &Plan,
     digest: &str,
@@ -256,12 +264,14 @@ fn progress(
         status,
     })
 }
+
 fn steps(manifest: &protocol::Manifest) -> Vec<String> {
     std::iter::once("prepare".into())
         .chain((0..manifest.chunks.len()).map(|i| format!("chunk-{i}")))
         .chain(std::iter::once("publish".into()))
         .collect()
 }
+
 fn command(expected: &protocol::Manifest, bytes: &[u8], index: usize) -> Command {
     if index == 0 {
         Command::Prepare(expected.clone())
@@ -279,6 +289,7 @@ fn command(expected: &protocol::Manifest, bytes: &[u8], index: usize) -> Command
         Command::Publish(expected.release.clone())
     }
 }
+
 fn observed(status: Option<&protocol::Status>, index: usize, chunks: usize) -> bool {
     status.is_some_and(|s| {
         if index == 0 {
@@ -290,6 +301,7 @@ fn observed(status: Option<&protocol::Status>, index: usize, chunks: usize) -> b
         }
     })
 }
+
 fn step_deadline(dir: &Path, plan: &Plan) -> Result<u64> {
     let directory = crate::output_publication::prepare(dir, 0o700)?;
     let path = dir.join("dispatch-deadline.json");
@@ -311,6 +323,7 @@ fn step_deadline(dir: &Path, plan: &Plan) -> Result<u64> {
     }
     Ok(deadline)
 }
+
 async fn verify_binding(client: &ReadClient, plan: &Plan, publication: &Publication) -> Result<()> {
     for (target, controller) in [
         (&publication.root, &plan.controller),
@@ -326,6 +339,7 @@ async fn verify_binding(client: &ReadClient, plan: &Plan, publication: &Publicat
     }
     Ok(())
 }
+
 async fn observe(
     dir: &Path,
     plan: &Plan,
@@ -346,6 +360,7 @@ async fn observe(
         "publication observation budget exhausted; retained evidence is unchanged".into(),
     ))
 }
+
 pub(crate) async fn apply(
     journal: &Path,
     dir: &Path,
@@ -397,6 +412,7 @@ pub(crate) async fn apply(
     }
     Ok(ApplyOutcome::Publication { publication: value })
 }
+
 pub(crate) fn receipt(
     dir: &Path,
     plan: &Plan,
@@ -466,6 +482,7 @@ pub(crate) fn completed_release<'a>(
     }
     Ok(receipt(dir, old, &old.digest()?, expected)?.is_some())
 }
+
 pub(crate) fn status(
     dir: &Path,
     digest: &str,

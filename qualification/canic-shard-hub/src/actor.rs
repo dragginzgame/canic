@@ -3,8 +3,10 @@ use ic_platform_runtime as runtime;
 use ic_platform_types::Principal;
 use sha2::{Digest, Sha256};
 use std::cell::Cell;
+
 thread_local! {static ROOT: Cell<Option<Principal>> = const {Cell::new(None)};}
 const KEY: &str = "hub.root.v1";
+
 fn open(initial: Option<Principal>) {
     let fresh = initial.is_some();
     let storage = canic::storage::bootstrap(
@@ -19,6 +21,7 @@ fn open(initial: Option<Principal>) {
         Principal::try_from_slice(cell.get()).expect("retained Root"),
     ));
 }
+
 canic::mount_lifecycle!(
     input = Principal,
     max_bytes = 29,
@@ -26,44 +29,73 @@ canic::mount_lifecycle!(
     install = install,
     reopen = reopen
 );
+
 fn install(root: Principal) {
     open(Some(root));
 }
+
 fn reopen() {
     open(None);
 }
-#[runtime::update(runtime = runtime, name = "signup", guard = user, decode = empty, encode = reply, max_bytes = 0, on_error = fail)]
+
+/// Assign the authenticated caller's key through the configured Root.
+#[runtime::update(
+    runtime = runtime,
+    name = "signup",
+    guard = user,
+    decode = empty,
+    encode = reply,
+    max_bytes = 0,
+    on_error = fail,
+)]
 async fn signup((): ()) -> Placement {
     sharding::assign(ROOT.get().unwrap(), key())
         .await
         .expect("inspect original key")
 }
-#[runtime::update(runtime = runtime, name = "lookup", guard = user, decode = empty, encode = reply, max_bytes = 0, on_error = fail)]
+
+/// Look up the authenticated caller's existing assignment.
+#[runtime::update(
+    runtime = runtime,
+    name = "lookup",
+    guard = user,
+    decode = empty,
+    encode = reply,
+    max_bytes = 0,
+    on_error = fail,
+)]
 async fn lookup((): ()) -> Placement {
     sharding::lookup(ROOT.get().unwrap(), key())
         .await
         .expect("lookup transport")
 }
+
 fn key() -> sharding::Key {
     Sha256::digest(runtime::system::caller().as_slice()).into()
 }
+
+/// Require an identified caller before deriving its placement key.
 fn user() -> Result<(), &'static str> {
     (runtime::system::caller() != Principal::anonymous())
         .then_some(())
         .ok_or("authenticated user")
 }
+
 fn principal(raw: &[u8]) -> Result<Principal, &'static str> {
     Principal::try_from_slice(raw).map_err(|_| "root principal")
 }
+
 fn empty(raw: &[u8]) -> Result<(), &'static str> {
     raw.is_empty()
         .then_some(())
         .ok_or("empty argument required")
 }
+
 #[allow(clippy::needless_pass_by_value)]
 fn reply(value: Placement) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(&value, ic_wire::Encoding::Payload, sharding::LIMITS)
 }
+
 fn fail(error: impl std::fmt::Debug) -> ! {
     runtime::system::trap(&format!("hub: {error:?}"))
 }

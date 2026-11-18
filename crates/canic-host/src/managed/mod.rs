@@ -1,5 +1,8 @@
 //! Root admission and authenticated child evidence. No host-owned child effects.
 
+#[cfg(test)]
+mod tests;
+
 mod application;
 use crate::{
     ApplyOutcome, DeploymentName, Error, ManagedOwner, Plan, PlanInput, Receipt, Result,
@@ -19,8 +22,6 @@ pub(crate) mod stored;
 mod wire;
 use wire::Method;
 pub(crate) use wire::{observation, same_slot};
-#[cfg(test)]
-mod tests;
 pub(crate) mod upgrade;
 
 pub(crate) const OBSERVATIONS: usize = 32;
@@ -321,6 +322,7 @@ fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
 pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
     evidence_with_source(dir, plan).map(|value| value.map(|(status, _)| status))
 }
+
 pub(crate) fn evidence_with_source(
     dir: &Path,
     plan: &Plan,
