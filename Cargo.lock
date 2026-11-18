@@ -300,7 +300,7 @@ dependencies = [
  "clap",
  "ic-host-process",
  "ic-host-text",
- "ic-topology",
+ "ic-query-topology",
  "serde_json",
  "time",
  "tiny_http",
@@ -349,7 +349,7 @@ dependencies = [
  "ic-platform",
  "ic-platform-protocol",
  "ic-platform-types",
- "ic-topology",
+ "ic-query-topology",
  "ic-wasm-store",
  "ic-wasm-store-protocol",
  "ic-wire 0.25.0",
@@ -1394,6 +1394,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-query-topology"
+version = "0.110.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "632ec94c3d187bd460dc6de24e27169c7551bb12c60ce92c3d88564e17ca4753"
+dependencies = [
+ "ic-platform",
+ "ic-platform-protocol",
+ "ic-platform-types",
+ "serde",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "ic-stable-structures"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1422,20 +1436,6 @@ checksum = "1deb15b51dca613fccec3f2cb900651992a2b242751135f54c0bb63f94035810"
 dependencies = [
  "ic-metrics",
  "ic-platform-runtime",
-]
-
-[[package]]
-name = "ic-topology"
-version = "0.109.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fc3203d1f19100968e704541909c9e22ff986a6743071197c71619aca79a1516"
-dependencies = [
- "ic-platform",
- "ic-platform-protocol",
- "ic-platform-types",
- "serde",
- "thiserror 2.0.21",
- "tokio",
 ]
 
 [[package]]

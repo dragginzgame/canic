@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.225.1] - Unreleased
+
+### 🔧 Changed
+
+Fleet placement and subnet comparison now read through the published
+`ic-query-topology` supplier. Existing schema 1 JSON reports retain their
+format. [#36](https://github.com/dragginzgame/canic/issues/36)
+
+From an app directory with a configured mainnet fleet, inspect its bound canisters:
+
+```sh
+canic fleet placements --json
+```
+
+### 🧪 Testing
+
+The installed profile route exercises qualified Rust paths for the method ID
+and both Wire budgets. [#29](https://github.com/dragginzgame/canic/issues/29)
+
 ## [0.225.0] - 2026-11-18
 
 ### ✨ Added

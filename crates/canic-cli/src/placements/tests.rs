@@ -89,8 +89,8 @@ async fn placements_unbound_config_never_resolves_or_writes_journals() {
 
 #[test]
 fn placements_mixed_evidence_keeps_unknowns_out_of_observed_subnet_counts() {
-    use ic_topology::placement::collection::{CanisterPlacement, PlacementCollectionReport};
-    use ic_topology::placement::{PlacementError, PlacementEvidence, PlacementReport};
+    use ic_query_topology::placement::collection::{CanisterPlacement, PlacementCollectionReport};
+    use ic_query_topology::placement::{PlacementError, PlacementEvidence, PlacementReport};
     let canister = "ryjl3-tyaaa-aaaaa-aaaba-cai".parse().unwrap();
     let subnet = "tdb26-jop6k-aogll-7ltgs-eruif-6kk7m-qpktf-gdiqx-mxtrf-vb5e6-eqe"
         .parse()

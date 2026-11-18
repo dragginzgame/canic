@@ -1,6 +1,6 @@
 use super::*;
 use crate::{CanisterConfig, FleetConfig};
-use ic_topology::placement::{
+use ic_query_topology::placement::{
     PlacementError,
     collection::{CanisterPlacement, PlacementCollectionReport},
 };

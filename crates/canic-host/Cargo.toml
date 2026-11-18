@@ -31,7 +31,7 @@ ic-host-text.workspace = true
 ic-platform = { workspace = true, features = ["native-signed-secp256k1"] }
 ic-platform-protocol = { workspace = true, features = ["ledger"] }
 ic-platform-types.workspace = true
-ic-topology.workspace = true
+ic-query-topology.workspace = true
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true
 serde.workspace = true

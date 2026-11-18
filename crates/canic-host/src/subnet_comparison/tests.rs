@@ -1,6 +1,6 @@
 use super::*;
 use crate::FleetConfig;
-use ic_topology::subnet::{
+use ic_query_topology::subnet::{
     compare::{Candidate, DistributionOutcome},
     distribution::DistributionError,
     metrics::{MetricsOutcome, SubnetMetricsError},
@@ -28,7 +28,7 @@ fn candidate(subnet_id: Principal) -> Candidate {
             error: DistributionError::InitialDeadline,
         },
         metrics: MetricsOutcome::Failed {
-            error: SubnetMetricsError::Read(ic_topology::ReadError::Deadline),
+            error: SubnetMetricsError::Read(ic_query_topology::ReadError::Deadline),
         },
     }
 }

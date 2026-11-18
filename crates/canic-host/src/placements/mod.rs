@@ -1,12 +1,12 @@
 //! One-shot mainnet placement diagnostics for explicitly configured bindings.
 use crate::{Error, Network, Result, SelectedFleet, supplier};
 use ic_platform_types::Principal;
-use ic_topology::placement::collection::{self, PlacementCollectionReport};
+use ic_query_topology::placement::collection::{self, PlacementCollectionReport};
 use serde::Serialize;
 use std::{collections::BTreeSet, future::Future};
 
 /// Query-owned per-canister evidence, exposed for diagnostic presentation.
-pub use ic_topology::placement::collection::PlacementOutcome;
+pub use ic_query_topology::placement::collection::PlacementOutcome;
 
 /// Application declarations paired with independent routing observations.
 #[derive(Debug, Serialize)]

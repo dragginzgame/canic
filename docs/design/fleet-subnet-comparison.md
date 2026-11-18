@@ -38,8 +38,7 @@ stay unavailable, not zero. Values establish neither allocatable headroom,
 application suitability, running software nor merge feasibility. JSON preserves
 raw evidence and Query's overlap identities; no snapshot or recommendation is added.
 
-The existing immutable `ic-topology` dependency supplies this report. No new wire
-codec, subprocess bridge, shared CLI rendering library or dependency is needed.
+The registry package `ic-query-topology` 0.110.6 supplies the schema 1 report.
 The Host adapter owns network/config admission; CLI owns parsing and presentation.
 The Query comparison contract and its legacy provenance review remain the source
 of acquisition policy; Canic does not duplicate the predecessor's catalog or caches.

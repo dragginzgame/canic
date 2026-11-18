@@ -28,7 +28,7 @@ tiny_http.workspace = true
 tokio.workspace = true
 
 [dev-dependencies]
-ic-topology.workspace = true
+ic-query-topology.workspace = true
 toml.workspace = true
 
 [lints]

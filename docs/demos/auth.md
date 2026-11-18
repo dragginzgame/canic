@@ -556,6 +556,12 @@ are required. The exact tested artifact is recorded in
 Application signing and the native test verifier now select registry Platform
 0.34.13's `ed25519` capability as `ic-platform-crypto`. Enrollment and issuer entropy
 use Protocol's `raw_rand` with explicit six-byte request and 42-byte reply budgets.
+Application canisters can enable Canic's `entropy` feature and call
+`canic::entropy::fresh(10).await` for 32 bytes with a ten-second bounded wait.
+A failure returns to the caller after that attempt. The application owns ID
+generation and rechecks authorization after the await. Enrollment separately
+rechecks its challenge and deadline. [Canic #34](https://github.com/dragginzgame/canic/issues/34)
+
 Product and qualification select Protocol 0.3.5 with Testkit 0.109.0.
 The witness and its real Root use Runtime 0.23.17, and committed
 Auth source uses the matching Types 0.21.2 boundary. Browser logout and transport

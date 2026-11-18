@@ -96,7 +96,7 @@ fn valid_worker(text: &str) -> Result<Principal, RouteError> {
 }
 
 canic::mount_wire_method! {
-    query(method = ROUTE, limits = LIMITS) fn route() -> RouteResult {
+    query(method = canic_profile_protocol::ROUTE, limits = canic_profile_protocol::LIMITS, reply_limits = canic_profile_protocol::LIMITS) fn route() -> RouteResult {
         STATE
             .with_borrow(|state| {
                 state

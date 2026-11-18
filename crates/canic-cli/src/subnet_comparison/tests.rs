@@ -1,7 +1,7 @@
 use super::*;
 use crate::args::Cli;
 use clap::Parser as _;
-use ic_topology::subnet::{
+use ic_query_topology::subnet::{
     compare::{Candidate, DistributionOutcome, SubnetComparisonReport},
     distribution::DistributionError,
     metrics::{MetricsOutcome, SubnetMetricsError},
@@ -15,7 +15,7 @@ fn fixture() -> FleetSubnetComparison {
             error: DistributionError::InitialDeadline,
         },
         metrics: MetricsOutcome::Failed {
-            error: SubnetMetricsError::Read(ic_topology::ReadError::Deadline),
+            error: SubnetMetricsError::Read(ic_query_topology::ReadError::Deadline),
         },
     };
     FleetSubnetComparison {
@@ -75,7 +75,7 @@ fn subnet_comparison_cli_scopes_explicit_candidates() {
 
 #[test]
 fn subnet_comparison_missing_and_zero_metrics_remain_distinct() {
-    use ic_topology::subnet::metrics::{SubnetMetricsEvidence, SubnetMetricsReport};
+    use ic_query_topology::subnet::metrics::{SubnetMetricsEvidence, SubnetMetricsReport};
     let mut report = fixture();
     assert!(render(&report).contains("Infrastructure overlap unavailable"));
     report.observation.left.metrics = MetricsOutcome::Read {
@@ -145,7 +145,7 @@ async fn subnet_comparison_duplicate_is_refused_without_journal_access() {
 
 #[test]
 fn subnet_comparison_overlap_keeps_unknown_coverage_and_independent_versions() {
-    use ic_topology::subnet::{
+    use ic_query_topology::subnet::{
         configuration::{SubnetConfigurationEvidence, SubnetConfigurationReport},
         distribution::{DistributionSummary, GroupCount, SubnetDistributionReport},
     };

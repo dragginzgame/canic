@@ -30,9 +30,7 @@ Text summarizes successful/configured reads, unresolved bindings, unbound slots
 and distinct subnets among successful reads. Unknown bindings do not contribute
 to the subnet count; these summaries add no queries and leave JSON unchanged.
 
-`ic-topology` 0.106.1 is selected from immutable Git revision
-`0a3eca919f05d777798406087049cc51ab7ae2a8` of `dragginzgame/ic-query`; packages are
-not published to crates.io. Query owns lookup policy and bounded protocol reads.
+Both Canic workspaces select the published `ic-query-topology` 0.110.6. Query owns lookup policy and bounded protocol reads.
 Canic owns config selection, application labels and output. Store's existing
 operation-bound placement checks and `fleet show`/watch budgets are unchanged.
 

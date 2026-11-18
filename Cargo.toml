@@ -60,8 +60,8 @@ url = "2.5.8"
 # Production and tests
 canic = { path = "crates/canic", version = "0.225.0" }
 ic-platform = { version = "0.34.13", default-features = false, features = ["ingress-packets"] }
+ic-query-topology = "0.110.6"
 ic-storage = "0.78.0"
-ic-topology = "0.109.2"
 ic-wire = { version = "0.25.0", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

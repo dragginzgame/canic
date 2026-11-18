@@ -7,6 +7,17 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Fleet diagnostic supplier cutover — 2026-11-18
+
+Starting from Canic `b2ccf4e`, both workspaces resolved crates.io
+`ic-query-topology` 0.110.6 (archive VCS revision
+`41aeb32e7df94e2b1b21b52fcc53cfe862286734`). Both resolved one Platform
+0.34.16, Protocol 0.3.5 and Types 0.21.2. Host consumes Query's collection
+and comparison reports directly. Seven placement and six comparison tests
+passed across Host and CLI, covering pre-read admission, partial evidence,
+output escaping and journal isolation. Qualification compiled against the
+migrated Host. These checks used fixtures without mainnet reads.
+
 ## Toko hub and shard adoption — 2026-11-18
 
 An isolated copy of the Toko working tree based on `417ee72c5852` built its
