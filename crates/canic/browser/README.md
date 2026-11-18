@@ -23,9 +23,12 @@ integrity bound by this module's lockfile. Platform npm 0.2.0 owns SDK access.
 transports through Auth, with explicit gateway trust, the temporary identity and
 AbortSignal supplied by its coordinator. `issuerAdapter` accepts an explicitly
 owned authenticated raw transport for other hosts and focused tests. Neither
-creates an identity, stores keys, opens a journal or retries effects. The public
-binding contains only principal identities, original intent and clock conversion;
-applications retain and restore it alongside their original login/key custody.
+creates an identity, stores keys, opens a journal or retries effects. Set
+`binding.browserKey` to `browserIdentity.getPublicKey()` from the selected
+Ed25519 device. The adapter checks the original intent's raw key against this
+public key and derives the browser principal using the SDK. A restored intent
+for another device fails at construction, before transport. On reopening, use
+the original intent, issuer, account and clock offset with the retained device.
 
 Pass `adapter.transport` to Auth's `SessionCoordinator` issuer configuration and
 `adapter.revoke` to `cleanupOnce`/`cleanupUntilFinished`. Auth owns readiness,
@@ -56,7 +59,7 @@ ceilings. Rust endpoints retain their separate allocation/node/depth accounting;
 Wire explicitly does not translate Rust allocation budgets into a JavaScript heap
 limit. HTTP/body transport limits remain with the supplier transport, not this codec.
 
-Six focused cases include native Rust frame parity, original selectors and signer
+Seven focused cases cover a mismatched device key, native Rust frame parity, original selectors and signer
 roles, unchanged credential bytes/deadlines, unavailable/malformed/oversized or
 wrong-direction replies, lost reply without fallback, cleanup mapping, cancellation
 and a real Auth HTTP signature with one submission. The HTTP loss case uses an

@@ -1,5 +1,14 @@
 use super::*;
 
+pub(crate) const UNBOUND_FLEET: &str = r#"[apps.app.canisters.root]
+role = "root"
+
+[apps.app.fleets.mainnet]
+network = { kind = "Mainnet" }
+journal = "must-not-exist"
+canisters = {}
+"#;
+
 #[test]
 fn human_errors_escape_terminal_controls_without_changing_json_evidence() {
     let error = Error::Invalid("bad\u{1b}[2J\rpath\u{202e}\ncompiler context".into());

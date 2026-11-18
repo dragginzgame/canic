@@ -59,7 +59,7 @@ pub(super) enum Commands {
 
 #[derive(Args)]
 pub(super) struct ConfigArgs {
-    /// Override the current/direct-child canic.json catalog.
+    /// Override the current/direct-child canic.toml catalog.
     #[arg(long, value_name = "PATH")]
     pub(super) config: Option<PathBuf>,
 }
@@ -75,7 +75,7 @@ pub(super) struct FleetScope {
     /// Override the journal (default .canic/apps/APP/fleets/FLEET); without config, .canic.
     #[arg(long)]
     pub(super) state_dir: Option<PathBuf>,
-    /// Override the current/direct-child canic.json catalog.
+    /// Override the current/direct-child canic.toml catalog.
     #[arg(long)]
     pub(super) config: Option<PathBuf>,
     /// Select an app; required when the config has multiple apps.
@@ -84,7 +84,7 @@ pub(super) struct FleetScope {
     /// Select a fleet within the app; required when the app has multiple fleets.
     #[arg(long, conflicts_with = "no_config")]
     pub(super) fleet: Option<String>,
-    /// Ignore canic.json and use the legacy .canic journal unless --state-dir is supplied.
+    /// Ignore canic.toml and use the legacy .canic journal unless --state-dir is supplied.
     #[arg(long, conflicts_with = "config")]
     pub(super) no_config: bool,
 }
@@ -155,6 +155,9 @@ pub(super) enum AppCanisterCommand {
         /// Cargo package producing this canister's Wasm.
         #[arg(long, requires = "manifest")]
         package: Option<String>,
+        /// Native command codec target in the same package, built by app build.
+        #[arg(long, requires = "package")]
+        client: Option<String>,
     },
     /// List shared app definitions; no network or journal access.
     List {
@@ -312,7 +315,7 @@ pub(super) enum FleetCommand {
         #[command(flatten)]
         signer: SignerArgs,
     },
-    /// Reconcile this retained Root approval without renewing effect limits or deadlines.
+    /// Observe an original app call or reconcile a Root approval without renewing authority.
     Reconcile {
         #[command(flatten)]
         scope: FleetScope,
@@ -379,18 +382,24 @@ pub(super) enum FleetCommand {
         #[arg(long)]
         open: bool,
     },
-    /// Call the deployed demo's read-only, uncertified greeting query.
+    /// Execute an app-owned command directly as the selected user; retain uncertain outcomes.
     Call {
         #[command(flatten)]
-        scope: FleetScope,
-        /// Completed hello-demo deployment operation; this is not a generic canister call.
-        #[arg(value_name = "OPERATION")]
-        digest: String,
-        /// Select the application in a multi-child fleet operation.
+        selection: CanisterConfigArgs,
+        /// Override the selected fleet's application-call journal.
         #[arg(long)]
-        canister: Option<String>,
-        #[arg(long, default_value = "team")]
-        name: String,
+        state_dir: Option<PathBuf>,
+        /// Select an app definition with a built native command codec.
+        #[arg(long)]
+        canister: String,
+        /// User identity; being a controller grants no application permission.
+        #[arg(long)]
+        identity: String,
+        #[command(flatten)]
+        signer: SignerArgs,
+        /// Named command and arguments interpreted by the application's codec.
+        #[arg(required = true, num_args = 1..)]
+        command: Vec<String>,
     },
 }
 
@@ -435,9 +444,9 @@ impl FleetCommand {
             | Self::Activate { scope, .. }
             | Self::Reconcile { scope, .. }
             | Self::Status { scope, .. }
-            | Self::Show { scope, .. }
-            | Self::Call { scope, .. } => Some(scope),
+            | Self::Show { scope, .. } => Some(scope),
             Self::CompareSubnets { .. }
+            | Self::Call { .. }
             | Self::Artifact(_)
             | Self::Auth(_)
             | Self::Placements { .. }

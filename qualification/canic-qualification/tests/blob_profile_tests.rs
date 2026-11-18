@@ -89,9 +89,8 @@ async fn composed_catalog_rollback_and_capacity_leave_profiles_usable() {
 
 #[tokio::test(flavor = "current_thread")]
 async fn corrupt_profile_participant_refuses_upgrade_without_reinitializing_other_owners() {
-    use canic::blob::supplier::local::persistence::{STORAGE_AUTHORITY, STORAGE_KEY};
     use ic_storage::{
-        AllocationGrants, GenericAllocationPolicy, MemoryAuthority, MemoryRequest, MemoryRuntime,
+        AllocationGrants, GenericAllocationPolicy, MemoryAuthority, MemoryRuntime,
         SealedDeclarationSnapshot, StableKey, VectorMemory,
     };
 
@@ -128,26 +127,16 @@ async fn corrupt_profile_participant_refuses_upgrade_without_reinitializing_othe
         let backing = VectorMemory::new(std::cell::RefCell::new(original.clone()));
         {
             let mut runtime = MemoryRuntime::new(backing.clone()).unwrap();
-            let requests = [
-                MemoryRequest::new("catalog", "catalog.entries.v1").unwrap(),
-                MemoryRequest::new(STORAGE_AUTHORITY, STORAGE_KEY).unwrap(),
-            ]
-            .into_iter()
-            .chain(canic_profile_worker::state::memory_requests())
-            .collect();
+            let requests = canic_profile_worker::state::memory_requests();
+            let authority = MemoryAuthority::new(
+                canic_profile_worker::state::STORAGE_AUTHORITY,
+                canic_profile_worker::state::STORAGE_PREFIX,
+            )
+            .unwrap();
             runtime
                 .bootstrap(
-                    &SealedDeclarationSnapshot::new(requests).unwrap(),
-                    &AllocationGrants::new(vec![
-                        MemoryAuthority::new("catalog", "catalog.").unwrap(),
-                        MemoryAuthority::new(STORAGE_AUTHORITY, "blob.").unwrap(),
-                        MemoryAuthority::new(
-                            canic_profile_worker::state::STORAGE_AUTHORITY,
-                            canic_profile_worker::state::STORAGE_PREFIX,
-                        )
-                        .unwrap(),
-                    ])
-                    .unwrap(),
+                    &SealedDeclarationSnapshot::new(requests.to_vec()).unwrap(),
+                    &AllocationGrants::new(vec![authority]).unwrap(),
                     &GenericAllocationPolicy,
                 )
                 .unwrap();
@@ -160,7 +149,7 @@ async fn corrupt_profile_participant_refuses_upgrade_without_reinitializing_othe
                 .open_memory(&StableKey::parse(key).unwrap())
                 .unwrap();
             memory.write(0, &[0; 8]);
-            assert_eq!(runtime.diagnostics().unwrap().allocations, 4);
+            assert_eq!(runtime.memory_allocations().unwrap().len(), 4);
         }
         let damaged = backing.borrow().clone();
         assert_ne!(damaged, original);

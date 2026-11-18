@@ -16,13 +16,16 @@ pub struct BuiltCanister {
     pub wasm: PathBuf,
     /// Exact built bytes.
     pub artifact: Artifact,
+    /// Optional app-owned native codec executable, not a deployment artifact.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client: Option<PathBuf>,
 }
 
 /// Build all declared app recipes or one selected canister, initializing absent workspace locks once.
 /// All recipes are validated before building; selection does not hide invalid app declarations.
 /// Existing locks are preserved and compilation always uses `--locked`.
 /// # Errors
-/// Refuses unknown canisters, missing recipes, non-workspace manifests, duplicate output paths or failed builds.
+/// Refuses invalid recipes, duplicate outputs, outputs replacing configuration/Cargo inputs or failed builds.
 pub fn build_app(
     path: &Path,
     app: Option<&str>,
@@ -42,6 +45,10 @@ pub fn build_app(
     let working_directory = std::env::current_dir().map_err(supplier)?;
     let mut recipes = Vec::new();
     let mut outputs = std::collections::BTreeSet::new();
+    let mut inputs =
+        std::collections::BTreeSet::from([
+            crate::output_path::resolve(path, &working_directory).map_err(supplier)?
+        ]);
     for (name, canister) in &app.canisters {
         let recipe = canister.build.as_ref().ok_or_else(|| Error::Invalid(format!("canister {name} has no build recipe; add build.manifest and build.package to its app definition")))?;
         let manifest = base
@@ -56,6 +63,11 @@ pub fn build_app(
                 "build.manifest must name the workspace manifest".into(),
             ));
         }
+        inputs.insert(manifest.clone());
+        inputs.insert(
+            crate::output_path::resolve(&manifest.with_file_name("Cargo.lock"), &working_directory)
+                .map_err(supplier)?,
+        );
         let output = base.join(
             canister
                 .wasm
@@ -69,7 +81,25 @@ pub fn build_app(
         if !outputs.insert(destination) {
             return Err(Error::Invalid("app build outputs must be distinct".into()));
         }
+        if recipe.client.is_some()
+            && !outputs.insert(
+                crate::output_path::resolve(
+                    &crate::application::codec::output(&output),
+                    &working_directory,
+                )
+                .map_err(supplier)?,
+            )
+        {
+            return Err(Error::Invalid("app build outputs must be distinct".into()));
+        }
         recipes.push((name, recipe, manifest, output));
+    }
+    // Check the complete app, including recipes not selected for this build.
+    // Missing lockfiles are inputs too: Cargo may create them below.
+    if outputs.iter().any(|output| inputs.contains(output)) {
+        return Err(Error::Invalid(
+            "app build output would replace its config, workspace manifest or Cargo.lock".into(),
+        ));
     }
     let mut built = Vec::new();
     for (name, recipe, manifest, output) in recipes {
@@ -96,11 +126,79 @@ pub fn build_app(
             .map_err(crate::artifact::cargo_failure)?;
         }
         let wasm = crate::artifact::build(&manifest, &recipe.package, &[], Some(&output))?;
+        let client = recipe
+            .client
+            .as_ref()
+            .map(|client| {
+                build_client(
+                    &manifest,
+                    &recipe.package,
+                    client,
+                    &crate::application::codec::output(&wasm),
+                )
+            })
+            .transpose()?;
         built.push(BuiltCanister {
             canister: name.clone(),
             artifact: crate::inspect(&wasm)?,
             wasm,
+            client,
         });
     }
     Ok(built)
+}
+
+fn build_client(
+    manifest: &Path,
+    package: &str,
+    client: &str,
+    destination: &Path,
+) -> Result<PathBuf> {
+    let output = crate::process::capture(
+        Command::new("cargo")
+            .current_dir(
+                manifest
+                    .parent()
+                    .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?,
+            )
+            .args([
+                "build",
+                "--locked",
+                "--release",
+                "--message-format=json-render-diagnostics",
+                "--manifest-path",
+            ])
+            .arg(manifest)
+            .args(["--package", package, "--bin", client]),
+        8 * 1024 * 1024,
+        1024 * 1024,
+        Duration::from_secs(600),
+    )
+    .map_err(crate::artifact::cargo_failure)?;
+    let mut executable = None;
+    for line in output
+        .split(|b| *b == b'\n')
+        .filter(|line| !line.is_empty())
+    {
+        let value: serde_json::Value = serde_json::from_slice(line).map_err(supplier)?;
+        if value["reason"] == "compiler-artifact"
+            && value["target"]["name"] == client
+            && value["target"]["kind"] == serde_json::json!(["bin"])
+            && let Some(path) = value["executable"].as_str()
+            && executable.replace(PathBuf::from(path)).is_some()
+        {
+            return Err(Error::Invalid("ambiguous app command executable".into()));
+        }
+    }
+    let executable = executable
+        .ok_or_else(|| Error::Invalid("Cargo produced no app command executable".into()))?;
+    let bytes = crate::store::read(&executable, 64 * 1024 * 1024)?;
+    crate::output_publication::publish(
+        destination,
+        &bytes,
+        ic_host_fs::Destination::Replace,
+        0o700,
+        0o700,
+    )?;
+    Ok(destination.into())
 }

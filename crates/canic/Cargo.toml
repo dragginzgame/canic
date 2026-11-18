@@ -16,7 +16,10 @@ auth-enrollment = ["auth", "dep:ic-auth", "dep:ic-platform-protocol", "dep:sha2"
 blob = ["dep:ic-blob-storage", "dep:ic-platform-runtime"]
 db = ["dep:ic-platform-runtime"]
 db-schema = ["db", "dep:ic-db"]
+greeting = ["dep:ic-platform-runtime"]
 metrics = ["dep:ic-platform-runtime"]
+readiness = ["dep:ic-platform-runtime"]
+storage = ["dep:ic-storage"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ic-platform-protocol = { workspace = true, optional = true, features = ["raw-rand"] }
@@ -28,6 +31,7 @@ ic-auth-protocol-types = { workspace = true, optional = true }
 ic-auth-wire = { workspace = true, optional = true }
 ic-blob-storage = { workspace = true, optional = true }
 ic-db = { workspace = true, optional = true }
+ic-storage = { workspace = true, optional = true }
 ic-wire.workspace = true
 serde.workspace = true
 sha2 = { workspace = true, optional = true }

@@ -47,7 +47,7 @@ async fn finish(root: &Client<'_>, approval: &wire::Approval, wasm: &[u8]) -> wi
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn root_migrates_issued_store_install_without_renewing_or_repeating_it() {
+async fn refused_root_upgrade_preserves_the_original_issued_store_install() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
@@ -70,10 +70,8 @@ async fn root_migrates_issued_store_install_without_renewing_or_repeating_it() {
     let issued = first::advance(&root, &approval).await;
     assert_eq!(issued.phase, wire::Phase::InstallIssued);
     assert!(issued.installation.as_ref().unwrap().request.is_some());
-    maintain(&root).await;
-    let retained = history(&root).await;
-    assert_eq!(retained.current.store_operation, Some(issued.clone()));
-    assert!(retained.store_history.is_empty());
+    super::refuse_old_backing(&root).await;
+    assert_eq!(first::observe(&root).await, issued);
     let ready = finish(&root, &approval, &wasm).await;
     assert_eq!(ready.approval, issued.approval);
     assert_eq!(
@@ -93,12 +91,12 @@ async fn root_migrates_issued_store_install_without_renewing_or_repeating_it() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn root_retains_store_successors_across_migration_and_refuses_stale_authority() {
+async fn root_retains_store_successors_across_upgrade_and_refuses_stale_authority() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
     let predecessor = include_bytes!("../../fixtures/root-store-single-maintenance.wasm");
-    let (root, supplier) = readiness_tests::fixture_with_root(pic, predecessor.to_vec()).await;
+    let (root, supplier) = readiness_tests::fixture(pic).await;
     let original = std::fs::read(artifacts().join("original.wasm")).unwrap();
     let candidate = std::fs::read(artifacts().join("candidate.wasm")).unwrap();
     let manifest = supplier.publish_bytes("retained", b"\0asm\x01\0\0\0").await;

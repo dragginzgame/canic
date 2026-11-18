@@ -2,6 +2,14 @@
 
 Edit `starter-app/src/lib.rs` to change the greeting. Root and Wasm Store are supplied by Canic.
 
+`starter-app/src/actor.rs` explicitly mounts the fixed Canic greeting adapter.
+Application handlers stay in the app; no endpoint codec boilerplate is generated.
+Mounting adds no storage, timers or management authority.
+The actor also mounts the replicated `readiness` observation. Its application
+handler reports `Ready` for this stateless greeting. Stateful applications must
+report their own prerequisites and fences; observing readiness never activates
+them. Fresh Root calls this readiness contract and accepts only `Ready`.
+
 ```text
 Root
 ├─ Wasm Store
@@ -13,17 +21,20 @@ The operator is Root's external controller, outside this canister tree.
 ## Build
 
 From this directory, build and install the CLI from the selected Canic checkout,
-then build all three canisters. The first build prepares a missing Cargo.lock; later builds preserve it. `make canic` makes the `canic`
+then build the stateless application. The first build prepares a missing Cargo.lock; later builds preserve it. `make canic` makes the `canic`
 command available on PATH:
 
 ```sh
 make -C {source} canic
-canic app build
+canic app build --canister app
 canic app canister list
 ```
 
+Fresh Root builds on Storage 0.78.0. Existing allocator images and journal-schema-1
+greeting Roots require their old executable; this is not an automatic migration.
+
 The dependency uses your selected local Canic checkout. If it moves, update
-Cargo.toml and the Root/Store build manifests in canic.json. No crates.io Canic package is selected.
+Cargo.toml and the Root/Store build manifests in canic.toml. No crates.io Canic package is selected.
 
 ## Deploy through Root
 
@@ -58,7 +69,6 @@ and, once ready, a verified completion receipt:
 ```sh
 canic fleet apply OPERATION --identity canic-mainnet
 canic fleet show
-canic fleet call OPERATION --name team
 ```
 
 To follow progress before retaining completion, use `canic fleet show`; it
@@ -107,9 +117,9 @@ eight serial child upgrades. A successor requires verified successful completion
 failed, expired or uncertain work stays blocked. Full history cannot be reset.
 Rebuild and repeat the same plan/apply flow for the next change. Root maintenance
 requires both executables to support the full custody observation contract;
-older Roots are refused before installation. Adoption of previously deployed
-fleets is not implemented. Root checks this application's greeting `probe`
-contract; changing the greeting text is supported, replacing that protocol is not.
+incompatible storage/readiness generations refuse during strict reopening. Adoption of previously deployed
+fleets is not implemented. Root checks this application's explicit `readiness`
+contract. Applications own its state; successful installation alone is not readiness.
 The greeting is stateless; application data preservation requires its own
 lifecycle and qualification.
 
@@ -126,7 +136,7 @@ Cancellation is allowed only before effect preparation. It retains the old appro
 and permanently prevents applying it. Once preparation starts, preserve and resume
 the same operation; expiry is not proof that nothing happened.
 
-Back up canic.json and the entire hidden .canic directory together. The journal is
+Back up canic.toml and the entire hidden .canic directory together. The journal is
 ignored by Git and contains irreplaceable signed attempts and result evidence.
 Keep the signer identity separately through ICP's identity storage. Source and
 Cargo.lock are needed to reproduce and upgrade the app. target/ and artifacts/

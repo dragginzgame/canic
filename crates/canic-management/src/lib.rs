@@ -1,6 +1,8 @@
 //! Bounded two-child management engine. Canisters own endpoints and lifecycle composition.
 //! Host consumers use canic-management-protocol without this runtime.
 
+#[cfg(all(feature = "backup", any(target_arch = "wasm32", test)))]
+pub mod backup;
 #[cfg(target_arch = "wasm32")]
 pub mod endpoint;
 #[cfg(target_arch = "wasm32")]

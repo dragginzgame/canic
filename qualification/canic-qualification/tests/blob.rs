@@ -178,15 +178,10 @@ impl Client<'_> {
         .map_err(|e| e.to_string())
     }
     async fn ready(&self) -> bool {
-        self.pic
-            .query_call(
-                self.canister,
-                actor(8),
-                "probe",
-                frame(canic::GREET, &"Root"),
-            )
-            .await
-            .is_ok()
+        let state: canic::readiness::State = self
+            .update(actor(8), "readiness", canic::readiness::METHOD, &())
+            .await;
+        state == canic::readiness::State::Ready
     }
 }
 async fn install(pic: &PocketIc) -> Client<'_> {
@@ -211,7 +206,7 @@ async fn install_bytes(pic: &PocketIc, wasm: Vec<u8>) -> Client<'_> {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn registry_blob_reopens_populated_predecessor_without_reinitialization() {
+async fn registry_blob_refuses_incompatible_populated_predecessor() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
@@ -230,20 +225,35 @@ async fn registry_blob_reopens_populated_predecessor_without_reinitialization() 
     client.remove(actor(1), 1).await.unwrap();
     let retained = client.management().await;
     let bob = client.asset(actor(2), 2).await.unwrap();
+    let previous = pic.get_stable_memory(client.canister).await;
     client
         .upgrade("candidate.wasm", frame(app::UPGRADE, &()))
         .await
-        .unwrap();
+        .expect_err("incompatible directory must refuse upgrade");
+    assert_eq!(pic.get_stable_memory(client.canister).await, previous);
+    let backing = ic_storage::VectorMemory::new(std::cell::RefCell::new(previous));
+    assert!(matches!(
+        ic_storage::MemoryRuntime::new(backing),
+        Err(ic_storage::RuntimeConstructionError::Directory(
+            ic_storage::DirectoryError::Invalid("root marker or reserved bytes")
+        ))
+    ));
     assert_eq!(client.management().await, retained);
     assert_eq!(client.asset(actor(2), 2).await.unwrap(), bob);
-    assert!(!client.ready().await);
+    assert_eq!(
+        client.authorize(actor(1), &client.draft(3).await).await,
+        Err(app::Error::Blob(BlobError::Maintenance))
+    );
     client
         .command(actor(8), Command::Activate(1))
         .await
         .unwrap();
-    assert!(client.ready().await);
     assert_eq!(client.asset(actor(2), 2).await.unwrap(), bob);
     assert_eq!(client.publish(actor(1), 1).await, Err(app::Error::Released));
+    client
+        .authorize(actor(1), &client.draft(3).await)
+        .await
+        .unwrap();
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

@@ -15,13 +15,13 @@ pub(crate) const MAX_WASM: usize = 1_900_000;
 pub(crate) const MAX_ARTIFACT_BYTES: usize =
     ic_wasm_store_protocol::CHUNK_BYTES * ic_wasm_store_protocol::MAX_CHUNKS;
 
-/// Identity of the exact uncompressed Wasm bytes selected for installation.
+/// Exact byte identity: Wasm for deployment, request payload for an application call.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct Artifact {
-    /// SHA-256 of the complete module.
+    /// SHA-256 of the complete payload.
     pub sha256: String,
-    /// Complete uncompressed module length.
+    /// Complete payload length.
     pub bytes: usize,
 }
 
@@ -192,6 +192,7 @@ pub fn build(
             &bytes,
             ic_host_fs::Destination::Replace,
             0o700,
+            0o600,
         )?;
         return Ok(output.into());
     }

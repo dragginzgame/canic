@@ -207,7 +207,7 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
         "canisters":{"root":{"role":"root"},"store":{"role":"wasm-store","parent":"root"},"app":{"parent":"root","wasm":wasm}},
         "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":hex(&pic.root_key().await.unwrap()),"root_subnet":pic.topology().await.get_nns().unwrap().to_text(),"routing_canister":root.to_text()},"journal":"journal","canisters":{"root":{"id":root.to_text()},"store":{"id":supplier.to_text()}}}}
     }}});
-    std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+    std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     let root_hash = hex(&store::digest(&root_bytes));
     let store_hash = hex(&store::digest(&store_bytes));
     let original = publication(&dir, "v1", &root_hash, &store_hash);

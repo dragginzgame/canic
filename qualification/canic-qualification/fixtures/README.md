@@ -1,5 +1,19 @@
 # Retained Root executable
 
+## Greeting readiness on Storage records
+
+`root-greeting-records.wasm` is the 1,422,930-byte Root from the 2026-11-17
+records qualification, before the explicit-readiness cutover. SHA-256:
+`0b51b0b4c5f980c9a40d13ac65f6d92f4d1b6b47c211727b6b59eb5ec1aeaa30`.
+It uses Storage 0.76.2 journal schema 1 with the greeting `probe` contract and
+CUJ9/CUA4 payloads. It is a retained pending-build witness, not a tagged release
+or reproducible-build claim. The current schema-2 Root refuses its populated
+state without replacing approvals, code or bytes. No compatibility mode is added.
+
+The older allocator fixtures below retain their historical provenance; current
+records builds refuse those physical images. Historical positive migration
+claims describe the corresponding old release, not support in the current Root.
+
 ## Blob catalog before registry adoption
 
 `blob-catalog-01006.wasm` is the populated-predecessor fixture retained before
@@ -8,8 +22,9 @@ adopting registry Blob 0.101.0. Its 510,340 bytes have SHA-256
 pre-adoption `target/blob/original.json`. It used the qualified Blob 0.100.6 Service
 and its Wire 0.22 persistence codec. This is an exact retained binary, not a tagged
 release or reproducible-build claim. The installed witness populates two owners,
-drains, releases one reference, upgrades to the current registry consumer and
-proves preserved closed admission, remaining ownership and non-resurrecting replay.
+drains and releases one reference before attempting upgrade. The Storage 0.78
+candidate refuses its old directory. The test checks rollback and retains the
+positive upgrade requirement tracked in [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8).
 No old supplier Git fetch or build fallback is introduced.
 
 `root-single-upgrade.wasm` is the retained pre-0.204 experimental greeting Root

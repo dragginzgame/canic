@@ -3,8 +3,11 @@
 #![forbid(unsafe_code)]
 
 mod app_build;
+pub mod application;
 mod artifact;
 mod auth;
+#[cfg(all(unix, feature = "backup"))]
+pub mod backup;
 mod config;
 mod fleet;
 mod fleet_plan;
@@ -50,7 +53,7 @@ pub use fleet_plan::{
     cancel_fleet_plan, plan_fleet,
 };
 pub use managed::{activate, create_managed_plan, stored::StoredArtifact};
-pub use network::{Network, greet};
+pub use network::Network;
 pub use operation::{
     ApplyOutcome, CanisterStatus, ChildOutcome, FleetChildStatus, FleetStatus, FleetStepStatus,
     ManagementStatus, OperationStatus, Receipt, StatusDetail, apply, reconcile, status,

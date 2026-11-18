@@ -1,0 +1,8 @@
+[apps.hello-world.canisters.hello]
+
+[apps.hello-world.fleets.mainnet]
+network = { kind = "Mainnet" }
+journal = ".canic"
+
+[apps.hello-world.fleets.mainnet.canisters.hello]
+id = "z4fqh-uqaaa-aaaan-q6yrq-cai"

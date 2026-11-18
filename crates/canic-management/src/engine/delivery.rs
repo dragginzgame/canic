@@ -16,7 +16,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 pub(super) fn source(slot: ChildId, upgrade: bool) -> Option<stored::Delivery> {
     STATE.with_borrow(|state| {
-        let sources = state.as_ref().expect("open engine").artifact.get().0[&slot].sources()?;
+        let sources = state.as_ref().expect("open engine").artifact.0[&slot].sources()?;
         if upgrade {
             sources.upgrades.last()
         } else {
@@ -31,7 +31,7 @@ pub(super) fn is_stored(slot: ChildId) -> bool {
 fn mutate(slot: ChildId, upgrade: bool, f: impl FnOnce(&mut stored::Delivery)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
-        let mut artifacts = state.artifact.get().clone();
+        let mut artifacts = state.artifact.clone();
         let sources = match artifacts.0.get_mut(&slot).expect("known child") {
             Artifact::Stored(sources) | Artifact::Application(sources, _) => sources,
             Artifact::Inline(_) => panic!("Store source required"),
@@ -41,7 +41,7 @@ fn mutate(slot: ChildId, upgrade: bool, f: impl FnOnce(&mut stored::Delivery)) {
         } else {
             &mut sources.creation
         });
-        state.artifact.set(artifacts);
+        state.set_artifact(artifacts);
     });
 }
 pub(super) fn admit(reference: &stored::Reference, hash: &[u8; 32]) -> Result<(), Refusal> {
@@ -71,10 +71,10 @@ pub(super) fn retained<A: Serialize>(
     }
 }
 pub(super) fn validate(state: &State, slot: ChildId) {
-    let Some(sources) = state.artifact.get().0[&slot].sources() else {
+    let Some(sources) = state.artifact.0[&slot].sources() else {
         return;
     };
-    let journal = &state.journal.get().0[&slot];
+    let journal = &state.journal.0[&slot];
     let creation = journal
         .0
         .approval
@@ -84,7 +84,7 @@ pub(super) fn validate(state: &State, slot: ChildId) {
         approval: creation,
         reference: sources.creation.reference.clone(),
     };
-    let pin = if let Artifact::Application(_, lifecycle) = &state.artifact.get().0[&slot] {
+    let pin = if let Artifact::Application(_, lifecycle) = &state.artifact.0[&slot] {
         #[cfg(not(feature = "blob"))]
         assert!(
             lifecycle.upgrades.is_empty(),
@@ -134,7 +134,7 @@ pub(super) fn validate(state: &State, slot: ChildId) {
             approval: approval.clone(),
             reference: source.reference.clone(),
         };
-        let pin = if let Artifact::Application(_, lifecycle) = &state.artifact.get().0[&slot] {
+        let pin = if let Artifact::Application(_, lifecycle) = &state.artifact.0[&slot] {
             {
                 let maintenance = &lifecycle.upgrades[index];
                 canic_management_protocol::application::Upgrade {
@@ -302,7 +302,7 @@ pub(super) fn upload(slot: ChildId, upgrade: bool, hash: [u8; 32], expires: u64)
         .expect("Store cache request")
     } else {
         let wasm = STATE.with_borrow(|state| {
-            state.as_ref().expect("open engine").artifact.get().0[&slot]
+            state.as_ref().expect("open engine").artifact.0[&slot]
                 .wasm(upgrade)
                 .to_vec()
         });

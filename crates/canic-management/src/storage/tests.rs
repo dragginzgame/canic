@@ -1,9 +1,6 @@
 //! Exercise the actual persistent codecs, including their untrusted record boundaries.
 use super::*;
-use ic_storage::{
-    AllocationGrants, GenericAllocationPolicy, MemoryAuthority, MemoryRequest, MemoryRuntime,
-    SealedDeclarationSnapshot, StableKey, StorageConfig, VectorMemory, adapter::StableCell,
-};
+use ic_storage::VectorMemory;
 
 fn encoded(tag: &[u8], value: &impl Serialize, limits: ic_wire::Limits) -> Vec<u8> {
     let mut bytes = tag.to_vec();
@@ -59,10 +56,10 @@ fn positional_journals_migrate_to_identified_records_without_reassignment() {
         ),
         JOURNAL_LIMITS,
     );
-    let loaded = Journals::from_bytes(Cow::Owned(bytes)).unwrap();
+    let loaded = Journals::from_bytes(&bytes).unwrap();
     let bytes = loaded.to_bytes().unwrap();
     assert!(bytes.starts_with(b"CUJ9"));
-    let reopened = Journals::from_bytes(bytes).unwrap();
+    let reopened = Journals::from_bytes(&bytes).unwrap();
     for slot in ChildId::ALL {
         assert_eq!(reopened.0[&slot].0, previous[slot.index()].0);
     }
@@ -91,7 +88,7 @@ fn identified_journal_refuses_missing_duplicate_reordered_and_unknown_ids() {
             ),
             JOURNAL_LIMITS,
         );
-        assert!(Journals::from_bytes(Cow::Owned(bytes)).is_err());
+        assert!(Journals::from_bytes(&bytes).is_err());
     }
     let journal = Journal(
         Default::default(),
@@ -120,7 +117,7 @@ fn identified_journal_refuses_missing_duplicate_reordered_and_unknown_ids() {
                 JOURNAL_LIMITS,
             )
         };
-        assert!(Journals::from_bytes(Cow::Owned(bytes)).is_err());
+        assert!(Journals::from_bytes(&bytes).is_err());
     }
 }
 
@@ -177,24 +174,8 @@ fn artifact_collection_refuses_partial_ambiguous_and_truncated_records() {
     assert!(Artifacts::from_bytes(Cow::Owned(trailing)).is_err());
 }
 
-// Frozen opaque CUA3 input is written through the same governed Cell contract.
-// It grants no production raw-backing path and cannot encode newer records.
-struct PreviousArtifacts(Vec<u8>);
-impl Storable for PreviousArtifacts {
-    const BOUND: Bound = Bound::Bounded {
-        max_size: (2 * MAX_WASM + 24) as u32,
-        is_fixed_size: false,
-    };
-    fn to_bytes(&self) -> Result<Cow<'_, [u8]>, CodecError> {
-        Ok(Cow::Borrowed(&self.0))
-    }
-    fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, CodecError> {
-        Ok(Self(bytes.into_owned()))
-    }
-}
-
 #[test]
-fn full_mixed_predecessor_migrates_without_growing_either_checked_allocation() {
+fn logical_predecessor_payload_reopens_without_growing_records() {
     use canic_management_protocol::stored;
     let sources = stored::Sources {
         creation: stored::Delivery {
@@ -218,7 +199,7 @@ fn full_mixed_predecessor_migrates_without_growing_either_checked_allocation() {
     };
     let second = Artifact::Stored(sources.clone());
     assert_application_artifact_codec(&sources);
-    let original_ceiling = 2 * MAX_WASM - ic_storage::STABLE_CELL_HEADER_SIZE;
+    let original_ceiling = 2 * MAX_WASM - 24;
     let inline_bytes = original_ceiling - 8 - 8 - previous_artifact(&second).len();
     assert!(inline_bytes <= canic_management_protocol::children::MAX_ARTIFACT_BYTES);
     let first = Artifact::Inline(Inline(
@@ -228,72 +209,28 @@ fn full_mixed_predecessor_migrates_without_growing_either_checked_allocation() {
     let old = positional_artifacts(&first, &second);
     assert_eq!(old.len(), original_ceiling);
 
-    let mut runtime = MemoryRuntime::new_with_config(
-        VectorMemory::default(),
-        StorageConfig {
-            allocations: 2,
-            extents: 3,
-            pages: 64,
-        },
-    )
-    .unwrap();
-    runtime
-        .bootstrap(
-            &SealedDeclarationSnapshot::new(vec![
-                MemoryRequest::new("manager", "manager.journal.v1").unwrap(),
-                MemoryRequest::new("manager", "manager.artifact.v1").unwrap(),
-            ])
-            .unwrap(),
-            &AllocationGrants::new(vec![MemoryAuthority::new("manager", "manager.").unwrap()])
-                .unwrap(),
-            &GenericAllocationPolicy,
-        )
-        .unwrap();
-    let journal = StableCell::create(
-        runtime
-            .open_memory(&StableKey::parse("manager.journal.v1").unwrap())
-            .unwrap(),
-        Journals::default(),
-    )
-    .unwrap();
-    let key = StableKey::parse("manager.artifact.v1").unwrap();
-    let previous =
-        StableCell::create(runtime.open_memory(&key).unwrap(), PreviousArtifacts(old)).unwrap();
-    let before = runtime.diagnostics().unwrap();
-    drop(previous);
-    let mut migrated: StableCell<Artifacts> =
-        StableCell::load(runtime.open_memory(&key).unwrap(), ARTIFACT_BYTES).unwrap();
-    assert!(migrated.get().to_bytes().unwrap().len() < original_ceiling);
-    migrated.set(migrated.get().clone());
-    assert_eq!(runtime.diagnostics().unwrap(), before);
-    drop(migrated);
-    let reopened: StableCell<Artifacts> =
-        StableCell::load(runtime.open_memory(&key).unwrap(), ARTIFACT_BYTES).unwrap();
-    assert_eq!(
-        reopened.get().0[&ChildId::FIRST].wasm(false),
-        first.wasm(false)
-    );
-    assert_eq!(
-        reopened.get().0[&ChildId::FIRST].wasm(true),
-        first.wasm(true)
-    );
-    assert_eq!(reopened.get().0[&ChildId::SECOND].sources(), Some(&sources));
-    let overflow = original_ceiling - reopened.get().to_bytes().unwrap().len() + 1;
-    let mut too_large = reopened.get().clone();
+    let backing = VectorMemory::default();
+    let runtime = canic::storage::bootstrap(backing.clone(), true, "manager", KEYS, 512);
+    let mut cell = canic::storage::cell(&runtime, ARTIFACT_KEY, ARTIFACT_BYTES, Some(old));
+    let migrated = Artifacts::from_bytes(cell.get().as_slice().into()).unwrap();
+    assert!(migrated.to_bytes().unwrap().len() < original_ceiling);
+    cell.set(migrated.to_bytes().unwrap().into_owned());
+    drop(cell);
+    drop(runtime);
+    let runtime = canic::storage::bootstrap(backing, false, "manager", KEYS, 512);
+    let cell = canic::storage::cell(&runtime, ARTIFACT_KEY, ARTIFACT_BYTES, None);
+    let reopened = Artifacts::from_bytes(cell.get().as_slice().into()).unwrap();
+    assert_eq!(reopened.0[&ChildId::FIRST].wasm(false), first.wasm(false));
+    assert_eq!(reopened.0[&ChildId::FIRST].wasm(true), first.wasm(true));
+    assert_eq!(reopened.0[&ChildId::SECOND].sources(), Some(&sources));
+    let overflow = original_ceiling - reopened.to_bytes().unwrap().len() + 1;
+    let mut too_large = reopened;
     let Artifact::Inline(value) = too_large.0.get_mut(&ChildId::FIRST).unwrap() else {
         panic!()
     };
     value.1.extend(vec![254; overflow]);
-    assert!(!too_large.fits(), "refuse before a Cell growth attempt");
+    assert!(!too_large.fits(), "refuse before a persistent write");
     assert!(too_large.to_bytes().is_err());
-    assert_eq!(runtime.diagnostics().unwrap(), before);
-    assert!(
-        journal
-            .get()
-            .0
-            .values()
-            .all(|entry| entry.0.approval.is_none())
-    );
 }
 
 fn assert_application_artifact_codec(sources: &canic_management_protocol::stored::Sources) {
@@ -364,15 +301,15 @@ fn scan_contract_requires_its_journal_version_and_survives_reopen() {
     };
     let mut journals = Journals(Journals::default().0, Some(record), vec![]);
     let bytes = journals.to_bytes().unwrap().into_owned();
-    let loaded = Journals::from_bytes(Cow::Borrowed(&bytes)).unwrap();
+    let loaded = Journals::from_bytes(&bytes).unwrap();
     assert_eq!(loaded.1, journals.1);
     let mut mislabeled = bytes;
     mislabeled[..4].copy_from_slice(b"CUJ8");
-    assert!(Journals::from_bytes(Cow::Owned(mislabeled)).is_err());
+    assert!(Journals::from_bytes(&mislabeled).is_err());
     journals.1.as_mut().unwrap().preservation = Scan::Legacy(None);
     let mut historical = journals.to_bytes().unwrap().into_owned();
     historical[..4].copy_from_slice(b"CUJ8");
-    let loaded = Journals::from_bytes(Cow::Owned(historical)).unwrap();
+    let loaded = Journals::from_bytes(&historical).unwrap();
     assert_eq!(loaded.1, journals.1);
     assert!(loaded.to_bytes().unwrap().starts_with(b"CUJ9"));
 }

@@ -16,6 +16,10 @@ pub fn admit(limit: usize, private: bool) -> Result<(), String> {
     if private && !runtime::system::is_controller(&runtime::system::caller()) {
         return Err("controller required".into());
     }
+    #[cfg(feature = "backup")]
+    if private && crate::backup::occupied() {
+        return Err("snapshot custody fences ordinary management".into());
+    }
     if ic_platform_runtime::system::argument_size() > limit {
         return Err("growth frame too large".into());
     }

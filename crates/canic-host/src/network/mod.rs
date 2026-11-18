@@ -152,36 +152,6 @@ where
         .map_err(supplier)
 }
 
-/// Call the demo greeting as a read-only, uncertified query.
-///
-/// # Errors
-/// Refuses oversized names, transport failures and responses outside the shared Wire contract.
-pub async fn greet(network: &Network, canister: &str, name: &str) -> Result<canic::Greeting> {
-    if name.len() > canic::MAX_NAME_BYTES {
-        return Err(Error::Invalid("name exceeds 128 UTF-8 bytes".into()));
-    }
-    let bytes = ic_wire::encode(
-        &name,
-        ic_wire::Encoding::Frame {
-            method: canic::GREET,
-            direction: ic_wire::Direction::Request,
-        },
-        canic::LIMITS,
-    )
-    .map_err(supplier)?;
-    let client = network.client()?;
-    let reply = query(&client, principal(canister)?, "greet", &bytes).await?;
-    ic_wire::decode(
-        &reply,
-        ic_wire::Encoding::Frame {
-            method: canic::GREET,
-            direction: ic_wire::Direction::Response,
-        },
-        canic::LIMITS,
-    )
-    .map_err(supplier)
-}
-
 /// Certified subnet identity shared by bootstrap and artifact-delivery admission.
 pub(crate) async fn subnet(client: &ReadClient, canister: &str) -> Result<Principal> {
     let (expiry, time) = context()?;

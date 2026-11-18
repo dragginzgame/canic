@@ -74,7 +74,8 @@ or require replacing the existing mainnet demos before their successor qualifies
   canister changes use the same owners and evidence.
 - Preserve cascading discovery and make scaling and sharding optional composable
   building blocks. No particular growth workload is selected yet; the existing
-  profile consumer supplies the first bounded extension, not a Toko port.
+  profile fixture retains earlier bounded-growth evidence; the selected hands-on
+  consumer is now the demo counter, not a Toko port.
 - Treat a subtree as an operational scope: it could represent an entire project.
   Support reviewed inspection, drain/suspend/resume and persistent upgrade journeys
   without affecting siblings outside that scope. This does not add a new App/Fleet
@@ -253,20 +254,61 @@ roles. Root and Wasm Store remain separate deployed owners; optional coordinatio
 does not turn application canisters into a prescribed Canic base class. Managed
 operations still require the explicit readiness and preservation contracts below.
 
-The experimental `canic-root` now qualifies one or two direct greeting children locally,
+The experimental `canic-root` now qualifies one or two direct application children locally,
 using the same bounded management engine as the profile manager. Its controller
 is the external operator; its created application's sole controller is Root.
 Lifecycle mounting and application readiness remain explicit in each canister.
-The supplied Root currently admits the greeting `probe` contract; the profile
-manager separately admits profile readiness. This is not a general application
-readiness interface. The profile manager explicitly mounts the same Store
+The supplied fresh Root admits the explicit `readiness` contract below; the profile
+fixture manager separately admits profile readiness. The profile manager explicitly mounts the same Store
 protocols and qualifies a Store-backed profile worker with its existing readiness
-decoder. Publication, worker/Store/owner upgrades preserve the worker's private
-user state and retained artifact custody. The greeting Root's contract is unchanged.
+decoder. Publication, worker/Store/owner upgrades historically preserved the worker's private
+user state and retained artifact custody on their qualified supplier inputs.
 Further consumers must qualify their application-owned readiness contract with
 the selected owner, including preservation for retained work. Do not substitute a
 successful install, accept an undecoded reply or impersonate the greeting protocol
 to bypass this boundary.
+
+The maintainer selected an explicit readiness response for the next counter
+consumer: `Unavailable` when application prerequisites are not established,
+`Fenced` when state is open but writes remain closed, and `Ready` when the
+application admits normal writes. The application owns that decision. Canic's
+optional mount exposes a bounded replicated observation and never initializes,
+repairs or activates the application. This is a point-in-time report, not a
+readiness lease, recovery permission or proof of a particular schema/generation.
+The management owner must still bind its observation to the approved executable
+and target. The selected cutover uses fresh journal schema 2, refusing old
+allocator images and schema-1 records approved under greeting readiness. No
+feature switch, endpoint fallback or reinterpreted historical completion is added.
+The application may keep its independent greeting endpoint; Root calls only
+`readiness` and accepts only a strictly decoded `Ready` response.
+
+The demo counter allows public increments; capture, restore and reopening
+remain explicitly operator-controlled. Both greeting and counter actors use the
+readiness mount. The counter's local installed persistence and fencing rehearsal
+uses published Storage 0.78.0. The installed fleet CLI now qualifies Root/Store
+creation, value-preserving upgrade and fenced readiness refusal for the counter.
+No new lifecycle engine is required.
+
+The counter stores one bounded 256-byte payload in a named stable cell. Its actual nonanonymous installation caller is the immutable
+maintenance authority (Root in the managed witness). Public increment
+uses checked u64 arithmetic. Fence/activation requests name monotonic nonzero
+attempts; only the retained authority may close or reopen writes, and an older
+activation cannot reopen a newer fence. A compatible upgrade reopens that exact
+record without changing admission. This application-local fence is not a backup
+rollback defense by itself: checkpoint recovery still requires the surviving
+control-plane evidence in §13. The first installed counter rehearsal uses direct
+local control; the subsequent fleet witness qualifies Root's readiness contract
+with Store-backed artifacts. Neither qualifies Backup integration or grants a
+Root endpoint for arbitrary application calls/fencing/activation.
+
+Fresh Root grants management two named cells, `manager.journal.v2` and
+`manager.artifacts.v1`. The optional Backup composition also grants
+`manager.snapshot.v1`. Reopen requires the exact selected membership. Keep the
+existing payload versions and semantic validation; the physical backing is a
+hard cut, not an importer for 0.74 leases. Known old payload decoders remain
+codec compatibility evidence, not proof of physical-image migration. Commit
+encoded records synchronously at existing mutation sites, before dispatch or
+callback completion, and trap on failure; no pre-upgrade flush is introduced.
 The CLI now generates a standalone greeting workspace whose artifact passes that
 same installed qualification. Managed-child CLI plan/apply now pins Root code,
 retains exact admission attempts and recovers completion through replicated
@@ -295,6 +337,23 @@ custody requires the qualified transition below, not an automatic migration.
 ### Repository and workspace boundary
 
 Keep Canic's CLI, Host, management contracts and runtime orchestration in one product workspace. CLI depends on Host, Host depends on passive Contracts, and the application runtime depends on Contracts and selected suppliers. Host communicates with deployed roles through contracts without depending on their runtime implementations. Add role crates when the topology requires separately compiled artifacts, and adapter crates with their first complete consumer journey.
+
+For consumer applications, prefer thin canister hosts under
+`apps/<app>/<crate>/` backed by an application library under `crates/<app>/`.
+For example, Toko's `apps/toko/<hub-crate>/` and `apps/toko/<shard-crate>/`
+depend on `crates/toko` (`crates/toko/src/lib.rs`); the hosts do not depend on
+one another. Package directories match their Cargo package names. One root
+workspace and lockfile build these packages, while `apps/toko/canic.toml`
+declares the reusable app and its optional fleets.
+
+The library owns application records, authorization policy and synchronous domain
+operations. Each host owns explicit lifecycle composition, captured ingress
+context, endpoint mounts and outbound calls. Sharing a library does not imply
+shared memory, a shared canister or permission to call another role. Select the
+library modules and supplier features each host actually needs. Root and Wasm
+Store remain supplied infrastructure; applications do not copy their implementations.
+This layout is a recommended composition, not another scaffold generator or a
+requirement to split a small single-purpose actor into extra packages.
 
 Platform replacement adoption is a cohort migration, not a version-only update.
 Canic 0.218 introduced Runtime 0.23.14 and Timers 0.46.0 with one exact executor
@@ -398,6 +457,36 @@ Contracts are organized by the protocol a consumer actually speaks. A runtime co
 
 ## 5 Configuration and operator experience
 
+### Source format decision — 2026-11-17
+
+The maintainer selected `canic.toml` as the single source configuration format.
+The smaller rewrite schema does not justify replacing working legacy TOML with
+JSON. Preserve the current App → Fleets → Canisters model, fleetless builds,
+relative paths and existing journal bindings. CLI additions preserve comments
+and existing values using a TOML document editor under the existing sidecar lock
+and atomic publication owner. TOML rejects duplicate keys/tables; unknown fields
+and the 32 KiB source limit remain enforced. No JSON fallback or format selector
+is provided. Journals, signed attempts, approval digests and structured CLI output
+retain their existing JSON codecs.
+
+Legacy review: `canic-legacy` revision
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`, `CONFIG.md`,
+`crates/canic-host/src/config_discovery/{mod.rs,tests.rs}` and
+`crates/canic-host/src/release_set/config/{tests.rs,mutation/}` establish TOML
+source input, bounded discovery, duplicate identity refusal and validation before
+writing. The mutation history includes `0940d5223cf6a0ddc4ded8ff66e6eeea41d49b45`
+(0.112.0) and `afc2521ed02744c1e1a376d59dae5e2b80d9dec5` (0.111 hard cut);
+TOML remained the source contract through these application-model changes.
+Retain the rewrite's smaller discovery scope and typed validation; use the
+supplier's syntax-aware editing rather than legacy line-oriented mutation.
+Regression coverage preserves malformed-input refusal, existing-source integrity,
+duplicate identities, symlink exclusion and unchanged retained authority.
+
+Repository declarations are converted in place beside their former JSON files,
+then the JSON source files are removed. Other workspaces must convert their
+source declarations before using the new CLI; changing only the suffix is not
+conversion. No deployment state or canister migration is involved.
+
 Separate three categories of input by writer; this does not require three files or a large configuration language:
 
 - Application specification: component artifacts, logical dependencies, permitted children, service contracts and optional participants.
@@ -422,14 +511,22 @@ definitions are reusable types, not a permanent promise of one canister each.
 The current named-definition projection remains a bounded implementation; instance
 allocation and deployment topology require their own consumer decisions.
 
-The Toko new-v1 increment admits only its existing workspace shell as one buildable
-component (`apps/toko`, Cargo package `toko-app`). Config initialization preserves
-workspace manifests and application source. Explicit `--source` remains the
-separate greeting-demo generator, not required application scaffolding. Supplied
-Root and Store implementations stay with their owners; this increment neither
-adds them to Toko nor admits a deployment. Greeting/probe success cannot establish
-database/schema admission or authenticated application readiness. Those contracts
-remain deferred until the actual Toko deployment step.
+Toko's current rewrite has replaced its greeting shell with the application library
+at `crates/toko`; `apps/toko` contains the fleetless configuration and planned thin
+hub/shard host boundaries. The inspected `toko-new` checkout has no deployable host
+packages or build recipes yet. Config initialization preserves workspace manifests
+and application source. Explicit `--source` remains the separate greeting-demo
+generator, not required application scaffolding. Supplied Root and Store stay
+with their owners. [Canic #19](https://github.com/dragginzgame/canic/issues/19)
+owns the missing generic shard allocation/lookup contract;
+[Canic #20](https://github.com/dragginzgame/canic/issues/20) tracks DB-backed upgrade preservation under the revised Storage contract in §13. Neither library tests nor greeting/probe success establish
+installed database/schema admission or authenticated application readiness.
+
+App build validates all declared output destinations before invoking Cargo,
+including when only one recipe is selected. Outputs cannot overlap the app's
+config, any declared workspace manifest or its existing/future Cargo lockfile.
+This path comparison is preflight validation, not filesystem confinement against
+concurrent changes; publication retains the filesystem supplier's own checks.
 
 The compiler validates the explicit deployment graph, normalizes sets and produces typed desired state. Service selections have one source of truth; any features or capability descriptions are derived from it. Group expansion is added only if reusable groups are selected. Unknown keys, impossible combinations, unavailable services, contradictory placement and unbounded effects are errors before network mutation. Static policy and mutable deployment policy each have one owner; any override must be explicitly modeled as a narrowing operation.
 
@@ -450,7 +547,7 @@ An existing shared journal may remain in place, but observations and operation
 selection must distinguish its fleets by exact retained names or known target
 and network evidence. Unassigned uncertain records remain visible as such.
 
-Reject ambiguous selections, duplicate JSON names, conflicting physical
+Reject ambiguous selections, duplicate configuration names, conflicting physical
 membership and upgrades outside the selected fleet before retaining a new plan.
 Approval still binds the exact network, target, artifact, controller and budget;
 mutable config cannot change those inputs during apply or recovery. These local
@@ -498,7 +595,7 @@ deployment; a selector may be omitted only when its choice is unique. See the
 | Review and execute a starter fleet or one deployment | `canic fleet plan --controller PRINCIPAL` selects fleet creation, publication or the next installation approval; `--canister SLOT` selects one deployment; `canic fleet apply DIGEST` resumes that exact approval |
 | Investigate or continue the original operation | `canic fleet status DIGEST`, `canic fleet apply DIGEST` |
 | Observe | `canic fleet show`, `canic fleet show --watch`, `canic fleet view REPORT` |
-| Exercise the greeting or inspect the wallet | `canic fleet call DIGEST`, `canic wallet PRINCIPAL` |
+| Call the application or inspect the wallet | `canic fleet call --canister SLOT --identity USER COMMAND`, `canic wallet PRINCIPAL` |
 
 Only structured output (`--json`) is global. App/fleet selection and journal
 arguments belong to deployment actions, not artifact inspection, saved-report
@@ -514,9 +611,26 @@ expiry. Existing single-canister planning remains explicit: a configured creatio
 names an unbound slot, while an upgrade
 names an admitted principal and its previous module hash. Named creation uses the
 app-defined Wasm input when present and refuses a competing CLI override; otherwise
-an explicit `--wasm` remains required. `fleet call` currently
-exercises the hello demo by its completed operation digest; it does not promise a
-generic application call interface. See the [command contexts](../../README.md#command-contexts).
+an explicit `--wasm` remains required. `fleet call` uses the app's optional native
+`build.client` codec, built beside its Wasm by `app build`. The app interprets
+command names and owns Wire request/reply budgets; Canic admits bounded codec
+output, resolves the exact slot identity and signs directly as the selected user.
+Neither Root nor controller membership supplies application permission. The first
+consumer is the counter's replicated `read` and `increment` commands; generic
+schema interpretation, query modes and management proxies are not admitted.
+
+Calls use `PlanAction::Call` (record version 7) and the same journal lock and
+signed-attempt owner. The historical `controller` field binds the ingress signer,
+not an authority claim; `artifact` binds the exact retained `request.bin` bytes,
+not a Wasm copy. Preview and result name the retained digest. A call is dispatched
+once, after signed bytes commit. Subsequent `apply`/`reconcile` observe only the
+original signed request and deadline; expiry stays blocked. An unresolved call
+blocks a new call by that signer to that target on that network. Replies commit
+before the app decoder runs; decoding failure cannot repeat the update. Recovery
+returns original raw reply bytes without requiring the current app codec. Calls
+grant no funding, installation, slot reservation or deployment completion authority.
+See the [demo command boundary](../demos/demo.md#accepted-application-command-boundary)
+and [command contexts](../../README.md#command-contexts).
 
 Wider admission, funding, capacity, restore and integration commands have no
 reserved spelling or implementation backlog merely because their responsibilities
@@ -699,6 +813,44 @@ handle concurrent completions, while replay of an existing key keeps its origina
 assignment even when the shard is full. Allocation reuse and data movement remain
 separate, explicitly qualified operations.
 
+### Toko shard consumer review
+
+[Canic #19](https://github.com/dragginzgame/canic/issues/19) is the consumer gate
+for the public assignment/lookup adapter and its installed witness. Inspection on
+2026-11-17 used `toko-new` HEAD `9c7ccfe2e9b843f263a19ad76bedc8cbe4d009dc`
+plus its uncommitted `crates/toko/src/user/{hub.rs,shard/mod.rs,mod.rs}` changes.
+Toko owns identity uniqueness, its user ID reservation, private routing and exact
+provisioning confirmation. Canic owns admitted generic capacity and placement.
+The current `AdmittedShard` constructor validates principal shape; it is not
+evidence of Canic allocation, readiness or lifecycle authority.
+
+Before an allocation call, the application must durably select one opaque key
+for the identity reservation. Concurrent registration must reuse that key; a
+fresh candidate user ID on every attempt could leak multiple capacity claims.
+Bind the returned owner/child/generation before provisioning. Toko's current
+reservation already contains a shard principal, so its host integration will
+need an explicit allocation-pending step, rather than a speculative allocation
+before every call to `begin_registration`. Do not expose account identities in
+public allocation diagnostics or let Canic authenticate Toko users.
+
+Legacy evidence at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`:
+`apps/demo/user_hub/src/lib.rs`, `crates/canic-core/src/api/placement/sharding/mod.rs`,
+`crates/canic-core/src/ops/storage/placement/sharding/{mod.rs,tests/mod.rs}` and
+`crates/canic-core/src/domain/policy/pure/placement/sharding/mod.rs`.
+Preserve atomic capacity admission, replay at full capacity, concurrent first
+assignment ownership, allocation-generation checks and dangling-assignment
+refusal. Legacy history `dfb42aa675b4fa30b4bff7b4c02ba11ef16b13f7` added release
+to address abandoned claims exhausting pools; therefore a no-release first
+contract must explicitly bound and report exhausted capacity, never reclaim it
+on timeout. Do not copy its global registry, implicit startup or full inventory
+exports. A hub plus multiple managed shards also exceeds today's two-child Root
+qualification; the complete witness needs an admitted identity-preserving
+expansion, not a hidden third-child special case.
+
+The initial provisioned-versus-autonomous pool scope, release policy and authority
+contract are under maintainer review. These notes record inspected obligations,
+not an implemented allocator or approval for new automatic creation.
+
 ### Physical placement
 
 The eventual placement choices are same subnet as a named parent or dependency,
@@ -870,6 +1022,15 @@ records source/history evidence and the differences needing new qualification.
 ### Memory and scheduling
 
 Memory ownership uses IC Storage allocations and stable names, not copied hardcoded IDs. Compile and validate one allocation manifest. Optional roles do not open unused stores during startup, diagnostics or sampling. Measure fresh physical allocation as well as logical usage. Reopening state must validate its schema, allocation owner and bounds before granting access.
+
+Storage 0.78 supplies named allocations and stable cells for fresh counter and
+Root installations; the requirements above concern ownership
+and admission, not compatibility with 0.74 type names or directory geometry.
+[Storage #5](https://github.com/dragginzgame/ic-storage/issues/5) records broader
+composition requirements. The selected records use fresh fixtures; preserve
+old retained images under their qualified owner until an explicit transition is
+selected. Canic must not grow a substitute allocator or copy private supplier
+qualification runtime code to bridge the gap.
 
 Use one qualified executor/timer provider instance in a composed canister. The scheduler owns wakeups; the domain owns durable demand. Each recovery-critical task retains its operation and attempt fence. A bounded independently rearmed watchdog can recover abandoned work, but does not create new business authority. Stale callbacks cannot clear successors.
 
@@ -1049,6 +1210,24 @@ provider journey, certificate, settlement or sustained-history gates.
 Domain transitions consume logical bounded values. Endpoint adapters select and invoke supplier-owned codecs, and call adapters own a single attempt. Application operations own retry and consistency. A decode failure after a remote mutation must not trigger a second request using another codec.
 
 ### Endpoint ownership and actor composition
+
+The ongoing Canic-owned demo reuses the greeting application with explicit
+greeting and metrics mounts in one actor file. Its fresh `demo/mainnet`
+declaration selects supplied Root and Store; the maintainer selected mainnet
+deployment only after Storage qualification. The stateless app and generated
+starter share one optional fixed greeting adapter, removing copied codec/export
+wrappers. This does not introduce a general actor registry or lifecycle wrapper.
+Toko and the demo share the authoring/build path, not domain state or readiness.
+See the [demo guide](../demos/demo.md) for its current runnable boundary.
+
+The explicitly started local demo session lives in qualification. Testkit owns
+its bounded simulator/instance lifetime; the existing CLI creates a fresh local
+actor declaration and owns all application build/deployment operations. Its
+single unparented actor is a direct Host rehearsal, not an alternate managed
+fleet topology or an override of the mainnet app's parent relationships. Stop
+on input, interruption or the one-hour limit; never attach a new instance to an
+old journal. No background daemon, automatic window or production CLI dependency
+on Testkit is introduced.
 
 The optional `db` adapter now mounts application-owned typed inspection, query
 and write handlers through Platform hooks. Applications supply passive Wire
@@ -1462,6 +1641,30 @@ Artifact publication is atomic and content-addressed. Verify uploads/chunks befo
 
 ## 13 Persistent releases checkpoints and recovery
 
+### Application persistence across ordinary upgrades
+
+Applications persist data in stable memory and reopen their declared schema after
+an ordinary heap-replacing upgrade. Canic approves the exact Wasm bytes and
+retains install and reconciliation evidence. Storage owns named allocations,
+namespace grants and exclusive leases. The application owns its record format,
+validation and decision to reopen writes. Wasm Store continues to own versioned
+artifacts and pins.
+
+Storage 0.77 restores named allocations over upstream stable collections and
+retires the retained-heap build path. The `Keep` and Wasm transformation proposal
+in [Canic #20](https://github.com/dragginzgame/canic/issues/20) is superseded for
+this journey. Its consumer acceptance criterion is a populated application that
+survives an ordinary upgrade, rolls back a failed upgrade, and retains the
+original operation when the result is uncertain. The installed DB witness qualifies populated upgrades and failed-upgrade rollback
+with IC DB. Its managed fleet additionally qualifies the lost install callback
+through CLI, Root and Store. See the [qualification guide](../../qualification/README.md).
+
+Fresh counter and Root fixtures use the Storage 0.78 directory and collection
+format. Existing Storage 0.76 records have a different physical layout. Moving an existing deployment requires
+an explicit migration that preserves application state, every child journal,
+artifact custody and any admitted snapshot ledger. A failed open must trap.
+Supplier adoption and installed preservation evidence are recorded separately.
+
 ### Experimental and production contracts
 
 Canic starts as an experimental system, with preservation guarantees limited to explicitly qualified paths, including the M3 rehearsal. Cross-release state preservation is not implemented by this document. Legacy Canic state, principals, journals and authority are not imported implicitly. Experimental status does not authorize reinstalling to resolve an uncertain effect or discarding state promised by a qualified path.
@@ -1507,6 +1710,98 @@ The initial restore boundary is application-only while its control plane remains
 Before checkpoint support, classify each authoritative field by rollback set, surviving witness and retention horizon. If evidence needed to distinguish post-checkpoint completed work has expired, that checkpoint cannot reopen the affected authority. Application-owned external effects require their own surviving reconciliation evidence; Canic cannot infer them from infrastructure records. Retained checkpoint lifetimes and receipt retention must agree.
 
 The legacy Canic live backup CLI was unavailable in the research baseline; the new design must not imply it can be copied as a working baseline. Canic consumes the upstream engine and qualifies its production provider. Backup, release upgrade, destructive reinstall and disaster recovery remain distinct operations with explicit authority.
+
+#### Backup signing and execution ownership
+
+The maintainer selected the demo's persistent counter as the first managed
+recovery consumer. Capture and restore require explicit operator initiation;
+restoration stays fenced until explicit acceptance/reopening. No automatic
+reopening policy or profile application migration is part of this first slice.
+
+The first signer integration is a direct-controller local qualification, not a
+manager-route fallback. [Canic #5](https://github.com/dragginzgame/canic/issues/5)
+owns a small adapter in Host; [Canic #1](https://github.com/dragginzgame/canic/issues/1)
+retains the complete managed recovery acceptance. Platform supplies exact offline
+update and original-request status envelopes; IC Tooling supplies the external
+signer and bounded credential/process lifecycle. Private keys stay outside Canic.
+Backup owns the approved operation, finite signing/transport allowances, retained
+signed bytes, submission and explicit original-result observation. Do not wrap
+Canic's complete deployment signing/submission workflow or introduce another
+Backup journal, key store or generic executor.
+
+The adapter preserves the approved sender and signer configuration, management
+recipient versus effective target, original method/argument bytes or request ID,
+exact nanosecond expiry, signing deadline and complete-envelope/network ceilings.
+An observation signs only the original request-status path. Rounded expiry,
+additional paths, anonymous fallback and replacement signatures after uncertain
+output do not satisfy this contract. Platform/Tooling qualification must cover
+the actual selected identity algorithm and provider, not just a fixture key.
+
+Backup can drop the signing future at its preparation deadline. Tooling therefore
+retains process/group cleanup custody across future cancellation; dropping a
+completion observer does not establish termination or successful reaping. Canic
+consumes the supplier's explicit cleanup outcome and cannot infer permission for
+another invocation from a timeout. No detached worker or consumer-owned process
+supervisor is introduced to bypass that boundary.
+
+The independent manager route remains with
+[Canic #6](https://github.com/dragginzgame/canic/issues/6) and
+[Backup #1](https://github.com/dragginzgame/ic-backup/issues/1): authenticate the
+outer host call and retained inner management outcome separately, preserve both
+hops' liabilities, and never replace an unresolved effect. A host operator is not
+implicitly a controller of Root's child. Application fencing and explicit reopening
+remain [Canic #7](https://github.com/dragginzgame/canic/issues/7); neither a valid
+signature nor a stopped restore receipt proves application recovery.
+
+On 2026-11-17 the maintainer accepted Backup 0.105.4's bounded execute-once /
+original-result lookup proposal for Canic #6 and limited source changes to Canic.
+Root owns the surviving inner-effect ledger; Backup owns the host journal,
+fixed capture/restore procedure and authentication of outer evidence. Use the
+existing passive management protocol and an optional `backup` Root feature,
+not a new executor package or a runtime dependency in Backup. Backup 0.105.5 supplies the Host route. Canic’s optional Host codec binds its fixed steps to this executor.
+
+The initial executor is a finite qualification profile: two operations, 64 total
+effect slots, 1 MiB extents plus framing and 16 MiB reserved result custody.
+Operation ID and kind select the original operation; approval, target, caller,
+manager and authority generation are immutable values, never replacement keys.
+Each fixed step/ordinal permits one inner call. Keep original argument commitment,
+absolute dispatch deadline, cycle liability and exact bounded reply/rejection.
+The call liability separately names attachment and an upper bound for Platform's
+system call cost plus attachment (at most 1T per slot). Root checks both the bound
+and its surviving reserve before enqueue; no refund restores a consumed slot.
+This does not bound snapshot storage charges against the child; the Backup
+consumer's admitted resource/target funding policy must cover those charges.
+Lookup and duplicate execution return retained evidence without issuing another
+call. Unretained outcomes remain pending. The operator approves each step; Backup
+still owns deriving steps, snapshot identity and geometry from its fixed procedure.
+
+The optional ledger joins Root's one Storage bootstrap with an explicit fresh
+layout; existing Root images are not implicitly migrated. A forward upgrade must
+retain that layout and all records. Once snapshot work is admitted, ordinary
+management mutation is fenced in this first profile; the existing Host Root
+maintenance contract cannot yet represent this custody. No slot recycling,
+Root rollback, application reopening or live Backup CLI is introduced. Reuse the
+legacy intent-before-dispatch, original-byte and failed-callback/upgrade research
+recorded under **First Root-owned child upgrade** in qualification history;
+legacy's retired live backup path is not a snapshot executor to transplant.
+
+The implemented optional mounts are `snapshot_execute` (Wire method 80) and
+`snapshot_lookup` (81), with passive types in `canic-management-protocol::backup`.
+Execution receives Platform's portable typed arguments plus the approved raw
+argument hash and length. Root re-encodes and compares them before dispatch;
+the Host keeps the original raw bytes. This avoids duplicating a one-MiB upload
+inside the outer envelope. The response binds the whole request and retains its
+exact inner bytes, including a distinct management rejection. Lookup is an
+authenticated update, not an uncertified diagnostic query. Current controllers
+may look up old evidence; new effects also require the original operator.
+The initial authority generation is fixed at 1; rotation/reuse is unsupported.
+After Backup verifies a successful outer ingress, its Canic adapter can call
+`Exchange::decode_response` with the locally derived original binding and the
+authenticated response bytes. It checks the response frame, every binding field
+and the original result reservation. Only a retained inner reply or rejection
+can settle the management result. Backup retains original host evidence and
+checks that later observations preserve previously retained terminal outcomes.
+Backup owns certificate replay and finite host observations. Its normal capture and restore consumer uses the same Canic codec for live dispatch and offline verification.
 
 ### Release to reusable capacity
 
@@ -1584,7 +1879,9 @@ Tests should prove user-visible behavior and recovery boundaries, not preserve t
 
 The OpenChat-class workload is the strategic qualification target, not a chat product to implement. Include shared MultiUser-style workers, user indexes, groups and communities, mixed tenancy, multiple subnets, sustained growth, local funding and governed effects. Exclude the legacy one-User-canister model from this target, following the retained developer feedback. Reported estate sizes and fees in the old idea are historical input, not current benchmark facts.
 
-Use a small synthetic fixture for failure injection and topology, alongside a named application consumer. The maintainer selected the **Canic profile demo** on 2026-11-13: keep the journey within Canic and keep it simple. Its application owns a stable user ID, immutable owner mapping, private profile and revision, with IC Storage as the first stateful supplier. Pin its inputs and measure the standalone baseline before expanding managed composition. The earlier Toko user-shard candidate is deferred research, not an implementation or measurement gate. Passing a synthetic fixture alone does not establish this hands-on application's adoption or complete M2.
+Use a small synthetic fixture for failure injection and topology, alongside a named application consumer. On 2026-11-17 the maintainer selected a **persistent counter in the fresh Canic demo**, replacing the profile app because the latter obscured the hands-on journey. The counter owns its value and recovery admission; Storage owns retained records. Capture and restore are explicit operator maintenance operations. Restore leaves writes fenced until the operator explicitly accepts and reopens the application. Pin the real inputs and measure the standalone baseline before expanding managed composition. The counter now has an installed Storage 0.78.0 preservation and fencing witness. Managed creation/upgrade and named counter calls now have a Root/Store CLI witness; the interactive local session prepares that managed counter fleet. The Backup witness restores a stopped Root-controlled counter. Application acceptance and reopening remain pending under #7. Toko deployment remains deferred. Passing a synthetic fixture alone does not establish the hands-on application's adoption or complete M2.
+
+The retired profile packages are private fixtures in the separate qualification workspace, preserving the existing ownership, discovery, Auth/Blob composition and management regressions until those cases have qualified replacement owners. They are not the new demo or an additional product requirement. Their recorded mainnet identities and original journal stay available for explicit historical inspection; retirement grants no deletion, controller change or state reset.
 
 Establish the first deployment baseline in M0 and capture the team's actual M1 experience. Establish the stateful consumer baseline before its implementation and compare equivalent guarantees at M2 and each subsequent expansion. Report advantage, parity, gap, tradeoff or unmeasured. Count application infrastructure removed, integration code added, new permissions, extra canisters, operator interventions and ongoing supplier maintenance. M8 validates accumulated broader value; it is not the first adoption measurement. A smaller diff is not automatically lower burden.
 
@@ -1699,7 +1996,7 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | Demo fleet visualization | Small host-served read-only view of actual topology and operation evidence, section 14 | Required — first multi-canister increment, no later than M2 | Runnable team exercise; truthful stale/unknown states; autonomous workers appear when supported |
 | Host Observatory, costs and reports | Host-only aggregation, section 14 | Consumer-gated — broader aggregation | Partial results never become complete |
 | Blob service and embedded/dedicated adapters | Independent engine and explicit composition, section 11 | Supplier-owned — Blob integration when needed | Real provider/application integration |
-| IcyDB integration | Database owns semantics; explicit host composition, section 11 | Supplier-owned — integrate only for a demonstrated database need; profile demo starts with IC Storage | Database readiness and lifecycle recovery |
+| IcyDB integration | Database owns semantics; explicit host composition, section 11 | Supplier-owned — integrate only for a demonstrated database need; the demo counter uses IC Storage | Database readiness and lifecycle recovery |
 | Backup/checkpoint/authority snapshots | Future production adapter to IC Backup, section 13 | Consumer-gated — consistent application restoration | Multi-participant consistent restore |
 | ICRC standards | Explicit external adapter only, section 11 | Consumer-gated — named standard requirement | Required external schema and guard tests |
 | Build tools, generated packages and caches | Delegate mechanics; bind exact artifacts, section 12 | Supplier-owned — build mechanics; artifact binding required | Cold/warm, mutation and concurrent publication |
@@ -1763,7 +2060,7 @@ The architecture is accepted as the basis for M0. The choices below still requir
 | Decision | Recommended answer | Proof or consequence |
 | --- | --- | --- |
 | First hands-on workload | Team-operated Hello World locally and on mainnet, through the public product path | M0 resolves first-effect contracts; M1 includes deployment, invocation, inspection and a changed greeting; feedback shapes subsequent increments |
-| First stateful consumer | Canic-owned profile demo with IC Storage; Toko integration excluded from current scope | Measure standalone baseline and bounded ownership invariant; M2 measures managed composition; second executable preservation by M3 |
+| First stateful consumer | Persistent counter in the fresh Canic demo with IC Storage; profile retired to qualification; Toko deployment excluded | Measure standalone baseline, bounded counter/fence invariants and managed composition; preserve state across executables |
 | Production promise | Persistent applications are the target; the initial system is experimental, with preservation guarantees limited to explicitly qualified paths | Define lifecycle preservation requirements in M0; prove the M3 path; require M7 before general production claims |
 | First persistent transition | Bounded maintenance-window release | Specify tolerated downtime, schema migration and uncertain-effect custody |
 | Governance profile | Direct operator for M1; hierarchical governance over infrastructure owners as proposed in section 6 | M0 proves the operator path; prove governance feasibility before that integration; direct SNS registration of every descendant would require a different effect owner |

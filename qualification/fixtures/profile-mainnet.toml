@@ -1,0 +1,29 @@
+[apps.profile.canisters.entry]
+role = "entry"
+
+[apps.profile.canisters.shared-worker]
+role = "worker"
+
+[apps.profile.canisters.manager]
+role = "manager"
+
+[apps.profile.canisters.managed-worker]
+role = "worker"
+parent = "manager"
+
+[apps.profile.fleets.mainnet]
+network = { kind = "Mainnet" }
+journal = "../../.canic"
+
+[apps.profile.fleets.mainnet.canisters.entry]
+id = "bisqm-biaaa-aaaas-qhfeq-cai"
+
+[apps.profile.fleets.mainnet.canisters.shared-worker]
+id = "4pkhu-oaaaa-aaaai-ra2ta-cai"
+
+[apps.profile.fleets.mainnet.canisters.manager]
+id = "rk6n2-wyaaa-aaaad-qmoua-cai"
+profile_manager = true
+
+[apps.profile.fleets.mainnet.canisters.managed-worker]
+id = "rn7lo-3aaaa-aaaad-qmouq-cai"

@@ -32,7 +32,12 @@ fn pre_upgrade((): ()) {
     STATE.with_borrow(|state| {
         assert!(
             state.as_ref().expect("catalog").blob.is_drained(),
-            "drain Blob before upgrade"
+            "drain Blob before upgrading catalog {}",
+            if cfg!(feature = "maintenance-candidate") {
+                "candidate"
+            } else {
+                "original"
+            }
         )
     });
 }
@@ -111,25 +116,15 @@ fn catalog_fault(point: u8) -> Ack {
     assert!(point <= 2);
     FAILURE.set(point);
 }
-// Use the same greeting/readiness contract as Canic's current Root. Inspection
-// and code identity cannot substitute for the explicit Blob activation below.
-const GREET: u64 = canic::GREET;
-#[runtime::query(runtime = runtime, guard = endpoint::admit::<GREET>, decode = endpoint::decode::<String, GREET>, max_bytes = 2097152, on_error = endpoint_error, name = "probe", encode = endpoint::encode::<canic::Greeting, GREET>)]
-fn probe(_name: String) -> canic::Greeting {
-    STATE.with_borrow(|state| {
-        assert!(
-            !state.as_ref().expect("catalog").blob.is_drained(),
-            "Blob admission remains closed"
-        )
-    });
-    canic::Greeting {
-        message: if cfg!(feature = "maintenance-candidate") {
-            "Catalog candidate"
-        } else {
-            "Catalog original"
-        }
-        .into(),
-    }
+canic::mount_readiness_endpoint!(crate::canister::readiness);
+
+fn readiness() -> canic::readiness::State {
+    use canic::readiness::State::{Fenced, Ready, Unavailable};
+    STATE.with_borrow(|state| match state {
+        None => Unavailable,
+        Some(state) if state.blob.is_drained() => Fenced,
+        Some(_) => Ready,
+    })
 }
 fn encode<T: serde::Serialize, const ID: u64>(
     value: T,

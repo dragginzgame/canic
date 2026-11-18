@@ -25,8 +25,8 @@ qualification_admit() {
     printf '%s\n' "${statuses[1]}" > "$evidence/qualification/log-status"
     [[ "${statuses[0]}" == 0 ]] || return "${statuses[0]}"
     [[ "${statuses[1]}" == 0 ]] || return "${statuses[1]}"
-    "${YQ:-yq}" -p toml -o json '.' "$directory/Cargo.toml" > "$evidence/qualification/root.json" || return
-    "${YQ:-yq}" -p toml -o json '.' "$directory/Cargo.lock" > "$evidence/qualification/lock.json" || return
+    decode_toml "$directory/Cargo.toml" > "$evidence/qualification/root.json" || return
+    decode_toml "$directory/Cargo.lock" > "$evidence/qualification/lock.json" || return
     jq -L "$script_dir" -e --slurpfile product "$evidence/metadata.json" \
         --slurpfile lock "$evidence/qualification/lock.json" \
         --slurpfile manifest "$evidence/qualification/root.json" --slurpfile plan "$evidence/plan.json" \
@@ -50,7 +50,7 @@ qualification_admit() {
             index($path) | not' "$root/$policy" > /dev/null || return
         # Product requirements must inherit this workspace's catalog, so no
         # hidden member requirement can lag the selected version transition.
-        "${YQ:-yq}" -p toml -o json '.' "$manifest" | jq -L "$script_dir" -e \
+        decode_toml "$manifest" | jq -L "$script_dir" -e \
             --slurpfile plan "$evidence/qualification/plan.json" --slurpfile product "$evidence/metadata.json" '
             include "cargo-qualification-release";
             qualification_member_catalog($product[0]; $plan[0].catalog)' > /dev/null || return

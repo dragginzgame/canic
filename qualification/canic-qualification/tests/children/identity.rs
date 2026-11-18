@@ -2,7 +2,7 @@
 use super::*;
 
 #[tokio::test]
-async fn identified_storage_migrates_pending_children_and_refuses_downgrade() {
+async fn identified_records_preserve_pending_children_and_refuse_old_storage_code() {
     let mut server = Server::start(
         PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
         Limits {
@@ -31,7 +31,8 @@ async fn identified_storage_migrates_pending_children_and_refuses_downgrade() {
         "a00ce6fcac8687c9c350e317c53d2d653665c1c531639af9d07961ade96cc90d"
     );
     let root = pic.create_canister().await;
-    pic.install_canister(root, old.clone(), vec![], None).await;
+    pic.install_canister(root, artifact("root.wasm"), vec![], None)
+        .await;
     pic.add_cycles(root, 10_000_000_000_000).await;
     let mut approvals = Vec::new();
     // Admission order must never decide identity, including while no principal exists.
@@ -56,8 +57,7 @@ async fn identified_storage_migrates_pending_children_and_refuses_downgrade() {
         .await
         .unwrap();
     let migrated = pic.get_stable_memory(root).await;
-    assert_ne!(migrated, stable);
-    assert_eq!(migrated.len(), stable.len(), "reuse the checked backing");
+    assert_eq!(migrated, stable, "reopen the same records without mutation");
     assert_eq!(read(pic, root).await, scheduled);
     for (slot, stage) in &approvals {
         assert_eq!(

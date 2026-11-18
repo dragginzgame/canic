@@ -33,6 +33,7 @@ pub(crate) fn publish(
     bytes: &[u8],
     mode: Destination,
     parent_mode: u32,
+    permissions: u32,
 ) -> Result<()> {
     let raw = destination.as_os_str().as_bytes();
     if raw.contains(&0)
@@ -51,7 +52,7 @@ pub(crate) fn publish(
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
     let parent = prepare(path, parent_mode)?;
-    publish_in(&parent, name, bytes, mode)
+    publish_in(&parent, name, bytes, mode, permissions)
 }
 
 pub(crate) fn prepare(path: &Path, mode: u32) -> Result<Directory> {
@@ -84,6 +85,7 @@ pub(crate) fn publish_in(
     name: &OsStr,
     bytes: &[u8],
     mode: Destination,
+    permissions: u32,
 ) -> Result<()> {
     let staging = OsString::from(format!(
         ".canic-artifact-{}-{}",
@@ -96,7 +98,7 @@ pub(crate) fn publish_in(
             name,
             Policy {
                 destination: mode,
-                permissions: 0o600,
+                permissions,
                 retention: Retention::Discard,
             },
         )

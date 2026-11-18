@@ -27,7 +27,7 @@ function binding(): IssuerBinding {
     login_epoch: 3n, login_id: new Array(32).fill(4),
     browser_public_key: [...browser.getPublicKey().rawKey],
     grants: [{ target: 'profile', scopes: ['read'] }] };
-  return { issuer, account: account.getPrincipal(), browser: browser.getPrincipal(),
+  return { issuer, account: account.getPrincipal(), browserKey: browser.getPublicKey(),
     intent, deadlineOffsetNs: -100n };
 }
 const code = (value: string) => (error: unknown) => error instanceof IssuerError && error.code === value;
@@ -42,6 +42,12 @@ test('generated codecs match native Rust Wire bytes', () => {
   assert.ok('ok' in decoded && decoded.ok.tag === 'Issued');
   assert.deepEqual(credential.encodeRequest(decoded.ok.value.credential), credential.encodeRequest(material));
   assert.equal(decoded.ok.value.admission_deadline_ns, 900n);
+});
+
+test('a stale issuance intent cannot bind the selected device to a different key', () => {
+  const selected = binding();
+  selected.browserKey = account.getPublicKey();
+  assert.throws(() => issuerAdapter(selected, async () => assert.fail('unexpected transport')), code('binding'));
 });
 
 test('original selectors, signer roles, canonical bytes and deadlines survive lookup', async () => {

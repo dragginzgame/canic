@@ -1,5 +1,13 @@
 # Root and its children
 
+The optional `backup` build exposes authenticated snapshot execute/lookup for a
+fresh Root. It uses one surviving original-result ledger alongside the existing
+Storage records. After admitting snapshot work it fences ordinary private
+management endpoints; it never starts or activates a restored application.
+See the [executor contract](../design/canic-system-design.md#backup-signing-and-execution-ownership).
+The installed local witness is `bash scripts/dev/test-root.sh snapshot::` after simulator
+preparation. This is not yet a Backup CLI workflow or an upgrade for existing fleets.
+
 The generated starter begins with a Wasm Store and one approved Hello World
 application; a fresh or completed one-child fleet can include a second application:
 
@@ -12,6 +20,14 @@ Root
 Root's controller is the external operator identity. The application's sole
 controller is Root. External identities appear as controller metadata, never as
 nodes above the canister tree.
+
+The development Root uses two named Storage 0.78 cells on one backing.
+The Backup build adds a third cell for snapshot custody. Fresh installs and compatible new executables
+are locally qualified. Root now uses journal schema 2 and accepts only an explicit
+`Ready` response. Schema-1 greeting and existing 0.74 fleet images must keep their qualified old
+Root; the new executable refuses those images. A failed Host maintenance install
+retains its signed attempt and leaves the target stopped for explicit recovery.
+Do not rebuild and upgrade the historical mainnet demo below with this executable.
 
 The generated `wasm-store` child is separate from both application slots.
 Whole-fleet planning currently admits one or two direct application children.
@@ -85,7 +101,6 @@ From the Canic checkout:
 
 ```sh
 canic fleet show --app starter
-canic fleet call 0a68a8de48d4ca642147087a893813359ca4b7eda6847cf554acfaaa91c757cc --app starter --name team
 ```
 
 The greeting is `Hello from upgraded Canic, team!`. Keep `starter/.canic/` for
@@ -118,7 +133,7 @@ with your project after the first `app build`; later builds preserve it.
 The generated app uses the selected local Canic checkout, with its supplier
 selections, compiler and lint policy. Root and Store remain supplied Canic packages.
 Canic source aliases resolve to their physical path. If that checkout moves,
-update the dependency and Root/Store build paths in `canic.json`.
+update the dependency and Root/Store build paths in `canic.toml`.
 No legacy crates.io Canic dependency is selected.
 
 `--output` is a replaceable build input, separate from the immutable artifact
@@ -145,8 +160,8 @@ simulator stops when qualification finishes.
 
 The same suite also qualifies two children through the runtime and installed CLI: separate
 creation and upgrade histories, sibling progress after callback loss, full-budget
-artifact custody, shared cycle reservations and migration from a retained old
-Root. The CLI fixture covers creation, lost admission replies, separate child
+artifact custody, shared cycle reservations and preservation on fresh records.
+Old allocator images are tested as refused upgrades, not migrations. The CLI fixture covers creation, lost admission replies, separate child
 upgrades, maintenance with both full journals, and terminal/HTML views. Untracked
 work in either child blocks Root maintenance before installation.
 
@@ -160,7 +175,7 @@ It initializes and builds all three declarations, deploys the normal Root and
 Store, publishes the app and retains completion. It then qualifies interrupted
 Store maintenance and subsequent Root/child upgrades using test-only fault code.
 It edits and rebuilds the generated greeting source, publishes that new artifact
-and verifies the changed greeting through `fleet call` at the same principal.
+and verifies the changed greeting directly at the same principal.
 An unchanged rebuild preserves artifact identities and the project lockfile.
 
 ## A fresh two-child fleet
@@ -186,8 +201,6 @@ each application creation from Root's allocation:
 ```sh
 canic fleet apply OPERATION --app siblings --identity canic-mainnet
 canic fleet show --app siblings
-canic fleet call OPERATION --app siblings --canister app
-canic fleet call OPERATION --app siblings --canister worker
 ```
 
 Apply again to retain completed outcomes after autonomous work finishes. Two-child
@@ -248,7 +261,6 @@ their original timing. Use the same operation to retain completion:
 ```sh
 canic fleet show --app starter --fleet mainnet
 canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
-canic fleet call OPERATION --app starter --fleet mainnet --name team
 ```
 
 Replanning unfinished work returns the original operation and deadlines; it never
@@ -406,7 +418,6 @@ repeat the same apply to retain authenticated completion:
 ```sh
 canic fleet apply UPGRADE_OPERATION --identity canic-mainnet
 canic fleet status UPGRADE_OPERATION
-canic fleet call UPGRADE_OPERATION --name team
 ```
 
 Root checks the old code, sole-controller relationship and canister version
@@ -510,9 +521,10 @@ qualification. Existing mainnet demos are unchanged.
 ## Responsibility and bounds
 
 `canic-root` mounts its lifecycle and management endpoints explicitly. It uses
-the same `canic-management` engine as the profile manager, with its own greeting
-readiness check. The greeting app's replicated `probe` method shares admission
-and response behavior with its existing `greet` query.
+the same `canic-management` engine as the profile fixture manager, with an explicit
+`readiness` request that accepts only `Ready`. Each app owns its prerequisite and
+fence checks. The independent greeting/probe endpoints remain available to callers;
+Root does not use them to infer readiness.
 
 `canic-management-protocol` contains only authority/evidence messages, hashing
 and decoding limits. Host tooling and application protocol consumers do not link

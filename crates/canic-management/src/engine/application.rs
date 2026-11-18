@@ -7,7 +7,7 @@ use ic_platform_runtime::system as api;
 
 pub(super) fn lifecycle(slot: ChildId) -> Option<application::Lifecycle> {
     STATE.with_borrow(
-        |state| match &state.as_ref().expect("open engine").artifact.get().0[&slot] {
+        |state| match &state.as_ref().expect("open engine").artifact.0[&slot] {
             Artifact::Application(_, value) => Some(value.clone()),
             _ => None,
         },
@@ -118,8 +118,8 @@ pub fn custody() -> application::Custody {
 pub(super) fn upgrade_matches(slot: ChildId, input: &application::Upgrade) -> bool {
     STATE.with_borrow(|state| {
         let state = state.as_ref().expect("open engine");
-        let journal = &state.journal.get().0[&slot];
-        let Artifact::Application(sources, lifecycle) = &state.artifact.get().0[&slot] else {
+        let journal = &state.journal.0[&slot];
+        let Artifact::Application(sources, lifecycle) = &state.artifact.0[&slot] else {
             return false;
         };
         journal

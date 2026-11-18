@@ -19,7 +19,7 @@ async function setup(config, { device = 9, accountSeed = 8, reopen = false,
   const journal = await LoginJournal.open(indexedDB, name, { id: 'fixture-unix', nowNs });
   if (!reopen) await journal.start({ generation, caller: browser.getPrincipal(), issuer });
   const trust = { host: new URL(config.gateway), rootKey: new Uint8Array(config.root) };
-  const adapter = httpIssuerAdapter({ issuer, account: account.getPrincipal(), browser: browser.getPrincipal(),
+  const adapter = httpIssuerAdapter({ issuer, account: account.getPrincipal(), browserKey: browser.getPublicKey(),
     deadlineOffsetNs: -1_000_000_000n,
     intent: { epoch: 1n, operation_id: new Array(32).fill(device), login_epoch: 1n,
       login_id: new Array(32).fill(device), browser_public_key: [...browser.getPublicKey().rawKey],

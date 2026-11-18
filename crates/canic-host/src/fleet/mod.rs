@@ -526,7 +526,10 @@ pub(crate) fn inventory(
                 let _store = crate::store::Store::open(root)?;
                 let dir = root.join(&id);
                 let (plan, bytes) = crate::plan::load(&dir, &id)?;
-                if plan.auth().is_some() || plan.publication().is_some() || plan.removal().is_some()
+                if plan.application_call().is_some()
+                    || plan.auth().is_some()
+                    || plan.publication().is_some()
+                    || plan.removal().is_some()
                 {
                     return Ok(vec![]);
                 }

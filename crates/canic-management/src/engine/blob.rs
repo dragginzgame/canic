@@ -30,13 +30,13 @@ fn state(slot: ChildId) -> Option<Maintenance> {
 fn mutate(slot: ChildId, f: impl FnOnce(&mut Maintenance)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
-        let mut artifacts = state.artifact.get().clone();
+        let mut artifacts = state.artifact.clone();
         let Artifact::Application(_, lifecycle) = artifacts.0.get_mut(&slot).expect("slot") else {
             panic!("application custody")
         };
         f(lifecycle.upgrades.last_mut().expect("admitted maintenance"));
         assert!(artifacts.fits(), "maintenance evidence budget");
-        state.artifact.set(artifacts);
+        state.set_artifact(artifacts);
     });
 }
 pub(super) fn waiting(slot: ChildId) -> bool {

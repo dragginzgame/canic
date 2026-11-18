@@ -32,6 +32,8 @@ pub struct StoreMaintenance {
 /// One operation with all and only the authority it needs.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum PlanAction {
+    /// One direct user application update; grants no management authority.
+    Call(crate::application::Approval),
     /// Configure or revoke one exact Auth grant; grants no installation authority.
     Auth(Box<crate::AuthApproval>),
     /// Publish immutable artifact bytes through Root; grants no installation authority.
@@ -82,6 +84,14 @@ pub enum PlanAction {
 }
 
 impl super::Plan {
+    /// Exact application call, independent of controller authority.
+    #[must_use]
+    pub const fn application_call(&self) -> Option<&crate::application::Approval> {
+        match &self.action {
+            PlanAction::Call(value) => Some(value),
+            _ => None,
+        }
+    }
     /// Exact Auth approval, separate from deployment and readiness.
     #[must_use]
     pub fn auth(&self) -> Option<&crate::AuthApproval> {
@@ -152,6 +162,7 @@ impl super::Plan {
             | PlanAction::CreateChild(_)
             | PlanAction::Remove(_)
             | PlanAction::Auth(_)
+            | PlanAction::Call(_)
             | PlanAction::Publish(_) => None,
         }
     }

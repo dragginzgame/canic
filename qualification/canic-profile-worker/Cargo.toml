@@ -1,0 +1,31 @@
+[package]
+name = "canic-profile-worker"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Retained persistent ownership and composition qualification fixture"
+
+[target.'cfg(any())'.dev-dependencies]
+toko-tooling.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+default = ["canister"]
+canister = ["dep:ic-platform-runtime"]
+profile-v2 = []
+reject-upgrade = []
+
+[dependencies]
+canic-profile-protocol.workspace = true
+ic-storage.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
+
+[lints]
+workspace = true

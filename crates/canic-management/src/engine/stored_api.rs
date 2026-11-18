@@ -58,13 +58,13 @@ pub(super) fn upgrade_source(
 ) -> Option<stored::Delivery> {
     STATE.with_borrow(|state| {
         let state = state.as_ref().expect("open engine");
-        let journal = &state.journal.get().0[&slot];
+        let journal = &state.journal.0[&slot];
         let index = journal
             .2
             .iter()
             .chain(std::iter::once(&journal.1))
             .position(|record| record.approval.as_ref() == Some(approval))?;
-        state.artifact.get().0[&slot]
+        state.artifact.0[&slot]
             .sources()?
             .upgrades
             .get(index)
@@ -125,13 +125,7 @@ pub fn custody() -> stored::Custody {
 pub fn root_custody() -> canic_management_protocol::custody::Root {
     super::application::require_legacy();
     assert!(
-        STATE.with_borrow(|state| state
-            .as_ref()
-            .expect("open engine")
-            .journal
-            .get()
-            .2
-            .is_empty()),
+        STATE.with_borrow(|state| state.as_ref().expect("open engine").journal.2.is_empty()),
         "complete Store history required"
     );
     current_root_custody()
@@ -148,7 +142,7 @@ pub(super) fn root_history_complete() -> canic_management_protocol::custody::Roo
     canic_management_protocol::custody::RootHistory {
         current: current_root_custody(),
         store_history: STATE
-            .with_borrow(|state| state.as_ref().expect("open engine").journal.get().2.clone()),
+            .with_borrow(|state| state.as_ref().expect("open engine").journal.2.clone()),
     }
 }
 fn current_root_custody() -> canic_management_protocol::custody::Root {
@@ -160,7 +154,7 @@ fn current_root_custody() -> canic_management_protocol::custody::Root {
 fn stored_journals() -> stored::Custody {
     let children: children::Custody = super::journals();
     let sources = STATE.with_borrow(|state| {
-        let artifacts = &state.as_ref().expect("open engine").artifact.get().0;
+        let artifacts = &state.as_ref().expect("open engine").artifact.0;
         ChildId::ALL.map(|slot| artifacts[&slot].sources().cloned())
     });
     stored::Custody { children, sources }

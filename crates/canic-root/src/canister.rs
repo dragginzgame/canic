@@ -33,30 +33,31 @@ management::mount_endpoints! {
 
 fn readiness() -> Readiness {
     Readiness {
-        method: "probe",
+        method: "readiness",
         request: ic_wire::encode(
-            &"Root",
+            &(),
             ic_wire::Encoding::Frame {
-                method: canic::GREET,
+                method: canic::readiness::METHOD,
                 direction: ic_wire::Direction::Request,
             },
-            canic::LIMITS,
+            canic::readiness::REQUEST_LIMITS,
         )
-        .expect("probe args"),
+        .expect("readiness args"),
         accept: |reply| {
-            let greeting: canic::Greeting = ic_wire::decode(
+            let state: canic::readiness::State = ic_wire::decode(
                 reply,
                 ic_wire::Encoding::Frame {
-                    method: canic::GREET,
+                    method: canic::readiness::METHOD,
                     direction: ic_wire::Direction::Response,
                 },
-                canic::LIMITS,
+                canic::readiness::RESPONSE_LIMITS,
             )
             .map_err(|_| Failure::InvalidReply)?;
-            if greeting.message.is_empty() {
-                Err(Failure::Mismatch)
-            } else {
-                Ok(())
+            match state {
+                canic::readiness::State::Ready => Ok(()),
+                canic::readiness::State::Unavailable | canic::readiness::State::Fenced => {
+                    Err(Failure::Mismatch)
+                }
             }
         },
     }

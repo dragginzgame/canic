@@ -79,6 +79,29 @@ async fn maintain(root: &Client<'_>) {
         .await
         .unwrap();
 }
+/// A rejected layout transition must leave the original executable and all records intact.
+async fn refuse_old_backing(root: &Client<'_>) {
+    let before = root.pic.get_stable_memory(root.id).await;
+    let status = || root.pic.canister_status(root.id, Some(root.operator));
+    let module = status().await.unwrap().module_hash.unwrap();
+    let error = canic_qualification::upgrade_stopped(
+        root.pic,
+        root.id,
+        std::fs::read(artifacts().join("root-maintenance.wasm")).unwrap(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .expect_err("fresh Root cannot reopen the old allocator");
+    assert!(
+        error
+            .reject_message
+            .contains("canic_management::engine::open"),
+        "{error:?}"
+    );
+    assert_eq!(status().await.unwrap().module_hash, Some(module));
+    assert_eq!(root.pic.get_stable_memory(root.id).await, before);
+}
 fn padded(mut wasm: Vec<u8>) -> Vec<u8> {
     // A valid custom section makes the actual executable larger than Root's former byte limit.
     let payload = 1_048_577_u32;

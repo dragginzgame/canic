@@ -11,6 +11,12 @@ checkout is needed. Existing generated configurations must change only their Sto
 pointing at the Canic workspace. Existing artifacts, approvals and deployed canisters
 are unchanged. Rebuilding does not authorize installing the changed executable.
 
+Store 0.4.1 uses Storage 0.78 for its four named allocations. Use it for a
+fresh Store. A fleet with the 0.3.3 Store on Storage 0.74.1 must retain its
+qualified executable. Installing 0.4.0 over that directory traps during upgrade.
+The endpoint identities and Store record encodings are preserved, but the
+underlying directory format changed.
+
 The supplier also supports exact removal/restoration and tombstones. Root now
 forwards exact deletion/cancellation through `store_removal`; Host retains their
 exact signed attempts under the existing journal lock. New Root attempts use Store 0.2.3's
@@ -20,7 +26,7 @@ separate digest domain commits to the entry kind. CUJ9 preserves both new and
 historical scan contracts; old attempts keep their exact digest and ordering,
 including any refusal. Old executables refuse the new journal format.
 
-For an existing fleet, upgrade Store to 0.2.3 under the old Root **before**
+The historical 0.2.3 rollout upgraded Store under the old Root before
 upgrading Root. New attempts require the versioned supplier endpoint; no probing
 or fallback selects a weaker scan. `bash scripts/dev/test-store.sh preservation`
 qualifies removed/cancelled labels through Root and Store replacement, alongside
@@ -292,8 +298,7 @@ copy. It requires unchanged counters, strictly increasing keys, the expected
 release count and an explicit end page. Aliases, incomplete-upload progress and
 all shared pins are included. Root replacement resumes the retained cursor;
 concurrent replies cannot count it twice. This does not scan payload bytes or
-commit management-cache contents. CUJ5 attempts load without scan evidence;
-already-stopped attempts never gain a fabricated preservation commitment.
+commit management-cache contents. The current Root refuses the old CUJ5 backing. The predecessor retains its original stop and scan evidence.
 Older Stores lacking this endpoint cannot complete the new pre-stop scan.
 
 The explicit `install_store_maintenance` mount accepts the approved raw replacement
@@ -628,7 +633,6 @@ arguments with the new publication operation:
 ```sh
 canic fleet plan --app starter --fleet mainnet --canister app --release NEXT_PUBLICATION_OPERATION --target APP_ID --previous-module PREVIOUS_SHA256 --root-module ROOT_SHA256 --identity canic-mainnet
 canic fleet apply UPGRADE_OPERATION --app starter --fleet mainnet --identity canic-mainnet
-canic fleet call UPGRADE_OPERATION --app starter --fleet mainnet --name team
 ```
 
 The final command is the greeting demo's read-only query. Root obtains an exact

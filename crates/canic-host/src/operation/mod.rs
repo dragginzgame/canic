@@ -60,6 +60,11 @@ pub struct ChildOutcome {
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum ApplyOutcome {
+    /// Original application reply bytes; interpretation belongs to the app.
+    Call {
+        /// Exact request's retained result, never a deployment receipt.
+        call: crate::application::Reply,
+    },
     /// Exact successful Auth configuration or revocation response.
     Auth {
         /// Historical response, never receiver readiness.
@@ -241,8 +246,8 @@ pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Res
     apply_at(root, &dir, digest, identity, icp).await
 }
 
-/// Request recovery of the named Root approval, retaining the exact signed request.
-/// This does not renew its effect budgets or deadlines and cannot bootstrap a fleet.
+/// Observe an original application call or request recovery of a named Root approval.
+/// Keeps exact signed-request custody; never renews effect budgets or deadlines or bootstraps a fleet.
 ///
 /// # Errors
 /// Refuses unmanaged or unadmitted work, changed Root authority and unresolved expired attempts.
@@ -268,6 +273,9 @@ pub(crate) async fn reconcile_at(
     icp: &Path,
 ) -> Result<ApplyOutcome> {
     let (plan, bytes) = plan::load(dir, digest)?;
+    if plan.application_call().is_some() {
+        return crate::application::apply(dir, &plan, &bytes, identity, icp, true).await;
+    }
     if plan.auth().is_some() {
         return crate::auth::apply(dir, &plan, identity, icp, true).await;
     }
@@ -308,6 +316,9 @@ async fn apply_operation(
     read_only: bool,
 ) -> Result<ApplyOutcome> {
     let (plan, wasm) = plan::load(dir, digest)?;
+    if plan.application_call().is_some() {
+        return crate::application::apply(dir, &plan, &wasm, identity, icp, false).await;
+    }
     if plan.auth().is_some() {
         return crate::auth::apply(dir, &plan, identity, icp, read_only).await;
     }
@@ -553,6 +564,9 @@ pub(crate) fn status_loaded(
     plan: Plan,
     bytes: &[u8],
 ) -> Result<CanisterStatus> {
+    if plan.application_call().is_some() {
+        return crate::application::status(dir, &plan, bytes);
+    }
     if plan.auth().is_some() {
         return crate::auth::status(dir, &plan);
     }
@@ -568,6 +582,7 @@ pub(crate) fn status_loaded(
     let mut effects = std::collections::BTreeMap::<String, String>::new();
     let effect_names: Vec<_> = match plan.action {
         crate::PlanAction::Auth(_)
+        | crate::PlanAction::Call(_)
         | crate::PlanAction::Remove(_)
         | crate::PlanAction::Publish(_) => {
             unreachable!("non-deployment status selected above")

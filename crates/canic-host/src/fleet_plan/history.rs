@@ -29,7 +29,8 @@ pub(crate) fn permits_upgrade(
             continue;
         }
         let (plan, _) = crate::plan::load(&path, &operation)?;
-        if plan.auth().is_none()
+        if plan.application_call().is_none()
+            && plan.auth().is_none()
             && plan.removal().is_none()
             && plan.publication().is_none()
             && plan

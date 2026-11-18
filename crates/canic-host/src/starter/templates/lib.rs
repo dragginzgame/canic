@@ -1,6 +1,6 @@
 //! Application-owned greeting. Root management code lives in the Canic dependency.
 #[cfg(target_family = "wasm")]
-mod endpoint;
+mod actor;
 
 /// Edit this greeting and rebuild the application artifact.
 pub const GREETING: &str = "Hello from Canic";

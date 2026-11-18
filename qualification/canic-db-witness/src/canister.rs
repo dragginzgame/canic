@@ -5,11 +5,11 @@ use crate::protocol::{
 };
 use canic::db::{Operation, endpoint::runtime};
 use ic_db::{Batch, Comparison, Database, Entity, Error, QueryCursor, Schema};
-use ic_storage::{
-    AllocationGrants, DefaultMemoryImpl, GenericAllocationPolicy, MemoryAuthority, MemoryRequest,
-    MemoryRuntime, RuntimeMemory, SealedDeclarationSnapshot, StableKey,
-};
-use std::rc::Rc;
+use ic_storage::{DefaultMemoryImpl, MemoryRuntime, RuntimeMemory, StableKey, StorageConfig};
+use std::{cell::OnceCell, rc::Rc};
+
+type Host = MemoryRuntime<DefaultMemoryImpl>;
+thread_local! { static HOST: OnceCell<Rc<Host>> = const { OnceCell::new() }; }
 
 #[ic_db::entity(pk(field="id"), index(fields=["score","id"]), fields(
     field(name="id",value(item(prim="Nat64"))),
@@ -31,20 +31,19 @@ fn schema() -> Schema {
     let entity = UnreadableItem::SCHEMA;
     Schema::new(&[entity]).unwrap()
 }
-fn runtime() -> Rc<MemoryRuntime<DefaultMemoryImpl>> {
-    thread_local! {
-        static HOST: Rc<MemoryRuntime<DefaultMemoryImpl>> = Rc::new({
-            let mut host = MemoryRuntime::new(DefaultMemoryImpl::default()).unwrap();
-            host.bootstrap(
-                &SealedDeclarationSnapshot::new(["app.db.v1", "app.owner.v1"].map(|key|
-                    MemoryRequest::new("app", key).unwrap()).to_vec()).unwrap(),
-                &AllocationGrants::new(vec![MemoryAuthority::new("app", "app.").unwrap()]).unwrap(),
-                &GenericAllocationPolicy,
-            ).unwrap();
-            host
-        });
-    }
-    HOST.with(Rc::clone)
+fn bootstrap(fresh: bool) -> Rc<Host> {
+    let host = Rc::new(canic::storage::bootstrap(
+        DefaultMemoryImpl::default(),
+        fresh,
+        "app",
+        &["app.db.v1", "app.owner.v1"],
+        StorageConfig::default().pages,
+    ));
+    HOST.with(|slot| assert!(slot.set(Rc::clone(&host)).is_ok(), "duplicate bootstrap"));
+    host
+}
+fn runtime() -> Rc<Host> {
+    HOST.with(|slot| Rc::clone(slot.get().expect("DB lifecycle bootstrap")))
 }
 fn memory(host: &MemoryRuntime<DefaultMemoryImpl>, key: &str) -> RuntimeMemory<DefaultMemoryImpl> {
     host.open_memory(&StableKey::parse(key).unwrap()).unwrap()
@@ -52,13 +51,33 @@ fn memory(host: &MemoryRuntime<DefaultMemoryImpl>, key: &str) -> RuntimeMemory<D
 fn open(host: &MemoryRuntime<DefaultMemoryImpl>) -> Result<Database, Error> {
     Database::open(memory(host, "app.db.v1"), schema())
 }
+#[cfg(feature = "managed-fixture")]
+canic::mount_readiness_endpoint!(crate::canister::readiness);
+#[cfg(feature = "managed-fixture")]
+fn readiness() -> canic::readiness::State {
+    use canic::readiness::State;
+    match open(&runtime()) {
+        Ok(_) => State::Ready,
+        Err(Error::Maintenance) => State::Fenced,
+        Err(_) => State::Unavailable,
+    }
+}
 fn decode_owner(bytes: &[u8]) -> Result<ic_db::Principal, std::convert::Infallible> {
+    // The managed test artifact pins a synthetic user independently of its controller.
+    #[cfg(feature = "managed-fixture")]
+    if bytes.is_empty() {
+        return Ok(
+            "xjfxn-sdn7v-35kn3-shpt7-357bn-nqgyl-x7ijr-2a2c5-gre6i-qcox2-4ae"
+                .parse()
+                .expect("fixture owner"),
+        );
+    }
     Ok({ ic_db::Principal::try_from_slice(bytes).expect("installation owner") })
 }
 #[runtime::init(runtime = runtime, guard = lifecycle_guard, decode = decode_owner, max_bytes = 2097152, on_error = endpoint_error)]
 fn initialize(owner: ic_db::Principal) {
     assert_ne!(owner, ic_db::Principal::anonymous());
-    let host = runtime();
+    let host = bootstrap(true);
     let owner_memory = memory(&host, "app.owner.v1");
     assert_eq!(owner_memory.size(), 0, "initialization only");
     owner_memory.grow(1).unwrap();
@@ -70,18 +89,39 @@ fn initialize(owner: ic_db::Principal) {
     // Fresh fixture installation identity; no init hook on upgrade.
     Database::create(memory(&host, "app.db.v1"), schema(), [91; 16]).unwrap();
 }
-fn authorize(caller: ic_db::Principal, _operation: Operation) -> Result<(), String> {
-    let host = runtime();
-    let owner_memory = memory(&host, "app.owner.v1");
+fn retained_owner(host: &Host) -> ic_db::Principal {
+    let owner_memory = memory(host, "app.owner.v1");
     let mut bytes = [0; 34];
-    if owner_memory.size() == 0 {
-        return Err("uninitialized".into());
-    }
+    assert_eq!(owner_memory.size(), 1, "missing or oversized owner record");
     owner_memory.read(0, &mut bytes);
     assert_eq!(&bytes[..4], b"OWN1", "owner format");
     assert!(bytes[4] <= 29, "owner length");
     let owner = ic_db::Principal::try_from_slice(&bytes[5..5 + usize::from(bytes[4])]).unwrap();
-    if caller == owner {
+    assert_ne!(
+        owner,
+        ic_db::Principal::anonymous(),
+        "invalid retained owner"
+    );
+    owner
+}
+fn decode_upgrade(bytes: &[u8]) -> Result<(), &'static str> {
+    if bytes.is_empty() {
+        Ok(())
+    } else {
+        Err("unexpected DB upgrade arguments")
+    }
+}
+#[runtime::post_upgrade(runtime = runtime, guard = lifecycle_guard, decode = decode_upgrade, max_bytes = 0, on_error = endpoint_error)]
+fn reopen((): ()) {
+    let host = bootstrap(false);
+    retained_owner(&host);
+    match open(&host) {
+        Ok(_) | Err(Error::Maintenance | Error::IncompatibleSchema) => (),
+        Err(error) => panic!("retained database unavailable: {error:?}"),
+    }
+}
+fn authorize(caller: ic_db::Principal, _operation: Operation) -> Result<(), String> {
+    if caller == retained_owner(&runtime()) {
         Ok(())
     } else {
         Err("denied".into())

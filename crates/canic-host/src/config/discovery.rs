@@ -15,7 +15,7 @@ pub struct DiscoveredConfig {
     pub config: Config,
 }
 
-/// Read explicit configuration, or current and direct-child `canic.json` files.
+/// Read explicit configuration, or current and direct-child `canic.toml` files.
 /// Automatic discovery skips symlinked directories and generated/hidden trees.
 /// # Errors
 /// Refuses malformed configs, duplicate app identities and more than 1024 entries or 64 configs.
@@ -27,7 +27,7 @@ pub fn discover_configs(
     if let Some(path) = explicit {
         paths.push(directory.join(path));
     } else {
-        let local = directory.join("canic.json");
+        let local = directory.join("canic.toml");
         if local.try_exists().map_err(supplier)? {
             paths.push(local);
         }
@@ -53,7 +53,7 @@ pub fn discover_configs(
             {
                 continue;
             }
-            let path = directory.join(child).join("canic.json");
+            let path = directory.join(child).join("canic.toml");
             match std::fs::symlink_metadata(&path) {
                 Ok(metadata) if metadata.is_file() => paths.push(path),
                 Ok(_) => continue,
@@ -111,7 +111,7 @@ pub fn resolve_config_path(
             });
     }
     match configs.as_slice() {
-        [] => Ok(directory.join("canic.json")),
+        [] => Ok(directory.join("canic.toml")),
         [item] => Ok(item.path.clone()),
         _ => Err(Error::Invalid(
             "multiple app configs found; select --app or --config".into(),

@@ -51,7 +51,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
                 json!({"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")});
         }
         let save = |config: &Value| {
-            std::fs::write(dir.join("canic.json"), serde_json::to_vec(config).unwrap()).unwrap()
+            std::fs::write(dir.join("canic.toml"), toml::to_string(config).unwrap()).unwrap()
         };
         save(&config);
         let plan = |dispatch: &str| {
@@ -130,7 +130,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
                 "worker.wasm",
             ],
         );
-        config = serde_json::from_slice(&std::fs::read(dir.join("canic.json")).unwrap()).unwrap();
+        config = toml::from_str(&std::fs::read_to_string(dir.join("canic.toml")).unwrap()).unwrap();
         std::fs::write(dir.join("worker.wasm"), &app).unwrap();
         let dispatch = scheduled(owner.client()).await;
         let mut next = app.clone();

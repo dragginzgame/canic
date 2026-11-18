@@ -526,7 +526,7 @@ pub fn plan_fleet(
             }
         } else {
             let (old, _) = plan::load(&dir, &id)?;
-            if old.auth().is_some() || old.removal().is_some() {
+            if old.application_call().is_some() || old.auth().is_some() || old.removal().is_some() {
                 continue;
             }
             if old.publication().is_some() {

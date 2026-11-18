@@ -2,6 +2,25 @@ use super::*;
 use clap::Parser as _;
 
 #[test]
+fn application_commands_require_identity_and_reject_journal_only_mode() {
+    let args = [
+        "canic",
+        "fleet",
+        "call",
+        "--canister",
+        "app",
+        "--identity",
+        "visitor",
+        "increment",
+    ];
+    assert!(Cli::try_parse_from(args).is_ok());
+    assert!(Cli::try_parse_from(args.into_iter().chain(["--no-config"])).is_err());
+    assert!(
+        Cli::try_parse_from(["canic", "fleet", "call", "--canister", "app", "increment"]).is_err()
+    );
+}
+
+#[test]
 fn local_initialization_requires_explicit_root_subnet() {
     let root_key = "00".repeat(133);
     let args = [
@@ -80,7 +99,7 @@ async fn selectors_infer_only_unique_apps_and_fleets() {
         .join("target/init-cli-tests");
     std::fs::create_dir_all(&parent).unwrap();
     let root = crate::tests::directory(&parent, "selectors").unwrap();
-    let path = root.join("custom.json");
+    let path = root.join("custom.toml");
     let config = path.to_str().unwrap();
     let report = root.join("report.html");
     let journal = root.join("journal");
@@ -97,7 +116,15 @@ async fn selectors_infer_only_unique_apps_and_fleets() {
         &["fleet", "apply", "operation", "--identity", "unused"],
         &["fleet", "reconcile", "operation", "--identity", "unused"],
         &["fleet", "status", "operation"],
-        &["fleet", "call", "operation"],
+        &[
+            "fleet",
+            "call",
+            "--canister",
+            "app",
+            "--identity",
+            "anonymous",
+            "increment",
+        ],
     ];
     json(&["app", "init", "hello", "--config", config]).await;
     json(&[
@@ -266,7 +293,7 @@ async fn app_artifact_and_topology_are_shared_but_fleet_plans_remain_independent
         .join("target/init-cli-tests");
     std::fs::create_dir_all(&parent).unwrap();
     let root = crate::tests::directory(&parent, "shared-app").unwrap();
-    let path = root.join("canic.json");
+    let path = root.join("canic.toml");
     let config = path.to_str().unwrap();
     std::fs::write(root.join("app.wasm"), b"\0asm\x01\0\0\0").unwrap();
     json(&["app", "init", "hello", "--config", config]).await;
@@ -412,7 +439,7 @@ async fn canister_declarations_retain_roles_and_parents_without_effect_authority
         .join("target/init-cli-tests");
     std::fs::create_dir_all(&parent).unwrap();
     let root = crate::tests::directory(&parent, "topology").unwrap();
-    let path = root.join("canic.json");
+    let path = root.join("canic.toml");
     let config = path.to_str().unwrap();
     json(&["app", "init", "profiles", "--config", config]).await;
     json(&[
@@ -500,7 +527,7 @@ async fn app_init_adds_a_second_app_and_requires_explicit_selection() {
         .join("target/init-cli-tests");
     std::fs::create_dir_all(&parent).unwrap();
     let root = crate::tests::directory(&parent, "second-app").unwrap();
-    let path = root.join("canic.json");
+    let path = root.join("canic.toml");
     let config = path.to_str().unwrap();
     json(&["app", "init", "first", "--config", config]).await;
     json(&[
@@ -567,7 +594,7 @@ async fn existing_canister_declaration_lists_exact_id_without_deployment_authori
         .join("target/init-cli-tests");
     std::fs::create_dir_all(&parent).unwrap();
     let root = crate::tests::directory(&parent, "existing-id").unwrap();
-    let path = root.join("canic.json");
+    let path = root.join("canic.toml");
     let config = path.to_str().unwrap();
     json(&["app", "init", "hello", "--config", config]).await;
     json(&[
@@ -655,7 +682,7 @@ async fn declaration_messages_escape_paths_while_json_retains_original_paths() {
     std::fs::create_dir_all(&parent).unwrap();
     let root = crate::tests::directory(&parent, "escaped-path").unwrap();
     for structured in [false, true] {
-        let path = root.join(format!("config-{structured}-café\n\u{1b}[2J\u{202e}.json"));
+        let path = root.join(format!("config-{structured}-café\n\u{1b}[2J\u{202e}.toml"));
         let config = path.to_str().unwrap();
         for args in [
             vec!["app", "init", "hello"],
@@ -688,7 +715,7 @@ async fn declaration_messages_escape_paths_while_json_retains_original_paths() {
                 Output::Text(value) => {
                     assert!(!structured);
                     assert!(value.contains(&format!(
-                        "config-{structured}-café\\n\\u{{1b}}[2J\\u{{202e}}.json"
+                        "config-{structured}-café\\n\\u{{1b}}[2J\\u{{202e}}.toml"
                     )));
                     assert!(!value.contains('\u{1b}'));
                     assert!(!value.contains('\u{202e}'));
@@ -713,7 +740,7 @@ async fn fleet_init_adds_a_second_fleet_without_journals_or_network_calls() {
         .join("target/init-cli-tests");
     std::fs::create_dir_all(&parent).unwrap();
     let root = crate::tests::directory(&parent, "second-fleet").unwrap();
-    let path = root.join("canic.json");
+    let path = root.join("canic.toml");
     let config = path.to_str().unwrap();
     json(&["app", "init", "hello", "--config", config]).await;
     json(&[
@@ -787,7 +814,7 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
         .join("target/init-cli-tests");
     std::fs::create_dir_all(&parent).unwrap();
     let root = crate::tests::directory(&parent, "fleet").unwrap();
-    let config = root.join("canic.json");
+    let config = root.join("canic.toml");
     let config = config.to_str().unwrap();
     let init = ["app", "init", "--config", config, "hello"];
     let result = json(&init).await;
@@ -962,13 +989,13 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
         .get_mut("demo")
         .unwrap()
         .journal = Some("original-journal".into());
-    std::fs::write(config, serde_json::to_vec_pretty(&declared).unwrap()).unwrap();
+    std::fs::write(config, toml::to_string_pretty(&declared).unwrap()).unwrap();
     let adopted_status = json(&["fleet", "status", "--config", config, id]).await;
     assert_eq!(adopted_status, status);
     assert!(!root.join(".canic/apps/hello/fleets/demo").exists());
     let fleets = &mut declared.apps.get_mut("hello").unwrap().fleets;
     fleets.insert("staging".into(), fleets["demo"].clone());
-    std::fs::write(config, serde_json::to_vec_pretty(&declared).unwrap()).unwrap();
+    std::fs::write(config, toml::to_string_pretty(&declared).unwrap()).unwrap();
     let ambiguous = Cli::try_parse_from(["canic", "fleet", "show", "--config", config]).unwrap();
     let listed = json(&["fleet", "list", "--config", config]).await;
     assert_eq!(listed["fleets"].as_array().unwrap().len(), 2);
@@ -1101,7 +1128,7 @@ fn source_generation_defaults_its_checkout_and_owns_its_new_config() {
             "--canic-source",
             ".",
             "--config",
-            "existing.json",
+            "existing.toml",
         ],
         vec![
             "--source",
@@ -1178,7 +1205,7 @@ fn commands_reject_context_they_do_not_use() {
             "mainnet",
         ],
         vec!["fleet", "view", "report.html", "--app", "demo"],
-        vec!["fleet", "view", "report.html", "--config", "canic.json"],
+        vec!["fleet", "view", "report.html", "--config", "canic.toml"],
         vec!["fleet", "list", "--fleet", "mainnet"],
         vec!["fleet", "list", "--state-dir", "journal"],
         vec!["fleet", "list", "--watch"],

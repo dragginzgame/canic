@@ -1,6 +1,7 @@
 import { httpUpdateTransport, type HttpUpdateOptions, type IssuedCredential,
   type IssuerTransport, type LogoutTransport } from '@dragginzgame/ic-auth-client';
 import type { Identity } from '@tokostudios/ic-platform/agent';
+import type { Ed25519KeyIdentity } from '@tokostudios/ic-platform/identity';
 import { Principal } from '@tokostudios/ic-platform/principal';
 import { codec as issueCodec, type Request as Issue, type Response } from './generated/issue.js';
 import { codec as renewCodec } from './generated/renew.js';
@@ -13,7 +14,8 @@ import { codec as credentialCodec } from './generated/credential.js';
 export interface IssuerBinding {
   issuer: Principal;
   account: Principal;
-  browser: Principal;
+  /** SDK public key from the selected device; the adapter never takes its signing key. */
+  browserKey: ReturnType<Ed25519KeyIdentity['getPublicKey']>;
   intent: Issue;
   /** Explicit conservative journal-minus-issuer clock offset. The application
    * must establish this bound; Canic never estimates it from response arrival.
@@ -38,12 +40,17 @@ export interface IssuerAdapter {
  * signer, retry or issue-after-lookup fallback is introduced here. */
 export function issuerAdapter(binding: IssuerBinding, update: IssuerUpdate): IssuerAdapter {
   const issuer = binding.issuer.toText(), account = binding.account.toText();
-  const browser = binding.browser.toText(), offset = binding.deadlineOffsetNs;
-  if ([binding.issuer, binding.account, binding.browser].some(p => p.isAnonymous())
+  const browser = Principal.selfAuthenticating(binding.browserKey.toDer()).toText();
+  const offset = binding.deadlineOffsetNs;
+  if ([binding.issuer, binding.account].some(p => p.isAnonymous())
     || typeof offset !== 'bigint') throw new IssuerError('binding');
   // Codec round-trip owns nested grants and identity arrays, before any await.
   const issueBytes = issueCodec.encodeRequest(binding.intent);
   const intent = issueCodec.decodeRequest(issueBytes);
+  const raw = binding.browserKey.rawKey;
+  if (intent.browser_public_key.length !== raw.length
+    || !intent.browser_public_key.every((byte, index) => byte === raw[index]))
+    throw new IssuerError('binding');
   const selectors = { account: Principal.fromText(account).toUint8Array(),
     login_epoch: intent.login_epoch, login_id: intent.login_id };
   const check = (identity: Identity, expected: string, signal: AbortSignal) => {

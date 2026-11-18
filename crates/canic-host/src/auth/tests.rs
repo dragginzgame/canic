@@ -94,7 +94,7 @@ fn retained_reply(dir: &Path, plan: &Plan) -> std::path::PathBuf {
 #[test]
 fn auth_approval_keeps_original_authority_and_rejects_conflicting_configuration() {
     let (dir, mut selected) = fixture();
-    let input = dir.join("canic.json");
+    let input = dir.join("canic.toml");
     let (id, plan) = create_auth_plan(&dir, &input, &selected, "2vxsx-fae").unwrap();
     assert_eq!(
         create_auth_plan(&dir, &input, &selected, "2vxsx-fae").unwrap(),
@@ -147,7 +147,7 @@ fn auth_receipts_require_exact_retained_call_and_revocation_does_not_consume_mut
     let (dir, mut selected) = fixture();
     let (id, plan) = create_auth_plan(
         &dir,
-        &dir.join("canic.json"),
+        &dir.join("canic.toml"),
         &selected,
         &crate::signed::tests::controller(),
     )

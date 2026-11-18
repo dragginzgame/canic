@@ -167,7 +167,7 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn historical_scan_keeps_its_refusal_and_digest_across_root_migration() {
+async fn historical_scan_keeps_its_refusal_and_digest_after_refused_root_upgrade() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
@@ -222,7 +222,7 @@ async fn historical_scan_keeps_its_refusal_and_digest_across_root_migration() {
     assert_eq!(scan.after.as_ref().unwrap().version, "z");
     assert_eq!(scan.catalog.releases, 2);
     assert!(matches!(status.preservation, wire::Scan::Legacy(_)));
-    maintain(&root).await;
+    super::refuse_old_backing(&root).await;
     assert_eq!(maintenance_tests::observe(&root).await, status);
     // Duplicate continuation cannot bypass the refused cursor or issue stop.
     assert_eq!(maintenance_tests::advance(&root, &approval).await, status);

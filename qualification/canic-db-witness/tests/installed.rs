@@ -1,10 +1,12 @@
 //! Installed application + Canic mount + actual IC DB. Expected rows are literal
 //! application outcomes; no engine codec/query implementation in this host.
+mod managed;
 use canic::db::RPC_LIMITS;
 use canic::db::inspection::{Admission, Cardinality, Entity, Kind, Request, Selection};
 use canic_db_witness::protocol::{
     INSPECT, InspectReply, QUERY, QueryReply, QueryRequest, Refusal, Row, WRITE, WriteReply,
 };
+use ic_testkit::pocket_ic::common::rest::BlobCompression;
 use ic_testkit::pocket_ic::{CanisterId as Principal, PocketIcBuilder, nonblocking::PocketIc};
 use ic_testkit::server::{Limits, PreparedServer, Server};
 use serde::{Serialize, de::DeserializeOwned};
@@ -332,6 +334,31 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
     invalid = request.clone();
     invalid.work = 0;
     assert_eq!(client.page(&invalid).await, Err(Refusal::Limit));
+    let before = pic.get_stable_memory(canister).await;
+    let original_module = pic
+        .canister_status(canister, None)
+        .await
+        .unwrap()
+        .module_hash
+        .unwrap();
+    assert!(
+        canic_qualification::upgrade_stopped(pic, canister, fault.clone(), vec![1], None)
+            .await
+            .is_err()
+    );
+    assert_eq!(pic.get_stable_memory(canister).await, before);
+    assert_eq!(
+        client.page(&request).await.unwrap().rows,
+        [row(3, 10), row(4, 20)]
+    );
+    assert_eq!(
+        pic.canister_status(canister, None)
+            .await
+            .unwrap()
+            .module_hash
+            .as_ref(),
+        Some(&original_module)
+    );
     // Upgrade loses heap caches, not authority/data/continuation.
     canic_qualification::upgrade_stopped(pic, canister, normal.clone(), vec![], None)
         .await
@@ -455,7 +482,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
     assert_eq!(changed.admission, Admission::Incompatible);
     assert_eq!(client.inspect().await.cardinality, Cardinality::Unavailable);
     assert_eq!(pic.get_stable_memory(canister).await, backing);
-    canic_qualification::upgrade_stopped(pic, canister, normal, vec![], None)
+    canic_qualification::upgrade_stopped(pic, canister, normal.clone(), vec![], None)
         .await
         .unwrap();
     assert_eq!(client.catalogue().await.schema, catalogue.schema);
@@ -463,9 +490,20 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         client.inspect().await.cardinality,
         Cardinality::Available(7)
     );
-    println!(
-        "Canic typed DB integration: bounded schema inspection, caller/frame refusal, atomic batch refusal, sparse pages, cursor validation, 7 upgrades, reply rollback, maintenance/cancellation and incompatible-state preservation passed"
-    );
+    // Model an installation with no directory. Reopen must refuse without
+    // allocating even an empty owner/database or accepting new authority.
+    let mut corrupt = pic.get_stable_memory(canister).await;
+    corrupt[0] ^= 0xff;
+    for damaged in [corrupt, vec![]] {
+        pic.set_stable_memory(canister, damaged.clone(), BlobCompression::NoCompression)
+            .await;
+        assert!(
+            canic_qualification::upgrade_stopped(pic, canister, normal.clone(), vec![], None)
+                .await
+                .is_err()
+        );
+        assert_eq!(pic.get_stable_memory(canister).await, damaged);
+    }
     assert_eq!(
         instance.close(std::time::Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

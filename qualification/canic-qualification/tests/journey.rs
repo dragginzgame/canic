@@ -8,6 +8,7 @@ use std::{
     process::Command,
     time::Duration,
 };
+mod demo_actor;
 
 fn cli(root: &Path, args: &[&str]) -> Value {
     let uses_journal = args.first() == Some(&"fleet")
@@ -84,7 +85,7 @@ async fn deploy_call_resume_and_upgrade() {
     let wasm = std::env::var("CANIC_HELLO_V1").unwrap();
     let wasm_v2 = std::env::var("CANIC_HELLO_V2").unwrap();
     let icp = repo.join(".tools/ic/bin/icp");
-    let config_path = root.join("canic.json");
+    let config_path = root.join("canic.toml");
     let config_path = config_path.to_str().unwrap();
     let initialized = cli(&root, &["app", "init", "hello", "--config", config_path]);
     assert_eq!(
@@ -201,6 +202,7 @@ async fn deploy_call_resume_and_upgrade() {
     );
     assert_eq!(configured["operations"][0]["canister"], target);
     let target_id = CanisterId::from_text(target).unwrap();
+    demo_actor::check(owner.client(), target_id, "Hello from Canic").await;
     let subnet = owner.client().get_subnet(target_id).await.unwrap();
     let count = owner
         .client()
@@ -208,10 +210,6 @@ async fn deploy_call_resume_and_upgrade() {
         .await
         .unwrap()
         .num_canisters;
-    assert_eq!(
-        cli(&root, &["fleet", "call", id, "--name", "team"])["greeting"],
-        "Hello from Canic, team!"
-    );
     // Completed replay neither signs nor creates another canister.
     assert_eq!(
         cli(
@@ -330,6 +328,7 @@ async fn deploy_call_resume_and_upgrade() {
     );
     assert_eq!(upgraded["canister"], target);
     assert_ne!(upgraded["module_hash"], receipt["module_hash"]);
+    demo_actor::check(owner.client(), target_id, "Hello again from Canic").await;
     let upgrade_status = cli(&root, &["fleet", "status", upgrade_id]);
     let runtime_attempts = ["stop", "stopped", "start"].map(|step| {
         assert_eq!(upgrade_status["effects"][step], "reply_retained");
@@ -337,10 +336,6 @@ async fn deploy_call_resume_and_upgrade() {
         let signed = std::fs::read(&path).unwrap();
         (path, signed)
     });
-    assert_eq!(
-        cli(&root, &["fleet", "call", upgrade_id, "--name", "team"])["greeting"],
-        "Hello again from Canic, team!"
-    );
     let signed_path = root.join(upgrade_id).join("install/signed.json");
     let original_signed = std::fs::read(&signed_path).unwrap();
     std::fs::remove_file(root.join(upgrade_id).join("receipt.json")).unwrap();

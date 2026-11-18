@@ -13,13 +13,18 @@ ic-wasm-store.workspace = true
 [target.'cfg(any())'.dev-dependencies]
 toko-tooling.workspace = true
 
+[features]
+backup = ["canic-management-protocol/backup", "dep:ic-backup", "dep:ic-host-sign"]
+
 [dependencies]
 base64.workspace = true
 canic = { workspace = true, features = ["auth"] }
 canic-management-protocol.workspace = true
+ic-backup = { workspace = true, optional = true }
 ic-host-artifacts.workspace = true
 ic-host-fs.workspace = true
 ic-host-process.workspace = true
+ic-host-sign = { workspace = true, optional = true }
 ic-host-text.workspace = true
 ic-platform = { workspace = true, features = ["native-signed-secp256k1"] }
 ic-platform-protocol = { workspace = true, features = ["ledger"] }
@@ -33,6 +38,7 @@ sha2.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 toml.workspace = true
+toml_edit.workspace = true
 url.workspace = true
 
 [dev-dependencies]

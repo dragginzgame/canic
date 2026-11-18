@@ -9,7 +9,6 @@ use std::{
 mod discovery;
 #[cfg(test)]
 mod tests;
-mod unique;
 pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
 
 const MAX_CONFIG_BYTES: usize = 32 * 1024;
@@ -19,7 +18,6 @@ const MAX_CONFIG_BYTES: usize = 32 * 1024;
 #[serde(deny_unknown_fields)]
 pub struct Config {
     /// Logical applications; each owns zero or more fleets.
-    #[serde(deserialize_with = "unique::map")]
     pub apps: BTreeMap<String, AppConfig>,
 }
 
@@ -28,10 +26,9 @@ pub struct Config {
 #[serde(deny_unknown_fields)]
 pub struct AppConfig {
     /// Reusable canister definitions shared by every fleet of this app.
-    #[serde(deserialize_with = "unique::map")]
     pub canisters: BTreeMap<String, CanisterDefinition>,
     /// Named deployments; an application can be defined and built without any.
-    #[serde(default, deserialize_with = "unique::map")]
+    #[serde(default)]
     pub fleets: BTreeMap<String, FleetDeclaration>,
 }
 
@@ -61,6 +58,9 @@ pub struct BuildInput {
     pub manifest: PathBuf,
     /// Cargo package producing one Wasm library.
     pub package: String,
+    /// Optional app-owned native command codec binary target, built beside the Wasm.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client: Option<String>,
 }
 
 /// Fleet-owned observation binding; no application topology or artifact overrides.
@@ -87,7 +87,6 @@ pub struct FleetDeclaration {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub journal: Option<PathBuf>,
     /// Existing identities by app definition name; absent entries remain unbound.
-    #[serde(deserialize_with = "unique::map")]
     pub canisters: BTreeMap<String, CanisterBinding>,
 }
 
@@ -104,7 +103,6 @@ pub struct FleetConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub journal: Option<PathBuf>,
     /// Named canisters belonging to this fleet.
-    #[serde(deserialize_with = "unique::map")]
     pub canisters: BTreeMap<String, CanisterConfig>,
 }
 
@@ -191,6 +189,9 @@ impl Config {
             for canister in definition.canisters.values() {
                 if let Some(build) = &canister.build {
                     name(&build.package)?;
+                    if let Some(client) = &build.client {
+                        name(client)?;
+                    }
                     if build.manifest.as_os_str().is_empty() || canister.wasm.is_none() {
                         return Err(Error::Invalid(
                             "build recipe needs a manifest and Wasm output".into(),
@@ -509,6 +510,21 @@ impl SelectedFleet {
                     ))
                 };
             }
+            let (plan, _) = crate::plan::load(&dir, id)?;
+            if plan.application_call().is_some() {
+                return if plan.network == self.config.network
+                    && plan
+                        .deployment
+                        .as_ref()
+                        .is_some_and(|d| d.app == self.app && d.fleet == self.fleet)
+                {
+                    Ok(())
+                } else {
+                    Err(Error::Invalid(
+                        "call does not belong to selected app/fleet".into(),
+                    ))
+                };
+            }
         }
         let (operation, network) = crate::fleet::local_operation(root, id, crate::now()?)?;
         let records = crate::fleet::inventory(root, false, crate::now()?)?.records;
@@ -543,12 +559,20 @@ impl SelectedFleet {
 /// Refuses invalid declarations and existing destination files.
 pub fn init_config(path: &Path, config: &Config) -> Result<()> {
     let bytes = encode_config(config)?;
-    crate::output_publication::publish(path, &bytes, ic_host_fs::Destination::CreateNew, 0o700)
+    crate::output_publication::publish(
+        path,
+        &bytes,
+        ic_host_fs::Destination::CreateNew,
+        0o700,
+        0o600,
+    )
 }
 
 pub(super) fn encode_config(config: &Config) -> Result<Vec<u8>> {
     config.validate()?;
-    let bytes = serde_json::to_vec_pretty(config).map_err(supplier)?;
+    let bytes = toml::to_string_pretty(config)
+        .map_err(supplier)?
+        .into_bytes();
     if bytes.len() > MAX_CONFIG_BYTES {
         return Err(Error::Invalid("config exceeds 32 KiB".into()));
     }
@@ -717,11 +741,53 @@ fn edit_config<T>(path: &Path, update: impl FnOnce(&mut Config) -> Result<T>) ->
             supplier(error)
         }
     })?;
-    let mut config = load_config(path)?;
+    let source = store::read(path, MAX_CONFIG_BYTES)?;
+    let source = std::str::from_utf8(&source).map_err(supplier)?;
+    let mut config: Config = toml::from_str(source).map_err(supplier)?;
+    config.validate()?;
     let result = update(&mut config)?;
-    let bytes = encode_config(&config)?;
-    crate::output_publication::publish(path, &bytes, ic_host_fs::Destination::Replace, 0o700)?;
+    config.validate()?;
+    let mut document = source.parse::<toml_edit::DocumentMut>().map_err(supplier)?;
+    let additions = toml::to_string(&config)
+        .map_err(supplier)?
+        .parse::<toml_edit::DocumentMut>()
+        .map_err(supplier)?;
+    append_declarations(document.as_table_mut(), additions.as_table());
+    let text = document.to_string();
+    // All current edits add declarations. Refuse any future mutation this writer
+    // cannot represent rather than silently dropping it or replacing comments.
+    if text.len() > MAX_CONFIG_BYTES || toml::from_str::<Config>(&text).map_err(supplier)? != config
+    {
+        return Err(Error::Invalid(
+            "config edit exceeds bounds or changes existing declarations".into(),
+        ));
+    }
+    let bytes = text.as_bytes();
+    crate::output_publication::publish(
+        path,
+        bytes,
+        ic_host_fs::Destination::Replace,
+        0o700,
+        0o600,
+    )?;
     Ok(result)
+}
+
+fn append_declarations(target: &mut dyn toml_edit::TableLike, source: &toml_edit::Table) {
+    for (key, value) in source {
+        match target.get_mut(key) {
+            Some(existing) => {
+                if let (Some(existing), Some(value)) =
+                    (existing.as_table_like_mut(), value.as_table())
+                {
+                    append_declarations(existing, value);
+                }
+            }
+            None => {
+                target.insert(key, value.clone());
+            }
+        }
+    }
 }
 
 /// Read one bounded local declaration without following a file symlink.
@@ -729,8 +795,9 @@ fn edit_config<T>(path: &Path, update: impl FnOnce(&mut Config) -> Result<T>) ->
 /// # Errors
 /// Refuses missing, malformed, unsupported or oversized configuration files.
 pub fn load_config(path: &Path) -> Result<Config> {
+    let bytes = store::read(path, MAX_CONFIG_BYTES)?;
     let config: Config =
-        serde_json::from_slice(&store::read(path, MAX_CONFIG_BYTES)?).map_err(supplier)?;
+        toml::from_str(std::str::from_utf8(&bytes).map_err(supplier)?).map_err(supplier)?;
     config.validate()?;
     Ok(config)
 }

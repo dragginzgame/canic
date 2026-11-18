@@ -7,6 +7,677 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Root-managed Backup capture and restore — 2026-11-18
+
+Both workspaces select registry IC Backup 0.105.5. The installed external-signer
+suite passed both the direct and the Root-managed case. The latter used Root
+Wasm `4baf945ca7288b7b3f5b360f9172040a2d31af82b9ef8a1c461e72eb6c0b11f5`
+and counter Wasm `6e7ab39c3bc523f3dd0f61b43c6c33e9255156327e4b31897d97f7af7af49262`.
+After simulated loss of the take and load replies, each reopened operation
+required explicit observation. The fixture verified restored stable bytes,
+stopped status and restore completion from the retained journal offline.
+The separate installed Root snapshot regression passed callback failure,
+duplicate delivery and upgrade with an unresolved result. Application reopening
+and migration of deployed Root layouts remain outside this qualification.
+
+## Managed DB upgrade with a lost install callback — 2026-11-18
+
+Canic #20's revised Storage contract was exercised with IC DB revision
+`97e49f2ef7547cc4413ec75e9cea7d70c56735c1`, Storage 0.78.1, Wasm Store
+0.4.0 and Testkit 0.110.0. The existing Root callback fault and fleet reconcile
+path reuse the exact-attempt rules recorded under **First Root-owned child
+upgrade**. No additional upgrade mode or allocation policy was required.
+The two-row fixture reached `InstallIssued` with the approved replacement
+already installed, one install attempt and no local completion receipt.
+Reconciliation preserved the signed stage, effect commitments, original approval
+and stable bytes. The version advanced once and the original user could write
+again. The direct DB witness separately checked failed upgrade rollback and
+refused empty/corrupt backing.
+
+## Backup direct signer and original-request recovery — 2026-11-18
+
+The installed Linux witness used registry Backup 0.105.4, Host Sign 0.1.0,
+Platform 0.34.16 and Testkit 0.110.0. The selected release provider executable
+had SHA-256 `162219b610b0997be248df5f86e2c3184d898781c237f00753531897ead919de`.
+The disposable identity used secp256k1 with an isolated OS keyring.
+
+The replica took one snapshot. After its reply was dropped, reopening the Backup
+journal and reconstructing the signer preserved the original request ID and journal
+bytes. Normal advance spent no signature and sent no request. A different signer
+manifest was refused. Explicit observation issued one original-request status
+lookup and capture completed. Offline receipt verification passed. Restore
+replaced the modified 64 KiB of stable memory byte-for-byte and left the child
+stopped. This fixture has one direct controller and synthetic application authority.
+
+The follow-up Canic consumer run exercised a partial success frame, output one
+byte over Tooling’s frame limit, process death, deadline expiry and caller
+cancellation after process launch. Dropping the connection reaped each provider.
+Cold journal reopen retained one spent signing reservation, no original request
+ID and zero replica requests. The binding checks used the real disposable
+signer at an expiry 731 ns past a minute boundary. Replaying a signed update
+under changed method, arguments, expiry or size failed, as did a mismatched
+status ID. The real signer also refused a changed sender and nonzero network
+allowance.
+
+## Registry Wasm Store 0.4.0 — 2026-11-18
+
+The public artifact builder used the published runtime and its packaged lock.
+The 712,986-byte Wasm had SHA-256
+`31d914f99c596590f663e1dcf063d6b369d105e397d66ca84b4b6bcbff2f052f`.
+Both Canic workspaces selected protocol 0.4.0. All six installed CLI publication
+cases passed, including the managed counter and Store upgrade. The isolated
+Store run passed 15 protocol tests and 25 of 31 installed cases. Six historical
+Root migration fixtures trapped in Root's Storage bootstrap during post-upgrade.
+They retain their positive assertions. Store 0.4.0 requires fresh backing for a
+fleet coming from the 0.3.3 layout. This run involved local simulated fleets only.
+
+## Blob 0.105.0 and DB 0.22.2 on Storage 0.78 — 2026-11-18
+
+Both locks select Blob archive SHA-256
+`9c30df43913693e3fa7752b8caae0a4ae0eea77347a205b2045590a150c54da3`
+and DB revision `97e49f2ef7547cc4413ec75e9cea7d70c56735c1`.
+The installed DB suite passed. Nine of ten installed Blob cases passed after
+the catalog mounted replicated readiness, including Root-managed creation and
+activation. The old catalog upgrade failed. Storage independently rejected its
+directory marker on a copy of the stable bytes. The failed upgrade retained the
+original bytes, closed management report and remaining asset. The positive
+transition remains tracked by [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8).
+
+## Storage 0.78, Testkit 0.110 and Blob 0.104 — 2026-11-18
+
+The installed local counter, managed fleet CLI counter, Root strict reopen and
+Root snapshot cases passed on the registry releases. They exercise ordinary
+upgrades, rollback, fence preservation, refusal of invalid or predecessor
+backings and original snapshot-result custody. The isolated DB witness passed
+seven upgrades and its mutation/permission cases with Testkit 0.110.0 and the
+Storage 0.74.1 lease required by its pinned DB. No deployed image was migrated.
+
+The product and qualification locks select Blob 0.104.0. Its optional Root
+mount compiles, but the installed catalog does not compile against that release.
+Its Service expects retained Access and does not export named allocation
+declarations. The local Blob checkout contains newer work and was excluded.
+
+## Storage 0.77 supplier review — 2026-11-18
+
+The clean Storage checkout and the local registry archive identify release
+`c5887b8d3e8e671e417e83b67d83663ce7e871f7`. Three native adapter tests passed
+against this checkout. The supplier's prepared installed lifecycle fixture also
+passed on localhost, exercising map, set and cell preservation across ordinary
+upgrades, failed-message rollback and read-only query isolation. The fixture
+used the existing supplier Wasm and test executable. Canic Root and counter
+still select the 0.76.2 records API. Their own installed cutover and custody
+checks are pending.
+
+## TOML source configuration — 2026-11-17
+
+Restore `canic.toml` under the existing App → Fleets → Canisters schema. The
+maintainer accepted a single-format cut with comment-preserving CLI additions.
+The design's configuration section records the legacy review and source-format
+decision. Host uses registry `toml` 1.2.1 and `toml_edit` 0.25.19; no parser enters
+application Wasm. The custom JSON duplicate-name visitor is removed.
+
+Focused evidence: 28 Host configuration tests, seven starter/build-admission
+tests, 17 CLI configuration tests, three progress tests and 15 status tests pass.
+Cases include ordinary/inline/dotted TOML, comments and quote preservation, JSON
+source refusal, duplicate keys, invalid edits, bounded discovery, locked writers,
+relative journals and unchanged retained plan bytes/digests. Product Host/CLI
+Clippy, strict Host Rustdoc, qualification Root/publication/Auth/journey Clippy,
+formatting and the installed Tooling snapshot check pass.
+
+The installed `counter_managed::` publication witness passes in 41.27 seconds
+with the updated PATH CLI and existing prepared Root, Store and counter artifacts:
+TOML fleet deployment, application calls, lost-reply observation, persistence
+upgrades and fenced readiness use the same retained effect owners. Synthetic
+cycles and localhost only; no mainnet deployment or push. `make canic` installs
+the updated executable. All three repository declarations load with their
+original identities and journal paths.
+
+An additional optional `profile-state` compilation probe remains blocked by the
+pre-existing profile worker's Storage 0.76 API migration. The browser harness's
+separate JSON transport fixture is unchanged; it is not Canic source config.
+
+## Root snapshot executor — 2026-11-17
+
+The maintainer accepted Backup 0.105.4's execute-once/original-result lookup
+proposal and explicitly limited source changes to Canic. The optional `backup`
+feature adds passive Platform-backed requests and original-result records,
+Root mounts and one record in the existing Storage bootstrap. It introduces no
+new package, Host journal, application permission or Backup runtime dependency.
+Legacy research is reused from **First Root-owned child upgrade** and the Backup
+signer review below: retain original authority before dispatch, preserve uncertain
+outcomes and refuse incompatible reopen. Legacy's retired live backup CLI is not
+evidence for this executor.
+
+The installed Root/counter witness executes stop/status, snapshot take, metadata
+and data acquisition, allocation/upload/readback/load and stopped completion.
+It preserves the populated counter's stable bytes, checks duplicate execute and
+lookup, malformed input, wrong caller/arguments/approval/generation, expired new
+dispatch and exhausted call-cost allowance. Controller rotation revokes the old
+caller's lookup access while the new controller can observe the original record.
+Actual management rejection preserves its code/message on replay. Traps before
+and after the inner result write leave the original slot Pending across Root upgrade
+and duplicate delivery, and blocks subsequent effects. Terminal original replies
+remain available after compatible upgrade and expiry. The simulator records a
+deletion attempt and clean process cleanup; this is not remote deletion proof.
+
+Focused evidence: eight management ledger/storage tests, two protocol tests
+(including a full one-MiB upload), strict native/Wasm Clippy and Rustdoc, and the
+installed `root snapshot::` case pass. The final installed case completed in
+6.50 seconds; the documented focused runner also passes. The first sandboxed simulator startup refused;
+localhost-enabled execution passed. Early tests exposed Wire's conservative
+borrowed-element allocation charge and a cleanup assertion that incorrectly
+treated intentional server termination as failure; both are corrected. Root's
+snapshot and default layouts remain explicit, without an implicit migration.
+
+Qualified Wasm SHA-256: Root
+`96c39533668b3d654923ee07068eeb2cd8dd6b5bd5a27cee8b99ce8e34d1e914`;
+counter `3034fb15505710f1b3c215e19416ab11ae28da524a42b1d1c91238a7498fc960`.
+Inputs retain Platform protocol 0.3.5 / Runtime 0.23.17, Storage 0.76.2,
+Wire 0.24.3 and Testkit 0.109.0. No supplier version refresh was requested.
+The normal Root runner owns the new focused selector:
+`bash scripts/dev/test-root.sh snapshot::`; no second runner is retained.
+
+[Canic #6](https://github.com/dragginzgame/canic/issues/6) remains open.
+[Backup #1](https://github.com/dragginzgame/ic-backup/issues/1) still owns the
+normal host route, original outer certificate/restart replay and finite two-hop
+observation accounting. Real transport-held reply windows are not qualified by
+this fixture. [Canic #7](https://github.com/dragginzgame/canic/issues/7)
+owns application fencing/reopening. Bounds are two lifetime operations, 64 total
+slots and 16 MiB reserved result bytes; no reclamation, generation rotation, Root
+rollback or existing-Root layout migration is admitted. Once occupied, snapshot
+custody fences ordinary private management endpoints. No live deployment,
+Backup sibling edit, publication, commit or push occurred.
+
+## Application-owned counter commands — 2026-11-17
+
+The maintainer selected named app-owned commands, direct selected-user ingress
+and retained uncertainty. Scope and legacy source/history review are recorded in
+[the demo contract](../demos/demo.md#accepted-application-command-boundary).
+`build.client` selects one native codec target in the existing application package.
+It encodes requests and interprets replies; Canic selects the canister and reuses
+the existing journal, `PlanAction`, signed-request admission and Platform transport.
+`Call` uses record version 7 with exact request bytes, no copied Wasm and no
+management/controller authority. Existing record codecs retain their byte order.
+
+The installed `counter_managed::` fixture passes using the PATH CLI (42.56s).
+An isolated authenticated visitor, separate from Root and the deployment operator,
+increments the real installed counter. Losing its local reply blocks another
+increment; reconciliation recovers the original signed request and leaves value
+unchanged. App status retains a reply without claiming a deployment receipt.
+Further user operations and Root-driven publication/upgrade preserve the counter
+at the same principal. The initially fenced case still refuses readiness and
+completion without granting activation to the external controller.
+
+Focused native checks pass: five application boundary cases, 17 CLI/config cases,
+and the affected plan/config/signed-owner regressions (18/26/13). The loopback
+fixture observes a read-state request, never update submission, on resume.
+Expired uncertainty stays blocked; malformed codec output and claimed callers
+refuse; terminal replies survive codec failure and permit a later explicit new
+invocation. Native strict Clippy, counter Wasm-library Clippy, qualification
+example/publication/Root/journey Clippy and affected native Rustdoc pass.
+Formatting and Toko Tooling 0.44.11 snapshot checks pass. No full repository gate
+was selected; broader Storage supplier composition restrictions remain unchanged.
+
+`make canic` installed the CLI on PATH. The explicit demo's one-second EOF smoke
+test prepared Root/Store/counter declarations, printed normal commands, attempted
+instance deletion and stopped its owned simulator. No browser/window, mainnet
+deployment, wallet operation, push or publication occurred. The interrupted
+greeting-directory move was finished at the maintainer's request; its existing
+regression app remains under `apps/demo/canic-hello`.
+
+Qualified inputs: product lock SHA-256
+`8d21125da4986da676f9a4549cb09784c6fb2958ab4123c230a100bb1e2b5ce0`,
+qualification lock
+`49aad37bb4c650bed6cd1437188b623a948c3d759c35abf18e32a74ab75c5f62`,
+installed CLI
+`505b62767d4dad95fb76477e615cdf24e00ec094fb2083b6b2cae149e4c4f78c`,
+native counter codec
+`f9b711ea133a357c714244252201d007d01b4eb15c8ef3daccc5c57b9b1b2506`.
+Counter v1/v2 hashes remain those in the preceding readiness entry. Logs are
+`target/application-{tests,cli-tests,owner-tests,installed-final,clippy,wasm-clippy,qualification-clippy,doc,demo-session}.log`.
+These are local Linux results, not native macOS execution evidence.
+
+Removed sediment: the greeting-specific CLI call/selection path and Host greeting
+transport helper. Management regressions query their greeting fixtures directly.
+No runtime plugin registry, schema interpreter, Root call proxy, second journal,
+new crate or second signing/retry engine was added. The native executable is
+trusted local app code, not a sandboxed plugin. Initial commands are replicated
+updates; recovery exposes retained raw replies and keeps the original deadline.
+The existing 128-operation inventory bound remains. Query commands, generic
+history reclamation, simulator restart recovery and installed Backup restoration
+are not qualified by this increment.
+
+## Explicit Root readiness and Host adoption — 2026-11-17
+
+Root now invokes the bounded replicated `readiness` method and accepts only
+strictly decoded `Ready`. `Unavailable`/`Fenced` refuse completion; observation
+never initializes or activates the app. Reuse the accepted readiness decisions
+and legacy lifecycle/endpoint research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`
+recorded below. No generic invocation engine, fallback greeting probe, service
+catalog or new runtime package is introduced.
+
+The fresh-fleet cutover raises the management journal root to schema 2 (artifact
+root remains schema 1). The exact prior schema-1 greeting Root is retained as
+`qualification/canic-qualification/fixtures/root-greeting-records.wasm`, with its
+provenance/hash beside it. Installed qualification populates its child custody,
+attempts the new executable and verifies refusal with byte-identical state and
+the old executable still installed. The same case retains old allocator and
+corrupt/empty-image refusal plus synchronous journal/artifact/timer rollback.
+This is deliberate refusal, not an approved live-fleet migration (6.43s).
+
+The new `counter_managed::` publication witness uses the actual fleet CLI and
+registry Store. Root installs the counter through a real management call, so the
+application records Root's actual installation principal. Two ingress users
+increment it; publication and Root-driven stop/upgrade/start preserve its value
+and principal across v1→v2. A separate initially-fenced executable stays at
+Verified with a readiness mismatch, no completion receipt and unchanged attempts.
+Repeated apply cannot reopen it; neither an ingress user nor Root's external
+controller gains application maintenance authority. No arbitrary Root call route
+or managed counter activation is claimed. The first complete run passed in 39.89s;
+the final independent lock selections below pass the same witness in 39.06s.
+
+The native Host/CLI require published Artifacts/FS 0.80.3 and Process 0.81.0;
+Text remains 0.77.2. Qualification requires Artifacts/FS 0.80.3 and Process
+0.80.5. Testkit 0.109.0 exposes the latter's concrete `Failure` in its public
+server report: selecting 0.81 directly made the existing typed cancellation
+check fail to compile. Keep the independent qualification graph on its compatible
+owner rather than adding an alias, matching error text or weakening cleanup.
+The published 0.81 API adds owned pipe input; Canic's existing Null/Inherit policy,
+byte/deadline limits and retry/diagnostic ownership remain unchanged.
+
+Focused validation: nine Host process/artifact tests, three CLI loopback/handoff
+tests (mock launcher, no browser), product and fixture Clippy, Wasm Rustdoc,
+generated starter build/lint, formatting and tooling snapshot verification pass.
+The demo example compiles against the retained Testkit boundary; its explicit
+one-second EOF session closes with deletion attempted and the server stopped.
+`make canic` installs the product CLI on PATH; its normal demo build produces all
+three artifacts. No full CI, mainnet deployment, release or sibling edits occurred.
+
+Product lock SHA-256 `2cf859485e4097b25a26f928c233d9c61f7b04a867c35ecc19f8bd462b7b91ab`;
+qualification lock `d9c2102c7d6cf50ead57192dc536bf01001bf861ac5741e721b71369a9181fc4`.
+Root is 1,422,292 bytes, SHA-256
+`0159abd2ab0b22a3938f5f153e8a12d40e8ef91dd7739cd26fcce5d59e47ad43`;
+maintenance candidate `c538f4423c50a51ae71052e50ab9d97febc0c64c7889d30204f660d47a0c7e6e`.
+Counter v1/v2 retain the hashes in the earlier counter entry; the fenced fixture
+is `3b74cc1dd4c89ab139b8bfe76401ef5f507c86058ae4992fdb5644cd6334b1f9`.
+Other supplier selections, including Platform 0.34.15, Runtime 0.23.17, Storage
+0.76.2, Timers 0.46.4 and registry Store 0.3.3, are preserved.
+
+Interactive counter calls remain pending: `make demo` still runs the greeting,
+and `fleet call --name` is not presented as a generic application client. Backup
+restoration and Root-mediated counter fencing/activation retain their own gates.
+
+## Root records and strict Storage cutover — 2026-11-17
+
+Fresh Root/management now uses registry Storage 0.76.2 `records` and `platform`,
+with one participant and two schema-1 roots: journal 16,384 bytes and retained
+artifact/source custody 1,048,600 bytes. The supplier admits 17 physical pages
+inside the existing 64-page budget. Existing CUJ/CUA payload decoders and authority
+checks remain; this is not an importer for 0.74's allocator/Cell image. The earlier
+legacy lifecycle/operation research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`
+still applies to the same intent/dispatch/result boundaries; no lifecycle policy
+was rederived or replaced in this storage change.
+
+Removed the old MemoryRuntime bootstrap, StableCell adapters and supplier CodecError
+coupling. Two concrete record setters persist at the existing mutation sites and
+trap on encoding/write failure before replacing their decoded cache. There is no
+generic Cell compatibility facade, custom allocator, pre-upgrade flush or reset
+fallback. Logical predecessor codecs remain deliberate compatibility evidence.
+Root still uses greeting readiness; the counter's managed readiness/maintenance
+and interactive calls are the next consumer increment.
+
+Focused installed evidence:
+
+- Generated starter build plus scheduled Root replacement preserves the original
+  approval and autonomously creates exactly one child (5.01s).
+- Ten affected Root cases pass (29.43s): two-child histories, reverse admission
+  order, callback loss and sibling progress, reservations, discovery, metrics,
+  CLI maintenance and old-allocator rejection. CLI rejection preserves signed
+  installation custody, the old module and bytes, leaving Root stopped; an
+  explicit fixture restart verifies retained old custody. Reapply cannot replace
+  the failed signed attempt.
+- Strict reopen additionally checks an actual reply-encoding trap after journal,
+  artifact and timer mutation: both records and scheduled creation roll back.
+  Old, empty and corrupt images refuse without initialization (5.76s).
+- The installed Store/Host Root-maintenance case preserves a stopped Store
+  operation, complete child custody and its exact signed install (10.65s).
+- The two-child Store publication CLI journey passes on fresh records (168.32s),
+  including publication/readiness gates, retained replies, independent child
+  upgrades and byte-identical complete custody across Root maintenance.
+- Six native codec tests pass, including full mixed inline/Store historical
+  payloads reopening in fresh records without growing the backing. Native/Wasm
+  Clippy, affected fixture Clippy, Wasm Rustdoc, formatting and the 0.44.11
+  tooling snapshot check pass. This is not a full CI or release claim.
+
+Root normal Wasm is 1,422,930 bytes,
+SHA-256 `0b51b0b4c5f980c9a40d13ac65f6d92f4d1b6b47c211727b6b59eb5ec1aeaa30`;
+maintenance candidate `7f96a03ffefd63680e845614338a92a544a4ab16773ef1c3c4c18e22fb8f5548`;
+fault fixture `5013aa37d6cad83545260d273e6bb3b05046e84b91a8f34664d05d1669f80d4e`.
+Product and qualification lock digests remain those recorded for the counter
+below. Inputs include Platform 0.34.15, Runtime 0.23.17, Timers 0.46.4, Wire
+0.24.3, Testkit 0.109.0 and independent registry Wasm Store 0.3.3.
+Profile and shared Blob/DB composition still need their own Storage migration;
+no mainnet state, release or supplier source was changed.
+The installed PATH command `canic app build --config apps/demo/canic.json` also
+passes, producing all three declared artifacts without a signer or deployment.
+
+## Installed counter on published Storage — 2026-11-17
+
+`apps/demo` now owns one application crate, its passive Wire request/response
+contract and explicit actor lifecycle. Reuse the legacy persistence/upgrade
+research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` under **First Root-owned
+child upgrade**: preserve state and authority across failed targets; do not copy
+legacy lifecycle engines. The application is deliberately smaller than the
+retired profile and needs no Auth, Blob, timers or generalized plugin registry.
+
+Published Storage 0.76.2 owns one 256-byte record reservation, backing and grant.
+The real nonanonymous installation caller becomes immutable maintenance authority.
+Public increments are checked; explicit monotonic attempts fence writes and only
+the matching activation reopens them. Reopen never creates state or activates.
+Ordinary domain refusals precede writes; persistence/reply failures trap. Canic's
+readiness mount reads actual opened/fenced state. This application-local record
+cannot detect authority spent after a restored checkpoint; surviving management
+evidence and real Backup integration remain required by Canic #7.
+
+`make counter-test` passes using the actual built Wasms and prepared local server
+(4.47 seconds for the final installed case). Two public callers increment; malformed
+and forged fields preserve bytes. An additional IC controller cannot fence or
+activate, including after that controller performs the B upgrade. A→B→A preserves
+value, original authority and closed admission. Repeated readiness cannot activate;
+stale activation and reuse of a consumed fence attempt refuse. A target that writes
+then traps rolls back both code and data; incompatible schema, corrupt and empty
+backing refuse reopen without replacement. One record occupies 65,536 stable bytes.
+
+Executable A is 118,976 bytes, SHA-256
+`3034fb15505710f1b3c215e19416ab11ae28da524a42b1d1c91238a7498fc960`;
+B is 118,977 bytes, SHA-256
+`10b0c7605ab19013ccbdc823463b27539c4042c1bcc9beac85455d1b6077412d`.
+Inputs select Storage 0.76.2, Runtime 0.23.17, Wire 0.24.3 and Testkit 0.109.0;
+the pre-existing Platform 0.34.15/Timers 0.46.4 selections were preserved.
+Product lock SHA-256 `8447f6056984d526097b85cd2d7ce42543db96f7e920726f9435f4e86461c5b3`;
+qualification lock `8250dfcf69b22aad2e59d645097b1255be63b9da7cb02db080b7eb1b2b5bebfa`.
+Focused Clippy and Wasm Rustdoc pass. The normal PATH CLI builds/inspects the
+configured counter. Native consumers link only Wire and Serde, not Storage.
+The interactive `make demo` remains the greeting; Root migration, managed readiness,
+general application calls and actual checkpoint restore are separate next steps.
+No mainnet deployment, sibling edit, release or push occurred.
+
+## Published Storage records available — 2026-11-17
+
+Inspected the actual crates.io `ic-storage` 0.76.2 archive, source
+`f9fa03611ebb8641412a2af0f8620b80909c164f`, SHA-256
+`cafc3922583e49960ca711b639778839a5607f27407df2b9a4f7165ff9ff340f`.
+Its public `records::{Plan, Root, Store, Participant, HostMemory}` and optional
+`platform` `StableMemory` now supply the previously missing counter/Root path:
+bounded declarations, explicit create/open, independently granted synchronous
+access and no implicit initialization or upgrade flush. Opening validates layout,
+identity, schema and seals; Canic must still admit its own logical payloads.
+Normal errors preserve earlier writes; installed atomic failure still requires
+a trap. No sibling source or unpublished override was selected.
+
+Raised both workspace requirements and lock selections to 0.76.2, updating only
+the selected Storage package. Existing supplier-owned 0.74.1 dependencies remain
+separate. Locked qualification metadata resolves both versions. The focused
+Wasm Root check still fails on Canic's old `MemoryRuntime`, allocation and
+`adapter::StableCell` imports plus `STABLE_CELL_HEADER_SIZE`; this is now consumer
+migration work, not evidence that the published byte-record contract is missing.
+The check selected the already-present Timers 0.46.4 lock entry; no Timers update
+was requested by this Storage selection.
+
+The distinct native `retained` runtime additionally requires supplier-owned Wasm
+preparation and close/reopen hooks. It is not needed for the counter's byte record
+or the first Root record migration. The archive's supplier fixtures do not qualify
+Canic's complete journals, existing fleet images, counter preservation or real
+Blob/DB composition. No persistent installed pass or deployment is claimed here.
+
+## Explicit application readiness mount — 2026-11-17
+
+The maintainer approved the readiness increment while Storage remains pending.
+Select public counter increments with operator-controlled recovery/reopening.
+Record `Unavailable`, `Fenced` and `Ready` as application-owned observations,
+not a readiness lease or permission to activate. Reuse the legacy endpoint and
+lifecycle research at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` under **Ongoing
+demo and explicit actor mounts** and **First Root-owned child upgrade** below:
+retain explicit protocol admission and lifecycle ownership, without a universal
+Core or installation-success shortcut. The changed consumer is a counter with
+an explicit write fence rather than a profile-specific readiness decoder.
+
+`canic::readiness` owns a small passive Wire contract (method 3, 32-byte request
+and response ceilings) and an optional Platform update mount. The empty request
+cannot claim a state, caller or activation attempt. The synchronous application
+handler owns the result; mounting creates no storage, timer or service. Both the
+greeting actor and generated starter mount it and report `Ready` for their
+stateless application. No dependency, package or generic lifecycle mechanism was
+added. Root's existing greeting contract and retained completion semantics are
+unchanged pending installed managed qualification on the new Storage owner.
+
+Native Wire tests preserve all three states and refuse state-bearing requests.
+The installed CLI journey passes before and after the same-canister upgrade,
+with anonymous/named callers, malformed/truncated/oversized/wrong-method/direction
+requests and claimed states. Valid observations remain `Ready`, and stable memory
+stays empty. These are endpoint and stateless application proofs, not persistence,
+recovery-fence preservation or managed Root acceptance. The initial sandbox run
+refused loopback binding; rerunning with local socket access passed 155 Host tests,
+71 CLI tests and the installed journey (8.59 seconds; one unrelated Host test
+remains explicitly ignored).
+
+Journey Clippy/Rustdoc, formatting and tooling snapshot agreement pass. The
+updated PATH CLI generated and built a fresh fleetless starter offline after
+the first build's registry access was refused by the sandbox. Its 74,811-byte
+Wasm has SHA-256 `2549a69e30325f6b8075ebe14a3b69c68ea4b90ccc9fefd676e694731ae773cb`.
+No mainnet deployment, supplier edit, release or push occurred.
+
+## Counter recovery selected; profile retired from products — 2026-11-17
+
+The maintainer selected a persistent counter in the fresh demo, replacing the
+profile app, and accepted operator-triggered maintenance with explicit acceptance
+before reopening after restore. Record this decision in the system design and
+demo guide. It does not claim that the current greeting actor is persistent or
+that Backup's manager route is implemented.
+
+Moved all five profile packages from `apps/profile/` into the independent
+qualification workspace with private `0.0.0` versions. Protocol/state/endpoint
+behavior is unchanged; the client custody test now locates scratch in its owning
+qualification target directory rather than assuming the old directory depth.
+The retained fixtures still own Auth/Blob composition, user isolation, discovery,
+failed-upgrade and uncertain-management regression cases. Existing field names
+and historical record codecs are not removed with the product demo.
+
+Removed `make profile` and the active root config's profile declaration. The
+four original IDs, parentage, manager selection and resolved root journal are
+preserved in `qualification/fixtures/profile-mainnet.json`. No live operation,
+controller, canister or journal was changed. Root/growth/profile/endpoint scripts
+now select the qualification manifest explicitly; the profile test target also
+retains the native client/protocol checks formerly covered by the product workspace.
+Replaced the old profile/growth setup guides with focused fixture/inspection notes.
+
+Reused the legacy custody/upgrade research recorded below rather than deleting
+its adopted regression obligations. Read-only legacy backup guidance at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801`,
+`docs/features/backup-and-restore/README.md`, likewise distinguishes stored
+evidence from permission to issue new work and disclaims safe live restore/start.
+
+Focused native client/protocol tests, Clippy and Rustdoc pass. Both workspace
+metadata graphs, shell checks, real CLI configuration listings, formatting,
+tooling snapshot agreement and whitespace checks pass. The initial client test
+exposed the old scratch-path assumption and passed after its correction. Existing
+Storage 0.76.1, Platform 0.34.14 and Store/protocol 0.3.3 lock selections were
+preserved; the moved fixtures are
+absent from the product members and dependencies. Persistent installed suites
+remain blocked on Storage's published application API and were not rerun. The
+supplier's new byte-record path was inspected read-only; it remains pending
+publication and is not copied into Canic. No counter persistence, recovery,
+mainnet deployment or release is claimed by this retirement increment.
+
+## Backup signer integration review — 2026-11-17
+
+Record the maintainer's accepted ownership split in the existing checkpoint
+contract: Platform owns exact offline IC envelopes, Tooling the external signer
+and bounded process/credential lifecycle, Canic the small Backup adapter, and
+Backup the sole host operation/dispatch/recovery owner. Reuse the original-byte,
+intent-before-dispatch and uncertainty research at legacy
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` under **First Root-owned child upgrade**
+below. The live legacy backup CLI was unavailable at the design baseline; it is
+not an implementation to transplant. The changed assumption is an independently
+owned Backup operation journal, not permission to duplicate Canic's dispatcher.
+
+Read the actual Backup `store/operation/runtime::{Signer, SigningRequest}` and
+`Connection::sign` plus the public capture/restore facade. Backup wraps the
+signer future in a timeout, reserves its allowances first and rechecks admission
+after completion. This makes future-drop cleanup a concrete Tooling obligation:
+dropping a blocking worker's observer alone cannot terminate or reap the signer.
+The [supplier finding](https://github.com/dragginzgame/ic-tooling/issues/12#issuecomment-6957965469)
+records the exact caller and needed cancellation handoff without prescribing a
+new worker implementation in Canic.
+
+[Platform #29](https://github.com/dragginzgame/ic-platform/issues/29) now records
+local offline signing qualification for both Ed25519 and secp256k1, including the
+single original-request path and exact expiry. Publication and Canic selection
+remain separate. Tooling has no qualified public signer interface to consume yet.
+No speculative adapter, supplier patch, key export, dependency or backup command
+was added. This is contract/source review only, not an installed Backup pass;
+the independent direct-controller witness can proceed once that interface exists
+without waiting for Canic's Storage 0.76 runtime.
+
+Follow-up registry/source review on 2026-11-17: Platform 0.34.14 is selected in
+both locks, but `ic-storage@0.76.2` and `ic-host-sign` are not published. Tooling's
+pending signer retains cancellation custody and explicitly refuses independent
+status admission. Its existing [Platform finding](https://github.com/dragginzgame/ic-platform/issues/29#issuecomment-6958534088)
+identifies the missing constructor for authenticating returned status bytes from
+the original request ID and approved sender, without an original update envelope.
+This matches Backup's actual `Signing::Observation` input. No duplicate issue,
+local crypto/admission workaround or supplier source change was needed. A search
+of the active product/build paths found no remaining `apps/profile` references;
+the retained profile runners select the qualification manifest. This follow-up
+is source and availability review, not additional installed qualification.
+
+## Interactive local actor session — 2026-11-17
+
+The maintainer accepted an explicit `make demo` session: disposable local
+simulation, a separate config/journal, synthetic cycles, printed normal Canic
+commands and no automatic windows. Keep it in the existing qualification package.
+Testkit 0.109.0 owns prepared-asset admission, server and instance lifetime;
+Canic's existing CLI owns configuration, builds, approvals and signed attempts.
+Reuse the starter/build research below and its explicit ownership lessons rather
+than adding a local deployment engine or hidden Core. The mainnet managed tree
+is unchanged; `demo-actor/local` is an explicitly distinct direct Host rehearsal.
+
+The example uses Clap for its bounded session duration, Process for bounded CLI
+setup, and Tokio for interruption/deadline selection. Its additional dependencies
+stay in qualification. Enter/EOF, Ctrl-C and expiry attempt instance deletion
+before stopping the owned server. An unexpected server failure or cleanup error
+refuses success. Local files remain; every invocation creates a new directory.
+Offline missing-asset admission refuses before creating a session. No restart,
+retargeting of old receipts, simulator download fallback or persistent daemon.
+
+Linux hands-on qualification used the printed PATH commands in
+`target/demo/1794939807570225662-2329136`: build, plan/apply, call, edit the source,
+rebuild and explicit target/hash upgrade. Canister
+`dmkut-c3777-77776-qaaaq-cai` remained unchanged. Module
+`4c61472b71c1e02e8cae7817d3d064986d5dc9729e5fe1e91b44a9ae3ee71d19`
+changed to `644c02f6487be7e199cd55d0ffd1aa977db76c9af1f72eb7ef3072335e59f475`;
+the next call returned the edited greeting. Both receipts and the observed fleet
+remain in that local directory. Restore the original greeting source after the
+rehearsal; no application source change is part of this increment.
+
+Actual Enter, Ctrl-C, one-second expiry and stdin-EOF runs close their simulators;
+the Ctrl-C Make invocation retains its interrupted exit status. Missing prepared
+assets refuse without setup. Focused example Clippy, formatting, tooling/ICP
+admission, locked metadata and whitespace checks pass. No active session is left
+running, no browser was opened, and no mainnet effect, supplier edit or push was
+performed. The managed Storage gate remains open; this is not its qualification.
+
+## Ongoing demo and explicit actor mounts — 2026-11-17
+
+The maintainer selected a fresh minimal demo with supplied Root/Store and mainnet
+deployment once Storage is ready. Record `demo/mainnet` under `apps/demo` with no
+bound canisters, funding or journal. Reuse the existing greeting package rather
+than a second application crate. Toko and the demo exercise the same authoring
+workflow; they share no application data, permission or readiness assumptions.
+Reuse the recorded starter/build research at legacy
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` and fixed endpoint-mount research below:
+retain explicit contracts and guards, omit hidden Core/lifecycle ownership.
+
+The optional fixed `greeting` adapter owns the existing greet/probe hooks and
+uses Platform entrypoints and Wire codecs. Both the shipped app and generated
+starter mount it, deleting two copied 66-line endpoint files and their direct
+Wire dependencies. The generated starter no longer declares Runtime just to
+implement adapter hooks. The demo actor also explicitly mounts metrics; absent
+timer instrumentation stays `None`, not fabricated zero counters. No new
+registry, generic mount framework, allocator, storage fallback or lifecycle owner.
+
+Separate the harness's optional `profile-state` dependency from stateless test
+targets. Blob and Auth/browser required features and their test/Clippy callers
+remain explicit. This removes an unrelated compilation barrier without claiming
+that their persistent witnesses work on Storage 0.76. Those remain blocked by
+[Storage #5](https://github.com/dragginzgame/ic-storage/issues/5).
+
+The actual CLI installed journey passes (7.99 seconds), including greeting query
+and replicated probe, exact UTF-8 bound, wrong method/direction, malformed and
+oversized frames, public metrics, absent timer provider, zero stable allocation,
+same-canister upgrade and original-attempt recovery. The first sandboxed run
+could not bind localhost for viewer tests; the authorized networking run passes.
+Host/CLI tests, native/Wasm journey Clippy, Rustdoc including the new Wasm adapter,
+formatting, tooling agreement and shell syntax checks pass on Linux. Evidence:
+`target/journey-demo.log` and `target/demo-lint.log`.
+
+`make canic` installs on PATH. The declared demo app builds to 85,379 bytes,
+SHA-256 `4c61472b71c1e02e8cae7817d3d064986d5dc9729e5fe1e91b44a9ae3ee71d19`.
+A freshly generated zero-fleet starter also builds its 68,748-byte app through
+the new mount at `target/qualification/demo-authoring.qgxLkj/generated`.
+Neither creates a deployment journal. The installed simulator proof uses the
+direct Host journey, not the managed Root/Store fleet; no mainnet deployment,
+push, Toko edit, browser launch or Storage readiness claim.
+
+## App build input preservation — 2026-11-17
+
+While Storage's public retained-runtime contract remains blocked by
+[Storage #5](https://github.com/dragginzgame/ic-storage/issues/5), continue the
+existing fleetless workflow. App build now compares every output with the config,
+all declared workspace manifests and existing/future lockfiles before invoking
+Cargo. A selected recipe cannot overwrite another recipe's Cargo inputs. Reuse
+the existing physical-path comparison and publication owner; no new path resolver
+or build workflow. This preflight does not claim confinement against concurrent
+filesystem changes or protection of every possible application source file.
+Reuse the starter/build-destination legacy research recorded below: preserve
+source/configuration and keep outputs separate from deployment authority.
+
+Three focused Host app-build tests pass, including config/manifest/lock aliases,
+absent lockfiles and unselected recipes. Host Clippy/Rustdoc, formatting, tooling
+agreement and whitespace checks pass on Linux. `make canic` installs on PATH;
+the command still reports 0.220.0 pending release. A generated fleetless greeting
+build and rebuild both pass through `canic app build --canister app`, replacing
+only the intended 66,711-byte artifact, SHA-256
+`f1bc3e33ec20cb935cc79d02f9c5c1a5f0010bb38c42235ff7a10e2dbba9ab10`.
+The fixture is `target/qualification/build-inputs.Nco229/app`; no fleet, journal,
+deployment, browser launch or supplier change. Persistent actor qualification
+still cannot build against Storage 0.76.0; the greeting pass does not unblock it.
+
+## Storage 0.76 selection
+
+2026-11-17: at the maintainer's request, select registry Storage 0.76.0 directly
+in both manifests and lockfiles despite its incomplete consumer surface. Source
+`5b6a8bc439dff1f4e7a20d7e34a441a04b0450bc`, archive checksum
+`7702ac131ffcbcb3726f99d9c2b2d7918edf33e4436a454ee75eae86811468e2`.
+Inspect the actual archive, not just the dirty sibling checkout: its pending
+`checkpoint` feature is absent from the published crate. Preserve that checkout
+read-only. No installed qualification or old-image transition is claimed.
+
+Locked/offline checks fail on the removed runtime/collection imports for native
+`canic-profile-worker`, Wasm `canic-root`/`canic-profile-entry`, and qualification
+`canic-asset-catalog`/`canic-db-witness`. Root also refers to the former cell-header
+size. These names identify adaptation work, not required replacement APIs.
+Both lockfiles resolve; existing Blob 0.103.3, DB revision
+`950f36807f8ffa7ebe4ca2cff6792fa2bbcbd03e` and supplied Wasm Store 0.3.2 retain
+their independent 0.74.1 selections. Two versions do not establish composed
+backing compatibility. [Storage #5](https://github.com/dragginzgame/ic-storage/issues/5)
+records exact consumer needs, existing supplier issue ownership, fresh-fixture
+acceptance and the separate disposition of retained 0.74 images. The 0.220.0
+release below remains the last qualified baseline; no fallback adapter was added.
+The unaffected native CLI check, locked metadata resolution in both workspaces,
+formatting, tooling snapshot agreement and whitespace checks pass. Full installed
+suites are blocked by the actor compilation failures above and were not rerun.
+
 ## Canic 0.220.0 release and Testkit clock adoption — 2026-11-17
 
 Adopt published Testkit 0.109.0, source

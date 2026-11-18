@@ -1,0 +1,20 @@
+[apps.demo.canisters.root]
+role = "root"
+wasm = "artifacts/root.wasm"
+build = { manifest = "../../Cargo.toml", package = "canic-root" }
+
+[apps.demo.canisters.store]
+role = "wasm-store"
+parent = "root"
+wasm = "artifacts/store.wasm"
+build = { manifest = "../../Cargo.toml", package = "ic-wasm-store" }
+
+[apps.demo.canisters.app]
+role = "app"
+parent = "root"
+wasm = "artifacts/app.wasm"
+build = { manifest = "../../Cargo.toml", package = "canic-demo", client = "canic-demo-client" }
+
+[apps.demo.fleets.mainnet]
+network = { kind = "Mainnet" }
+canisters = {}

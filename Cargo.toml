@@ -1,11 +1,7 @@
 [workspace]
 members = [
-    "apps/hello/canic-hello",
-    "apps/profile/canic-profile-client",
-    "apps/profile/canic-profile-entry",
-    "apps/profile/canic-profile-manager",
-    "apps/profile/canic-profile-protocol",
-    "apps/profile/canic-profile-worker",
+    "apps/demo",
+    "apps/demo/canic-hello",
     "crates/canic",
     "crates/canic-cli",
     "crates/canic-host",
@@ -17,7 +13,7 @@ exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.220.0"
+version = "0.221.0"
 edition = "2024"
 rust-version = "1.100.0"
 publish = false
@@ -28,26 +24,27 @@ canic = { path = "crates/canic" }
 canic-host = { path = "crates/canic-host" }
 canic-management = { path = "crates/canic-management" }
 canic-management-protocol = { path = "crates/canic-management-protocol" }
-canic-profile-protocol = { path = "apps/profile/canic-profile-protocol" }
 clap = { version = "4.6.7", features = ["derive"] }
 ic-auth = { version = "0.47.1", features = ["receiver-memory", "ed25519-verification"] }
 ic-auth-protocol-types = "0.43.0"
 ic-auth-wire = "0.43.0"
-ic-blob-storage = "0.103.1"
-ic-db = { git = "https://github.com/dragginzgame/ic-db", rev = "950f36807f8ffa7ebe4ca2cff6792fa2bbcbd03e" }
-ic-host-artifacts = "0.80.1"
-ic-host-fs = { version = "0.80.1", default-features = false }
-ic-host-process = { version = "0.80.2", default-features = false }
+ic-backup = "0.105.5"
+ic-blob-storage = "0.105.0"
+ic-db = { git = "https://github.com/dragginzgame/ic-db", rev = "97e49f2ef7547cc4413ec75e9cea7d70c56735c1" }
+ic-host-artifacts = "0.80.3"
+ic-host-fs = { version = "0.80.3", default-features = false }
+ic-host-process = { version = "0.81.0", default-features = false }
+ic-host-sign = "0.1.0"
 ic-host-text = { version = "0.77.2", default-features = false }
 ic-platform = { version = "0.34.13", default-features = false, features = ["ingress-packets"] }
 ic-platform-protocol = { version = "0.3.5", default-features = false }
 ic-platform-runtime = { version = "0.23.16", default-features = false }
 ic-platform-types = { version = "0.21.2", default-features = false }
-ic-storage = "0.74.0"
+ic-storage = "0.78.0"
 ic-timers = "0.46.3"
 ic-topology = "0.109.2"
-ic-wasm-store = "0.3.0"
-ic-wasm-store-protocol = "0.3.0"
+ic-wasm-store = "0.4.0"
+ic-wasm-store-protocol = "0.4.0"
 ic-wire = { version = "0.24.1", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"
@@ -58,8 +55,9 @@ time = { version = "0.3.55", default-features = false }
 tiny_http = { version = "0.12.0", default-features = false }
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
 # Development tooling (source distribution; not a runtime dependency).
-toko-tooling = "=0.44.11"
+toko-tooling = "=0.45.3"
 toml = "1.2.1"
+toml_edit = "0.25.19"
 url = "2.5.8"
 
 [workspace.lints.cargo]

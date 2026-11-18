@@ -131,6 +131,12 @@ publication share the callback transaction. Reply failure traps that transaction
 and retains the earlier reservation as unresolved. Exact duplicate delivery and
 reconciliation never start another signing attempt. Explicit supplier pruning
 closes old epochs instead of making consumed request identities reusable.
+An installed test rotates the fixture's signing key and authority generation
+while a browser renewal awaits entropy. The callback and a duplicate renewal
+are refused. Lookup of the renewal stays unresolved, while lookup of the
+completed issue returns the original credential and deadline. A fresh device
+login verifies under the replacement key. Rotation is an installation-owned
+fixture control using public test seeds.
 
 Run the selected installed cases with:
 
@@ -156,8 +162,9 @@ Receiver logout remains its separate, unchanged unit-input operation.
 
 The [optional browser adapter](../../crates/canic/browser/README.md) now implements
 Auth's issuer transport and adapts this login-specific logout to Auth cleanup.
-It binds immutable intents, account/browser signer roles and explicit clock
-conversion; unresolved lookup cannot become issuance. Its generated codecs come
+It checks the original intent against the selected Ed25519 device's public key
+before issuance, and derives the expected browser signer from that key.
+It preserves original signer roles and clock conversion across lookup. Its generated codecs come
 from the mounted Rust DTOs. The installed profile slice below advances
 [Canic #11](https://github.com/dragginzgame/canic/issues/11).
 
@@ -326,7 +333,6 @@ no durable session preservation or complete Fleet login qualification.
 
 The production engine remains supplier-owned and standalone. Remaining scopes:
 
-- [#9 — Fleet-authorized Auth enrollment](https://github.com/dragginzgame/canic/issues/9).
 - [#10 — Auth issuance, renewal and reconciliation](https://github.com/dragginzgame/canic/issues/10).
 - [#11 — Installed profile/browser Auth journey](https://github.com/dragginzgame/canic/issues/11).
 

@@ -1,5 +1,7 @@
 use crate::Readiness;
-use crate::storage::{ARTIFACT_BYTES, Artifact, Artifacts, JOURNAL_BYTES, Journals};
+use crate::storage::{
+    ARTIFACT_BYTES, ARTIFACT_KEY, Artifact, Artifacts, JOURNAL_BYTES, JOURNAL_KEY, Journals, KEYS,
+};
 use canic_management_protocol::children::{self, ChildId};
 use canic_management_protocol::{
     Approval, CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, Stage, Status, digest,
@@ -17,10 +19,7 @@ use ic_platform_runtime::{
     system as api,
 };
 use ic_platform_types::Principal;
-use ic_storage::{
-    AllocationGrants, DefaultMemoryImpl, GenericAllocationPolicy, MemoryAuthority, MemoryRequest,
-    MemoryRuntime, SealedDeclarationSnapshot, StableKey, StorageConfig, adapter::StableCell,
-};
+use ic_storage::{DefaultMemoryImpl, adapter::StableCell};
 use ic_timers::{Lifetime, Observation, Once, OnceDemand, OnceNext, OnceResult, OnceStatus};
 use std::{
     cell::RefCell,
@@ -66,7 +65,7 @@ pub fn owner_custody() -> children::Custody {
 }
 fn journals() -> children::Custody {
     STATE.with_borrow(|state| {
-        let journals = &state.as_ref().expect("open engine").journal.get().0;
+        let journals = &state.as_ref().expect("open engine").journal.0;
         ChildId::ALL.map(|slot| {
             let journal = &journals[&slot];
             let mut upgrades = journal.2.clone();
@@ -81,7 +80,6 @@ fn journals() -> children::Custody {
     })
 }
 
-const MAX_PAGES: u64 = 64;
 const MANAGEMENT_LIMITS: Limits = Limits {
     bytes: 16_384,
     header: 4096,
@@ -92,15 +90,38 @@ const MANAGEMENT_LIMITS: Limits = Limits {
     skipping: 65_536,
 };
 
-struct State {
-    journal: StableCell<Journals>,
-    artifact: StableCell<Artifacts>,
+pub(crate) struct State {
+    journal: Journals,
+    artifact: Artifacts,
+    journal_cell: StableCell<Vec<u8>>,
+    artifact_cell: StableCell<Vec<u8>>,
+    #[cfg(feature = "backup")]
+    backup_cell: StableCell<Vec<u8>>,
     readiness: Readiness,
     timer_window: (u64, u64),
-    _runtime: MemoryRuntime<DefaultMemoryImpl>,
+    #[cfg(feature = "backup")]
+    pub(crate) backup: crate::backup::Ledger,
+}
+impl State {
+    #[cfg(feature = "backup")]
+    pub(crate) fn save_backup(&mut self) {
+        let bytes = self.backup.encode();
+        self.backup_cell.set(bytes);
+    }
+    fn set_journal(&mut self, journal: Journals) {
+        let bytes = journal.to_bytes().expect("encode management journal");
+        self.journal_cell.set(bytes.into_owned());
+        self.journal = journal;
+    }
+
+    fn set_artifact(&mut self, artifact: Artifacts) {
+        let bytes = artifact.to_bytes().expect("encode management artifacts");
+        self.artifact_cell.set(bytes.into_owned());
+        self.artifact = artifact;
+    }
 }
 thread_local! {
-    static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
+    pub(crate) static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
     static TIMER: RefCell<BTreeMap<ChildId, Once>> = const { RefCell::new(BTreeMap::new()) };
     static OBSERVING: RefCell<BTreeSet<ChildId>> = const { RefCell::new(BTreeSet::new()) };
     #[cfg(feature = "fault-injection")]
@@ -109,89 +130,70 @@ thread_local! {
 
 /// Open the bounded child engine and register independent continuation timers.
 /// The canister owns lifecycle entrypoints and supplies its application readiness check.
-/// Existing storage keys and wire evidence are retained across this extraction.
+/// Reopens the records backing strictly; older allocator images require their old executable.
 ///
 /// # Panics
 /// Traps if storage is missing/corrupt on upgrade, admission fails, or timers cannot open.
 pub fn open(fresh: bool, readiness: Readiness) {
-    let mut runtime = MemoryRuntime::new_with_config(
-        DefaultMemoryImpl::default(),
-        StorageConfig {
-            allocations: 2,
-            extents: 3,
-            pages: MAX_PAGES,
-        },
-    )
-    .expect("admit manager backing");
-    let allocations = runtime.diagnostics().expect("integrity").allocations;
-    assert!(
-        if fresh {
-            allocations == 0
-        } else {
-            allocations == 2
-        },
-        "missing manager stores"
+    let runtime =
+        canic::storage::bootstrap(DefaultMemoryImpl::default(), fresh, "manager", KEYS, 512);
+    let journal_cell = canic::storage::cell(
+        &runtime,
+        JOURNAL_KEY,
+        JOURNAL_BYTES,
+        fresh.then(|| {
+            Journals::default()
+                .to_bytes()
+                .expect("journal")
+                .into_owned()
+        }),
     );
-    runtime
-        .bootstrap(
-            &SealedDeclarationSnapshot::new(vec![
-                MemoryRequest::new("manager", "manager.journal.v1").expect("constant key"),
-                MemoryRequest::new("manager", "manager.artifact.v1").expect("constant key"),
-            ])
-            .expect("constant declarations"),
-            &AllocationGrants::new(vec![
-                MemoryAuthority::new("manager", "manager.").expect("constant owner"),
-            ])
-            .expect("constant grants"),
-            &GenericAllocationPolicy,
-        )
-        .expect("commit manager admission");
-    let journal = runtime
-        .open_memory(&StableKey::parse("manager.journal.v1").expect("constant key"))
-        .expect("journal lease");
-    let artifact = runtime
-        .open_memory(&StableKey::parse("manager.artifact.v1").expect("constant key"))
-        .expect("artifact lease");
-    let journal = if fresh {
-        StableCell::create(journal, Journals::default())
-    } else {
-        StableCell::load(journal, JOURNAL_BYTES)
-    }
-    .expect("strict journal opening");
-    let artifact = if fresh {
-        StableCell::create(artifact, Artifacts::default())
-    } else {
-        StableCell::load(artifact, ARTIFACT_BYTES)
-    }
-    .expect("strict artifact opening");
+    let artifact_cell = canic::storage::cell(
+        &runtime,
+        ARTIFACT_KEY,
+        ARTIFACT_BYTES,
+        fresh.then(|| {
+            Artifacts::default()
+                .to_bytes()
+                .expect("artifact")
+                .into_owned()
+        }),
+    );
+    #[cfg(feature = "backup")]
+    let backup_cell = canic::storage::cell(
+        &runtime,
+        "manager.snapshot.v1",
+        crate::backup::CAPACITY,
+        fresh.then(|| crate::backup::Ledger::default().encode()),
+    );
     let mut state = State {
-        journal,
-        artifact,
+        journal: Journals::from_bytes(journal_cell.get()).expect("journal custody"),
+        artifact: Artifacts::from_bytes(artifact_cell.get().as_slice().into())
+            .expect("artifact custody"),
+        journal_cell,
+        artifact_cell,
+        #[cfg(feature = "backup")]
+        backup: crate::backup::Ledger::open(backup_cell.get()),
+        #[cfg(feature = "backup")]
+        backup_cell,
         readiness,
         timer_window: (api::canister_version(), api::time()),
-        _runtime: runtime,
     };
     for slot in ChildId::ALL {
         validate(&state, slot);
         upgrade::validate(&state, slot);
         delivery::validate(&state, slot);
     }
-    assert!(state.artifact.get().fits(), "aggregate artifact budget");
+    assert!(state.artifact.fits(), "aggregate artifact budget");
     store_maintenance::validate(&state);
     let mut children = BTreeSet::new();
-    for child in state
-        .journal
-        .get()
-        .0
-        .values()
-        .filter_map(|j| j.0.worker.as_ref())
-    {
+    for child in state.journal.0.values().filter_map(|j| j.0.worker.as_ref()) {
         assert!(children.insert(child), "distinct child identities");
     }
     // Commit identified collections only after strict validation of both old/new stores.
     // A post-upgrade trap rolls back both writes with the executable change.
-    state.journal.set(state.journal.get().clone());
-    state.artifact.set(state.artifact.get().clone());
+    state.set_journal(state.journal.clone());
+    state.set_artifact(state.artifact.clone());
     STATE.with_borrow_mut(|slot| *slot = Some(state));
     ic_timers::initialize().expect("one timer runtime");
     for slot in ChildId::ALL {
@@ -200,7 +202,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
 }
 
 fn validate(state: &State, slot: ChildId) {
-    let s = &state.journal.get().0[&slot].0;
+    let s = &state.journal.0[&slot].0;
     assert!(s.attempts.iter().all(|n| *n <= 1), "single-use counts");
     for index in 0..3 {
         assert_eq!(
@@ -217,7 +219,7 @@ fn validate(state: &State, slot: ChildId) {
         );
         assert_eq!(a.creation_cycles, CREATION_CYCLES, "ceiling");
         assert_eq!(
-            state.artifact.get().0[&slot].hash(false),
+            state.artifact.0[&slot].hash(false),
             Some(a.module_hash),
             "artifact custody"
         );
@@ -230,7 +232,7 @@ fn validate(state: &State, slot: ChildId) {
     } else {
         assert_eq!(s, &Status::default(), "unadmitted journal");
         assert!(
-            state.artifact.get().0[&slot].hash(false).is_none(),
+            state.artifact.0[&slot].hash(false).is_none(),
             "unadmitted artifact"
         );
     }
@@ -266,7 +268,7 @@ fn validate(state: &State, slot: ChildId) {
 
 fn snapshot(slot: ChildId) -> Status {
     STATE.with_borrow(|state| {
-        state.as_ref().expect("initialized manager").journal.get().0[&slot]
+        state.as_ref().expect("initialized manager").journal.0[&slot]
             .0
             .clone()
     })
@@ -274,9 +276,9 @@ fn snapshot(slot: ChildId) -> Status {
 fn mutate(slot: ChildId, f: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
-        let mut journal = state.journal.get().clone();
+        let mut journal = state.journal.clone();
         f(&mut journal.0.get_mut(&slot).expect("known child").0);
-        state.journal.set(journal);
+        state.set_journal(journal);
     });
 }
 fn next(s: &Status) -> Option<u64> {
@@ -397,12 +399,12 @@ fn admit(slot: ChildId, approval: Approval, artifact: Artifact) -> Result<Status
         return Err(Refusal::Reserve);
     }
     let mut artifacts =
-        STATE.with_borrow(|state| state.as_ref().expect("open engine").artifact.get().clone());
+        STATE.with_borrow(|state| state.as_ref().expect("open engine").artifact.clone());
     *artifacts.0.get_mut(&slot).expect("known child") = artifact;
     if !artifacts.fits() {
         return Err(Refusal::Artifact);
     }
-    STATE.with_borrow_mut(|state| state.as_mut().expect("open engine").artifact.set(artifacts));
+    STATE.with_borrow_mut(|state| state.as_mut().expect("open engine").set_artifact(artifacts));
     mutate(slot, |s| {
         s.approval = Some(approval);
         s.phase = Phase::Scheduled;
@@ -704,20 +706,23 @@ async fn reconcile_bound(slot: ChildId, expected: Approval) -> Status {
 
 // Pending, unissued attachments are non-overlapping reservations. Issued calls have
 // already deducted their cycles; uncertain outcomes never reissue that attachment.
-fn reserved_cycles() -> u128 {
+pub(crate) fn reserved_cycles() -> u128 {
     STATE.with_borrow(|state| {
         u128::from(RESERVE_CYCLES)
             + state
                 .as_ref()
                 .expect("open engine")
                 .journal
-                .get()
                 .0
                 .values()
                 .filter(|journal| journal.0.phase == Phase::Scheduled)
                 .map(|_| u128::from(CREATION_CYCLES))
                 .sum::<u128>()
     })
+}
+#[cfg(feature = "backup")]
+pub(crate) fn snapshot_idle() -> bool {
+    OBSERVING.with_borrow(BTreeSet::is_empty)
 }
 // The executor drops the suspended future during callback-trap cleanup. Keep
 // this heap exclusion owned by that future; durable effect intent stays intact.

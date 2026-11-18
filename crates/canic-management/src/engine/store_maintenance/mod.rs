@@ -21,14 +21,13 @@ pub(crate) fn active() -> bool {
             .as_ref()
             .expect("open engine")
             .journal
-            .get()
             .1
             .as_ref()
             .is_some_and(|record| record.phase != Phase::Ready)
     })
 }
 fn quiescent(state: &State) -> bool {
-    state.journal.get().0.values().all(|journal| {
+    state.journal.0.values().all(|journal| {
         matches!(
             journal.0.phase,
             canic_management_protocol::Phase::Empty | canic_management_protocol::Phase::Ready
@@ -53,17 +52,16 @@ fn binding(state: &State, approval: &Approval) -> bool {
         && approval.attempt.operation != [0; 32]
         && state
             .journal
-            .get()
             .0
             .values()
             .all(|j| j.0.worker.as_ref() != Some(&approval.store))
-        && state.artifact.get().0.values().all(|a| {
+        && state.artifact.0.values().all(|a| {
             a.sources()
                 .is_none_or(|s| s.creation.reference.store == approval.store)
         })
 }
 pub(super) fn validate(state: &State) {
-    let journals = state.journal.get();
+    let journals = &state.journal;
     assert!(journals.2.len() < MAX_UPGRADES, "Store history bound");
     assert!(
         journals.2.is_empty() || journals.1.is_some(),
@@ -120,7 +118,7 @@ pub(super) fn validate(state: &State) {
 /// Traps if lifecycle has not opened the engine.
 #[must_use]
 pub fn observe() -> Option<Status> {
-    STATE.with_borrow(|state| state.as_ref().expect("open engine").journal.get().1.clone())
+    STATE.with_borrow(|state| state.as_ref().expect("open engine").journal.1.clone())
 }
 fn successor(previous: &Status, approval: &Approval) -> bool {
     previous.phase == Phase::Ready
@@ -136,7 +134,7 @@ fn successor(previous: &Status, approval: &Approval) -> bool {
 #[must_use]
 pub fn observe_attempt(approval: &Approval) -> Option<Status> {
     STATE.with_borrow(|state| {
-        let journals = state.as_ref().expect("open engine").journal.get();
+        let journals = &state.as_ref().expect("open engine").journal;
         journals
             .1
             .iter()
@@ -171,7 +169,6 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
             .as_ref()
             .expect("open engine")
             .journal
-            .get()
             .1
             .as_ref()
             .is_some_and(|old| !successor(old, &approval))
@@ -190,7 +187,7 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
         if !quiescent(state) || OBSERVING.with_borrow(|active| !active.is_empty()) {
             return Err(Refusal::Occupied);
         }
-        let journals = state.journal.get();
+        let journals = &state.journal;
         if journals.2.len() + usize::from(journals.1.is_some()) >= MAX_UPGRADES
             || (journals.1.is_none() && approval.attempt.sequence != 1)
             || journals
@@ -210,11 +207,11 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
             preservation: Scan::Entries(None),
             installation: None,
         };
-        let mut journals = state.journal.get().clone();
+        let mut journals = state.journal.clone();
         if let Some(previous) = journals.1.replace(record.clone()) {
             journals.2.push(previous);
         }
-        state.journal.set(journals);
+        state.set_journal(journals);
         Ok(record)
     })
 }
@@ -232,12 +229,12 @@ fn selected(approval: &Approval) -> Status {
 fn change(approval: &Approval, expected: Phase, update: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
-        let mut journals = state.journal.get().clone();
+        let mut journals = state.journal.clone();
         let value = journals.1.as_mut().expect("retained maintenance");
         // Both operation and phase fence callbacks, including a successor at the same phase.
         if &value.approval == approval && value.phase == expected {
             update(value);
-            state.journal.set(journals);
+            state.set_journal(journals);
         }
     });
 }

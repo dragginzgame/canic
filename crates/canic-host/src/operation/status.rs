@@ -46,6 +46,11 @@ pub enum ManagementStatus {
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
 pub enum StatusDetail {
+    /// An application's original reply; the app owns its interpretation.
+    Call {
+        /// Retained reply, if observed.
+        call: Option<crate::application::Reply>,
+    },
     /// Exact historical Auth reply; no readiness or enrollment claim.
     Auth {
         /// Validated original response, if retained.

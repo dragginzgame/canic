@@ -23,16 +23,20 @@ crate-type = ["cdylib", "rlib"]
 [features]
 fault-injection = []
 incompatible-schema = []
+managed-fixture = ["canic/readiness"]
 
 [dependencies]
-canic = { workspace = true, features = ["db-schema"] }
+canic = { workspace = true, features = ["db-schema", "storage"] }
 ic-wire.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+canic-management-protocol.workspace = true
 canic-qualification.workspace = true
 ic-testkit.workspace = true
+serde_json.workspace = true
 tokio.workspace = true
+toml.workspace = true
 
 [lints]
 workspace = true

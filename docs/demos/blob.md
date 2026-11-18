@@ -6,6 +6,9 @@ is [canic-asset-catalog](../../qualification/canic-asset-catalog/src/lib.rs), in
 qualification workspace. It is a finite local catalog example, not a provider
 client or a production deployment recipe.
 
+The published 0.105.0 Service accepts the application’s Storage 0.78 lease.
+Use fresh backing for this Storage generation. The historical 0.100.6 catalog retains its original executable. [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8)
+
 ## Ownership and use
 
 | Owner | Responsibility |
@@ -35,7 +38,7 @@ Fresh installation takes explicit users, manager and Blob limits, binding both
 records to the actual canister. Upgrade uses a method-bound unit argument, opens
 both existing stores, and refuses missing/corrupt/foreign records. It never falls
 back to initialization. Pre-upgrade requires Blob drained; post-upgrade retains
-that state. `probe` uses Canic's greeting contract but refuses while drained.
+that state. The replicated `readiness` endpoint reports `Fenced` while drained.
 Only the matching explicit Blob activation can reopen admission. Inspection and
 cleanup remain available under ordinary permissions while drained.
 
@@ -160,10 +163,10 @@ Canic's existing artifact builder and runs ten installed tests with synthetic
 cycles. `make blob-clippy` and `make blob-doc` select the adapter and actual caller.
 The two artifacts and input receipts stay under `target/blob/`; no live IC or
 Caffeine request is issued. Optional feature selection keeps Blob/Storage/Runtime
-out of Canic's default runtime graph. Both workspaces select published Blob 0.103.3,
+out of Canic's default runtime graph. The previous installed witness used published Blob 0.103.3,
 archive SHA-256 `559aa9a43ac96817d4c703285007e7bbd3b413b134efc2952d17646c04c52639`,
 from source `ff1aaafc75d80cd51c12f232dd758d4883a7aa21`.
-The current witness uses Runtime 0.23.16 and Types 0.21.2; Storage's older raw-memory
+That witness used Runtime 0.23.16 and Types 0.21.2; Storage's older raw-memory
 runtime edge has no executor.
 The mutable sibling checkout stays read-only and is not a Cargo input.
 
@@ -266,8 +269,7 @@ processes. Both users, shared references and a pending declaration survive. Chan
 authority/arguments, malformed frames and stale activation refuse. Existing local
 transaction rollback cases remain separate.
 
-The registry predecessor case opens a populated retained 0.100.6 binary without
-reinitializing either owner. See its [binary provenance](../../qualification/canic-qualification/fixtures/README.md).
+The predecessor test requires Storage 0.78 to refuse the populated 0.100.6 directory and preserve its bytes and maintenance admission. See its [binary provenance](../../qualification/canic-qualification/fixtures/README.md).
 The named CLI journey retains its existing one-successor bound; repeated Root
 admission is separately exercised for stale-attempt refusal. Whole-fleet configured
 arguments and Host-driven Root/Store preservation of these records remain

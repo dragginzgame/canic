@@ -14,8 +14,17 @@ toko-tooling.workspace = true
 [package.metadata.toko-tooling.loc]
 category = "tests"
 
+[features]
+backup = ["dep:canic-host", "dep:ic-backup", "dep:ic-host-sign"]
+profile-state = ["dep:canic-profile-worker", "dep:ic-storage"]
+
 [dependencies]
+canic-host = { workspace = true, features = ["backup"], optional = true }
+canic-profile-worker = { workspace = true, optional = true }
+ic-backup = { workspace = true, optional = true }
 ic-host-artifacts.workspace = true
+ic-host-sign = { workspace = true, optional = true }
+ic-storage = { workspace = true, optional = true }
 ic-testkit.workspace = true
 wasmparser.workspace = true
 
@@ -24,22 +33,24 @@ canic.workspace = true
 canic-artifact-probe.workspace = true
 canic-asset-catalog.workspace = true
 canic-auth-witness.workspace = true
+canic-demo.workspace = true
 canic-effect-probe.workspace = true
-canic-management-protocol.workspace = true
+canic-management-protocol = { workspace = true, features = ["backup"] }
 canic-profile-protocol.workspace = true
-canic-profile-worker.workspace = true
+clap.workspace = true
 ic-auth.workspace = true
 ic-auth-protocol-types.workspace = true
 ic-host-process.workspace = true
 ic-platform-crypto.workspace = true
-ic-storage.workspace = true
+ic-platform-protocol = { workspace = true, features = ["management-snapshots"] }
 ic-testkit = { workspace = true, features = ["held-reply-fixtures"] }
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["io-util", "net", "signal", "sync"] }
+toml.workspace = true
 
 [[test]]
 name = "artifact"
@@ -49,12 +60,22 @@ name = "auth"
 
 [[test]]
 name = "auth_browser"
+required-features = ["profile-state"]
+
+[[test]]
+name = "backup"
+path = "tests/backup/mod.rs"
+required-features = ["backup"]
 
 [[test]]
 name = "blob"
+required-features = ["profile-state"]
 
 [[test]]
 name = "creation"
+
+[[test]]
+name = "counter"
 
 [[test]]
 name = "endpoints"

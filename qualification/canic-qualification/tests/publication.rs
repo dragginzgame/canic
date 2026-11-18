@@ -1,5 +1,7 @@
 //! Real CLI Store bootstrap and publication through Root with retained recovery.
+mod counter_managed;
 mod fleet_growth;
+mod greeting;
 mod publication_removal_tests;
 mod store_upgrade_tests;
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings, PocketIcBuilder};
@@ -16,7 +18,7 @@ fn run(dir: &Path, args: &[&str]) -> Output {
     Command::new(std::env::var_os("CANIC_CLI").expect("make publication-test"))
         .args(args)
         .args(["--json", "--config"])
-        .arg(dir.join("canic.json"))
+        .arg(dir.join("canic.toml"))
         .output()
         .unwrap()
 }
@@ -140,7 +142,7 @@ async fn maintain_root(
     std::fs::set_permissions(&pause, std::fs::Permissions::from_mode(0o700)).unwrap();
     let interrupted = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["fleet", "apply", id, "--json", "--config"])
-        .arg(dir.join("canic.json"))
+        .arg(dir.join("canic.toml"))
         .args(["--identity", "anonymous", "--icp-bin"])
         .arg(&pause)
         .env("CANIC_REAL_SIGNER", signer)
@@ -174,9 +176,9 @@ async fn maintain_root(
         std::fs::read(path.join("custody-after/reply.bin")).unwrap()
     );
     let migrated = pic.get_stable_memory(root).await;
-    assert_ne!(
+    assert_eq!(
         migrated, stable,
-        "positional payloads migrate to identified collections"
+        "compatible records reopen without rewriting custody"
     );
     assert_eq!(
         migrated.len(),
@@ -229,22 +231,14 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     let app_bytes = padded(std::fs::read(assets.join("app.wasm")).unwrap());
     std::fs::write(dir.join("app.wasm"), &app_bytes).unwrap();
     std::fs::write(dir.join("worker.wasm"), &app_bytes).unwrap();
-    let predecessor =
-        repo.join("qualification/canic-qualification/fixtures/root-positional-children.wasm");
-    assert_eq!(
-        hex(&ic_wasm_store_protocol::digest(
-            &std::fs::read(&predecessor).unwrap()
-        )),
-        "a00ce6fcac8687c9c350e317c53d2d653665c1c531639af9d07961ade96cc90d"
-    );
     let mut config = json!({"apps":{"demo":{
-        "canisters":{"root":{"role":"root","wasm":predecessor},
+        "canisters":{"root":{"role":"root","wasm":assets.join("root.wasm")},
             "store":{"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")},
             "app":{"role":"app","parent":"root","wasm":dir.join("app.wasm")},
             "worker":{"role":"worker","parent":"root","wasm":dir.join("worker.wasm")}},
         "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":root_key,"root_subnet":owner.client().topology().await.get_nns().unwrap().to_text(),"routing_canister":routing.to_text()},"journal":"journal","canisters":{}}}
     }}});
-    std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+    std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     let dispatch = (std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -274,7 +268,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     );
     let human = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["fleet", "status", id, "--config"])
-        .arg(dir.join("canic.json"))
+        .arg(dir.join("canic.toml"))
         .output()
         .unwrap();
     assert!(human.status.success());
@@ -288,7 +282,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     std::fs::set_permissions(&paused, std::fs::Permissions::from_mode(0o700)).unwrap();
     let stopped = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["fleet", "apply", id, "--json", "--config"])
-        .arg(dir.join("canic.json"))
+        .arg(dir.join("canic.toml"))
         .args(["--identity", "anonymous", "--icp-bin"])
         .arg(&paused)
         .env("CANIC_REAL_SIGNER", &signer)
@@ -358,7 +352,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     std::fs::write(&paused, "#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */sibling/publication/publication/observe/1/arguments.bin) exit 72;; esac\ndone\nexec \"$CANIC_REAL_SIGNER\" \"$@\"\n").unwrap();
     let stopped = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["fleet", "apply", id, "--json", "--config"])
-        .arg(dir.join("canic.json"))
+        .arg(dir.join("canic.toml"))
         .args(["--identity", "anonymous", "--icp-bin"])
         .arg(&paused)
         .env("CANIC_REAL_SIGNER", &signer)
@@ -486,7 +480,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         if index == 2 {
             config["apps"]["demo"]["canisters"]["root"]["wasm"] =
                 json!(assets.join("root-maintenance.wasm"));
-            std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+            std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
             maintain_root(&dir, owner.client(), root, store, &signer).await;
         }
         let mut next = app_bytes.clone();
@@ -809,7 +803,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
         "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":root_key,"root_subnet":owner.client().topology().await.get_nns().unwrap().to_text(),"routing_canister":root.to_text()},
             "journal":"journal", "canisters":{"root":{"id":root.to_text()}}}}
     }}});
-    std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+    std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     let inspected = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["artifact", "inspect", "--json"])
         .arg(&wasm)
@@ -897,7 +891,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     std::fs::set_permissions(&paused, std::fs::Permissions::from_mode(0o700)).unwrap();
     let stopped = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["fleet", "apply", bootstrap_id, "--json", "--config"])
-        .arg(dir.join("canic.json"))
+        .arg(dir.join("canic.toml"))
         .args(["--identity", "anonymous", "--icp-bin"])
         .arg(&paused)
         .env("CANIC_REAL_SIGNER", &signer)
@@ -1026,7 +1020,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     let started = Instant::now();
     let failed = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["fleet", "apply", id, "--json", "--config"])
-        .arg(dir.join("canic.json"))
+        .arg(dir.join("canic.toml"))
         .args(["--identity", "anonymous", "--icp-bin"])
         .arg(&interrupted)
         .env("CANIC_REAL_SIGNER", &signer)
@@ -1080,7 +1074,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     assert_eq!(status["publication"], completed["publication"]);
     let human = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["fleet", "status", id, "--config"])
-        .arg(dir.join("canic.json"))
+        .arg(dir.join("canic.toml"))
         .output()
         .unwrap();
     assert!(human.status.success());
@@ -1373,7 +1367,12 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     );
     assert_eq!(apply("reconcile", upgrade_id), upgraded);
     assert_eq!(
-        cli(&dir, &["fleet", "call", upgrade_id, "--name", "Store"])["greeting"],
+        greeting::call(
+            owner.client(),
+            CanisterId::from_text(child).unwrap(),
+            "Store"
+        )
+        .await,
         "Hello from Canic, Store!"
     );
     assert_eq!(

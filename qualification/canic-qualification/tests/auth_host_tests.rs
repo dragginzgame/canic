@@ -11,7 +11,7 @@ fn run(dir: &Path, args: &[&str]) -> Output {
     Command::new(std::env::var_os("CANIC_CLI").expect("make auth-test"))
         .args(args)
         .args(["--json", "--config"])
-        .arg(dir.join("canic.json"))
+        .arg(dir.join("canic.toml"))
         .output()
         .unwrap()
 }
@@ -101,13 +101,13 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
             "key":hex(&KEY), "network_id":hex(&[0x11;32]), "application_id":hex(&[0x22;32]),
             "role":"user", "scopes":["read"], "not_before_ns":now - SECOND, "expires_at_ns":now + 600 * SECOND}
     }}}}});
-    std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+    std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     let mut wrong_code = config.clone();
     wrong_code["apps"]["demo"]["canisters"]["root"]["wasm"] =
         config["apps"]["demo"]["canisters"]["receiver"]["wasm"].clone();
     std::fs::write(
-        dir.join("canic.json"),
-        serde_json::to_vec(&wrong_code).unwrap(),
+        dir.join("canic.toml"),
+        toml::to_string(&wrong_code).unwrap(),
     )
     .unwrap();
     let wrong_journal = dir.join("wrong-code");
@@ -146,7 +146,7 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
             .join("auth/signed.json")
             .exists()
     );
-    std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+    std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     let planned = cli(
         &dir,
         &["fleet", "auth", "plan", "--controller", "2vxsx-fae"],
@@ -199,7 +199,7 @@ async fn cli_auth_approval_binds_real_code_and_recovers_only_the_original_call()
     let signed = std::fs::read(effect.join("signed.json")).unwrap();
     // Edited config cannot widen retained authority or change the revocation's target grant.
     config["apps"]["demo"]["fleets"]["local"]["auth"]["scopes"] = json!(["read", "write"]);
-    std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+    std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     assert!(
         !run(
             &dir,

@@ -15,7 +15,7 @@ cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "
 "$cli" artifact build --package canic-root --features auth --output target/auth/root.wasm --json > target/auth/root.json
 if [[ "$browser" == true ]]; then
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --features profile --output target/auth/profile.wasm --json > target/auth/profile.json
-    cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test auth_browser "$@" -- --ignored --nocapture
+    cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features profile-state --test auth_browser "$@" -- --ignored --nocapture
     exit
 fi
 cargo test --locked -p canic --features auth-enrollment auth::enrollment

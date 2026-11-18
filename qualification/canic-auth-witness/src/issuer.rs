@@ -1,5 +1,5 @@
 //! Application-owned, volatile test signer. No production key custody is claimed.
-use crate::{IssuerObservation, KEY, audience};
+use crate::{IssuerObservation, audience};
 use canic::auth::issuer::{Issue, Logout, Lookup, Refusal, Renew, Revoked, Status};
 use ic_auth::{
     issuer_memory::{
@@ -30,6 +30,7 @@ struct State {
     engine: MemoryIssuer,
     account: Principal,
     authority: IssuerAuthority,
+    signer: SigningKey,
     allowed: bool,
     signatures: u32,
     reply_fault: bool,
@@ -37,6 +38,7 @@ struct State {
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
 pub(crate) fn init() {
     let now = api::time();
+    let signer = SigningKey::from_bytes(&[7; 32]);
     STATE.with_borrow_mut(|state| {
         *state = Some(State {
             engine: MemoryIssuer::new_fresh(
@@ -65,9 +67,12 @@ pub(crate) fn init() {
             authority: IssuerAuthority {
                 signing: IssuerSigning::Ed25519,
                 generation: 1,
-                key_binding_id: Ed25519Key::new(KEY).unwrap().binding(),
+                key_binding_id: Ed25519Key::new(signer.verifying_key().to_bytes())
+                    .unwrap()
+                    .binding(),
                 expires_at_ns: now + 600 * SECOND,
             },
+            signer,
             allowed: true,
             signatures: 0,
             reply_fault: false,
@@ -87,6 +92,13 @@ pub(crate) fn control(command: u8) -> bool {
             8 => s.allowed = false,
             9 => {
                 s.engine.prune(api::time(), 32).unwrap();
+            }
+            10 if s.authority.generation == 1 => {
+                s.signer = SigningKey::from_bytes(&[17; 32]);
+                s.authority.key_binding_id = Ed25519Key::new(s.signer.verifying_key().to_bytes())
+                    .unwrap()
+                    .binding();
+                s.authority.generation = 2;
             }
             _ => return false,
         }
@@ -274,9 +286,7 @@ async fn finish<const ID: u64>(ticket: IssuerTicket, existing: bool) -> Result<S
             .map_err(refused)?;
         // Local test-key signing has no independently committed external effect.
         // Signature, result, counter and reply encoding share this IC transaction.
-        let signature = SigningKey::from_bytes(&[7; 32])
-            .sign(&Sha256::digest(signing.claims()))
-            .to_bytes();
+        let signature = s.signer.sign(&Sha256::digest(signing.claims())).to_bytes();
         s.engine
             .complete(ticket, s.authority, signature, now)
             .expect("atomic local signing completion");

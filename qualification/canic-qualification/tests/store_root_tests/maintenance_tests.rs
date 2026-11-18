@@ -184,7 +184,7 @@ async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callba
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn root_upgrades_pre_registry_store_preserving_state_and_uncertain_effects() {
+async fn refused_pre_registry_root_upgrade_preserves_original_upload_and_store() {
     replacement_preserves_state(
         include_bytes!("../../fixtures/store-0.1.0.wasm").to_vec(),
         true,
@@ -290,6 +290,17 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     inject(&root, 0).await;
     assert_eq!(observe(&root).await.phase, Phase::UploadIssued);
     let pending_upload = observe(&root).await;
+    if historical_scan {
+        super::refuse_old_backing(&root).await;
+        assert_eq!(observe(&root).await, pending_upload);
+        assert_eq!(pic.get_stable_memory(supplier.id).await, before_store);
+        assert_eq!(
+            owner.close(Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        assert!(server.stop().unwrap().process.cleanup.is_empty());
+        return;
+    }
     maintain(&root).await;
     assert_eq!(observe(&root).await, pending_upload); // Preserve the original upload commitment.
     restore_faults(&root).await;

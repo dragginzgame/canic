@@ -20,5 +20,16 @@ for entry in root-faults:canic-root:fault-injection store-candidate:ic-wasm-stor
     "$cli" artifact build --package "${rest%%:*}" --features "${rest#*:}" --json > "target/publication/$name.json"
     cp -- "$(jq -r .wasm "target/publication/$name.json")" "target/publication/$name.wasm"
 done
+if [[ $# == 0 || "${1:-}" == counter_managed:: ]]; then
+    "$cli" app build --config apps/demo/canic.toml --canister app --json > target/publication/counter-client.json
+    for variant in v1 v2 fenced; do
+        features=()
+        case "$variant" in
+            v2) features=(--features counter-v2) ;;
+            fenced) features=(--features initially-fenced) ;;
+        esac
+        "$cli" artifact build --package canic-demo "${features[@]}" --output "target/publication/counter-$variant.wasm" --json > "target/publication/counter-$variant.json"
+    done
+fi
 CANIC_CLI="$cli" CANIC_PUBLICATION_ARTIFACTS="$root/target/publication" \
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test publication "$@" -- --nocapture

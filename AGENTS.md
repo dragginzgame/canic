@@ -47,7 +47,21 @@ installer, never by editing installed bytes.
 - Exclude ICP conversion from Canic; operators fund cycles manually. Application
   frontend integration and Toko deployment integration remain deferred. Toko's
   existing workspace shell is admitted for fleetless definition/build qualification;
-  the managed consumer remains the Canic profile demo. Apps may have zero fleets;
+  the selected persistence/recovery consumer is a small counter in the fresh
+  [demo fleet](docs/demos/demo.md), declared under `apps/demo`. Capture and restore
+  are operator-triggered; restore stays fenced until explicit acceptance/reopening.
+  Counter increments are public; the application owns its explicit readiness and
+  fence report. Observing readiness cannot activate or reopen application writes.
+  The counter's local persistence/upgrade witness uses Storage named cells. Managed
+  creation/upgrade through separate Root/Store now has a local installed CLI witness;
+  named counter commands use an optional app-owned native codec. Backup qualifies local restoration of a stopped counter.
+  Application acceptance and reopening remain pending. `fleet call` signs as the selected user, never proxies through
+  Root and never treats controller membership as application permission. Calls
+  retain exact request bytes in the existing journal; resumed signed calls are
+  observation-only, and uncertainty blocks replacement calls to that target.
+  The profile app is retired from the product; its packages under `qualification/`
+  remain regression fixtures for ownership, composition and retained effect paths.
+  Apps may have zero fleets;
   initialize apps independently and declare networks only through fleet setup.
 
 ## Ownership and retained-state contracts
@@ -64,34 +78,31 @@ bytes, recovery boundaries and qualified predecessor paths:
 | Persistence and migration | [Persistent releases](docs/design/canic-system-design.md#13-persistent-releases-checkpoints-and-recovery) |
 | Actor composition and suppliers | [Endpoint ownership](docs/design/canic-system-design.md#endpoint-ownership-and-actor-composition), [Blob witness](docs/demos/blob.md) |
 
-- One explicit `PlanAction` carries each operation's authority. Keep historical
-  field names and directory layouts in record codecs, preserving approval digests,
-  exact signed attempts and original deadlines. Unknown outcomes retain exposure;
-  expiry, funding or a missing receipt cannot authorize a replacement effect.
-- Whole-fleet operations reuse existing effect owners and the journal lock. Children
-  have permanent identities in one ordered collection. Current one/two-child and
-  bounded-upgrade limits are qualification boundaries, not a reason to duplicate
-  child/sibling workflows. Store is infrastructure and consumes no application slot.
-  Cancellation is allowed only before effect preparation and retains revocation.
-  No-change compares retained completion, not fresh network convergence.
-- Root maintenance must preserve every child's complete custody and any retained
-  Store operation. Old owners require an explicitly qualified exact-code transition;
-  never probe endpoints or fall back to observations that omit custody. Reconciliation
-  observes only admitted effects; it does not renew budgets or dispatch authority.
-  Store maintenance uses its restricted recovery contract, not generic advance.
-- Reopen persistent state; never initialize after a load failure, reset consumed
-  authority or discard uncertain history. Storage owns checked allocations. Preserve
-  existing leases and record formats when reorganizing modules. Unsupported older
-  executables must refuse newer state rather than silently dropping evidence.
-- Public diagnostic reports do not establish completion, readiness or permission.
-  Terminal, JSON and browser views project the same owners. Watchers never sign,
-  reconcile, publish receipts or mutate fleets. Local artifact listings project
-  retained publication records, not a second catalog or live Store discovery.
-- Canic composes actor endpoints; Platform owns generic IC entrypoint macros; Wire
-  owns codecs; Storage owns memory allocation. Protocol packages stay passive and
-  Host-safe. Endpoint mounting never implicitly boots storage, timers or services.
+- One explicit `PlanAction` owns authority. Preserve historical record codecs,
+  approval digests, exact signed attempts and original deadlines. Unknown outcomes
+  retain exposure; expiry, funding or missing receipts cannot authorize replacement.
+- Whole-fleet operations share effect owners and the journal lock. Permanent child
+  identities, Store infrastructure and application slots remain distinct. Cancel
+  only before effect preparation and retain revocation; no-change compares retained
+  completion rather than fresh network convergence.
+- Maintenance preserves complete child/Store custody. Old owners need qualified
+  exact-code transitions; never fall back to endpoints omitting retained evidence.
+  Reconciliation observes admitted effects without renewing budgets or authority;
+  Store uses its restricted recovery contract, not generic advance.
+- Reopen state and preserve leases/formats; never initialize after load failure or
+  reset consumed authority. Unsupported old executables must refuse newer records.
+- Reports, watchers and listings project existing owners. They grant no completion,
+  readiness or permission and never sign, reconcile or publish receipts.
+- Canic composes endpoints; Platform owns generic IC entrypoint macros, Wire owns
+  codecs and Storage owns checked allocation. Passive protocols remain Host-safe.
+  Mounting endpoints never implicitly boots storage, timers or services.
 
 ## Packages and qualification
+
+Fresh counter and Root installations use Storage named leases. Existing retained
+images require an explicitly qualified transition. Read the
+[current qualification](qualification/README.md#storage-078-adoption) before
+persistent-actor work.
 
 Keep the root virtual Cargo workspace, products under `crates/`, fleet components
 under `apps/`, and the separate qualification workspace under `qualification/`.
@@ -101,9 +112,10 @@ remain separate; do not pull optional supplier runtimes into default application
 | Owner | Responsibility | Affected checks |
 | --- | --- | --- |
 | `canic` | Small greeting contract and optional local actor adapters | `make test`, `make clippy`, `make doc` |
-| `canic-host`, `canic-cli`, `apps/hello/canic-hello` | Native planning, custody and hands-on greeting journey | `make journey-test`, `make journey-clippy`, `make journey-doc` |
+| `canic-host`, `canic-cli`, `apps/demo/canic-hello` | Native planning, custody and hands-on greeting journey | `make journey-test`, `make journey-clippy`, `make journey-doc` |
+| `apps/demo` | Persistent public counter, explicit owner-only fencing and readiness | `make counter-test`, `make counter-clippy`, `make counter-doc` |
 | `canic-management`, `canic-management-protocol`, `canic-root` | Shared bounded effect engine, passive contracts and explicit Root mounts | `make root-test`, `make root-clippy`, `make root-doc`; `make growth-test` for shared effect boundaries |
-| `apps/profile/` | Profile protocol/client, discovery entry, persistent worker and autonomous manager | `make profile-test`, `make profile-clippy`, `make profile-doc` |
+| `qualification/canic-profile-*` | Retained ownership, composition, discovery and autonomous-management fixtures; not a product demo | `make profile-test`, `make profile-clippy`, `make profile-doc` |
 | `ic-wasm-store` supplier; Canic's Root/Host integration | Supplier owns artifacts, pins and admission; Canic owns orchestration | `make store-test`, `make store-clippy`; `make root-doc` covers management contracts |
 | `qualification/canic-asset-catalog` | Installed local Blob/catalog composition | `make blob-test`, `make blob-clippy`, `make blob-doc` |
 | `canic::auth`, `qualification/canic-auth-witness` | Optional issuer/receiver mounts and installed volatile Auth composition | `make auth-test`, `make auth-clippy`, `make auth-doc` |
@@ -125,74 +137,51 @@ into Host. The public builder requires matching runtime/protocol versions and
 uses the runtime archive's packaged lockfile, checking its protocol selection too.
 No sibling checkout, copied runtime or Git fallback is required.
 
-The qualification harness owns explicit `make qualification-setup`; simulator setup
-and tests share `IC_TESTKIT_SERVER_DIRECTORY`, defaulting to
-`target/qualification/server/prepared`. Tests verify prepared assets. Retire probes only when
-their failure cases have a qualified product owner; renaming is not replacement.
-Testkit 0.109.0 owns client types, selected held replies, prepared assets and
-bounded server/instance ownership. Keep those owners explicit. Successful close
-records a deletion attempt; it does not independently prove remote deletion.
-Missing or corrupt assets refuse offline; only `make qualification-setup` downloads.
+The harness owns explicit `make qualification-setup`; setup and tests share
+`IC_TESTKIT_SERVER_DIRECTORY` (default `target/qualification/server/prepared`).
+Testkit owns client types, held replies, assets and bounded server/instance
+lifetimes. Verify assets offline; only explicit setup downloads. Successful close
+records a deletion attempt, not independent remote deletion proof. Retire probes
+only when their failure cases have a qualified product owner. Exact supplier
+versions and current witnesses belong in manifests, locks and qualification notes.
 
-### Blob boundary
+### Supplier composition boundaries
 
-- The qualified supplier is registry Blob 0.103.3 in both lockfiles. Keep its
-  sibling checkout read-only; do not substitute pending supplier work.
-  `scripts/dev/blob-inputs.pl` records locked archive identities and
-  hashes around installed qualification; changed inputs require requalification.
-- Blob owns Service, identity, accounting and maintenance admission. Canic mounts
-  endpoints; the application owns users, catalog and publication permission. Pass
-  captured ingress callers unchanged; check real user permission before invoking
-  trusted local application authority. Compose through one Storage bootstrap.
-- Reopen with the real Service; preserve catalog/Blob rollback and exact maintenance
-  attempts. Root's optional `blob` feature extends its existing child upgrade owner;
-  it retains drain/stop/start/activation custody alongside exact application arguments.
-  `fleet activate` separately authorizes the matching reopened attempt. Issued
-  calls are observed, never replaced; readiness never activates admission. Old
-  complete-custody endpoints refuse application records they cannot represent.
-  Host-driven Root/Store maintenance over these new records remains closed until
-  its complete preservation contract is extended. Blob remains independently usable;
-  the local fleet witness does not qualify a provider journey.
-  The catalog's optional `profile` feature composes the real profile engine under
-  the same Storage bootstrap. Use its stable request contribution and explicit
-  create/open paths; do not embed the standalone `storage::open` bootstrap in a
-  shared backing. Participant additions/removals require an explicit migration.
+Read the [Blob witness](docs/demos/blob.md) and [Auth contract](docs/demos/auth.md)
+before changing their mounts, retained state or qualification. Those documents,
+manifests/locks and qualification records own exact versions, source captures,
+current journeys and remaining gates; do not substitute sibling working trees.
 
-### Auth boundary
-
-- Auth selects registry engine 0.47.4 (`a85cc80c375349fcc22b1df57e5e7348bacf161b`)
-  and Wire/Types 0.43.0. The private browser package remains materialized from
-  the qualified 0.47.1 source `a05b5ddd4099a3f64b95deb173a0c16746d98ac5`, never
-  the sibling working tree. Both boundaries pass the installed browser journey.
-  Canic's optional `auth` feature mounts passive Wire contracts;
-  the application selects the independent engine and protected authorities.
-  `auth-enrollment` adds direct, bounded Root enrollment; Root's `auth` feature
-  admits one explicit immutable grant under its existing controller boundary.
-- Capture caller/time at ingress, preserve directional budgets and synchronous
-  reply rollback. Mounting grants no enrollment, readiness, storage or timers.
-  Lost volatile replay/revocation state stays closed; fresh enrollment is not
-  recovery. The current [receiver witness](docs/demos/auth.md) pulls from an actual
-  Auth-enabled Root. Host compiles the optional fleet `auth` declaration into the
-  existing journal's exact configure/revoke plans; it imports passive types only.
-  Retained Auth authority blocks Root/receiver preservation upgrades in that
-  journal. Managed Auth preservation and the complete browser journey are pending.
-- Issuer mounts stay passive: applications own account authentication, browser
-  binding checks, grant policy and key/effect custody; `MemoryIssuer` owns intents,
-  renewal sequencing, results and pruning. Reconciliation is lookup-only. The
-  installed local test signer does not qualify production keys or external signing
-  recovery. Browser logout passes the captured caller to `revoke_browser`; account
-  fields remain selectors. The optional browser module uses generated Wire codecs
-  and Auth's coordinator/HTTP transport; it owns no journal or cleanup scheduler.
-  Use `make auth-browser-prepare` explicitly, then `make auth-browser-test`.
-  `make auth-profile-test` additionally requires an explicitly prepared Chromium
-  via `CANIC_AUTH_BROWSER_EXECUTABLE`; it runs headless. Its optional witness reuses
-  the actual profile engine with two independently enrolled receivers. The fixed
-  issuer namespace authenticates profile owners; browser/controller identities
-  never substitute for them. Profile state survives upgrades while lost volatile
-  Auth state stays closed. This does not enable Auth on default profile deployments.
+- Blob owns Service, identity, accounting and maintenance admission; the app owns
+  users, catalog and publication authority. Pass captured callers unchanged and
+  authorize users before invoking trusted application authority. Compose through
+  one Storage bootstrap, preserving participant contributions and explicit create/open.
+  Participant additions/removals require migration, not a second bootstrap.
+- Preserve catalog/Blob rollback, exact maintenance attempts, drain/stop/start and
+  activation custody. Issued effects are observed, never replaced. Readiness does
+  not activate admission; activation requires the matching explicit authorization.
+  Old custody-incomplete endpoints refuse newer records. Host-driven preservation
+  remains closed until its complete contract is qualified. A local fleet witness
+  is not a provider journey.
+- Auth Rust and browser selections have independent, exact qualification identities.
+  Optional mounts stay passive; apps select engines, account authentication,
+  protected authorities and browser binding. Host imports passive types only.
+- Capture caller/time at ingress; preserve directional budgets and synchronous
+  reply rollback. Mounts grant no enrollment, storage or timer authority. Lost
+  volatile replay/revocation state stays closed; fresh enrollment is not recovery.
+  Retained Auth authority blocks preservation upgrades until qualified.
+- Issuers own intents/renewal/results/pruning; reconciliation is lookup-only.
+  Local signers do not qualify production keys or external signing recovery.
+  Logout passes the captured caller; account fields are selectors. Browser code
+  uses generated Wire codecs and Auth coordination without its own journal.
+  Browser tests require explicitly prepared tools and remain headless; controller
+  identity cannot replace application ownership. Keep default deployments free
+  of optional Auth until selected.
 
 ## CLI and developer experience
 
+- `canic.toml` is the only app/fleet source format. Preserve comments when adding
+  declarations; journals, signed attempts and `--json` output retain their codecs.
 - Group actions under `app`, `artifact` and `fleet`; alphabetize help. Only `--json`
   is global. Reject context options that the action does not consume. Infer only a
   sole app, then a sole fleet within it; never infer app identity from a child name.
@@ -217,6 +206,11 @@ Missing or corrupt assets refuse offline; only `make qualification-setup` downlo
   start at 0.200.0. Do not publish to crates.io until maturity and explicit maintainer
   authorization. GitHub pushes do not authorize publication. There are no local
   dependency exceptions or release adapters.
+- For a Tooling update, change both exact workspace pins and locks, preview with
+  `make toko-tooling-preview`, then run `make toko-tooling-update`. Verify the
+  installed snapshot and tools with `make toko-tooling-check tools-check` and run
+  the affected consumer checks. If setup fails, fix the reported phase and rerun
+  the shared installer against the same locked archive.
 - Ordinary changes use focused tests, Clippy and Rustdoc for affected packages/cases.
   Use `make fmt-check` and `make toko-tooling-check` for formatting and snapshot
   agreement. `make lint` aggregates both workspaces' lint/docs/format checks; `make ci`

@@ -45,15 +45,16 @@ impl State {
                 allocations: if cfg!(feature = "profile") { 4 } else { 2 },
                 extents: if cfg!(feature = "profile") { 6 } else { 4 },
                 pages: 64,
+                ..Default::default()
             },
         )
         .expect("one application backing");
         if input.is_none() {
             assert_eq!(
                 runtime
-                    .diagnostics()
+                    .memory_allocations()
                     .expect("retained directory")
-                    .allocations,
+                    .len(),
                 if cfg!(feature = "profile") { 4 } else { 2 },
                 "composition membership requires an explicit migration"
             );
@@ -103,7 +104,7 @@ impl State {
             };
             let bytes = ic_wire::encode(&catalog, ic_wire::Encoding::Payload, RPC_LIMITS)
                 .expect("initial catalog");
-            let cell = StableCell::create(catalog_memory, bytes).expect("fresh catalog");
+            let cell = StableCell::create(catalog_memory, bytes);
             let blob = Service::create(
                 blob_memory,
                 installation,
@@ -124,8 +125,9 @@ impl State {
         } else {
             let blob = Service::open(blob_memory, installation)
                 .expect("existing Blob; no initialization fallback");
-            let cell = StableCell::<Vec<u8>>::load(catalog_memory, RPC_LIMITS.bytes)
-                .expect("existing catalog");
+            ic_storage::stable_cell_payload_length(&catalog_memory, RPC_LIMITS.bytes)
+                .expect("bounded catalog");
+            let cell = StableCell::<Vec<u8>>::load(catalog_memory).expect("existing catalog");
             let catalog: Catalog =
                 ic_wire::decode(cell.get(), ic_wire::Encoding::Payload, RPC_LIMITS)
                     .expect("catalog record");

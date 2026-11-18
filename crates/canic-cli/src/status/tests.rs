@@ -346,7 +346,7 @@ fn store_apply_followup_keeps_scope_and_signer_only_for_signed_commands() {
         "apply",
         "original",
         "--config",
-        "project's config.json",
+        "project's config.toml",
         "--app",
         "demo",
         "--fleet",
@@ -378,7 +378,7 @@ fn store_apply_followup_keeps_scope_and_signer_only_for_signed_commands() {
         };
         let text = crate::progress::applied(&outcome, &command);
         assert!(text.contains(&format!("canic fleet {expected} original")));
-        assert!(text.contains("--config 'project'\"'\"'s config.json'"));
+        assert!(text.contains("--config 'project'\"'\"'s config.toml'"));
         assert!(text.contains("--state-dir 'journal path' --app demo --fleet local"));
         assert_eq!(
             text.contains("--identity operator --icp-bin 'signer path'"),
@@ -624,53 +624,4 @@ fn fleet_budget_and_utc_labels_preserve_exact_boundaries() {
         "2000-02-29 00:00:00 UTC"
     );
     assert_eq!(super::utc(u64::MAX), "2554-07-21 23:34:33 UTC");
-}
-
-#[test]
-fn greeting_selection_uses_retained_child_names_and_refuses_ambiguity() {
-    let first = fixture(&state()).unwrap();
-    let mut second = fixture(&state()).unwrap();
-    second.operation = "second".into();
-    let root = fixture(&state()).unwrap();
-    let fleet_plan = canic_host::FleetPlan {
-        version: 1,
-        root: root.plan.clone(),
-        children: vec![],
-        store: None,
-    };
-    let state = OperationStatus::Fleet(Box::new(canic_host::FleetStatus {
-        operation: "fleet".into(),
-        fleet_plan,
-        root,
-        cancellation: None,
-        store: None,
-        children: vec![
-            canic_host::FleetChildStatus {
-                name: "app".into(),
-                state: Some(first),
-                publication: None,
-            },
-            canic_host::FleetChildStatus {
-                name: "worker".into(),
-                state: Some(second),
-                publication: None,
-            },
-            canic_host::FleetChildStatus {
-                name: "unadmitted".into(),
-                state: None,
-                publication: None,
-            },
-        ],
-    }));
-    assert!(super::call_state(&state, None).is_err());
-    assert!(super::call_state(&state, Some("missing")).is_err());
-    assert!(super::call_state(&state, Some("unadmitted")).is_err());
-    assert_eq!(
-        super::call_state(&state, Some("app")).unwrap().operation,
-        "a".repeat(64)
-    );
-    assert_eq!(
-        super::call_state(&state, Some("worker")).unwrap().operation,
-        "second"
-    );
 }

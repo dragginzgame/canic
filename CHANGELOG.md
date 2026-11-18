@@ -1,5 +1,286 @@
 # Changelog
 
+## [0.221.0] - 2026-11-18
+
+The optional Auth browser adapter now takes the selected device's SDK public
+key as `browserKey`. Reopening an issuance intent with another device's key
+fails before the account submits anything. With browser dependencies prepared:
+
+```sh
+make auth-browser-test
+```
+
+The local DB fleet now qualifies recovery after Root loses an upgrade callback.
+With the repository ICP CLI prepared, run both the direct and managed DB tests:
+
+```sh
+make qualification-setup
+make db-test
+```
+
+Both workspaces now pin Toko Tooling 0.45.3. Use `make toko-tooling-check`
+to verify the installed snapshot against the locked archive.
+
+IC Backup 0.105.6 supports Root-managed capture and restore through Canic’s optional Host codec. Both controller routes use a real external keyring signer.
+On Linux with ICP CLI, D-Bus and GNOME Keyring, prepare the local tools and run:
+
+```sh
+make qualification-setup backup-signer-setup
+make backup-signer-test
+```
+
+The managed fixture captures a Root-owned counter, recovers the original take and load results after lost replies, and checks the restored stable bytes while the counter is stopped.
+
+Wasm Store 0.4.1 and its protocol are selected for fresh fleets. The operator can
+build the published runtime locally from the Canic workspace with the installed CLI:
+
+```sh
+canic artifact build --package ic-wasm-store --output target/wasm-store.wasm
+```
+
+This writes a local Wasm. Existing 0.3.3 Stores require a separately qualified
+migration from their Storage 0.74.1 directory.
+
+Fresh counter and Root installations use Storage 0.78 named cells and the local
+simulator uses Testkit 0.110. Blob 0.105 and DB 0.22.2 use the same Storage release.
+The managed catalog reports explicit readiness and stays fenced across upgrade
+until its matching activation. The populated Blob 0.100.6 catalog retains its original executable under the hard-cut decision in [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8). Existing fleets require a separately
+qualified storage migration.
+
+### 🧩 Restore TOML configuration
+
+**Configuration cut:** `canic.toml` replaces `canic.json` as the only app/fleet
+source format. The declaration model stays the same. Initialization, discovery,
+starter generation and CLI edits use TOML; edits preserve comments and existing
+values. Repository configs are converted with their original canister IDs and
+journal paths. External JSON configs need conversion, not just renaming.
+Retained journals, signed requests and `--json` output are unchanged. Remove the
+custom duplicate-name decoder: the TOML parser owns duplicate-key rejection.
+
+### ▶️ Try it
+
+From the repository root, install the updated CLI, then inspect the demo locally:
+
+```sh
+make canic
+canic app list --config apps/demo/canic.toml
+canic fleet canister list --config apps/demo/canic.toml
+```
+
+In your own project, create a fleetless app and then its deployment declaration:
+
+```sh
+canic app init example
+canic fleet init mainnet --app example --network ic
+```
+
+These commands write local TOML only; no credentials, funding or deployment needed.
+
+### 🧩 Root snapshot executor
+
+Add an optional `backup` Root feature with authenticated `snapshot_execute` and
+`snapshot_lookup` endpoints. A bounded surviving ledger retains the exact original
+argument commitment, dispatch deadline, call-cost ceiling and inner result. Duplicate
+delivery and lookup never redispatch. Missing callback evidence stays pending
+through compatible Root upgrades. Ordinary private management endpoints stay
+fenced once snapshot work is admitted.
+
+Backup verifies the outer ingress and replays the exact inner result using Canic’s codec. Application fencing and reopening remain under [Canic #7](https://github.com/dragginzgame/canic/issues/7).
+The optional Storage layout requires a fresh Root; no live migration is supplied.
+
+Build/inspect only, from the repository root with `canic` installed:
+
+```sh
+canic artifact build --package canic-root --features backup --output target/backup-preview.wasm
+canic artifact inspect target/backup-preview.wasm
+```
+
+With simulator assets already prepared, run the local Root/counter witness:
+
+```sh
+bash scripts/dev/test-root.sh snapshot::
+```
+
+It uses synthetic cycles and a qualification-only callback fault build. No backup
+CLI command, mainnet effect, automatic activation or browser launch is introduced.
+
+### 🧩 Application-owned commands
+
+**CLI cut:** `fleet call OPERATION --name NAME` is retired. App definitions can
+select an optional native `build.client` target in their existing package.
+`app build` produces its codec beside the Wasm; `fleet call` invokes named commands
+directly as the selected user. The counter owns `read`/`increment` and Wire codecs;
+Canic owns target selection and exact signed-request custody. Root grants no
+application permission and does not proxy these calls.
+
+Uncertain calls retain their original request and block replacement calls from
+that user to that target. `fleet apply`/`reconcile` observe an already signed call
+without redispatching it. Reply decoding happens after retention. Call records
+store request bytes, not another copy of the application Wasm.
+
+### ▶️ Try it
+
+From the repository root, after explicit tool/simulator preparation:
+
+```sh
+make demo
+```
+
+In the session directory it prints, build and deploy with synthetic cycles:
+
+```sh
+canic app build
+canic fleet plan --identity anonymous
+canic fleet apply OPERATION --identity anonymous
+```
+
+Repeat apply on that operation if Root is still pending. Once complete:
+
+```sh
+canic fleet call --canister app --identity anonymous read
+canic fleet call --canister app --identity anonymous increment
+canic fleet show
+```
+
+Increment changes the local persistent counter once. No window opens and no
+mainnet wallet is used. Enter in the original terminal stops the simulator.
+
+### 🧩 Managed counter and Host adoption
+
+Fresh Root now calls explicit application readiness and accepts only `Ready`.
+The installed fleet CLI publishes the counter through its separate Wasm Store,
+creates it through Root and preserves its value across a managed upgrade. A
+fenced counter stays closed and cannot receive a completion receipt through
+repeated apply. Journal schema 2 refuses older greeting-approved Root state
+without resetting it; existing fleets must keep their old executable.
+
+Adopt Artifacts/FS 0.80.3 and product Process 0.81.0. Qualification retains Process
+0.80.5 to match Testkit's public cleanup report. Text stays at 0.77.2. After explicit
+tool and simulator preparation, build locally and run the managed rehearsal:
+
+```sh
+make canic
+canic app build --config apps/demo/canic.toml
+canic artifact inspect apps/demo/artifacts/root.wasm
+bash scripts/dev/test-publication.sh counter_managed::
+```
+
+No mainnet deployment occurs. Interactive counter calls, Root-mediated fencing
+and Backup recovery remain pending; `make demo` still uses the greeting actor.
+
+### 🧩 Demo fleet
+
+Implement the persistent counter in `apps/demo` using published Storage 0.76.2:
+one bounded record, public increments, explicit installation-authority fencing,
+matching activation and application readiness. Installed tests cover compatible
+upgrades with writes still closed, stale activation, malformed input, failed
+target-write rollback and corrupt/missing state refusal. From the repository root
+with `canic` installed and simulator assets explicitly prepared:
+
+```sh
+canic app build --config apps/demo/canic.toml --canister app
+canic artifact inspect apps/demo/artifacts/app.wasm
+make counter-test
+```
+
+The counter build creates no canisters. Qualification uses synthetic cycles and
+direct local control. Interactive counter calls and Backup restore
+remain pending; `make demo` continues to rehearse the greeting actor.
+
+Move fresh Root persistence onto Storage's public records API, keeping existing
+custody payloads and mutation boundaries. Two bounded records occupy 17 stable
+pages; no local allocator, Cell facade or upgrade flush is added. Compatible
+executables preserve child identities, attempts and Store custody. Old 0.74
+images refuse without reset; retain their old Root executable. Build/inspect only:
+
+```sh
+canic app build --config apps/demo/canic.toml --canister root
+canic artifact inspect apps/demo/artifacts/root.wasm
+bash scripts/dev/test-root.sh storage_reopen::
+```
+
+Add an optional application-owned `readiness` mount with distinct `Unavailable`,
+`Fenced` and `Ready` responses. The greeting actor and generated starter expose
+the bounded replicated observation; requests cannot select a state or activate
+the application. Fresh Root now consumes this contract. Build the
+counter actor without deployment:
+
+```sh
+canic app build --config apps/demo/canic.toml --canister app
+canic artifact inspect apps/demo/artifacts/app.wasm
+```
+
+Select a persistent counter with explicit recovery acceptance for the ongoing
+demo. The current interactive local session remains the
+stateless greeting. Retire the profile product and `make profile` entrypoint;
+move its five packages into the qualification workspace to retain existing
+Auth/Blob, ownership and management regression coverage. After `make canic`:
+
+```sh
+canic app list --config apps/demo/canic.toml
+# Explicit read-only inspection of the retired deployment:
+canic fleet canister list --config qualification/fixtures/profile-mainnet.toml
+```
+
+The retired declaration retains the original canister IDs and root journal.
+No live canister, controller or retained operation changes.
+
+`make demo` starts a bounded interactive local actor session, with a fresh
+config/journal and prepared simulator. It installs `canic` on PATH and prints
+the normal build, plan, apply, call and upgrade commands. After explicit tool
+and simulator preparation:
+
+```sh
+make demo
+# In another terminal, cd to the printed session directory:
+canic app build
+canic fleet plan --canister app --identity anonymous
+```
+
+Application deployment remains explicit. Enter, Ctrl-C, input EOF or the one-hour
+limit ends the session; local evidence remains. The session uses synthetic cycles
+and the direct Host path, leaving the managed mainnet declaration untouched.
+
+Add a fresh `demo/mainnet` declaration with supplied Root, Store and one
+application, separate from existing mainnet demos. The stateless actor explicitly
+mounts greeting and metrics; a missing timer provider is reported as unavailable.
+The greeting adapter replaces duplicated application/starter codec wrappers.
+After `make canic`, work from the repository root without deploying:
+
+```sh
+canic app canister list --config apps/demo/canic.toml
+canic app build --config apps/demo/canic.toml --canister app
+canic fleet list --config apps/demo/canic.toml
+```
+
+The managed counter has not been deployed to mainnet. The local installed greeting
+journey remains runnable: persistent host-readback dependencies are selected
+explicitly by the Blob/Auth-browser suites instead of every qualification test.
+
+### 🛠️ Fixed
+
+`app build` refuses outputs that overlap its config, any declared workspace
+manifest or Cargo lockfile, including aliases and a lockfile not yet created.
+All recipes are checked before Cargo runs, even when selecting one canister.
+From a configured app, these commands still build only local Wasm artifacts:
+
+```sh
+canic app build
+canic app build --canister app
+```
+
+### 🧩 Changed
+
+Select registry IC Storage 0.76.2 directly in both workspaces. Its published
+bounded records and Platform backing unblock implementation of the fresh counter
+and Root record migration. This remains an incomplete consumer migration: existing
+Root/profile imports and composed Blob/DB owners still need adaptation and
+installed qualification; the version update alone does not make them compile.
+[Storage #5](https://github.com/dragginzgame/ic-storage/issues/5) records the actual
+callers, required contracts and installed acceptance. Existing suppliers still
+select 0.74.1 transitively; no compatibility shim or retained-image conversion
+is added. The deployed/installed 0.220.0 release is unchanged.
+
 ## [0.220.0] - 2026-11-17
 
 ### 🧩 Changed

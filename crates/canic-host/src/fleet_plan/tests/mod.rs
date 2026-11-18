@@ -42,7 +42,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
 fn create(dir: &Path, selected: &SelectedFleet) -> Result<(String, FleetPlan)> {
     let result = plan_fleet(
         &dir.join("journal"),
-        &dir.join("canic.json"),
+        &dir.join("canic.toml"),
         selected,
         &input().controller,
         Some(3_000_000_000_000),
@@ -78,7 +78,7 @@ fn stored_fleet_admits_full_manifests_and_keeps_retained_inline_delivery() {
     std::fs::write(dir.join("app.wasm"), &bytes).unwrap();
     let result = plan_fleet(
         &dir.join("journal"),
-        &dir.join("canic.json"),
+        &dir.join("canic.toml"),
         &selected,
         &input().controller,
         None,
@@ -118,7 +118,7 @@ fn stored_fleet_admits_full_manifests_and_keeps_retained_inline_delivery() {
         mut fleet_plan,
     } = plan_fleet(
         &dir.join("journal"),
-        &dir.join("canic.json"),
+        &dir.join("canic.toml"),
         &selected,
         &input().controller,
         None,
@@ -142,7 +142,7 @@ fn stored_fleet_admits_full_manifests_and_keeps_retained_inline_delivery() {
     assert_eq!(
         plan_fleet(
             &dir.join("journal"),
-            &dir.join("canic.json"),
+            &dir.join("canic.toml"),
             &selected,
             &input().controller,
             None,
@@ -175,7 +175,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
     let plan = || {
         plan_fleet(
             &dir.join("journal"),
-            &dir.join("canic.json"),
+            &dir.join("canic.toml"),
             &selected,
             &input().controller,
             None,
@@ -266,7 +266,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
     assert!(matches!(
         plan_fleet(
             &dir.join("journal"),
-            &dir.join("canic.json"),
+            &dir.join("canic.toml"),
             &changed,
             &input().controller,
             None,
@@ -339,7 +339,7 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
     let planning = |dispatch| {
         plan_fleet(
             &journal,
-            &dir.join("canic.json"),
+            &dir.join("canic.toml"),
             &selected,
             &input().controller,
             None,
@@ -438,7 +438,7 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
     assert_eq!(
         plan_fleet(
             &journal,
-            &dir.join("canic.json"),
+            &dir.join("canic.toml"),
             &selected,
             &input().controller,
             Some(3_000_000_000_000),

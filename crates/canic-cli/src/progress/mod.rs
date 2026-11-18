@@ -67,21 +67,39 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
                 item.canister.clone(),
                 item.wasm.display().to_string(),
                 item.artifact.bytes.to_string(),
+                item.client
+                    .as_ref()
+                    .map_or_else(|| "—".into(), |path| path.display().to_string()),
             ]
         })
         .collect();
     format!(
         "Built app canisters\n\n{}\n\nNothing deployed.\n",
         plain_table(
-            &["CANISTER", "WASM", "BYTES"],
+            &["CANISTER", "WASM", "BYTES", "COMMAND CODEC"],
             &rows,
-            &[Alignment::Left, Alignment::Left, Alignment::Right]
+            &[
+                Alignment::Left,
+                Alignment::Left,
+                Alignment::Right,
+                Alignment::Left
+            ]
         )
     )
 }
 
 fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {
     match value {
+        ApplyOutcome::Call { call } => {
+            writeln!(
+                text,
+                "Application reply retained: {} ({} bytes).",
+                call.operation,
+                call.bytes.len()
+            )
+            .expect("String write");
+            true
+        }
         ApplyOutcome::Auth { auth } => {
             writeln!(
                 text,

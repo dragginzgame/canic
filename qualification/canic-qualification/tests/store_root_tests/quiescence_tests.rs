@@ -325,7 +325,7 @@ async fn maintenance_refuses_unfinished_children_and_checks_live_store_authority
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn cuj5_maintenance_migration_preserves_real_attempt_without_inventing_a_scan() {
+async fn cuj5_refused_upgrade_preserves_the_original_maintenance_attempt() {
     #[derive(serde::Deserialize)]
     struct Previous {
         approval: Approval,
@@ -388,23 +388,21 @@ async fn cuj5_maintenance_migration_preserves_real_attempt_without_inventing_a_s
                 .await;
             assert_eq!(old.phase, Phase::Stopped);
         }
-        maintain(&root).await;
-        let restored = observe(&root).await.unwrap();
+        super::refuse_old_backing(&root).await;
+        let restored: Option<Previous> = root
+            .update(
+                "observe_store_maintenance",
+                wire::OBSERVE,
+                &(),
+                wire::LIMITS,
+            )
+            .await;
+        let restored = restored.unwrap();
         assert_eq!(restored.approval, old.approval);
         assert_eq!(restored.operator, old.operator);
         assert_eq!(restored.phase, old.phase);
         assert_eq!(restored.stop_request, old.stop_request);
         assert_eq!(restored.failure, old.failure);
-        assert!(restored.preservation.is_none());
-        let resumed = advance(&root, &input).await;
-        if stopped {
-            assert_eq!(resumed, restored);
-        } else {
-            let scan = resumed.preservation.as_ref().unwrap();
-            assert!(scan.complete);
-            assert_eq!(scan.observed, 0);
-            assert_eq!(resumed.phase, Phase::Closed);
-        }
     }
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
@@ -415,7 +413,7 @@ async fn cuj5_maintenance_migration_preserves_real_attempt_without_inventing_a_s
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn root_journal_migration_adds_no_store_authority_to_a_retained_predecessor() {
+async fn refused_upgrade_keeps_the_original_single_child_root() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
@@ -432,21 +430,7 @@ async fn root_journal_migration_adds_no_store_authority_to_a_retained_predecesso
     )
     .await;
     let root = Client { pic, id, operator };
-    maintain(&root).await;
-    assert!(observe(&root).await.is_none());
-    let custody: management::children::Custody = root
-        .update(
-            "observe_children",
-            management::children::CUSTODY,
-            &(),
-            management::children::LIMITS,
-        )
-        .await;
-    assert!(
-        custody
-            .iter()
-            .all(|c| c.creation.approval.is_none() && c.upgrades.is_empty())
-    );
+    super::refuse_old_backing(&root).await;
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

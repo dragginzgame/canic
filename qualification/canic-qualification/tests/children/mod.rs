@@ -1,4 +1,4 @@
-//! Independent siblings, aggregate reservations and migration in the original storage leases.
+//! Independent siblings, aggregate reservations and preservation in Storage records.
 use super::*;
 use canic_management_protocol::{
     children::{self, ChildId, Request},
@@ -106,18 +106,9 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         .unwrap();
     let pic = owner.client();
     let root = pic.create_canister().await;
-    // The release fixture retains the v3 one-child history schema, rather than
-    // manufacturing stable bytes using the new writer under test.
-    let old = std::fs::read(
-        repo().join("qualification/canic-qualification/fixtures/root-one-child-history.wasm"),
-    )
-    .unwrap();
-    let hash: String = digest(&old).iter().map(|b| format!("{b:02x}")).collect();
-    assert_eq!(
-        hash,
-        "3de14eb8422bb99c57f9c63870523460fb9d7b3d4c5f0ef5f7a75cc0c1333c3a"
-    );
-    pic.install_canister(root, old, vec![], None).await;
+    // Old allocator images are qualified separately as refused upgrades.
+    pic.install_canister(root, artifact("root.wasm"), vec![], None)
+        .await;
     let first = input(
         root,
         padded_artifact("app.wasm"),
@@ -128,7 +119,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     settle(pic).await;
     let first_ready = status(pic, root).await;
     assert_eq!(first_ready.phase, Phase::Ready);
-    // Populate actual v3 history before migration, including a return to the
+    // Populate history before reopening, including a return to the
     // original module hash. Neither completion may be mistaken for new work.
     let mut previous = first.approval.module_hash;
     for name in ["app-v2.wasm", "app.wasm"] {

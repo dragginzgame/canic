@@ -1,5 +1,121 @@
 # Canic qualification
 
+## Optional Root snapshot executor
+
+`bash scripts/dev/test-root.sh snapshot::` qualifies Canic #6's optional fresh Root
+layout against an actual Root-created persistent counter. It covers exact
+execute/lookup replay, one-MiB transfer, upload/load with stopped completion,
+populated stable-byte preservation, authority and argument refusal, expiry,
+call-cost admission and callback-evidence loss across Root upgrade. Protocol and
+ledger unit tests cover full-extent framing, conflicting original bindings,
+finite slots and unretained oversized replies. The installed consumer decodes
+execute and lookup with `Exchange::decode_response`. A response for another
+method, a changed original binding or an oversized inner result fails closed.
+The decoder accepts payloads only after the caller authenticates the outer ingress.
+
+The separate Backup integration below exercises the public Host consumer. Canic #7 owns application fencing and reopening. No
+mainnet work or existing-Root layout migration is qualified. The ordinary Root
+build keeps its existing two-record layout; `backup` adds a third bounded record.
+
+## Storage 0.78 adoption
+
+Fresh counter and Root installations use named stable cells on registry Storage
+0.78.0. Application codecs retain their payload bounds. Storage owns directory
+encoding and allocation. The local counter upgrade and Root snapshot tests run on
+Testkit 0.110.0. Keep deployed 0.76 records with their qualified executable until
+a physical-image migration is separately qualified.
+
+The DB 0.22.2 witness and Blob 0.105.0 catalog use Storage 0.78.0 directly.
+The DB installed suite covers populated upgrades, refused upgrades and damaged storage. The installed Blob suite covers fresh composition, the managed fleet journey and refusal to upgrade the populated 0.100.6 catalog. The refusal preserves
+the predecessor's stable bytes, management report and surviving asset.
+[Storage #8](https://github.com/dragginzgame/ic-storage/issues/8) records the decision to retain the original executable for this directory.
+
+## Backup integration boundary
+
+The optional `canic-host/backup` adapter connects IC Backup 0.105.6 to
+Tooling's published `ic-host-sign` 0.1.0. It passes the original management
+arguments or status request ID, sender, effective target, exact expiry, deadline
+and spending limits. Backup commits to the adapter version, provider, identity and
+configuration at approval. Tooling owns key access and process cleanup. Backup
+owns signing reservations, signed bytes, transport and observation.
+
+On Linux with ICP CLI, D-Bus and GNOME Keyring installed, run:
+
+```sh
+make qualification-setup
+make backup-signer-setup
+make backup-signer-test
+```
+
+The fixture creates its own session bus, keyring, secp256k1 identity and stopped
+canister. It drops the response to a real snapshot take, reopens the journal and
+reconstructs the signer. Changing its public manifest path refuses recovery.
+The original configuration permits one explicit status observation. The fixture
+checks the snapshot count, journal bytes and signature spending, verifies the
+completed capture offline, overwrites the fixture's stable bytes, restores and
+checks the bytes and stopped status.
+
+The managed case installs a fresh Backup-enabled Root and its persistent counter.
+The signer controls Root, and Root is the counter’s sole controller. Supply
+`canic_host::backup::SnapshotCodec` to Backup’s `with_root_manager` connection
+and `with_root_codec` store. The codec binds each step to its original management
+arguments and checks the returned binding before exposing the retained result.
+The fixture drops the take and load replies, reopens the operations, uses one
+explicit lookup apiece, restores the original bytes and checks stopped completion.
+The restore journal is reopened again with the replica gateway stopped.
+
+These are local Linux qualification routes. The provider requires a
+keyring-backed identity. Password-encrypted ICP identities use a different
+storage contract. The same test exercises partial and oversized signer output,
+provider death, deadline expiry and cancellation after launch. Each failed capture
+retains one signing reservation, sends zero replica requests and refuses to sign
+again after journal reopen. Real signed envelopes also exercise method, argument,
+expiry, sender and original-status binding checks for [Canic #5](https://github.com/dragginzgame/canic/issues/5).
+Root-managed execution and application fencing/reopening have their own
+acceptance in [Canic #6](https://github.com/dragginzgame/canic/issues/6) and
+[Canic #7](https://github.com/dragginzgame/canic/issues/7).
+
+## Qualified baseline
+
+The stateless greeting journey remains runnable during Storage adoption.
+`make demo` explicitly starts its hands-on actor counterpart through the
+`canic-qualification` demo example. It uses prepared Testkit assets and the PATH
+CLI, creates a fresh local declaration/journal directory, and stops on input,
+Ctrl-C or a one-hour limit. It never provisions the pending managed mainnet tree.
+`make journey-test` installs the real app, checks greeting/probe and metrics
+composition, malformed requests, unchanged empty stable memory and same-ID upgrade.
+It also checks the optional replicated readiness mount before and after upgrade,
+including malformed, oversized, wrong-direction and caller-supplied state refusal.
+The stateless actor reports `Ready`; passive Wire tests preserve all three states
+(`Unavailable`, `Fenced`, `Ready`). The independent `make counter-test` now proves
+actual persistent fencing, same-ID A→B→A upgrades, original installation authority,
+stale activation refusal, malformed requests, failed target-write rollback and
+missing/corrupt/schema-mismatched reopen refusal using Storage 0.78.0. Its 256-byte
+payload has an eight-page limit including directory overhead. This is a direct local installed application;
+Backup restoration remains unqualified. The counter's
+fault/schema/version features are qualification-only, never live selections.
+Its simulator uses the direct Host path. The separate managed witness runs with
+`bash scripts/dev/test-publication.sh counter_managed::`: the CLI publishes the
+counter to Store, Root installs it, named CLI calls and two users increment it, and a Root-driven
+upgrade preserves value and authority at the same principal. An initially fenced
+variant stays incomplete with no terminal receipt; repeated apply/observation
+cannot reopen it, replace attempts or grant authority to the external controller.
+This is local synthetic-cycle qualification, not a mainnet or Backup recovery claim.
+
+Application-call native checks live with `canic-host::application`: strict codec
+admission, exact retained bytes, expired uncertainty and observation-only resume.
+The application owns codecs in `apps/demo/src/client/main.rs`; its Wasm and native
+command binary share the package but keep target-specific dependency graphs.
+Wasm checks select the library; native checks include the command binary.
+
+Product Host/CLI and qualification use Process 0.81.0. Testkit
+0.110.0 exposes its `Failure` in its public cleanup report. Both
+workspaces require Artifacts/FS 0.80.3. Keep the typed cancellation check; do not
+replace it with error-string matching, ignore failures or add version aliases.
+The harness's explicit `profile-state` feature selects persistent host readback
+only for the Blob and Auth/browser suites. Their existing test/Clippy targets
+enable it explicitly.
+
 This workspace owns installed effect-boundary and product regression tests.
 Actors select Platform Runtime 0.23.17 and Timers 0.46.3. Current upgrade fixtures
 stop/drain before replacing an executable, then restart explicitly; application
@@ -15,16 +131,21 @@ fleet journey was rerun. See the dated
 Store-native tests and the standalone upload/reopen/version-reuse witness now live
 in `dragginzgame/ic-wasm-store`. The two local workspaces pin its passive protocol;
 the existing artifact builder selects the matching locked crates.io runtime and
-builds it using its packaged lockfile.
+builds it using its packaged lockfile. Both select 0.4.1. Fresh Store
+fixtures use Storage 0.78.0. The previous 0.3.3 Store uses an incompatible
+0.74.1 directory.
 This workspace retains Root integration, chunked installation and complete CLI
 journeys. `make store-test` does not rerun the supplier's native suite.
 `bash scripts/dev/test-store.sh preservation` selects three installed boundaries
-against published 0.3.0: distinct removed/restored pages, an actual historical
+originally qualified against published 0.3.0: distinct removed/restored pages, an actual historical
 scan retaining its digest/refusal across CUJ8→CUJ9, and a new Root scan retaining
 deleted/cancelled labels and its removed-entry cursor across Root and Store
 upgrades. Store activation remains explicit; a downgrade cannot discard the
 scan contract. Historical pre-registry Store maintenance starts under the retained
-old Root, preserving that scan through owner replacement.
+old Root. In the 0.4.0 adoption run, 25 of 31 installed Store cases passed.
+Six historical Root migration cases trapped during Root storage reopen, including
+the pre-registry Store scenario before it could exercise Store replacement.
+The current suite checks refused upgrades against the original executable and stable bytes, including retained stop, scan and installation evidence. Current-layout Root and Store upgrades exercise the positive paths.
 `bash scripts/dev/test-store.sh removal` selects the actual Root forwarding cases:
 full-manifest delete/cancel, pinned refusal, immutable tombstones/quota, malformed
 and unauthorized requests, maintenance fencing, expiry before exact restoration,
@@ -85,7 +206,14 @@ issuance/renewal and lookup-only reconciliation. Actual ingress account/browser
 separation, independent signature verification/counts, a Root-enrolled receiver,
 unchanged login deadlines, duplicate delivery, reply rollback, permission changes
 across awaits, malformed frames, capacity, expiry, real pruning and upgrade-loss
-closure are covered. The supplier owns the sole intent/result/renewal engine.
+closure are covered. The callback is exercised one nanosecond before, at and one
+nanosecond after its original 30-second completion deadline. Only the first
+case signs; exact duplicate delivery and lookup preserve the original result
+or unresolved reservation in all three cases. A key rotation while a renewal awaits entropy leaves that
+renewal unresolved. Lookup preserves the original completed issue, and an
+independent new login verifies against the replacement public key. Both signed
+claims carry the corresponding supplier key binding. The supplier owns the sole
+intent/result/renewal engine.
 `auth_logout_tests` adds browser-bound revocation, two independent devices,
 in-flight initial/renewal fencing, retained results/deadlines, real pruning,
 malformed input, reply rollback and closed state after upgrade. Registry Auth
@@ -121,7 +249,7 @@ still uses its original caller identity path. See the
 [Auth guide](../docs/demos/auth.md) for exact inputs and the remaining issue scopes.
 The qualification application's signer and native verifier use Platform 0.34.13
 Ed25519. Product enrollment and qualification both use Protocol 0.3.5 for
-actual `raw_rand` framing. Testkit 0.109.0 shares Protocol 0.3 for held replies. Actors use
+actual `raw_rand` framing. Testkit 0.110.0 shares Protocol 0.3 for held replies. Actors use
 Runtime 0.23.17. Host uses Platform 0.34.13's native transport; both graphs have
 removed Platform 0.33.7 as part of [Canic #14](https://github.com/dragginzgame/canic/issues/14).
 Host placement/subnet comparison now selects registry Topology 0.109.2, sharing
@@ -152,7 +280,7 @@ bindings without that identity remain readable with unchanged digests but cannot
 make network requests. No trust is inferred from a routing canister. Fixed wire
 fixtures retain independent legacy codec evidence without linking the old crate.
 
-All simulator client imports select Testkit 0.109.0. The Auth harness additionally
+All simulator client imports select Testkit 0.110.0. The Auth harness additionally
 selects its bounded held-reply feature for actual cross-receiver publication order.
 Its optional `managed-server` capability also owns prepared assets, bounded
 startup/output and server/instance custody. The old lifecycle dependency is removed
@@ -204,16 +332,14 @@ migration is tested at the record codec boundary, not using a historical binary.
 closure/stop cases and the maintenance Wire-budget test. Store has sole Root
 control. Callback faults 13/14 preserve closure and stop intent; Root replacement
 and post-deadline observation recover without reissuing stop. Unfinished children,
-wrong Store control and expired dispatch refuse effects. The pinned predecessor
-Root binaries migrate without gaining maintenance or preservation evidence.
+wrong Store control and expired dispatch refuse effects. Upgrades of pinned allocator-era Roots refuse and preserve the original code and records.
 This selection ends at Stopped. Full child-custody reads refuse any retained
 Store-maintenance record, including completed operations.
 The same selection now interrupts a closed-catalog scan with Root replacement
 and concurrent continuations, retaining one cursor/count and including an
 unfinished upload. Native Store cases cover aliases, former-owner pins,
 reopen and stale/wrong-owner/open-gate refusal. Metadata page and retained Root
-status fit their scoped Wire budgets. No payload scan is claimed; old CUJ5
-attempts cannot gain preservation evidence during migration.
+status fit their scoped Wire budgets. No payload scan is claimed; old CUJ5 attempts retain their original stop commitments after refusal.
 
 `bash scripts/dev/test-store.sh maintenance` selects the full local runtime
 replacement witness. Root alone uploads/installs approved bytes, restarts with
@@ -221,15 +347,10 @@ admission closed, verifies metadata and explicitly activates. Callback faults
 15–18 and pre-install dispatch fault 19 cover retained intent and observation-only
 recovery across Root replacement. The fixture compares every Store stable byte
 before/after upgrade, including chunks, shared-version pins and an unfinished
-upload; publication resumes only after activation. The same checks also start
-from the retained Store 0.1.0 executable in `canic-qualification/fixtures`, proving
-the pre-registry transition without rebuilding the predecessor or copying its
-implementation. Wrong bytes/callers, malformed frames, expiry, rejected modules
+upload; publication resumes only after activation. The retained Store 0.1.0 case verifies that refusing a Root upgrade preserves the original upload commitment and every Store byte. Wrong bytes/callers, malformed frames, expiry, rejected modules
 and incompatible replacement endpoints cannot
 activate or reissue installation. Recovery after expiry can retain an installed
-outcome but cannot start it with expired authority. The repeat fixture migrates
-both an issued installation and a completed attempt from a retained 0.215 Root,
-then qualifies bounded successors without losing prior authority. CLI qualification
+outcome but cannot start it with expired authority. The 0.215 Root retains its issued installation after upgrade refusal. Current-layout Roots qualify bounded successors without losing prior authority. CLI qualification
 is separate below; neither selection establishes mainnet readiness.
 The explicit `recover_store_maintenance` endpoint qualifies observation without
 fresh dispatch: it leaves Reserved, Closed, Stopped, Uploaded, Installed, Verified
@@ -353,10 +474,9 @@ not invoke signing or continue maintenance.
 Native fleet tests admit both full 8 MiB manifests and
 preserve existing inline fleets with or without Store and their retained digests.
 `make blob-test` builds Blob-only and profile-composed executable pairs using the optional
-Canic adapter and registry Blob 0.103.3. Ten installed cases cover user
+Canic adapter. The registry Blob 0.105.0 fixtures cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,
-non-resurrecting replay, drain/reopen/exact activation, reopen refusal and populated
-0.100.6 predecessor compatibility. The optional profile composition shares one
+non-resurrecting replay, drain/reopen/exact activation, and reopen refusal. The populated 0.100.6 predecessor must refuse the incompatible upgrade and preserve its original state. The optional profile composition shares one
 Storage bootstrap with Blob, preserves both owners across upgrade, closes profile
 access until exact activation and refuses silent participant addition/removal.
 A separate installed case damages each profile store while keeping the directory,
@@ -541,20 +661,21 @@ bash scripts/dev/test-root.sh whole_fleet managed_child_cli multi_child_cli reta
 
 These fixtures explicitly select inline custody. The publication runner above
 owns the generated Root/Store/app default; neither fixture migrates retained fleets.
-`bash scripts/dev/test-root.sh identified_storage_migrates_pending_children_and_refuses_downgrade`
-checks migration from the retained positional-storage Root to CUJ9/CUA4 identified
-collections. Both pending child approvals survive replacement unchanged and
-complete independently. Compatible executables reopen the collection; the old
-executable refuses without changing state. The two-child publication journey
-starts from the same retained binary and compares complete custody across
-Host-driven migration with both Store-backed children and their upgrade histories.
-Stable payload bytes change once; original Storage allocations and backing size
-are retained. Neither transition increases the two-child bound.
+`bash scripts/dev/test-root.sh children::` checks pending and completed child
+custody on fresh records backing, including refusal of old code without changing
+state. Both pending child approvals survive compatible replacement unchanged and
+complete independently. `storage_reopen::` refuses old allocator, corrupt and
+empty images without initialization; `predecessor::` retains the old executable
+and signed failed attempt through CLI maintenance. Old images require their old
+release, not a new backing or automatic reinstall. The two-child publication
+journey also starts with fresh records and preserves complete custody through
+Host-driven maintenance. Neither transition increases the two-child bound.
 The Root runner also runs `cargo test --locked -p canic-management --lib`, exercising
 the actual persistent codecs natively: malformed identities, oversized history,
 truncated records and the full retained inline artifact budget. A mixed inline/Store
-record fills the original artifact lease, migrates and reopens through governed
-Cells without growing either allocation; excess data refuses before writing. These checks use
+payload fills the historical artifact budget inside fresh records, decodes and
+reopens without growing the 17-page backing; excess data refuses before writing.
+That is logical payload compatibility, not old physical-image migration. These checks use
 test-only native dependencies; Host still consumes the passive protocol alone.
 Host's `root_custody::`, `maintenance::` and `managed::` native tests cover the
 shared identity-keyed projection of historical complete Root replies: empty and
@@ -664,13 +785,15 @@ quality match terminal details, unknown readings never become zero, and owner,
 network and error text is escaped. Rendering preserves the source snapshot and
 uses the existing bounded localhost viewer; it adds no browser RPC client.
 
-`make profile-test` runs the [Canic-owned profile demo](../docs/demos/profile.md)
+`make profile-test` runs the [retired profile fixture](../docs/demos/profile.md)
 through the existing deployment CLI, with private ownership, bounded capacity,
 failed-upgrade rollback and preservation across two executables. It also deploys
 the discovery entry, checks immutable binding and upgrade preservation, exercises
 direct worker observation and unavailable-worker recovery, and renders the pair.
-Its entry, worker and client are products under `apps/profile/`; only its installed harness belongs
-to this qualification workspace. `make profile-clippy` and `make profile-doc`
+Its protocol, entry, worker, manager and client now belong to this qualification
+workspace with independent private versions. They are retained only for existing
+Auth/Blob, discovery and management regressions; the selected hands-on consumer
+is the [demo counter](../docs/demos/demo.md). `make profile-clippy` and `make profile-doc`
 cover its native and Wasm graphs. These targets are included in the corresponding
 repository aggregates.
 
@@ -717,7 +840,7 @@ Canic. Its passive `db::inspection` contract is versioned independently as
 `method_id("canic.db.inspect.v1")`. The separate optional `db-schema` feature adds
 stateless projection of compiled IC DB metadata, with no database executor,
 storage owner or permission policy. The witness consumes committed IC DB revision
-`950f36807f8ffa7ebe4ca2cff6792fa2bbcbd03e`; transport never becomes its durable codec.
+`97e49f2ef7547cc4413ec75e9cea7d70c56735c1`; transport never becomes its durable codec.
 
 ```sh
 make qualification-setup
@@ -727,12 +850,25 @@ make db-clippy
 
 The installed test checks authorization before malformed decoding, wrong
 method/direction and oversize refusal, atomic batch conflicts, sparse empty pages,
-cursor binding, seven upgrades, reply-encoding rollback, frozen ordinary access,
+cursor binding, populated upgrades, reply-encoding rollback, frozen ordinary access,
 supported cancellation and incompatible-executable refusal without changing stable
-backing. The original executable then reopens all seven rows. Normal Wasm excludes the private fault/maintenance
+backing. A rejected upgrade preserves the prior module, stable bytes and a live
+query cursor. Empty and corrupt storage directories both refuse upgrade without
+changing the supplied bytes. The compatible executable reopens all seven rows. Normal Wasm excludes the private fault/maintenance
 entrypoint. Requests bound results to 1–3 and candidates to 1–4, with 1 KiB engine
 output and a 64 KiB frame envelope; writes contain at most four rows. These are
 application witness bounds, not new engine limits.
+
+The managed test in `make db-test` builds the CLI from the checkout and uses
+it to deploy a DB child through separate Root and registry Wasm Store actors.
+The qualification-only `managed-fixture` build pins a synthetic application
+user for Root's empty install argument. DB readiness reports whether the stored
+schema opens for ordinary access. The test populates two rows, publishes a
+replacement, and traps Root's install callback after the replacement commits.
+A fresh CLI invocation reconciles the original approval, signed request and
+single install attempt. The child advances one executable version, retains its
+stable bytes and both rows, denies Root's application query, and admits the
+original user's next write. These runs use local synthetic cycles.
 
 The fault artifact also deliberately expands an inspection reply after successful
 schema projection. The installed endpoint must refuse its final encoding rather

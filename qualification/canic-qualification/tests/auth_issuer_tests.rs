@@ -7,7 +7,10 @@ use canic_auth_witness::{
         model::{DelegatedRoleGrant, PortableProof},
     },
 };
-use ic_auth::{claims::decode_claims, verification::browser_principal};
+use ic_auth::{
+    claims::decode_claims,
+    verification::{Ed25519Key, browser_principal},
+};
 use ic_auth_protocol_types::Principal;
 use ic_platform_crypto::ed25519::{Signature, SigningKey, VerifyingKey};
 use ic_testkit::pocket_ic::{CanisterId, Time};
@@ -113,6 +116,12 @@ pub(super) async fn observe(f: &Fixture) -> IssuerObservation {
     .unwrap()
 }
 pub(super) fn claims(value: &Status) -> ic_auth_protocol_types::PortableClaims {
+    verified_claims(value, &KEY)
+}
+fn verified_claims(
+    value: &Status,
+    verification_key: &[u8; 32],
+) -> ic_auth_protocol_types::PortableClaims {
     let Status::Issued {
         credential,
         admission_deadline_ns,
@@ -123,7 +132,7 @@ pub(super) fn claims(value: &Status) -> ic_auth_protocol_types::PortableClaims {
     let PortableProof::Ed25519(signature) = &credential.proof else {
         panic!("Ed25519 proof required");
     };
-    VerifyingKey::from_bytes(&KEY)
+    VerifyingKey::from_bytes(verification_key)
         .unwrap()
         .verify_strict(
             &Sha256::digest(credential.claims.as_slice()),
@@ -132,6 +141,10 @@ pub(super) fn claims(value: &Status) -> ic_auth_protocol_types::PortableClaims {
         .unwrap();
     let claims = decode_claims(credential.claims.as_slice()).unwrap();
     assert_eq!(claims.admission_expires_at_ns, *admission_deadline_ns);
+    assert_eq!(
+        claims.key_binding_id,
+        Ed25519Key::new(*verification_key).unwrap().binding()
+    );
     claims
 }
 
@@ -475,37 +488,117 @@ async fn issuer_bounds_expiry_and_pruning_never_create_replacement_results() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn issuer_expired_entropy_completion_cannot_restart_the_intent() {
+async fn issuer_entropy_completion_respects_the_original_exclusive_deadline() {
+    for distance_ns in [-1_i64, 0, 1] {
+        let f = fixture(false).await;
+        let pic = f.owner.client();
+        let input = request(1);
+        let pending = pic
+            .submit_call(
+                f.target,
+                account(),
+                "issue_portable_credential",
+                frame(issuer::ISSUE, &input),
+            )
+            .await
+            .unwrap();
+        pic.tick().await;
+        let issued_at = pic.get_time().await.as_nanos_since_unix_epoch();
+        assert!(pic.ingress_status(pending.clone()).await.is_none());
+        assert_eq!(observe(&f).await.operations, 1);
+
+        let deadline = issued_at + 30_000_000_000;
+        let callback_at = deadline.checked_add_signed(distance_ns).unwrap();
+        // PocketIC advances one nanosecond for this callback round.
+        pic.set_time(Time::from_nanos_since_unix_epoch(callback_at - 1))
+            .await;
+        let received = response(issuer::ISSUE, &pic.await_call(pending).await.unwrap());
+        assert_eq!(
+            pic.get_time().await.as_nanos_since_unix_epoch(),
+            callback_at
+        );
+        let retained = if distance_ns < 0 {
+            let issued = received.unwrap();
+            assert_eq!(claims(&issued).issued_at_ns, issued_at);
+            assert_eq!(observe(&f).await.signatures, 1);
+            Ok(issued)
+        } else {
+            assert_eq!(received, Err(Refusal::Expired));
+            assert_eq!(observe(&f).await.signatures, 0);
+            Ok(Status::Unresolved)
+        };
+        let original = observe(&f).await;
+        assert_eq!(
+            call(&f, account(), issuer::RECONCILE, &lookup(&input)).await,
+            retained
+        );
+        let duplicate = call(&f, account(), issuer::ISSUE, &input).await;
+        if distance_ns < 0 {
+            assert_eq!(duplicate, retained);
+        } else {
+            assert_eq!(duplicate, Err(Refusal::Expired));
+        }
+        assert_eq!(observe(&f).await, original);
+        f.close().await;
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn issuer_rotation_fences_pending_renewal_and_preserves_original_issue() {
     let f = fixture(false).await;
     let pic = f.owner.client();
     let input = request(1);
+    let original = call(&f, account(), issuer::ISSUE, &input).await.unwrap();
+    claims(&original);
+    let caller = browser(&input);
+    assert!(!control(pic, f.target, caller, 10).await);
+
+    let renewal = renew(&input, 1);
     let pending = pic
         .submit_call(
             f.target,
-            account(),
-            "issue_portable_credential",
-            frame(issuer::ISSUE, &input),
+            caller,
+            "renew_portable_credential",
+            frame(issuer::RENEW, &renewal),
         )
         .await
         .unwrap();
     pic.tick().await;
     assert!(pic.ingress_status(pending.clone()).await.is_none());
-    assert_eq!(observe(&f).await.operations, 1);
-    pic.advance_time(Duration::from_secs(31)).await;
+    let reserved = observe(&f).await;
+    assert_eq!((reserved.signatures, reserved.operations), (1, 2));
+    assert!(control(pic, f.target, f.installer, 10).await);
     assert_eq!(
-        response(issuer::ISSUE, &pic.await_call(pending).await.unwrap()),
-        Err(Refusal::Expired)
+        response(issuer::RENEW, &pic.await_call(pending).await.unwrap()),
+        Err(Refusal::Denied)
     );
-    let original = observe(&f).await;
-    assert_eq!(original.signatures, 0);
     assert_eq!(
-        call(&f, account(), issuer::RECONCILE, &lookup(&input)).await,
+        call(&f, caller, issuer::RENEW, &renewal).await,
+        Err(Refusal::Denied)
+    );
+    assert_eq!(
+        call(&f, caller, issuer::RECONCILE, &Lookup::Renew(renewal)).await,
         Ok(Status::Unresolved)
     );
     assert_eq!(
-        call(&f, account(), issuer::ISSUE, &input).await,
-        Err(Refusal::Expired)
+        call(&f, account(), issuer::RECONCILE, &lookup(&input)).await,
+        Ok(original)
     );
-    assert_eq!(observe(&f).await, original);
+    assert_eq!(observe(&f).await, reserved);
+
+    let mut fresh = request(2);
+    fresh.login_id = [2; 32];
+    fresh.browser_public_key = SigningKey::from_bytes(&[11; 32]).verifying_key().to_bytes();
+    let issued = call(&f, account(), issuer::ISSUE, &fresh).await.unwrap();
+    let rotated_key = SigningKey::from_bytes(&[17; 32]).verifying_key().to_bytes();
+    assert_eq!(
+        verified_claims(&issued, &rotated_key).browser_public_key,
+        fresh.browser_public_key
+    );
+    let observed = observe(&f).await;
+    assert_eq!(
+        (observed.signatures, observed.operations, observed.logins),
+        (2, 3, 2)
+    );
     f.close().await;
 }

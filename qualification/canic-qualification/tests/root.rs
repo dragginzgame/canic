@@ -9,9 +9,12 @@ use std::{path::PathBuf, time::Duration};
 
 mod children;
 mod fleet_children;
+mod greeting;
 mod metrics;
 mod predecessor;
 mod profile_store;
+mod snapshot;
+mod storage_reopen;
 
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -25,7 +28,7 @@ fn repo() -> PathBuf {
 // qualifies the generated default Root/Store/app topology through the CLI.
 fn inline_fixture(config: &std::path::Path, app: &str) {
     let mut value: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(config).unwrap()).unwrap();
+        toml::from_str(&std::fs::read_to_string(config).unwrap()).unwrap();
     assert!(
         value["apps"][app]["canisters"]
             .as_object_mut()
@@ -33,7 +36,7 @@ fn inline_fixture(config: &std::path::Path, app: &str) {
             .remove("store")
             .is_some()
     );
-    std::fs::write(config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(config, toml::to_string(&value).unwrap()).unwrap();
 }
 
 async fn status(pic: &PocketIc, root: CanisterId) -> Status {
@@ -271,7 +274,7 @@ async fn root_controls_one_greeting_application() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[ignore = "requires CANIC_PREVIOUS_MANAGER naming the retained pre-extraction Wasm"]
+#[ignore = "historical old-Storage migration; requires a compatible old build and CANIC_PREVIOUS_MANAGER"]
 async fn previous_profile_manager_preserves_admitted_work() {
     let artifacts = repo().join("target/growth");
     qualify(
@@ -285,7 +288,7 @@ async fn previous_profile_manager_preserves_admitted_work() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-#[ignore = "requires CANIC_PREVIOUS_ROOT naming the retained two-store Root Wasm"]
+#[ignore = "historical old-Storage migration; requires a compatible old build and CANIC_PREVIOUS_ROOT"]
 async fn previous_root_migrates_payloads_without_replacing_creation() {
     let artifacts = repo().join("target/root");
     qualify(
@@ -431,7 +434,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
             .unwrap()
             .as_nanos()
     ));
-    let config = workspace.join("canic.json");
+    let config = workspace.join("canic.toml");
     let executable = std::env::var_os("CANIC_CLI").unwrap();
     let generated = {
         let created = std::process::Command::new(&executable)
@@ -470,7 +473,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
                 "--routing-canister",
                 &routing.to_text(),
                 "--config",
-                workspace.join("canic.json").to_str().unwrap(),
+                workspace.join("canic.toml").to_str().unwrap(),
                 "--json",
             ])
             .output()
@@ -500,11 +503,12 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     assert_eq!(root_receipt["controller"], "2vxsx-fae");
     // Also retain coverage of explicitly configured existing Roots. This separate
     // observation config is used only to test rejected authority, not deployment.
-    let drift_config = workspace.join("authority-check.json");
-    let mut declaration: serde_json::Value = serde_json::from_slice(&config_bytes).unwrap();
+    let drift_config = workspace.join("authority-check.toml");
+    let mut declaration: serde_json::Value =
+        toml::from_str(std::str::from_utf8(&config_bytes).unwrap()).unwrap();
     declaration["apps"]["starter"]["fleets"]["local"]["canisters"]["root"] =
         serde_json::json!({"id":root.to_text()});
-    std::fs::write(&drift_config, serde_json::to_vec(&declaration).unwrap()).unwrap();
+    std::fs::write(&drift_config, toml::to_string(&declaration).unwrap()).unwrap();
     let execute_at = (std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -673,7 +677,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     );
     assert_eq!(cli(&config, &apply), receipt);
     assert_eq!(
-        cli(&config, &["fleet", "call", id, "--name", "team"])["greeting"],
+        greeting::call(owner.client(), child, "team").await,
         "Hello from Canic, team!"
     );
     let state = cli(&config, &["fleet", "status", id]);
@@ -731,7 +735,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     let second_journal = workspace.join(".canic/apps/starter/fleets/second");
     assert!(!second_journal.exists());
     let declarations: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&config).unwrap()).unwrap();
+        toml::from_str(&std::fs::read_to_string(&config).unwrap()).unwrap();
     assert_eq!(
         declarations["apps"]["starter"]["canisters"],
         declaration["apps"]["starter"]["canisters"]
@@ -796,12 +800,7 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
     assert_eq!(cli(&config, &second_plan_args)["operation"], second_id);
     assert_eq!(cli(&config, &second_apply), second_receipt);
     assert_eq!(
-        cli(
-            &config,
-            &[
-                "fleet", "call", second_id, "--fleet", "second", "--name", "second"
-            ]
-        )["greeting"],
+        greeting::call(owner.client(), second_child, "second").await,
         "Hello from Canic, second!"
     );
     for (fleet, fleet_root, fleet_child) in [
@@ -1008,13 +1007,18 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         "Ready"
     );
     assert_eq!(
-        cli(
-            &config,
-            &[
-                "fleet", "call", upgrade_id, "--fleet", "local", "--name", "team"
-            ]
-        )["greeting"],
+        greeting::call(owner.client(), child, "team").await,
         "Hello again from Canic, team!"
+    );
+    let after_upgrade = status(owner.client(), root).await;
+    // Recording the upgrade may grow Root's backing. Original creation evidence must survive.
+    assert!(after_upgrade.stable_pages >= ready.stable_pages);
+    assert_eq!(
+        after_upgrade,
+        Status {
+            stable_pages: after_upgrade.stable_pages,
+            ..ready
+        }
     );
     assert_eq!(
         cli(
@@ -1037,14 +1041,9 @@ async fn managed_child_cli_retains_admission_and_recovers_lost_reply() {
         std::fs::read(journal.join(id).join("receipt.json")).unwrap(),
         first_receipt_bytes
     );
-    assert_eq!(status(owner.client(), root).await, ready);
+    assert_eq!(status(owner.client(), root).await, after_upgrade);
     assert_eq!(
-        cli(
-            &config,
-            &[
-                "fleet", "call", second_id, "--fleet", "second", "--name", "second"
-            ]
-        )["greeting"],
+        greeting::call(owner.client(), second_child, "second").await,
         "Hello from Canic, second!"
     );
     let view = cli(&config, &["fleet", "show", "--fleet", "local"]);
@@ -1161,7 +1160,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
                 "--routing-canister",
                 &routing.to_text(),
                 "--config",
-                workspace.join("canic.json").to_str().unwrap(),
+                workspace.join("canic.toml").to_str().unwrap(),
                 "--json",
             ])
             .output()
@@ -1172,7 +1171,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
         "{}",
         String::from_utf8_lossy(&initialized.stderr)
     );
-    let config = workspace.join("canic.json");
+    let config = workspace.join("canic.toml");
     inline_fixture(&config, "starter");
     cli(&config, &["app", "build"]);
     let lock = std::fs::read(workspace.join("Cargo.lock")).unwrap();
@@ -1334,10 +1333,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
         assert_eq!(unchanged["operation"], id);
         if !profile {
             assert_eq!(
-                cli(
-                    &config,
-                    &["fleet", "call", id, "--fleet", fleet, "--name", "fleet"]
-                )["greeting"],
+                greeting::call(owner.client(), child, "fleet").await,
                 "Hello from Canic, fleet!"
             );
         } else if fleet == "first" {
@@ -1753,10 +1749,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
         }
     } else {
         assert_eq!(
-            cli(
-                &config,
-                &["fleet", "call", id, "--fleet", "first", "--name", "fleet"]
-            )["greeting"],
+            greeting::call(owner.client(), identities[0].1, "fleet").await,
             "Hello again from Canic, fleet!"
         );
     }

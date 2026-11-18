@@ -13,7 +13,7 @@ mod record;
 mod tests;
 pub use action::{PlanAction, StoreMaintenance, UpgradeTarget};
 
-/// One explicit deployment or artifact-operation approval. No implicit funding conversions.
+/// One explicit effect approval, including application calls. No implicit funding conversions.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(try_from = "record::PlanRecord")]
 pub struct Plan {
@@ -21,9 +21,9 @@ pub struct Plan {
     pub version: u32,
     /// Exact network trust binding.
     pub network: Network,
-    /// Required signer; sole direct controller, or sole operator controller of Root.
+    /// Required signer. The historical field name grants no controller authority to application calls.
     pub controller: String,
-    /// Exact retained Wasm bytes, including publication/removal content identity.
+    /// Exact retained payload: Wasm for management, request bytes for application calls.
     pub artifact: Artifact,
     /// Explicit effect and its complete authority.
     pub action: PlanAction,
@@ -92,11 +92,12 @@ impl Plan {
         let controller = principal(&self.controller)?;
         if !matches!(
             (self.version, self.deployment.is_some()),
-            (1, false) | (2, true) | (3, true) | (4, true) | (5, true) | (6, true)
+            (1, false) | (2, true) | (3, true) | (4, true) | (5, true) | (6, true) | (7, true)
         ) || (self.version == 3) != self.publication().is_some()
             || (self.version == 4) != self.removal().is_some()
             || (self.version == 5) != self.auth().is_some()
             || (self.version == 6) != self.management().is_some_and(|m| m.arguments.is_some())
+            || (self.version == 7) != self.application_call().is_some()
             || self.artifact.bytes > self.artifact_limit()
             || self.artifact.sha256.len() != 64
             || self.expires_at_ns <= self.created_at_ns
@@ -131,7 +132,7 @@ impl Plan {
         }
         if self.network == Network::Mainnet && controller == principal("2vxsx-fae")? {
             return Err(Error::Invalid(
-                "mainnet requires an authenticated controller".into(),
+                "mainnet requires an authenticated signer".into(),
             ));
         }
         if let Some(managed) = self.management() {
@@ -174,6 +175,7 @@ impl Plan {
             }
         }
         match &self.action {
+            PlanAction::Call(value) => crate::application::validate(self, value)?,
             PlanAction::Auth(value) => crate::auth::validate(self, value)?,
             PlanAction::Publish(value) => crate::publication::validate(self, value)?,
             PlanAction::Remove(value) => crate::publication::removal::validate(self, value)?,
@@ -373,7 +375,8 @@ pub(crate) fn retain_locked(store: &Store, mut plan: Plan, bytes: &[u8]) -> Resu
             if existing.digest()? != existing_id {
                 return Err(Error::Invalid("retained plan digest mismatch".into()));
             }
-            if existing.auth().is_some()
+            if existing.application_call().is_some()
+                || existing.auth().is_some()
                 || existing.removal().is_some()
                 || publication_predecessors.contains(&existing_id)
             {
@@ -498,7 +501,12 @@ pub(crate) fn publish_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<
     let id = plan.digest()?;
     let dir = store.operation(&id)?;
     let held = crate::output_publication::prepare(&dir, 0o700)?;
-    store::put_in(&held, std::ffi::OsStr::new("module.wasm"), bytes)?;
+    let file = if plan.application_call().is_some() {
+        "request.bin"
+    } else {
+        "module.wasm"
+    };
+    store::put_in(&held, std::ffi::OsStr::new(file), bytes)?;
     let plan_bytes = serde_json::to_vec_pretty(&plan).map_err(supplier)?;
     store::put_in(&held, std::ffi::OsStr::new("plan.json"), &plan_bytes)?;
     Ok((id, plan))
@@ -506,10 +514,23 @@ pub(crate) fn publish_locked(store: &Store, plan: Plan, bytes: &[u8]) -> Result<
 
 pub(crate) fn load(dir: &Path, digest: &str) -> Result<(Plan, Vec<u8>)> {
     let plan: Plan = store::json(&dir.join("plan.json"))?;
-    let bytes = store::read(&dir.join("module.wasm"), plan.artifact_limit())?;
-    if plan.digest()? != digest
-        || artifact::admit_bounded(&bytes, plan.artifact_limit())? != plan.artifact
-    {
+    let bytes = if plan.application_call().is_some() {
+        store::read(
+            &dir.join("request.bin"),
+            crate::application::MAX_REQUEST_BYTES,
+        )?
+    } else {
+        store::read(&dir.join("module.wasm"), plan.artifact_limit())?
+    };
+    let actual = if plan.application_call().is_some() {
+        Artifact {
+            sha256: artifact::digest(&bytes),
+            bytes: bytes.len(),
+        }
+    } else {
+        artifact::admit_bounded(&bytes, plan.artifact_limit())?
+    };
+    if plan.digest()? != digest || actual != plan.artifact {
         return Err(Error::Invalid(
             "retained plan or artifact differs from the approved digest".into(),
         ));

@@ -12,6 +12,7 @@ pub fn save_fleet_report(html: &str, destination: Option<&Path>) -> Result<PathB
             html.as_bytes(),
             ic_host_fs::Destination::CreateNew,
             0o700,
+            0o600,
         )?;
         return Ok(path.into());
     }
@@ -23,6 +24,7 @@ pub fn save_fleet_report(html: &str, destination: Option<&Path>) -> Result<PathB
         "index.html".as_ref(),
         html.as_bytes(),
         ic_host_fs::Destination::CreateNew,
+        0o600,
     )?;
     Ok(root.join(name).join("index.html"))
 }

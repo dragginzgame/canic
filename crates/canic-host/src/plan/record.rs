@@ -38,6 +38,8 @@ pub(super) struct PlanRecord {
     removal: Option<crate::PublicationRemoval>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     auth: Option<Box<crate::AuthApproval>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    call: Option<crate::application::Approval>,
 }
 
 fn invalid() -> Error {
@@ -68,6 +70,7 @@ impl TryFrom<PlanRecord> for Plan {
             store_upgrade_sequence,
             removal,
             auth,
+            call,
         } = record;
         if store_upgrade_sequence.is_some() && store_upgrade_root.is_none() {
             return Err(invalid());
@@ -75,7 +78,25 @@ impl TryFrom<PlanRecord> for Plan {
         if maintenance_store.is_some() && maintenance.is_none() {
             return Err(invalid());
         }
-        let action = if let Some(value) = auth {
+        let action = if let Some(value) = call {
+            if version != 7
+                || creation_cycles != 0
+                || target.is_some()
+                || previous_module.is_some()
+                || management.is_some()
+                || maintenance.is_some()
+                || maintenance_sibling.is_some()
+                || publication.is_some()
+                || store_root.is_some()
+                || maintenance_store.is_some()
+                || store_upgrade_root.is_some()
+                || removal.is_some()
+                || auth.is_some()
+            {
+                return Err(invalid());
+            }
+            PlanAction::Call(value)
+        } else if let Some(value) = auth {
             if version != 5
                 || creation_cycles != 0
                 || target.is_some()
@@ -213,6 +234,7 @@ impl TryFrom<Plan> for PlanRecord {
         let publication = plan.publication().cloned();
         let removal = plan.removal().cloned();
         let auth = plan.auth().cloned().map(Box::new);
+        let call = plan.application_call().cloned();
         let store_root = plan.store_root().cloned();
         let store_upgrade_root = plan.store_upgrade_root().cloned();
         let store_upgrade_sequence = plan.store_upgrade_sequence();
@@ -244,6 +266,7 @@ impl TryFrom<Plan> for PlanRecord {
             store_upgrade_sequence,
             removal,
             auth,
+            call,
         })
     }
 }

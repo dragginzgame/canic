@@ -29,7 +29,7 @@ fn call(dir: &Path, method: &str, id: &str, signer: &Path) -> Value {
     )
 }
 fn write_config(dir: &Path, config: &Value) {
-    std::fs::write(dir.join("canic.json"), serde_json::to_vec(config).unwrap()).unwrap();
+    std::fs::write(dir.join("canic.toml"), toml::to_string(config).unwrap()).unwrap();
 }
 async fn retained(
     pic: &ic_testkit::pocket_ic::nonblocking::PocketIc,
@@ -168,7 +168,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
                 "--routing-canister",
                 &routing.to_text(),
                 "--config",
-                dir.join("canic.json").to_str().unwrap(),
+                dir.join("canic.toml").to_str().unwrap(),
                 "--json",
             ])
             .output()
@@ -183,7 +183,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     assert_eq!(built["canisters"].as_array().unwrap().len(), 3);
     let lock = std::fs::read(dir.join("Cargo.lock")).unwrap();
     let mut config: Value =
-        serde_json::from_slice(&std::fs::read(dir.join("canic.json")).unwrap()).unwrap();
+        toml::from_str(&std::fs::read_to_string(dir.join("canic.toml")).unwrap()).unwrap();
     assert!(
         config["apps"]["demo"]["fleets"]["local"]["canisters"]
             .as_object()
@@ -240,7 +240,12 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         started.elapsed().as_millis()
     );
     assert_eq!(
-        cli(&dir, &["fleet", "call", creation, "--name", "team"])["greeting"],
+        crate::greeting::call(
+            owner.client(),
+            CanisterId::from_text(application.as_str().unwrap()).unwrap(),
+            "team"
+        )
+        .await,
         "Hello from Canic, team!"
     );
     // A warm build must preserve the selected artifacts and lock, leaving no new
@@ -589,18 +594,15 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     assert!(ready["canister"].is_string());
     assert_eq!(ready["canister"], application);
     assert_eq!(ready["module_hash"], replacement["artifact"]["sha256"]);
-    let greeting = cli(
-        &dir,
-        &[
-            "fleet",
-            "call",
-            child["operation"].as_str().unwrap(),
-            "--name",
-            "team",
-        ],
+    assert_eq!(
+        crate::greeting::call(
+            owner.client(),
+            CanisterId::from_text(application.as_str().unwrap()).unwrap(),
+            "team"
+        )
+        .await,
+        "Hello from rebuilt starter, team!"
     );
-    assert_eq!(greeting["canister"], application);
-    assert_eq!(greeting["greeting"], "Hello from rebuilt starter, team!");
     println!(
         "Ready-dispatch child upgrade: {} ms (local wall time, publication already retained)",
         started.elapsed().as_millis()

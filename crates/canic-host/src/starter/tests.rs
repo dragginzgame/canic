@@ -161,6 +161,50 @@ fn app_build_refuses_output_aliases_before_creating_a_lock_or_output() {
 
 #[cfg(unix)]
 #[test]
+fn app_build_preserves_config_and_cargo_inputs_including_unselected_recipes() {
+    let parent = crate::tests::directory();
+    let destination = parent.join("starter");
+    let path = create_starter(&destination, "hello", &source()).unwrap();
+    let original = crate::load_config(&path).unwrap();
+    let manifest = destination.join("Cargo.toml");
+    let manifest_bytes = std::fs::read(&manifest).unwrap();
+    std::os::unix::fs::symlink(".", destination.join("alias")).unwrap();
+    std::os::unix::fs::symlink("Cargo.lock", destination.join("lock-link")).unwrap();
+    for output in [
+        PathBuf::from("canic.toml"),
+        PathBuf::from("Cargo.toml"),
+        PathBuf::from("Cargo.lock"),
+        PathBuf::from("alias/canic.toml"),
+        PathBuf::from("lock-link"),
+        source().join("Cargo.toml"),
+        source().join("Cargo.lock"),
+    ] {
+        let mut config = original.clone();
+        config
+            .apps
+            .get_mut("hello")
+            .unwrap()
+            .canisters
+            .get_mut("app")
+            .unwrap()
+            .wasm = Some(output);
+        let bytes = crate::config::encode_config(&config).unwrap();
+        std::fs::write(&path, &bytes).unwrap();
+        for selected in [None, Some("app"), Some("root")] {
+            let error = crate::build_app(&path, None, selected).unwrap_err();
+            assert!(error.to_string().contains("would replace"), "{error}");
+            assert_eq!(std::fs::read(&path).unwrap(), bytes);
+            assert_eq!(std::fs::read(&manifest).unwrap(), manifest_bytes);
+            assert!(!destination.join("Cargo.lock").exists());
+            assert!(!destination.join("artifacts").exists());
+            assert!(!destination.join(".canic").exists());
+        }
+    }
+    std::fs::remove_dir_all(parent).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
 fn source_alias_resolves_physically_and_destination_symlinks_are_not_replaced() {
     let parent = crate::tests::directory();
     let alias = parent.join("source with 'quote");
@@ -203,9 +247,9 @@ fn concurrent_initializers_publish_one_complete_project() {
         .map(|attempt| attempt.join().unwrap())
         .collect();
     assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
-    let config = crate::load_config(&destination.join("canic.json")).unwrap();
+    let config = crate::load_config(&destination.join("canic.toml")).unwrap();
     assert_eq!(config.select_app(None).unwrap().1.canisters.len(), 3);
-    assert!(destination.join("starter-app/src/endpoint.rs").is_file());
+    assert!(destination.join("starter-app/src/actor.rs").is_file());
     assert!(destination.join("README.md").is_file());
     std::fs::remove_dir_all(parent).unwrap();
 }

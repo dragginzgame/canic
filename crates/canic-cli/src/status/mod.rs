@@ -22,6 +22,19 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
         OperationStatus::Canister(state) => state,
     };
     let plan = &state.plan;
+    if let Some(call) = plan.application_call() {
+        return Ok(format!(
+            "CANIC APPLICATION CALL\nOperation: {}\nCanister: {}\nCaller: {}\nMethod: {}\nRequest: {} ({} bytes)\nState: {}\nJournal: {}\n",
+            state.operation,
+            call.canister,
+            escape(&plan.controller),
+            escape(&call.method),
+            plan.artifact.sha256,
+            plan.artifact.bytes,
+            state.effects.get("call").map_or("unknown", String::as_str),
+            escape(&journal.to_string_lossy())
+        ));
+    }
     let receipt = state.receipt.as_ref();
     let effects = &state.effects;
     let operation = &state.operation;
@@ -51,7 +64,7 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
     writeln!(
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
-        match plan.action { canic_host::PlanAction::Auth(_) => "configure or revoke exact Auth grant (no deployment)", canic_host::PlanAction::Remove(_) => "remove exact Store release (no deployment)", canic_host::PlanAction::UpgradeStore { .. } => "Root upgrades Store, preserving its closed catalog and pins", canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
+        match plan.action { canic_host::PlanAction::Call(_) => unreachable!("call rendered above"), canic_host::PlanAction::Auth(_) => "configure or revoke exact Auth grant (no deployment)", canic_host::PlanAction::Remove(_) => "remove exact Store release (no deployment)", canic_host::PlanAction::UpgradeStore { .. } => "Root upgrades Store, preserving its closed catalog and pins", canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
         escape(&network),
         plan.network.binding_id()?,
         escape(plan.application_controller()),
@@ -485,48 +498,4 @@ fn cycles(value: u64) -> String {
         format!("{whole}.{fraction}")
     };
     format!("{amount}{unit} cycles ({value})")
-}
-
-// Select against retained names before making a network call; configuration changes
-// cannot redirect a completed operation to another application.
-pub(crate) fn call_state<'a>(
-    state: &'a OperationStatus,
-    selected: Option<&str>,
-) -> Result<&'a CanisterStatus> {
-    match state {
-        OperationStatus::Fleet(fleet) => {
-            if let Some(child) = fleet
-                .children
-                .iter()
-                .find(|child| selected.map_or(fleet.children.len() == 1, |name| child.name == name))
-            {
-                return child.state.as_ref().ok_or_else(|| {
-                    Error::Invalid("operation has no completed deployment receipt".into())
-                });
-            }
-            Err(Error::Invalid(format!(
-                "select --canister from: {}",
-                fleet
-                    .children
-                    .iter()
-                    .map(|c| c.name.as_str())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )))
-        }
-        OperationStatus::Canister(state) => {
-            if selected.is_some_and(|name| {
-                state
-                    .plan
-                    .deployment
-                    .as_ref()
-                    .is_none_or(|d| d.canister != name)
-            }) {
-                return Err(Error::Invalid(
-                    "--canister does not match this retained operation".into(),
-                ));
-            }
-            Ok(state)
-        }
-    }
 }

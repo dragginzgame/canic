@@ -20,6 +20,6 @@ perl scripts/dev/blob-inputs.pl > target/blob/inputs.before.json
 CANIC_CLI="$cli" CANIC_EFFECT_PROBE_WASM="$root/target/blob/original.wasm" \
     CANIC_BLOB_ARTIFACT_DIRECTORY="$root/target/blob" \
     cargo test --locked --manifest-path qualification/Cargo.toml \
-    -p canic-qualification --test blob "$@" -- --nocapture
+    -p canic-qualification --features profile-state --test blob "$@" -- --nocapture
 perl scripts/dev/blob-inputs.pl > target/blob/inputs.after.json
 cmp target/blob/inputs.before.json target/blob/inputs.after.json

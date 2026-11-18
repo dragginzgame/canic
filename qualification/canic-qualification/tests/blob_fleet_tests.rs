@@ -13,7 +13,7 @@ fn run(dir: &Path, args: &[&str]) -> Output {
     Command::new(std::env::var_os("CANIC_CLI").expect("Blob runner builds the CLI"))
         .args(args)
         .args(["--json", "--config"])
-        .arg(dir.join("canic.json"))
+        .arg(dir.join("canic.toml"))
         .output()
         .unwrap()
 }
@@ -69,7 +69,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":root_key,"root_subnet":owner.client().topology().await.get_nns().unwrap().to_text(),"routing_canister":routing.to_text()},
             "journal":"journal", "canisters":{}}}
     }}});
-    std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+    std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     let signer = Path::new(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
@@ -365,9 +365,9 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
     let unresolved = client.asset(actor(1), 3).await.unwrap();
     let candidate = assets.join("candidate.wasm");
     let mut config: Value =
-        serde_json::from_slice(&std::fs::read(dir.join("canic.json")).unwrap()).unwrap();
+        toml::from_str(&std::fs::read_to_string(dir.join("canic.toml")).unwrap()).unwrap();
     config["apps"]["assets"]["canisters"]["catalog"]["wasm"] = json!(candidate);
-    std::fs::write(dir.join("canic.json"), serde_json::to_vec(&config).unwrap()).unwrap();
+    std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     let published = cli(
         &dir,
         &[

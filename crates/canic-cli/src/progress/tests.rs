@@ -13,7 +13,7 @@ fn upgrade_follow_up_preserves_authority_and_selects_recovery_from_retained_evid
         "apply",
         "original",
         "--config",
-        "project's config.json",
+        "project's config.toml",
         "--app",
         "profiles",
         "--fleet",
@@ -65,7 +65,7 @@ fn upgrade_follow_up_preserves_authority_and_selects_recovery_from_retained_evid
             next.starts_with(&format!("canic fleet {action} original ")),
             "{output}"
         );
-        assert!(next.contains("--config 'project'\"'\"'s config.json'"));
+        assert!(next.contains("--config 'project'\"'\"'s config.toml'"));
         assert!(next.contains("--state-dir 'journal path' --app profiles --fleet local"));
         assert_eq!(
             next.contains("--identity 'profile operator' --icp-bin 'signer path'"),
@@ -86,7 +86,7 @@ fn follow_up_retains_scope_and_quotes_shell_input() {
         "fleet",
         "plan",
         "--config",
-        "project's config.json",
+        "project's config.toml",
         "--app",
         "demo",
         "--fleet",
@@ -103,7 +103,7 @@ fn follow_up_retains_scope_and_quotes_shell_input() {
         panic!("fleet")
     };
     let output = next(&command, "digest", "apply", Some("operator"));
-    assert!(output.contains("--config 'project'\"'\"'s config.json'"));
+    assert!(output.contains("--config 'project'\"'\"'s config.toml'"));
     assert!(output.contains("--state-dir 'journal path' --app demo --fleet mainnet"));
     assert!(output.contains("--identity operator --icp-bin 'signer path'"));
     assert_eq!(quote("$(touch nope)"), "'$(touch nope)'");

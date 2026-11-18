@@ -13,8 +13,15 @@ pub mod blob;
 #[cfg(feature = "db")]
 pub mod db;
 
+/// Explicit mounts for the demo's fixed greeting and replicated probe contract.
+#[cfg(all(feature = "greeting", target_arch = "wasm32"))]
+pub mod greeting;
+
 /// Passive operational reports; the optional `metrics` feature enables endpoint mounting.
 pub mod metrics;
+
+/// Application-owned readiness; the optional feature enables an explicit replicated mount.
+pub mod readiness;
 
 use serde::{Deserialize, Serialize};
 
@@ -36,3 +43,6 @@ pub struct Greeting {
     /// Human-readable greeting from the installed executable.
     pub message: String,
 }
+
+#[cfg(feature = "storage")]
+pub mod storage;

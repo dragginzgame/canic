@@ -35,13 +35,23 @@ pub(crate) fn capture(
     stderr_limit: usize,
     elapsed: Duration,
 ) -> Result<Vec<u8>, CaptureFailure> {
+    capture_input(command, Input::Null, stdout_limit, stderr_limit, elapsed)
+}
+
+pub(crate) fn capture_input(
+    command: &mut Command,
+    input: Input,
+    stdout_limit: usize,
+    stderr_limit: usize,
+    elapsed: Duration,
+) -> Result<Vec<u8>, CaptureFailure> {
     let mut stdout = Vec::new();
     let mut stderr = Vec::new();
     let report = ic_host_process::run(
         command,
         Policy {
             ownership: Ownership::Group,
-            input: Input::Null,
+            input,
             stdout_bytes: stdout_limit,
             stderr: Stderr::Capture(stderr_limit),
             elapsed,

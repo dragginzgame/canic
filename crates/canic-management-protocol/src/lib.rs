@@ -10,6 +10,8 @@ use sha2::{Digest, Sha256};
 pub mod application;
 #[cfg(test)]
 mod application_tests;
+#[cfg(feature = "backup")]
+pub mod backup;
 pub mod children;
 pub mod custody;
 #[cfg(test)]

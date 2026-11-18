@@ -105,7 +105,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
                 "--routing-canister",
                 &routing.to_text(),
                 "--config",
-                workspace.join("canic.json").to_str().unwrap(),
+                workspace.join("canic.toml").to_str().unwrap(),
                 "--json",
             ])
             .output()
@@ -116,7 +116,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let config = workspace.join("canic.json");
+    let config = workspace.join("canic.toml");
     inline_fixture(&config, "starter");
     cli(
         &config,
@@ -203,11 +203,12 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     let stable = owner.client().get_stable_memory(root).await;
     let approval_bytes = std::fs::read(path.join("fleet.json")).unwrap();
     let operations = std::fs::read_dir(&journal).unwrap().count();
-    let mut expanded: serde_json::Value = serde_json::from_slice(&config_bytes).unwrap();
+    let mut expanded: serde_json::Value =
+        toml::from_str(std::str::from_utf8(&config_bytes).unwrap()).unwrap();
     expanded["apps"]["starter"]["canisters"]["aaa"] = serde_json::json!({
         "parent": "root", "role": "worker", "wasm": "missing-third.wasm"
     });
-    std::fs::write(&config, serde_json::to_vec(&expanded).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&expanded).unwrap()).unwrap();
     let error = rejected(&config, &["fleet", "plan", "--identity", "anonymous"]);
     assert!(error["message"].as_str().unwrap().contains(
         "fleet declares 3 direct application children under root; this Root path supports 1 to 2"
@@ -295,14 +296,15 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         cli(&config, &["fleet", "plan", "--identity", "anonymous"])["action"],
         "unchanged"
     );
-    assert_eq!(
-        rejected(&config, &["fleet", "call", id])["error"],
-        "invalid"
-    );
-    for (name, child) in [("app", app), ("worker", worker)] {
+    for child in [app, worker] {
         assert_eq!(
-            cli(&config, &["fleet", "call", id, "--canister", name])["canister"],
-            child
+            greeting::call(
+                owner.client(),
+                CanisterId::from_text(child).unwrap(),
+                "team"
+            )
+            .await,
+            "Hello from Canic, team!"
         );
     }
     let terminal = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
@@ -313,14 +315,15 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     assert!(terminal.contains("root / slot 1 · app"));
     assert!(terminal.contains("root / slot 2 · worker"));
     // Configuration cannot remove/reassign a retained child or redirect its slot.
-    let mut renamed: serde_json::Value = serde_json::from_slice(&config_bytes).unwrap();
+    let mut renamed: serde_json::Value =
+        toml::from_str(std::str::from_utf8(&config_bytes).unwrap()).unwrap();
     let definition = renamed["apps"]["starter"]["canisters"]
         .as_object_mut()
         .unwrap()
         .remove("worker")
         .unwrap();
     renamed["apps"]["starter"]["canisters"]["aaa"] = definition;
-    std::fs::write(&config, serde_json::to_vec(&renamed).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&renamed).unwrap()).unwrap();
     assert_eq!(
         rejected(&config, &["fleet", "plan", "--identity", "anonymous"])["error"],
         "blocked"

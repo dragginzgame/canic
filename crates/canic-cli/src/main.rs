@@ -2,6 +2,7 @@
 
 #![forbid(unsafe_code)]
 
+mod application;
 mod args;
 mod artifacts;
 mod auth;
@@ -85,6 +86,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 wasm,
                 manifest,
                 package,
+                client,
             } => {
                 let path = selection.config.path(selection.app.as_deref())?;
                 let declaration = canic_host::load_config(&path)?;
@@ -101,6 +103,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                             |(manifest, package)| canic_host::BuildInput {
                                 manifest: manifest.clone(),
                                 package: package.clone(),
+                                client: client.clone(),
                             },
                         ),
                     },
@@ -141,7 +144,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
             let path = config
                 .config
                 .clone()
-                .unwrap_or_else(|| PathBuf::from("canic.json"));
+                .unwrap_or_else(|| PathBuf::from("canic.toml"));
             let declaration = canic_host::init_app(&path, name)?;
             if !cli.json {
                 return Ok(Output::Text(format!(
@@ -183,6 +186,9 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
 }
 
 async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Output> {
+    if matches!(command, FleetCommand::Call { .. }) {
+        return application::run(command).await.map(Output::Json);
+    }
     if let FleetCommand::Auth(command) = command {
         return auth::run(command, cli.json);
     }
@@ -215,7 +221,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             scope.config.as_deref(),
             scope.app.as_deref(),
         )?,
-        _ => PathBuf::from("canic.json"),
+        _ => PathBuf::from("canic.toml"),
     };
     let configuration = if let Some(scope) = scope
         && !scope.no_config
@@ -252,13 +258,13 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         | FleetCommand::Activate { digest, .. }
         | FleetCommand::Reconcile { digest, .. }
         | FleetCommand::Cancel { digest, .. }
-        | FleetCommand::Status { digest, .. }
-        | FleetCommand::Call { digest, .. } = command
+        | FleetCommand::Status { digest, .. } = command
     {
         config.check_operation(&state_dir, digest)?;
     }
     let result = match command {
         FleetCommand::Auth(_)
+        | FleetCommand::Call { .. }
         | FleetCommand::Artifact(_)
         | FleetCommand::CompareSubnets { .. }
         | FleetCommand::Placements { .. } => {
@@ -644,23 +650,6 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 )));
             }
             Ok(serde_json::json!(snapshot))
-        }
-        FleetCommand::Call {
-            digest,
-            name,
-            canister,
-            ..
-        } => {
-            let state = canic_host::status(&state_dir, digest)?;
-            let state = status::call_state(&state, canister.as_deref())?;
-            let receipt = state.receipt.as_ref().ok_or_else(|| {
-                Error::Invalid("operation has no completed deployment receipt".into())
-            })?;
-            let plan = &state.plan;
-            let result = canic_host::greet(&plan.network, &receipt.canister, name).await?;
-            Ok(
-                serde_json::json!({"canister": receipt.canister, "certified": false, "greeting": result.message}),
-            )
         }
     };
     result.map(Output::Json)

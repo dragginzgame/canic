@@ -47,7 +47,13 @@ pub(crate) fn put_in(parent: &ic_host_fs::Directory, name: &OsStr, bytes: &[u8])
     if bytes.len() > MAX_RECORD {
         return Err(Error::Invalid("retained record too large".into()));
     }
-    crate::output_publication::publish_in(parent, name, bytes, ic_host_fs::Destination::CreateNew)
+    crate::output_publication::publish_in(
+        parent,
+        name,
+        bytes,
+        ic_host_fs::Destination::CreateNew,
+        0o600,
+    )
 }
 
 pub(crate) fn put_json_in(
@@ -66,7 +72,13 @@ pub(crate) fn put(path: &Path, bytes: &[u8]) -> Result<()> {
     if bytes.len() > MAX_RECORD {
         return Err(Error::Invalid("retained record too large".into()));
     }
-    crate::output_publication::publish(path, bytes, ic_host_fs::Destination::CreateNew, 0o777)
+    crate::output_publication::publish(
+        path,
+        bytes,
+        ic_host_fs::Destination::CreateNew,
+        0o777,
+        0o600,
+    )
 }
 
 pub(crate) fn read(path: &Path, limit: usize) -> Result<Vec<u8>> {

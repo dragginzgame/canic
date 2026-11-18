@@ -221,7 +221,20 @@ pub(crate) async fn execute(
     icp: &Path,
     client: &ReadClient,
 ) -> Result<Vec<u8>> {
-    execute_with(path, &Authority::from(plan), call, identity, icp, client).await
+    // Application mutations are submitted at most once. Resumption can only
+    // observe their original signed request; management keeps its existing policy.
+    let dispatch = plan.application_call().is_none()
+        || !path.join("signed.json").try_exists().map_err(supplier)?;
+    execute_with(
+        path,
+        &Authority::from(plan),
+        call,
+        identity,
+        icp,
+        client,
+        dispatch,
+    )
+    .await
 }
 
 /// Read only the typed metadata selected by the approved operation.
@@ -291,6 +304,7 @@ async fn observe_metadata(
         identity,
         icp,
         client,
+        true,
     )
     .await
 }
@@ -374,6 +388,7 @@ pub(crate) async fn observe(
         identity,
         icp,
         client,
+        true,
     )
     .await
 }
@@ -416,6 +431,7 @@ pub(crate) async fn reconcile(
         identity,
         icp,
         client,
+        true,
     )
     .await
 }
@@ -427,6 +443,7 @@ async fn execute_with(
     identity: &str,
     icp: &Path,
     client: &ReadClient,
+    dispatch: bool,
 ) -> Result<Vec<u8>> {
     let directory = crate::output_publication::prepare(path, 0o700)?;
     if path.join("reply.bin").try_exists().map_err(supplier)? {
@@ -468,8 +485,12 @@ async fn execute_with(
     }
     // Publish exact bytes before this boundary. Retrying sends only this same
     // request ID within its original validity window; never a fresh signature.
-    let result = bounded(client.dispatch(&attempt.update, crate::network::context()?.1)).await;
-    if let Ok(Dispatch::Observed(observation)) = result
+    let result = if dispatch {
+        Some(bounded(client.dispatch(&attempt.update, crate::network::context()?.1)).await)
+    } else {
+        None
+    };
+    if let Some(Ok(Dispatch::Observed(observation))) = result
         && let RequestStatus::Replied(reply) = observation.status()
     {
         store::put_in(&directory, std::ffi::OsStr::new("reply.bin"), reply)?;

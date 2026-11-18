@@ -1,311 +1,52 @@
-# Persistent profile demo
+# Retired profile qualification fixture
 
-This Canic-owned application gives the team a small stateful deployment to use.
-One worker owns a nonzero user ID, its original caller principal, a private
-display name and a revision. It uses IC Storage directly, with one lifecycle and
-two named allocations. A separate entry stores one immutable worker address and
-checks readiness through a direct inter-canister call. There is no database,
-Coordinator, Store or Relay dependency in the application runtime. The optional
-managed fleet below keeps versioned artifacts in a separate Store canister.
+The maintainer retired the profile application as a hands-on demo in favour of
+[a persistent counter in the ongoing demo](demo.md). The profile protocol,
+worker, discovery entry, manager and native test client now live under
+`qualification/canic-profile-*`, with private versions independent of Canic releases.
+There is no `make profile` product command.
 
-## Store-backed profile fleet
+These fixtures remain because the installed Auth/Blob composition, ownership,
+capacity, failed-upgrade rollback, discovery and management tests still use them.
+Moving them does not establish replacement counter coverage. Retire a fixture
+only when its relevant failure cases have another qualified owner.
 
-The profile manager can occupy the `root` role and publish/install its worker
-through a separate Wasm Store. It keeps its existing profile `probe` decoder:
-readiness means the worker successfully opened its application storage. It does
-not accept a greeting reply as evidence of profile readiness. The worker owns
-user IDs, caller mappings and private reads; Root control grants no profile access.
+## Regression commands
 
-After simulator and signer preparation, run the installed local witness:
+From the repository root, after explicit simulator preparation:
 
 ```sh
-bash scripts/dev/test-root.sh profile_store
+make profile-test
+make profile-clippy
+make profile-doc
 ```
 
-It creates the three-canister fleet through the real CLI, writes two users'
-profiles, publishes and upgrades the worker, upgrades Store and the management
-owner, and verifies both private records and artifact custody. Both users then
-update their profiles; retries are idempotent, stale writes and controller writes
-are refused. A new approval selects the compatible earlier worker executable
-through the upgraded Root and Store, preserving the latest profiles rather than
-restoring old application data. Wrong-user and controller reads are refused.
-The fleet then adds a second worker under a separate approval. Both users create
-independent profiles there; their original worker and records remain unchanged.
-The added worker upgrades to `profile-v2`, and another Root replacement preserves
-both workers' complete custody, private records and stable storage. Each worker
-owns its own user namespace; this does not supply automatic sharding or routing.
-An incompatible greeting application remains at
-code-verified status without a completion receipt or another install attempt.
-The witness also selects a qualification-only manager through maintenance and
-traps its worker-upgrade callback after the new worker code has committed. The
-worker keeps both private profiles while Root retains an uncertain installation.
-Replanning and observation retain the original operation; explicit CLI reconciliation
-recovers readiness with the same signed admission and effect fingerprints, exactly
-one installation and one worker version increment. The later owner maintenance
-restores the normal manager. Never select `fault-injection` for a live fleet.
-The replica stops after the test; all cycles are synthetic.
-
-To prepare a separate hands-on fleet from the Canic checkout, choose an unused
-`profile-store/` directory. These commands only create local declarations and
-build code; they do not deploy:
-
-```sh
-mkdir profile-store
-canic app init profile-store --config profile-store/canic.json
-canic fleet init mainnet --app profile-store --network ic
-canic app canister add root --app profile-store --role root --wasm artifacts/root.wasm --manifest ../Cargo.toml --package canic-profile-manager
-canic app canister add store --app profile-store --parent root --role wasm-store --wasm artifacts/store.wasm --manifest ../Cargo.toml --package ic-wasm-store
-canic app canister add worker --app profile-store --parent root --role worker --wasm artifacts/worker.wasm --manifest ../Cargo.toml --package canic-profile-worker
-canic app build --app profile-store
-canic fleet canister list --app profile-store
-```
-
-With a prepared identity, review the usual 4T total creation approval (3T to the
-management owner including worker funding, 1T to Store):
-
-```sh
-canic fleet plan --app profile-store --identity canic-mainnet
-canic fleet status OPERATION --app profile-store
-```
-
-Applying spends the approved budget. Use the existing [fleet apply and recovery
-workflow](root.md#deploy-the-generated-application); this new composition has
-local qualification, not a mainnet maintenance rehearsal. Keep the original
-journal. New worker bytes require publication before a separate upgrade approval.
-If an admitted worker upgrade has an uncertain outcome, inspect and reconcile that
-same operation with the original identity. Pending upgrade output prints a scoped
-next command, preserving any explicit config, journal and signer override:
-
-```sh
-canic fleet status UPGRADE_OPERATION --app profile-store
-canic fleet reconcile UPGRADE_OPERATION --app profile-store --identity canic-mainnet
-```
-
-Reconciliation reconstructs evidence where possible; it does not reset consumed
-authority or grant permission to reinstall. Keep blocked evidence if the observed
-code or version cannot establish the approved outcome.
-Callback cleanup requires the updated management executable; a new CLI alone
-does not repair a heap guard already stranded in an older deployed Root.
-Use the profile application's client for authenticated operations; `fleet call`
-is the greeting-demo helper. Store remains an infrastructure role, not a profile
-or application-permission store. The qualified journey grows from one worker to
-two; broader allocation patterns and arbitrary readiness protocols remain future work.
-
-For a completed `profile-store` fleet prepared above, declare and build a second
-worker from the Canic checkout:
-
-```sh
-canic app canister add archive --app profile-store --parent root --role worker \
-  --wasm artifacts/archive.wasm --manifest ../Cargo.toml --package canic-profile-worker
-canic app build --app profile-store --canister archive
-canic fleet plan --app profile-store --identity canic-mainnet
-```
-
-Review and apply the publication operation, then plan and apply the separate
-creation operation. Root supplies the 1T creation attachment from its existing
-balance and must retain its operating reserve. Keep the original journal. This
-adds independent capacity; it does not move profiles or change the entry's route.
+These are qualification commands, not application setup. The selected Storage
+0.76 migration still blocks the persistent cases. Test scripts select the
+qualification manifest explicitly when building profile artifacts and the private
+client; they continue using the normal product CLI for deployment effects.
 
 ## Current mainnet demo
 
-Deployed and checked on 2026-11-13:
-
-| Role | Canister |
-| --- | --- |
-| Entry | `bisqm-biaaa-aaaas-qhfeq-cai` |
-| Worker (`profile-v2`) | `4pkhu-oaaaa-aaaai-ra2ta-cai` |
-
-User 1 belongs to `canic-mainnet`. Its revision 2 profile survived the worker's
-v1-to-v2 upgrade with the same owner, name and user ID. Read it from this checkout:
+This heading retains the historical link target; the profile fleet is retired.
+Its four original identities and tree are preserved in
+[`qualification/fixtures/profile-mainnet.toml`](../../qualification/fixtures/profile-mainnet.toml).
+The journal resolves to the same repository-root `.canic` directory. For explicit
+read-only inspection from the repository root:
 
 ```sh
-./target/debug/canic-profile --entry bisqm-biaaa-aaaas-qhfeq-cai get 1
-./target/debug/canic-profile --entry bisqm-biaaa-aaaas-qhfeq-cai check
-canic fleet show --app profile --fleet mainnet --link bisqm-biaaa-aaaas-qhfeq-cai:4pkhu-oaaaa-aaaai-ra2ta-cai --open
+canic fleet canister list --config qualification/fixtures/profile-mainnet.toml
+canic fleet show --config qualification/fixtures/profile-mainnet.toml
 ```
 
-The fleet opens in the normal desktop browser at **http://localhost:8787/**.
-Keep its terminal running; Ctrl-C stops it. If the viewer is already running,
-open that URL or use another `--port`. This selects the `profile/mainnet` fleet;
-the Hello World canister belongs to `hello-world/mainnet` and is shown separately.
-Private profile reads are explicitly uncertified queries;
-deployment metadata and update replies use the certified paths described below.
+No canister has been stopped, deleted, reassigned or reinstalled by retirement.
+Existing journals, approval digests and controller authority remain unchanged.
+The [qualification history](../qualification/history.md#profile-mainnet-deployment-and-preservation)
+retains the actual deployment and preservation evidence.
 
-The creation and upgrade receipts are retained in `.canic/` under their original
-operation IDs; see [the mainnet evidence](../qualification/history.md#profile-mainnet-deployment-and-preservation).
-The following fresh-deployment instructions create another pair; they are not
-needed to use this existing demo.
+## Store-backed profile fleet
 
-## Local rehearsal
-
-Build the tools and run the local deployment/preservation rehearsal:
-
-```sh
-make profile
-make profile-test
-```
-
-The test needs the already prepared PocketIC server (`make qualification-setup`) and ICP CLI
-(`make install-ic-tools`). It deploys through Canic, exercises the profile Wire
-endpoints, fills the bounded store, rejects unauthorized calls, rolls back a
-failed upgrade, installs a second executable and checks the retained values.
-It also deploys the entry, tests controller-only binding and direct readiness
-checks, preserves the route across an entry upgrade, and retains the same route
-when the worker is unavailable. It exercises the native client and emits a fleet HTML snapshot under
-`target/profile/journey-*/fleet.html`. The local replica stops when the test ends.
-Serve that retained snapshot with `canic fleet view target/profile/journey-N/fleet.html`
-(use the directory from your run), then open **http://localhost:8787/**.
-Keep the viewer running; Ctrl-C stops it. No editor HTML preview is required.
-
-## Deploy a fresh mainnet worker
-
-The worker has its own storage format. Create a new canister; it cannot be
-installed as an upgrade over the stateless Hello World canister.
-
-```sh
-canic artifact build --json --package canic-profile-worker > target/profile-build.json
-canic fleet plan --no-config --json \
-  --wasm "$(jq -r .wasm target/profile-build.json)" \
-  --network ic \
-  --controller "$(./.tools/ic/bin/icp identity principal --identity canic-mainnet)" \
-  --cycles 1000000000000 > target/profile-plan.json
-cat target/profile-plan.json
-canic fleet apply --no-config --json "$(jq -r .operation target/profile-plan.json)" \
-  --identity canic-mainnet --icp-bin ./.tools/ic/bin/icp \
-  > target/profile-receipt.json
-```
-
-Review the exact artifact, controller and 1T-cycle ceiling before applying.
-Enter the identity password in the terminal prompt. Preserve `.canic/` and the
-operation digest for recovery. Approval expires after one hour; an unresolved
-submitted attempt must keep its original recovery identity.
-
-## Use your profile
-
-From the repository root:
-
-```sh
-profile_canister=$(jq -r .canister target/profile-receipt.json)
-./target/debug/canic-profile --canister "$profile_canister" info
-./target/debug/canic-profile --canister "$profile_canister" put 1 --name "My profile"
-./target/debug/canic-profile --canister "$profile_canister" get 1
-./target/debug/canic-profile --canister "$profile_canister" put 1 --revision 1 --name "Updated profile"
-canic fleet show --no-config --open
-```
-
-The client defaults to identity `canic-mainnet`, network `ic` and the prepared
-`./.tools/ic/bin/icp`. Each private operation uses the actual signed IC caller;
-another identity cannot read or change your profile. Each caller owns one user ID.
-Names are private application data; controller authority still permits code
-replacement, so this is not protection against a trusted controller.
-
-Registration starts at revision one. Updates name the current revision and
-increase it by one. Exact replay of the last transition returns the same profile
-without another revision. A conflicting or older revision is refused. There is
-no automatic retry: after an uncertain write, use `get` before issuing a new
-revision. Private reads require an authenticated caller; readiness is public.
-Both use explicitly uncertified queries. Update replies are obtained through ICP CLI's
-normal certified request-status path. Passwords remain in its terminal prompt.
-
-## Preserve the profile across an upgrade
-
-Build the second executable, then use the existing Canic plan/apply path:
-
-```sh
-canic artifact build --json --package canic-profile-worker --features profile-v2 \
-  > target/profile-v2-build.json
-canic fleet plan --no-config --json \
-  --wasm "$(jq -r .wasm target/profile-v2-build.json)" \
-  --network ic \
-  --controller "$(jq -r .controller target/profile-receipt.json)" \
-  --target "$profile_canister" \
-  --previous-module "$(jq -r .module_hash target/profile-receipt.json)" \
-  > target/profile-upgrade-plan.json
-cat target/profile-upgrade-plan.json
-canic fleet apply --no-config --json "$(jq -r .operation target/profile-upgrade-plan.json)" \
-  --identity canic-mainnet --icp-bin ./.tools/ic/bin/icp \
-  > target/profile-upgrade-receipt.json
-./target/debug/canic-profile --canister "$profile_canister" info
-./target/debug/canic-profile --canister "$profile_canister" get 1
-```
-
-`info` changes from `profile-v1` to `profile-v2`; the ID, owner, name and revision
-remain. The separate `reject-upgrade` feature exists only for the local failure
-rehearsal; ordinary deployment selects neither it nor `--all-features`.
-
-## Add the entry and view the pair
-
-Deploy the worker above first, then create the entry using another reviewed
-1T-cycle creation ceiling:
-
-```sh
-canic artifact build --json --package canic-profile-entry > target/profile-entry-build.json
-canic fleet plan --no-config --json \
-  --wasm "$(jq -r .wasm target/profile-entry-build.json)" \
-  --network ic \
-  --controller "$(jq -r .controller target/profile-receipt.json)" \
-  --cycles 1000000000000 > target/profile-entry-plan.json
-cat target/profile-entry-plan.json
-canic fleet apply --no-config --json "$(jq -r .operation target/profile-entry-plan.json)" \
-  --identity canic-mainnet --icp-bin ./.tools/ic/bin/icp \
-  > target/profile-entry-receipt.json
-profile_entry=$(jq -r .canister target/profile-entry-receipt.json)
-./target/debug/canic-profile --entry "$profile_entry" bind "$profile_canister"
-./target/debug/canic-profile --entry "$profile_entry" route
-./target/debug/canic-profile --entry "$profile_entry" check
-./target/debug/canic-profile --entry "$profile_entry" get 1
-canic fleet show --no-config --link "$profile_entry:$profile_canister" --open
-```
-
-The fleet command prints a localhost URL and stays running to serve it. Use
-`--serve` instead of `--open` if you want to click the URL yourself. Stop the
-viewer with Ctrl-C; use `--port 8788` if the default port is already occupied.
-
-Binding requires the entry's current controller. Repeating the same binding is
-idempotent; replacing it is refused. An invalid, anonymous, management or self
-principal is refused. Binding records the operator's selection; it does not
-prove the selected code is a profile worker. `check` performs that protocol
-observation separately, with one outstanding call, a five-second wait, no cycles
-attachment and no automatic retry. It is controller-only to bound public fan-out.
-An unavailable worker produces an explicit unknown result and keeps the binding.
-
-```mermaid
-flowchart LR
-  C[Native client] -->|certified route resolution| E[Entry: persistent worker address]
-  C -->|original user identity: read / write| W[Worker: private profiles]
-  E -->|controller-requested direct readiness check| W
-```
-
-With `--entry`, the client resolves the worker using a replicated update and ICP
-CLI's certified response before sending profile data. The subsequent private
-operation is signed by the same user and sent directly to that worker. The entry
-does not impersonate the user, own private profile data, or control the worker.
-Trust in the entry and its controller is required for discovery, just as trust in
-the worker and its controller is required for private data. `--canister` remains
-the explicit direct-worker path. Uncertified `route` queries exist for observation,
-but the native client uses `resolve` even for its `route` command.
-
-The fleet page shows both certified deployment observations and a separate
-**declared** entry-to-worker arrow. `--link` is an operator-supplied visualization;
-it is not an on-chain route or readiness claim. Both targets must exist in the
-selected journal under one unambiguous network trust binding. Rerun `check` for
-a point-in-time readiness observation and regenerate the fleet snapshot to refresh.
-
-The entry has its own single named Storage allocation, a 16-page (1 MiB) stable
-ceiling and no timers. Upgrade it using the same Canic plan/apply workflow with
-its receipt's principal, controller and previous module hash. Strict restoration
-retains the original binding; it does not reset to an unbound entry.
-
-## Limits and remaining work
-
-The worker admits 16 profiles, names of at most 128 UTF-8 bytes, 4 KiB RPC frames
-and at most 32 physical stable pages. There are no application timers. Restore
-strictly reopens the original allocations and records; it never resets or
-silently initializes a missing store. No cross-schema migration is supplied.
-
-This establishes stateful storage plus a separate discovery entry and a real
-direct-call observation. The separate [bounded growth demo](growth.md) now
-qualifies one autonomous worker locally, with a surviving manager journal.
-The existing entry retains its original route; new workers are used directly.
-The fleet view observes deployment metadata and
-operation evidence, not profile contents or application readiness.
+The existing `profile_store` case in `make root-test` retains the Root/Store/profile
+consumer proof. Its script now builds the profile components from the qualification
+workspace. The current product workflow is the [Root journey](root.md); the
+profile fixture does not define the new demo's application or recovery contract.

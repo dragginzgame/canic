@@ -1,9 +1,9 @@
-//! The exact retained single-upgrade Root enters current custody through the CLI.
+//! The old allocator Root is preserved when a new records executable refuses its image.
 use super::*;
-use canic_management_protocol::{custody, upgrade};
+use canic_management_protocol::upgrade;
 
 #[tokio::test]
-async fn retained_predecessor_maintenance_preserves_empty_and_completed_slots() {
+async fn retained_predecessor_maintenance_refuses_old_storage_without_reset() {
     for completed in [false, true] {
         qualify_predecessor(completed, false).await;
     }
@@ -95,7 +95,7 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
                 "--routing-canister",
                 &routing.to_text(),
                 "--config",
-                workspace.join("canic.json").to_str().unwrap(),
+                workspace.join("canic.toml").to_str().unwrap(),
                 "--json",
             ])
             .output()
@@ -114,7 +114,7 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
         workspace.join("artifacts/app.wasm"),
     )
     .unwrap();
-    let config = workspace.join("canic.json");
+    let config = workspace.join("canic.toml");
     inline_fixture(&config, "transition");
     let dispatch = || {
         (std::time::SystemTime::now()
@@ -299,62 +299,28 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
         assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
         return;
     }
-    let maintained = cli(&config, &apply);
-    assert_eq!(maintained["canister"], root.to_text());
-    assert_eq!(
-        cli(&config, &["fleet", "status", id])["effects"],
-        serde_json::json!({
-            "custody-before-creation": "reply_retained",
-            "custody-before-upgrade": "reply_retained",
-            "install": "reply_retained",
-            "stop": "reply_retained",
-            "stopped": "reply_retained",
-            "start": "reply_retained",
-            "custody-after": "reply_retained",
-        })
-    );
-    assert!(dir.join("custody-before-creation/reply.bin").exists());
-    assert!(dir.join("custody-before-upgrade/reply.bin").exists());
-    assert!(!dir.join("custody-before").exists());
-    let custody: custody::Custody = ic_wire::decode(
-        &std::fs::read(dir.join("custody-after/reply.bin")).unwrap(),
-        ic_wire::Encoding::Frame {
-            method: custody::OBSERVE,
-            direction: ic_wire::Direction::Response,
-        },
-        custody::LIMITS,
-    )
-    .unwrap();
-    let mut expected = before;
-    expected.stable_pages = 0;
-    expected.maintenance_candidate = false;
-    assert_eq!(custody.creation, expected);
-    assert_eq!(custody.upgrades.len(), usize::from(completed));
+    let stable = owner.client().get_stable_memory(root).await;
+    let refused = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
+        .args(apply)
+        .args(["--config", config.to_str().unwrap(), "--json"])
+        .output()
+        .unwrap();
+    assert!(!refused.status.success());
+    assert!(!dir.join("receipt.json").exists());
+    assert_eq!(owner.client().get_stable_memory(root).await, stable);
     let install = std::fs::read(dir.join("install/signed.json")).unwrap();
-    let version = owner
-        .client()
-        .canister_status(root, None)
-        .await
-        .unwrap()
-        .version;
-    // Lose host completion after installation; preserve the exact signed attempt.
-    std::fs::remove_file(dir.join("receipt.json")).unwrap();
-    std::fs::remove_file(dir.join("install/reply.bin")).unwrap();
-    let interrupted = cli(&config, &["fleet", "status", id]);
+    let original_status = owner.client().canister_status(root, None).await.unwrap();
     assert_eq!(
-        interrupted["effects"]["install"],
-        "signed_attempt_retained_outcome_unknown"
+        original_status.module_hash,
+        Some(digest(&original).to_vec())
     );
-    assert_eq!(
-        interrupted["effects"]["custody-before-creation"],
-        "reply_retained"
-    );
-    assert_eq!(
-        interrupted["effects"]["custody-before-upgrade"],
-        "reply_retained"
-    );
-    assert!(interrupted["receipt"].is_null());
-    assert_eq!(cli(&config, &apply), maintained);
+    assert_eq!(format!("{:?}", original_status.status), "Stopped");
+    let replay = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
+        .args(apply)
+        .args(["--config", config.to_str().unwrap(), "--json"])
+        .output()
+        .unwrap();
+    assert!(!replay.status.success());
     assert_eq!(
         std::fs::read(dir.join("install/signed.json")).unwrap(),
         install
@@ -366,7 +332,7 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
             .await
             .unwrap()
             .version,
-        version
+        original_status.version
     );
     assert_eq!(
         std::fs::read(journal.join(creation_id).join("fleet.json")).unwrap(),
@@ -375,52 +341,9 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     if let Some((path, bytes)) = old_upgrade_record {
         assert_eq!(std::fs::read(path).unwrap(), bytes);
     }
-    // New child authority uses the maintained Root, without rebinding old plans.
-    let replacement = artifacts.join(if completed { "app.wasm" } else { "app-v2.wasm" });
-    std::fs::copy(&replacement, workspace.join("artifacts/app.wasm")).unwrap();
-    let at = (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000 + 40)
-        .to_string();
-    let next = cli(
-        &config,
-        &[
-            "fleet",
-            "plan",
-            "--identity",
-            "anonymous",
-            "--execute-at",
-            &at,
-        ],
-    );
-    assert_eq!(next["action"], "upgrade");
-    assert_eq!(
-        next["plan"]["management"]["root_module"],
-        maintained["module_hash"]
-    );
-    let next_id = next["operation"].as_str().unwrap();
-    cli(
-        &config,
-        &["fleet", "apply", next_id, "--identity", "anonymous"],
-    );
-    owner.client().stop_progress().await;
-    owner.client().advance_time(Duration::from_secs(45)).await;
-    settle(owner.client()).await;
-    owner.client().auto_progress().await;
-    assert_eq!(
-        cli(
-            &config,
-            &["fleet", "apply", next_id, "--identity", "anonymous"]
-        )["canister"],
-        child.to_text()
-    );
-    assert_eq!(
-        owner
-            .client()
-            .canister_status(child, Some(root))
-            .await
-            .unwrap()
-            .module_hash,
-        Some(digest(&std::fs::read(replacement).unwrap()).to_vec())
-    );
+    // Explicit fixture recovery restarts the retained old executable, not a replacement.
+    owner.client().start_canister(root, None).await.unwrap();
+    assert_eq!(status(owner.client(), root).await, before);
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

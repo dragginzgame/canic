@@ -46,7 +46,7 @@ async fn discovers_both_children_without_local_deployment_records() {
             .as_nanos()
     ));
     std::fs::create_dir(&directory).unwrap();
-    let config = directory.join("canic.json");
+    let config = directory.join("canic.toml");
     let mut value = serde_json::json!({"apps":{"discovery":{
         "canisters":{"root":{"role":"root"}},
         "fleets":{"local":{
@@ -54,7 +54,7 @@ async fn discovers_both_children_without_local_deployment_records() {
             "journal":"journal","canisters":{"root":{"id":root.to_text(),"profile_manager":true}}
         }}
     }}});
-    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let show = |report: &std::path::Path| {
         cli(
             &config,
@@ -149,7 +149,7 @@ async fn discovers_both_children_without_local_deployment_records() {
     .await;
     value["apps"]["discovery"]["fleets"]["local"]["canisters"]["root"]["id"] =
         serde_json::json!(old.to_text());
-    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let stable = pic.get_stable_memory(old).await;
     let unknown = show(&directory.join("older-root.html"));
     assert_eq!(unknown["canisters"].as_array().unwrap().len(), 1);

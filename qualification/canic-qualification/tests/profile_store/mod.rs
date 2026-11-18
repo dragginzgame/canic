@@ -216,7 +216,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     let directory = assets.join(format!("profile-store-{}", std::process::id()));
     std::fs::create_dir(&directory).unwrap();
     let (signer, controller) = canic_qualification::isolated_signer(&directory, "profile-fixture");
-    let config = directory.join("canic.json");
+    let config = directory.join("canic.toml");
     let mut value = json!({"apps":{"profiles":{
         "canisters":{
             "root":{"role":"root","wasm":assets.join("profile-manager.wasm")},
@@ -225,7 +225,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
         },
         "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":key,"root_subnet":pic.topology().await.get_nns().unwrap().to_text(),"routing_canister":routing.to_text()},"canisters":{}}}
     }}});
-    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let plan = || cli(&config, &["fleet", "plan", "--controller", &controller]);
     let initial = plan();
     let created = complete(&config, initial["operation"].as_str().unwrap(), &signer).await;
@@ -264,7 +264,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     // fault owner through maintenance before exercising callback uncertainty.
     value["apps"]["profiles"]["canisters"]["root"]["wasm"] =
         json!(assets.join("profile-faults.wasm"));
-    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let fault_owner = plan();
     assert_eq!(fault_owner["action"], "maintenance");
     complete(&config, fault_owner["operation"].as_str().unwrap(), &signer).await;
@@ -286,7 +286,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     .unwrap();
     value["apps"]["profiles"]["canisters"]["worker"]["wasm"] =
         json!(assets.join("profile-worker-v2.wasm"));
-    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let publication = plan();
     assert_eq!(publication["action"], "publication");
     complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
@@ -416,7 +416,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     verify_profiles(pic, child, root, &profiles).await;
     value["apps"]["profiles"]["canisters"]["store"]["wasm"] =
         json!(assets.join("store-maintenance.wasm"));
-    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let store_upgrade = plan();
     assert_eq!(store_upgrade["action"], "upgrade");
     assert_eq!(
@@ -457,7 +457,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     verify_profiles(pic, child, root, &profiles).await;
     value["apps"]["profiles"]["canisters"]["root"]["wasm"] =
         json!(assets.join("profile-maintenance.wasm"));
-    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let maintenance = plan();
     assert_eq!(maintenance["action"], "maintenance");
     assert_eq!(
@@ -521,7 +521,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     // changes code, never restores an old application snapshot or old authority.
     value["apps"]["profiles"]["canisters"]["worker"]["wasm"] =
         json!(assets.join("profile-worker.wasm"));
-    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let publication = plan();
     assert_eq!(publication["action"], "publication");
     complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
@@ -568,7 +568,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
             assets.join("profile-worker.wasm").to_str().unwrap(),
         ],
     );
-    value = serde_json::from_slice(&std::fs::read(&config).unwrap()).unwrap();
+    value = toml::from_str(&std::fs::read_to_string(&config).unwrap()).unwrap();
     let publication = plan();
     assert_eq!(publication["action"], "publication");
     complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
@@ -609,7 +609,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
 
     value["apps"]["profiles"]["canisters"]["archive"]["wasm"] =
         json!(assets.join("profile-worker-v2.wasm"));
-    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let publication = plan();
     assert_eq!(publication["action"], "publication");
     complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
@@ -642,7 +642,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     // original worker, without changing either application's records or Store.
     value["apps"]["profiles"]["canisters"]["root"]["wasm"] =
         json!(assets.join("profile-manager.wasm"));
-    std::fs::write(&config, serde_json::to_vec(&value).unwrap()).unwrap();
+    std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let maintenance = plan();
     assert_eq!(maintenance["action"], "maintenance");
     assert_eq!(
@@ -695,8 +695,8 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
         .remove("archive");
     value["apps"]["profiles"]["canisters"]["worker"]["wasm"] = json!(assets.join("app.wasm"));
     value["apps"]["profiles"]["fleets"]["local"]["journal"] = json!("refused-journal");
-    let refused_config = directory.join("refused.json");
-    std::fs::write(&refused_config, serde_json::to_vec(&value).unwrap()).unwrap();
+    let refused_config = directory.join("refused.toml");
+    std::fs::write(&refused_config, toml::to_string(&value).unwrap()).unwrap();
     let refused = cli(
         &refused_config,
         &["fleet", "plan", "--controller", &controller],

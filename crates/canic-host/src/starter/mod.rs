@@ -47,6 +47,7 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
                             build: Some(crate::BuildInput {
                                 manifest: source.join("Cargo.toml"),
                                 package: "canic-root".into(),
+                                client: None,
                             }),
                             ..Default::default()
                         },
@@ -60,6 +61,7 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
                             build: Some(crate::BuildInput {
                                 manifest: source.join("Cargo.toml"),
                                 package: "ic-wasm-store".into(),
+                                client: None,
                             }),
                         },
                     ),
@@ -72,6 +74,7 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
                             build: Some(crate::BuildInput {
                                 manifest: "Cargo.toml".into(),
                                 package: "starter-app".into(),
+                                client: None,
                             }),
                         },
                     ),
@@ -108,12 +111,13 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
         .get("dependencies")
         .ok_or_else(|| Error::Invalid("missing Canic dependencies".into()))?;
     let mut selected = serde_json::Map::new();
-    for name in ["ic-platform-runtime", "ic-wire", "toko-tooling"] {
-        let value = dependencies
-            .get(name)
-            .ok_or_else(|| Error::Invalid(format!("missing Canic dependency {name}")))?;
-        selected.insert(name.into(), serde_json::to_value(value).map_err(supplier)?);
-    }
+    let tooling = dependencies
+        .get("toko-tooling")
+        .ok_or_else(|| Error::Invalid("missing Canic dependency toko-tooling".into()))?;
+    selected.insert(
+        "toko-tooling".into(),
+        serde_json::to_value(tooling).map_err(supplier)?,
+    );
     selected.insert("canic".into(), json!({"path":source.join("crates/canic")}));
     let lints = workspace
         .get("lints")
@@ -129,10 +133,9 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
     let app_manifest = json!({
         "package":{"name":"starter-app", "version":{"workspace":true}, "edition":{"workspace":true}, "rust-version":{"workspace":true}, "publish":{"workspace":true}},
         "lib":{"crate-type":["cdylib","rlib"]},
-        "dependencies":{"canic":{"workspace":true},"ic-wire":{"workspace":true}},
+        "dependencies":{"canic":{"workspace":true,"features":["greeting", "readiness"]}},
         "target":{
-            "cfg(any())":{"dev-dependencies":{"toko-tooling":{"workspace":true}}},
-            "cfg(target_family = \"wasm\")":{"dependencies":{"ic-platform-runtime":{"workspace":true,"features":["entrypoint-macros"]}}}
+            "cfg(any())":{"dev-dependencies":{"toko-tooling":{"workspace":true}}}
         },
         "lints":{"workspace":true},
     });
@@ -141,7 +144,7 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
         source = shell_path(source)?,
     );
     Ok(BTreeMap::from([
-        ("canic.json".into(), config_bytes),
+        ("canic.toml".into(), config_bytes),
         (
             "Cargo.toml".into(),
             toml::to_string_pretty(&generated)
@@ -159,8 +162,8 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
             include_bytes!("templates/lib.rs").to_vec(),
         ),
         (
-            "starter-app/src/endpoint.rs".into(),
-            include_bytes!("templates/endpoint.rs").to_vec(),
+            "starter-app/src/actor.rs".into(),
+            include_bytes!("templates/actor.rs").to_vec(),
         ),
         (
             "rust-toolchain.toml".into(),
@@ -253,5 +256,5 @@ pub fn create_starter(destination: &Path, app: &str, source: &Path) -> Result<Pa
             source,
         })
     })?;
-    Ok(destination.join("canic.json"))
+    Ok(destination.join("canic.toml"))
 }
