@@ -251,6 +251,69 @@ changes and automatic progress remain forbidden while replies are held.
 Production key custody,
 certified issuer proofs and stable Auth preservation remain unqualified.
 
+## Internet Identity account handoff for Toko
+
+Internet Identity (II) delegates a short-lived session key for the application's
+origin. On an authenticated update the issuer sees the account principal as the
+IC caller. That principal alone does not identify the provider: an unrelated
+key can also make authenticated calls. Keep the II-delegated account signer
+available for initial issuance and original issue lookup. Give Canic the
+separate portable browser public key in the issue request. The issuer derives
+the credential subject from the authenticated account and checks Toko's allowed
+grants. Browser renewal uses the issuer's retained account/login binding.
+[ICP sign-in guide](https://docs.internetcomputer.org/guides/authentication/internet-identity/)
+
+### Where Toko verifies the provider
+
+The Rust reference implementation is DFINITY's `identity-attributes`. Its
+`sign_in_finish` reads the signer and bundle attached to the authenticated IC
+message. It checks the signer against `trusted_attribute_signers`, verifies the
+bundle, then calls the application's callback with `msg_caller()`. The local
+deployment must set that signer to its installed II principal and set
+`frontend_origins` to the exact Toko frontend origin. The verifier checks the
+origin and age and consumes a backend-issued nonce. The request body supplies
+none of these trust settings. [Verifier source](https://github.com/dfinity/identity-attributes/blob/24da86edfd05bee13874e3f5a5da92f5b7978ee2/rust/src/lib.rs)
+and [bundle checks](https://github.com/dfinity/identity-attributes/blob/24da86edfd05bee13874e3f5a5da92f5b7978ee2/rust/src/internal/verify.rs).
+
+The supplier's profile example shows where to implement `on_verified`. For Toko,
+use that callback on the issuer to record a bounded, expiring admission for the
+verified principal. Toko needs the principal for signup and can discard the
+profile attributes. On initial issuance, look up the actual ingress caller's
+admission, apply Toko's grant policy and recheck it after any signing await before
+completing issuance. The credential binds that account subject to the distinct
+browser public key. Original issue lookup uses the same account signer and
+operation ID. [Rust callback example](https://github.com/dfinity/identity-attributes/blob/24da86edfd05bee13874e3f5a5da92f5b7978ee2/rust/examples/profile/src/lib.rs)
+and [Canic browser adapter](../../crates/canic/browser/src/issuer.ts).
+
+### Local acceptance and current evidence
+
+Toko owns the browser-to-issuer test because it selects the II installation,
+frontend origin and issuer grant policy. For its headless local witness:
+
+1. Install II and the issuer on the same local network. Use the local root of
+   trust. Obtain a challenge with `_internet_identity_sign_in_start`, sign in
+   through II, then call `_internet_identity_sign_in_finish` as the delegated
+   account with the signed attributes attached.
+2. Use that account to issue a credential for a fresh browser key. Assert the
+   installed receiver sees the II account as subject and that browser as caller.
+3. With the first account still admitted, make the same issue request from an
+   unrelated self-authenticating identity. Its finish without an II bundle and
+   its issuance must both fail. Verify the issuer created no operation or
+   signature for that caller. Reusing a consumed challenge must also fail.
+
+The [Toko frontend handoff](https://github.com/dragginzgame/toko-new/blob/main/docs/frontend-integration.md)
+owns this remaining journey. Canic qualifies issuance and receiver binding with
+a preselected account. Run that part independently with a prepared simulator:
+
+```sh
+bash scripts/dev/test-auth.sh issuer_real_calls_bind_accounts_renewals_and_exact_results
+```
+
+For [Canic #21](https://github.com/dragginzgame/canic/issues/21), the pinned
+Rust reference declares version 0.1.0. During this review Cargo could not
+resolve that package from crates.io. The source example documents the supplier
+contract. A real local II login with Toko's issuer remains unqualified.
+
 ## Run locally
 
 After `make canic` and `make qualification-setup`:
