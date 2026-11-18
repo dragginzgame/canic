@@ -114,7 +114,19 @@ pub(super) async fn act(
         ic_wire::decode(&bytes, frame(ic_wire::Direction::Request), snapshot::LIMITS).unwrap();
     let binding = original.prepare().unwrap().0;
     let root = CanisterId::from_text(&binding.operation.manager).unwrap();
-    if first {
+    // Simulate a disconnected operator for the post-load transitions. Submit once
+    // and discard the ingress handle. Only Root's retained lookup feeds the guard.
+    if first
+        && matches!(plan, OperationPlan::Restore(_))
+        && matches!(step, Step::Start | Step::Accept | Step::Open)
+    {
+        pic.submit_call(root, caller, "snapshot_execute", bytes)
+            .await
+            .unwrap();
+        for _ in 0..10 {
+            pic.tick().await;
+        }
+    } else if first {
         let reply = pic
             .update_call(root, caller, "snapshot_execute", bytes)
             .await
@@ -136,6 +148,9 @@ pub(super) async fn act(
         snapshot::LIMITS,
     )
     .unwrap();
+    if first && step == Step::Accept {
+        check_controller_change(pic, caller, root, plan, original.expires_at_ns, &lookup).await;
+    }
     let bytes = pic
         .update_call(root, caller, "snapshot_lookup", lookup)
         .await
@@ -147,6 +162,56 @@ pub(super) async fn act(
     guard
         .borrow_mut()
         .observe(plan, &original, &record)
+        .unwrap();
+}
+
+/// Replacing Root's controller revokes the old caller. Its successor cannot
+/// issue the remaining Open under the original operator's approval.
+async fn check_controller_change(
+    pic: &PocketIc,
+    caller: CanisterId,
+    root: CanisterId,
+    plan: OperationPlan<'_>,
+    expiry: u64,
+    lookup: &[u8],
+) {
+    use canic_management_protocol::backup as snapshot;
+    let successor = CanisterId::self_authenticating(b"backup recovery successor");
+    pic.set_controllers(root, Some(caller), vec![successor])
+        .await
+        .unwrap();
+    assert!(
+        pic.update_call(root, caller, "snapshot_lookup", lookup.to_vec())
+            .await
+            .is_err()
+    );
+    let open = canic_host::backup::recovery_request(plan, Step::Open, expiry).unwrap();
+    let open_bytes = ic_wire::encode(
+        &open,
+        ic_wire::Encoding::Frame {
+            method: snapshot::EXECUTE,
+            direction: ic_wire::Direction::Request,
+        },
+        snapshot::LIMITS,
+    )
+    .unwrap();
+    assert!(
+        pic.update_call(root, caller, "snapshot_execute", open_bytes.clone())
+            .await
+            .is_err()
+    );
+    let reply = pic
+        .update_call(root, successor, "snapshot_execute", open_bytes)
+        .await
+        .unwrap();
+    assert_eq!(
+        snapshot::Exchange::Execute
+            .decode_response(&open.prepare().unwrap().0, &reply)
+            .unwrap(),
+        Err(snapshot::Error::Invalid)
+    );
+    pic.set_controllers(root, Some(successor), vec![caller])
+        .await
         .unwrap();
 }
 

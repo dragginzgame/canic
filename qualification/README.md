@@ -111,8 +111,13 @@ admissions. After start, the restored counter reports value 1 and fence 1.
 Replaying the old successful opening leaves writes closed. The operator accepts
 generation 3, verifies the counter is still fenced, then opens it explicitly.
 Only then does the next public increment succeed. The fixture reconstructs
-guard evidence by looking up the original requests and reopens the completed
-Backup journal with the gateway stopped.
+guard evidence by looking up the original requests. It discards the ingress
+handles for restore start, acceptance and opening and observes Root's retained
+results. Changing Root's controller after acceptance removes the original
+operator's lookup and execution authority. The replacement controller cannot
+use the original plan to open the counter. With the gateway stopped, reopening
+the journal yields the exact restore receipt and unchanged signature, network
+and observation spending.
 
 The test uses Testkit operator ingress for these lifecycle calls and the
 external signer for Backup's snapshot procedure. The one-capture/one-restore

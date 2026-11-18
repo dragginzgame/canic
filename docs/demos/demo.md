@@ -182,7 +182,9 @@ session limit also end the session. Shutdown attempts instance deletion and stop
 the owned server; deletion-attempt completion is not independent proof of remote
 deletion. Local config, artifacts and journals remain for inspection. A new run
 gets a fresh instance and directory; old session receipts cannot authorize work
-in it. Counter state survives the qualified compatible upgrade. Simulator process restart and checkpoint restoration remain unqualified.
+in it. The interactive session preserves state across a compatible upgrade. The separate
+`make backup-signer-test` journey qualifies checkpoint restoration. Simulator
+process restart remains outside both witnesses.
 
 ## Actor composition
 

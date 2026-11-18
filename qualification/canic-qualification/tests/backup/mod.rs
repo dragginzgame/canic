@@ -472,16 +472,16 @@ async fn exercise(managed: bool) {
         ));
         assert_eq!(gateway.requests.load(Ordering::SeqCst), sent + 1);
     }
-    loop {
+    let loaded = loop {
         match operation.advance(&mut connection).await.unwrap() {
             OperationProgress::Complete(receipt) => {
                 assert_eq!(receipt.source_operation_id, captured.bundle_id);
-                break;
+                break *receipt;
             }
             OperationProgress::Advanced => (),
             OperationProgress::NeedsAttention(step) => panic!("unresolved restore {step:?}"),
         }
-    }
+    };
     assert_eq!(pic.get_stable_memory(child).await, stable);
     assert_eq!(
         format!(
@@ -527,12 +527,26 @@ async fn exercise(managed: bool) {
             2
         );
     }
+    let spending = operation.inspect().unwrap();
     drop(operation);
     pic.stop_live().await;
     let mut replay = store
         .open_restore(&restore.request().operation_id, restore.digest())
         .unwrap();
-    assert!(replay.inspect().unwrap().completed.is_some());
+    let offline = replay.inspect().unwrap();
+    assert_eq!(offline.completed, Some(loaded));
+    assert_eq!(
+        offline.signing_requests_reserved,
+        spending.signing_requests_reserved
+    );
+    assert_eq!(
+        offline.network_requests_reserved,
+        spending.network_requests_reserved
+    );
+    assert_eq!(
+        offline.observations_reserved,
+        spending.observations_reserved
+    );
     assert_eq!(
         instance.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

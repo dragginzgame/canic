@@ -7,6 +7,25 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Backup recovery after operator disconnection — 2026-11-18
+
+The installed witness on Canic 0.224.0 submitted restore start, acceptance and
+opening once apiece and discarded their ingress handles. Each completion came
+from Root's lookup against the saved request. After acceptance the fixture
+replaced Root's controller. The previous controller lost lookup and execution
+authority, and Root refused the successor's attempt to issue Open under the
+previous controller's plan. Restoring the original controller let it observe
+acceptance; the counter still refused increments until explicitly opened.
+
+The two routes in `make backup-signer-test` use IC Backup 0.105.6, IC Host Sign
+0.1.0 and a disposable Linux keyring. The offline restore check compares the
+receipt and reserved signatures, network requests and observations with the
+live operation. `bash scripts/dev/test-root.sh snapshot::` separately checks
+both callback-loss windows, including retained Pending across a Root upgrade.
+This qualification covers one capture and restore of the same counter. The
+operator lifecycle calls use Testkit ingress; Backup's snapshot steps use the
+real external signer. The counter has no external participants to reconcile.
+
 ## Retained Toko shard store
 
 On 2026-11-18 an isolated copy of Toko used Canic’s optional `db-store` with
