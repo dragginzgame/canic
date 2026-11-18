@@ -206,6 +206,9 @@ current journeys and remaining gates; do not substitute sibling working trees.
 
 ## Delivery and checks
 
+- A maintainer request to “deploy” authorizes the GitHub release commit and tag
+  and crates.io publication of every eligible product package. A live fleet
+  deployment requires a named fleet.
 - Publish only the six product packages under `crates/` under the repository
   licence, using the shared Cargo publication adapter. Demo and qualification
   packages stay private. GitHub pushes alone do not authorize registry uploads.
