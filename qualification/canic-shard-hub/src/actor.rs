@@ -58,10 +58,7 @@ fn empty(raw: &[u8]) -> Result<(), &'static str> {
 fn allow() -> Result<(), std::convert::Infallible> {
     Ok(())
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform passes the owned reply"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn reply(value: Placement) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(&value, ic_wire::Encoding::Payload, sharding::LIMITS)
 }

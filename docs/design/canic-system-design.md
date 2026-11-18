@@ -1312,6 +1312,30 @@ Domain transitions consume logical bounded values. Endpoint adapters select and 
 
 ### Endpoint ownership and actor composition
 
+An actor can enable Canic's `method` feature and use `mount_wire_method!` for
+one `query`, `update` or `async update`. The Rust function supplies its export name and request/reply types. New methods
+default to the Wire hash of that name, a unit request for an empty argument list,
+and a 512-byte frame budget in each direction. An existing protocol supplies
+its original method ID and any different limits. The default permits ingress;
+a selected application guard runs before argument copy. The handler owns
+checks on decoded data and must recheck affected authority or state after a
+suspension. A synchronous reply-encoding trap rolls back that message;
+an async callback cannot undo work committed before its await.
+
+The legacy `crates/canic-macros/src/endpoint/typed_tests.rs` at
+`fa92d886ef9beee824de3ec900832722fef85bd2` required bounded Wire
+codecs on owned endpoints. The rewrite preserves that contract through
+Platform entrypoints and Wire frames, with an installed byte-compatibility
+and rollback witness. Application mounts contribute no storage or lifecycle.
+
+For a retained single-owner directory, `storage::bootstrap_with_prefix` takes
+the original authority, dot-terminated prefix, complete key set and
+`ic_storage::StorageConfig`. Use `StorageConfig::default()` for a prior
+`MemoryRuntime::new` layout, or supply the original explicit budgets.
+Every retained name must be declared, including currently unused names.
+A directory with extra owners needs its composed grants. Applications reopen
+their cells and validate payload schemas after Storage admits the directory.
+
 The ongoing Canic-owned demo reuses the greeting application with explicit
 greeting and metrics mounts in one actor file. Its fresh `demo/mainnet`
 declaration selects supplied Root and Store; the maintainer selected mainnet

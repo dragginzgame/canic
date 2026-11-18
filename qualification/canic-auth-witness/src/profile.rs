@@ -69,10 +69,7 @@ fn owner(scope: &str) -> Result<ic_auth_protocol_types::Principal, ProfileError>
 }
 
 #[runtime::update(runtime = runtime, guard = guard, decode = decode::<Put, PUT>, max_bytes = 4096, on_error = fail, name = "profile_put", encode = encode::<ProfileResult, PUT>)]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "mounted handler owns decoded input"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn put(input: Put) -> ProfileResult {
     let owner = owner("write")?;
     let result = PROFILES.with_borrow_mut(|state| {

@@ -17,6 +17,9 @@ pub mod db;
 #[cfg(all(feature = "greeting", target_arch = "wasm32"))]
 pub mod greeting;
 
+#[cfg(all(feature = "method", target_arch = "wasm32"))]
+pub mod method;
+
 /// Passive operational reports; the optional `metrics` feature enables endpoint mounting.
 pub mod metrics;
 

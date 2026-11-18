@@ -51,6 +51,14 @@ build keeps its existing two-record layout; `backup` adds a third bounded record
 
 ## Storage 0.78 adoption
 
+`cargo test --locked -p canic --features storage storage::tests` creates a
+directory with lower-level Storage admission and reopens it with Canic under
+the same owner and independent prefix. It checks retained IDs and cell bytes,
+incompatible budgets, missing or extra names, and out-of-prefix refusal.
+`make profile-test` exercises named Wire mounts on an installed actor,
+including byte-exact replies, caller rejection before decode, wrong direction
+and method, bounded requests, synchronous reply rollback and an async worker check.
+
 Fresh counter and Root installations use named stable cells on registry Storage
 0.78.0. Application codecs retain their payload bounds. Storage owns directory
 encoding and allocation. The local counter upgrade and Root snapshot tests run on

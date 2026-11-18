@@ -224,7 +224,7 @@ impl Pull {
         if api::time() >= self.start.deadline_ns {
             return Err(Error::Expired);
         }
-        let bytes = super::transport::encode_request(super::SNAPSHOT, &self.request)?;
+        let bytes = super::encode_request(super::SNAPSHOT, &self.request)?;
         let response = Call::new(
             self.authority,
             super::SNAPSHOT_METHOD,
@@ -242,7 +242,7 @@ impl Pull {
             return Err(Error::Expired);
         }
         let snapshot: Result<Snapshot, Error> =
-            super::transport::decode_response(super::SNAPSHOT, response.as_ref())?;
+            super::decode_response(super::SNAPSHOT, response.as_ref())?;
         Ok(Authenticated {
             pull: self,
             snapshot: snapshot?,

@@ -1,0 +1,18 @@
+[package]
+name = "template"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[target.'cfg(any())'.dev-dependencies]
+toko-tooling.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+canic = { workspace = true, features = ["greeting", "readiness"] }
+
+[lints]
+workspace = true

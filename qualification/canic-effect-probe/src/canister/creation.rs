@@ -32,10 +32,7 @@ fn decode_start(bytes: &[u8]) -> Result<Fault, ic_wire::Error> {
     )
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Runtime transfers the owned endpoint result to its encoder"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn encode_start(value: Status) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
@@ -58,10 +55,7 @@ fn decode_status(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     )
 }
 
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Runtime transfers the owned endpoint result to its encoder"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn encode_status(value: Status) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,

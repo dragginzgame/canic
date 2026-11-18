@@ -10,15 +10,19 @@ description = "Retained profile discovery qualification fixture"
 [target.'cfg(any())'.dev-dependencies]
 toko-tooling.workspace = true
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+named-profile-witness = []
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+canic = { workspace = true, features = ["method", "storage"] }
 canic-profile-protocol.workspace = true
 ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
 ic-platform-types.workspace = true
 ic-storage.workspace = true
 ic-wire.workspace = true
-
-[lib]
-crate-type = ["cdylib", "rlib"]
 
 [lints]
 workspace = true

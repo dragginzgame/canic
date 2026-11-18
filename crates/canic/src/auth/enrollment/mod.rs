@@ -22,12 +22,10 @@ use ic_auth::{
 };
 pub use ic_auth_protocol_types as types;
 use ic_auth_protocol_types::{CanonicalId, Principal};
-#[cfg(feature = "auth-enrollment")]
-use ic_wire::Encoding;
-use ic_wire::Limits;
+use ic_wire::{Direction, Encoding, Limits};
 #[cfg(feature = "auth-enrollment")]
 pub use receiver::{Authenticated, Challenge, Pull, Receiver, Start};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::DeserializeOwned};
 #[cfg(feature = "auth-enrollment")]
 use sha2::{Digest, Sha256};
 
@@ -58,6 +56,43 @@ pub const LIMITS: Limits = Limits {
 pub const RECEIPT_NS: u64 = 30_000_000_000;
 /// Maximum snapshot freshness, independently bounded by the grant's approval.
 pub const FRESHNESS_NS: u64 = 60_000_000_000;
+
+/// Encode the unit request shared by independently controlled and Root-controlled receivers.
+/// # Errors
+/// Returns an encoding refusal if the request cannot fit the enrollment budget.
+pub fn encode_refresh_request() -> Result<Vec<u8>, Error> {
+    encode_request(REFRESH, &())
+}
+
+/// Decode the receiver's typed result. A malformed frame is an outer error.
+/// # Errors
+/// Refuses a reply with the wrong identity, direction, encoding or bounds.
+pub fn decode_refresh_response(bytes: &[u8]) -> Result<Result<(), Error>, Error> {
+    decode_response(REFRESH, bytes)
+}
+
+fn encode_request(method: u64, value: &impl Serialize) -> Result<Vec<u8>, Error> {
+    ic_wire::encode(
+        value,
+        Encoding::Frame {
+            method,
+            direction: Direction::Request,
+        },
+        LIMITS,
+    )
+    .map_err(|_| Error::Invalid)
+}
+fn decode_response<T: DeserializeOwned>(method: u64, bytes: &[u8]) -> Result<T, Error> {
+    ic_wire::decode(
+        bytes,
+        Encoding::Frame {
+            method,
+            direction: Direction::Response,
+        },
+        LIMITS,
+    )
+    .map_err(|_| Error::Invalid)
+}
 
 /// Operator-approved immutable grant. A canister's role or controller relationship
 /// alone cannot construct this approval at the mounted Root boundary.

@@ -18,7 +18,7 @@ for variant in v1 v2 reject; do
     "$cli" artifact build --json --manifest qualification/Cargo.toml --package canic-profile-worker "${features[@]}" > "target/profile/$variant.json"
     cp -- "$(jq -r .wasm "target/profile/$variant.json")" "target/profile/$variant.wasm"
 done
-"$cli" artifact build --json --manifest qualification/Cargo.toml --package canic-profile-entry > target/profile/entry.json
+"$cli" artifact build --json --manifest qualification/Cargo.toml --package canic-profile-entry --features named-profile-witness > target/profile/entry.json
 cp -- "$(jq -r .wasm target/profile/entry.json)" target/profile/entry.wasm
 CANIC_CLI="$cli" CANIC_PROFILE_CLIENT="$client" cargo test --locked \
     --manifest-path qualification/Cargo.toml -p canic-qualification --test profile -- --nocapture

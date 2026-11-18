@@ -13,6 +13,10 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
     let parent = crate::tests::directory();
     let destination = parent.join("starter");
     let config = create_starter(&destination, "hello", &source()).unwrap();
+    assert_eq!(
+        std::fs::read(destination.join("starter-app/src/lib.rs")).unwrap(),
+        std::fs::read(source().join("apps/template/src/lib.rs")).unwrap()
+    );
     let initial = crate::load_config(&config).unwrap();
     assert!(initial.apps["hello"].fleets.is_empty());
     assert!(!destination.join(".canic").exists());
@@ -249,7 +253,13 @@ fn concurrent_initializers_publish_one_complete_project() {
     assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
     let config = crate::load_config(&destination.join("canic.toml")).unwrap();
     assert_eq!(config.select_app(None).unwrap().1.canisters.len(), 3);
-    assert!(destination.join("starter-app/src/actor.rs").is_file());
+    assert!(destination.join("starter-app/src/lib.rs").is_file());
+    assert_eq!(
+        std::fs::read_dir(destination.join("starter-app/src"))
+            .unwrap()
+            .count(),
+        1
+    );
     assert!(destination.join("README.md").is_file());
     std::fs::remove_dir_all(parent).unwrap();
 }

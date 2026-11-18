@@ -371,6 +371,13 @@ handler. The installer has no residual refresh permission after control transfer
 | `refresh_auth` | Operator-controlled hub | `enrollment::REFRESH` with unit |
 | `refresh_auth_receiver` | Shard's Root | `enrollment::TRIGGER_REFRESH` with the shard principal |
 
+Both receivers mount `canic::mount_auth_refresh_endpoint!`. A direct caller sends
+`enrollment::encode_refresh_request()?` to `enrollment::REFRESH_METHOD` and
+decodes the returned bytes with `enrollment::decode_refresh_response`. A valid
+request from an unrelated caller returns the typed `Error::Binding`. A malformed
+frame traps during admission. The receiver contract uses the same method ID and
+limits for either controller topology.
+
 Root accepts the second update only from a controller and only for a registered
 receiver. It sends a single cycle-free `refresh_auth` update to that receiver.
 The shard sees Root as its controller and calls back to its configured Root for

@@ -137,10 +137,7 @@ fn refusal(error: Error) -> Refusal {
         other => panic!("unexpected database failure: {other:?}"),
     }
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "the mounted handler owns its decoded request"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn inspect(_caller: ic_db::Principal, request: InspectRequest) -> InspectReply {
     use canic::db::inspection::{Admission, Cardinality};
     let host = runtime();
@@ -172,10 +169,7 @@ fn inspect(_caller: ic_db::Principal, request: InspectRequest) -> InspectReply {
     let reply = controls::inspection_reply(reply);
     reply
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Mounted handler receives the decoded request"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn query(_caller: ic_db::Principal, request: QueryRequest) -> QueryReply {
     if !(1..=3).contains(&request.limit) || !(1..=4).contains(&request.work) {
         return Err(Refusal::Limit);

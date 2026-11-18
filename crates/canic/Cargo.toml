@@ -19,6 +19,7 @@ blob = ["dep:ic-blob-storage", "dep:ic-platform-runtime"]
 db = ["dep:ic-platform-runtime"]
 db-schema = ["db", "dep:ic-db"]
 greeting = ["dep:ic-platform-runtime"]
+method = ["dep:ic-platform-runtime", "dep:paste"]
 metrics = ["dep:ic-platform-runtime"]
 recovery = []
 readiness = ["dep:ic-platform-runtime"]
@@ -29,6 +30,7 @@ storage = ["dep:ic-storage"]
 ic-platform-protocol = { workspace = true, optional = true, features = ["raw-rand"] }
 ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
 ic-platform-types = { workspace = true, optional = true }
+paste = { workspace = true, optional = true }
 
 [dependencies]
 ic-auth = { workspace = true, optional = true }

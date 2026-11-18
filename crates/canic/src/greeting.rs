@@ -38,10 +38,7 @@ pub fn decode(bytes: &[u8]) -> Result<String, std::convert::Infallible> {
 /// Encode the fixed response; Platform traps any encoding failure.
 /// # Errors
 /// Refuses an unencodable or over-budget response.
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint encoder owns return value"
-)]
+#[allow(clippy::needless_pass_by_value)]
 pub fn encode(value: Greeting) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
@@ -72,13 +69,13 @@ macro_rules! mount_greeting_endpoints {
             use endpoint::runtime;
 
             #[runtime::query(runtime = runtime, guard = endpoint::bounded, decode = endpoint::decode, max_bytes = 4096, on_error = endpoint::fail, name = "greet", encode = endpoint::encode)]
-            #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns the decoded request")]
+            #[allow(clippy::needless_pass_by_value)]
             fn greet(name: String) -> Greeting {
                 $handler(&name)
             }
 
             #[runtime::update(runtime = runtime, guard = endpoint::bounded, decode = endpoint::decode, max_bytes = 4096, on_error = endpoint::fail, name = "probe", encode = endpoint::encode)]
-            #[expect(clippy::needless_pass_by_value, reason = "entrypoint owns the decoded request")]
+            #[allow(clippy::needless_pass_by_value)]
             fn probe(name: String) -> Greeting {
                 $handler(&name)
             }

@@ -1,4 +1,6 @@
-use super::{Fixture, control, enrollment_request, enrollment_response, fixture, grant};
+use super::{
+    Fixture, control, enrollment_request, enrollment_response, fixture, grant, receiver_refresh,
+};
 use canic::auth::issuer::{self, Issue, Lookup, Refusal, Renew, Status};
 use canic::auth::protocol::wire as auth_wire;
 use canic_auth_witness::{
@@ -173,7 +175,7 @@ async fn issuer_real_calls_bind_accounts_renewals_and_exact_results() {
         enrollment_response::<Result<(), enrollment::Error>>(enrollment::CONFIGURE, &bytes),
         Ok(())
     );
-    assert!(control(pic, f.target, f.installer, 1).await);
+    assert!(receiver_refresh(pic, f.target, f.installer).await.is_ok());
     for wrong in [caller, f.installer, CanisterId::anonymous()] {
         assert_eq!(
             call(&f, wrong, issuer::ISSUE, &input).await,

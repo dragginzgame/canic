@@ -1,4 +1,6 @@
-use super::{control, enrollment_request, enrollment_response, fixture, grant, observe, snapshot};
+use super::{
+    enrollment_request, enrollment_response, fixture, grant, observe, receiver_refresh, snapshot,
+};
 use canic_auth_witness::{LIMITS, OBSERVE, RefreshObservation, enrollment};
 use ic_testkit::pocket_ic::{CanisterId, Time, nonblocking::PocketIc};
 use std::time::Duration;
@@ -104,7 +106,12 @@ async fn held_authenticated_replies_keep_receiver_bindings_and_revocation_isolat
         );
     }
     let first_call = pic
-        .submit_call(f.target, f.installer, "control", vec![1])
+        .submit_call(
+            f.target,
+            f.installer,
+            enrollment::REFRESH_METHOD,
+            enrollment::encode_refresh_request().unwrap(),
+        )
         .await
         .unwrap();
     for _ in 0..30 {
@@ -125,7 +132,12 @@ async fn held_authenticated_replies_keep_receiver_bindings_and_revocation_isolat
         (1, 1, 1, 0)
     );
     let second_call = pic
-        .submit_call(second, f.installer, "control", vec![1])
+        .submit_call(
+            second,
+            f.installer,
+            enrollment::REFRESH_METHOD,
+            enrollment::encode_refresh_request().unwrap(),
+        )
         .await
         .unwrap();
     for _ in 0..30 {
@@ -156,7 +168,10 @@ async fn held_authenticated_replies_keep_receiver_bindings_and_revocation_isolat
     held.release(pic, tokens.iter().find(|t| t.slot() == 1).unwrap())
         .await
         .unwrap();
-    assert_eq!(pic.await_call(second_call).await.unwrap(), [1]);
+    assert_eq!(
+        enrollment::decode_refresh_response(&pic.await_call(second_call).await.unwrap()).unwrap(),
+        Ok(())
+    );
     let revoked = snapshot(pic, second).await;
     assert!(revoked.revoked);
     assert_eq!(revoked.grant, second_grant);
@@ -169,7 +184,10 @@ async fn held_authenticated_replies_keep_receiver_bindings_and_revocation_isolat
     held.release(pic, tokens.iter().find(|t| t.slot() == 0).unwrap())
         .await
         .unwrap();
-    assert_eq!(pic.await_call(first_call).await.unwrap(), [1]);
+    assert_eq!(
+        enrollment::decode_refresh_response(&pic.await_call(first_call).await.unwrap()).unwrap(),
+        Ok(())
+    );
     let active = snapshot(pic, f.target).await;
     assert!(!active.revoked);
     assert_eq!(active.grant.receiver.as_slice(), f.target.as_slice());
@@ -193,7 +211,12 @@ async fn overlapping_refreshes_reserve_and_dispatch_only_once() {
     configure(&f).await;
     let pic = f.owner.client();
     let first = pic
-        .submit_call(f.target, f.installer, "control", vec![1])
+        .submit_call(
+            f.target,
+            f.installer,
+            enrollment::REFRESH_METHOD,
+            enrollment::encode_refresh_request().unwrap(),
+        )
         .await
         .unwrap();
     pic.tick().await;
@@ -204,11 +227,22 @@ async fn overlapping_refreshes_reserve_and_dispatch_only_once() {
     );
     assert!(pic.ingress_status(first.clone()).await.is_none());
     let duplicate = pic
-        .submit_call(f.target, f.installer, "control", vec![1])
+        .submit_call(
+            f.target,
+            f.installer,
+            enrollment::REFRESH_METHOD,
+            enrollment::encode_refresh_request().unwrap(),
+        )
         .await
         .unwrap();
-    assert_eq!(pic.await_call(duplicate).await.unwrap(), [0]);
-    assert_eq!(pic.await_call(first).await.unwrap(), [1]);
+    assert_eq!(
+        enrollment::decode_refresh_response(&pic.await_call(duplicate).await.unwrap()).unwrap(),
+        Err(enrollment::Error::Busy)
+    );
+    assert_eq!(
+        enrollment::decode_refresh_response(&pic.await_call(first).await.unwrap()).unwrap(),
+        Ok(())
+    );
     let completed = refresh_state(pic, f.target).await;
     assert_eq!(
         (
@@ -237,7 +271,7 @@ async fn expiry_during_entropy_or_snapshot_cannot_publish_authority() {
         configure(&f).await;
         let pic = f.owner.client();
         let previous = if after_dispatch {
-            assert!(control(pic, f.target, f.installer, 1).await);
+            assert!(receiver_refresh(pic, f.target, f.installer).await.is_ok());
             Some(snapshot(pic, f.target).await)
         } else {
             None
@@ -245,7 +279,12 @@ async fn expiry_during_entropy_or_snapshot_cannot_publish_authority() {
         let initial = refresh_state(pic, f.target).await;
         let original_state = observe(pic, f.target).await;
         let pending = pic
-            .submit_call(f.target, f.installer, "control", vec![1])
+            .submit_call(
+                f.target,
+                f.installer,
+                enrollment::REFRESH_METHOD,
+                enrollment::encode_refresh_request().unwrap(),
+            )
             .await
             .unwrap();
         pic.tick().await;
@@ -270,7 +309,10 @@ async fn expiry_during_entropy_or_snapshot_cannot_publish_authority() {
         assert!(pic.ingress_status(pending.clone()).await.is_none());
         pic.set_time(Time::from_nanos_since_unix_epoch(reserved.deadline_ns))
             .await;
-        assert_eq!(pic.await_call(pending).await.unwrap(), [0]);
+        assert_eq!(
+            enrollment::decode_refresh_response(&pic.await_call(pending).await.unwrap()).unwrap(),
+            Err(enrollment::Error::Expired)
+        );
         let expired = refresh_state(pic, f.target).await;
         assert_eq!(
             (expired.reserved, expired.dispatched, expired.installed),
@@ -288,7 +330,7 @@ async fn expiry_during_entropy_or_snapshot_cannot_publish_authority() {
         }
 
         // Only an explicit later admission gets another entropy/call attempt.
-        assert!(control(pic, f.target, f.installer, 1).await);
+        assert!(receiver_refresh(pic, f.target, f.installer).await.is_ok());
         let recovered = refresh_state(pic, f.target).await;
         assert_eq!(
             (
@@ -322,7 +364,7 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
         let f = fixture(false).await;
         configure(&f).await;
         let pic = f.owner.client();
-        assert!(control(pic, f.target, f.installer, 1).await);
+        assert!(receiver_refresh(pic, f.target, f.installer).await.is_ok());
         let retained = snapshot(pic, f.target).await;
         // Replenish actual verification credit before admitting a live session.
         pic.advance_time(Duration::from_secs(20)).await;
@@ -357,7 +399,7 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
         }
         // Exercise both an actual call rejection and Root's closed application
         // response. Neither can replace the previously installed authority.
-        assert!(!control(pic, f.target, f.installer, 1).await);
+        assert!(receiver_refresh(pic, f.target, f.installer).await.is_err());
         let failed = refresh_state(pic, f.target).await;
         assert_eq!(
             (failed.reserved, failed.dispatched, failed.installed),
@@ -367,7 +409,7 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
                 initial.installed
             )
         );
-        assert!(!control(pic, f.target, f.installer, 1).await);
+        assert!(receiver_refresh(pic, f.target, f.installer).await.is_err());
         assert_eq!(refresh_state(pic, f.target).await, failed);
         assert_eq!(snapshot(pic, f.target).await, retained);
         assert_eq!(observe(pic, f.target).await, original);
@@ -376,7 +418,7 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
         // extend the last good snapshot or the session captured from it.
         pic.set_time(Time::from_nanos_since_unix_epoch(failed.deadline_ns))
             .await;
-        assert!(!control(pic, f.target, f.installer, 1).await);
+        assert!(receiver_refresh(pic, f.target, f.installer).await.is_err());
         let second = refresh_state(pic, f.target).await;
         assert_eq!(second.reserved, failed.reserved + 1);
         assert_eq!(second.dispatched, failed.dispatched + 1);
@@ -488,7 +530,12 @@ async fn expired_held_response_cannot_clear_newer_pending_or_committed_revocatio
             [1]
         );
         let old_call = pic
-            .submit_call(f.target, f.installer, "control", vec![1])
+            .submit_call(
+                f.target,
+                f.installer,
+                enrollment::REFRESH_METHOD,
+                enrollment::encode_refresh_request().unwrap(),
+            )
             .await
             .unwrap();
         let old_token = pending(&held, pic, 1).await.remove(0);
@@ -497,7 +544,7 @@ async fn expired_held_response_cannot_clear_newer_pending_or_committed_revocatio
             (old.reserved, old.dispatched, old.fetched, old.installed),
             (1, 1, 1, 0)
         );
-        assert!(!control(pic, f.target, f.installer, 1).await);
+        assert!(receiver_refresh(pic, f.target, f.installer).await.is_err());
         assert_eq!(refresh_state(pic, f.target).await, old);
         let before = pic.get_time().await.as_nanos_since_unix_epoch();
         let after = held
@@ -520,7 +567,12 @@ async fn expired_held_response_cannot_clear_newer_pending_or_committed_revocatio
             Ok(())
         );
         let new_call = pic
-            .submit_call(f.target, f.installer, "control", vec![1])
+            .submit_call(
+                f.target,
+                f.installer,
+                enrollment::REFRESH_METHOD,
+                enrollment::encode_refresh_request().unwrap(),
+            )
             .await
             .unwrap();
         let new_token = pending(&held, pic, 2)
@@ -542,14 +594,23 @@ async fn expired_held_response_cannot_clear_newer_pending_or_committed_revocatio
         assert_eq!(observe(pic, f.target).await.enrollment, None);
         if old_first {
             held.release(pic, &old_token).await.unwrap();
-            assert_eq!(pic.await_call(old_call.clone()).await.unwrap(), [0]);
+            assert_eq!(
+                enrollment::decode_refresh_response(
+                    &pic.await_call(old_call.clone()).await.unwrap()
+                )
+                .unwrap(),
+                Err(enrollment::Error::Conflict)
+            );
             assert_eq!(refresh_state(pic, f.target).await, newer);
             assert_eq!(observe(pic, f.target).await.enrollment, None);
-            assert!(!control(pic, f.target, f.installer, 1).await);
+            assert!(receiver_refresh(pic, f.target, f.installer).await.is_err());
             assert_eq!(refresh_state(pic, f.target).await, newer);
         }
         held.release(pic, &new_token).await.unwrap();
-        assert_eq!(pic.await_call(new_call).await.unwrap(), [1]);
+        assert_eq!(
+            enrollment::decode_refresh_response(&pic.await_call(new_call).await.unwrap()).unwrap(),
+            Ok(())
+        );
         let committed = snapshot(pic, f.target).await;
         assert!(committed.revoked);
         assert_eq!(committed.grant, grant);
@@ -559,7 +620,11 @@ async fn expired_held_response_cannot_clear_newer_pending_or_committed_revocatio
         assert_eq!(counters.installed, 1);
         if !old_first {
             held.release(pic, &old_token).await.unwrap();
-            assert_eq!(pic.await_call(old_call).await.unwrap(), [0]);
+            assert_eq!(
+                enrollment::decode_refresh_response(&pic.await_call(old_call).await.unwrap())
+                    .unwrap(),
+                Err(enrollment::Error::Conflict)
+            );
         }
         assert_eq!(snapshot(pic, f.target).await, committed);
         assert_eq!(observe(pic, f.target).await, metadata);

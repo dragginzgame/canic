@@ -12,10 +12,7 @@ async fn execute(request: Request) -> Result<Record, Error> {
 #[runtime::update(runtime = runtime, name = "snapshot_lookup", guard = guard,
     decode = decode::<Binding, 81>, encode = encode::<Result<Record, Error>, 81>,
     max_bytes = 4096, on_error = fail)]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform owns the decoded ingress value"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn lookup(binding: Binding) -> Result<Record, Error> {
     backup::lookup(&binding)
 }

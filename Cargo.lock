@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.223.0"
+version = "0.223.1"
 dependencies = [
  "ic-auth",
  "ic-auth-protocol-types",
@@ -284,6 +284,7 @@ dependencies = [
  "ic-platform-types",
  "ic-storage",
  "ic-wire 0.25.0",
+ "paste",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -292,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.223.0"
+version = "0.223.1"
 dependencies = [
  "canic-host",
  "canic-management-protocol",
@@ -310,7 +311,7 @@ dependencies = [
 
 [[package]]
 name = "canic-demo"
-version = "0.223.0"
+version = "0.223.1"
 dependencies = [
  "canic",
  "clap",
@@ -325,7 +326,7 @@ dependencies = [
 
 [[package]]
 name = "canic-hello"
-version = "0.223.0"
+version = "0.223.1"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -334,7 +335,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.223.0"
+version = "0.223.1"
 dependencies = [
  "base64",
  "canic",
@@ -366,7 +367,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.223.0"
+version = "0.223.1"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -384,7 +385,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.223.0"
+version = "0.223.1"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -398,7 +399,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.223.0"
+version = "0.223.1"
 dependencies = [
  "canic",
  "canic-management",
@@ -1217,9 +1218,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.23.4"
+version = "0.23.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "460b88a831a2b8ecee87c60e38f06576112df22fb48985a8f7caf5810785c371"
+checksum = "d81d459a681645472470b09ecaabc591984e1fe3f43a17bb1cfd5a56c7153fe4"
 dependencies = [
  "ethnum",
  "ic-db-macros",
@@ -1232,9 +1233,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.23.4"
+version = "0.23.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d75c8a31fe40d4a2d5c04e51a357ea38d89f370866e34f6663a06873be7b990"
+checksum = "64c6402081741b42e859d095977b03ed69238beb879e03b7641148d15d5e021c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2693,6 +2694,14 @@ dependencies = [
  "once_cell",
  "rustix",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "template"
+version = "0.223.1"
+dependencies = [
+ "canic",
+ "toko-tooling",
 ]
 
 [[package]]

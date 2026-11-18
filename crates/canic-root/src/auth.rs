@@ -34,10 +34,7 @@ fn configure_auth(grant: Grant) -> Result<(), Error> {
     })
 }
 #[runtime::update(runtime = runtime, guard = controller::<{enrollment::REVOKE}>, decode = transport::decode::<Grant, {enrollment::REVOKE}>, max_bytes = 8192, on_error = endpoint_error, name = "revoke_auth", encode = transport::encode::<Result<(), Error>, {enrollment::REVOKE}>)]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "the IC entrypoint owns its decoded request"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn revoke_auth(grant: Grant) -> Result<(), Error> {
     STATE.with_borrow_mut(|state| {
         let authority = state

@@ -133,7 +133,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 let path = canic_host::create_starter(source, name, canic_source)?;
                 if !cli.json {
                     return Ok(Output::Text(format!(
-                        "Initialized app {name}\nConfig: {}\n\nRoot\n├─ Wasm Store\n└─ Application\n\nSource created; nothing built or deployed. See the generated README for build steps.\n",
+                        "Initialized app {name}\nConfig: {}\n\nRoot\n├─ Wasm Store\n└─ Application\n\nEdit starter-app/src/lib.rs, then run `canic app build --canister app` from the new directory.\n",
                         ic_host_text::escape(&path.to_string_lossy()),
                     )));
                 }

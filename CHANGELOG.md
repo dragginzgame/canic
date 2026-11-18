@@ -1,6 +1,32 @@
 # Changelog
 
-## [Unreleased]
+## [0.223.1] - 2026-11-18
+
+### 🔧 Changed
+
+Auth receiver refresh uses one Wire contract for direct controller calls, Root forwarding and qualification clients. Native callers can use `enrollment::encode_refresh_request` and `enrollment::decode_refresh_response`.
+
+A new source workspace starts with the single actor from the [fleet app template](apps/template/README.md).
+From a matching Canic checkout with the CLI installed, create a fresh directory
+and build the app locally:
+
+```sh
+canic app init hello --source hello
+cd hello
+canic app build --canister app
+```
+
+### ➕ Added
+
+- Applications can mount their own named Wire queries and updates from a function signature. Canic supplies the export name, Wire codecs and bounded public ingress by default. [Canic #24](https://github.com/dragginzgame/canic/issues/24)
+- Single-owner storage layouts can keep their existing authority, key prefix and Storage configuration when adopting Canic. [Canic #25](https://github.com/dragginzgame/canic/issues/25)
+
+With the Rust Wasm target installed, build the qualification actor locally. Run its installed journey with the prepared simulator and signer.
+
+```sh
+canic artifact build --manifest qualification/Cargo.toml --package canic-profile-entry --features named-profile-witness
+make profile-test
+```
 
 ## [0.223.0] - 2026-11-18
 

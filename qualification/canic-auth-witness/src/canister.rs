@@ -129,10 +129,7 @@ fn encode_control(value: bool) -> Result<Vec<u8>, std::convert::Infallible> {
     Ok({ vec![u8::from(value)] })
 }
 #[runtime::update(runtime = runtime, guard = control_guard, decode = decode_control, max_bytes = 2097152, on_error = endpoint_error, name = "control", encode = encode_control)]
-async fn control(command: u8) -> bool {
-    if command == 1 {
-        return enrollment::transport::authorize_refresh().is_ok() && refresh().await.is_ok();
-    }
+fn control(command: u8) -> bool {
     STATE.with_borrow_mut(|state| {
         let Some(s) = state else {
             return false;

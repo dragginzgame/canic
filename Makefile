@@ -77,7 +77,7 @@ check:
 	cargo check --locked -p canic
 
 test:
-	cargo test --locked -p canic
+	cargo test --locked -p canic --features storage
 
 clippy:
 	cargo clippy --locked -p canic --all-targets -- -D warnings

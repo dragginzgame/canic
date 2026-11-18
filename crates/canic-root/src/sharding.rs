@@ -51,10 +51,7 @@ fn configured(value: Result<(), Refusal>) -> Result<Vec<u8>, ic_wire::Error> {
 fn decode<const METHOD: u64>(b: &[u8]) -> Result<Key, ic_wire::Error> {
     ic_wire::decode(b, frame(METHOD, ic_wire::Direction::Request), LIMITS)
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "Platform passes the owned reply"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn encode<const METHOD: u64>(value: Placement) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(&value, frame(METHOD, ic_wire::Direction::Response), LIMITS)
 }

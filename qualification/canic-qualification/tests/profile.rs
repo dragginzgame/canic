@@ -121,6 +121,122 @@ async fn info(pic: &PocketIc, worker: CanisterId) -> Info {
     .unwrap()
 }
 
+// Independently construct the published client frames and compare complete response bytes.
+async fn named_profile(pic: &PocketIc, entry: CanisterId) {
+    use canic_profile_protocol::Profile;
+    use ic_wire::{
+        Direction::{Request, Response},
+        Encoding::Frame,
+    };
+    let method = ic_wire::method_id("protocol_version");
+    let version = pic
+        .query_call(
+            entry,
+            CanisterId::anonymous(),
+            "protocol_version",
+            ic_wire::encode(
+                &(),
+                Frame {
+                    method,
+                    direction: Request,
+                },
+                LIMITS,
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        version,
+        ic_wire::encode(
+            &1u8,
+            Frame {
+                method,
+                direction: Response
+            },
+            LIMITS
+        )
+        .unwrap()
+    );
+    let user = CanisterId::from_slice(&[42, 2]);
+    let get = ic_wire::encode(
+        &(),
+        Frame {
+            method: 20,
+            direction: Request,
+        },
+        LIMITS,
+    )
+    .unwrap();
+    let read = || pic.query_call(entry, user, "get_me", get.clone());
+    let reply = |profile: Option<Profile>| {
+        ic_wire::encode(
+            &profile,
+            Frame {
+                method: 20,
+                direction: Response,
+            },
+            LIMITS,
+        )
+        .unwrap()
+    };
+    assert_eq!(read().await.unwrap(), reply(None));
+    let set = |name: &str, method, direction| {
+        ic_wire::encode(&name, Frame { method, direction }, LIMITS).unwrap()
+    };
+    let write = |bytes| pic.update_call(entry, user, "set_display_name", bytes);
+    let profile = Profile {
+        user_id: 1,
+        owner: user.as_slice().to_vec(),
+        revision: 1,
+        display_name: "Ada".into(),
+    };
+    assert_eq!(
+        write(set("Ada", 21, Request)).await.unwrap(),
+        ic_wire::encode(
+            &profile,
+            Frame {
+                method: 21,
+                direction: Response
+            },
+            LIMITS
+        )
+        .unwrap()
+    );
+    let denied = pic
+        .update_call(
+            entry,
+            CanisterId::anonymous(),
+            "set_display_name",
+            vec![0; 129],
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        denied.reject_message.contains("profile witness denied"),
+        "{denied:?}"
+    );
+    for bytes in [
+        set("new", 20, Request),
+        set("new", 21, Response),
+        vec![0; 10],
+    ] {
+        assert!(write(bytes).await.is_err());
+    }
+    let oversized = write(vec![0; 129]).await.unwrap_err();
+    assert!(
+        oversized.reject_message.contains("request byte limit"),
+        "{oversized:?}"
+    );
+    // This request fits the input budget. Its handler writes before its reply exceeds 72 bytes.
+    let failed_reply = write(set(&"x".repeat(80), 21, Request)).await.unwrap_err();
+    assert!(
+        failed_reply.reject_message.contains("Encode"),
+        "{failed_reply:?}"
+    );
+    assert_eq!(read().await.unwrap(), reply(Some(profile)));
+}
+
 async fn entry_journey(
     pic: &PocketIc,
     root: &Path,
@@ -156,6 +272,7 @@ async fn entry_journey(
     );
     let entry_text = receipt["canister"].as_str().unwrap().to_owned();
     let entry = CanisterId::from_text(&entry_text).unwrap();
+    named_profile(pic, entry).await;
     let outsider = CanisterId::self_authenticating(b"entry outsider");
     let resolve = ic_wire::encode(
         &(),

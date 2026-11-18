@@ -104,7 +104,7 @@ fn decode_stage(bytes: &[u8]) -> Result<Approval, ic_wire::Error> {
     )
 }
 
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns its reply")]
+#[allow(clippy::needless_pass_by_value)]
 fn encode_stage(value: Result<Status, AdmissionError>) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
@@ -149,7 +149,7 @@ fn decode_status(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     )
 }
 
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns its reply")]
+#[allow(clippy::needless_pass_by_value)]
 fn encode_status(value: Status) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
@@ -321,7 +321,7 @@ fn decode_reconcile(bytes: &[u8]) -> Result<(), ic_wire::Error> {
     )
 }
 
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns its reply")]
+#[allow(clippy::needless_pass_by_value)]
 fn encode_reconcile(value: Status) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,

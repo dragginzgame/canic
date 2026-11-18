@@ -9,8 +9,7 @@ use ic_platform_runtime::{
 };
 use ic_platform_types::Principal;
 use ic_storage::{
-    AllocationGrants, DefaultMemoryImpl, GenericAllocationPolicy, MemoryAuthority, MemoryRequest,
-    MemoryRuntime, SealedDeclarationSnapshot, StableKey, StorageConfig,
+    DefaultMemoryImpl, MemoryRuntime, StableKey, StorageConfig,
     adapter::{Bound, StableCell, Storable},
 };
 use std::{borrow::Cow, cell::RefCell};
@@ -50,36 +49,19 @@ struct State {
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
 
 fn open(fresh: bool) {
-    let mut runtime = MemoryRuntime::new_with_config(
+    let runtime = canic::storage::bootstrap_with_prefix(
         DefaultMemoryImpl::default(),
+        fresh,
+        "entry",
+        "entry.",
+        &["entry.worker.v1"],
         StorageConfig {
             allocations: 1,
             extents: 2,
             pages: 16,
             ..Default::default()
         },
-    )
-    .expect("admit entry backing");
-    if !fresh {
-        assert_eq!(
-            runtime.memory_allocations().expect("entry integrity").len(),
-            1,
-            "missing retained entry binding"
-        );
-    }
-    runtime
-        .bootstrap(
-            &SealedDeclarationSnapshot::new(vec![
-                MemoryRequest::new("entry", "entry.worker.v1").expect("constant request"),
-            ])
-            .expect("constant declarations"),
-            &AllocationGrants::new(vec![
-                MemoryAuthority::new("entry", "entry.").expect("constant authority"),
-            ])
-            .expect("constant grants"),
-            &GenericAllocationPolicy,
-        )
-        .expect("commit entry admission");
+    );
     let memory = runtime
         .open_memory(&StableKey::parse("entry.worker.v1").expect("constant key"))
         .expect("entry lease");
@@ -118,166 +100,99 @@ fn valid_worker(text: &str) -> Result<Principal, RouteError> {
     Ok(principal)
 }
 
-fn bounded() -> Result<(), String> {
-    if ic_platform_runtime::system::argument_size() > LIMITS.bytes {
-        return Err("entry frame too large".into());
+canic::mount_wire_method! {
+    query(method = ROUTE, limits = LIMITS) fn route() -> RouteResult {
+        STATE
+            .with_borrow(|state| {
+                state
+                    .as_ref()
+                    .expect("initialized entry")
+                    .binding
+                    .get()
+                    .0
+                    .clone()
+            })
+            .map(|worker| Route { worker })
+            .ok_or(RouteError::Unbound)
     }
-    Ok(())
-}
-
-fn decode_route(bytes: &[u8]) -> Result<(), ic_wire::Error> {
-    ic_wire::decode::<()>(
-        bytes,
-        ic_wire::Encoding::Frame {
-            method: ROUTE,
-            direction: ic_wire::Direction::Request,
-        },
-        LIMITS,
-    )
-}
-fn decode_bind(bytes: &[u8]) -> Result<Route, ic_wire::Error> {
-    ic_wire::decode(
-        bytes,
-        ic_wire::Encoding::Frame {
-            method: BIND,
-            direction: ic_wire::Direction::Request,
-        },
-        LIMITS,
-    )
-}
-fn decode_check(bytes: &[u8]) -> Result<(), ic_wire::Error> {
-    ic_wire::decode::<()>(
-        bytes,
-        ic_wire::Encoding::Frame {
-            method: CHECK,
-            direction: ic_wire::Direction::Request,
-        },
-        LIMITS,
-    )
-}
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
-fn encode_route(value: RouteResult) -> Result<Vec<u8>, ic_wire::Error> {
-    ic_wire::encode(
-        &value,
-        ic_wire::Encoding::Frame {
-            method: ROUTE,
-            direction: ic_wire::Direction::Response,
-        },
-        LIMITS,
-    )
-}
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
-fn encode_bind(value: RouteResult) -> Result<Vec<u8>, ic_wire::Error> {
-    ic_wire::encode(
-        &value,
-        ic_wire::Encoding::Frame {
-            method: BIND,
-            direction: ic_wire::Direction::Response,
-        },
-        LIMITS,
-    )
-}
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
-fn encode_check(value: CheckResult) -> Result<Vec<u8>, ic_wire::Error> {
-    ic_wire::encode(
-        &value,
-        ic_wire::Encoding::Frame {
-            method: CHECK,
-            direction: ic_wire::Direction::Response,
-        },
-        LIMITS,
-    )
-}
-
-#[runtime::query(runtime = runtime, guard = bounded, decode = decode_route, max_bytes = 4096, on_error = endpoint_error, name = "route", encode = encode_route)]
-fn route((): ()) -> RouteResult {
-    STATE
-        .with_borrow(|state| {
-            state
-                .as_ref()
-                .expect("initialized entry")
-                .binding
-                .get()
-                .0
-                .clone()
-        })
-        .map(|worker| Route { worker })
-        .ok_or(RouteError::Unbound)
 }
 
 // Clients use replicated resolution before sending private data to a discovered worker.
-#[runtime::update(runtime = runtime, guard = bounded, decode = decode_route, max_bytes = 4096, on_error = endpoint_error, name = "resolve", encode = encode_route)]
-fn resolve((): ()) -> RouteResult {
-    route(())
+canic::mount_wire_method! {
+    update(name = "resolve", method = ROUTE, limits = LIMITS) fn replicated_route() -> RouteResult {
+        route()
+    }
 }
 
-#[runtime::update(runtime = runtime, guard = bounded, decode = decode_bind, max_bytes = 4096, on_error = endpoint_error, name = "bind", encode = encode_bind)]
-fn bind(input: Route) -> RouteResult {
-    if !api::is_controller(&api::caller()) {
-        return Err(RouteError::Forbidden);
-    }
-    valid_worker(&input.worker)?;
-    STATE.with_borrow_mut(|state| {
-        let state = state.as_mut().expect("initialized entry");
-        if let Some(worker) = &state.binding.get().0 {
-            if worker != &input.worker {
-                return Err(RouteError::Conflict);
+canic::mount_wire_method! {
+    update(method = BIND, limits = LIMITS) fn bind(input: Route) -> RouteResult {
+        if !api::is_controller(&api::caller()) {
+            return Err(RouteError::Forbidden);
+        }
+        valid_worker(&input.worker)?;
+        STATE.with_borrow_mut(|state| {
+            let state = state.as_mut().expect("initialized entry");
+            if let Some(worker) = &state.binding.get().0 {
+                if worker != &input.worker {
+                    return Err(RouteError::Conflict);
+                }
+            } else {
+                state.binding.set(Binding(Some(input.worker.clone())));
             }
-        } else {
-            state.binding.set(Binding(Some(input.worker.clone())));
-        }
-        Ok(input)
-    })
+            Ok(input)
+        })
+    }
 }
 
-#[runtime::update(runtime = runtime, guard = bounded, decode = decode_check, max_bytes = 4096, on_error = endpoint_error, name = "check", encode = encode_check)]
-async fn check((): ()) -> CheckResult {
-    if !api::is_controller(&api::caller()) {
-        return Err(RouteError::Forbidden);
-    }
-    let route = route(())?;
-    let target = valid_worker(&route.worker)?;
-    let request = ic_wire::encode(
-        &(),
-        ic_wire::Encoding::Frame {
-            method: INFO,
-            direction: ic_wire::Direction::Request,
-        },
-        LIMITS,
-    )
-    .expect("constant request");
-    STATE.with_borrow_mut(|state| {
-        let state = state.as_mut().expect("initialized entry");
-        if state.checking {
-            return Err(RouteError::Busy);
+canic::mount_wire_method! {
+    async update(method = CHECK, limits = LIMITS) fn check() -> CheckResult {
+        if !api::is_controller(&api::caller()) {
+            return Err(RouteError::Forbidden);
         }
-        state.checking = true;
-        Ok(())
-    })?;
-    let response = Call::new(target, "probe", Wait::Bounded { seconds: 5 })
-        .owned_args(request)
-        .execute()
-        .await;
-    STATE.with_borrow_mut(|state| state.as_mut().expect("initialized entry").checking = false);
-    let response = response.map_err(|_| RouteError::Unavailable)?;
-    let response = match response.into_parts().0 {
-        ic_platform_runtime::call::Outcome::Reply(bytes) => bytes,
-        _ => return Err(RouteError::Unavailable),
-    };
-    let info: Info = ic_wire::decode(
-        &response,
-        ic_wire::Encoding::Frame {
-            method: INFO,
-            direction: ic_wire::Direction::Response,
-        },
-        LIMITS,
-    )
-    .map_err(|_| RouteError::InvalidReply)?;
-    // Bound the response encoder even when the selected worker is not our implementation.
-    if info.executable.len() > 128 {
-        return Err(RouteError::InvalidReply);
+        let route = route()?;
+        let target = valid_worker(&route.worker)?;
+        let request = ic_wire::encode(
+            &(),
+            ic_wire::Encoding::Frame {
+                method: INFO,
+                direction: ic_wire::Direction::Request,
+            },
+            LIMITS,
+        )
+        .expect("constant request");
+        STATE.with_borrow_mut(|state| {
+            let state = state.as_mut().expect("initialized entry");
+            if state.checking {
+                return Err(RouteError::Busy);
+            }
+            state.checking = true;
+            Ok(())
+        })?;
+        let response = Call::new(target, "probe", Wait::Bounded { seconds: 5 })
+            .owned_args(request)
+            .execute()
+            .await;
+        STATE.with_borrow_mut(|state| state.as_mut().expect("initialized entry").checking = false);
+        let response = response.map_err(|_| RouteError::Unavailable)?;
+        let response = match response.into_parts().0 {
+            ic_platform_runtime::call::Outcome::Reply(bytes) => bytes,
+            _ => return Err(RouteError::Unavailable),
+        };
+        let info: Info = ic_wire::decode(
+            &response,
+            ic_wire::Encoding::Frame {
+                method: INFO,
+                direction: ic_wire::Direction::Response,
+            },
+            LIMITS,
+        )
+        .map_err(|_| RouteError::InvalidReply)?;
+        // Bound the response encoder even when the selected worker is not our implementation.
+        if info.executable.len() > 128 {
+            return Err(RouteError::InvalidReply);
+        }
+        Ok(WorkerCheck { route, info })
     }
-    Ok(WorkerCheck { route, info })
 }
 
 fn endpoint_error(error: impl std::fmt::Debug) -> ! {

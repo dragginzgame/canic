@@ -382,22 +382,22 @@ async function qualify() {
       const revoked = Array.from(await flow.raw('revoke_auth', root, controller, selected.revoke));
       // Root revocation is not instantly visible across canisters. Refresh through
       // the receiver's existing direct authority pull before asserting closure.
-      const refreshed = Array.from(await flow.control(target, 1));
+      const refreshed = Array.from(await flow.raw(flow.config.frames.refreshMethod, target, controller, flow.config.frames.refresh));
       const admissions = flow.counts.admit;
       const read = Array.from(await flow.get(target, flow.config.frames.getA));
       const write = Array.from(await flow.write(target, flow.config.frames.putA));
       const afterAdmissions = flow.counts.admit;
       const retry = Array.from(await flow.raw('configure_auth', root, controller, selected.configure));
-      const retried = Array.from(await flow.control(target, 1));
+      const retried = Array.from(await flow.raw(flow.config.frames.refreshMethod, target, controller, flow.config.frames.refresh));
       const stillClosed = Array.from(await flow.get(target, flow.config.frames.getA));
       const other = Array.from(await flow.get(flow.targets[0], flow.config.frames.getA));
       return { before, revoked, refreshed, read, write, admissions, afterAdmissions, retry, retried, stillClosed, other };
     });
     assert.deepEqual(result.before, config.frames.missingGet, 'authenticated read reached the empty application store');
-    assert.deepEqual(result.revoked, config.frames.revokeOk); assert.deepEqual(result.refreshed, [1]);
+    assert.deepEqual(result.revoked, config.frames.revokeOk); assert.deepEqual(result.refreshed, config.frames.refreshOk);
     assert.deepEqual(result.read, config.frames.unauthGet); assert.deepEqual(result.write, config.frames.unauthPut);
     assert.equal(result.afterAdmissions, result.admissions, 'cached readiness cannot replace server authorization');
-    assert.deepEqual(result.retry, config.frames.configureOk); assert.deepEqual(result.retried, [1]);
+    assert.deepEqual(result.retry, config.frames.configureOk); assert.deepEqual(result.retried, config.frames.refreshOk);
     assert.deepEqual(result.stillClosed, config.frames.unauthGet);
     assert.deepEqual(result.other, config.frames.profileAGet);
   });

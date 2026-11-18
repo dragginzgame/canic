@@ -99,6 +99,10 @@ bytes, recovery boundaries and qualified predecessor paths:
 
 ## Packages and qualification
 
+Use function-level `#[allow(clippy::needless_pass_by_value)]` on endpoint handlers
+and reply encoders when the runtime supplies an owned value. Named Wire mounts
+apply this allowance for the application.
+
 Fresh counter and Root installations use Storage named leases. Existing retained
 images require an explicitly qualified transition. Read the
 [current qualification](qualification/README.md#storage-078-adoption) before

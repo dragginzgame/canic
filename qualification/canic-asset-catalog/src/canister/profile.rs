@@ -32,10 +32,7 @@ fn encode<T: Serialize, const ID: u64>(value: T) -> Result<Vec<u8>, ic_wire::Err
 }
 
 #[runtime::update(runtime = runtime, guard = lifecycle_guard, decode = decode::<Put, PUT>, max_bytes = 4096, on_error = endpoint_error, name = "profile_put", encode = encode::<ProfileResult, PUT>)]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoded input"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn put(input: Put) -> ProfileResult {
     let caller = api::caller();
     STATE.with_borrow_mut(|state| {

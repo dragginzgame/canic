@@ -384,7 +384,7 @@ macro_rules! mount_endpoints {
                     method: protocol::$($id)::+, direction: wire::Direction::Request
                 }, protocol::$($limits)::+)
             }
-            #[allow(clippy::needless_pass_by_value, reason = "Platform passes an owned reply; selected reply types include both Copy and non-Copy values")]
+            #[allow(clippy::needless_pass_by_value)]
             fn encode(value: Reply) -> Result<Vec<u8>, wire::Error> {
                 wire::encode(&value, wire::Encoding::Frame {
                     method: protocol::$($id)::+, direction: wire::Direction::Response

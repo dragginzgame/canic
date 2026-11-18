@@ -59,7 +59,7 @@ fn decode_info(bytes: &[u8]) -> Result<(), ic_wire::Error> {
         LIMITS,
     )
 }
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
+#[allow(clippy::needless_pass_by_value)]
 fn encode_put(value: ProfileResult) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
@@ -70,7 +70,7 @@ fn encode_put(value: ProfileResult) -> Result<Vec<u8>, ic_wire::Error> {
         LIMITS,
     )
 }
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
+#[allow(clippy::needless_pass_by_value)]
 fn encode_get(value: ProfileResult) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
@@ -81,7 +81,7 @@ fn encode_get(value: ProfileResult) -> Result<Vec<u8>, ic_wire::Error> {
         LIMITS,
     )
 }
-#[expect(clippy::needless_pass_by_value, reason = "entrypoint owns result")]
+#[allow(clippy::needless_pass_by_value)]
 fn encode_info(value: Info) -> Result<Vec<u8>, ic_wire::Error> {
     ic_wire::encode(
         &value,
@@ -94,10 +94,7 @@ fn encode_info(value: Info) -> Result<Vec<u8>, ic_wire::Error> {
 }
 
 #[runtime::update(runtime = runtime, guard = bounded, decode = decode_put, max_bytes = 4096, on_error = endpoint_error, name = "put", encode = encode_put)]
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "entrypoint owns decoded request"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn put(input: Put) -> ProfileResult {
     STATE.with_borrow_mut(|state| {
         state

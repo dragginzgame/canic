@@ -187,10 +187,19 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
         .unwrap();
         assert_eq!(reply, Ok(()));
         assert_eq!(
-            pic.update_call(*receiver, installer, "control", vec![1])
-                .await
-                .unwrap(),
-            [1]
+            pic.update_call(
+                *receiver,
+                installer,
+                enrollment::REFRESH_METHOD,
+                enrollment::encode_refresh_request().unwrap()
+            )
+            .await
+            .unwrap(),
+            enrollment_frame(
+                enrollment::REFRESH,
+                ic_wire::Direction::Response,
+                &Ok::<(), enrollment::Error>(())
+            )
         );
     }
     pic.set_time(Time::from_nanos_since_unix_epoch(wall_now))
@@ -217,6 +226,9 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
             "forbiddenGet": result(GET, Err(ProfileError::Forbidden)),
             "alreadyRegistered": result(PUT, Err(ProfileError::AlreadyRegistered)),
             "revoked": canic::auth::protocol::EstablishSession::encode_response(&Err(canic::auth::protocol::model::AdmissionRefusal::Revoked)).unwrap(),
+            "refreshMethod": enrollment::REFRESH_METHOD,
+            "refresh": enrollment::encode_refresh_request().unwrap(),
+            "refreshOk": enrollment_frame(enrollment::REFRESH, response, &Ok::<(), enrollment::Error>(())),
             "revokeOk": enrollment_frame(enrollment::REVOKE, response, &Ok::<(), enrollment::Error>(())),
             "configureOk": enrollment_frame(enrollment::CONFIGURE, response, &Ok::<(), enrollment::Error>(())),
         } });
@@ -285,7 +297,12 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
         )
         .await;
     let refresh = pic
-        .update_call(receivers[0], installer, "control", vec![1])
+        .update_call(
+            receivers[0],
+            installer,
+            enrollment::REFRESH_METHOD,
+            enrollment::encode_refresh_request().unwrap(),
+        )
         .await;
     assert_eq!(
         owned.close(Duration::from_secs(10)).await,
@@ -322,8 +339,8 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
         result(GET, Err(ProfileError::Unauthenticated))
     );
     assert_eq!(
-        refresh.unwrap(),
-        [0],
+        enrollment::decode_refresh_response(&refresh.unwrap()).unwrap(),
+        Err(enrollment::Error::Closed),
         "fresh enrollment cannot revive lost Auth state"
     );
     let backing = VectorMemory::new(std::cell::RefCell::new(after));

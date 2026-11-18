@@ -321,10 +321,7 @@ fn reconcile(caller: Principal, input: Lookup, _: u64) -> Result<Status, Refusal
         }
     })
 }
-#[expect(
-    clippy::needless_pass_by_value,
-    reason = "the mounted handler owns its decoded request"
-)]
+#[allow(clippy::needless_pass_by_value)]
 fn logout(caller: Principal, input: Logout, now: u64) -> Result<Revoked, Refusal> {
     STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(Refusal::Unavailable)?;

@@ -255,7 +255,7 @@ canic app build
 
 The package can live at `apps/toko`; Canic uses the explicit Cargo package recipe,
 not a directory-name convention. Builds require no deployment network, signer or
-journal. For an isolated greeting demo, `app init APP --source DIRECTORY` creates
+journal. For a buildable starting point, see the [fleet app template](apps/template/README.md). For an isolated greeting demo, `app init APP --source DIRECTORY` creates
 new source and a fleetless config, and refuses an occupied destination.
 
 In a project without `canic.toml`, initialize an app, then declare a fleet when ready:

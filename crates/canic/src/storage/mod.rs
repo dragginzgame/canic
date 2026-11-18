@@ -15,16 +15,39 @@ pub fn bootstrap<M: MemoryBacking>(
     keys: &[&str],
     pages: u64,
 ) -> MemoryRuntime<M> {
-    assert_eq!(memory.size() == 0, fresh, "storage lifecycle mismatch");
-    let mut runtime = MemoryRuntime::new_with_config(
+    bootstrap_with_prefix(
         memory,
+        fresh,
+        authority,
+        &format!("{authority}."),
+        keys,
         StorageConfig {
             allocations: keys.len(),
             pages,
             ..Default::default()
         },
     )
-    .expect("open storage directory");
+}
+
+/// Admit a single owner's complete key set under an independently named prefix.
+/// Supply the original Storage configuration on reopen, including page, extent,
+/// allocation and directory budgets. The directory must contain exactly these
+/// keys. Layouts shared with other owners need their original composed bootstrap.
+///
+/// # Panics
+/// Traps on lifecycle mismatch, missing or extra allocations, invalid grants or
+/// incompatible backing. A failed reopen must never be retried as fresh.
+pub fn bootstrap_with_prefix<M: MemoryBacking>(
+    memory: M,
+    fresh: bool,
+    authority: &str,
+    prefix: &str,
+    keys: &[&str],
+    config: StorageConfig,
+) -> MemoryRuntime<M> {
+    assert_eq!(memory.size() == 0, fresh, "storage lifecycle mismatch");
+    let mut runtime =
+        MemoryRuntime::new_with_config(memory, config).expect("open storage directory");
     if !fresh {
         assert_eq!(
             runtime.memory_allocations().expect("directory").len(),
@@ -48,7 +71,7 @@ pub fn bootstrap<M: MemoryBacking>(
         .bootstrap(
             &SealedDeclarationSnapshot::new(requests).expect("declarations"),
             &AllocationGrants::new(vec![
-                MemoryAuthority::new(authority, format!("{authority}.")).expect("authority"),
+                MemoryAuthority::new(authority, prefix).expect("authority"),
             ])
             .expect("grants"),
             &GenericAllocationPolicy,
@@ -78,3 +101,6 @@ pub fn cell<M: MemoryBacking>(
         StableCell::load(lease).expect("load retained cell")
     }
 }
+
+#[cfg(test)]
+mod tests;

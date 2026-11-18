@@ -1,0 +1,18 @@
+[package]
+name = "starter-app"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+canic = { workspace = true, features = ["greeting", "readiness"] }
+
+[target.'cfg(any())'.dev-dependencies]
+toko-tooling.workspace = true
+
+[lints]
+workspace = true

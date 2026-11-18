@@ -40,29 +40,6 @@ pub fn encode<T: Serialize, const ID: u64>(value: T) -> Result<Vec<u8>, ic_wire:
         LIMITS,
     )
 }
-pub(super) fn encode_request(method: u64, value: &impl Serialize) -> Result<Vec<u8>, Error> {
-    ic_wire::encode(
-        value,
-        Encoding::Frame {
-            method,
-            direction: Direction::Request,
-        },
-        LIMITS,
-    )
-    .map_err(|_| Error::Invalid)
-}
-pub(super) fn decode_response<T: DeserializeOwned>(method: u64, bytes: &[u8]) -> Result<T, Error> {
-    ic_wire::decode(
-        bytes,
-        Encoding::Frame {
-            method,
-            direction: Direction::Response,
-        },
-        LIMITS,
-    )
-    .map_err(|_| Error::Invalid)
-}
-
 /// Require the current IC controller before beginning any refresh work.
 /// # Errors
 /// Returns a binding refusal for an unrelated caller, including a former installer.
@@ -80,7 +57,7 @@ pub fn authorize_refresh() -> Result<(), Error> {
 /// A missing reply leaves the refresh outcome unknown. Never retry implicitly.
 pub async fn trigger_refresh(receiver: super::types::Principal) -> Result<(), Error> {
     use ic_platform_runtime::call::{Call, Outcome, Wait};
-    let request = encode_request(super::REFRESH, &())?;
+    let request = super::encode_refresh_request()?;
     let response = Call::new(
         receiver,
         super::REFRESH_METHOD,
@@ -93,5 +70,5 @@ pub async fn trigger_refresh(receiver: super::types::Principal) -> Result<(), Er
     let Outcome::Reply(bytes) = response.into_parts().0 else {
         return Err(Error::Unavailable);
     };
-    decode_response(super::REFRESH, bytes.as_ref())?
+    super::decode_refresh_response(bytes.as_ref())?
 }

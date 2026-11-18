@@ -26,13 +26,6 @@ fn manifest(path: &Path) -> Result<toml::Value> {
     toml::from_str(text).map_err(supplier)
 }
 
-fn shell_path(path: &Path) -> Result<String> {
-    let value = path
-        .to_str()
-        .ok_or_else(|| Error::Invalid("starter paths require UTF-8".into()))?;
-    Ok(format!("'{}'", value.replace('\'', "'\"'\"'")))
-}
-
 fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
     let config = Config {
         apps: BTreeMap::from([(
@@ -130,19 +123,6 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
             "dependencies":selected, "lints":lints,
         }
     });
-    let app_manifest = json!({
-        "package":{"name":"starter-app", "version":{"workspace":true}, "edition":{"workspace":true}, "rust-version":{"workspace":true}, "publish":{"workspace":true}},
-        "lib":{"crate-type":["cdylib","rlib"]},
-        "dependencies":{"canic":{"workspace":true,"features":["greeting", "readiness"]}},
-        "target":{
-            "cfg(any())":{"dev-dependencies":{"toko-tooling":{"workspace":true}}}
-        },
-        "lints":{"workspace":true},
-    });
-    let readme = format!(
-        include_str!("templates/README.md"),
-        source = shell_path(source)?,
-    );
     Ok(BTreeMap::from([
         ("canic.toml".into(), config_bytes),
         (
@@ -153,17 +133,11 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
         ),
         (
             "starter-app/Cargo.toml".into(),
-            toml::to_string_pretty(&app_manifest)
-                .map_err(supplier)?
-                .into_bytes(),
+            include_bytes!("templates/app.toml").to_vec(),
         ),
         (
             "starter-app/src/lib.rs".into(),
-            include_bytes!("templates/lib.rs").to_vec(),
-        ),
-        (
-            "starter-app/src/actor.rs".into(),
-            include_bytes!("templates/actor.rs").to_vec(),
+            crate::store::read(&source.join("apps/template/src/lib.rs"), 65_536)?,
         ),
         (
             "rust-toolchain.toml".into(),
@@ -173,7 +147,10 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
             ".gitignore".into(),
             b"/target/\n/artifacts/\n/.canic/\n*.canic-lock\n".to_vec(),
         ),
-        ("README.md".into(), readme.into_bytes()),
+        (
+            "README.md".into(),
+            include_bytes!("templates/README.md").to_vec(),
+        ),
     ]))
 }
 

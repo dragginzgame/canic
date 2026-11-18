@@ -70,6 +70,22 @@ fn input_for_device(now: u64, device: u8, slot: u8) -> (CanisterId, SessionInput
         },
     )
 }
+async fn receiver_refresh(
+    pic: &PocketIc,
+    receiver: CanisterId,
+    caller: CanisterId,
+) -> Result<(), enrollment::Error> {
+    let bytes = pic
+        .update_call(
+            receiver,
+            caller,
+            enrollment::REFRESH_METHOD,
+            enrollment::encode_refresh_request().unwrap(),
+        )
+        .await
+        .unwrap();
+    enrollment::decode_refresh_response(&bytes).unwrap()
+}
 async fn control(pic: &PocketIc, target: CanisterId, caller: CanisterId, command: u8) -> bool {
     pic.update_call(target, caller, "control", vec![command])
         .await
@@ -291,10 +307,10 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         Err(AdmissionRefusal::Unavailable)
     );
     assert!(
-        !control(pic, target, browser, 1).await,
+        receiver_refresh(pic, target, browser).await.is_err(),
         "claimed app membership cannot configure authority"
     );
-    assert!(control(pic, target, installer, 1).await);
+    assert!(receiver_refresh(pic, target, installer).await.is_ok());
     let initial_enrollment = snapshot(pic, target).await;
     assert_eq!(initial_enrollment.grant, grant);
     assert_ne!(initial_enrollment.request.challenge, [0; 32]);
@@ -477,16 +493,21 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     let before = observe(pic, target).await;
     let retained = snapshot(pic, target).await;
     assert!(
-        pic.update_call(target, installer, "control", vec![1])
-            .await
-            .is_err()
+        pic.update_call(
+            target,
+            installer,
+            enrollment::REFRESH_METHOD,
+            enrollment::encode_refresh_request().unwrap()
+        )
+        .await
+        .is_err()
     );
     assert_eq!(observe(pic, target).await, before);
     assert_eq!(snapshot(pic, target).await, retained);
     assert!(control(pic, target, installer, 3).await);
-    assert!(!control(pic, target, installer, 1).await);
+    assert!(receiver_refresh(pic, target, installer).await.is_err());
     pic.advance_time(Duration::from_secs(31)).await;
-    assert!(control(pic, target, installer, 1).await);
+    assert!(receiver_refresh(pic, target, installer).await.is_ok());
     let refreshed = snapshot(pic, target).await;
     assert_eq!(refreshed.grant, retained.grant);
     assert_eq!(refreshed.generation, retained.generation);
@@ -536,7 +557,12 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     // Revoke while the receiver is awaiting real management entropy, before
     // its direct Root snapshot can be dispatched.
     let pending = pic
-        .submit_call(target, installer, "control", vec![1])
+        .submit_call(
+            target,
+            installer,
+            enrollment::REFRESH_METHOD,
+            enrollment::encode_refresh_request().unwrap(),
+        )
         .await
         .unwrap();
     pic.tick().await;
@@ -554,7 +580,10 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         enrollment_response::<Result<(), enrollment::Error>>(enrollment::REVOKE, &response),
         Ok(())
     );
-    assert_eq!(pic.await_call(pending).await.unwrap(), [1]);
+    assert_eq!(
+        enrollment::decode_refresh_response(&pic.await_call(pending).await.unwrap()).unwrap(),
+        Ok(())
+    );
     let revoked = snapshot(pic, target).await;
     assert!(revoked.revoked);
     assert!(revoked.generation > refreshed.generation);
@@ -567,7 +596,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         enrollment_response::<Result<(), enrollment::Error>>(enrollment::CONFIGURE, &response),
         Ok(())
     );
-    assert!(control(pic, target, installer, 1).await);
+    assert!(receiver_refresh(pic, target, installer).await.is_ok());
     assert!(snapshot(pic, target).await.revoked);
     let bytes = pic
         .query_call(target, browser, "portable_session_read", read.clone())
@@ -588,14 +617,14 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         enrollment_response::<Result<(), enrollment::Error>>(enrollment::CONFIGURE, &response),
         Err(enrollment::Error::Closed)
     );
-    assert!(!control(pic, target, installer, 1).await);
+    assert!(receiver_refresh(pic, target, installer).await.is_err());
 
     canic_qualification::upgrade_stopped(pic, target, wasm, vec![], Some(installer))
         .await
         .unwrap();
     assert!(!observe(pic, target).await.present);
     assert!(
-        !control(pic, target, installer, 1).await,
+        receiver_refresh(pic, target, installer).await.is_err(),
         "enrollment cannot repair volatile safety loss"
     );
     let bytes = pic
