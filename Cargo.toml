@@ -35,7 +35,7 @@ ic-auth-protocol-types = "0.43.0"
 ic-auth-wire = "0.44.0"
 ic-backup = "0.105.5"
 ic-blob-storage = "0.106.0"
-ic-db = "0.23.10"
+ic-db = "=0.23.10"
 ic-host-artifacts = "0.80.3"
 ic-host-fs = { version = "0.80.3", default-features = false }
 ic-host-process = { version = "0.81.0", default-features = false }

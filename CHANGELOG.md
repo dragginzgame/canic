@@ -21,6 +21,9 @@ canic app build --canister user_shard
 ### 🔧 Changed
 
 The Host and endpoint macros use Syn 3.0.10, already selected in both workspaces.
+The DB adapter requires IC DB 0.23.10. Version 0.23.11 removed the production
+query byte limit used for provisioning. Revisit this constraint when a supplier
+API can enforce the same 1 KiB bound.
 
 ## [0.228.0] - 2026-11-18
 

@@ -39,7 +39,7 @@ clap = { version = "4.6.7", features = ["derive"] }
 ic-auth = { version = "0.48.0", features = ["receiver-memory", "ed25519-verification"] }
 ic-auth-protocol-types = "0.43.0"
 ic-backup = "0.105.5"
-ic-db = "0.23.10"
+ic-db = "=0.23.10"
 ic-host-artifacts = { version = "0.80.3", default-features = false }
 ic-host-fs = { version = "0.80.3", default-features = false }
 ic-host-process = { version = "0.81.0", default-features = false }

@@ -125,7 +125,10 @@ duplicate IC exports. Custom layouts can implement `Record`, `HubRoute` and
 `ShardRecord` directly.
 
 The named fields in this adapter cover the two qualified IC DB layouts. Its
-indexed lookup reads one row within 1 KiB. Preserve the same database schema,
+indexed lookup admits one result row within a 1 KiB output budget. IC DB
+0.23.10 exposes the production query limit. Version 0.23.11 only exposes a
+test-only override. Requalify with `make db-test db-clippy` before lifting the
+0.23.10 pin when equivalent production enforcement is available. Preserve the same database schema,
 key namespace, original Root and pool when adopting it on existing data.
 Root retains the original generation; after suspension the hub checks the
 allocation and principal. A pending row with no corresponding Root claim
