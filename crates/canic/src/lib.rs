@@ -10,14 +10,18 @@ pub mod auth;
 pub mod blob;
 
 /// Optional application-owned typed database endpoints.
-#[cfg(feature = "db")]
+#[cfg(any(feature = "db", feature = "db-store"))]
 pub mod db;
+
+/// One bounded management entropy request, with no local generator or retry.
+#[cfg(all(feature = "entropy", target_arch = "wasm32"))]
+pub mod entropy;
 
 /// Explicit mounts for the demo's fixed greeting and replicated probe contract.
 #[cfg(all(feature = "greeting", target_arch = "wasm32"))]
 pub mod greeting;
 
-#[cfg(all(feature = "method", target_arch = "wasm32"))]
+#[cfg(feature = "method")]
 pub mod method;
 
 /// Passive operational reports; the optional `metrics` feature enables endpoint mounting.

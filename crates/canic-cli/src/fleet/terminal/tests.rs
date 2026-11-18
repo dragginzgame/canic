@@ -439,6 +439,7 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
         app: "profile".into(),
         fleet: "mainnet".into(),
         config: FleetConfig {
+            receiver_policy: None,
             shard_pool: None,
             auth: Vec::new(),
             network: Network::Mainnet,

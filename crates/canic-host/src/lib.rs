@@ -37,7 +37,7 @@ mod wallet;
 pub use app_build::{BuiltCanister, build_app};
 pub use artifact::{Artifact, BuildReport, build, build_report, inspect};
 pub use auth::{
-    AuthApproval, AuthConfig, AuthReceipt, ReceiverController, create_auth_plan,
+    AuthApproval, AuthConfig, AuthReceipt, ReceiverController, ReceiverPolicy, create_auth_plan,
     create_auth_revocation, create_receiver_auth_plan,
 };
 pub use canic_management_protocol::Phase as ManagementPhase;

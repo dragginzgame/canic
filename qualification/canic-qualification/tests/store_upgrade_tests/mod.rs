@@ -528,7 +528,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         let bytes = std::fs::read(&path).unwrap();
         (path, bytes)
     });
-    let source = dir.join("starter-app/src/lib.rs");
+    let source = dir.join("starter-app/src/endpoints/mod.rs");
     let original = std::fs::read_to_string(&source).unwrap();
     let changed = original.replace("Hello from Canic", "Hello from rebuilt starter");
     assert_ne!(changed, original);

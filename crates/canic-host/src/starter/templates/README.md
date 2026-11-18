@@ -1,6 +1,6 @@
 # Getting started
 
-Edit the greeting in `starter-app/src/lib.rs`. From this directory, build the
+Edit the greeting in `starter-app/src/endpoints/mod.rs`. From this directory, build the
 application and inspect its Wasm:
 
 ```sh

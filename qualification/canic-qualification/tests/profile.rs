@@ -596,6 +596,104 @@ async fn entry_journey(
     entry_text
 }
 
+// Each held slot corresponds to exactly one outbound call to the originally bound worker.
+async fn malformed_probe_replies(pic: &PocketIc, artifacts: &Path) {
+    use ic_testkit::held::{Catalog, Fixture, Limits as HeldLimits, Reply};
+    use ic_wire::{Direction, Encoding};
+    let frame = |method, direction| Encoding::Frame { method, direction };
+    let info = Info {
+        executable: "worker".into(),
+        ready: true,
+        profile_limit: 2,
+        stable_page_limit: 4,
+    };
+    let large = Info {
+        executable: "x".repeat(LIMITS.bytes),
+        ..info.clone()
+    };
+    let replies = [
+        ic_wire::encode(&info, frame(INFO + 1, Direction::Response), LIMITS).unwrap(),
+        ic_wire::encode(&info, frame(INFO, Direction::Request), LIMITS).unwrap(),
+        vec![0xff],
+        ic_wire::encode(
+            &large,
+            frame(INFO, Direction::Response),
+            ic_wire::Limits {
+                bytes: 8192,
+                nodes: 8192,
+                allocation: 131072,
+                ..LIMITS
+            },
+        )
+        .unwrap(),
+    ];
+    let slots = replies.each_ref().map(|bytes| Reply {
+        method: "probe",
+        bytes,
+    });
+    let catalog = Catalog::new(
+        &slots,
+        HeldLimits {
+            slots: 4,
+            name_bytes: 20,
+            reply_bytes: 8192,
+        },
+    )
+    .unwrap();
+    let target = pic.create_canister().await;
+    let mut held = Fixture::new(
+        pic,
+        target.to_text().parse().unwrap(),
+        &catalog,
+        100_000_000_000,
+        32768,
+    )
+    .await
+    .unwrap();
+    let entry = pic.create_canister().await;
+    for (id, wasm) in [
+        (target, held.wasm().to_vec()),
+        (entry, std::fs::read(artifacts.join("entry.wasm")).unwrap()),
+    ] {
+        pic.add_cycles(id, 2_000_000_000_000).await;
+        pic.install_canister(id, wasm, vec![], None).await;
+    }
+    let caller = CanisterId::anonymous();
+    let route = Route {
+        worker: target.to_text(),
+    };
+    let bind = ic_wire::encode(&route, frame(BIND, Direction::Request), LIMITS).unwrap();
+    let reply = pic.update_call(entry, caller, "bind", bind).await.unwrap();
+    assert_eq!(
+        ic_wire::decode::<RouteResult>(&reply, frame(BIND, Direction::Response), LIMITS).unwrap(),
+        Ok(route)
+    );
+    let check = ic_wire::encode(&(), frame(CHECK, Direction::Request), LIMITS).unwrap();
+    for slot in 0..slots.len() {
+        let call = pic
+            .submit_call(entry, caller, "check", check.clone())
+            .await
+            .unwrap();
+        let mut pending = vec![];
+        for _ in 0..30 {
+            pending = held.pending(pic).await.unwrap();
+            if !pending.is_empty() {
+                break;
+            }
+            pic.tick().await;
+        }
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].slot(), slot);
+        held.release(pic, &pending[0]).await.unwrap();
+        let reply = pic.await_call(call).await.unwrap();
+        assert_eq!(
+            ic_wire::decode::<CheckResult>(&reply, frame(CHECK, Direction::Response), LIMITS)
+                .unwrap(),
+            Err(RouteError::InvalidReply)
+        );
+    }
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn profile_deploy_ownership_capacity_and_upgrade() {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -630,6 +728,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
         )
         .await
         .unwrap();
+    malformed_probe_replies(owner.client(), &artifacts).await;
     let url = owner.client_mut().make_live(None).await.to_string();
     let root_key: String = owner
         .client()

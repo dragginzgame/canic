@@ -1322,6 +1322,19 @@ checks on decoded data and must recheck affected authority or state after a
 suspension. A synchronous reply-encoding trap rolls back that message;
 an async callback cannot undo work committed before its await.
 
+For a direct call the application protocol can implement `canic::method::Contract`.
+It supplies the export, Wire ID, both shapes and both budgets. The receiving
+mount uses `update(contract = ProtocolType)`; the sender selects an admitted
+principal and calls `method::call::<ProtocolType>(target, wait_seconds, &input)`.
+One attempt returns a typed reply, dispatch refusal, rejection, unknown outcome
+or codec failure. The application owns its original ticket and reconciliation.
+Platform captures the transport reply before Wire enforces the declared budget.
+
+Applications may select the `entropy` feature and call `canic::entropy::fresh(10).await`
+for one bounded management request. Platform owns the raw_rand codecs and
+transport. Enrollment retains its original freshness and challenge checks.
+The application owns its identifiers and authorization after suspension.
+
 The legacy `crates/canic-macros/src/endpoint/typed_tests.rs` at
 `fa92d886ef9beee824de3ec900832722fef85bd2` required bounded Wire
 codecs on owned endpoints. The rewrite preserves that contract through
@@ -1774,6 +1787,13 @@ retains install and reconciliation evidence. Storage owns named allocations,
 namespace grants and exclusive leases. The application owns its record format,
 validation and decision to reopen writes. Wasm Store continues to own versioned
 artifacts and pins.
+
+A stateful role may declare a retained IC DB store by allocation key and compiled
+schema. Its install hook supplies the application incarnation and its upgrade
+hook strictly opens the original allocation. Both use the application's existing
+Storage bootstrap, authority, prefix and complete directory membership. An
+adjacent principal cell and all endpoint permissions remain application-owned.
+The adapter holds the open database for synchronous operations.
 
 Storage 0.77 restores named allocations over upstream stable collections and
 retires the retained-heap build path. The `Keep` and Wasm transformation proposal

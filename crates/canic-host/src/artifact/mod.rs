@@ -6,6 +6,7 @@ use std::{
     process::Command,
     time::Duration,
 };
+mod source_layout;
 mod store_source;
 
 // Leave at least 190 KiB for Candid/envelope overhead below the IC's 2 MiB ingress limit.
@@ -173,6 +174,7 @@ pub fn build_report(
     struct Layout {
         target_directory: PathBuf,
         build_directory: PathBuf,
+        packages: Vec<source_layout::Package>,
     }
     let layout: Layout = serde_json::from_slice(
         &crate::process::capture(
@@ -194,6 +196,9 @@ pub fn build_report(
         .map_err(cargo_failure)?,
     )
     .map_err(supplier)?;
+    if let Some(selected) = layout.packages.iter().find(|p| p.id == package_id) {
+        selected.validate()?;
+    }
     let cache = if package == "ic-wasm-store" {
         workspace.join("target/store-build")
     } else {

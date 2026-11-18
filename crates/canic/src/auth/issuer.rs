@@ -33,7 +33,7 @@ pub const RESPONSE_LIMITS: Limits = Limits {
 
 /// Untrusted initial intent. No account, policy, issuer key or deadline is accepted.
 #[cfg_attr(
-    feature = "auth-browser",
+    all(feature = "auth-browser", not(target_family = "wasm")),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -54,7 +54,7 @@ pub struct Issue {
 }
 /// Browser-authenticated selection. Naming an account grants no account authority.
 #[cfg_attr(
-    feature = "auth-browser",
+    all(feature = "auth-browser", not(target_family = "wasm")),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -73,7 +73,7 @@ pub struct Renew {
 }
 /// Select the original login. Only the captured caller authenticates its browser.
 #[cfg_attr(
-    feature = "auth-browser",
+    all(feature = "auth-browser", not(target_family = "wasm")),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -88,7 +88,7 @@ pub struct Logout {
 }
 /// Local issuer revocation only. Other receivers still need explicit cleanup.
 #[cfg_attr(
-    feature = "auth-browser",
+    all(feature = "auth-browser", not(target_family = "wasm")),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -99,7 +99,7 @@ pub struct Revoked {
 }
 /// Select lookup under the original signer role; never fall back to issuance.
 #[cfg_attr(
-    feature = "auth-browser",
+    all(feature = "auth-browser", not(target_family = "wasm")),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -117,7 +117,7 @@ pub enum Lookup {
 }
 /// Retained evidence, not permission to issue or extend any lifetime.
 #[cfg_attr(
-    feature = "auth-browser",
+    all(feature = "auth-browser", not(target_family = "wasm")),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -135,7 +135,7 @@ pub enum Status {
 }
 /// Bounded transport refusals; ordinary refusals retain applicable work charges.
 #[cfg_attr(
-    feature = "auth-browser",
+    all(feature = "auth-browser", not(target_family = "wasm")),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]

@@ -2,6 +2,10 @@
 //! schema, query construction and explicit storage/lifecycle hooks.
 //! No database executor, registry or durable transport representation lives here.
 
+/// A retained database in one application-owned named allocation.
+#[cfg(feature = "db-store")]
+pub mod store;
+
 /// Passive bounded inspection contract, usable independently of the database engine.
 pub mod inspection;
 /// Optional projection of compiled DB metadata; application authorization stays external.
@@ -25,7 +29,7 @@ pub enum Operation {
     /// Application-defined atomic writes.
     Write,
 }
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(feature = "db", target_arch = "wasm32"))]
 #[doc(hidden)]
 pub mod endpoint;
 
@@ -39,7 +43,7 @@ pub mod endpoint;
 /// `(caller, request, time)`. All handlers are synchronous; reply failure traps.
 /// An allowed operation may still need row/tenant checks inside its typed handler.
 /// Mounting performs no initialization, grants no authority and exports no lifecycle.
-#[cfg(target_arch = "wasm32")]
+#[cfg(all(feature = "db", target_arch = "wasm32"))]
 #[macro_export]
 macro_rules! mount_db_endpoints {
     (protocol = $protocol:path, authorize = $authorize:path,

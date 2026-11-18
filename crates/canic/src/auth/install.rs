@@ -1,0 +1,63 @@
+//! Passive fresh-install envelope. The application owns the nested argument bytes.
+use super::enrollment::types::Principal;
+use ic_wire::{Direction, Encoding, Limits};
+use serde::{Deserialize, Serialize};
+
+const FRAME: Encoding = Encoding::Frame {
+    method: 0x4341_5554_4806,
+    direction: Direction::Request,
+};
+const LIMITS: Limits = Limits {
+    bytes: 4096,
+    allocation: 65536,
+    nodes: 8192,
+    depth: 8,
+};
+
+/// Application-selected limits on top of Auth's bounded receiver profile.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LimitsPolicy {
+    /// Default lease requested by a session.
+    pub default_session_secs: u64,
+    /// Maximum lease allowed by the receiver.
+    pub max_session_secs: u64,
+    /// Maximum signed credential proof lifetime.
+    pub max_proof_ttl_ns: u64,
+    /// Override the supplier's maximum physical sessions.
+    pub max_sessions: Option<u32>,
+}
+
+/// Fleet-approved receiver configuration and unchanged inner app payload.
+#[derive(Debug, Deserialize, Serialize)]
+pub struct Install {
+    /// Actual Root selected by the deployment plan.
+    pub root: Principal,
+    /// Accepted credential issuer.
+    pub issuer: Principal,
+    /// Canonical network identifier.
+    pub network: [u8; 32],
+    /// Logical fleet audience identifier.
+    pub audience: [u8; 32],
+    /// Accepted credential role.
+    pub role: String,
+    /// Selected receiver limits.
+    pub limits: LimitsPolicy,
+    /// Original app initialization payload.
+    pub application: Vec<u8>,
+}
+
+impl Install {
+    /// Encode exact bytes for this fresh installation.
+    /// # Errors
+    /// Refuses an envelope exceeding the install budget.
+    pub fn encode(&self) -> Result<Vec<u8>, ic_wire::Error> {
+        ic_wire::encode(self, FRAME, LIMITS)
+    }
+    /// Decode only this versioned install frame.
+    /// # Errors
+    /// Refuses wrong directions, identities, malformed or oversized payloads.
+    pub fn decode(bytes: &[u8]) -> Result<Self, ic_wire::Error> {
+        ic_wire::decode(bytes, FRAME, LIMITS)
+    }
+}

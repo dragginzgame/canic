@@ -7,6 +7,51 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Retained Toko shard store
+
+On 2026-11-18 an isolated copy of Toko used Canic’s optional `db-store` with
+registry IC DB 0.23.6 and Storage 0.78.2. Its original authority `user_shard`,
+prefix `toko.user.shard.`, default directory configuration, two keys, bounded
+hub cell and Toko incarnation derivation were retained. This follows the legacy
+review of reopened references and exact snapshots at
+`377fbceb3994c9d1f3033979ef4e4ce9e6b85801` (storage regressions under
+“Versioned Wasm Store decision”). IC DB now owns schema admission.
+
+`canic app build --config apps/toko/canic.toml --app toko --canister user_shard`
+produced candidate SHA-256
+`6d7af258801986162d91b96d4cc69237337b9b3b02dd066e037b1bced9ec2c03`.
+Toko's installed `user_shard` test ran with `TOKO_PREDECESSOR_SHARD_WASM`
+selecting `07354bf02d7c814c5dcb4659ca41376eaaef1274a1b872a7db9d16d914ba1c4b`.
+It provisioned a user through the hub before upgrade, compared complete stable
+memory after upgrade, refused an unauthorized caller and a conflicting binding,
+and returned the original receipt on replay. Empty and foreign stable backing
+both rejected upgrade and retained their original bytes. The in-repo DB gate
+also opens a directly created populated supplier database and checks both
+allocation IDs and the adjacent principal bytes. The default Canic Wasm graph
+continues to exclude IC DB and Storage.
+
+## Stateful fleet Auth receivers — 2026-11-18
+
+An isolated working copy of Toko at base
+`417ee72c58529490b8e3eaf9a7bb13ff67075af1`, with local consumer changes,
+built both roles with `canic app build --config apps/toko/canic.toml --app toko`.
+Canic used registry IC Auth 0.48.0. The resulting hub Wasm SHA-256 was
+`df587b09984bf8505390aa9da17af5a6cf8c2e51697e354aa46ca9e8126584a2`;
+the shard was `149f9b2c9ce13e729d7a8ca27ba4ecf8e0865c4860cf9f2bccc2b06f00dbaf21`.
+
+The installed signup and user_shard tests passed. They exercised managed shard
+placement, separate receiver admission and upgrade with populated application
+state. The headless II fixture recovered an interrupted logout after a browser
+reload, checked shard cleanup and read the original profile after fresh sign-in.
+A canister upgrade reopens application state with Auth closed. Recovering a
+receiver after its volatile replay and logout state is lost requires the
+[IC Auth recovery contract](https://github.com/dragginzgame/ic-auth/issues/4)
+and its [installed proof](https://github.com/dragginzgame/ic-auth/issues/5).
+
+Canic's Auth, browser, profile and publication suites passed separately. The
+publication suite rebuilt a generated starter. The stateful hub and shard in
+the installed signup test used Toko's existing application sources.
+
 ## IC Wire 0.25.0 — 2026-11-18
 
 Canic and its qualification workspace now depend directly on registry IC Wire

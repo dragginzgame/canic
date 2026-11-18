@@ -278,44 +278,104 @@ origin and age and consumes a backend-issued nonce. The request body supplies
 none of these trust settings. [Verifier source](https://github.com/dfinity/identity-attributes/blob/24da86edfd05bee13874e3f5a5da92f5b7978ee2/rust/src/lib.rs)
 and [bundle checks](https://github.com/dfinity/identity-attributes/blob/24da86edfd05bee13874e3f5a5da92f5b7978ee2/rust/src/internal/verify.rs).
 
-The supplier's profile example shows where to implement `on_verified`. For Toko,
-use that callback on the issuer to record a bounded, expiring admission for the
-verified principal. Toko needs the principal for signup and can discard the
-profile attributes. On initial issuance, look up the actual ingress caller's
-admission, apply Toko's grant policy and recheck it after any signing await before
-completing issuance. The credential binds that account subject to the distinct
-browser public key. Original issue lookup uses the same account signer and
-operation ID. [Rust callback example](https://github.com/dfinity/identity-attributes/blob/24da86edfd05bee13874e3f5a5da92f5b7978ee2/rust/examples/profile/src/lib.rs)
-and [Canic browser adapter](../../crates/canic/browser/src/issuer.ts).
+Toko's local fleet installs a separate verifier. Its `on_verified` callback
+records an expiring admission for the authenticated principal. Only the configured
+issuer may query that admission. The issuer captures the ingress caller, asks the
+verifier about that principal, checks the application's allowed grants, and checks
+the deadline again after obtaining entropy. Its disposable signing key binds the
+account to the distinct browser public key. Toko owns these admission decisions.
 
-### Local acceptance and current evidence
+### Installed Toko witness
 
-Toko owns the browser-to-issuer test because it selects the II installation,
-frontend origin and issuer grant policy. For its headless local witness:
+From a prepared Toko checkout run `make test-ii-signup`. Its preparation and pinned
+inputs are in `docs/development.md` under “Local Internet Identity signup”. The
+verifier uses DFINITY's Git revision `24da86edfd05bee13874e3f5a5da92f5b7978ee2`.
+The browser driver, verifier and test issuer are in `qualification/ii/browser.mjs`,
+`qualification/toko-ii-verifier` and `qualification/toko-ii-test-issuer`.
 
-1. Install II and the issuer on the same local network. Use the local root of
-   trust. Obtain a challenge with `_internet_identity_sign_in_start`, sign in
-   through II, then call `_internet_identity_sign_in_finish` as the delegated
-   account with the signed attributes attached.
-2. Use that account to issue a credential for a fresh browser key. Assert the
-   installed receiver sees the II account as subject and that browser as caller.
-3. With the first account still admitted, make the same issue request from an
-   unrelated self-authenticating identity. Its finish without an II bundle and
-   its issuance must both fail. Verify the issuer created no operation or
-   signature for that caller. Reusing a consumed challenge must also fail.
+The headless Chromium witness signs in to an installed II with a passkey, presents
+the signed attributes, rejects a consumed nonce, and refuses credential issuance
+to an unrelated self-authenticating key. The issuer binds the accepted account
+to the browser key, and both hub and assigned shard enforce the resulting session.
+The browser recovers an interrupted logout, then a fresh sign-in with a different
+browser key returns to the same account, route and edited profile. The Canic
+integration run also exercised a plain finish call from the unrelated key without
+an II bundle. This covers the local handoff in [#21](https://github.com/dragginzgame/canic/issues/21).
+It uses a disposable issuer and local root of trust.
 
-The [Toko frontend handoff](https://github.com/dragginzgame/toko-new/blob/main/docs/frontend-integration.md)
-owns this remaining journey. Canic qualifies issuance and receiver binding with
-a preselected account. Run that part independently with a prepared simulator:
+### Opt-in volatile receiver
 
-```sh
-bash scripts/dev/test-auth.sh issuer_real_calls_bind_accounts_renewals_and_exact_results
+Select `auth-enrollment` for each participating Wasm (and `method` for named
+application methods). In the fleet config, declare the shared policy once. This
+example uses a disposable issuer; bind the fixture's actual issuer before planning.
+
+```toml
+[apps.toko.fleets.local.receiver_policy]
+root = "root"
+roles = ["user_hub", "user_shard"]
+issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai"
+role = "user"
+network_id = "1111111111111111111111111111111111111111111111111111111111111111"
+application_id = "2222222222222222222222222222222222222222222222222222222222222222"
+limits = { default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns = 60000000000 }
 ```
 
-For [Canic #21](https://github.com/dragginzgame/canic/issues/21), the pinned
-Rust reference declares version 0.1.0. During this review Cargo could not
-resolve that package from crates.io. The source example documents the supplier
-contract. A real local II login with Toko's issuer remains unqualified.
+`roles` selects app canister roles. The singular `role` selects the credential
+role they accept. The session engine uses Auth 0.48.0's bounded starting profile;
+set `limits.max_sessions` to override its physical session capacity. The
+lower-level `session::init(memory, policy)` accepts the supplier's full custom
+memory configuration. Use the lower-level handler mounts for custom subject admission.
+
+Each receiver still needs an individual Root grant. Existing explicit declarations
+work. A selected receiver's grant can omit root, issuer, role, network_id and
+application_id; explicit values must agree with the policy. Each grant keeps
+its own receiver identity, verification key, scopes, controller and time window.
+
+Named Store-backed creations and shard-pool approvals bind the encoded receiver
+policy and the original application arguments to the approved install. An
+independent hub installer can obtain those bytes from
+`FleetConfig::receiver_install_args` with the resolved Root principal. The
+whole-fleet bootstrap cannot yet bind an unresolved future Root into an app's
+install envelope. Bootstrap infrastructure first for that arrangement.
+
+Put the callable mount under `src/endpoints/` and the lifecycle mount in
+`src/lifecycle.rs`. The app supplies its existing decoder and store-opening
+function. Fresh install passes `Some(decoded_app_args)`; upgrade with empty
+arguments passes `None`. A failed reopen traps in that hook.
+
+```rust
+// src/endpoints/mod.rs
+canic::mount_auth_session!(read = "read");
+
+// src/lifecycle.rs
+canic::mount_auth_lifecycle!(decode = super::decode_install, open = super::open);
+```
+
+In a private handler, `canic::auth::session::authorize("read")?` returns the
+admitted issuer and subject for the actual caller. Toko uses them for its account
+lookup and checks ownership. A write that suspends must recheck its captured
+user's scope and account before its next effect with
+`session::reauthorize(&original, "write")?`. A named method can declare the
+scope and receive the admitted identity directly:
+
+```rust
+canic::mount_wire_method! {
+    query(scope = "read", method = signup::GET_ME)
+    fn get_me(account) -> Option<MyProfile> {
+        profiles::find(account.issuer, account.subject)
+    }
+}
+```
+
+Controller refresh pulls the individual
+receiver's grant. Repeated install refuses. A post-upgrade handler may reopen the
+application database, but must leave this volatile receiver closed.
+
+Re-admitting users after losing replay evidence is a separate qualification
+gate. IC Auth owns the [recovery contract](https://github.com/dragginzgame/ic-auth/issues/4)
+and [installed proof](https://github.com/dragginzgame/ic-auth/issues/5). Canic's
+[receiver integration](https://github.com/dragginzgame/canic/issues/31) keeps
+the volatile receiver closed across that transition.
 
 ## Toko signup and private shard reads
 
@@ -474,9 +534,9 @@ not another shipped adapter package or default Canic dependency.
 
 ## Inputs and limits
 
-Both lockfiles select registry engine `ic-auth` 0.47.4 from
-`a85cc80c375349fcc22b1df57e5e7348bacf161b` and passive
-`ic-auth-wire` / `ic-auth-protocol-types` 0.43.0. The browser package remains
+Both lockfiles select registry engine `ic-auth` 0.48.0 from
+`b26205d5c9acfc818a828162a9bcd9991d79b889` and passive
+`ic-auth-wire` 0.44.0 and `ic-auth-protocol-types` 0.43.0. The browser package remains
 pinned to `a05b5ddd4099a3f64b95deb173a0c16746d98ac5` (0.47.1); the installed
 journey qualifies that actual combination. The basic `auth` feature selects
 only passive contracts; `auth-enrollment` selects `receiver-memory` and
@@ -514,5 +574,4 @@ receiver also returns the original receipt when a renderer loses the admission
 reply and reopens its journal. See the [runnable qualification](../../qualification/README.md)
 for enrollment, recovery, device replacement, logout and upgrade coverage.
 
-Production key custody, certified proofs, durable Auth recovery and Toko's
-Internet Identity sign-in require separate qualification.
+Production key custody, certified proofs and durable Auth recovery require separate qualification.

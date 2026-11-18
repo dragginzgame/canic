@@ -79,3 +79,66 @@ fn missing_cargo_package_reports_its_name_and_preserves_build_output() {
     assert_eq!(std::fs::read(output).unwrap(), b"existing output");
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
+    use std::fs::{create_dir_all, write};
+    let tree = tempfile::tempdir().unwrap();
+    let project = tree.path().join("source");
+    let source = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap();
+    crate::create_starter(&project, "demo", source).unwrap();
+    let package = project.join("starter-app");
+    let manifest = package.join("Cargo.toml");
+    let validate = |metadata: serde_json::Value| {
+        let package: super::source_layout::Package = serde_json::from_value(serde_json::json!({
+            "id": "starter-app", "name": "starter-app", "manifest_path": manifest, "metadata": metadata
+        })).unwrap();
+        package.validate()
+    };
+    let default = serde_json::json!({"canic":{"layout":{}}});
+    validate(default.clone()).unwrap();
+    for (label, decl, expected) in [
+        (
+            "endpoints",
+            "canic::mount_wire_method!{ query fn who() -> u8 { 1 } }",
+            "src/endpoints",
+        ),
+        (
+            "schema",
+            "#[entity(name = \"Row\")] struct Row {}",
+            "src/schema",
+        ),
+        (
+            "lifecycle",
+            "#[runtime::post_upgrade] fn reopen() {}",
+            "src/lifecycle.rs",
+        ),
+    ] {
+        let misplaced = package.join("src/custom.rs");
+        write(&misplaced, decl).unwrap();
+        let error = validate(default.clone()).unwrap_err().to_string();
+        for part in [
+            "starter-app",
+            expected,
+            &format!("package.metadata.canic.layout.{label}"),
+        ] {
+            assert!(error.contains(part), "{error}");
+        }
+        // Only this package chooses a different location for this declaration class.
+        validate(serde_json::json!({"canic":{"layout":{(label): "src"}}})).unwrap_err();
+        if label != "endpoints" {
+            validate(serde_json::json!({"canic":{"layout":{(label): "src/custom.rs"}}})).unwrap();
+        }
+        let proper = if label == "lifecycle" {
+            package.join(expected)
+        } else {
+            package.join(expected).join("example.rs")
+        };
+        create_dir_all(proper.parent().unwrap()).unwrap();
+        std::fs::rename(misplaced, proper).unwrap();
+        validate(default.clone()).unwrap();
+    }
+}

@@ -10,6 +10,7 @@ fn selection() -> SelectedFleet {
         app: "assets".into(),
         fleet: "mainnet".into(),
         config: FleetConfig {
+            receiver_policy: None,
             shard_pool: None,
             auth: Vec::new(),
             network: Network::Mainnet,

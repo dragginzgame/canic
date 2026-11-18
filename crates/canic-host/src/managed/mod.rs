@@ -164,6 +164,30 @@ pub fn create_managed_plan(
     let root = roots
         .pop_first()
         .ok_or_else(|| Error::Invalid("missing Root identity".into()))?;
+    let arguments = if input.target.is_none() && selection.config.receiver_selected(canister) {
+        if selection
+            .config
+            .receiver_policy
+            .as_ref()
+            .is_none_or(|p| &p.root != parent)
+        {
+            return Err(Error::Invalid(
+                "managed receiver must select the planned Root".into(),
+            ));
+        }
+        if release.is_none() {
+            return Err(Error::Invalid(
+                "configured receiver creation requires a Store release".into(),
+            ));
+        }
+        Some(selection.config.receiver_install_args(
+            canister,
+            &root,
+            arguments.unwrap_or_default(),
+        )?)
+    } else {
+        arguments
+    };
     let source = release
         .map(|id| stored::select(journal, id, &input, selection, canister, &root, root_module))
         .transpose()?;

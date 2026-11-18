@@ -12,6 +12,8 @@ pub use ic_auth_wire as protocol;
 /// Explicit, volatile single-grant enrollment. Does not mount or activate itself.
 pub mod enrollment;
 
+pub mod install;
+
 /// Canic-owned issuer transport; application handlers own authentication and keys.
 pub mod issuer;
 
@@ -81,3 +83,7 @@ macro_rules! mount_auth_endpoints {
         }
     };
 }
+
+/// Volatile enrolled session adapter with application-selected limits and role.
+#[cfg(all(feature = "auth-enrollment", any(target_arch = "wasm32", test)))]
+pub mod session;

@@ -11,6 +11,7 @@ description = "Private Wire contract for retained profile qualification"
 toko-tooling.workspace = true
 
 [dependencies]
+canic = { workspace = true, features = ["method"] }
 ic-wire.workspace = true
 serde.workspace = true
 

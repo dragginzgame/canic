@@ -173,10 +173,30 @@ impl FleetConfig {
                 "a pooled shard component cannot bind a fixed instance".into(),
             ));
         }
+        let root = id(&policy.root)?;
+        let arguments = if self.receiver_selected(&policy.component) {
+            if self
+                .receiver_policy
+                .as_ref()
+                .is_none_or(|p| p.root != policy.root)
+            {
+                return Err(Error::Invalid(
+                    "shard pool must use the receiver policy Root".into(),
+                ));
+            }
+            let bytes = self.receiver_install_args(
+                &policy.component,
+                &root,
+                arguments.as_slice().to_vec(),
+            )?;
+            canic_management_protocol::application::Arguments::new(bytes).map_err(supplier)?
+        } else {
+            arguments
+        };
         Ok(stored::ShardPool {
             arguments,
             pool: policy.component.clone(),
-            root: id(&policy.root)?,
+            root,
             hub: id(policy.hub(&self.canisters)?)?,
             max_shards: policy.max_shards,
             keys_per_shard: policy.keys_per_shard,

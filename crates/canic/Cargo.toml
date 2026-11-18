@@ -14,12 +14,24 @@ ignored = ["toko-tooling"]
 [features]
 auth = ["dep:ic-auth-protocol-types", "dep:ic-auth-wire", "dep:ic-platform-runtime"]
 auth-browser = ["auth", "ic-auth-wire/typescript"]
-auth-enrollment = ["auth", "dep:ic-auth", "dep:ic-platform-protocol", "dep:sha2"]
+auth-enrollment = ["auth", "dep:ic-auth", "entropy", "dep:sha2"]
 blob = ["dep:ic-blob-storage", "dep:ic-platform-runtime"]
 db = ["dep:ic-platform-runtime"]
 db-schema = ["db", "dep:ic-db"]
+db-store = ["dep:ic-db", "storage"]
+entropy = [
+    "dep:ic-platform-protocol",
+    "dep:ic-platform-runtime",
+    "ic-platform-runtime/call-ic0",
+    "dep:ic-platform-types",
+]
 greeting = ["dep:ic-platform-runtime"]
-method = ["dep:ic-platform-runtime", "dep:paste"]
+method = [
+    "dep:ic-platform-runtime",
+    "ic-platform-runtime/call-ic0",
+    "dep:ic-platform-types",
+    "dep:paste",
+]
 metrics = ["dep:ic-platform-runtime"]
 recovery = []
 readiness = ["dep:ic-platform-runtime"]

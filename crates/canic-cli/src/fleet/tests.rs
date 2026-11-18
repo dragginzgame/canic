@@ -19,6 +19,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
             app: "app".into(),
             fleet: "demo".into(),
             config: FleetConfig {
+                receiver_policy: None,
                 shard_pool: None,
                 auth: Vec::new(),
                 network: network.clone(),

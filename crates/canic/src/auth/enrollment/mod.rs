@@ -6,7 +6,7 @@ mod authority;
 #[cfg(feature = "auth-enrollment")]
 mod receiver;
 #[cfg(all(test, feature = "auth-enrollment"))]
-mod tests;
+pub(super) mod tests;
 #[cfg(all(target_arch = "wasm32", feature = "auth-enrollment"))]
 pub mod transport;
 

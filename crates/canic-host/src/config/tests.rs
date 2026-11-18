@@ -146,6 +146,7 @@ fn config() -> SelectedFleet {
         app: "hello".into(),
         fleet: "demo".into(),
         config: FleetConfig {
+            receiver_policy: None,
             shard_pool: None,
             auth: Vec::new(),
             network: Network::Mainnet,
@@ -250,6 +251,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                 fleets: BTreeMap::from([(
                     selected.fleet.clone(),
                     FleetDeclaration {
+                        receiver_policy: None,
                         shard_pool: None,
                         auth: Vec::new(),
                         network: FleetNetwork::Bound(selected.config.network.clone()),

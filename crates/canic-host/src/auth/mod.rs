@@ -1,6 +1,8 @@
 //! Optional explicit Auth approvals; the existing journal owns signed attempts.
 //! These records prove configuration replies, never receiver enrollment or readiness.
 mod execution;
+mod policy;
+pub use policy::ReceiverPolicy;
 #[cfg(test)]
 mod tests;
 
@@ -39,6 +41,7 @@ impl ReceiverController {
 #[serde(deny_unknown_fields)]
 pub struct AuthConfig {
     /// Explicit authority slot, not inferred from a role or tree edge.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub root: String,
     /// Reviewed Root Wasm when supplied by this fleet without an app artifact.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -49,14 +52,18 @@ pub struct AuthConfig {
     /// Exact receiver slot.
     pub receiver: String,
     /// Application-approved issuer principal.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub issuer: String,
     /// Ed25519 public key as 64 lowercase hexadecimal digits.
     pub key: String,
     /// Canonical network identity; not the Host transport/trust digest.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub network_id: String,
     /// Logical application identity; independent of display names and fleet instances.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub application_id: String,
     /// Explicit application role, not a canister role.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub role: String,
     /// Canonically ordered unique application scopes.
     pub scopes: Vec<String>,

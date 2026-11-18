@@ -125,3 +125,14 @@ pub struct WorkerCheck {
 
 /// Direct observation or explicit unknown result.
 pub type CheckResult = Result<WorkerCheck, RouteError>;
+
+/// Replicated worker readiness observation shared by the entry and worker.
+pub struct Probe;
+impl canic::method::Contract for Probe {
+    const NAME: &'static str = "probe";
+    const ID: u64 = INFO;
+    const REQUEST: ic_wire::Limits = LIMITS;
+    const REPLY: ic_wire::Limits = LIMITS;
+    type Input = ();
+    type Output = Info;
+}

@@ -277,7 +277,7 @@ intent/result/renewal engine.
 `auth_logout_tests` adds browser-bound revocation, two independent devices,
 in-flight initial/renewal fencing, retained results/deadlines, real pruning,
 malformed input, reply rollback and closed state after upgrade. Registry Auth
-0.47.4 / Wire and Types 0.43.0 supply the sole retained binding engine; the private
+0.48.0 / Auth Wire 0.44.0 and Types 0.43.0 supply the sole retained binding engine; the private
 browser package remains the separately pinned 0.47.1 source.
 `make auth-browser-prepare` explicitly prepares the immutable browser supplier;
 `make auth-browser-test` checks generated codecs, native frame parity and the
@@ -971,3 +971,33 @@ qualifies typed composition, not arbitrary remote queries, production authority
 storage, full migration orchestration or a deployed-database CLI. All database
 semantics remain in IC DB; permission and any tenant/row restrictions remain in
 the application. Mounting adds no initialization or lifecycle hooks.
+
+### Retained application store
+
+Enable `canic/db-store` in a stateful actor and pass the generated schema function
+directly. A Toko shard can declare its existing allocation:
+
+```rust
+use canic::db::store::Store;
+
+thread_local! {
+    static USERS: Store = const { Store::new("toko.user.shard.user.v1", compiled) };
+}
+```
+
+Keep the application's existing Storage bootstrap and hub cell. In the lifecycle
+hook, pass `Some(original_incarnation)` on install and `None` on upgrade:
+
+```rust
+USERS.with(|store| store.attach(&host, incarnation));
+```
+
+An authorized handler can use `USERS.with(|s| s.with(|db| get_me(db, &identity)))`.
+The application computes the incarnation only on install. A Storage or DB refusal
+traps the lifecycle message. The helper exports no endpoints. Applications that
+need to inspect a fenced database can handle IC DB's open result directly.
+
+`make db-test` includes a populated supplier-created predecessor and checks
+allocation IDs, adjacent bytes, strict reopen and schema refusal. The
+[installed Toko shard test](../docs/qualification/history.md#retained-toko-shard-store)
+also checked hub-only admission across a Wasm upgrade.

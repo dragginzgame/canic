@@ -1,7 +1,7 @@
 use super::*;
 use ic_auth_wire::wire;
 
-fn grant() -> Grant {
+pub(in crate::auth) fn grant() -> Grant {
     Grant {
         receiver: Principal::from_slice(&[1]),
         audience: AudienceId {
@@ -127,55 +127,17 @@ fn receiver_engine() -> (
     supplier::receiver_memory::MemoryReceiver,
     Authority,
 ) {
-    use supplier::{
-        receiver_memory::{
-            EnrollmentBinding, LoginLimits, MemoryConfig, MemoryReceiver, SessionCapacity,
-            UnknownLogoutLimits,
-        },
-        verification::VerificationCosts,
-    };
     let grant = grant();
-    let binding = EnrollmentBinding {
-        receiver: grant.receiver,
-        authority: Principal::from_slice(&[3]),
-    };
-    let engine = MemoryReceiver::new_fresh(
-        MemoryConfig {
-            audience: grant.audience(),
-            enrollment: binding,
-            login: LoginLimits {
-                max_device_slots: 1,
-                max_login_ttl_ns: 300_000_000_000,
-                max_admitted_logins: 1,
-            },
-            capacity: SessionCapacity {
-                max_sessions: 1,
-                max_replays: 2,
-                max_replays_per_account: 2,
-                max_encoded_bytes: 4096,
-            },
-            verification_capacity: 10,
-            refill_interval_ns: 1_000_000_000,
-            verification_costs: VerificationCosts {
-                ed25519: 1,
-                certified: 2,
-            },
-            unknown_logout: UnknownLogoutLimits {
-                max_denials: 1,
-                capacity: 1,
-                refill_interval_ns: 1_000_000_000,
-            },
-        },
-        1,
-    )
-    .unwrap();
+    let memory = memory_config();
+    let binding = memory.enrollment;
+    let engine = supplier::receiver_memory::MemoryReceiver::new_fresh(memory, 1).unwrap();
     (
         Receiver::new(binding, grant.audience(), 1).unwrap(),
         engine,
         Authority::new(grant, 1).unwrap(),
     )
 }
-fn response(
+pub(in crate::auth) fn response(
     receiver: &mut Receiver,
     engine: &mut supplier::receiver_memory::MemoryReceiver,
     authority: &mut Authority,
@@ -269,4 +231,44 @@ fn complete_reply_validation_precedes_atomic_metadata_and_entry_installation() {
     );
     assert_eq!(engine.enrollment(), Some(retired));
     assert!(receiver.current(7).unwrap().revoked);
+}
+
+pub(in crate::auth) fn memory_config() -> supplier::receiver_memory::MemoryConfig {
+    use supplier::{
+        receiver_memory::{
+            EnrollmentBinding, LoginLimits, MemoryConfig, SessionCapacity, UnknownLogoutLimits,
+        },
+        verification::VerificationCosts,
+    };
+    let grant = grant();
+    let binding = EnrollmentBinding {
+        receiver: grant.receiver,
+        authority: Principal::from_slice(&[3]),
+    };
+    MemoryConfig {
+        audience: grant.audience(),
+        enrollment: binding,
+        login: LoginLimits {
+            max_device_slots: 1,
+            max_login_ttl_ns: 300_000_000_000,
+            max_admitted_logins: 1,
+        },
+        capacity: SessionCapacity {
+            max_sessions: 1,
+            max_replays: 2,
+            max_replays_per_account: 2,
+            max_encoded_bytes: 4096,
+        },
+        verification_capacity: 10,
+        refill_interval_ns: 1_000_000_000,
+        verification_costs: VerificationCosts {
+            ed25519: 1,
+            certified: 2,
+        },
+        unknown_logout: UnknownLogoutLimits {
+            max_denials: 1,
+            capacity: 1,
+            refill_interval_ns: 1_000_000_000,
+        },
+    }
 }

@@ -99,6 +99,9 @@ pub enum UnboundLocal {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetDeclaration {
+    /// Optional install-time policy for explicitly selected application roles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receiver_policy: Option<crate::ReceiverPolicy>,
     /// Optional fleet-owned bounds for the declared shard component.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shard_pool: Option<ShardPoolConfig>,
@@ -123,6 +126,9 @@ pub struct FleetDeclaration {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetConfig {
+    /// Optional install-time policy for explicitly selected application roles.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receiver_policy: Option<crate::ReceiverPolicy>,
     /// Optional fleet-owned bounds for the declared shard component.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shard_pool: Option<ShardPoolConfig>,
@@ -250,6 +256,9 @@ impl Config {
                     }
                     let slots = definition.resolve_slots(config)?;
                     validate_canisters(&slots)?;
+                    if let Some(policy) = &config.receiver_policy {
+                        policy.validate(&slots)?;
+                    }
                     if let Some(pool) = &config.shard_pool {
                         pool.validate(&slots)?;
                     }
@@ -312,13 +321,16 @@ impl AppConfig {
                 "local fleet requires its simulator URL, trust anchor and routing binding".into(),
             ));
         };
-        Ok(FleetConfig {
+        let mut config = FleetConfig {
+            receiver_policy: fleet.receiver_policy.clone(),
             shard_pool: fleet.shard_pool.clone(),
             auth: fleet.auth.clone(),
             network: network.clone(),
             journal: fleet.journal.clone(),
             canisters: self.resolve_slots(fleet)?,
-        })
+        };
+        config.resolve_receiver_grants()?;
+        Ok(config)
     }
 
     fn resolve_slots(&self, fleet: &FleetDeclaration) -> Result<BTreeMap<String, CanisterConfig>> {
@@ -407,6 +419,9 @@ fn select<'a, T>(
 
 impl FleetConfig {
     fn validate(&self) -> Result<()> {
+        if let Some(policy) = &self.receiver_policy {
+            policy.validate(&self.canisters)?;
+        }
         if let Some(pool) = &self.shard_pool {
             pool.validate(&self.canisters)?;
         }
@@ -738,6 +753,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
         definition.fleets.insert(
             fleet.into(),
             FleetDeclaration {
+                receiver_policy: None,
                 shard_pool: None,
                 auth: Vec::new(),
                 network: FleetNetwork::Bound(network),
@@ -905,6 +921,9 @@ pub fn create_configured_plan(
     canister: &str,
 ) -> Result<(String, Plan)> {
     selection.validate()?;
+    if selection.config.receiver_selected(canister) {
+        return Err(Error::Invalid("selected Auth role needs its approved receiver install arguments; use a managed Store release or supply the receiver envelope to the independent installer".into()));
+    }
     if selection
         .config
         .canisters

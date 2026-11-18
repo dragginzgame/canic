@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.224.0] - 2026-11-18
+
+### 🔧 Changed
+
+Adopt IC Auth Wire 0.44.0 and Toko Tooling 0.45.7 in both workspaces. The generated browser codecs are byte-compatible with the existing fixtures.
+
+Stateful actors can attach a named IC DB store using the optional `db-store`
+feature. Run the [retained-store checks](qualification/README.md#retained-application-store)
+with a prepared local simulator:
+
+```sh
+make db-test
+```
+
+### ▶️ Try it
+
+Generated canisters put callable methods under `src/endpoints/` and check the
+package's selected source layout on build. With a matching CLI and source checkout:
+
+```sh
+canic app init hello --source hello
+cd hello
+canic app build --canister app
+canic artifact inspect artifacts/app.wasm
+```
+
+A fleet can select a shared Auth 0.48.0 receiver policy for its hub and shards.
+Each receiver keeps its own Root grant. [Configuration and scoped endpoint example](docs/demos/auth.md#opt-in-volatile-receiver)
+
+Applications can mount a volatile Auth receiver, share a typed Wire contract with
+a calling canister, and request fresh IC entropy with an explicit timeout. Run the
+local installed witnesses with the prepared simulator and signer:
+
+```sh
+make auth-test
+make profile-test
+```
+
 ## [0.223.1] - 2026-11-18
 
 ### 🔧 Changed

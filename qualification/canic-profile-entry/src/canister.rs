@@ -1,12 +1,7 @@
 use canic_profile_protocol::{
-    BIND, CHECK, CheckResult, INFO, Info, LIMITS, ROUTE, Route, RouteError, RouteResult,
-    WorkerCheck,
+    BIND, CHECK, CheckResult, LIMITS, ROUTE, Route, RouteError, RouteResult, WorkerCheck,
 };
-use ic_platform_runtime::{
-    self as runtime,
-    call::{Call, Wait},
-    system as api,
-};
+use ic_platform_runtime::{self as runtime, system as api};
 use ic_platform_types::Principal;
 use ic_storage::{
     DefaultMemoryImpl, MemoryRuntime, StableKey, StorageConfig,
@@ -151,15 +146,6 @@ canic::mount_wire_method! {
         }
         let route = route()?;
         let target = valid_worker(&route.worker)?;
-        let request = ic_wire::encode(
-            &(),
-            ic_wire::Encoding::Frame {
-                method: INFO,
-                direction: ic_wire::Direction::Request,
-            },
-            LIMITS,
-        )
-        .expect("constant request");
         STATE.with_borrow_mut(|state| {
             let state = state.as_mut().expect("initialized entry");
             if state.checking {
@@ -168,25 +154,12 @@ canic::mount_wire_method! {
             state.checking = true;
             Ok(())
         })?;
-        let response = Call::new(target, "probe", Wait::Bounded { seconds: 5 })
-            .owned_args(request)
-            .execute()
-            .await;
+        let response = canic::method::call::<canic_profile_protocol::Probe>(target, 5, &()).await;
         STATE.with_borrow_mut(|state| state.as_mut().expect("initialized entry").checking = false);
-        let response = response.map_err(|_| RouteError::Unavailable)?;
-        let response = match response.into_parts().0 {
-            ic_platform_runtime::call::Outcome::Reply(bytes) => bytes,
-            _ => return Err(RouteError::Unavailable),
-        };
-        let info: Info = ic_wire::decode(
-            &response,
-            ic_wire::Encoding::Frame {
-                method: INFO,
-                direction: ic_wire::Direction::Response,
-            },
-            LIMITS,
-        )
-        .map_err(|_| RouteError::InvalidReply)?;
+        let info = response.map_err(|error| match error {
+            canic::method::CallError::Reply(_) => RouteError::InvalidReply,
+            _ => RouteError::Unavailable,
+        })?;
         // Bound the response encoder even when the selected worker is not our implementation.
         if info.executable.len() > 128 {
             return Err(RouteError::InvalidReply);

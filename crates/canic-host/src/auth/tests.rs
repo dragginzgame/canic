@@ -10,6 +10,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
         app: "demo".into(),
         fleet: "local".into(),
         config: FleetConfig {
+            receiver_policy: None,
             shard_pool: None,
             network: Network::Local {
                 url: "http://localhost:8000/".into(),
@@ -258,4 +259,88 @@ fn operator_controller_is_bound_into_the_plan_and_retained_for_revocation() {
             .receiver_controller,
         ReceiverController::Operator
     );
+}
+
+#[test]
+fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
+    let (_, mut selected) = fixture();
+    let config = &mut selected.config;
+    config.auth.clear();
+    config.canisters.get_mut("root").unwrap().role = Some("root".into());
+    config.canisters.get_mut("receiver").unwrap().role = Some("shard".into());
+    let policy: ReceiverPolicy = toml::from_str(&format!(r#"
+        root = "root"
+        roles = ["shard"]
+        issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai"
+        role = "user"
+        network_id = "{}"
+        application_id = "{}"
+        limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns = 60000000000, max_sessions = 7 }}
+    "#, "11".repeat(32), "22".repeat(32))).unwrap();
+    config.receiver_policy = Some(policy);
+    let root = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+    let args = config
+        .receiver_install_args("receiver", root, vec![5, 4])
+        .unwrap();
+    let decoded = canic::auth::install::Install::decode(&args).unwrap();
+    assert_eq!(decoded.root.to_text(), root);
+    assert_eq!(decoded.limits.max_sessions, Some(7));
+    assert_eq!(decoded.application, [5, 4]);
+    assert_eq!(decoded.audience, [0x22; 32]);
+    assert_eq!(decoded.encode().unwrap(), args);
+    assert!(config.auth.is_empty());
+    assert!(config.receiver_install_args("root", root, vec![]).is_err());
+    assert!(
+        config
+            .receiver_install_args("receiver", "ryjl3-tyaaa-aaaaa-aaaba-cai", vec![])
+            .is_err()
+    );
+    assert!(
+        config
+            .receiver_install_args("receiver", root, vec![0; 4096])
+            .is_err()
+    );
+    config
+        .receiver_policy
+        .as_mut()
+        .unwrap()
+        .limits
+        .max_session_secs = 1801;
+    assert!(
+        config
+            .receiver_install_args("receiver", root, vec![])
+            .is_err()
+    );
+}
+
+#[test]
+fn receiver_grant_inherits_only_install_identity_and_preserves_its_own_authority() {
+    let (_, mut selected) = fixture();
+    let config = &mut selected.config;
+    config.canisters.get_mut("receiver").unwrap().role = Some("hub".into());
+    let original = config.auth[0].clone();
+    config.receiver_policy = Some(ReceiverPolicy {
+        root: original.root.clone(),
+        roles: vec!["hub".into()],
+        issuer: original.issuer.clone(),
+        role: original.role.clone(),
+        network_id: original.network_id.clone(),
+        application_id: original.application_id.clone(),
+        limits: canic::auth::install::LimitsPolicy {
+            default_session_secs: 1,
+            max_session_secs: 60,
+            max_proof_ttl_ns: 10,
+            max_sessions: None,
+        },
+    });
+    let grant = &mut config.auth[0];
+    grant.root.clear();
+    grant.issuer.clear();
+    grant.role.clear();
+    grant.network_id.clear();
+    grant.application_id.clear();
+    config.resolve_receiver_grants().unwrap();
+    assert_eq!(config.auth, [original]);
+    config.auth[0].application_id = "00".repeat(32);
+    assert!(config.resolve_receiver_grants().is_err());
 }

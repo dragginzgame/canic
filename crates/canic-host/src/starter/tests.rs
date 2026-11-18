@@ -254,11 +254,10 @@ fn concurrent_initializers_publish_one_complete_project() {
     let config = crate::load_config(&destination.join("canic.toml")).unwrap();
     assert_eq!(config.select_app(None).unwrap().1.canisters.len(), 3);
     assert!(destination.join("starter-app/src/lib.rs").is_file());
-    assert_eq!(
-        std::fs::read_dir(destination.join("starter-app/src"))
-            .unwrap()
-            .count(),
-        1
+    assert!(
+        destination
+            .join("starter-app/src/endpoints/mod.rs")
+            .is_file()
     );
     assert!(destination.join("README.md").is_file());
     std::fs::remove_dir_all(parent).unwrap();

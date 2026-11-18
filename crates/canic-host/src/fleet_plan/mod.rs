@@ -359,6 +359,9 @@ pub fn plan_fleet(
         }
         return pool.preview(config_path, selected, controller);
     }
+    if selected.config.receiver_policy.is_some() {
+        return Err(Error::Invalid("receiver install requires a resolved Root; bootstrap infrastructure and plan named Store-backed children".into()));
+    }
     let slots = &selected.config.canisters;
     let stores: Vec<_> = slots
         .iter()

@@ -728,6 +728,17 @@ storage allocation, admission, backing access or persistence integrations.
 
 ## Rust workspaces and portable tooling
 
+Prefer one grouped `use` declaration per crate in each scope. Factor out shared
+path prefixes with nested braces. Group imports that share visibility and
+attributes, and preserve the names each import brings into scope.
+
+In handwritten and generated Rust, leave a blank line between the import block,
+item-level macro invocations and function definitions. Keep comments and
+attributes attached to their item. Write endpoint mounts and endpoint attributes
+with several named arguments on multiple lines, one argument per line.
+Document each endpoint's caller-visible purpose, each guard's access policy and
+each mount's role. A shared mount needs one comment for the group.
+
 Keep Rust tests and test-only helpers in `tests.rs`, `*_tests.rs` or `tests/`;
 declare fixture-only package roles explicitly. Adopt the naming layout as a
 hard cut, including references, under the

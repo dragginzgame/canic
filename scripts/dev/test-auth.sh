@@ -18,6 +18,6 @@ if [[ "$browser" == true ]]; then
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features profile-state --test auth_browser "$@" -- --ignored --nocapture
     exit
 fi
-cargo test --locked -p canic --features auth-enrollment auth::enrollment
+cargo test --locked -p canic --features auth-enrollment auth::
 "$cli" artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --output target/auth/receiver.wasm --json > target/auth/receiver.json
 CANIC_CLI="$cli" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test auth "$@" -- --nocapture

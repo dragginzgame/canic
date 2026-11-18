@@ -37,6 +37,7 @@ ic-wire.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
+syn.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
