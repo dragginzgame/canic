@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.234.0] - 2026-11-19
+
+Both workspaces now use Toko Tooling 0.45.18 and registry IC DB 0.23.15.
+IC Timers supplies IC Metrics 0.30.17 for Root’s timer counters.
+Canic and qualification use IC Wire 0.26.0. The Blob adapter takes all four
+Wire budgets from the supplier protocol.
+Shared issuer DTOs use the Wire derive on native and Wasm whenever the
+`auth-browser` feature is enabled.
+
+Canic actor mounts, caller guards, scoped endpoints and shard provisioning now
+type-check on native targets using registry Platform Runtime 0.23.21 and IC DB.
+Fresh entropy forwards the caller’s bounded wait to Platform in a single attempt.
+Root’s four Auth enrollment endpoints also type-check on the host. IC authority
+and effects still require canister execution.
+
+Retired the `ex-backup-counter` example fleet. The installed Backup test now
+builds its Root and counter artifacts directly.
+
+Native rust-analyzer now keeps handwritten `#[canic::query]` and
+`#[canic::update]` signatures active. The IC wrappers still compile only on
+Wasm. [#46](https://github.com/dragginzgame/canic/issues/46)
+
+Example Cargo names keep their `ex-` prefix. Single-crate examples build from
+their fleet directories. The user directory keeps its components in `hub/`,
+`shard/` and `schema/`. Provisioning resources inherit the sharding Wire budget
+unless the application supplies a different limit.
+
+```sh
+cd apps/examples/user-directory
+canic app canister list
+canic app build --canister ex-user-directory-hub
+```
+
 ## [0.233.0] - 2026-11-19
 
 ### 🧱 Actor declarations

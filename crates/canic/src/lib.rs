@@ -14,7 +14,7 @@ pub mod blob;
 pub mod db;
 
 /// One bounded management entropy request, with no local generator or retry.
-#[cfg(all(feature = "entropy", target_arch = "wasm32"))]
+#[cfg(feature = "entropy")]
 pub mod entropy;
 
 /// Explicit lifecycle hooks independent of storage and Auth.

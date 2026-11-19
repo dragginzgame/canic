@@ -107,7 +107,7 @@ macro_rules! declare_db_store {
 
 /// Declare the generated database and install one Auth-enrolled hub or shard.
 /// Put this in the role setup module. IC DB's build script owns schema generation.
-/// Native builds need only `db-store`; Wasm builds select `stateful-role`.
+/// Select `stateful-role` for the mounted actor on both targets; plain stores use `db-store`.
 /// A shard retains its approved parent in `<prefix>hub.v1`. For a predecessor
 /// using a different allocation, specify its exact `parent_storage_key`.
 #[macro_export]
@@ -126,8 +126,7 @@ macro_rules! mount_db_role {
             /// Scope required to read an Auth session.
             pub const AUTH_READ: &str = $scope;
 
-            #[cfg(target_arch = "wasm32")]
-            $crate::mount_db_role!(@actor HubConfig, decode_hub, hub_readiness, initial, {
+            $crate::__canic_mount_db_actor!(HubConfig, decode_hub, hub_readiness, initial, {
                 role::open_hub(initial, AUTHORITY, PREFIX, DATABASE_KEY, CONFIG_KEY, PAGES, store::attach);
             });
         });
@@ -158,13 +157,24 @@ macro_rules! mount_db_role {
             /// Scope required to read an Auth session.
             pub const AUTH_READ: &str = $scope;
 
-            #[cfg(target_arch = "wasm32")]
-            $crate::mount_db_role!(@actor ShardConfig, decode_shard, shard_readiness, initial, {
+            $crate::__canic_mount_db_actor!(ShardConfig, decode_shard, shard_readiness, initial, {
                 role::open_shard(initial, AUTHORITY, PREFIX, DATABASE_KEY, PARENT_STORAGE_KEY, PAGES, store::attach);
             });
         });
     };
-    (@actor $config:ident, $decode:ident, $ready:ident, $initial:ident, $open:block) => {
+    (@prefix $owner:literal) => { concat!($owner, ".") };
+    (@prefix $owner:literal, $prefix:literal) => { $prefix };
+    (@pages) => { None };
+    (@pages $pages:literal) => { Some($pages) };
+}
+
+// Older manifests select only db-store on native and stateful-role on Wasm.
+// Select the implementation in Canic, where that feature is declared.
+#[cfg(feature = "stateful-role")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_mount_db_actor {
+    ($config:ident, $decode:ident, $ready:ident, $initial:ident, $open:block) => {
         use $crate::db::role;
 
         $crate::mount_auth_lifecycle!(
@@ -177,8 +187,14 @@ macro_rules! mount_db_role {
         $crate::mount_auth_session!(read = super::AUTH_READ);
         $crate::mount_readiness_endpoint!($crate::db::role::$ready);
     };
-    (@prefix $owner:literal) => { concat!($owner, ".") };
-    (@prefix $owner:literal, $prefix:literal) => { $prefix };
-    (@pages) => { None };
-    (@pages $pages:literal) => { Some($pages) };
+}
+
+#[cfg(not(feature = "stateful-role"))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_mount_db_actor {
+    ($($role:tt)*) => {
+        #[cfg(target_arch = "wasm32")]
+        compile_error!("mount_db_role! requires canic/stateful-role for a deployed actor");
+    };
 }

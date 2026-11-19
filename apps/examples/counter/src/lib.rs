@@ -1,5 +1,4 @@
-//! Application-owned counter contract. Persistence and endpoints compile only for Wasm.
-#[cfg(target_arch = "wasm32")]
+//! Application-owned counter contract. The IC supplies caller identity at execution.
 mod actor;
 
 use serde::{Deserialize, Serialize};

@@ -13,11 +13,10 @@ autotests = false
 category = "tests"
 
 [features]
-backup = ["dep:canic-host", "dep:ic-backup", "dep:ic-host-sign"]
+backup = ["canic-host/backup", "dep:ic-backup", "dep:ic-host-sign"]
 profile-state = ["dep:canic-profile-worker", "dep:ic-storage"]
 
 [dependencies]
-canic-host = { workspace = true, features = ["backup"], optional = true }
 canic-profile-worker = { workspace = true, optional = true }
 ex-counter.workspace = true
 ic-backup = { workspace = true, optional = true }

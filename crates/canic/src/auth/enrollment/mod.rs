@@ -9,7 +9,7 @@ pub(super) mod tests;
 mod authority;
 #[cfg(feature = "auth-enrollment")]
 mod receiver;
-#[cfg(all(target_arch = "wasm32", feature = "auth-enrollment"))]
+#[cfg(feature = "auth-enrollment")]
 pub mod transport;
 
 use super::protocol::model::{AudienceId, DelegatedRoleGrant};

@@ -9,8 +9,9 @@ pub(super) async fn install(
     pic: &PocketIc,
     caller: CanisterId,
 ) -> (CanisterId, CanisterId, Vec<u8>, Vec<u8>) {
-    let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("../../apps/examples/backup-counter/artifacts");
+    let assets = PathBuf::from(
+        std::env::var_os("CANIC_BACKUP_FIXTURE").expect("use make backup-signer-test"),
+    );
     let root_wasm = fs::read(assets.join("root.wasm")).unwrap();
     let child_wasm = fs::read(assets.join("counter.wasm")).unwrap();
     let root = pic.create_canister().await;

@@ -2,7 +2,7 @@
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
-#[cfg(all(target_arch = "wasm32", feature = "storage"))]
+#[cfg(feature = "storage")]
 pub use actor::{attach_parent, parent, require_parent};
 
 const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
@@ -64,7 +64,7 @@ impl Install {
             .ok_or("conflicting installation Root")
     }
 }
-#[cfg(all(target_arch = "wasm32", feature = "storage"))]
+#[cfg(feature = "storage")]
 mod actor {
     use super::{Install, Principal};
     use ic_platform_runtime::system as api;

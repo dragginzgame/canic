@@ -68,7 +68,6 @@ impl HubRoute for Hub {
 }
 
 /// Reserve this session’s account and confirm its shard insertion.
-#[cfg(target_arch = "wasm32")]
 #[canic::update(scope = Hub::SCOPE)]
 async fn register(session: SessionView) -> canic::sharding::provisioning::Progress {
     canic::sharding::provisioning::provision::<Hub>(&session, (), || {

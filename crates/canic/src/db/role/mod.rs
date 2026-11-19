@@ -1,10 +1,8 @@
 //! Hub and shard installation configuration and local state attachment.
 
-#[cfg(target_arch = "wasm32")]
 mod actor;
 
 use crate::{auth::install::Install, topology};
-#[cfg(target_arch = "wasm32")]
 pub use actor::{
     HubConfig, decode_hub, hub_readiness, open_hub, open_shard, root, shard_readiness,
 };

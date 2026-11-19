@@ -13,12 +13,7 @@ use ic_auth::{
 };
 use ic_auth_protocol_types::{DelegatedRoleGrant, Principal};
 use ic_platform_crypto::ed25519::{Signer, SigningKey};
-use ic_platform_protocol::raw_rand;
-use ic_platform_runtime::{
-    self as runtime,
-    call::{Call, Outcome, Wait},
-    system as api,
-};
+use ic_platform_runtime::{self as runtime, system as api};
 use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 
@@ -263,20 +258,9 @@ async fn finish<const ID: u64>(ticket: IssuerTicket, existing: bool) -> Result<S
     }
     // Reservation and outgoing entropy call commit together before any signing.
     // Duplicate or abandoned work is lookup-only, including after a callback trap.
-    let response = Call::new(
-        Principal::management_canister(),
-        raw_rand::METHOD,
-        Wait::Bounded { seconds: 300 },
-    )
-    .args(raw_rand::encode(6).map_err(|_| Refusal::Unavailable)?)
-    .execute()
-    .await
-    .map_err(|_| Refusal::Unavailable)?;
-    let response = match response.into_parts().0 {
-        Outcome::Reply(bytes) => bytes,
-        _ => return Err(Refusal::Unavailable),
-    };
-    let randomness = raw_rand::decode(response.as_ref(), 42).map_err(|_| Refusal::Unavailable)?;
+    let randomness = canic::entropy::fresh(300)
+        .await
+        .map_err(|_| Refusal::Unavailable)?;
     let nonce: [u8; 16] = randomness[..16].try_into().unwrap();
     if nonce == [0; 16] {
         return Err(Refusal::Unavailable);

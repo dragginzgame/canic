@@ -36,7 +36,7 @@ operator maintenance operations; restoration keeps writes fenced until the
 operator explicitly accepts and reopens the application. The Backup signer exercise below qualifies this path locally.
 
 The counter stores a bounded 256-byte payload in a named Storage 0.78 cell.
-Its installed local witness checks an eight-page backing limit. The app lives in `apps/examples/counter/ex-counter`; it owns its protocol, value,
+Its installed local witness checks an eight-page backing limit. The app lives in `apps/examples/counter`; it owns its protocol, value,
 installation authority and maintenance attempts. No temporary raw memory
 implementation or fallback Storage owner is added. The profile packages
 now live only in `qualification/`, preserving existing regression cases. Its old
@@ -89,7 +89,7 @@ canic artifact inspect artifacts/app.wasm
 These commands require no identity, funding or network deployment. Build uses
 the locked workspace graph and produces counter, Root and Store under
 `apps/examples/counter/artifacts/`. Use `--canister ex-counter` to rebuild only the counter.
-The [actor](../../apps/examples/counter/ex-counter/src/actor.rs) explicitly creates or opens its record
+The [actor](../../apps/examples/counter/src/actor.rs) explicitly creates or opens its record
 and mounts readiness; its `counter` endpoint accepts application-owned Wire
 `Read`, `Increment`, `Fence { attempt }` and `Activate { attempt }` requests.
 An uncertain increment must not be automatically retried: this simple app has
@@ -159,7 +159,7 @@ canic fleet status OPERATION
 
 Use the operation from the plan; repeat apply on that same operation while Root
 is pending. The local anonymous identity spends synthetic cycles, not the mainnet
-wallet. Edit the counter in `apps/examples/counter/ex-counter/src/actor.rs`, then run `canic app build`.
+wallet. Edit the counter in `apps/examples/counter/src/actor.rs`, then run `canic app build`.
 `canic fleet plan --identity anonymous` first selects publication, then upgrade;
 apply each returned operation. A compatible upgrade keeps the value and identity.
 
@@ -187,7 +187,7 @@ process restart remains outside both witnesses.
 
 ## Actor composition
 
-The [greeting actor](../../apps/examples/greeting/ex-greeting/src/actor.rs)
+The [greeting actor](../../apps/examples/greeting/src/actor.rs)
 declares its own `greet` query and replicated `probe` update. Both use the same
 application reply and Wire method ID for compatibility with existing callers.
 A separate readiness endpoint reports application readiness. The optional metrics

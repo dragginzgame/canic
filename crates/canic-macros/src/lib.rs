@@ -172,7 +172,6 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 wire::encode(&value, wire::Encoding::Frame { method: __CANIC_ID, direction: wire::Direction::Response }, __CANIC_REPLY)
             }
 
-            #[cfg(target_arch = "wasm32")]
             {
                 use ::canic::method::{fail as __canic_fail, runtime as platform};
                 use self::#handler as __canic_handler;

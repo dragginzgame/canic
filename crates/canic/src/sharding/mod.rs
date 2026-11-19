@@ -3,14 +3,12 @@
 #[cfg(test)]
 mod tests;
 
-#[cfg(target_arch = "wasm32")]
 mod client;
 
 /// Optional hub and shard composition for an issuer-qualified account.
 #[cfg(feature = "method")]
 pub mod provisioning;
 
-#[cfg(target_arch = "wasm32")]
 pub use client::{assign, lookup};
 use serde::{Deserialize, Serialize};
 

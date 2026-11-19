@@ -78,3 +78,24 @@ fn named_frames_follow_each_direction_and_budget() {
     assert!(Example::decode_request(&request[..request.len() - 1]).is_err());
     assert!(Example::decode_reply(&reply[..reply.len() - 1]).is_err());
 }
+
+#[test]
+fn outbound_call_refuses_oversized_request_before_dispatch() {
+    use canic::method::{CallError, call, runtime};
+    use ic_platform_types::Principal;
+    use std::{
+        future::Future,
+        pin::pin,
+        task::{Context, Poll, Waker},
+    };
+
+    let input = "a".repeat(96);
+    let handler = async { call::<Example>(Principal::management_canister(), 1, &input).await };
+    assert!(matches!(
+        pin!(handler).poll(&mut Context::from_waker(Waker::noop())),
+        Poll::Ready(Err(CallError::Request(_)))
+    ));
+
+    // The same public runtime import used by application guards type-checks here.
+    let _: fn() -> Principal = runtime::system::caller;
+}

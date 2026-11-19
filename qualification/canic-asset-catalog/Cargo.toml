@@ -7,10 +7,6 @@ license-file.workspace = true
 publish.workspace = true
 description = "Installed embedded Blob and application catalog composition witness"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-ic-platform-runtime.workspace = true
-ic-storage.workspace = true
-
 [package.metadata.toko-tooling.loc]
 category = "tests"
 
@@ -25,7 +21,9 @@ profile = ["dep:canic-profile-worker", "dep:canic-profile-protocol"]
 canic = { workspace = true, features = ["blob", "readiness"] }
 canic-profile-protocol = { workspace = true, optional = true }
 canic-profile-worker = { workspace = true, optional = true }
+ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
+ic-storage.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
 

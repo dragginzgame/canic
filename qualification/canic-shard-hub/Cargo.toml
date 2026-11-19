@@ -13,7 +13,7 @@ category = "tests"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
+[dependencies]
 canic = { workspace = true, features = ["lifecycle", "sharding", "storage"] }
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true

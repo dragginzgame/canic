@@ -49,7 +49,6 @@ impl ShardRecord for Shard {
 }
 
 /// Accept an insertion or exact replay from the installed parent hub.
-#[cfg(target_arch = "wasm32")]
 #[canic::update(
     contract = canic::sharding::provisioning::Provision<Users>,
     guard = canic::topology::require_parent,

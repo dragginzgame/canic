@@ -233,7 +233,7 @@ auth-test:
 	bash scripts/dev/test-auth.sh
 
 auth-clippy:
-	cargo clippy --locked -p canic --features auth-enrollment,auth-browser --all-targets -- -D warnings
+	cargo clippy --locked -p canic -p canic-root --features canic/auth-enrollment,canic/auth-browser,canic-root/auth --all-targets -- -D warnings
 	cargo clippy --locked -p canic -p canic-root --features canic/auth-enrollment,canic-root/auth --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --features profile --target wasm32-unknown-unknown -- -D warnings

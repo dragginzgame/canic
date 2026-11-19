@@ -51,7 +51,6 @@ macro_rules! mount_readiness_endpoint {
     ($snapshot:path) => {
         const _: fn() -> $crate::readiness::State = $snapshot;
 
-        #[cfg(target_arch = "wasm32")]
         mod canic_readiness {
             use endpoint::runtime;
             use $crate::readiness::{State, endpoint};

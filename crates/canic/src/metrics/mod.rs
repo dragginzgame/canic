@@ -98,7 +98,6 @@ macro_rules! mount_metrics_endpoint {
     ($snapshot:path) => {
         const _: fn() -> $crate::metrics::Snapshot = $snapshot;
 
-        #[cfg(target_arch = "wasm32")]
         mod canic_metrics {
             use endpoint::runtime;
             use $crate::metrics::{Snapshot, endpoint};

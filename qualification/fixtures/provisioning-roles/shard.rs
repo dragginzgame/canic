@@ -1,7 +1,6 @@
 //! Application-owned shard mapping for Toko's existing shared schema.
 mod endpoints;
 mod ops;
-#[cfg(target_arch = "wasm32")]
 mod provision_user;
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests;

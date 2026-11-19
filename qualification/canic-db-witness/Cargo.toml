@@ -7,11 +7,6 @@ license-file.workspace = true
 publish.workspace = true
 description = "Installed typed Canic database composition witness"
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-ic-db.workspace = true
-ic-platform-runtime.workspace = true
-ic-storage.workspace = true
-
 [package.metadata.toko-tooling.loc]
 category = "tests"
 
@@ -25,6 +20,9 @@ managed-fixture = ["canic/readiness"]
 
 [dependencies]
 canic = { workspace = true, features = ["db-schema", "storage"] }
+ic-db.workspace = true
+ic-platform-runtime.workspace = true
+ic-storage.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
 

@@ -1,5 +1,4 @@
 //! Explicit install and strict empty-argument reopen hooks.
-#[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
 pub use ic_platform_runtime as runtime;
 

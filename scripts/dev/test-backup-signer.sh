@@ -6,11 +6,11 @@ cd -- "$(dirname -- "$0")/../.."
 repo=$PWD
 export CANIC_BACKUP_SIGNER="$repo/target/backup-sign-tools/bin/ic-sign"
 [[ -x "$CANIC_BACKUP_SIGNER" ]] || { echo 'Run make backup-signer-setup first.' >&2; exit 1; }
-mkdir -p target/backup
-canic app build --config apps/examples/backup-counter/canic.toml --json > target/backup/example-build.json
 export CANIC_BACKUP_FIXTURE
 CANIC_BACKUP_FIXTURE=$(mktemp -d)
 trap 'rm -rf -- "$CANIC_BACKUP_FIXTURE"' EXIT
+canic artifact build --package canic-root --features backup --output "$CANIC_BACKUP_FIXTURE/root.wasm"
+canic artifact build --package ex-counter --output "$CANIC_BACKUP_FIXTURE/counter.wasm"
 export ICP_HOME="$CANIC_BACKUP_FIXTURE" XDG_CONFIG_HOME="$CANIC_BACKUP_FIXTURE/config" XDG_DATA_HOME="$CANIC_BACKUP_FIXTURE/data" XDG_RUNTIME_DIR="$CANIC_BACKUP_FIXTURE/runtime"
 unset GNOME_KEYRING_CONTROL DISPLAY WAYLAND_DISPLAY XAUTHORITY
 mkdir -p "$CANIC_BACKUP_FIXTURE/store" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_RUNTIME_DIR"

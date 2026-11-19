@@ -563,8 +563,9 @@ are required. The exact tested artifact is recorded in
 [qualification history](../qualification/history.md).
 
 Application signing and the native test verifier now select registry Platform
-0.34.13's `ed25519` capability as `ic-platform-crypto`. Enrollment and issuer entropy
-use Protocol's `raw_rand` with explicit six-byte request and 42-byte reply budgets.
+0.34.13's `ed25519` capability as `ic-platform-crypto`. Enrollment and the qualification issuer both call `canic::entropy::fresh(300)`.
+The helper uses Platform’s `raw_rand` codec with a six-byte request budget and
+a 42-byte reply budget.
 Application canisters can enable Canic's `entropy` feature and call
 `canic::entropy::fresh(10).await` for 32 bytes with a ten-second bounded wait.
 A failure returns to the caller after that attempt. The application owns ID

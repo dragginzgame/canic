@@ -11,7 +11,15 @@ pub mod endpoint;
 /// The independent supplier; its DTOs and Service retain their original identities.
 pub use ic_blob_storage as supplier;
 /// Request and reply budgets defined by the Blob protocol.
-pub use supplier::protocol::RPC_LIMITS;
+pub const RPC_LIMITS: ic_wire::Limits = {
+    let limits = supplier::protocol::RPC_LIMITS;
+    ic_wire::Limits {
+        bytes: limits.bytes,
+        allocation: limits.allocation,
+        nodes: limits.nodes,
+        depth: limits.depth,
+    }
+};
 
 /// Wire identity for the captured-caller mutation endpoint.
 pub const UPDATE: u64 = ic_wire::method_id("blob_update");

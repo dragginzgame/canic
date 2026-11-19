@@ -1,10 +1,8 @@
 //! Installed volatile Auth receiver fixture with direct Canic Root enrollment.
 //! Fixture control is installation-owned, never browser-selected authority.
-#[cfg(target_arch = "wasm32")]
 mod canister;
-#[cfg(target_arch = "wasm32")]
 mod issuer;
-#[cfg(all(target_arch = "wasm32", feature = "profile"))]
+#[cfg(feature = "profile")]
 mod profile;
 
 pub use canic::auth::{enrollment, protocol};

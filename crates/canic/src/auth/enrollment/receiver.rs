@@ -183,7 +183,6 @@ impl Receiver {
     }
 }
 
-#[cfg(target_arch = "wasm32")]
 impl Start {
     /// Obtain fresh IC entropy without renewing the admitted deadline.
     pub async fn entropy(self) -> Result<Challenge, Error> {
@@ -202,7 +201,6 @@ impl Start {
         Ok(Challenge { start: self, bytes })
     }
 }
-#[cfg(target_arch = "wasm32")]
 impl Pull {
     /// Authenticate by the actual call destination; never trust a response's
     /// claimed principal. This function owns one attempt, with no fallback/retry.

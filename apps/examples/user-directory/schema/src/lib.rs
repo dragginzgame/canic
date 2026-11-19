@@ -12,5 +12,4 @@ impl Resource for Users {
     type Data = ();
     const METHOD: &'static str = "provision_user";
     const DOMAIN: &'static [u8] = b"example.user-directory.account.v1";
-    const LIMITS: ic_wire::Limits = canic::sharding::LIMITS;
 }

@@ -225,7 +225,7 @@ This is local synthetic-cycle qualification, not a mainnet or Backup recovery cl
 
 Application-call native checks live with `canic-host::application`: strict codec
 admission, exact retained bytes, expired uncertainty and observation-only resume.
-The application owns codecs in `apps/examples/counter/ex-counter/src/client/main.rs`; its Wasm and native
+The application owns codecs in `apps/examples/counter/src/client/main.rs`; its Wasm and native
 command binary share the package but keep target-specific dependency graphs.
 Wasm checks select the library; native checks include the command binary.
 
@@ -1037,8 +1037,8 @@ the application. Mounting adds no initialization or lifecycle hooks.
 
 For an Auth-enrolled hub or shard, place a single declaration in `src/setup.rs`.
 The role's build script still calls IC DB's `build_schema!(src::schema)`.
-Use `canic/db-store` in native dependencies and add `canic/stateful-role` in
-the Wasm dependency. A role can expose its schema and declared settings with
+Select `canic/stateful-role` on all targets to check the entire actor natively.
+Store-only native consumers may select `canic/db-store`. A role can expose its schema and declared settings with
 `pub use setup::database;` in `lib.rs`. On both targets, `database::AUTH_READ`
 is the selected session scope. Hubs expose `database::CONFIG_KEY` and shards
 expose `database::PARENT_STORAGE_KEY`.

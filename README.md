@@ -50,7 +50,8 @@ The selected stateful demo is a **persistent counter**, with operator-triggered
 backup/restore and explicit acceptance before reopening. Its Storage 0.78.0
 integration now passes local installed value/fence preservation and failed-upgrade
 rollback (`make counter-test`). The separate managed CLI witness runs with
-`bash scripts/dev/test-publication.sh counter_managed::`. The Backup example exercises local snapshot restoration;
+`bash scripts/dev/test-publication.sh counter_managed::`. The installed Backup test exercises local snapshot restoration with
+`make backup-signer-test`.
 `make demo` prepares a local Root/Store/counter session with named `read` and
 `increment` commands through `canic fleet call`. The former
 profile application has moved out of the product into qualification fixtures.

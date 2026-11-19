@@ -14,6 +14,7 @@ pub mod backup;
 pub mod endpoint;
 #[cfg(target_arch = "wasm32")]
 mod engine;
+mod mount;
 #[cfg(target_arch = "wasm32")]
 pub mod publication;
 #[cfg(target_arch = "wasm32")]

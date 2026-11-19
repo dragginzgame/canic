@@ -1,3 +1,8 @@
+#[cfg(feature = "backup")]
+mod backup;
+#[cfg(feature = "sharding")]
+mod sharding;
+
 use canic_management::{self as management, Readiness};
 use canic_management_protocol::Failure;
 use ic_platform_runtime as runtime;

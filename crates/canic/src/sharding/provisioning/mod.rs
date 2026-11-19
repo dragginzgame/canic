@@ -1,25 +1,19 @@
 //! Bounded account provisioning through the installed hub and its managed shards.
 
+// These host fixtures reopen an isolated VectorMemory. On Wasm, Database uses IC stable memory.
 #[cfg(all(test, feature = "provisioning", not(target_arch = "wasm32")))]
 mod tests;
 
 #[cfg(feature = "db-store")]
 mod directory;
 
-#[cfg(all(feature = "provisioning", target_arch = "wasm32"))]
+#[cfg(feature = "provisioning")]
 mod actor;
 #[cfg(feature = "provisioning")]
-#[cfg_attr(
-    all(not(target_arch = "wasm32"), not(test)),
-    expect(
-        dead_code,
-        reason = "installed provisioning handlers access these private row operations"
-    )
-)]
 mod rows;
 
 use crate::method::Contract;
-#[cfg(all(feature = "provisioning", target_arch = "wasm32"))]
+#[cfg(feature = "provisioning")]
 pub use actor::{provision, receive};
 #[cfg(feature = "db-store")]
 pub use directory::{Data, HubRoute, Id, Record, ShardRecord, Ticket};
@@ -37,26 +31,12 @@ pub struct Account {
 
 #[cfg(feature = "provisioning")]
 impl Account {
-    #[cfg_attr(
-        all(not(target_arch = "wasm32"), not(test)),
-        expect(
-            dead_code,
-            reason = "the installed hub and shard validate the account before provisioning"
-        )
-    )]
     fn valid(self) -> bool {
         self.issuer != Principal::anonymous() && self.subject != Principal::anonymous()
     }
 }
 
 #[cfg(feature = "provisioning")]
-#[cfg_attr(
-    all(not(target_arch = "wasm32"), not(test)),
-    expect(
-        dead_code,
-        reason = "the installed hub checks the observed shard after suspension"
-    )
-)]
 fn matches_target(
     observation: &super::Placement,
     allocation: &super::Allocation,
@@ -66,13 +46,6 @@ fn matches_target(
 }
 
 #[cfg(feature = "provisioning")]
-#[cfg_attr(
-    all(not(target_arch = "wasm32"), not(test)),
-    expect(
-        dead_code,
-        reason = "the installed hub derives the placement key at signup"
-    )
-)]
 fn placement_key<R: Resource>(account: Account) -> super::Key {
     use sha2::{Digest, Sha256};
     let mut digest = Sha256::new().chain_update(R::DOMAIN);
@@ -95,7 +68,7 @@ pub trait Resource {
     /// Domain separator for the permanent placement key.
     const DOMAIN: &'static [u8];
     /// Directional frame budget for this small request and acknowledgement.
-    const LIMITS: ic_wire::Limits;
+    const LIMITS: ic_wire::Limits = super::LIMITS;
 }
 
 /// Exact identity acknowledged by the originally called shard.

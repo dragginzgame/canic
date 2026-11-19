@@ -7,8 +7,8 @@ the verified session’s issuer and subject. The application chooses the user ID
 
 | Canister | What it owns |
 | --- | --- |
-| [User hub](ex-user-directory-hub/src/lib.rs) | The account directory. `my_shard` returns the caller’s confirmed route. |
-| [User shard](ex-user-directory-shard/src/lib.rs) | Private account rows. Only its installed parent can provision a row. `my_id` requires a session on this shard. |
+| [User hub](hub/src/lib.rs) | The account directory. `my_shard` returns the caller’s confirmed route. |
+| [User shard](shard/src/lib.rs) | Private account rows. Only its installed parent can provision a row. `my_id` requires a session on this shard. |
 | Root | Placement, creation and separate Auth grants for the hub and each shard. |
 | Wasm Store | The published shard executable used when the pool grows. |
 

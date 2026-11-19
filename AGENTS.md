@@ -122,6 +122,10 @@ persistent-actor work.
 
 Keep the root virtual Cargo workspace, products under `crates/`, fleet components
 under `apps/`, and the separate qualification workspace under `qualification/`.
+The maintainer-selected exception to package directory matching applies to examples
+and the app template. Use `ex-` in Cargo package names for discoverability, keep
+a single-crate example in its fleet directory, and use short component directories
+such as `hub/`, `shard/` and `schema/` in a multi-crate example.
 Use Rust 1.100.0 and inherited workspace lints. Runtime and Host dependency graphs
 remain separate; do not pull optional supplier runtimes into default applications.
 

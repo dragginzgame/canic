@@ -20,14 +20,12 @@ profile-v2 = []
 reject-upgrade = []
 
 [dependencies]
+canic = { workspace = true, optional = true, features = ["method"] }
 canic-profile-protocol.workspace = true
+ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
 ic-storage.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-canic = { workspace = true, optional = true, features = ["method"] }
-ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
 
 [dev-dependencies]
 toko-tooling.workspace = true

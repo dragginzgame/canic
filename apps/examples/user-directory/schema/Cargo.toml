@@ -16,7 +16,6 @@ name = "user_directory_schema"
 [dependencies]
 canic = { workspace = true, features = ["sharding", "method"] }
 ic-db.workspace = true
-ic-wire.workspace = true
 serde.workspace = true
 
 [dev-dependencies]

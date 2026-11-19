@@ -133,7 +133,7 @@ async fn session(
     );
     println!(
         "Edit {} and rebuild with canic app build.",
-        shell(&repo.join("apps/examples/counter/ex-counter/src/actor.rs"))?
+        shell(&repo.join("apps/examples/counter/src/actor.rs"))?
     );
     println!(
         "After a rebuild, fleet plan selects publication, then upgrade. Apply each returned operation. Repeat apply on the same operation while Root is pending; wait for completion before calling the app."

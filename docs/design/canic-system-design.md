@@ -524,8 +524,8 @@ installed database/schema admission or authenticated application readiness.
 
 Example apps live in `apps/examples/<name>/`. An app's build recipe may select
 Cargo features for the Wasm artifact through `build.features`. For example,
-the Backup counter selects the supplied Root's `backup` feature. This choice
-is shared by the app's fleets. It grants no controller or snapshot authority.
+the user directory selects `auth` and `sharding` for Root. The app's fleets
+share this build choice. Enrollment and placement require separate approvals.
 The native command codec uses its existing package and binary target.
 
 App build validates all declared output destinations before invoking Cargo,

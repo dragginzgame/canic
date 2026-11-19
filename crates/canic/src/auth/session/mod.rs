@@ -12,10 +12,8 @@
 #[cfg(test)]
 mod tests;
 
-#[cfg(target_arch = "wasm32")]
 mod actor;
 
-#[cfg(target_arch = "wasm32")]
 pub use actor::{authorize, init, install, reauthorize, refresh};
 
 use super::{
@@ -59,13 +57,6 @@ pub struct Policy {
     pub max_proof_ttl_ns: u64,
 }
 
-#[cfg_attr(
-    all(not(target_arch = "wasm32"), not(test)),
-    expect(
-        dead_code,
-        reason = "the actor installs the session receiver at canister initialization"
-    )
-)]
 pub(super) fn initialize(memory: MemoryConfig, policy: Policy, own_id: Principal, now: u64) {
     assert_eq!(memory.enrollment.receiver, own_id);
     assert_ne!(

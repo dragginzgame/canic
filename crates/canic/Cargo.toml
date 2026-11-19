@@ -19,12 +19,7 @@ blob = ["dep:ic-blob-storage", "dep:ic-platform-runtime"]
 db = ["dep:ic-platform-runtime"]
 db-schema = ["db", "dep:ic-db"]
 db-store = ["dep:ic-db", "storage"]
-entropy = [
-    "dep:ic-platform-protocol",
-    "dep:ic-platform-runtime",
-    "ic-platform-runtime/call-ic0",
-    "dep:ic-platform-types",
-]
+entropy = ["dep:ic-platform-runtime", "ic-platform-runtime/raw-rand"]
 lifecycle = ["dep:ic-platform-runtime"]
 method = [
     "dep:canic-macros",
@@ -41,11 +36,9 @@ stateful-role = ["auth-enrollment", "db-store", "readiness", "topology"]
 storage = ["dep:ic-storage"]
 topology = ["dep:ic-platform-types", "dep:ic-platform-runtime"]
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-ic-platform-protocol = { workspace = true, optional = true, features = ["raw-rand"] }
+[dependencies]
 ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
 
-[dependencies]
 canic-macros = { workspace = true, optional = true }
 ic-auth = { workspace = true, optional = true }
 ic-auth-protocol-types = { workspace = true, optional = true }

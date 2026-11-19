@@ -1,5 +1,4 @@
 //! Application-owned passive protocol. No IC DB executor or runtime in host clients.
-#[cfg(target_arch = "wasm32")]
 mod canister;
 
 /// Typed protocol for this witness application, not a general dynamic DB frontend.

@@ -1,11 +1,8 @@
 //! Named application Wire endpoints with Platform execution.
-#[cfg(target_arch = "wasm32")]
 mod actor;
 
-#[cfg(target_arch = "wasm32")]
 pub use actor::{CallError, admit_request, call};
 
-#[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
 pub use ic_platform_runtime as runtime;
 #[doc(hidden)]
@@ -16,10 +13,7 @@ pub use ic_wire as wire;
 /// Traps the current IC message or panics when executing a native handler.
 #[doc(hidden)]
 pub fn fail(error: impl std::fmt::Debug) -> ! {
-    #[cfg(target_arch = "wasm32")]
-    runtime::system::trap(&format!("endpoint refused: {error:?}"));
-    #[cfg(not(target_arch = "wasm32"))]
-    panic!("endpoint refused: {error:?}");
+    runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
 /// Default Wire budgets for small application requests and replies.

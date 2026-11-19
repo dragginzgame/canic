@@ -14,7 +14,6 @@ pub mod install;
 /// Canic-owned issuer transport; application handlers own authentication and keys.
 pub mod issuer;
 
-#[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
 pub mod endpoint;
 
