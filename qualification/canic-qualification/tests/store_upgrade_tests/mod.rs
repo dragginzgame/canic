@@ -186,7 +186,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         "{}",
         String::from_utf8_lossy(&initialized.stderr)
     );
-    let built = cli(&dir, &["app", "build"]);
+    let mut built = cli(&dir, &["app", "build"]);
     assert_eq!(built["canisters"].as_array().unwrap().len(), 3);
     let lock = std::fs::read(dir.join("Cargo.lock")).unwrap();
     let mut config: Value =
@@ -257,7 +257,18 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     );
     // A warm build must preserve the selected artifacts and lock, leaving no new
     // deployment approval. Every CLI invocation is a separate host process.
-    assert_eq!(cli(&dir, &["app", "build"]), built);
+    let mut rebuilt = cli(&dir, &["app", "build"]);
+    for report in [&mut built, &mut rebuilt] {
+        for canister in report["canisters"].as_array_mut().unwrap() {
+            let elapsed = canister
+                .as_object_mut()
+                .unwrap()
+                .remove("build_ms")
+                .unwrap();
+            assert!(elapsed.is_u64(), "expected elapsed milliseconds");
+        }
+    }
+    assert_eq!(rebuilt, built);
     assert_eq!(std::fs::read(dir.join("Cargo.lock")).unwrap(), lock);
     assert_eq!(
         cli(&dir, &["fleet", "plan", "--controller", &controller])["action"],
