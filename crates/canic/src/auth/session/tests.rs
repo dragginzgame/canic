@@ -18,8 +18,8 @@ fn repeated_receiver_initialization_preserves_logout_evidence_and_capacity() {
     let mut root = enrollment::Authority::new(grant.clone(), 1).unwrap();
     STATE.with_borrow_mut(|slot| {
         let s = slot.as_mut().unwrap();
-        let reply = response(&mut s.enrollment, &mut s.receiver, &mut root, 2, 1);
-        s.enrollment.finish(&mut s.receiver, reply, 2).unwrap();
+        let reply = response(&mut s.enrollment, s.receiver.state(), &mut root, 2, 1);
+        s.enrollment.finish(s.receiver.state(), reply, 2).unwrap();
     });
     let first = Principal::self_authenticating(b"first");
     let receipt = session::logout(first, 1_000_000_002);

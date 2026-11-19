@@ -19,7 +19,7 @@ named-profile-witness = []
 [dependencies]
 canic = { workspace = true, features = ["method", "storage"] }
 canic-profile-protocol.workspace = true
-ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
+ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
 ic-storage.workspace = true
 ic-wire.workspace = true

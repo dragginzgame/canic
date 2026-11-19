@@ -7,6 +7,33 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Stable session and issuer checkpoints — 2026-11-19
+
+With IC Auth 0.48.6, the installed Ed25519 fixture used a distinct governed
+engine lease and host record for each owner. A deliberately damaged receiver
+candidate refused reopen and its predecessor still served the live session.
+Two successful upgrades required new Root enrollment; the second preserved
+logout and denied the original credential. The issuer reconciled its completed
+signature and retained a pending renewal whose old callback ticket could no
+longer record a nonce. No external signer or certification tree was involved.
+The volatile receiver upgrade-loss case remains covered. Host admits a receiver
+upgrade before or after grant approval while fencing the authoritative Root in
+both planning orders.
+Legacy enrollment and late-outcome research at `fa92d886` recorded below still
+applies. IC Auth now supplies checked, single-use checkpoints for these engines.
+
+## Auth Wire 0.45.0 and Blob Storage 0.107.0 — 2026-11-19
+
+Both workspaces resolved IC Wire 0.26.1. The generator changed one comment in
+the browser runtime. Its schemas and native frame fixtures remained byte-identical.
+Four native Auth tests, 20 installed Auth tests, seven browser adapter tests and
+11 installed Chromium cases passed with the existing browser client.
+
+All ten installed Blob tests passed, including catalog rollback, the populated
+predecessor refusal and the managed fleet journey. The Blob registry archive
+SHA-256 was `7a58cbe9ee13d687812bbdfb9772459e0c963588be4249ec765e349b15bce7c2`.
+Supplier and lockfile fingerprints matched before and after the installed run.
+
 ## Wasm Store 0.4.6 to 0.5.0 — 2026-11-19
 
 The installed Root preservation test used the ordinary Store 0.4.6 Wasm from

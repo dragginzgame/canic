@@ -14,6 +14,16 @@ pub fn init(memory: MemoryConfig, policy: Policy) {
 /// Open Auth's bounded starting profile from the approved fresh-install envelope.
 #[doc(hidden)]
 pub fn install(input: &Install) {
+    assert_eq!(
+        input.storage,
+        crate::auth::install::Storage::Volatile,
+        "stable receiver needs governed leases"
+    );
+    let (memory, policy) = configuration(input);
+    init(memory, policy);
+}
+
+pub(super) fn configuration(input: &Install) -> (MemoryConfig, Policy) {
     use enrollment::types::{AudienceId, CanonicalId};
     use ic_auth::receiver_memory::EnrollmentBinding;
     let binding = EnrollmentBinding {
@@ -28,7 +38,7 @@ pub fn install(input: &Install) {
     if let Some(max) = input.limits.max_sessions {
         memory.capacity.max_sessions = max as usize;
     }
-    init(
+    (
         memory,
         Policy {
             issuer: input.issuer,
@@ -40,7 +50,7 @@ pub fn install(input: &Install) {
             .expect("installed session TTL"),
             max_proof_ttl_ns: input.limits.max_proof_ttl_ns,
         },
-    );
+    )
 }
 
 /// Refresh the Root grant for the installed receiver after controller admission.
@@ -55,12 +65,13 @@ pub async fn refresh() -> Result<(), enrollment::Error> {
     let pull = STATE.with_borrow_mut(|s| {
         let s = s.as_mut().ok_or(enrollment::Error::Closed)?;
         s.enrollment
-            .prepare(&mut s.receiver, challenge, api::time())
+            .prepare(s.receiver.state(), challenge, api::time())
     })?;
     let response = pull.fetch().await?;
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().ok_or(enrollment::Error::Closed)?;
-        s.enrollment.finish(&mut s.receiver, response, api::time())
+        s.enrollment
+            .finish(s.receiver.state(), response, api::time())
     })
 }
 

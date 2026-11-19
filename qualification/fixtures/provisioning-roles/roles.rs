@@ -28,6 +28,7 @@ async fn display_names_preserve_behavior_and_storage() {
     };
     let args = |application| {
         Install {
+        storage: canic::auth::install::Storage::Volatile,
             root: principal(root),
             issuer: principal(root),
             network: [1; 32],

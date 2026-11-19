@@ -5,7 +5,7 @@ The six fleet designs below each have a distinct hands-on exercise.
 | Fleet design | Status | What to try |
 | --- | --- | --- |
 | [Counter](counter/DESIGN.md) | Runnable, metrics planned | Increment a value, upgrade the executable and read the retained value. |
-| [Notebook](notebook/DESIGN.md) | Planned | Restore “draft” and explicitly reopen edits. |
+| [Notebook](notebook/DESIGN.md) | Runnable, local snapshot recovery | Restore “draft” and verify edits stay fenced until the installer reopens them. |
 | [Asset library](asset-library/DESIGN.md) | Planned | Release one user’s Blob reference while another keeps the same content. |
 | [User directory](user-directory/DESIGN.md) | Runnable, revocation walkthrough planned | Register two accounts on different shards and retry the first signup. |
 | [Project board](project-board/DESIGN.md) | Planned | Upgrade one project subtree and inspect the untouched sibling. |

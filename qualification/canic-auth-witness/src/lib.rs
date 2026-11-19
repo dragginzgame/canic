@@ -1,9 +1,13 @@
 //! Installed volatile Auth receiver fixture with direct Canic Root enrollment.
 //! Fixture control is installation-owned, never browser-selected authority.
+#[cfg(not(feature = "stable"))]
 mod canister;
+mod frames;
 mod issuer;
-#[cfg(feature = "profile")]
+#[cfg(all(feature = "profile", not(feature = "stable")))]
 mod profile;
+#[cfg(feature = "stable")]
+mod stable;
 
 pub use canic::auth::{enrollment, protocol};
 use ic_auth_protocol_types::{AudienceId, CanonicalId};

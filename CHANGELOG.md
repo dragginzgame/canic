@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.238.0] - 2026-11-19
+
+Receiver enrollment no longer blocks application upgrades. Volatile sessions close on upgrade. Fresh Auth installs can select stable Ed25519 receiver and issuer checkpoints.
+With a prepared simulator, run the installed upgrade and logout regression:
+
+```sh
+make auth-test
+```
+
+The optional Auth and Blob adapters now use Auth Wire 0.45.0 and Blob Storage 0.107.1. Both workspaces resolve a single IC Wire version (0.26.1).
+
+Build the local Notebook and restore a fenced draft from a stopped-canister snapshot. The installed walkthrough checks the 256-byte edit limit, upgrade persistence and separate acceptance and reopening.
+
+```sh
+canic app build --config apps/examples/notebook/canic.toml
+make notebook-test
+```
+
 ## [0.237.0] - 2026-11-19
 
 User Directory now uses ordinary application rows and a checked placement handle

@@ -14,6 +14,13 @@ category = "tests"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+damaged-checkpoint = ["stable"]
+stable = [
+    "canic/method",
+    "canic/auth-receiver-stable",
+    "canic/auth-issuer-stable",
+    "dep:ic-storage",
+]
 profile = ["dep:canic-profile-worker", "dep:canic-profile-protocol", "dep:ic-storage"]
 
 [dependencies]

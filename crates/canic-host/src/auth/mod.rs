@@ -373,11 +373,7 @@ fn retain(held: &store::Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan
     let mut retained = None;
     let mut upgrade = None;
     for (id, existing) in plans(&held.path)? {
-        if existing.network == plan.network
-            && existing.target().is_some_and(|target| {
-                target == &approval.root.canister || target == &approval.receiver.canister
-            })
-        {
+        if existing.network == plan.network && existing.target() == Some(&approval.root.canister) {
             upgrade = Some(id.clone());
         }
         let Some(old) = existing.auth() else {
@@ -411,7 +407,7 @@ fn retain(held: &store::Store, plan: Plan, bytes: &[u8]) -> Result<(String, Plan
         && let Some(id) = upgrade
     {
         return Err(Error::Blocked(format!(
-            "Auth requires a fresh owner without an admitted upgrade ({id}); volatile-state migration is not qualified"
+            "Root already has an admitted upgrade ({id}); grant preservation is not qualified"
         )));
     }
     if !approval.revoke
@@ -430,12 +426,8 @@ pub(crate) fn permit_upgrade(journal: &Path, plan: &Plan) -> Result<()> {
         return Ok(());
     };
     for (_, old) in plans(journal)? {
-        if old.network == plan.network
-            && old
-                .auth()
-                .is_some_and(|a| &a.root.canister == target || &a.receiver.canister == target)
-        {
-            return Err(Error::Blocked("Auth has volatile replay/revocation state; this journal's Root or receiver cannot be upgraded through a preservation workflow".into()));
+        if old.network == plan.network && old.auth().is_some_and(|a| &a.root.canister == target) {
+            return Err(Error::Blocked("Root has retained Auth grant authority; its upgrade must preserve grants and terminal revocations".into()));
         }
     }
     Ok(())

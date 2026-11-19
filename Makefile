@@ -94,7 +94,13 @@ endif
 # The CLI journey owns product Clippy/Rustdoc coverage, including the shared canic library.
 lint: fmt-check toko-tooling-check check-app-endpoints effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc counter-clippy counter-doc profile-clippy profile-doc root-clippy root-doc store-clippy blob-clippy blob-doc auth-clippy auth-doc db-clippy
 
-CI_TEST_TARGETS := test effect-test artifact-custody-test journey-test counter-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
+# Build through the same app declaration used in the local walkthrough.
+.PHONY: notebook-test
+notebook-test:
+	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/notebook/canic.toml
+	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test notebook
+
+CI_TEST_TARGETS := notebook-test test effect-test artifact-custody-test journey-test counter-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
 ci: lint
 	$(MAKE) -j1 $(CI_TEST_TARGETS)
 
@@ -239,14 +245,15 @@ auth-test:
 	bash scripts/dev/test-auth.sh
 
 auth-clippy:
-	cargo clippy --locked -p canic -p canic-root --features canic/auth-enrollment,canic/auth-browser,canic-root/auth --all-targets -- -D warnings
+	cargo clippy --locked -p canic -p canic-root --features canic/auth-receiver-stable,canic/auth-issuer-stable,canic/auth-browser,canic-root/auth --all-targets -- -D warnings
 	cargo clippy --locked -p canic -p canic-root --features canic/auth-enrollment,canic-root/auth --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --features profile --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --features damaged-checkpoint --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features profile-state --test auth --test auth_browser -- -D warnings
 
 auth-doc:
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features auth-enrollment --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features auth-receiver-stable,auth-issuer-stable --target wasm32-unknown-unknown --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --no-deps
 
 .PHONY: blob-test blob-clippy blob-doc

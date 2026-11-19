@@ -4,6 +4,7 @@ mod auth_host_tests;
 mod auth_issuer_tests;
 mod auth_logout_tests;
 mod auth_single_root_tests;
+mod auth_stable_tests;
 mod credential;
 
 use canic::auth::protocol::wire as auth_wire;

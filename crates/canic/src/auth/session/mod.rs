@@ -14,6 +14,25 @@ mod tests;
 
 mod actor;
 
+#[cfg(feature = "auth-receiver-stable")]
+pub mod stable;
+
+enum Engine {
+    Volatile(MemoryReceiver),
+    #[cfg(feature = "auth-receiver-stable")]
+    Stable(ic_auth::receiver_memory::StableReceiver),
+}
+
+impl Engine {
+    fn state(&mut self) -> &mut MemoryReceiver {
+        match self {
+            Self::Volatile(engine) => engine,
+            #[cfg(feature = "auth-receiver-stable")]
+            Self::Stable(engine) => engine.state(),
+        }
+    }
+}
+
 pub use actor::{authorize, init, install, reauthorize, refresh};
 
 use super::{
@@ -38,7 +57,7 @@ use std::cell::RefCell;
 
 struct State {
     enrollment: enrollment::Receiver,
-    receiver: MemoryReceiver,
+    receiver: Engine,
     policy: Policy,
     max_login_ttl_ns: u64,
 }
@@ -58,6 +77,18 @@ pub struct Policy {
 }
 
 pub(super) fn initialize(memory: MemoryConfig, policy: Policy, own_id: Principal, now: u64) {
+    initialize_with(memory, policy, own_id, now, |config| {
+        Engine::Volatile(MemoryReceiver::new_fresh(config, now).expect("fresh session receiver"))
+    });
+}
+
+fn initialize_with(
+    memory: MemoryConfig,
+    policy: Policy,
+    own_id: Principal,
+    now: u64,
+    build: impl FnOnce(MemoryConfig) -> Engine,
+) {
     assert_eq!(memory.enrollment.receiver, own_id);
     assert_ne!(
         memory.enrollment.authority, own_id,
@@ -72,7 +103,7 @@ pub(super) fn initialize(memory: MemoryConfig, policy: Policy, own_id: Principal
     let max_login_ttl_ns = memory.login.max_login_ttl_ns;
     let enrollment = enrollment::Receiver::new(memory.enrollment, memory.audience, now)
         .expect("installed enrollment binding");
-    let receiver = MemoryReceiver::new_fresh(memory, now).expect("fresh session receiver");
+    let receiver = build(memory);
     STATE.with_borrow_mut(|slot| {
         assert!(slot.is_none(), "receiver already initialized");
         *slot = Some(State {
@@ -173,9 +204,10 @@ pub fn admit(
             max_login_ttl_ns: s.max_login_ttl_ns,
             max_proof_ttl_ns: s.policy.max_proof_ttl_ns,
         };
-        s.receiver.prune(now, 8).map_err(admission_error)?;
+        s.receiver.state().prune(now, 8).map_err(admission_error)?;
         let outcome = s
             .receiver
+            .state()
             .admit(
                 &credential,
                 request,
@@ -240,6 +272,7 @@ pub fn read_scope(
             subject_admissible: true,
         };
         s.receiver
+            .state()
             .read(
                 &authority,
                 &[scope
@@ -269,7 +302,7 @@ pub fn logout(caller: Principal, now: u64) -> LogoutResult {
             return LogoutResult::Unavailable(LogoutUnavailable::Storage);
         };
 
-        match s.receiver.logout(caller, now) {
+        match s.receiver.state().logout(caller, now) {
             Ok(LogoutReceipt::Revoked { deny_until_ns }) => LogoutResult::Revoked(deny_until_ns),
             Ok(LogoutReceipt::Unconfirmed { deny_until_ns }) => {
                 LogoutResult::Unconfirmed(deny_until_ns)
@@ -318,6 +351,23 @@ macro_rules! mount_auth_session {
 /// `Some(decoded)` on install and `None` on upgrade.
 #[macro_export]
 macro_rules! mount_auth_lifecycle {
+    (stable = $open:path $(, seal = $seal:path)? $(,)?) => {
+        const _: () = {
+            use $crate::auth::{endpoint::{runtime, fail}, install::Install, session::stable};
+            #[allow(clippy::needless_pass_by_value)]
+            fn install(input: Install) {
+                stable::open(&$open(Some(&input)), Some(&input));
+            }
+            fn reopen() { stable::open(&$open(None), None); }
+            $crate::mount_lifecycle!(input = Install, max_bytes = 4096, decode = Install::decode,
+                install = install, reopen = reopen);
+            fn admit() -> Result<(), std::convert::Infallible> { Ok(()) }
+            use $crate::lifecycle::empty_arguments;
+            #[runtime::pre_upgrade(runtime = runtime, guard = admit,
+                decode = empty_arguments, max_bytes = 0, on_error = fail)]
+            fn pre_upgrade((): ()) { stable::seal(); $( $seal(); )? }
+        };
+    };
     (decode = $decode:path, open = $open:path $(,)?) => {
         $crate::mount_auth_lifecycle!(@mount $decode, $open, application);
     };

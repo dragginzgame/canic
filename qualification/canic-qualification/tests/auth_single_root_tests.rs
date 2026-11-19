@@ -33,7 +33,7 @@ pub(super) async fn refresh(
     enrollment_response(id, &response)
 }
 
-async fn admit(
+pub(super) async fn admit(
     pic: &PocketIc,
     receiver: CanisterId,
     browser: CanisterId,
@@ -51,7 +51,7 @@ async fn admit(
     EstablishSession::decode_response(&bytes).unwrap()
 }
 
-async fn read(
+pub(super) async fn read(
     pic: &PocketIc,
     receiver: CanisterId,
     browser: CanisterId,

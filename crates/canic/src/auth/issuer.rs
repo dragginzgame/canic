@@ -8,6 +8,11 @@ use ic_auth_wire::wire;
 use serde::{Deserialize, Serialize};
 use wire::{Limits, List};
 
+/// Supplier checkpoint for a stable issuer. The app owns the exclusive lease,
+/// its protected issuer policy, signer and certification contributions.
+#[cfg(feature = "auth-issuer-stable")]
+pub use ic_auth::issuer_memory::StableIssuer;
+
 /// Account-authenticated initial issuance.
 pub const ISSUE: u64 = 0x4341_5554_4810;
 /// Browser-authenticated renewal of one retained login.

@@ -68,7 +68,7 @@ fn encode<T: Serialize, const ID: u64>(value: T) -> Result<Vec<u8>, ic_wire::Err
         direction: ic_wire::Direction::Response,
     };
     if crate::canister::profile_fault() {
-        ic_wire::encode(&crate::canister::Unencodable, frame, LIMITS)
+        ic_wire::encode(&crate::frames::Unencodable, frame, LIMITS)
     } else {
         ic_wire::encode(&value, frame, LIMITS)
     }
@@ -111,11 +111,11 @@ fn put(input: Put) -> ProfileResult {
 #[runtime::query(
     runtime = runtime,
     guard = guard,
-    decode = crate::canister::decode_observe,
+    decode = crate::frames::decode_observe,
     max_bytes = 0,
     on_error = fail,
     name = "observe_profile_writes",
-    encode = crate::canister::encode_observe::<u32>,
+    encode = crate::frames::encode_observe::<u32>,
 )]
 fn writes((): ()) -> u32 {
     WRITES.get()

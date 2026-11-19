@@ -1,0 +1,7 @@
+[apps.ex-notebook.canisters.notebook]
+role = "app"
+wasm = "artifacts/notebook.wasm"
+build = { manifest = "../../../Cargo.toml", package = "ex-notebook" }
+
+[apps.ex-notebook.fleets.local]
+network = { kind = "Local" }

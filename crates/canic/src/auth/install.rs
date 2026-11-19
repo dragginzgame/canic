@@ -4,7 +4,7 @@ use ic_wire::{Direction, Encoding, Limits};
 use serde::{Deserialize, Serialize};
 
 const FRAME: Encoding = Encoding::Frame {
-    method: 0x4341_5554_4806,
+    method: 0x4341_5554_4807,
     direction: Direction::Request,
 };
 const LIMITS: Limits = Limits {
@@ -28,9 +28,22 @@ pub struct LimitsPolicy {
     pub max_sessions: Option<u32>,
 }
 
+/// Storage lifetime selected at installation.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Storage {
+    /// An upgrade closes sessions permanently.
+    #[default]
+    Volatile,
+    /// Preserve the owner in its exclusive governed allocation.
+    Stable,
+}
+
 /// Fleet-approved receiver configuration and unchanged inner app payload.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct Install {
+    /// Approved receiver storage lifetime.
+    pub storage: Storage,
     /// Actual Root selected by the deployment plan.
     pub root: Principal,
     /// Accepted credential issuer.

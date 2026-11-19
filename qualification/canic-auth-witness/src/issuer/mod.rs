@@ -25,7 +25,7 @@ const POLICY: IssuerPolicy = IssuerPolicy {
     reconciliation_retention_ns: 60 * SECOND,
 };
 struct State {
-    engine: MemoryIssuer,
+    engine: Engine,
     account: Principal,
     authority: IssuerAuthority,
     signer: SigningKey,
@@ -34,29 +34,54 @@ struct State {
     reply_fault: bool,
 }
 
+fn engine_mut(engine: &mut Engine) -> &mut MemoryIssuer {
+    #[cfg(feature = "stable")]
+    return engine.state();
+    #[cfg(not(feature = "stable"))]
+    engine
+}
+
+impl State {
+    fn engine(&self) -> &MemoryIssuer {
+        #[cfg(feature = "stable")]
+        return self.engine.as_ref();
+        #[cfg(not(feature = "stable"))]
+        &self.engine
+    }
+}
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
 
+fn config() -> IssuerConfig {
+    IssuerConfig {
+        audience: audience(),
+        issuer: api::canister_self(),
+        max_logins: if cfg!(feature = "profile") { 5 } else { 2 },
+        max_operations: if cfg!(feature = "profile") { 8 } else { 4 },
+        max_operations_per_account: 4,
+        // Replacement retains revoked login evidence; it does not reclaim its slot.
+        max_devices_per_account: if cfg!(feature = "profile") { 3 } else { 2 },
+        max_result_bytes: 16384,
+        issuance_burst: 8,
+        issuance_refill_interval_ns: SECOND,
+    }
+}
+
+#[cfg(not(feature = "stable"))]
+type Engine = MemoryIssuer;
+#[cfg(feature = "stable")]
+type Engine = canic::auth::issuer::StableIssuer;
+
+#[cfg(not(feature = "stable"))]
 pub(crate) fn init() {
+    initialize(MemoryIssuer::new_fresh(config(), api::time()).unwrap());
+}
+
+fn initialize(engine: Engine) {
     let now = api::time();
     let signer = SigningKey::from_bytes(&[7; 32]);
     STATE.with_borrow_mut(|state| {
         *state = Some(State {
-            engine: MemoryIssuer::new_fresh(
-                IssuerConfig {
-                    audience: audience(),
-                    issuer: api::canister_self(),
-                    max_logins: if cfg!(feature = "profile") { 5 } else { 2 },
-                    max_operations: if cfg!(feature = "profile") { 8 } else { 4 },
-                    max_operations_per_account: 4,
-                    // Replacement retains revoked login evidence; it does not reclaim its slot.
-                    max_devices_per_account: if cfg!(feature = "profile") { 3 } else { 2 },
-                    max_result_bytes: 16384,
-                    issuance_burst: 8,
-                    issuance_refill_interval_ns: SECOND,
-                },
-                now,
-            )
-            .unwrap(),
+            engine,
             account: if cfg!(feature = "profile") {
                 ic_auth::verification::browser_principal(
                     &SigningKey::from_bytes(&[8; 32]).verifying_key().to_bytes(),
@@ -92,7 +117,7 @@ pub(crate) fn control(command: u8) -> bool {
             7 => s.reply_fault = false,
             8 => s.allowed = false,
             9 => {
-                s.engine.prune(api::time(), 32).unwrap();
+                engine_mut(&mut s.engine).prune(api::time(), 32).unwrap();
             }
             10 if s.authority.generation == 1 => {
                 s.signer = SigningKey::from_bytes(&[17; 32]);
@@ -195,8 +220,14 @@ fn status(value: Option<IssuerStatus<'_>>) -> Status {
     }
 }
 
+#[cfg(feature = "stable")]
+mod checkpoint;
+
+#[cfg(feature = "stable")]
+pub(crate) use checkpoint::{HOST_KEY, KEY, open, seal};
+
 fn retained(s: &State, ticket: IssuerTicket) -> Result<Status, Refusal> {
-    s.engine
+    s.engine()
         .reconcile(ticket.account(), ticket.epoch(), ticket.operation_id())
         .map(status)
         .map_err(refused)
@@ -215,12 +246,11 @@ async fn issue(caller: Principal, input: Issue, now: u64) -> Result<Status, Refu
         let s = state.as_mut().ok_or(Refusal::Unavailable)?;
         permit(s, caller, &request.grants)?;
         let existing = s
-            .engine
+            .engine()
             .reconcile(caller, request.epoch, request.operation_id)
             .map_err(refused)?
             .is_some();
-        let ticket = s
-            .engine
+        let ticket = engine_mut(&mut s.engine)
             .prepare_issue(caller, &request, POLICY, s.authority, now)
             .map_err(refused)?;
         Ok::<_, Refusal>((ticket, existing))
@@ -233,17 +263,16 @@ async fn renew(caller: Principal, input: Renew, now: u64) -> Result<Status, Refu
     let (ticket, existing) = STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(Refusal::Unavailable)?;
         let selection = s
-            .engine
+            .engine()
             .preflight_renewal(caller, &request)
             .map_err(refused)?;
         permit(s, selection.account, &selection.request.grants)?;
         let existing = s
-            .engine
+            .engine()
             .reconcile_renewal(caller, &request)
             .map_err(refused)?
             .is_some();
-        let ticket = s
-            .engine
+        let ticket = engine_mut(&mut s.engine)
             .prepare_renewal(caller, &request, s.authority, now)
             .map_err(refused)?;
         Ok::<_, Refusal>((ticket, existing))
@@ -268,31 +297,30 @@ async fn finish<const ID: u64>(ticket: IssuerTicket, existing: bool) -> Result<S
     STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(Refusal::Unavailable)?;
         let now = api::time();
-        let intent = s.engine.intent(ticket).map_err(refused)?;
+        let intent = s.engine().intent(ticket).map_err(refused)?;
         permit(s, ticket.account(), intent.grants)?;
-        s.engine
+        engine_mut(&mut s.engine)
             .record_nonce(ticket, s.authority, nonce, now)
             .map_err(refused)?;
         let mut commitment = Sha256::new();
         commitment.update(b"canic-issuer-witness-approved");
         commitment.update(ticket.operation_id());
         commitment.update(nonce);
-        s.engine
+        engine_mut(&mut s.engine)
             .record_approval(ticket, s.authority, commitment.finalize().into(), now)
             .map_err(refused)?;
-        let signing = s
-            .engine
+        let signing = engine_mut(&mut s.engine)
             .dispatch(ticket, s.authority, now)
             .map_err(refused)?;
         // Local test-key signing has no independently committed external effect.
         // Signature, result, counter and reply encoding share this IC transaction.
         let signature = s.signer.sign(&Sha256::digest(signing.claims())).to_bytes();
-        s.engine
+        engine_mut(&mut s.engine)
             .complete(ticket, s.authority, signature, now)
             .expect("atomic local signing completion");
         s.signatures += 1;
         let result = retained(s, ticket).expect("completed local signing result");
-        crate::canister::reply_fault::<ID>(s.reply_fault);
+        crate::frames::reply_fault::<ID>(s.reply_fault);
         Ok(result)
     })
 }
@@ -308,13 +336,13 @@ fn reconcile(caller: Principal, input: Lookup, _: u64) -> Result<Status, Refusal
                 if !known_account(s, caller) {
                     return Err(Refusal::Denied);
                 }
-                s.engine
+                s.engine()
                     .reconcile(caller, epoch, operation_id)
                     .map(status)
                     .map_err(refused)
             }
             Lookup::Renew(request) => s
-                .engine
+                .engine()
                 .reconcile_renewal(caller, &renewal(request)?)
                 .map(|retained| status(retained.map(|r| r.status)))
                 .map_err(refused),
@@ -326,8 +354,7 @@ fn reconcile(caller: Principal, input: Lookup, _: u64) -> Result<Status, Refusal
 fn logout(caller: Principal, input: Logout, now: u64) -> Result<Revoked, Refusal> {
     STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(Refusal::Unavailable)?;
-        let login_deadline_ns = s
-            .engine
+        let login_deadline_ns = engine_mut(&mut s.engine)
             .revoke_browser(
                 caller,
                 input.account,
@@ -336,7 +363,7 @@ fn logout(caller: Principal, input: Logout, now: u64) -> Result<Revoked, Refusal
                 now,
             )
             .map_err(refused)?;
-        crate::canister::reply_fault::<{ canic::auth::issuer::LOGOUT }>(s.reply_fault);
+        crate::frames::reply_fault::<{ canic::auth::issuer::LOGOUT }>(s.reply_fault);
         Ok(Revoked { login_deadline_ns })
     })
 }
@@ -352,11 +379,11 @@ canic::mount_auth_issuer_endpoints! {
 #[runtime::query(
     runtime = runtime,
     guard = lifecycle_guard,
-    decode = crate::canister::decode_observe,
+    decode = crate::frames::decode_observe,
     max_bytes = 2097152,
     on_error = endpoint_error,
     name = "observe_issuer",
-    encode = crate::canister::encode_observe::<IssuerObservation>,
+    encode = crate::frames::encode_observe::<IssuerObservation>,
 )]
 fn observe_issuer((): ()) -> IssuerObservation {
     STATE.with_borrow(|state| match state {
@@ -370,9 +397,9 @@ fn observe_issuer((): ()) -> IssuerObservation {
         Some(s) => IssuerObservation {
             present: true,
             signatures: s.signatures,
-            operations: s.engine.usage().operations,
-            logins: s.engine.usage().logins,
-            epoch: s.engine.epoch(),
+            operations: s.engine().usage().operations,
+            logins: s.engine().usage().logins,
+            epoch: s.engine().epoch(),
         },
     })
 }

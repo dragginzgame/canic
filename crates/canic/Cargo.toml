@@ -14,7 +14,16 @@ ignored = ["toko-tooling"]
 [features]
 auth = ["dep:ic-auth-protocol-types", "dep:ic-auth-wire", "dep:ic-platform-runtime"]
 auth-browser = ["auth", "ic-auth-wire/typescript"]
-auth-enrollment = ["auth", "dep:ic-auth", "entropy", "lifecycle", "dep:sha2"]
+auth-enrollment = [
+    "auth",
+    "ic-auth/receiver-memory",
+    "ic-auth/ed25519-verification",
+    "entropy",
+    "lifecycle",
+    "dep:sha2",
+]
+auth-receiver-stable = ["auth-enrollment", "ic-auth/receiver-stable", "storage"]
+auth-issuer-stable = ["auth", "ic-auth/issuer-stable"]
 blob = ["dep:ic-blob-storage", "dep:ic-platform-runtime"]
 db = ["dep:ic-platform-runtime"]
 db-schema = ["db", "dep:ic-db"]

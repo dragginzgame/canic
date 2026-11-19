@@ -130,6 +130,8 @@ fn auth_approval_keeps_original_authority_and_rejects_conflicting_configuration(
     selected.check_operation(&dir, &id).unwrap();
     let mut upgrade = plan.clone();
     upgrade.action = PlanAction::Upgrade(plan.auth().unwrap().receiver.clone());
+    permit_upgrade(&dir, &upgrade).unwrap();
+    upgrade.action = PlanAction::Upgrade(plan.auth().unwrap().root.clone());
     assert!(permit_upgrade(&dir, &upgrade).is_err());
     assert!(
         crate::create_plan(
@@ -143,8 +145,40 @@ fn auth_approval_keeps_original_authority_and_rejects_conflicting_configuration(
                 creation_cycles: 0,
             }
         )
-        .is_err()
+        .is_ok()
     );
+}
+
+#[test]
+fn a_prior_receiver_upgrade_allows_grant_planning_but_a_root_upgrade_blocks_it() {
+    for slot in ["receiver", "root"] {
+        let (dir, selected) = fixture();
+        let wasm = dir.join("root.wasm");
+        let module =
+            artifact::admit_bounded(&std::fs::read(&wasm).unwrap(), artifact::MAX_ARTIFACT_BYTES)
+                .unwrap()
+                .sha256;
+        crate::create_plan(
+            &dir,
+            &wasm,
+            crate::PlanInput {
+                network: selected.config.network.clone(),
+                controller: "2vxsx-fae".into(),
+                target: selected.config.canisters[slot].id.clone(),
+                previous_module: Some(module),
+                creation_cycles: 0,
+            },
+        )
+        .unwrap();
+        let grant = create_auth_plan(&dir, &dir.join("canic.toml"), &selected, "2vxsx-fae");
+        if slot == "receiver" {
+            grant.unwrap();
+        } else {
+            assert!(
+                matches!(grant, Err(Error::Blocked(message)) if message.contains("Root already has an admitted upgrade"))
+            );
+        }
+    }
 }
 
 #[test]
@@ -284,6 +318,19 @@ fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
         .receiver_install_args("receiver", root, vec![5, 4])
         .unwrap();
     let decoded = canic::auth::install::Install::decode(&args).unwrap();
+    use canic::auth::install::Storage;
+    assert_eq!(decoded.storage, Storage::Volatile);
+    config.receiver_policy.as_mut().unwrap().storage = Storage::Stable;
+    let stable_args = config
+        .receiver_install_args("receiver", root, vec![5, 4])
+        .unwrap();
+    assert_ne!(args, stable_args);
+    assert_eq!(
+        canic::auth::install::Install::decode(&stable_args)
+            .unwrap()
+            .storage,
+        Storage::Stable
+    );
     assert_eq!(decoded.root.to_text(), root);
     assert_eq!(decoded.limits.max_sessions, Some(7));
     assert_eq!(decoded.application, [5, 4]);
@@ -321,6 +368,7 @@ fn receiver_grant_inherits_only_install_identity_and_preserves_its_own_authority
     config.canisters.get_mut("receiver").unwrap().role = Some("hub".into());
     let original = config.auth[0].clone();
     config.receiver_policy = Some(ReceiverPolicy {
+        storage: canic::auth::install::Storage::Volatile,
         root: original.root.clone(),
         roles: vec!["hub".into()],
         issuer: original.issuer.clone(),

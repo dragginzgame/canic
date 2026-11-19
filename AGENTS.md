@@ -194,7 +194,9 @@ current journeys and remaining gates; do not substitute sibling working trees.
 - Capture caller/time at ingress; preserve directional budgets and synchronous
   reply rollback. Mounts grant no enrollment, storage or timer authority. Lost
   volatile replay/revocation state stays closed; fresh enrollment is not recovery.
-  Retained Auth authority blocks preservation upgrades until qualified.
+  A receiver grant allows application upgrades. Volatile receivers stay closed
+  afterward. Stable receivers require a fresh Root refresh. A Root with retained
+  grant approvals remains fenced until its grant and revocation transition qualifies.
 - Issuers own intents/renewal/results/pruning; reconciliation is lookup-only.
   Local signers do not qualify production keys or external signing recovery.
   Logout passes the captured caller; account fields are selectors. Browser code

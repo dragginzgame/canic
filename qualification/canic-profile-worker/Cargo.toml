@@ -22,7 +22,7 @@ reject-upgrade = []
 [dependencies]
 canic = { workspace = true, optional = true, features = ["method"] }
 canic-profile-protocol.workspace = true
-ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
+ic-platform-runtime = { workspace = true, optional = true }
 ic-storage.workspace = true
 ic-wire.workspace = true
 serde.workspace = true

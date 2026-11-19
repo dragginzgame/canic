@@ -103,12 +103,15 @@ not permission to re-sign or to revoke an unknown configuration through a new
 path. Revocation cannot select a different grant or reopen a retired key.
 Already issued snapshots remain usable only within their original freshness.
 
-Known Auth approvals block Root/receiver preservation upgrades in the same
-journal, including after revocation. Fresh enrollment refuses existing upgrade
-approvals. Keep the journal: this is a local workflow fence, not discovery of
-out-of-band Auth configuration. Direct upgrades still lose volatile Auth state
-and stay closed. Stable Auth needs its supplier's persistence contract; Canic
-does not add a temporary store or reconstruct lost replay evidence.
+A receiver’s Auth enrollment leaves application upgrades available. A volatile
+receiver loses its sessions and stays closed after upgrade. A stable receiver
+can resume an unexpired session after reopening and refreshing its Root grant.
+An upgrade approval grants no new Auth authority. Existing approvals and
+revocations keep their original code and controller bindings.
+
+The journal still blocks a Root upgrade when it holds grant authority, including
+terminal revocations. A previously approved Root upgrade also blocks a new grant
+configuration. Qualifying preservation of those records will lift that restriction.
 
 ## Issuer endpoints
 
@@ -252,7 +255,7 @@ cannot clear a newer pending refresh or overwrite its committed revoked snapshot
 both release orders preserve supplier metadata, deadlines and counters. Raw clock
 changes and automatic progress remain forbidden while replies are held.
 Production key custody,
-certified issuer proofs and stable Auth preservation remain unqualified.
+certified issuer proofs remain unqualified. The stable Ed25519 path is described below.
 
 ## Internet Identity account handoff for Toko
 
@@ -551,9 +554,9 @@ not another shipped adapter package or default Canic dependency.
 
 ## Inputs and limits
 
-Both lockfiles select registry engine `ic-auth` 0.48.0 from
-`b26205d5c9acfc818a828162a9bcd9991d79b889` and passive
-`ic-auth-wire` 0.44.0 and `ic-auth-protocol-types` 0.43.0. The browser package remains
+Both lockfiles select registry engine `ic-auth` 0.48.6 from
+`b66a252b7914f7b77b7b6cb8cc86ca2a354aec04` and passive
+`ic-auth-wire` 0.45.0 and `ic-auth-protocol-types` 0.43.2. The browser package remains
 pinned to `a05b5ddd4099a3f64b95deb173a0c16746d98ac5` (0.47.1); the installed
 journey qualifies that actual combination. The basic `auth` feature selects
 only passive contracts; `auth-enrollment` selects `receiver-memory` and
@@ -599,3 +602,41 @@ reply and reopens its journal. See the [runnable qualification](../../qualificat
 for enrollment, recovery, device replacement, logout and upgrade coverage.
 
 Production key custody, certified proofs and durable Auth recovery require separate qualification.
+
+## Stable Auth owner selection (#50)
+
+For fresh installs, each owner selects volatile or stable storage explicitly.
+Volatile remains the default. The application contributes distinct Auth leases
+to its existing Storage bootstrap. The receiver keeps the Ed25519 verifier.
+A new install frame identifies the storage choice. An older volatile owner
+whose replay state has been lost stays closed. A fresh stable install and an
+upgrade of an already-stable owner are the admitted transitions.
+
+The receiver seals both its supplier checkpoint and its host configuration and
+challenge sequence. Reopen starts closed until a new authenticated Root pull.
+Root owns grant entries and terminal revocation. Issuers own pending external
+effects and certification contributions. Receiver checkpoint support alone
+does not authorize a Root preservation upgrade or issuer recovery.
+
+Set `storage = "stable"` in the fleet’s existing `receiver_policy` table and
+select `canic/auth-receiver-stable` in the receiver build. Contribute
+`session::stable::{ENGINE_KEY, HOST_KEY}` to the application bootstrap.
+`mount_auth_lifecycle!(stable = open)` calls the application’s `open` with the
+approved install or with `None` on upgrade and uses the returned Storage runtime.
+Use its optional `seal` callback when the application has additional owners.
+The volatile mount rejects a stable install. A stable-only layout rejects a
+volatile install. The new receiver frame ends in `4807`. Rebuild the actor and
+generate a new approval for a fresh installation with this Host.
+
+Select `canic/auth-issuer-stable` independently for an issuer. The app binds its
+own storage choice in the app payload, passes its separate lease to
+`auth::issuer::StableIssuer`, and seals its protected signing policy alongside
+the engine. IC Auth limits each encoded owner checkpoint to 8 MiB. The installed
+witness uses local Ed25519 signing. It retains an unresolved renewal through
+restart and checks the original ticket against the restart fence. An issuer with
+a certification tree would also need to retain its contributions and republish
+the root before serving proofs.
+
+Managed Root upgrades with live or revoked grants remain a roadmap item. The
+release gate is an installed Root transition that preserves all authority entries,
+original request bindings, snapshot revisions and terminal revocations.

@@ -6,7 +6,12 @@ use ic_auth::receiver_memory::{EnrollmentBinding, MemoryReceiver};
 
 /// Receiver-owned volatile enrollment projection. The application owns the one
 /// real Auth receiver and publishes both in a single IC callback transaction.
+#[cfg_attr(
+    feature = "auth-receiver-stable",
+    derive(serde::Deserialize, serde::Serialize)
+)]
 pub struct Receiver {
+    refreshed: bool,
     binding: EnrollmentBinding,
     audience: AudienceId,
     sequence: u64,
@@ -52,11 +57,31 @@ impl Receiver {
         Ok(Self {
             binding,
             audience,
+            refreshed: false,
             sequence: 0,
             pending: None,
             current: None,
             observed_at_ns: now_ns,
         })
+    }
+
+    #[cfg(feature = "auth-receiver-stable")]
+    pub(crate) fn reopen(&mut self, original: Self, now_ns: u64) {
+        assert_eq!(
+            original.binding, self.binding,
+            "receiver checkpoint binding"
+        );
+        assert_eq!(
+            original.audience, self.audience,
+            "receiver checkpoint audience"
+        );
+        assert!(
+            now_ns >= original.observed_at_ns,
+            "receiver checkpoint clock"
+        );
+        *self = original;
+        self.refreshed = false;
+        self.observed_at_ns = now_ns;
     }
 
     /// Reserve the original receipt window before awaiting entropy. An unexpired
@@ -107,7 +132,8 @@ impl Receiver {
     ) -> Result<(), Error> {
         // A duplicate committed response is harmless only within its original
         // window, without a newer pending request or any authority substitution.
-        if self.pending.is_none()
+        if self.refreshed
+            && self.pending.is_none()
             && self.sequence == response.pull.start.sequence
             && response.pull.authority == self.binding.authority
             && self.current.as_ref() == Some(&response.snapshot)
@@ -135,11 +161,11 @@ impl Receiver {
         {
             return Err(Error::Invalid);
         }
-        if self
-            .current
-            .as_ref()
-            .is_some_and(|old| old.grant != snapshot.grant || (old.revoked && !snapshot.revoked))
-        {
+        if self.current.as_ref().is_some_and(|old| {
+            old.grant != snapshot.grant
+                || (old.revoked && !snapshot.revoked)
+                || snapshot.revision <= old.revision
+        }) {
             return Err(Error::Conflict);
         }
         let metadata = snapshot.metadata()?;
@@ -147,6 +173,7 @@ impl Receiver {
             .install_enrollment(now_ns, response.pull.authority, metadata)
             .map_err(|_| Error::Refused)?;
         self.current = Some(snapshot);
+        self.refreshed = true;
         self.pending = None;
         Ok(())
     }
@@ -155,6 +182,9 @@ impl Receiver {
     pub fn current(&self, now_ns: u64) -> Result<&Snapshot, Error> {
         if now_ns < self.observed_at_ns {
             return Err(Error::Invalid);
+        }
+        if !self.refreshed {
+            return Err(Error::Closed);
         }
         let snapshot = self.current.as_ref().ok_or(Error::Closed)?;
         if now_ns >= snapshot.expires_at_ns || now_ns >= snapshot.grant.expires_at_ns {

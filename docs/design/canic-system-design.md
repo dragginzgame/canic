@@ -1239,15 +1239,21 @@ and exact signed-attempt custody. Revocation derives from a configuration's
 successful retained reply, never an edited config or an unknown outcome.
 Canonical network/application identities are explicit, not display names or the
 Host transport digest. Auth approvals are not deployment-slot reservations or
-deployment receipts. Known Auth authority fences preservation upgrades of its
-Root/receiver in that journal, including after revocation. Existing upgrade
-approvals block fresh enrollment. The managed Auth lifecycle remains unfinished;
+deployment receipts. Known Auth grants fence preservation upgrades of the authoritative Root in that
+journal, including after revocation. A receiver grant permits ordinary upgrades of
+the application. Volatile receivers lose their sessions and stay closed; stable
+receivers need a fresh authenticated Root pull. An admitted Root upgrade blocks
+new grant configuration. The managed Auth lifecycle remains unfinished;
 do not enable the feature in a
 default fleet recipe or represent this local witness as an upgrade-safe login.
 This is [#8 — Mount Auth receiver contracts](https://github.com/dragginzgame/canic/issues/8),
 not production login readiness. The [Auth guide](../demos/auth.md) links the
-separate admitted enrollment, issuance and profile/browser work. Stable Auth
-integration awaits its supplier contract; do not add an interim Storage adapter.
+separate admitted enrollment, issuance and profile/browser work. A fresh application with IC Auth 0.48.6 can select governed receiver and issuer
+checkpoints. A receiver must refresh its enrollment after every reopen. Root upgrades
+with retained grants remain an intended delivery path. Before admitting one, qualify
+preservation of each grant, snapshot revision, original challenge and terminal
+revocation across a stopped, exact-code Root transition. Until then the Host keeps
+its upgrade restriction, including for a Root with only revoked grants.
 
 ### Optional issuer transport
 

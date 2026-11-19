@@ -1,4 +1,4 @@
-// Candidate interpreter for the admitted host schema subset. See
+// Candidate interpreter for the admitted schema subset. See
 // docs/design/browser-runtime.md for source provenance and the reuse contract.
 // Generated metadata is trusted; allowances do not bound the JS engine heap.
 export const schemaFormat = 'ic-wire-json';

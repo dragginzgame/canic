@@ -78,7 +78,7 @@ encoding and allocation. The local counter upgrade and Root snapshot tests run o
 Testkit 0.110.1. Keep deployed 0.76 records with their qualified executable until
 a physical-image migration is separately qualified.
 
-The DB 0.23.11 witness and Blob 0.106.0 catalog use Storage 0.78.3 directly.
+The DB 0.23.11 witness and Blob 0.107.0 catalog use Storage 0.78.7 directly.
 The DB installed suite covers populated upgrades, refused upgrades and damaged storage. The installed Blob suite covers fresh composition, the managed fleet journey and refusal to upgrade the populated 0.100.6 catalog. The refusal preserves
 the predecessor's stable bytes, management report and surviving asset.
 [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8) records the decision to retain the original executable for this directory.
@@ -295,7 +295,7 @@ intent/result/renewal engine.
 `auth_logout_tests` adds browser-bound revocation, two independent devices,
 in-flight initial/renewal fencing, retained results/deadlines, real pruning,
 malformed input, reply rollback and closed state after upgrade. Registry Auth
-0.48.0 / Auth Wire 0.44.0 and Types 0.43.0 supply the sole retained binding engine; the private
+0.48.6 / Auth Wire 0.45.0 and Types 0.43.2 supply the sole retained binding engine; the private
 browser package remains the separately pinned 0.47.1 source.
 `make auth-browser-prepare` explicitly prepares the immutable browser supplier;
 `make auth-browser-test` checks generated codecs, native frame parity and the
@@ -568,7 +568,7 @@ not invoke signing or continue maintenance.
 Native fleet tests admit both full 8 MiB manifests and
 preserve existing inline fleets with or without Store and their retained digests.
 `make blob-test` builds Blob-only and profile-composed executable pairs using the optional
-Canic adapter. The registry Blob 0.106.0 fixtures cover user
+Canic adapter. The registry Blob 0.107.0 fixtures cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,
 non-resurrecting replay, drain/reopen/exact activation, and reopen refusal. The populated 0.100.6 predecessor must refuse the incompatible upgrade and preserve its original state. The optional profile composition shares one
 Storage bootstrap with Blob, preserves both owners across upgrade, closes profile
