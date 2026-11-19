@@ -4,7 +4,11 @@ pub mod user_shard;
 
 use canic::sharding::provisioning::Resource;
 
+///
+/// Users
 /// Each signup provisions one private ID, with no additional profile payload.
+///
+
 pub struct Users;
 
 impl Resource for Users {

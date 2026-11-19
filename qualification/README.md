@@ -226,7 +226,7 @@ This is local synthetic-cycle qualification, not a mainnet or Backup recovery cl
 
 Application-call native checks live with `canic-host::application`: strict codec
 admission, exact retained bytes, expired uncertainty and observation-only resume.
-The application owns codecs in `apps/examples/counter/src/client/main.rs`; its Wasm and native
+The application owns codecs in `apps/examples/counter/client/main.rs`; its Wasm and native
 command binary share the package but keep target-specific dependency graphs.
 Wasm checks select the library; native checks include the command binary.
 

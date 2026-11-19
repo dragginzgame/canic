@@ -17,9 +17,10 @@ category = "examples"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# Native codec launched by the Canic CLI for named fleet calls.
 [[bin]]
 name = "ex-counter-client"
-path = "src/client/main.rs"
+path = "client/main.rs"
 
 [features]
 counter-v2 = []
@@ -28,8 +29,8 @@ initially-fenced = []
 reject-upgrade = []
 
 [dependencies]
-canic = { workspace = true, features = ["readiness", "recovery", "storage"] }
-ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
+canic = { workspace = true, features = ["lifecycle", "method", "readiness", "recovery", "storage"] }
+ic-platform-runtime = { workspace = true, features = ["system-raw"] }
 ic-platform-types.workspace = true
 ic-storage.workspace = true
 

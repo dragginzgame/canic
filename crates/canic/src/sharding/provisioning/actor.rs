@@ -55,10 +55,7 @@ pub async fn provision<E: HubRoute>(
     // Capture ingress authority before any suspension; callers cannot supply another user's view.
     assert_eq!(api::caller(), view.caller, "session caller mismatch");
     admit::<E>(view);
-    let account = Account {
-        issuer: view.issuer,
-        subject: view.subject,
-    };
+    let account = Account::from(view);
     assert!(account.valid(), "invalid provisioning account");
     let input = E::normalize(input);
     let existing = E::with_store(|db| find::<E::Row>(db, account));

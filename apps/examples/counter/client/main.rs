@@ -1,5 +1,8 @@
 //! Native command codec. Canic owns signing and transport; this process only handles bytes.
+
+use canic::method::Contract;
 use clap::{Parser, Subcommand};
+use ex_counter::CounterMethod;
 use std::io::Read as _;
 
 #[derive(Parser)]
@@ -34,34 +37,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Counter::Increment => ex_counter::Request::Increment,
                 Counter::Read => ex_counter::Request::Read,
             };
-            let arguments = ic_wire::encode(
-                &request,
-                ic_wire::Encoding::Frame {
-                    method: ex_counter::METHOD,
-                    direction: ic_wire::Direction::Request,
-                },
-                ex_counter::LIMITS,
-            )
-            .map_err(|e| format!("counter request refused: {e:?}"))?;
-            serde_json::json!({"method": "counter", "arguments": arguments})
+            let arguments = CounterMethod::encode_request(&request)
+                .map_err(|e| format!("counter request refused: {e:?}"))?;
+
+            serde_json::json!({"method": CounterMethod::NAME, "arguments": arguments})
         }
         Action::Decode => {
             let mut bytes = Vec::new();
             std::io::stdin()
-                .take(ex_counter::LIMITS.bytes as u64 + 1)
+                .take(CounterMethod::REPLY.bytes as u64 + 1)
                 .read_to_end(&mut bytes)?;
-            let reply: Result<ex_counter::Snapshot, ex_counter::Error> = ic_wire::decode(
-                &bytes,
-                ic_wire::Encoding::Frame {
-                    method: ex_counter::METHOD,
-                    direction: ic_wire::Direction::Response,
-                },
-                ex_counter::LIMITS,
-            )
-            .map_err(|e| format!("counter reply refused: {e:?}"))?;
+            let reply = CounterMethod::decode_reply(&bytes)
+                .map_err(|e| format!("counter reply refused: {e:?}"))?;
+
             serde_json::to_value(reply)?
         }
     };
     println!("{result}");
+
     Ok(())
 }

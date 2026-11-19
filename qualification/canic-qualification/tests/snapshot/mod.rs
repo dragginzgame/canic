@@ -165,28 +165,13 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
     let pic = owner.client();
     let wasm = std::fs::read(repo().join("target/backup/root.wasm")).unwrap();
     let (root, child, expiry) = fixture(pic, wasm.clone()).await;
-    let increment = ic_wire::encode(
-        &ex_counter::Request::Increment,
-        ic_wire::Encoding::Frame {
-            method: ex_counter::METHOD,
-            direction: ic_wire::Direction::Request,
-        },
-        ex_counter::LIMITS,
+    let value = canic_qualification::counter(
+        pic,
+        child,
+        CanisterId::anonymous(),
+        ex_counter::Request::Increment,
     )
-    .unwrap();
-    let counter_reply = pic
-        .update_call(child, CanisterId::anonymous(), "counter", increment)
-        .await
-        .unwrap();
-    let value: Result<ex_counter::Snapshot, ex_counter::Error> = ic_wire::decode(
-        &counter_reply,
-        ic_wire::Encoding::Frame {
-            method: ex_counter::METHOD,
-            direction: ic_wire::Direction::Response,
-        },
-        ex_counter::LIMITS,
-    )
-    .unwrap();
+    .await;
     assert_eq!(value.unwrap().value, 1);
     let original_memory = pic.get_stable_memory(child).await;
     let op = operation(root, child);

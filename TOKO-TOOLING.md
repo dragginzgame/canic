@@ -744,6 +744,14 @@ These rules apply to handwritten and generated Rust.
   macro. Start with a bare `///`, put the exact type name alone on the next
   line, then describe its role on one or more lines. Close with a bare `///`
   and leave one blank source line before the code.
+- Use the same header for handwritten entity structs and their adapter structs,
+  including unit structs that map an application row to a trait contract.
+  After the declaration, leave a blank line and place its inherent `impl`
+  blocks first, followed by its trait `impl` blocks alphabetically by trait
+  name. Leave a blank line between blocks. If there is no inherent `impl`,
+  start with the first trait implementation. Use this layout for new definitions.
+  When formatting existing code, limit layout changes to the requested types
+  or files.
 - Start with module comments and inner attributes, then child module declarations
   (including `mod tests;`), then imports. Leave one blank line before the import
   block and one before the following item. Prefer one nested `use` per crate
@@ -752,6 +760,12 @@ These rules apply to handwritten and generated Rust.
   adjacent methods, tests and test helpers. Keep comments and attributes attached
   to their item. Give each named argument its own line in multi-argument endpoint
   mounts and attributes. Document each mount’s role and each guard’s access policy.
+- In a Rust function or method, leave one blank line between preceding
+  statements and the returned value. This applies to an explicit `return`
+  (including an early `return;`) and to an implicit tail expression such as
+  `Ok(x)`. Apply the spacing within the block containing the return. A body
+  consisting of one expression, even across several lines, needs no leading
+  blank line.
 - Group a canister’s endpoint mount macros and directly exported query and
   update handlers at the top of its library root, immediately after module
   declarations and imports. Put constants, types, guard implementations and
@@ -785,12 +799,12 @@ These rules apply to handwritten and generated Rust.
   `#[cfg(test)]` on unit-test modules. Apply the [Wasm target guard rule](#wasm-target-guards)
   to any target condition on the declaration. Declare fixture-only package roles explicitly.
 
-For import and test layout examples, see the [Rust hygiene guide](https://github.com/dragginzgame/toko-tooling/blob/6b698abe60094d90aacb39695cb696aa9a4e7c91/docs/principles/rust-code-hygiene.md).
+For import and test layout examples, see the [Rust hygiene guide](https://github.com/dragginzgame/toko-tooling/blob/3846fcb68e52a00c4a5ee5376c3e4ab8ac1f80af/docs/principles/rust-code-hygiene.md).
 
 Prefer `#[expect(..., reason = "...")]` over `#[allow(...)]` for Rust lint
 suppressions. Repositories must review every `allow` for conversion and retain
 one only with a concrete reason why an expectation cannot work. Follow the
-[lint suppression rule](https://github.com/dragginzgame/toko-tooling/blob/6b698abe60094d90aacb39695cb696aa9a4e7c91/docs/principles/rust-code-hygiene.md#lint-suppressions).
+[lint suppression rule](https://github.com/dragginzgame/toko-tooling/blob/3846fcb68e52a00c4a5ee5376c3e4ab8ac1f80af/docs/principles/rust-code-hygiene.md#lint-suppressions).
 
 ### Wasm target guards
 
@@ -892,7 +906,13 @@ wildcard_imports = "warn"
 missing_panics_doc = "warn"
 must_use_candidate = "warn"
 too_many_lines = "allow"
+empty_line_after_doc_comments = "allow"
 ```
+
+Allow `clippy::empty_line_after_doc_comments` in the workspace lint table (or
+the package lint table for a standalone crate). The blank line after an entity
+or adapter header is intentional. Never add an item-level `#[expect]` or
+`#[allow]` for this lint.
 
 Use `unsafe_code = "forbid"` for packages requiring no unsafe constructs. Keep
 `deny` with narrow reviewed expectations for FFI and unsafe export attributes;
@@ -1055,7 +1075,7 @@ framework dependencies on core development. Follow the
 Do not add Python tooling. Read the applicable
 [workspace/tooling contracts](https://github.com/dragginzgame/toko-tooling/blob/a716b501274678a8ebf163ef576bbb549e974acd/rules/engineering-details.md#rust-workspaces-and-portable-tooling)
 for manifests, dependencies, hooks, installers or shared snapshots, and the
-[Rust hygiene guide](https://github.com/dragginzgame/toko-tooling/blob/6b698abe60094d90aacb39695cb696aa9a4e7c91/docs/principles/rust-code-hygiene.md) for Rust implementation.
+[Rust hygiene guide](https://github.com/dragginzgame/toko-tooling/blob/3846fcb68e52a00c4a5ee5376c3e4ab8ac1f80af/docs/principles/rust-code-hygiene.md) for Rust implementation.
 
 ## Host support
 

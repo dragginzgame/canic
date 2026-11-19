@@ -27,6 +27,15 @@ pub enum Command {
     Open(u64),
 }
 
+#[cfg(feature = "method")]
+impl crate::method::Contract for Command {
+    const NAME: &'static str = "recovery";
+    const ID: u64 = METHOD;
+    const REQUEST: ic_wire::Limits = LIMITS;
+    type Input = Self;
+    type Output = Self;
+}
+
 /// Encode an original invocation or its matching acknowledgement.
 /// # Errors
 /// Returns a Wire error if the fixed command exceeds its bound.

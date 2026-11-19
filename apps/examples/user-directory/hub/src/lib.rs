@@ -1,6 +1,8 @@
 //! The user hub owns its account routes.
+
 use canic::{
     auth::protocol::SessionView,
+    db,
     sharding::provisioning::{self, Account, Binding, HubRoute, Record},
 };
 use ic_db::{Database, Principal, Ulid};
@@ -16,27 +18,32 @@ canic::mount_db_role! {
     auth_read = "read",
 }
 
-/// Maps the application's retained row into Canic provisioning.
-pub struct Hub;
-
-impl Record for Hub {
-    type Row = Route;
-    type Resource = Users;
-
-    fn with_store<T>(f: impl FnOnce(&mut Database) -> T) -> T {
-        database::store::with(f)
-    }
-
-    fn identity(row: &Route) -> (Account, [u8; 16]) {
-        (
-            Account {
-                issuer: row.issuer,
-                subject: row.subject,
-            },
-            row.id.to_bytes(),
-        )
-    }
+// register
+// Reserve the signed-in account and confirm insertion on its assigned shard.
+// scope  : write
+// limits : default
+#[canic::update(scope = Hub::SCOPE)]
+async fn register(session: SessionView) -> canic::sharding::provisioning::Progress {
+    provisioning::provision::<Hub>(&session, (), provisioning::new_ulid).await
 }
+
+// my_shard
+// Look up at most one confirmed route for the signed-in account.
+// scope  : read
+// limits : default
+#[canic::query(scope = "read")]
+fn my_shard(session: SessionView) -> Option<Principal> {
+    provisioning::session_row::<Route>(&db!(), &session)
+        .filter(|row| row.ready)
+        .map(|row| row.shard)
+}
+
+///
+/// Hub
+/// Maps the application's retained row into Canic provisioning.
+///
+
+pub struct Hub;
 
 impl HubRoute for Hub {
     const SCOPE: &'static str = "write";
@@ -67,32 +74,21 @@ impl HubRoute for Hub {
     }
 }
 
-/// Reserve this session’s account and confirm its shard insertion.
-#[canic::update(scope = Hub::SCOPE)]
-async fn register(session: SessionView) -> canic::sharding::provisioning::Progress {
-    provisioning::provision::<Hub>(&session, (), provisioning::new_ulid).await
-}
+impl Record for Hub {
+    type Row = Route;
+    type Resource = Users;
 
-/// Return the signed-in user's confirmed shard.
-#[canic::query(scope = "read")]
-fn my_shard(session: SessionView) -> Option<Principal> {
-    ops::route(&session)
-        .expect("lookup route")
-        .filter(|row| row.ready)
-        .map(|row| row.shard)
-}
+    fn with_store<T>(f: impl FnOnce(&mut Database) -> T) -> T {
+        database::store::with(f)
+    }
 
-mod ops {
-    use super::{Route, SessionView, database};
-    use canic::db;
-
-    pub(super) fn route(session: &SessionView) -> Result<Option<Route>, ic_db::Error> {
-        db!()
-            .read()?
-            .query::<Route>()
-            .eq(Route::ISSUER, session.issuer)
-            .eq(Route::SUBJECT, session.subject)
-            .work_limit(1)
-            .try_one()
+    fn identity(row: &Route) -> (Account, [u8; 16]) {
+        (
+            Account {
+                issuer: row.issuer,
+                subject: row.subject,
+            },
+            row.id.to_bytes(),
+        )
     }
 }

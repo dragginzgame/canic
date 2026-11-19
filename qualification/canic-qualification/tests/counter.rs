@@ -1,7 +1,7 @@
 //! Real counter persistence and admission; no Root or Backup recovery claim.
-use canic::readiness;
+use canic::{method::Contract, readiness};
 use canic_qualification::counter;
-use ex_counter::{Error, LIMITS, METHOD, Request, Snapshot};
+use ex_counter::{CounterMethod, Error, METHOD, Request, Snapshot};
 use ic_testkit::{
     pocket_ic::{
         CanisterId, CanisterSettings, PocketIcBuilder, common::rest::BlobCompression,
@@ -19,7 +19,7 @@ fn encode(request: &impl serde::Serialize) -> Vec<u8> {
             method: METHOD,
             direction: Direction::Request,
         },
-        LIMITS,
+        CounterMethod::REQUEST,
     )
     .unwrap()
 }
@@ -123,7 +123,7 @@ async fn counter_preserves_value_authority_and_fence_across_upgrade() {
     let valid = encode(&Request::Increment);
     for invalid in [
         vec![],
-        vec![0; LIMITS.bytes + 1],
+        vec![0; CounterMethod::REQUEST.bytes + 1],
         valid[..valid.len() - 1].to_vec(),
         encode(&(Request::Fence { attempt: 1 }, operator)),
         ic_wire::encode(
@@ -132,7 +132,7 @@ async fn counter_preserves_value_authority_and_fence_across_upgrade() {
                 method: METHOD + 1,
                 direction: Direction::Request,
             },
-            LIMITS,
+            CounterMethod::REQUEST,
         )
         .unwrap(),
         ic_wire::encode(
@@ -141,7 +141,7 @@ async fn counter_preserves_value_authority_and_fence_across_upgrade() {
                 method: METHOD,
                 direction: Direction::Response,
             },
-            LIMITS,
+            CounterMethod::REQUEST,
         )
         .unwrap(),
     ] {
@@ -189,9 +189,13 @@ async fn counter_preserves_value_authority_and_fence_across_upgrade() {
     );
     let before = pic.canister_status(id, Some(operator)).await.unwrap();
     pic.stop_canister(id, Some(operator)).await.unwrap();
-    for candidate in [rejected, incompatible] {
+    for (candidate, args) in [
+        (rejected, vec![]),
+        (incompatible, vec![]),
+        (b.clone(), vec![1]),
+    ] {
         assert!(
-            pic.upgrade_canister(id, candidate, vec![], Some(operator))
+            pic.upgrade_canister(id, candidate, args, Some(operator))
                 .await
                 .is_err()
         );

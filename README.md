@@ -137,8 +137,8 @@ make canic
 canic --help
 ```
 
-To build the demo application after preparing the Wasm target, run
-`canic artifact build --package ex-greeting`. Building does not deploy or spend cycles.
+To build the counter example after preparing the Wasm target, run
+`canic app build --config apps/examples/counter/canic.toml`. Building does not deploy or spend cycles.
 
 Rust 1.100.0 is pinned in `rust-toolchain.toml`. Install it with Rustup, then run:
 
@@ -431,7 +431,7 @@ Set `canic_owner` to the controller principal and prepare the Wasm target, then
 build, inspect and review the plan (requires `jq`):
 
 ```sh
-canic artifact build --json --package ex-greeting > target/hello-build.json
+canic artifact build --json --package ex-template > target/hello-build.json
 canic artifact inspect "$(jq -r .wasm target/hello-build.json)"
 canic fleet plan --app hello --fleet mainnet --json --canister backend \
   --wasm "$(jq -r .wasm target/hello-build.json)" \
@@ -519,7 +519,7 @@ For a named deployment use the initialization guide above. Build the CLI and app
 
 ```sh
 make canic
-canic artifact build --package ex-greeting --json > target/hello-build.json
+canic artifact build --package ex-template --json > target/hello-build.json
 canic fleet plan --no-config --json \
   --wasm "$(jq -r .wasm target/hello-build.json)" \
   --network ic \
@@ -670,13 +670,14 @@ manager reports are labelled uncertified and declared routes remain separate fro
 certified module/controller metadata. Reports contain no keys, signed requests
 or artifact bytes.
 
-## Upgrade the demo
+## Upgrade the starter
 
-The second executable changes the greeting. It preserves the canister ID and
-controller; this stateless demo promises no application-data migration.
+In the template used above, edit the greeting returned by
+`apps/template/src/endpoints/mod.rs`. Build the edited application and use its
+new module hash to plan an upgrade of the same canister.
 
 ```sh
-canic artifact build --package ex-greeting --json --features greeting-v2 > target/hello-build-v2.json
+canic artifact build --package ex-template --json > target/hello-build-v2.json
 canic fleet plan --no-config --json \
   --wasm "$(jq -r .wasm target/hello-build-v2.json)" \
   --network ic \

@@ -1,6 +1,26 @@
 //! Bounded lookups and atomic updates of application-owned provisioning rows.
 use super::{Account, Binding, HubRoute, Id, Request, ShardRecord, Ticket};
-use ic_db::{Database, Entity};
+use crate::auth::protocol::SessionView;
+use ic_db::{Database, DatabaseSession, Entity};
+
+/// Read the provisioning row for a session already authorized by the endpoint.
+/// Uses the same unique account index and one-row byte budget as provisioning.
+/// # Panics
+/// Traps on conflicting database access, an incompatible index, or an oversized row.
+#[must_use]
+pub fn session_row<E: Entity>(database: &DatabaseSession, view: &SessionView) -> Option<E> {
+    let db = database.read().expect("read provisioned account");
+    find::<E>(&db, Account::from(view))
+}
+
+impl From<&SessionView> for Account {
+    fn from(view: &SessionView) -> Self {
+        Self {
+            issuer: view.issuer,
+            subject: view.subject,
+        }
+    }
+}
 
 pub(super) fn find<E: Entity>(db: &Database, account: Account) -> Option<E> {
     assert!(

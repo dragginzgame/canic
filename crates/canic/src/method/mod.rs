@@ -30,10 +30,10 @@ pub trait Contract {
     const NAME: &'static str;
     /// Stable Wire method identity.
     const ID: u64;
-    /// Complete request budget.
-    const REQUEST: wire::Limits;
-    /// Complete reply budget.
-    const REPLY: wire::Limits;
+    /// Request budget, defaulting to the standard small endpoint limits.
+    const REQUEST: wire::Limits = LIMITS;
+    /// Reply budget, defaulting to the request budget.
+    const REPLY: wire::Limits = Self::REQUEST;
     /// Public input shape, including unit for empty requests.
     type Input: serde::Serialize + serde::de::DeserializeOwned;
     /// Public reply shape.

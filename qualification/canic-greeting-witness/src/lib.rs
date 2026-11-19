@@ -1,8 +1,34 @@
-//! First hands-on greeting application. Upgrades replace code; no persistent state is claimed.
-
-mod actor;
+//! Stateless CLI qualification actor for calls, metrics and compatible upgrades.
 
 use serde::{Deserialize, Serialize};
+
+// Report readiness for the installed CLI fixture.
+canic::mount_readiness_endpoint!(crate::readiness);
+
+// Sample the installed canister clock.
+canic::mount_metrics_endpoint!(crate::snapshot);
+
+// greet
+// Greet a visitor with a name of up to 128 UTF-8 bytes.
+// limits : LIMITS
+#[canic::query(
+    method = GREET,
+    limits = LIMITS,
+)]
+fn greet(name: String) -> Greeting {
+    greeting(&name)
+}
+
+// probe
+// Return the replicated greeting for the same bounded name.
+// limits : LIMITS
+#[canic::update(
+    method = GREET,
+    limits = LIMITS,
+)]
+fn probe(name: String) -> Greeting {
+    greeting(&name)
+}
 
 /// Identity of the greeting RPC, including its Wire request/response envelope.
 pub const GREET: u64 = 1;
@@ -38,5 +64,17 @@ pub fn greeting(name: &str) -> Greeting {
     assert!(name.len() <= MAX_NAME_BYTES, "name exceeds 128 UTF-8 bytes");
     Greeting {
         message: format!("{GREETING}, {name}!"),
+    }
+}
+
+fn readiness() -> canic::readiness::State {
+    // This actor has no persistent state or lifecycle to open.
+    canic::readiness::State::Ready
+}
+
+fn snapshot() -> canic::metrics::Snapshot {
+    canic::metrics::Snapshot {
+        observed_at_ns: ic_platform_runtime::system::time(),
+        timers: None,
     }
 }

@@ -1,12 +1,17 @@
 # Example fleets
 
-| Example | Declared canister tree | What to try locally |
-| --- | --- | --- |
-| [`ex-greeting`](greeting/) | Greeting | Call a stateless canister, then upgrade it to change the reply. |
-| [`ex-counter`](counter/) | Root with Store and counter children | Increment a stored value and read it after an upgrade. |
-| [`ex-user-directory`](user-directory/) | User hub with pooled user shards, plus Root and Store | Register two accounts, sign in to their shards and observe refusal when the pool fills. |
+The six fleet designs below each have a distinct hands-on exercise.
 
-Each directory contains one app definition in `canic.toml`. From the repository
+| Fleet design | Status | What to try |
+| --- | --- | --- |
+| [Counter](counter/DESIGN.md) | Runnable, metrics planned | Increment a value, upgrade the executable and read the retained value. |
+| [Notebook](notebook/DESIGN.md) | Planned | Restore “draft” and explicitly reopen edits. |
+| [Asset library](asset-library/DESIGN.md) | Planned | Release one user’s Blob reference while another keeps the same content. |
+| [User directory](user-directory/DESIGN.md) | Runnable, revocation walkthrough planned | Register two accounts on different shards and retry the first signup. |
+| [Project board](project-board/DESIGN.md) | Planned | Upgrade one project subtree and inspect the untouched sibling. |
+| [Miner pool](miner-pool/DESIGN.md) | Planned, simulator only | Raise and lower a production goal and watch miners start, drain and return. |
+
+Only directories with a `canic.toml` appear in the CLI. From the repository
 root, install the CLI and list the examples:
 
 ```sh

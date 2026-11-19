@@ -29,7 +29,7 @@ scratch=$(mktemp -d target/root/starter.XXXXXX)
 cargo fmt --all --manifest-path "$scratch/project/Cargo.toml" -- --check
 cargo clippy --locked --manifest-path "$scratch/project/Cargo.toml" --target wasm32-unknown-unknown -- -D warnings
 cp -- "$scratch/project/artifacts/app.wasm" target/root/app.wasm
-"$cli" artifact build --json --package ex-greeting --features greeting-v2 > target/root/app-v2.json
+"$cli" artifact build --json --package canic-greeting-witness --manifest qualification/Cargo.toml --features greeting-v2 > target/root/app-v2.json
 cp -- "$(jq -r .wasm target/root/app-v2.json)" target/root/app-v2.wasm
 cp -- "$scratch/project/artifacts/root.wasm" target/root/root.wasm
 cp -- "$scratch/project/artifacts/store.wasm" target/root/store.wasm

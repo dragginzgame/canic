@@ -227,7 +227,7 @@ To inspect/build the inputs yourself:
 
 ```sh
 canic artifact build --package canic-root
-canic artifact build --package ex-greeting
+canic artifact build --package ex-template
 canic artifact inspect target/root/root.wasm
 ```
 

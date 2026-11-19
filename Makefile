@@ -92,7 +92,7 @@ ifneq ($(filter ci lint,$(MAKECMDGOALS)),)
 endif
 
 # The CLI journey owns product Clippy/Rustdoc coverage, including the shared canic library.
-lint: fmt-check toko-tooling-check effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc counter-clippy counter-doc profile-clippy profile-doc root-clippy root-doc store-clippy blob-clippy blob-doc auth-clippy auth-doc db-clippy
+lint: fmt-check toko-tooling-check check-app-endpoints effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc counter-clippy counter-doc profile-clippy profile-doc root-clippy root-doc store-clippy blob-clippy blob-doc auth-clippy auth-doc db-clippy
 
 CI_TEST_TARGETS := test effect-test artifact-custody-test journey-test counter-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
 ci: lint
@@ -111,7 +111,10 @@ publication-effect-test:
 
 # Routine hosted coverage: product packages only, no signer/server provisioning.
 # Installed journeys remain explicit through the existing qualification runners.
-.PHONY: check-pins ci-native ci-wasm
+.PHONY: check-app-endpoints check-pins ci-native ci-wasm
+check-app-endpoints:
+	perl scripts/ci/check-app-endpoints.pl
+
 check-pins:
 	bash vendor/toko-tooling/scripts/ci/check-dependency-pins.sh --cargo-inheritance
 
@@ -121,7 +124,8 @@ ci-native:
 	cargo test --locked --workspace
 
 ci-wasm:
-	cargo clippy --locked -p canic -p ex-counter -p ex-greeting -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-greeting-witness --lib --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked -p canic -p ex-counter -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features blob,auth --target wasm32-unknown-unknown --no-deps
 
@@ -158,13 +162,15 @@ journey-test:
 	bash scripts/dev/test-journey.sh
 
 journey-clippy:
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-greeting-witness --all-targets -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features backup --test backup -- -D warnings
-	cargo clippy --locked -p canic-macros -p canic -p canic-host -p canic-cli -p ex-greeting --features canic-host/backup --all-targets -- -D warnings
-	cargo clippy --locked -p ex-greeting --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked -p canic-macros -p canic -p canic-host -p canic-cli --features canic-host/backup --all-targets -- -D warnings
+	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-greeting-witness --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --lib --example demo --test journey --test publication -- -D warnings
 
 journey-doc:
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-macros -p canic -p canic-host -p ex-greeting --features canic-host/backup --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-greeting-witness --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-macros -p canic -p canic-host --features canic-host/backup --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-qualification --no-deps
 
 .PHONY: profile-test profile-clippy profile-doc

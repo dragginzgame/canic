@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.236.0] - 2026-11-19
+
+The workspace allows blank lines after Rust doc comments for spaced type headers.
+
+Counter is the starter example. Greeting has moved into the private CLI qualification workspace.
+
+Counter uses Canic’s default 512-byte Wire budget for both its endpoint and native CLI codec. The
+user-directory hub and shard use `provisioning::session_row` for scoped account reads.
+
+Counter uses the zero-argument form of `canic::mount_lifecycle!` for install and upgrade.
+
+The counter groups its endpoints in `src/endpoints.rs`. The user-directory
+roles group theirs at the top of each library root. Their headers identify access and payload
+limits. Build an example locally from the repository root:
+
+```sh
+canic app build --config apps/examples/counter/canic.toml
+```
+
 ## [0.235.0] - 2026-11-19
 
 Both workspaces now use IC DB 0.23.17 and Toko Tooling 0.45.19.

@@ -111,6 +111,11 @@ bytes, recovery boundaries and qualified predecessor paths:
 
 ## Packages and qualification
 
+In `apps/examples` and the starter template, declare application queries and
+updates with `#[canic::query]` or `#[canic::update]`, or use an existing Canic
+endpoint mount. Share a typed Wire contract when a client needs the same
+encoding and budgets. Canic owns the Platform entrypoint wiring.
+
 Use function-level `#[allow(clippy::needless_pass_by_value)]` on endpoint handlers
 and reply encoders when the runtime supplies an owned value. Canic endpoint attributes
 apply this allowance for the application.
@@ -132,7 +137,7 @@ remain separate; do not pull optional supplier runtimes into default application
 | Owner | Responsibility | Affected checks |
 | --- | --- | --- |
 | `canic` | Endpoint composition and optional local actor adapters | `make test`, `make clippy`, `make doc` |
-| `canic-host`, `canic-cli`, `apps/examples/greeting` | Native planning, custody and hands-on greeting journey | `make journey-test`, `make journey-clippy`, `make journey-doc` |
+| `canic-host`, `canic-cli`, `qualification/canic-greeting-witness` | Native planning, custody and hands-on greeting journey | `make journey-test`, `make journey-clippy`, `make journey-doc` |
 | `apps/examples/counter` | Persistent public counter, explicit owner-only fencing and readiness | `make counter-test`, `make counter-clippy`, `make counter-doc` |
 | `canic-management`, `canic-management-protocol`, `canic-root` | Shared bounded effect engine, passive contracts and explicit Root mounts | `make root-test`, `make root-clippy`, `make root-doc`; `make growth-test` for shared effect boundaries |
 | `qualification/canic-profile-*` | Retained ownership, composition, discovery and autonomous-management fixtures; not a product demo | `make profile-test`, `make profile-clippy`, `make profile-doc` |

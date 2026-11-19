@@ -45,7 +45,7 @@ jobs:
           mode: save
       - name: Admit snapshot, pins and workflow
         run: |
-          make toko-tooling-check check-pins
+          make toko-tooling-check check-pins check-app-endpoints
           bash scripts/ci/test-check-order.sh
           bash scripts/ci/test-publication-preflight.sh
           bash scripts/ci/test-publication-retry.sh

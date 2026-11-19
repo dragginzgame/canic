@@ -17,6 +17,7 @@ backup = ["canic-host/backup", "dep:ic-backup", "dep:ic-host-sign"]
 profile-state = ["dep:canic-profile-worker", "dep:ic-storage"]
 
 [dependencies]
+canic = { workspace = true, features = ["method"] }
 canic-profile-worker = { workspace = true, optional = true }
 ex-counter.workspace = true
 ic-backup = { workspace = true, optional = true }
@@ -33,11 +34,11 @@ canic-artifact-probe.workspace = true
 canic-asset-catalog.workspace = true
 canic-auth-witness.workspace = true
 canic-effect-probe.workspace = true
+canic-greeting-witness.workspace = true
 canic-host.workspace = true
 canic-management-protocol = { workspace = true, features = ["backup"] }
 canic-profile-protocol.workspace = true
 clap.workspace = true
-ex-greeting.workspace = true
 ic-auth.workspace = true
 ic-auth-protocol-types.workspace = true
 ic-host-process.workspace = true

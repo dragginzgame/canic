@@ -18,6 +18,8 @@ pub use actor::{provision, receive};
 #[cfg(feature = "db-store")]
 pub use directory::{Data, HubRoute, Id, Record, ShardRecord, Ticket};
 use ic_platform_types::Principal;
+#[cfg(feature = "provisioning")]
+pub use rows::session_row;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 /// Generate the 16-byte IC DB ULID used by conventional account routes.

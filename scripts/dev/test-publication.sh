@@ -6,12 +6,13 @@ mkdir -p target/publication
 records=$(mktemp target/publication/build.XXXXXX.jsonl)
 cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$records"
 cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected one CLI") end' "$records")
-for entry in root:canic-root store:ic-wasm-store app:ex-greeting; do
+for entry in root:canic-root store:ic-wasm-store; do
     name=${entry%%:*}
     package=${entry#*:}
     "$cli" artifact build --package "$package" --json > "target/publication/$name.json"
     cp -- "$(jq -r .wasm "target/publication/$name.json")" "target/publication/$name.wasm"
 done
+"$cli" artifact build --manifest qualification/Cargo.toml --package canic-greeting-witness --output target/publication/app.wasm --json > target/publication/app.json
 "$cli" artifact build --package canic-root --features maintenance-candidate --json > target/publication/root-maintenance.json
 cp -- "$(jq -r .wasm target/publication/root-maintenance.json)" target/publication/root-maintenance.wasm
 for entry in root-faults:canic-root:fault-injection store-candidate:ic-wasm-store:maintenance-candidate; do
