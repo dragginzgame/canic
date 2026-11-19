@@ -275,22 +275,22 @@ async fn retained_artifact_installs_without_operator_and_survives_maintenance() 
                     ic_wire::encode(
                         &"team",
                         ic_wire::Encoding::Frame {
-                            method: canic_hello::GREET,
+                            method: ex_greeting::GREET,
                             direction: ic_wire::Direction::Request,
                         },
-                        canic_hello::LIMITS,
+                        ex_greeting::LIMITS,
                     )
                     .unwrap(),
                 )
                 .await
                 .unwrap();
-            let greeting: canic_hello::Greeting = ic_wire::decode(
+            let greeting: ex_greeting::Greeting = ic_wire::decode(
                 &reply,
                 ic_wire::Encoding::Frame {
-                    method: canic_hello::GREET,
+                    method: ex_greeting::GREET,
                     direction: ic_wire::Direction::Response,
                 },
-                canic_hello::LIMITS,
+                ex_greeting::LIMITS,
             )
             .unwrap();
             assert_eq!(greeting.message, "Hello from Canic, team!");

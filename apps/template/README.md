@@ -5,7 +5,7 @@ Edit [src/endpoints/mod.rs](src/endpoints/mod.rs). It is also the actor that `ca
 From this directory, build just the application with the installed CLI and Rust Wasm target:
 
 ```sh
-canic app build --canister app
+canic app build --canister ex-template
 canic artifact inspect artifacts/app.wasm
 ```
 
@@ -17,7 +17,7 @@ cd hello
 canic app build --canister app
 ```
 
-As the app grows, keep callable declarations under `src/endpoints/` and move domain operations into ordinary Rust functions. Select a pre-decode guard for protected endpoints and check resource permissions in the handler. If the app gains persistent state, create it on install, reopen it on upgrade and report its actual readiness. The [counter](../examples/counter/canic-demo/src/actor.rs) demonstrates that next step.
+As the app grows, keep callable declarations under `src/endpoints/` and move domain operations into ordinary Rust functions. Select a pre-decode guard for protected endpoints and check resource permissions in the handler. If the app gains persistent state, create it on install, reopen it on upgrade and report its actual readiness. The [counter](../examples/counter/ex-counter/src/actor.rs) demonstrates that next step.
 
 Generated crates opt into source layout checks with `[package.metadata.canic.layout]`
 in their Cargo manifest. Canic checks selected packages during `canic app build`

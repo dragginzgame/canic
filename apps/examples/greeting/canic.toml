@@ -1,7 +1,7 @@
-[apps.greeting.canisters.greeting]
+[apps.ex-greeting.canisters.ex-greeting]
 role = "app"
 wasm = "artifacts/greeting.wasm"
-build = { manifest = "../../../Cargo.toml", package = "canic-hello" }
+build = { manifest = "../../../Cargo.toml", package = "ex-greeting" }
 
-[apps.greeting.fleets.local]
+[apps.ex-greeting.fleets.local]
 network = { kind = "Local" }

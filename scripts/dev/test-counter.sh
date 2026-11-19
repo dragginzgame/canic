@@ -8,9 +8,9 @@ cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$r
 cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected CLI") end' "$records")
 # Cargo uses the same public filename for both features. Consume the reported
 # paths only after both commands finish, as independent fleet builds would.
-"$cli" artifact build --json --package canic-demo > target/counter/v1.json &
+"$cli" artifact build --json --package ex-counter > target/counter/v1.json &
 base_pid=$!
-"$cli" artifact build --json --package canic-demo --features incompatible-schema > target/counter/incompatible.json &
+"$cli" artifact build --json --package ex-counter --features incompatible-schema > target/counter/incompatible.json &
 incompatible_pid=$!
 status=0
 wait "$base_pid" || status=$?
@@ -23,6 +23,6 @@ for variant in v1 incompatible; do
     cp -- "$wasm" "target/counter/$variant.wasm"
 done
 jq -e -s '.[0].artifact.sha256 != .[1].artifact.sha256' target/counter/{v1,incompatible}.json >/dev/null
-"$cli" artifact build --json --package canic-demo --features counter-v2 --output target/counter/v2.wasm > target/counter/v2.json
-"$cli" artifact build --json --package canic-demo --features reject-upgrade --output target/counter/reject.wasm > target/counter/reject.json
+"$cli" artifact build --json --package ex-counter --features counter-v2 --output target/counter/v2.wasm > target/counter/v2.json
+"$cli" artifact build --json --package ex-counter --features reject-upgrade --output target/counter/reject.wasm > target/counter/reject.json
 CANIC_COUNTER_ARTIFACTS="$root/target/counter" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test counter -- --nocapture

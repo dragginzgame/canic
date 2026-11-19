@@ -297,7 +297,7 @@ pub fn logout(caller: Principal, now: u64) -> LogoutResult {
 /// The application selects the read endpoint's scope and explicitly initializes on install.
 #[macro_export]
 macro_rules! mount_auth_session {
-    (read = $scope:literal $(,)?) => {
+    (read = $scope:expr $(,)?) => {
         mod canic_session {
             use $crate::auth::{
                 enrollment::types::Principal,

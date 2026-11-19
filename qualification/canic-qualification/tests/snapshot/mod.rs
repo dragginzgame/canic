@@ -166,25 +166,25 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
     let wasm = std::fs::read(repo().join("target/backup/root.wasm")).unwrap();
     let (root, child, expiry) = fixture(pic, wasm.clone()).await;
     let increment = ic_wire::encode(
-        &canic_demo::Request::Increment,
+        &ex_counter::Request::Increment,
         ic_wire::Encoding::Frame {
-            method: canic_demo::METHOD,
+            method: ex_counter::METHOD,
             direction: ic_wire::Direction::Request,
         },
-        canic_demo::LIMITS,
+        ex_counter::LIMITS,
     )
     .unwrap();
     let counter_reply = pic
         .update_call(child, CanisterId::anonymous(), "counter", increment)
         .await
         .unwrap();
-    let value: Result<canic_demo::Snapshot, canic_demo::Error> = ic_wire::decode(
+    let value: Result<ex_counter::Snapshot, ex_counter::Error> = ic_wire::decode(
         &counter_reply,
         ic_wire::Encoding::Frame {
-            method: canic_demo::METHOD,
+            method: ex_counter::METHOD,
             direction: ic_wire::Direction::Response,
         },
-        canic_demo::LIMITS,
+        ex_counter::LIMITS,
     )
     .unwrap();
     assert_eq!(value.unwrap().value, 1);
@@ -566,10 +566,10 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
                     pic,
                     worker,
                     CanisterId::anonymous(),
-                    canic_demo::Request::Increment
+                    ex_counter::Request::Increment
                 )
                 .await,
-                Err(canic_demo::Error::Fenced)
+                Err(ex_counter::Error::Fenced)
             );
         }
         let changed = request(
@@ -585,7 +585,7 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
     // The application can reject Root's requested generation. A valid transport
     // reply from the executor retains that rejection and grants no stop.
     let (r, worker, expiry) = fixture(pic, wasm.clone()).await;
-    canic_qualification::counter(pic, worker, r, canic_demo::Request::Fence { attempt: 4 })
+    canic_qualification::counter(pic, worker, r, ex_counter::Request::Fence { attempt: 4 })
         .await
         .unwrap();
     let op = operation(r, worker);

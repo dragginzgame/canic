@@ -1,20 +1,20 @@
-[apps.counter.canisters.root]
+[apps.ex-counter.canisters.root]
 role = "root"
 wasm = "artifacts/root.wasm"
 build = { manifest = "../../../Cargo.toml", package = "canic-root" }
 
-[apps.counter.canisters.store]
+[apps.ex-counter.canisters.store]
 role = "wasm-store"
 parent = "root"
 wasm = "artifacts/store.wasm"
 build = { manifest = "../../../Cargo.toml", package = "ic-wasm-store" }
 
-[apps.counter.canisters.app]
+[apps.ex-counter.canisters.ex-counter]
 role = "app"
 parent = "root"
 wasm = "artifacts/app.wasm"
-build = { manifest = "../../../Cargo.toml", package = "canic-demo", client = "canic-demo-client" }
+build = { manifest = "../../../Cargo.toml", package = "ex-counter", client = "ex-counter-client" }
 
-[apps.counter.fleets.mainnet]
+[apps.ex-counter.fleets.mainnet]
 network = { kind = "Mainnet" }
 canisters = {}

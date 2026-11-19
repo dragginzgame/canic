@@ -56,8 +56,8 @@ if [[ "$scope" == all || "$scope" == root-maintenance ]]; then
 fi
 if [[ "$scope" == all || "$scope" == sharding || "$scope" == publication || "$scope" == dispatch || "$scope" == root-maintenance ]]; then
     build root canic-root
-    build app canic-hello
-    build app-v2 canic-hello --features greeting-v2
+    build app ex-greeting
+    build app-v2 ex-greeting --features greeting-v2
 fi
 if [[ "$scope" == all || "$scope" == custody || "$scope" == admission || "$scope" == quiescence || "$scope" == maintenance || "$scope" == preservation || "$scope" == root-maintenance ]]; then
     build candidate ic-wasm-store --features maintenance-candidate

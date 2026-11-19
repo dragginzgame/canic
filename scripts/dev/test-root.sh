@@ -7,7 +7,7 @@ prepare_snapshot() {
     cargo test --locked -p canic-management-protocol --features backup backup::tests
     mkdir -p target/backup
     "$1" artifact build --package canic-root --features backup,fault-injection --output target/backup/root.wasm --json > target/backup/root.json
-    "$1" artifact build --package canic-demo --output target/backup/app.wasm --json > target/backup/app.json
+    "$1" artifact build --package ex-counter --output target/backup/app.wasm --json > target/backup/app.json
 }
 if [[ $# == 1 && $1 == snapshot:: ]]; then
     prepare_snapshot canic
@@ -29,7 +29,7 @@ scratch=$(mktemp -d target/root/starter.XXXXXX)
 cargo fmt --all --manifest-path "$scratch/project/Cargo.toml" -- --check
 cargo clippy --locked --manifest-path "$scratch/project/Cargo.toml" --target wasm32-unknown-unknown -- -D warnings
 cp -- "$scratch/project/artifacts/app.wasm" target/root/app.wasm
-"$cli" artifact build --json --package canic-hello --features greeting-v2 > target/root/app-v2.json
+"$cli" artifact build --json --package ex-greeting --features greeting-v2 > target/root/app-v2.json
 cp -- "$(jq -r .wasm target/root/app-v2.json)" target/root/app-v2.wasm
 cp -- "$scratch/project/artifacts/root.wasm" target/root/root.wasm
 cp -- "$scratch/project/artifacts/store.wasm" target/root/store.wasm

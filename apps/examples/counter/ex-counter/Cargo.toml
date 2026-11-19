@@ -1,5 +1,5 @@
 [package]
-name = "canic-demo"
+name = "ex-counter"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -18,7 +18,7 @@ category = "examples"
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "canic-demo-client"
+name = "ex-counter-client"
 path = "src/client/main.rs"
 
 [features]

@@ -66,12 +66,12 @@ counter-test:
 	bash scripts/dev/test-counter.sh
 
 counter-clippy:
-	cargo clippy --locked -p canic-demo --all-targets -- -D warnings
-	cargo clippy --locked -p canic-demo --lib --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked -p ex-counter --all-targets -- -D warnings
+	cargo clippy --locked -p ex-counter --lib --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test counter -- -D warnings
 
 counter-doc:
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-demo --lib --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p ex-counter --lib --target wasm32-unknown-unknown --no-deps
 
 check:
 	cargo check --locked -p canic
@@ -121,7 +121,7 @@ ci-native:
 	cargo test --locked --workspace
 
 ci-wasm:
-	cargo clippy --locked -p canic -p canic-demo -p canic-hello -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked -p canic -p ex-counter -p ex-greeting -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features blob,auth --target wasm32-unknown-unknown --no-deps
 
@@ -159,12 +159,12 @@ journey-test:
 
 journey-clippy:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features backup --test backup -- -D warnings
-	cargo clippy --locked -p canic-macros -p canic -p canic-host -p canic-cli -p canic-hello --features canic-host/backup --all-targets -- -D warnings
-	cargo clippy --locked -p canic-hello --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked -p canic-macros -p canic -p canic-host -p canic-cli -p ex-greeting --features canic-host/backup --all-targets -- -D warnings
+	cargo clippy --locked -p ex-greeting --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --lib --example demo --test journey --test publication -- -D warnings
 
 journey-doc:
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-macros -p canic -p canic-host -p canic-hello --features canic-host/backup --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-macros -p canic -p canic-host -p ex-greeting --features canic-host/backup --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-qualification --no-deps
 
 .PHONY: profile-test profile-clippy profile-doc

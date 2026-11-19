@@ -1,5 +1,5 @@
 [package]
-name = "user-directory-shard"
+name = "ex-user-directory-shard"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -14,12 +14,12 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 canic = { workspace = true, features = ["provisioning"] }
+ex-user-directory-schema.workspace = true
 ic-db.workspace = true
-user-directory-schema.workspace = true
 
 [build-dependencies]
+ex-user-directory-schema.workspace = true
 ic-db = { workspace = true, features = ["build"] }
-user-directory-schema.workspace = true
 
 [dev-dependencies]
 toko-tooling.workspace = true

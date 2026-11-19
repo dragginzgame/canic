@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.233.0] - 2026-11-19
+
+### 🧱 Actor declarations
+
+Hub and shard declarations in `mount_db_role!` now expose their storage settings
+and Auth read scope through the generated `database` module on native and Wasm
+targets. Only the IC lifecycle and endpoint wiring is Wasm-specific.
+
+Example app names, application canister slots and Cargo packages use the
+`ex-` prefix. From the repository root, list the examples and build the counter:
+
+```sh
+cd apps/examples
+canic app list
+cd counter
+canic app build --canister ex-counter
+```
+
 ## [0.232.0] - 2026-11-19
 
 ### 🎯 Qualification

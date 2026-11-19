@@ -1,5 +1,5 @@
 //! Call the installed demo through its application-owned Wire contract.
-use canic_demo::{Error, Request, Snapshot};
+use ex_counter::{Error, Request, Snapshot};
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
 use ic_wire::{Direction, Encoding};
 
@@ -20,10 +20,10 @@ pub async fn counter(
             ic_wire::encode(
                 &request,
                 Encoding::Frame {
-                    method: canic_demo::METHOD,
+                    method: ex_counter::METHOD,
                     direction: Direction::Request,
                 },
-                canic_demo::LIMITS,
+                ex_counter::LIMITS,
             )
             .unwrap(),
         )
@@ -32,10 +32,10 @@ pub async fn counter(
     ic_wire::decode(
         &reply,
         Encoding::Frame {
-            method: canic_demo::METHOD,
+            method: ex_counter::METHOD,
             direction: Direction::Response,
         },
-        canic_demo::LIMITS,
+        ex_counter::LIMITS,
     )
     .unwrap()
 }

@@ -27,9 +27,7 @@ canic = { path = "../crates/canic" }
 canic-artifact-probe = { path = "canic-artifact-probe" }
 canic-asset-catalog = { path = "canic-asset-catalog" }
 canic-auth-witness = { path = "canic-auth-witness" }
-canic-demo = { path = "../apps/examples/counter/canic-demo" }
 canic-effect-probe = { path = "canic-effect-probe" }
-canic-hello = { path = "../apps/examples/greeting/canic-hello" }
 canic-host = { path = "../crates/canic-host" }
 canic-management = { path = "../crates/canic-management" }
 canic-management-protocol = { path = "../crates/canic-management-protocol" }
@@ -37,6 +35,8 @@ canic-profile-protocol = { path = "canic-profile-protocol" }
 canic-profile-worker = { path = "canic-profile-worker", default-features = false }
 canic-qualification = { path = "canic-qualification" }
 clap = { version = "4.6.7", features = ["derive"] }
+ex-counter = { path = "../apps/examples/counter/ex-counter" }
+ex-greeting = { path = "../apps/examples/greeting/ex-greeting" }
 ic-auth = { version = "0.48.0", features = ["receiver-memory", "ed25519-verification"] }
 ic-auth-protocol-types = "0.43.0"
 ic-backup = "0.105.5"

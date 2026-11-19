@@ -1,7 +1,7 @@
 //! Real counter persistence and admission; no Root or Backup recovery claim.
 use canic::readiness;
-use canic_demo::{Error, LIMITS, METHOD, Request, Snapshot};
 use canic_qualification::counter;
+use ex_counter::{Error, LIMITS, METHOD, Request, Snapshot};
 use ic_testkit::{
     pocket_ic::{
         CanisterId, CanisterSettings, PocketIcBuilder, common::rest::BlobCompression,

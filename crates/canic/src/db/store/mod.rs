@@ -69,12 +69,17 @@ impl Store {
 #[macro_export]
 macro_rules! declare_db_store {
     ($vis:vis mod $name:ident, key = $key:literal $(,)?) => {
+        $crate::declare_db_store!(@generated $vis mod $name, $key, {});
+    };
+    (@generated $vis:vis mod $name:ident, $key:literal, { $($role:item)* }) => {
         /// Retained database allocation and the schema emitted by the app's build script.
         $vis mod $name {
             /// Original stable allocation name.
             pub const DATABASE_KEY: &str = $key;
             /// Compiled application schema for native and Wasm consumers.
             pub const SCHEMA: fn() -> ::ic_db::Schema = compiled;
+
+            $($role)*
 
             include!(concat!(env!("OUT_DIR"), "/schema.rs"));
 
@@ -109,24 +114,23 @@ macro_rules! declare_db_store {
 macro_rules! mount_db_role {
     (hub, database = $key:literal, config = $config:literal, authority = $owner:literal,
      $(prefix = $prefix:literal,)? pages = $pages:literal, auth_read = $scope:literal $(,)?) => {
-        $crate::declare_db_store!(pub mod database, key = $key);
-        #[cfg(target_arch = "wasm32")]
-        mod actor {
-            use $crate::db::role;
+        $crate::declare_db_store!(@generated pub mod database, $key, {
+            /// Stable hub configuration allocation.
+            pub const CONFIG_KEY: &str = $config;
+            /// Storage allocation owner.
+            pub const AUTHORITY: &str = $owner;
+            /// Namespace admitted by the Storage owner.
+            pub const PREFIX: &str = $crate::mount_db_role!(@prefix $owner $(, $prefix)?);
+            /// Maximum pages in the Storage directory.
+            pub const PAGES: u64 = $pages;
+            /// Scope required to read an Auth session.
+            pub const AUTH_READ: &str = $scope;
 
-            $crate::mount_auth_lifecycle!(
-                decode_context = $crate::db::role::decode_hub,
-                open = super::open,
-            );
-
-            fn open(initial: Option<role::HubConfig>) {
-                role::open_hub(initial, $owner, $crate::mount_db_role!(@prefix $owner $(, $prefix)?), $key, $config, $pages, super::database::store::attach);
-            }
-
-            $crate::mount_auth_session!(read = $scope);
-
-            $crate::mount_readiness_endpoint!($crate::db::role::hub_readiness);
-        }
+            #[cfg(target_arch = "wasm32")]
+            $crate::mount_db_role!(@actor HubConfig, decode_hub, hub_readiness, initial, {
+                role::open_hub(initial, AUTHORITY, PREFIX, DATABASE_KEY, CONFIG_KEY, PAGES, store::attach);
+            });
+        });
     };
     (shard, database = $key:literal, authority = $owner:literal,
      prefix = $prefix:literal, $(pages = $pages:literal,)? auth_read = $scope:literal $(,)?) => {
@@ -142,25 +146,36 @@ macro_rules! mount_db_role {
     };
     (shard, database = $key:literal, parent_storage_key = $parent:expr, authority = $owner:literal,
      prefix = $prefix:literal, $(pages = $pages:literal,)? auth_read = $scope:literal $(,)?) => {
-        $crate::declare_db_store!(pub mod database, key = $key);
-        #[cfg(target_arch = "wasm32")]
-        mod actor {
-            use $crate::db::role;
+        $crate::declare_db_store!(@generated pub mod database, $key, {
+            /// Stable allocation for the installed parent.
+            pub const PARENT_STORAGE_KEY: &str = $parent;
+            /// Storage allocation owner.
+            pub const AUTHORITY: &str = $owner;
+            /// Namespace admitted by the Storage owner.
+            pub const PREFIX: &str = $prefix;
+            /// Optional override of the Storage directory's page budget.
+            pub const PAGES: Option<u64> = $crate::mount_db_role!(@pages $($pages)?);
+            /// Scope required to read an Auth session.
+            pub const AUTH_READ: &str = $scope;
 
-            $crate::mount_auth_lifecycle!(
-                decode_context = $crate::db::role::decode_shard,
-                open = super::open,
-            );
+            #[cfg(target_arch = "wasm32")]
+            $crate::mount_db_role!(@actor ShardConfig, decode_shard, shard_readiness, initial, {
+                role::open_shard(initial, AUTHORITY, PREFIX, DATABASE_KEY, PARENT_STORAGE_KEY, PAGES, store::attach);
+            });
+        });
+    };
+    (@actor $config:ident, $decode:ident, $ready:ident, $initial:ident, $open:block) => {
+        use $crate::db::role;
 
-            fn open(initial: Option<role::ShardConfig>) {
-                const PARENT_STORAGE_KEY: &str = $parent;
-                role::open_shard(initial, $owner, $prefix, $key, PARENT_STORAGE_KEY, $crate::mount_db_role!(@pages $($pages)?), super::database::store::attach);
-            }
+        $crate::mount_auth_lifecycle!(
+            decode_context = $crate::db::role::$decode,
+            open = super::open,
+        );
 
-            $crate::mount_auth_session!(read = $scope);
+        fn open($initial: Option<role::$config>) $open
 
-            $crate::mount_readiness_endpoint!($crate::db::role::shard_readiness);
-        }
+        $crate::mount_auth_session!(read = super::AUTH_READ);
+        $crate::mount_readiness_endpoint!($crate::db::role::$ready);
     };
     (@prefix $owner:literal) => { concat!($owner, ".") };
     (@prefix $owner:literal, $prefix:literal) => { $prefix };

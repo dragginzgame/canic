@@ -25,7 +25,7 @@ build_wasm qualification/Cargo.toml canic-artifact-probe canic_artifact_probe \
     target/artifact-custody/original.wasm ''
 build_wasm qualification/Cargo.toml canic-artifact-probe canic_artifact_probe \
     target/artifact-custody/candidate.wasm maintenance-candidate
-build_wasm Cargo.toml canic-hello canic_hello target/artifact-custody/worker.wasm ''
+build_wasm Cargo.toml ex-greeting ex_greeting target/artifact-custody/worker.wasm ''
 cargo test --locked --manifest-path qualification/Cargo.toml -p canic-artifact-probe --lib -- --nocapture
 CANIC_EFFECT_PROBE_WASM="$root/target/artifact-custody/original.wasm" \
     CANIC_EFFECT_ARTIFACT_DIRECTORY="$root/target/artifact-custody" \

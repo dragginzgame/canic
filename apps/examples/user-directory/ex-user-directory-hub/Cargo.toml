@@ -1,5 +1,5 @@
 [package]
-name = "user-directory-schema"
+name = "ex-user-directory-hub"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,11 +9,17 @@ publish = false
 [package.metadata.toko-tooling.loc]
 category = "examples"
 
+[lib]
+crate-type = ["cdylib", "rlib"]
+
 [dependencies]
-canic = { workspace = true, features = ["sharding", "method"] }
+canic = { workspace = true, features = ["provisioning"] }
+ex-user-directory-schema.workspace = true
 ic-db.workspace = true
-ic-wire.workspace = true
-serde.workspace = true
+
+[build-dependencies]
+ex-user-directory-schema.workspace = true
+ic-db = { workspace = true, features = ["build"] }
 
 [dev-dependencies]
 toko-tooling.workspace = true

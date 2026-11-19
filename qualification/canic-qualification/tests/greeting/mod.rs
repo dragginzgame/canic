@@ -5,23 +5,23 @@ pub async fn call(pic: &PocketIc, canister: CanisterId, name: &str) -> String {
     let request = ic_wire::encode(
         &name,
         ic_wire::Encoding::Frame {
-            method: canic_hello::GREET,
+            method: ex_greeting::GREET,
             direction: ic_wire::Direction::Request,
         },
-        canic_hello::LIMITS,
+        ex_greeting::LIMITS,
     )
     .unwrap();
     let bytes = pic
         .query_call(canister, CanisterId::anonymous(), "greet", request)
         .await
         .unwrap();
-    let greeting: canic_hello::Greeting = ic_wire::decode(
+    let greeting: ex_greeting::Greeting = ic_wire::decode(
         &bytes,
         ic_wire::Encoding::Frame {
-            method: canic_hello::GREET,
+            method: ex_greeting::GREET,
             direction: ic_wire::Direction::Response,
         },
-        canic_hello::LIMITS,
+        ex_greeting::LIMITS,
     )
     .unwrap();
     greeting.message

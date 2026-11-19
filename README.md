@@ -137,7 +137,7 @@ canic --help
 ```
 
 To build the demo application after preparing the Wasm target, run
-`canic artifact build --package canic-hello`. Building does not deploy or spend cycles.
+`canic artifact build --package ex-greeting`. Building does not deploy or spend cycles.
 
 Rust 1.100.0 is pinned in `rust-toolchain.toml`. Install it with Rustup, then run:
 
@@ -430,7 +430,7 @@ Set `canic_owner` to the controller principal and prepare the Wasm target, then
 build, inspect and review the plan (requires `jq`):
 
 ```sh
-canic artifact build --json --package canic-hello > target/hello-build.json
+canic artifact build --json --package ex-greeting > target/hello-build.json
 canic artifact inspect "$(jq -r .wasm target/hello-build.json)"
 canic fleet plan --app hello --fleet mainnet --json --canister backend \
   --wasm "$(jq -r .wasm target/hello-build.json)" \
@@ -518,7 +518,7 @@ For a named deployment use the initialization guide above. Build the CLI and app
 
 ```sh
 make canic
-canic artifact build --package canic-hello --json > target/hello-build.json
+canic artifact build --package ex-greeting --json > target/hello-build.json
 canic fleet plan --no-config --json \
   --wasm "$(jq -r .wasm target/hello-build.json)" \
   --network ic \
@@ -675,7 +675,7 @@ The second executable changes the greeting. It preserves the canister ID and
 controller; this stateless demo promises no application-data migration.
 
 ```sh
-canic artifact build --package canic-hello --json --features greeting-v2 > target/hello-build-v2.json
+canic artifact build --package ex-greeting --json --features greeting-v2 > target/hello-build-v2.json
 canic fleet plan --no-config --json \
   --wasm "$(jq -r .wasm target/hello-build-v2.json)" \
   --network ic \

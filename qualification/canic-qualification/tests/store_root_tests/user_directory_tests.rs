@@ -96,7 +96,7 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
     let mut config = canic_host::load_config(&dir.join("canic.toml")).unwrap();
     let local = config
         .apps
-        .get_mut("user-directory")
+        .get_mut("ex-user-directory")
         .unwrap()
         .fleets
         .get_mut("local")
@@ -114,7 +114,11 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
         routing_canister: root.id.to_text(),
     });
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    for (name, id) in [("root", root.id), ("store", store.id), ("user_hub", hub)] {
+    for (name, id) in [
+        ("root", root.id),
+        ("store", store.id),
+        ("ex-user-directory-hub", hub),
+    ] {
         local.canisters.insert(
             name.into(),
             canic_host::CanisterBinding {
@@ -144,7 +148,7 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
         .await
         .unwrap();
     let args = fleet
-        .receiver_install_args("user_hub", &pool.root, vec![5; 16])
+        .receiver_install_args("ex-user-directory-hub", &pool.root, vec![5; 16])
         .unwrap();
     let install = canic::auth::install::Install::decode(&args).unwrap();
     pic.install_canister(hub, wasm("user_hub"), args, Some(root.operator))

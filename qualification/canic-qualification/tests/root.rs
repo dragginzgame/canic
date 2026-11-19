@@ -220,22 +220,22 @@ async fn qualify(
                 ic_wire::encode(
                     &"team",
                     ic_wire::Encoding::Frame {
-                        method: canic_hello::GREET,
+                        method: ex_greeting::GREET,
                         direction: ic_wire::Direction::Request,
                     },
-                    canic_hello::LIMITS,
+                    ex_greeting::LIMITS,
                 )
                 .unwrap(),
             )
             .await
             .unwrap();
-        let reply: canic_hello::Greeting = ic_wire::decode(
+        let reply: ex_greeting::Greeting = ic_wire::decode(
             &reply,
             ic_wire::Encoding::Frame {
-                method: canic_hello::GREET,
+                method: ex_greeting::GREET,
                 direction: ic_wire::Direction::Response,
             },
-            canic_hello::LIMITS,
+            ex_greeting::LIMITS,
         )
         .unwrap();
         assert_eq!(reply.message, "Hello from Canic, team!");

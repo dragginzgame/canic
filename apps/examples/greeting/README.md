@@ -12,4 +12,4 @@ canic artifact inspect artifacts/greeting.wasm
 
 From the repository root, run `make journey-test` with the simulator prepared.
 The installed CLI journey calls the greeting, upgrades the same canister and
-checks its new reply. [Application endpoints](canic-hello/src/actor.rs)
+checks its new reply. [Application endpoints](ex-greeting/src/actor.rs)

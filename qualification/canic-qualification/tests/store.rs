@@ -332,22 +332,22 @@ async fn pins_survive_maintenance_and_cache_reconstruction_supports_install_and_
             ic_wire::encode(
                 &"Store",
                 ic_wire::Encoding::Frame {
-                    method: canic_hello::GREET,
+                    method: ex_greeting::GREET,
                     direction: ic_wire::Direction::Request,
                 },
-                canic_hello::LIMITS,
+                ex_greeting::LIMITS,
             )
             .unwrap(),
         )
         .await
         .unwrap();
-    let greeting: canic_hello::Greeting = ic_wire::decode(
+    let greeting: ex_greeting::Greeting = ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: canic_hello::GREET,
+            method: ex_greeting::GREET,
             direction: ic_wire::Direction::Response,
         },
-        canic_hello::LIMITS,
+        ex_greeting::LIMITS,
     )
     .unwrap();
     assert!(greeting.message.contains("Store"));
