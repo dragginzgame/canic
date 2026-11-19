@@ -76,7 +76,7 @@ pub(crate) fn seal() {
 // Exercise delivery of a pre-upgrade callback using the original retained
 // renewal ticket. The actual browser must own the renewal. The engine itself
 // must refuse this mutation on its restart fence.
-#[canic::update(limits = canic::auth::issuer::REQUEST_LIMITS)]
+#[canic::update(limits = crate::CALLBACK_LIMITS)]
 fn stale_callback(request: canic::auth::issuer::Renew) -> bool {
     STATE.with_borrow_mut(|slot| {
         let s = slot.as_mut().expect("open issuer");

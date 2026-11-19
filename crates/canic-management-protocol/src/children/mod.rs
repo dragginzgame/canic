@@ -17,13 +17,12 @@ impl ChildId {
     /// Additional allocation with independent authority and evidence.
     pub const SECOND: Self = Self(1);
     /// Slots addressable by ordinary management requests, in custody order.
-    /// Shared-shard placement uses this same pair. Pool identities are listed in [`Self::SHARDS`] and [`Self::INSTANCES`].
     pub const ALL: [Self; 2] = [Self::FIRST, Self::SECOND];
 
     /// Original dedicated children retained by the four-child Root format.
     pub const PROJECT: [Self; 2] = [Self(2), Self(3)];
 
-    /// Stable identities available to each pool. The first four keep their deployed encoding.
+    /// Shared-shard identities in HRW candidate order. A pool grant admits a prefix.
     pub const SHARDS: [Self; 8] = [
         Self(0),
         Self(1),
@@ -34,7 +33,7 @@ impl ChildId {
         Self(8),
         Self(9),
     ];
-    /// Keyed instances use a disjoint identity range.
+    /// Dedicated instance identities in claim order. A pool grant admits a prefix.
     pub const INSTANCES: [Self; 8] = [
         Self(2),
         Self(3),

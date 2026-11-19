@@ -8,6 +8,12 @@ use ic_db::{Batch, Comparison, Database, Entity, Error, QueryCursor, Schema};
 use ic_storage::{DefaultMemoryImpl, MemoryRuntime, RuntimeMemory, StableKey, StorageConfig};
 use std::{cell::OnceCell, rc::Rc};
 
+#[ic_db::canister]
+struct Witness {}
+
+#[ic_db::store(canister = Witness, key = "app.db.v1")]
+struct Items {}
+
 type Host = MemoryRuntime<DefaultMemoryImpl>;
 
 thread_local! { static HOST: OnceCell<Rc<Host>> = const { OnceCell::new() }; }
@@ -18,6 +24,7 @@ thread_local! { static HOST: OnceCell<Rc<Host>> = const { OnceCell::new() }; }
 ///
 
 #[ic_db::entity(
+    store = crate::canister::Items,
     pk(field = "id"),
     index(fields = ["score", "id"]),
     fields(
@@ -34,6 +41,7 @@ struct Item {}
 
 #[cfg(feature = "incompatible-schema")]
 #[ic_db::entity(
+    store = crate::canister::Items,
     name = "Item",
     pk(field = "id"),
     index(fields = ["score", "id"]),
@@ -392,6 +400,7 @@ mod controls {
     ///
 
     #[ic_db::entity(
+        store = crate::canister::Items,
         name = "Item",
         pk(field = "id"),
         index(fields = ["score", "id"]),

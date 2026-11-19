@@ -1,5 +1,10 @@
 # User directory
 
+The shared `schema` crate builds both databases. Its model binds `Route` to the
+hub's `Routes` store and `User` to the shard's `Accounts` store. Each actor passes
+its store type to `mount_db_role!`. Keep the declared store key when upgrading a
+populated role.
+
 A user signs in to the hub and calls `register`. The hub asks Root to place
 the account, records its route, and asks that shard to insert the private
 user ID. A retry returns to the same reservation. The account key comes from

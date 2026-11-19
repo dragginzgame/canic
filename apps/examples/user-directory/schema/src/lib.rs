@@ -1,6 +1,7 @@
 //! Shared account schema and the hub-to-shard Wire contract.
-pub mod user_hub;
-pub mod user_shard;
+pub mod model;
+
+ic_db::include_schema!();
 
 use canic::sharding::provisioning::Resource;
 

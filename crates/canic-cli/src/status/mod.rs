@@ -17,52 +17,74 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
 pub(crate) fn pool_preview(
-    deployment: &canic_host::DeploymentName,
-    network: &Network,
+    selected: &canic_host::SelectedFleet,
     controller: &str,
-    approval: &canic_management_protocol::stored::ShardPool,
+    shards: Option<&canic_management_protocol::stored::ShardPool>,
+    instances: Option<&canic_management_protocol::stored::InstancePool>,
+    capacity: Option<&canic_host::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
+    increases: &[canic_host::PoolGrant<canic_management_protocol::stored::IncreasePool>],
 ) -> Result<String> {
-    let hex = |bytes: &[u8]| bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
-    let manifest = &approval.reference.manifest;
+    let network = &selected.config.network;
     let location = match network {
         Network::Mainnet => "IC mainnet",
         Network::Local { url, .. } => url,
     };
-    Ok(format!(
-        "Shard pool preview · {}/{} · {}\n\nNetwork: {location}\nNetwork binding: {}\nController: {controller}\nRoot: {}\nStore: {}\nHub: {}\nRelease: {} @ {}\nWasm SHA-256: {}\nInit bytes (hex): {}\nCapacity: {} shards × {} lifetime keys per shard\nCreation budget: {} cycles\nGrowth deadline: {} Unix ns\n\nOffline review only. No operation submitted.\n",
-        deployment.app,
-        deployment.fleet,
-        approval.pool,
-        network.binding_id()?,
-        approval.root,
-        approval.reference.store,
-        approval.hub,
-        manifest.release.name,
-        manifest.release.version,
-        hex(&manifest.hash),
-        hex(approval.arguments.as_slice()),
-        approval.max_shards,
-        approval.keys_per_shard,
-        approval.creation_budget,
-        approval.expires_at_ns
-    ))
+    let mut text = format!(
+        "Placement approvals · {}/{}\nNetwork: {}\nNetwork binding: {}\nController: {controller}\n",
+        selected.app,
+        selected.fleet,
+        escape(location),
+        network.binding_id()?
+    );
+    if let Some(cap) = capacity {
+        writeln!(
+            text,
+            "Managed subnet ceiling: {} children",
+            cap.approval.max_children
+        )
+        .unwrap();
+    }
+    for change in increases {
+        use canic_management_protocol::stored::IncreasePool;
+        let (pool, old, new) = match &change.approval {
+            IncreasePool::Shards(a, n) => (&a.pool, a.max_shards, n),
+            IncreasePool::Instances(a, n) => (&a.component, a.max_instances, n),
+        };
+        writeln!(text, "Increase {}: {old} → {new} children", escape(pool)).unwrap();
+    }
+    if let Some(a) = shards {
+        writeln!(text, "\nShared shards · {}\nRoot: {}\nHub: {}\nCapacity: {} shards × {} lifetime keys per shard\nInit bytes (hex): {}", escape(&a.pool), a.root, a.hub, a.max_shards, a.keys_per_shard, hex(a.arguments.as_slice())).unwrap();
+        pool_release(&mut text, &a.reference, a.creation_budget, a.expires_at_ns);
+    }
+    if let Some(a) = instances {
+        writeln!(
+            text,
+            "\nDedicated instances · {}\nRoot: {}\nParent hub: {}\nCapacity: {} lifetime instances",
+            escape(&a.component),
+            a.root,
+            a.hub,
+            a.max_instances
+        )
+        .unwrap();
+        pool_release(&mut text, &a.reference, a.creation_budget, a.expires_at_ns);
+    }
+    text.push_str("\nOffline review only. No operation submitted.\n");
+    Ok(text)
 }
 
-pub(crate) fn pool_release(
+fn pool_release(
     text: &mut String,
     reference: &canic_management_protocol::stored::Reference,
     budget: u64,
     deadline: u64,
 ) {
-    use std::fmt::Write as _;
     let m = &reference.manifest;
-    let hash = m
-        .hash
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect::<String>();
-    writeln!(text, "Release: {} @ {}\nWasm SHA-256: {hash}\nCreation budget: {budget} cycles\nGrowth deadline: {deadline} Unix ns", escape(&m.release.name), escape(&m.release.version)).expect("write to String");
+    writeln!(text, "Store: {}\nRelease: {} @ {}\nWasm SHA-256: {}\nCreation budget: {budget} cycles\nGrowth deadline: {deadline} Unix ns", reference.store, escape(&m.release.name), escape(&m.release.version), hex(&m.hash)).unwrap();
 }
 
 pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> {
@@ -130,9 +152,9 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
             if auth.revoke { "revoke" } else { "configure" },
             escape(&auth.root.canister), escape(&auth.receiver.canister), escape(auth.expected_receiver_controller(&plan.controller)), escape(&auth.receiver.module),
             auth.grant.issuer.to_text(),
-            auth.grant.key.iter().map(|b| format!("{b:02x}")).collect::<String>(),
-            auth.grant.audience.canonical_network_id.iter().map(|b| format!("{b:02x}")).collect::<String>(),
-            auth.grant.audience.fleet_id.iter().map(|b| format!("{b:02x}")).collect::<String>(),
+            hex(&auth.grant.key),
+            hex(&auth.grant.audience.canonical_network_id),
+            hex(&auth.grant.audience.fleet_id),
             escape(auth.grant.grant.target.as_str()),
             auth.grant.grant.scopes.as_slice().iter().map(|s| escape(s.as_str())).collect::<Vec<_>>().join(", "),
             auth.grant.not_before_ns, auth.grant.expires_at_ns,
@@ -547,25 +569,4 @@ fn cycles(value: u64) -> String {
         format!("{whole}.{fraction}")
     };
     format!("{amount}{unit} cycles ({value})")
-}
-
-pub(super) fn pool_capacity(
-    text: &mut String,
-    capacity: Option<&canic_host::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
-    increases: &[canic_host::PoolGrant<canic_management_protocol::stored::IncreasePool>],
-) {
-    if let Some(cap) = capacity {
-        text.push_str(&format!(
-            "\nManaged subnet ceiling: {} children\n",
-            cap.approval.max_children
-        ));
-    }
-    for change in increases {
-        use canic_management_protocol::stored::IncreasePool;
-        let (pool, old, new) = match &change.approval {
-            IncreasePool::Shards(a, n) => (&a.pool, a.max_shards, n),
-            IncreasePool::Instances(a, n) => (&a.component, a.max_instances, n),
-        };
-        text.push_str(&format!("Increase {pool}: {old} → {new} children\n"));
-    }
 }

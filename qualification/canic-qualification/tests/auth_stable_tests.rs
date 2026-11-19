@@ -137,7 +137,7 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
             ic_wire::encode(
                 &renewal,
                 method_frame(stale, ic_wire::Direction::Request),
-                issuer::REQUEST_LIMITS,
+                canic_auth_witness::CALLBACK_LIMITS,
             )
             .unwrap(),
         )

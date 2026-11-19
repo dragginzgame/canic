@@ -395,26 +395,10 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 )?;
                 if !cli.json {
                     let (digest, mut text) = match &result {
-                        canic_host::FleetPlanning::ShardPool { deployment, network, controller, approval, capacity, increases, .. } => {
-                            let mut text = status::pool_preview(deployment, network, controller, approval)?;
-                            status::pool_capacity(&mut text, capacity.as_ref(), increases);
-                            return Ok(Output::Text(text));
-                        }
-                        canic_host::FleetPlanning::PlacementPools { app, fleet, network, controller, shards, instances, capacity, increases } => {
-                            let mut text = format!("Placement approvals · {app}/{fleet}\nNetwork binding: {}\nController: {controller}\n", network.binding_id()?);
-                            let projects = &instances.approval;
-                            text.push_str(&format!("Root: {}\nStore: {}\n", projects.root, projects.reference.store));
-                            status::pool_capacity(&mut text, capacity.as_ref(), increases);
-                            if let Some(shared) = shards {
-                                let a = &shared.approval;
-                                text.push_str(&format!("\nShared shards · {}\nHub: {}\nCapacity: {} shards × {} lifetime keys per shard\n", a.pool, a.hub, a.max_shards, a.keys_per_shard));
-                                status::pool_release(&mut text, &a.reference, a.creation_budget, a.expires_at_ns);
-                            }
-                            text.push_str(&format!("\nDedicated instances · {}\nParent hub: {}\nCapacity: {} lifetime instances\n", projects.component, projects.hub, projects.max_instances));
-                            status::pool_release(&mut text, &projects.reference, projects.creation_budget, projects.expires_at_ns);
-                            text.push_str("\nOffline review only. No operation submitted.\n");
-                            return Ok(Output::Text(text));
-                        }
+                        canic_host::FleetPlanning::ShardPool { approval, capacity, increases, .. } =>
+                            return Ok(Output::Text(status::pool_preview(selected, &controller, Some(approval), None, capacity.as_ref(), increases)?)),
+                        canic_host::FleetPlanning::PlacementPools { shards, instances, capacity, increases, .. } =>
+                            return Ok(Output::Text(status::pool_preview(selected, &controller, shards.as_ref().map(|s| &s.approval), Some(&instances.approval), capacity.as_ref(), increases)?)),
                         canic_host::FleetPlanning::Create { operation, fleet_plan } =>
                             (operation, status::fleet_preview(operation, fleet_plan, &state_dir)?),
                         canic_host::FleetPlanning::AddChild { operation, .. } | canic_host::FleetPlanning::Upgrade { operation, .. } | canic_host::FleetPlanning::Maintenance { operation, .. } | canic_host::FleetPlanning::Publication { operation, .. } =>
@@ -431,18 +415,16 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     ));
                     return Ok(Output::Text(text));
                 }
-                if matches!(
+                let offline = matches!(
                     result,
                     canic_host::FleetPlanning::ShardPool { .. }
                         | canic_host::FleetPlanning::PlacementPools { .. }
-                ) {
-                    return Ok(Output::Json(
-                        serde_json::to_value(result).map_err(|e| Error::Invalid(e.to_string()))?,
-                    ));
-                }
+                );
                 let mut output =
                     serde_json::to_value(result).map_err(|e| Error::Invalid(e.to_string()))?;
-                output["state_dir"] = serde_json::json!(state_dir);
+                if !offline {
+                    output["state_dir"] = serde_json::json!(state_dir);
+                }
                 return Ok(Output::Json(output));
             }
             if execute_at.is_some() && root_module.is_none() {

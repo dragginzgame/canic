@@ -2,6 +2,17 @@
 //! schema, query construction and explicit storage/lifecycle hooks.
 //! No database executor, registry or durable transport representation lives here.
 
+#[cfg(all(test, any(feature = "db-store", feature = "db-schema")))]
+pub(crate) mod test_store {
+    use ic_db::design::prelude::*;
+
+    #[canister]
+    pub(crate) struct Owner {}
+
+    #[store(canister = Owner, key = "test.rows")]
+    pub(crate) struct Rows {}
+}
+
 /// A retained database in one application-owned named allocation.
 #[cfg(feature = "db-store")]
 pub mod store;

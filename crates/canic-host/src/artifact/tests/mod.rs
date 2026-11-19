@@ -151,7 +151,7 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
         "metadata": default
     }))
     .unwrap();
-    let mount = r#"canic::mount_db_role! { hub, database = "app.db", config = "app.config", authority = "app", pages = 8, auth_read = "read" }"#;
+    let mount = r#"canic::mount_db_role! { hub, database = schema::Accounts, config = "app.config", authority = "app", pages = 8, auth_read = "read" }"#;
     write(package.join("src/endpoints/role.rs"), mount).unwrap();
     assert!(
         validate(default.clone())

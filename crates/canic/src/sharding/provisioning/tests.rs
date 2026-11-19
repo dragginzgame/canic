@@ -19,6 +19,7 @@ impl Resource for Users {
 ///
 
 #[ic_db::entity(
+    store = crate::db::test_store::Rows,
     pk(field = "id"),
     index(fields = ["issuer", "subject"], unique),
     fields(
@@ -38,6 +39,7 @@ struct Route {}
 ///
 
 #[ic_db::entity(
+    store = crate::db::test_store::Rows,
     pk(field = "id"),
     index(fields = ["issuer", "subject"], unique),
     fields(
@@ -222,6 +224,7 @@ fn a_nonunique_account_index_cannot_authorize_provisioning() {
     ///
 
     #[ic_db::entity(
+        store = crate::db::test_store::Rows,
         pk(field = "id"),
         index(fields = ["issuer", "subject"]),
         fields(

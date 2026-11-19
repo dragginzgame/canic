@@ -1,5 +1,5 @@
 use super::*;
-use crate::{CanisterConfig, FleetConfig};
+use crate::CanisterConfig;
 use ic_query_topology::placement::{
     PlacementError,
     collection::{CanisterPlacement, PlacementCollectionReport},
@@ -7,36 +7,28 @@ use ic_query_topology::placement::{
 use std::{cell::Cell, collections::BTreeMap, time::Duration};
 
 fn selected() -> SelectedFleet {
-    SelectedFleet {
-        app: "app".into(),
-        fleet: "mainnet".into(),
-        config: FleetConfig {
-            receiver_policy: None,
-            subnet_child_limit: None,
-            instance_pool: None,
-            shard_pool: None,
-            auth: Vec::new(),
-            network: Network::Mainnet,
-            journal: None,
-            canisters: BTreeMap::from([
-                (
-                    "root".into(),
-                    CanisterConfig {
-                        id: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
-                        role: Some("root".into()),
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "worker".into(),
-                    CanisterConfig {
-                        parent: Some("root".into()),
-                        ..Default::default()
-                    },
-                ),
-            ]),
-        },
-    }
+    crate::tests::selected_fleet(
+        "app",
+        "mainnet",
+        Network::Mainnet,
+        BTreeMap::from([
+            (
+                "root".into(),
+                CanisterConfig {
+                    id: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
+                    role: Some("root".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "worker".into(),
+                CanisterConfig {
+                    parent: Some("root".into()),
+                    ..Default::default()
+                },
+            ),
+        ]),
+    )
 }
 
 #[tokio::test]

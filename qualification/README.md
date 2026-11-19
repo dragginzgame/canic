@@ -104,7 +104,7 @@ encoding and allocation. The local counter upgrade and Root snapshot tests run o
 Testkit 0.110.1. Keep deployed 0.76 records with their qualified executable until
 a physical-image migration is separately qualified.
 
-The DB 0.23.11 witness and Blob 0.107.1 catalog use Storage 0.78.7 directly.
+The DB 0.24.0 witness and Blob 0.107.1 catalog use Storage 0.78.7 directly.
 The DB installed suite covers populated upgrades, refused upgrades and damaged storage. The installed Blob suite covers fresh composition, the managed fleet journey and refusal to upgrade the populated 0.100.6 catalog. The refusal preserves
 the predecessor's stable bytes, management report and surviving asset.
 [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8) records the decision to retain the original executable for this directory.
@@ -960,7 +960,7 @@ explicitly and supplies synchronous inspect/query/write handlers to
 Canic. Its passive `db::inspection` contract is versioned independently as
 `method_id("canic.db.inspect.v1")`. The separate optional `db-schema` feature adds
 stateless projection of compiled IC DB metadata, with no database executor,
-storage owner or permission policy. The witness consumes crates.io IC DB 0.23.2; transport never becomes its durable codec.
+storage owner or permission policy. The witness consumes crates.io IC DB 0.24.0; transport never becomes its durable codec.
 
 ```sh
 make qualification-setup
@@ -1020,7 +1020,10 @@ the application. Mounting adds no initialization or lifecycle hooks.
 ### Retained application store
 
 For an Auth-enrolled hub or shard, place a single declaration in `src/setup.rs`.
-The role's build script still calls IC DB's `build_schema!(src::schema)`.
+The schema owner's build script calls `ic_db::build_schema!(model);` and its library
+calls `ic_db::include_schema!();` at the crate root. Its model declares a canister,
+a named store with its original allocation key, and entities assigned to that store.
+Both User Directory actors import that one schema crate.
 Select `canic/stateful-role` on all targets to check the entire actor natively.
 Store-only native consumers may select `canic/db-store`. A role can expose its schema and declared settings with
 `pub use setup::database;` in `lib.rs`. On both targets, `database::AUTH_READ`
@@ -1029,12 +1032,12 @@ expose `database::PARENT_STORAGE_KEY`.
 
 ```rust
 canic::mount_db_role! {
-    shard, database = "toko.user.shard.user.v1",
+    shard, database = toko_schema::model::Accounts,
     authority = "user_shard", prefix = "toko.user.shard.", auth_read = "read",
 }
 ```
 
-The hub selects `hub, database = "...", config = "...", authority = "toko",
+The hub selects `hub, database = toko_schema::model::Routes, config = "...", authority = "toko",
 pages = 65536, auth_read = "read"` and obtains its retained routing Root from
 `canic::db::role::root()`. The shard uses `canic::topology::require_parent` to
 authorize a parent-only method. Declare `parent = "user_hub"` once in the
@@ -1049,16 +1052,16 @@ the declared stores opened. Auth admission is independent and stays closed
 after volatile loss. Role selection grants no management authority.
 
 For a generated schema with an application-owned lifecycle,
-`canic::declare_db_store!(pub mod database, key = "app.items.v1");` exposes
+`canic::declare_db_store!(pub mod database, store = app_schema::model::Items);` exposes
 `database::SCHEMA` and `database::DATABASE_KEY` natively and
 `database::store::{attach, with}` on Wasm.
 
-Enable `canic/db-store` in a stateful actor and pass the generated schema function
-directly. A Toko shard can declare its existing allocation:
+For an application that constructs its schema explicitly, `canic/db-store` also
+accepts an allocation key and a schema function:
 
 ```rust
 canic::declare_db_store!(pub(crate) mod users,
-    key = super::DATABASE_KEY, schema = super::compiled);
+    key = super::DATABASE_KEY, schema = super::schema);
 ```
 
 Keep the application's existing Storage bootstrap and hub cell. In the lifecycle

@@ -5,6 +5,9 @@
 #[cfg(feature = "auth")]
 pub mod auth;
 
+#[cfg(any(feature = "blob", feature = "db"))]
+mod frame;
+
 /// Optional Blob endpoint composition; no implicit lifecycle or service activation.
 #[cfg(feature = "blob")]
 pub mod blob;

@@ -18,6 +18,9 @@ canic = { workspace = true, features = ["sharding", "method"] }
 ic-db.workspace = true
 serde.workspace = true
 
+[build-dependencies]
+ic-db = { workspace = true, features = ["build"] }
+
 [dev-dependencies]
 toko-tooling.workspace = true
 

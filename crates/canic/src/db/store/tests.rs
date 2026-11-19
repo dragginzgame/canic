@@ -9,6 +9,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 ///
 
 #[ic_db::entity(
+    store = crate::db::test_store::Rows,
     pk(field = "id"),
     fields(field(name = "id", value(item(prim = "Nat64"))))
 )]
@@ -59,6 +60,7 @@ fn open_requires_existing_database_and_preserves_neighbor_and_incarnation() {
 ///
 
 #[ic_db::entity(
+    store = crate::db::test_store::Rows,
     pk(field = "id"),
     fields(field(name = "id", value(item(prim = "Nat32"))))
 )]

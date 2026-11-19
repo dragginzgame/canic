@@ -96,28 +96,25 @@ impl Store {
 }
 
 /// Declare an actor-local database module with `attach` and synchronous `with`.
-/// Supply only the allocation key to bind IC DB's generated `OUT_DIR/schema.rs`
-/// from the consuming package. All targets use the same compiled schema
-/// and explicitly attached store. With an explicit schema
-/// function, the key and schema paths resolve inside the generated module.
+/// Select an IC DB store from the schema owner. A custom lifecycle can instead
+/// provide an explicit key and schema function inside its generated module.
 #[macro_export]
 macro_rules! declare_db_store {
-    ($vis:vis mod $name:ident, key = $key:literal $(,)?) => {
-        $crate::declare_db_store!(@generated $vis mod $name, $key, {});
+    ($vis:vis mod $name:ident, store = $store:path $(,)?) => {
+        $crate::declare_db_store!(@typed $vis mod $name, $store, {});
     };
-    (@generated $vis:vis mod $name:ident, $key:literal, { $($role:item)* }) => {
-        /// Retained database allocation and the schema emitted by the app's build script.
+    (@typed $vis:vis mod $name:ident, $store:path, { $($role:item)* }) => {
+        /// Database allocation selected from the application schema.
         $vis mod $name {
-            /// Original stable allocation name.
-            pub const DATABASE_KEY: &str = $key;
-            /// Compiled application schema for native and Wasm consumers.
-            pub const SCHEMA: fn() -> ::ic_db::Schema = compiled;
+            use $store as Definition;
+            /// Stable allocation key declared by IC DB.
+            pub const DATABASE_KEY: &str = <Definition as ::ic_db::Store>::KEY;
+            /// Compiled schema for this allocation.
+            pub const SCHEMA: fn() -> ::ic_db::Schema = Definition::compiled;
 
             $($role)*
 
-            include!(concat!(env!("OUT_DIR"), "/schema.rs"));
-
-            $crate::declare_db_store!(pub(crate) mod store, key = super::DATABASE_KEY, schema = super::compiled);
+            $crate::declare_db_store!(pub(crate) mod store, key = super::DATABASE_KEY, schema = super::SCHEMA);
         }
     };
     ($vis:vis mod $name:ident, key = $key:expr, schema = $schema:path $(,)?) => {
@@ -151,16 +148,16 @@ macro_rules! declare_db_store {
     };
 }
 
-/// Declare the generated database and install one Auth-enrolled hub or shard.
-/// Put this in the role setup module. IC DB's build script owns schema generation.
+/// Select one store from the schema owner and mount an Auth-enrolled hub or shard.
+/// Pass the store's crate-qualified type path in the role setup module.
 /// Select `stateful-role` for the mounted actor on both targets; plain stores use `db-store`.
 /// A shard retains its approved parent in `<prefix>hub.v1`. For a predecessor
 /// using a different allocation, specify its exact `parent_storage_key`.
 #[macro_export]
 macro_rules! mount_db_role {
-    (hub, database = $key:literal, config = $config:literal, authority = $owner:literal,
+    (hub, database = $store:path, config = $config:literal, authority = $owner:literal,
      $(prefix = $prefix:literal,)? pages = $pages:literal, auth_read = $scope:literal $(,)?) => {
-        $crate::declare_db_store!(@generated pub mod database, $key, {
+        $crate::declare_db_store!(@typed pub mod database, $store, {
             /// Stable hub configuration allocation.
             pub const CONFIG_KEY: &str = $config;
             /// Storage allocation owner.
@@ -177,11 +174,11 @@ macro_rules! mount_db_role {
             });
         });
     };
-    (shard, database = $key:literal, authority = $owner:literal,
+    (shard, database = $store:path, authority = $owner:literal,
      prefix = $prefix:literal, $(pages = $pages:literal,)? auth_read = $scope:literal $(,)?) => {
         $crate::mount_db_role!(
             shard,
-            database = $key,
+            database = $store,
             parent_storage_key = concat!($prefix, "hub.v1"),
             authority = $owner,
             prefix = $prefix,
@@ -189,9 +186,9 @@ macro_rules! mount_db_role {
             auth_read = $scope
         );
     };
-    (shard, database = $key:literal, parent_storage_key = $parent:expr, authority = $owner:literal,
+    (shard, database = $store:path, parent_storage_key = $parent:expr, authority = $owner:literal,
      prefix = $prefix:literal, $(pages = $pages:literal,)? auth_read = $scope:literal $(,)?) => {
-        $crate::declare_db_store!(@generated pub mod database, $key, {
+        $crate::declare_db_store!(@typed pub mod database, $store, {
             /// Stable allocation for the installed parent.
             pub const PARENT_STORAGE_KEY: &str = $parent;
             /// Storage allocation owner.

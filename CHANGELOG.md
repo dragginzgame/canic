@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.241.0] - 2026-11-20
+
+IC DB 0.24.0 moves schema compilation into the schema owner. In `mount_db_role!`,
+replace the literal database key with the store type declared in that crate.
+Give its `#[store]` the existing allocation key. The User Directory now has one
+schema build script shared by both actors.
+
+```sh
+canic app build --config apps/examples/user-directory/canic.toml
+bash scripts/dev/test-store.sh user-directory
+```
+
+Canic now uses IC Wire 0.27.0 directly. Blob and DB share the request framing
+and reply encoder while retaining their own budgets and authorization.
+
+Removed the obsolete Rust constant `stored::SHARD_SLOTS`. Use `ChildId::SHARDS`
+for the ordered shard identities. The fleet grant determines how many are eligible.
+Shard-only and combined fleet previews now use the same text layout for each
+approval, including its release, budget and deadline. Preview a configured fleet
+or run the installed growth witness on a prepared simulator.
+
+```sh
+canic fleet plan --config apps/toko/canic.toml --controller "$CONTROLLER"
+bash scripts/dev/test-store.sh sharding
+```
+
 ## [0.240.0] - 2026-11-19
 
 ### 🚀 Features

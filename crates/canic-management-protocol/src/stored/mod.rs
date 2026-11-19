@@ -183,16 +183,27 @@ pub enum IncreasePool {
 /// Increase one pool count without renewing funding or time.
 pub const INCREASE_POOL: u64 = ic_wire::method_id("canic.increase_pool.v1");
 
-/// Permanent Root slots eligible for the existing shared-shard approval. Their order
-/// is part of HRW placement and their indices address the retained shard ledger.
-pub const SHARD_SLOTS: [children::ChildId; 2] =
-    [children::ChildId::FIRST, children::ChildId::SECOND];
-
 /// Maximum retained account keys per shard in the initial bounded Root layout.
 pub const MAX_KEYS_PER_SHARD: u16 = 64;
 
 /// Supplier-owned Store chunk budget for the Canic codec.
-pub use ic_wasm_store_protocol::CHUNK_LIMITS as STORE_CHUNK_LIMITS;
+pub const STORE_CHUNK_LIMITS: ic_wire::Limits = {
+    let limits = ic_wasm_store_protocol::CHUNK_LIMITS;
+    ic_wire::Limits {
+        bytes: limits.bytes,
+        allocation: limits.allocation,
+        nodes: limits.nodes,
+        depth: limits.depth,
+    }
+};
 
 /// Supplier-owned Store metadata budget for the Canic codec.
-pub use ic_wasm_store_protocol::LIMITS as STORE_LIMITS;
+pub const STORE_LIMITS: ic_wire::Limits = {
+    let limits = ic_wasm_store_protocol::LIMITS;
+    ic_wire::Limits {
+        bytes: limits.bytes,
+        allocation: limits.allocation,
+        nodes: limits.nodes,
+        depth: limits.depth,
+    }
+};

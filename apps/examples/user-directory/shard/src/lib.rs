@@ -6,12 +6,12 @@ use canic::{
     sharding::provisioning::{self, Binding, Provision, Request},
 };
 use ic_db::Ulid;
-use user_directory_schema::{Users, user_shard::User};
+use user_directory_schema::{Users, model::user_shard::User};
 
 // Open the shard database and mount its Auth session and readiness endpoints.
 canic::mount_db_role! {
     shard,
-    database = "directory.shard.db.v1",
+    database = user_directory_schema::model::user_shard::Accounts,
     authority = "directory",
     prefix = "directory.",
     auth_read = "read",

@@ -18,6 +18,28 @@ pub(crate) fn directory() -> PathBuf {
     )
 }
 
+pub(crate) fn selected_fleet(
+    app: &str,
+    fleet: &str,
+    network: Network,
+    canisters: std::collections::BTreeMap<String, crate::CanisterConfig>,
+) -> crate::SelectedFleet {
+    crate::SelectedFleet {
+        app: app.into(),
+        fleet: fleet.into(),
+        config: crate::FleetConfig {
+            network,
+            canisters,
+            journal: None,
+            receiver_policy: None,
+            subnet_child_limit: None,
+            instance_pool: None,
+            shard_pool: None,
+            auth: Vec::new(),
+        },
+    }
+}
+
 pub(crate) fn input() -> PlanInput {
     PlanInput {
         network: Network::Mainnet,

@@ -18,6 +18,7 @@ struct Link {}
 ///
 
 #[ic_db::entity(
+    store = crate::db::test_store::Rows,
     pk(field = "id"),
     index(fields = ["next", "id"]),
     fields(

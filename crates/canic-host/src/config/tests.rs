@@ -143,20 +143,12 @@ fn catalog_and_selection_share_declared_identity_and_reject_duplicates() {
 }
 
 fn config() -> SelectedFleet {
-    SelectedFleet {
-        app: "hello".into(),
-        fleet: "demo".into(),
-        config: FleetConfig {
-            receiver_policy: None,
-            subnet_child_limit: None,
-            instance_pool: None,
-            shard_pool: None,
-            auth: Vec::new(),
-            network: Network::Mainnet,
-            journal: None,
-            canisters: BTreeMap::from([("backend".into(), CanisterConfig::default())]),
-        },
-    }
+    crate::tests::selected_fleet(
+        "hello",
+        "demo",
+        Network::Mainnet,
+        BTreeMap::from([("backend".into(), CanisterConfig::default())]),
+    )
 }
 
 #[test]

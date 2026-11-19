@@ -287,7 +287,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.240.0"
+version = "0.241.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -298,7 +298,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "sha2 0.11.1",
 ]
@@ -311,7 +311,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-timers",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -328,7 +328,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "toko-tooling",
 ]
@@ -346,7 +346,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "sha2 0.11.1",
  "toko-tooling",
@@ -363,7 +363,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-storage",
  "ic-testkit",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "serde_json",
  "tokio",
@@ -378,7 +378,7 @@ dependencies = [
  "ic-platform-protocol",
  "ic-platform-runtime",
  "ic-platform-types",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "serde_bytes",
  "toko-tooling",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.240.0"
+version = "0.241.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -413,7 +413,7 @@ dependencies = [
  "ic-query-topology",
  "ic-wasm-store",
  "ic-wasm-store-protocol",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.240.0"
+version = "0.241.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.240.0"
+version = "0.241.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -448,18 +448,18 @@ dependencies = [
  "ic-storage",
  "ic-timers",
  "ic-wasm-store-protocol",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
 ]
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.240.0"
+version = "0.241.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
  "ic-wasm-store-protocol",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -475,7 +475,7 @@ dependencies = [
  "ic-host-artifacts",
  "ic-host-fs",
  "ic-host-process",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde_json",
  "toko-tooling",
 ]
@@ -489,7 +489,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.27.0",
  "toko-tooling",
 ]
 
@@ -502,7 +502,7 @@ dependencies = [
  "canic-management-protocol",
  "canic-profile-protocol",
  "ic-platform-runtime",
- "ic-wire",
+ "ic-wire 0.27.0",
  "toko-tooling",
 ]
 
@@ -511,7 +511,7 @@ name = "canic-profile-protocol"
 version = "0.0.0"
 dependencies = [
  "canic",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "toko-tooling",
 ]
@@ -524,7 +524,7 @@ dependencies = [
  "canic-profile-protocol",
  "ic-platform-runtime",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "toko-tooling",
 ]
@@ -556,7 +556,7 @@ dependencies = [
  "ic-storage",
  "ic-testkit",
  "ic-wasm-store-protocol",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -574,7 +574,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.27.0",
  "sha2 0.11.1",
  "toko-tooling",
 ]
@@ -1038,14 +1038,14 @@ dependencies = [
 
 [[package]]
 name = "ex-counter"
-version = "0.240.0"
+version = "0.241.0"
 dependencies = [
  "canic",
  "clap",
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.27.0",
  "serde",
  "serde_json",
 ]
@@ -1420,7 +1420,7 @@ dependencies = [
  "ic-auth-protocol-types",
  "ic-platform",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.26.1",
  "serde",
  "sha2 0.11.1",
 ]
@@ -1442,7 +1442,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "838a20773da8849419283ac9bf8207445393d5c4b99de39044f524d8be26aa51"
 dependencies = [
  "ic-auth-protocol-types",
- "ic-wire",
+ "ic-wire 0.26.1",
  "serde",
 ]
 
@@ -1474,7 +1474,7 @@ checksum = "67a52305244e0d106baae32a414db802c8de005a565f8a699536c3a2969b6d64"
 dependencies = [
  "ic-platform-types",
  "ic-storage",
- "ic-wire",
+ "ic-wire 0.26.1",
  "serde",
  "sha2 0.11.1",
 ]
@@ -1493,9 +1493,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.23.21"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28a7523b42b3a2d708e29abe2b0d4706f31b027ba9a2789221a3c45200965bc2"
+checksum = "eaeafbbc09be7970fc0104eab3023d949ba4f68c61491c5a89dd03e263788fdf"
 dependencies = [
  "ethnum",
  "getrandom 0.4.3",
@@ -1511,9 +1511,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.23.21"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a66390bd0ccf915370cb57c7965f3af776c373a646758ab0f8ea317708dc0df7"
+checksum = "965b8d35895a4a86b2f6d9f88cf557546c04fe46b553ff269e2cb28c7d43d691"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1787,7 +1787,7 @@ dependencies = [
  "ic-platform-types",
  "ic-storage",
  "ic-wasm-store-protocol",
- "ic-wire",
+ "ic-wire 0.26.1",
  "serde",
  "sha2 0.11.1",
 ]
@@ -1798,7 +1798,7 @@ version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "59431cc18f243ae6addc620b04335122c719841534140bf0d7997d68a92fa84a"
 dependencies = [
- "ic-wire",
+ "ic-wire 0.26.1",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -1809,6 +1809,18 @@ name = "ic-wire"
 version = "0.26.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0375907693869ca5de23befc66639d7e982d85a342b8fb06c1bc7ceafed13c4b"
+dependencies = [
+ "bytemuck",
+ "postcard",
+ "serde",
+ "serde_bytes",
+]
+
+[[package]]
+name = "ic-wire"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d28bb4f9831431626826f79a72921af936bfbf46ee910fb81930bcc7cea9720a"
 dependencies = [
  "bytemuck",
  "postcard",

@@ -7,6 +7,21 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## IC DB 0.24.0 schema-owner upgrade — 2026-11-20
+
+The User Directory journey installed the previous IC DB 0.23.22 role Wasms,
+registered two accounts on distinct shards, and upgraded the populated hub and
+one shard to actors using the shared schema crate's typed stores. Both opened
+under their original allocation keys with byte-identical stable memory. The
+shard refused session admission after volatile Auth state was lost.
+
+To repeat, set `CANIC_PREDECESSOR_DIRECTORY_ROLES` to a directory containing
+the original `user_hub.wasm` and `user_shard.wasm` and run
+`bash scripts/dev/test-store.sh user-directory`. The predecessor SHA-256 digests
+were `9df6e33240e0e363b85863e10a9b6c0ffec58fe9955af4df2b2e71b5f658ecbc`
+(hub) and `6b78bc30a4ca90dd0603bb823efca744f45822eca26809ed14ee126e7ab12d3e`
+(shard).
+
 ## Stable session and issuer checkpoints — 2026-11-19
 
 With IC Auth 0.48.6, the installed Ed25519 fixture used a distinct governed

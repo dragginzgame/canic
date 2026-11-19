@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    CanisterConfig, FleetConfig, Network,
+    CanisterConfig, Network,
     tests::{directory, input},
 };
 use std::collections::BTreeMap;
@@ -10,37 +10,29 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
     for file in ["root.wasm", "app.wasm"] {
         std::fs::write(dir.join(file), b"\0asm\x01\0\0\0").unwrap();
     }
-    let selected = SelectedFleet {
-        app: "demo".into(),
-        fleet: "local".into(),
-        config: FleetConfig {
-            receiver_policy: None,
-            subnet_child_limit: None,
-            instance_pool: None,
-            shard_pool: None,
-            auth: Vec::new(),
-            network: Network::Mainnet,
-            journal: None,
-            canisters: BTreeMap::from([
-                (
-                    "root".into(),
-                    CanisterConfig {
-                        role: Some("root".into()),
-                        wasm: Some("root.wasm".into()),
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "app".into(),
-                    CanisterConfig {
-                        parent: Some("root".into()),
-                        wasm: Some("app.wasm".into()),
-                        ..Default::default()
-                    },
-                ),
-            ]),
-        },
-    };
+    let selected = crate::tests::selected_fleet(
+        "demo",
+        "local",
+        Network::Mainnet,
+        BTreeMap::from([
+            (
+                "root".into(),
+                CanisterConfig {
+                    role: Some("root".into()),
+                    wasm: Some("root.wasm".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "app".into(),
+                CanisterConfig {
+                    parent: Some("root".into()),
+                    wasm: Some("app.wasm".into()),
+                    ..Default::default()
+                },
+            ),
+        ]),
+    );
     (dir, selected)
 }
 

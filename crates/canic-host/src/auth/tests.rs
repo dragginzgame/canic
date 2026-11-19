@@ -1,60 +1,53 @@
 use super::*;
-use crate::{CanisterConfig, FleetConfig, Network, tests::directory};
+use crate::{CanisterConfig, Network, tests::directory};
 use std::collections::BTreeMap;
 
 fn fixture() -> (std::path::PathBuf, SelectedFleet) {
     let dir = directory();
     std::fs::write(dir.join("root.wasm"), b"\0asm\x01\0\0\0").unwrap();
     let now = crate::now().unwrap();
-    let selected = SelectedFleet {
-        app: "demo".into(),
-        fleet: "local".into(),
-        config: FleetConfig {
-            receiver_policy: None,
-            subnet_child_limit: None,
-            instance_pool: None,
-            shard_pool: None,
-            network: Network::Local {
-                url: "http://localhost:8000/".into(),
-                root_key: "00".repeat(133),
-                root_subnet: None,
-                routing_canister: "aaaaa-aa".into(),
-            },
-            journal: None,
-            canisters: BTreeMap::from([
-                (
-                    "root".into(),
-                    CanisterConfig {
-                        id: Some("rrkah-fqaaa-aaaaa-aaaaq-cai".into()),
-                        wasm: Some("root.wasm".into()),
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "receiver".into(),
-                    CanisterConfig {
-                        id: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
-                        wasm: Some("root.wasm".into()),
-                        ..Default::default()
-                    },
-                ),
-            ]),
-            auth: vec![AuthConfig {
-                root_wasm: None,
-                receiver_controller: ReceiverController::Root,
-                root: "root".into(),
-                receiver: "receiver".into(),
-                issuer: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
-                key: "11".repeat(32),
-                network_id: "22".repeat(32),
-                application_id: "33".repeat(32),
-                role: "user".into(),
-                scopes: vec!["read".into()],
-                not_before_ns: now - 1,
-                expires_at_ns: now + 600_000_000_000,
-            }],
+    let mut selected = crate::tests::selected_fleet(
+        "demo",
+        "local",
+        Network::Local {
+            url: "http://localhost:8000/".into(),
+            root_key: "00".repeat(133),
+            root_subnet: None,
+            routing_canister: "aaaaa-aa".into(),
         },
-    };
+        BTreeMap::from([
+            (
+                "root".into(),
+                CanisterConfig {
+                    id: Some("rrkah-fqaaa-aaaaa-aaaaq-cai".into()),
+                    wasm: Some("root.wasm".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "receiver".into(),
+                CanisterConfig {
+                    id: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
+                    wasm: Some("root.wasm".into()),
+                    ..Default::default()
+                },
+            ),
+        ]),
+    );
+    selected.config.auth = vec![AuthConfig {
+        root_wasm: None,
+        receiver_controller: ReceiverController::Root,
+        root: "root".into(),
+        receiver: "receiver".into(),
+        issuer: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        key: "11".repeat(32),
+        network_id: "22".repeat(32),
+        application_id: "33".repeat(32),
+        role: "user".into(),
+        scopes: vec!["read".into()],
+        not_before_ns: now - 1,
+        expires_at_ns: now + 600_000_000_000,
+    }];
     (dir, selected)
 }
 

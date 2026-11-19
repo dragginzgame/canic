@@ -1,5 +1,4 @@
 use super::*;
-use crate::FleetConfig;
 use ic_query_topology::subnet::{
     compare::{Candidate, DistributionOutcome},
     distribution::DistributionError,
@@ -8,20 +7,10 @@ use ic_query_topology::subnet::{
 use std::{cell::Cell, collections::BTreeMap, time::Duration};
 
 fn selected() -> SelectedFleet {
-    SelectedFleet {
-        app: "app".into(),
-        fleet: "mainnet".into(),
-        config: FleetConfig {
-            receiver_policy: None,
-            subnet_child_limit: None,
-            instance_pool: None,
-            shard_pool: None,
-            auth: Vec::new(),
-            network: Network::Mainnet,
-            journal: Some("must-not-be-used".into()),
-            canisters: BTreeMap::new(),
-        },
-    }
+    let mut selected =
+        crate::tests::selected_fleet("app", "mainnet", Network::Mainnet, BTreeMap::new());
+    selected.config.journal = Some("must-not-be-used".into());
+    selected
 }
 
 fn candidate(subnet_id: Principal) -> Candidate {

@@ -34,7 +34,8 @@ fleets. See the [maintenance walkthrough](docs/demos/root.md#root-maintenance).
 
 The current increment also qualifies bounded serial Root-owned child upgrades locally,
 including retained outcomes, callback-loss recovery and application persistence.
-The experimental Root has two permanent child slots and retains up to eight upgrades per child.
+Ordinary fleet plans support two permanent child slots and up to eight upgrades per child.
+Runtime placement supports up to eight children across the shared-shard and dedicated-instance pools.
 Only successful completion permits a successor; failed or uncertain work remains
 blocked, and full history is never cleared.
 See the [upgrade walkthrough](docs/demos/root.md).

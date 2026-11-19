@@ -78,6 +78,11 @@ async fn query<T: serde::de::DeserializeOwned>(
 async fn accounts_register_on_distinct_shards_with_independent_auth() {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/examples/user-directory");
     let wasm = |name: &str| std::fs::read(dir.join(format!("artifacts/{name}.wasm"))).unwrap();
+    let initial_roles = std::env::var_os("CANIC_PREDECESSOR_DIRECTORY_ROLES")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| dir.join("artifacts"));
+    let initial_role =
+        |name: &str| std::fs::read(initial_roles.join(format!("{name}.wasm"))).unwrap();
     let (mut server, mut instance) = support::instance_with(
         &canic_qualification::server_directory(),
         PocketIcBuilder::new()
@@ -133,7 +138,7 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
         .publish_named(
             &policy.release.name,
             &policy.release.version,
-            &wasm("user_shard"),
+            &initial_role("user_shard"),
         )
         .await;
     let nonce = std::fs::read(dir.join(policy.install_args.as_ref().unwrap())).unwrap();
@@ -151,7 +156,7 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
         .receiver_install_args("ex-user-directory-hub", &pool.root, vec![5; 16])
         .unwrap();
     let install = canic::auth::install::Install::decode(&args).unwrap();
-    pic.install_canister(hub, wasm("user_hub"), args, Some(root.operator))
+    pic.install_canister(hub, initial_role("user_hub"), args, Some(root.operator))
         .await;
     root.update::<_, Result<(), management::Refusal>>(
         "configure_shards",
@@ -426,6 +431,11 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
             .unwrap(),
         Some(Principal::from_slice(second.as_slice()))
     );
+    let hub_memory = pic.get_stable_memory(hub).await;
+    canic_qualification::upgrade_stopped(pic, hub, wasm("user_hub"), vec![], Some(root.operator))
+        .await
+        .unwrap();
+    assert!(pic.get_stable_memory(hub).await == hub_memory);
     let (snapshot, browser) = replay_snapshot.unwrap();
     pic.stop_canister(hub, Some(root.operator)).await.unwrap();
     pic.load_canister_snapshot(hub, Some(root.operator), snapshot)

@@ -6,12 +6,12 @@ use canic::{
     sharding::provisioning::{self, Account, Binding, Progress, Request},
 };
 use ic_db::{Principal, Ulid};
-use user_directory_schema::{Users, user_hub::Route};
+use user_directory_schema::{Users, model::user_hub::Route};
 
 // Open the hub database and mount its Auth session and readiness endpoints.
 canic::mount_db_role! {
     hub,
-    database = "directory.hub.db.v1",
+    database = user_directory_schema::model::user_hub::Routes,
     config = "directory.hub.config.v1",
     authority = "directory",
     pages = 65536,

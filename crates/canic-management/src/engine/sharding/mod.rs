@@ -78,6 +78,24 @@ impl Pools {
         self.capacity.as_ref().map_or(2, |c| c.max_children)
     }
 
+    fn shard_slots(&self, grant: &ShardPool) -> &'static [ChildId] {
+        let count = self
+            .shard_increases
+            .last()
+            .copied()
+            .unwrap_or(grant.max_shards);
+        &ChildId::SHARDS[..usize::from(count)]
+    }
+
+    fn instance_slots(&self, grant: &stored::InstancePool) -> &'static [ChildId] {
+        let count = self
+            .instance_increases
+            .last()
+            .copied()
+            .unwrap_or(grant.max_instances);
+        &ChildId::INSTANCES[..usize::from(count)]
+    }
+
     fn used(&self) -> usize {
         self.projects.len()
             + self
@@ -202,16 +220,7 @@ pub(super) fn open(bytes: &[u8]) -> Pools {
     if let Some(grant) = &pools.instances {
         assert!(grant.max_instances <= pools.pool_limit());
         validate_instance(grant).expect("retained instance grant");
-        assert!(
-            pools.projects.len()
-                <= usize::from(
-                    pools
-                        .instance_increases
-                        .last()
-                        .copied()
-                        .unwrap_or(grant.max_instances)
-                )
-        );
+        assert!(pools.projects.len() <= pools.instance_slots(grant).len());
         assert!(pools.projects.len() as u64 * CREATION_CYCLES <= grant.creation_budget);
         if let Some(shared) = &pools.shards {
             assert!(
@@ -223,17 +232,9 @@ pub(super) fn open(bytes: &[u8]) -> Pools {
     if let Some(l) = &pools.shards {
         assert!(valid_limits(&l.approval) && l.approval.max_shards <= pools.pool_limit());
         let mut counts = [0_u16; SLOT_COUNT];
+        let slots = pools.shard_slots(&l.approval);
         for slot in l.claims.values() {
-            assert!(
-                ChildId::SHARDS[..usize::from(
-                    pools
-                        .shard_increases
-                        .last()
-                        .copied()
-                        .unwrap_or(l.approval.max_shards)
-                )]
-                    .contains(slot)
-            );
+            assert!(slots.contains(slot));
             counts[slot.index()] += 1;
             assert!(counts[slot.index()] <= l.approval.keys_per_shard);
         }
@@ -496,24 +497,24 @@ pub fn assign(key: Key) -> Placement {
     if retained != Placement::Unknown {
         return retained;
     }
-    let (approval, counts, generations) = STATE.with_borrow(|s| {
+    let (approval, slots, counts, generations) = STATE.with_borrow(|s| {
         let pools = &s.as_ref().unwrap().pools;
         let ledger = pools.shards.as_ref().unwrap();
-        let mut approval = ledger.approval.clone();
-        approval.max_shards = pools
-            .shard_increases
-            .last()
-            .copied()
-            .unwrap_or(approval.max_shards);
-        (approval, ledger.counts, ledger.generations)
+        (
+            ledger.approval.clone(),
+            pools.shard_slots(&ledger.approval),
+            ledger.counts,
+            ledger.generations,
+        )
     });
-    if counts.iter().sum::<u16>() == u16::from(approval.max_shards) * approval.keys_per_shard {
+    if usize::from(counts.iter().sum::<u16>()) == slots.len() * usize::from(approval.keys_per_shard)
+    {
         return Placement::Full;
     }
     let mut ready = None;
     let mut free = None;
     let mut blocked = false;
-    for &slot in &ChildId::SHARDS[..usize::from(approval.max_shards)] {
+    for &slot in slots {
         if let Some(generation) = generations[slot.index()] {
             if counts[slot.index()] < approval.keys_per_shard {
                 match resolve(slot, generation) {
@@ -739,26 +740,22 @@ pub fn assign_instance(key: Key) -> Placement {
     if previous != Placement::Unknown {
         return previous;
     }
-    let (grant, count) = STATE.with_borrow(|s| {
+    let Some((grant, count, slot)) = STATE.with_borrow(|s| {
         let pools = &s.as_ref().unwrap().pools;
-        let mut grant = pools.instances.clone().unwrap();
-        grant.max_instances = pools
-            .instance_increases
-            .last()
-            .copied()
-            .unwrap_or(grant.max_instances);
-        (grant, pools.projects.len())
-    });
-    if STATE.with_borrow(|s| s.as_ref().unwrap().pools.full())
-        || count >= usize::from(grant.max_instances)
-    {
+        let grant = pools.instances.as_ref().unwrap();
+        let count = pools.projects.len();
+        if pools.full() {
+            return None;
+        }
+        let &slot = pools.instance_slots(grant).get(count)?;
+        Some((grant.clone(), count, slot))
+    }) else {
         return Placement::Full;
-    }
+    };
     let now = api::time();
     if now >= grant.expires_at_ns || (count as u64 + 1) * CREATION_CYCLES > grant.creation_budget {
         return Placement::GrowthRefused;
     }
-    let slot = ChildId::INSTANCES[count];
     let Some(generation) = create(
         slot,
         grant.reference,

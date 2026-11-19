@@ -17,10 +17,6 @@ canic = { workspace = true, features = ["provisioning"] }
 ex-user-directory-schema.workspace = true
 ic-db.workspace = true
 
-[build-dependencies]
-ex-user-directory-schema.workspace = true
-ic-db = { workspace = true, features = ["build"] }
-
 [dev-dependencies]
 toko-tooling.workspace = true
 

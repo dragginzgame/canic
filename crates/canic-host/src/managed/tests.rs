@@ -1,42 +1,34 @@
 use super::*;
 use crate::{
-    CanisterConfig, FleetConfig, Network,
+    CanisterConfig, Network,
     tests::{directory, input},
 };
 use canic_management_protocol::{STAGE, STATUS};
 use std::collections::BTreeMap;
 
 fn selection() -> SelectedFleet {
-    SelectedFleet {
-        app: "starter".into(),
-        fleet: "mainnet".into(),
-        config: FleetConfig {
-            receiver_policy: None,
-            subnet_child_limit: None,
-            instance_pool: None,
-            shard_pool: None,
-            auth: Vec::new(),
-            network: Network::Mainnet,
-            journal: None,
-            canisters: BTreeMap::from([
-                (
-                    "root".into(),
-                    CanisterConfig {
-                        id: Some("rrkah-fqaaa-aaaaa-aaaaq-cai".into()),
-                        role: Some("root".into()),
-                        ..Default::default()
-                    },
-                ),
-                (
-                    "app".into(),
-                    CanisterConfig {
-                        parent: Some("root".into()),
-                        ..Default::default()
-                    },
-                ),
-            ]),
-        },
-    }
+    crate::tests::selected_fleet(
+        "starter",
+        "mainnet",
+        Network::Mainnet,
+        BTreeMap::from([
+            (
+                "root".into(),
+                CanisterConfig {
+                    id: Some("rrkah-fqaaa-aaaaa-aaaaq-cai".into()),
+                    role: Some("root".into()),
+                    ..Default::default()
+                },
+            ),
+            (
+                "app".into(),
+                CanisterConfig {
+                    parent: Some("root".into()),
+                    ..Default::default()
+                },
+            ),
+        ]),
+    )
 }
 
 #[tokio::test]

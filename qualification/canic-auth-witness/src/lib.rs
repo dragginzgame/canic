@@ -28,6 +28,16 @@ pub const KEY: [u8; 32] = [
 ];
 /// Test observation contract.
 pub const OBSERVE: u64 = 901;
+/// Application endpoint budget for the witness's retained issuer callback.
+pub const CALLBACK_LIMITS: ic_wire::Limits = {
+    let limits = canic::auth::issuer::REQUEST_LIMITS;
+    ic_wire::Limits {
+        bytes: limits.bytes,
+        allocation: limits.allocation,
+        nodes: limits.nodes,
+        depth: limits.depth,
+    }
+};
 /// Small fixture control/observation budget.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 4096,

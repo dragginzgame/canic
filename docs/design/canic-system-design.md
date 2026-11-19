@@ -896,9 +896,9 @@ capacity when committing. This selects placement without rebalancing accounts
 when a new shard appears.
 
 The local installed witness exercises this contract on a fresh Root with the
-`sharding` feature. It uses Root's two existing permanent slots for shards and
-an independently installed hub. Putting the hub and both shards under the same
-Root's creation journal still requires the general child-capacity expansion.
+`sharding` feature. It starts with a two-shard grant and an independently installed hub.
+Root uses the approved pool count to select eligible shard identities in stable HRW order.
+A controller-approved count increase admits more identities under the shared subnet ceiling.
 Toko owns login, account identity, user ID generation, payload validation and
 the private user record. In the User Directory example the authenticated hub calls
 `place` with its pending shard, if any. After placement it reloads the unique
@@ -957,9 +957,11 @@ Root's controller-only `configure_shards` update. Encode the request with
 The application supplies its bounded installation bytes, for example an encoded
 trusted hub principal. Root retains them in its existing application creation
 journal and binds them to the generation and Store pin. An empty argument
-uses the existing Store-only path. Replaying the exact grant is idempotent. The current API supports one
-nonreplaceable pool per fresh Root, one or two shards, and 1–64 lifetime keys
-per shard. Each creation reserves the engine's fixed creation attachment.
+uses the existing Store-only path. Replaying the exact grant is idempotent.
+One Root can authorize a shared-shard pool and a dedicated-instance pool. Each
+shard admits 1–64 lifetime keys. Without an explicit subnet ceiling each pool
+is limited to two children. A controller-approved subnet ceiling allows up to eight
+children in total across the two pools. Each creation reserves the engine's fixed creation attachment.
 The deadline restricts new child effects. Existing capacity and lookup persist.
 
 After Toko authenticates a user and derives a stable 32-byte key, its hub can call:
