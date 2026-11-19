@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+User Directory now uses ordinary application rows and a checked placement handle
+for registration. Build the two actors locally and run the installed retry and
+revocation cases with a prepared simulator.
+
+```sh
+canic app build --config apps/examples/user-directory/canic.toml
+bash scripts/dev/test-store.sh user-directory
+```
+
 ## [0.236.0] - 2026-11-19
 
 The workspace allows blank lines after Rust doc comments for spaced type headers.

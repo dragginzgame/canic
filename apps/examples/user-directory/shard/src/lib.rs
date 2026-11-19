@@ -3,9 +3,9 @@
 use canic::{
     auth::protocol::SessionView,
     db,
-    sharding::provisioning::{self, Account, Record, ShardRecord, Ticket},
+    sharding::provisioning::{self, Binding, Provision, Request},
 };
-use ic_db::{Database, Ulid};
+use ic_db::Ulid;
 use user_directory_schema::{Users, user_shard::User};
 
 // Open the shard database and mount its Auth session and readiness endpoints.
@@ -22,11 +22,28 @@ canic::mount_db_role! {
 // guard  : canic::topology::require_parent
 // limits : Provision<Users>
 #[canic::update(
-    contract = canic::sharding::provisioning::Provision<Users>,
+    contract = Provision<Users>,
     guard = canic::topology::require_parent,
 )]
-fn provision_user(request: Ticket<Shard>) -> canic::sharding::provisioning::Binding<[u8; 16]> {
-    canic::sharding::provisioning::receive::<Shard>(request)
+fn provision_user(request: Request<[u8; 16], ()>) -> Binding<[u8; 16]> {
+    let binding = request.binding;
+    binding.require_target();
+    let account = binding.account;
+    if let Some(user) = provisioning::account_row::<User>(&db!(), account) {
+        if user.id.to_bytes() != binding.id {
+            canic::method::fail("BindingConflict");
+        }
+    } else {
+        db!()
+            .insert(&User {
+                id: Ulid::from_bytes(binding.id),
+                issuer: account.issuer,
+                subject: account.subject,
+            })
+            .expect("insert user");
+    }
+
+    binding
 }
 
 // my_id
@@ -36,42 +53,4 @@ fn provision_user(request: Ticket<Shard>) -> canic::sharding::provisioning::Bind
 #[canic::query(scope = "read")]
 fn my_id(session: SessionView) -> Option<[u8; 16]> {
     provisioning::session_row::<User>(&db!(), &session).map(|row| row.id.to_bytes())
-}
-
-///
-/// Shard
-/// Maps the application's retained row into Canic provisioning.
-///
-
-pub struct Shard;
-
-impl Record for Shard {
-    type Row = User;
-    type Resource = Users;
-
-    fn with_store<T>(f: impl FnOnce(&mut Database) -> T) -> T {
-        database::store::with(f)
-    }
-
-    fn identity(row: &User) -> (Account, [u8; 16]) {
-        (
-            Account {
-                issuer: row.issuer,
-                subject: row.subject,
-            },
-            row.id.to_bytes(),
-        )
-    }
-}
-
-impl ShardRecord for Shard {
-    fn create(request: Ticket<Self>) -> User {
-        let binding = request.binding;
-
-        User {
-            id: Ulid::from_bytes(binding.id),
-            issuer: binding.account.issuer,
-            subject: binding.account.subject,
-        }
-    }
 }

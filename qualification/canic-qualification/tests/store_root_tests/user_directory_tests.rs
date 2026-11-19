@@ -182,6 +182,7 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
         expires_at_ns: now + 600_000_000_000,
     };
     enroll(&root, hub, &grant, false).await;
+    let mut replay_snapshot = None;
     let mut assigned = Vec::new();
     for device in [9, 10, 11] {
         // Receiver verification credit accrues against replica time.
@@ -228,6 +229,94 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
         }
         assert_eq!(register().await, Progress::PlacementPending);
         super::settle(pic).await;
+        if device == 9 {
+            // Observe through the actual hub's Root lookup. Derive the public key independently.
+            use sha2::{Digest, Sha256};
+            let mut digest = Sha256::new().chain_update(b"example.user-directory.account.v1");
+            for pid in [install.issuer, Principal::from_slice(&[device, 2])] {
+                digest.update([u8::try_from(pid.as_slice().len()).unwrap()]);
+                digest.update(pid.as_slice());
+            }
+            let observation: canic::sharding::Placement = Client {
+                operator: hub,
+                ..root
+            }
+            .update(
+                "lookup_shard",
+                canic::sharding::LOOKUP,
+                &canic::sharding::Key::from(digest.finalize()),
+                canic::sharding::LIMITS,
+            )
+            .await;
+            let shard = observation.assigned_target().unwrap().unwrap().1;
+            let shard = CanisterId::from_slice(shard.as_slice());
+            pic.stop_canister(shard, Some(root.id)).await.unwrap();
+            assert_eq!(register().await, Progress::ProvisionPending);
+            pic.stop_canister(root.id, Some(root.operator))
+                .await
+                .unwrap();
+            assert_eq!(register().await, Progress::PlacementUnavailable);
+            pic.start_canister(root.id, Some(root.operator))
+                .await
+                .unwrap();
+            pic.stop_canister(hub, Some(root.operator)).await.unwrap();
+            let pending = pic
+                .take_canister_snapshot(hub, Some(root.operator), None)
+                .await
+                .unwrap();
+            pic.start_canister(hub, Some(root.operator)).await.unwrap();
+            pic.start_canister(shard, Some(root.id)).await.unwrap();
+            assert_eq!(register().await, Progress::Ready);
+            let populated = pic.get_stable_memory(shard).await;
+            // Recreate exactly a lost acknowledgement: pending hub, already committed shard.
+            pic.stop_canister(hub, Some(root.operator)).await.unwrap();
+            pic.load_canister_snapshot(hub, Some(root.operator), pending.id.clone())
+                .await
+                .unwrap();
+            pic.start_canister(hub, Some(root.operator)).await.unwrap();
+            assert_eq!(
+                query::<Option<Principal>>(&client, "my_shard")
+                    .await
+                    .unwrap(),
+                None
+            );
+            assert_eq!(register().await, Progress::Ready);
+            assert!(pic.get_stable_memory(shard).await == populated);
+            replay_snapshot = Some((pending.id, browser));
+        } else {
+            // Admit two distinct ingress messages before advancing either registration.
+            let frame = |direction| ic_wire::Encoding::Frame {
+                method: ic_wire::method_id("register"),
+                direction,
+            };
+            let args = ic_wire::encode(
+                &(),
+                frame(ic_wire::Direction::Request),
+                canic::method::LIMITS,
+            )
+            .unwrap();
+            let first = pic
+                .submit_call(hub, browser, "register", args.clone())
+                .await
+                .unwrap();
+            let second = pic
+                .submit_call(hub, browser, "register", args)
+                .await
+                .unwrap();
+            assert_ne!(first.message_id, second.message_id);
+            for ingress in [first, second] {
+                let bytes = pic.await_call(ingress).await.unwrap();
+                assert_eq!(
+                    ic_wire::decode::<Progress>(
+                        &bytes,
+                        frame(ic_wire::Direction::Response),
+                        canic::method::LIMITS
+                    )
+                    .unwrap(),
+                    Progress::Ready
+                );
+            }
+        }
         assert_eq!(register().await, Progress::Ready);
         assert_eq!(register().await, Progress::Ready);
         let shard = query::<Option<Principal>>(&client, "my_shard")
@@ -282,9 +371,160 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
         assigned.push((shard, id));
     }
     assert_eq!(assigned.len(), 2);
+    let (snapshot, browser) = replay_snapshot.unwrap();
+    pic.stop_canister(hub, Some(root.operator)).await.unwrap();
+    pic.load_canister_snapshot(hub, Some(root.operator), snapshot)
+        .await
+        .unwrap();
+    pic.start_canister(hub, Some(root.operator)).await.unwrap();
+    let client = Client {
+        pic,
+        id: hub,
+        operator: browser,
+    };
+    let (shard, id) = assigned[0];
+    let expected = canic::sharding::provisioning::Binding {
+        id,
+        account: canic::sharding::provisioning::Account {
+            issuer: install.issuer,
+            subject: Principal::from_slice(&[9, 2]),
+        },
+        shard: Principal::from_slice(shard.as_slice()),
+    };
+    check_receipts(&client, root.id, shard, expected).await;
     assert_eq!(
         instance.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted
     );
     assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+// Replace just the disposable test receiver to control reply contents and delivery order.
+async fn check_receipts(
+    client: &Client<'_>,
+    root: CanisterId,
+    shard: CanisterId,
+    expected: canic::sharding::provisioning::Binding<[u8; 16]>,
+) {
+    use canic::auth::protocol::Logout;
+    use ic_testkit::held::{Catalog, Fixture, Limits, Reply};
+    use ic_wire::{Direction, Encoding};
+    let pic = client.pic;
+    let frame = |name, direction| Encoding::Frame {
+        method: ic_wire::method_id(name),
+        direction,
+    };
+    let mut wrong = expected.clone();
+    wrong.id[0] ^= 1;
+    // Exercise the real shard before replacing it with the controlled responder.
+    let original_rows = pic.get_stable_memory(shard).await;
+    let mut wrong_target = expected.clone();
+    wrong_target.shard = Principal::from_slice(root.as_slice());
+    for (caller, binding) in [
+        (root, expected.clone()),
+        (client.id, wrong_target),
+        (client.id, wrong.clone()),
+    ] {
+        let bytes = ic_wire::encode(
+            &canic::sharding::provisioning::Request { binding, data: () },
+            frame("provision_user", Direction::Request),
+            canic::sharding::LIMITS,
+        )
+        .unwrap();
+        assert!(
+            pic.update_call(shard, caller, "provision_user", bytes)
+                .await
+                .is_err()
+        );
+    }
+    assert!(pic.get_stable_memory(shard).await == original_rows);
+    let replies = [wrong, expected].map(|binding| {
+        ic_wire::encode(
+            &binding,
+            frame("provision_user", Direction::Response),
+            canic::sharding::LIMITS,
+        )
+        .unwrap()
+    });
+    let catalog = Catalog::new(
+        &replies.each_ref().map(|bytes| Reply {
+            method: "provision_user",
+            bytes,
+        }),
+        Limits {
+            slots: 2,
+            name_bytes: 32,
+            reply_bytes: 1024,
+        },
+    )
+    .unwrap();
+    let mut held = Fixture::new(
+        pic,
+        shard.to_text().parse().unwrap(),
+        &catalog,
+        100_000_000_000,
+        8192,
+    )
+    .await
+    .unwrap();
+    canic_qualification::upgrade_stopped(pic, shard, held.wasm().to_vec(), vec![], Some(root))
+        .await
+        .unwrap();
+    let args = ic_wire::encode(
+        &(),
+        frame("register", Direction::Request),
+        canic::method::LIMITS,
+    )
+    .unwrap();
+    let pending_memory = pic.get_stable_memory(client.id).await;
+    for slot in 0..2 {
+        let call = pic
+            .submit_call(client.id, client.operator, "register", args.clone())
+            .await
+            .unwrap();
+        let mut pending = vec![];
+        for _ in 0..40 {
+            pic.tick().await;
+            pending = held.pending(pic).await.unwrap();
+            if !pending.is_empty() {
+                break;
+            }
+        }
+        let token = pending
+            .pop()
+            .expect("provisioning call reached assigned shard");
+        assert_eq!(token.slot(), slot);
+        if slot == 1 {
+            let bytes = pic
+                .update_call(
+                    client.id,
+                    client.operator,
+                    "logout_portable_session",
+                    Logout::encode_request(&()).unwrap(),
+                )
+                .await
+                .unwrap();
+            assert!(matches!(
+                Logout::decode_response(&bytes).unwrap(),
+                model::LogoutResult::Revoked(_)
+            ));
+        }
+        held.release(pic, &token).await.unwrap();
+        let err = pic.await_call(call).await.unwrap_err();
+        if slot == 0 {
+            assert!(
+                err.reject_message.contains("changed provisioning binding"),
+                "{err:?}"
+            );
+            assert_eq!(
+                query::<Option<Principal>>(client, "my_shard")
+                    .await
+                    .unwrap(),
+                None
+            );
+        } else {
+            assert!(err.reject_message.contains("endpoint refused"), "{err:?}");
+        }
+        assert!(pic.get_stable_memory(client.id).await == pending_memory);
+    }
 }

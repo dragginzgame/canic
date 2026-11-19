@@ -34,60 +34,16 @@ Run `make store-test` for these and the other installed Store cases.
 
 ### Provision an account on its assigned shard
 
-Use two ordinary endpoint functions. The hub calls `provision` after Canic has
-admitted the caller's session. It supplies the validated account mapping and a
-candidate ID generator. Canic calls the generator only when it needs to make a
-reservation. Import `new_ulid` from `canic::sharding::provisioning` for the
-standard 16-byte IC DB ID, or supply an application generator. The shard calls `receive` under its configured parent guard.
+The [hub](../apps/examples/user-directory/hub/src/lib.rs) and
+[shard](../apps/examples/user-directory/shard/src/lib.rs) are the runnable
+implementation. Run `bash scripts/dev/test-store.sh user-directory` with the
+prepared simulator. For Toko's existing payload, storage layout, exact migration
+and test commands, see the [provisioning migration](../docs/demos/provisioning.md).
 
-```rust
-#[canic::update(scope = Hub::SCOPE, limits = LIMITS)]
-async fn register(session: SessionView, name: String) -> Progress {
-    provision::<Hub>(&session, name, new_ulid).await
-}
-
-#[canic::update(contract = Provision<Users>, guard = canic::topology::require_parent)]
-fn provision_user(request: Ticket<Shard>) -> Binding<[u8; 16]> {
-    receive::<Shard>(request)
-}
-```
-
-The complete [hub](fixtures/provisioning-roles/hub.rs) and
-[shard](fixtures/provisioning-roles/shard.rs) examples import `UserRoute` and
-`User` from Toko's shared schema library. `HubRoute` maps an application row to
-its pending or ready state. `ShardRecord` constructs a validated private row.
-Both use their role's existing store. The mapping compiles on native and Wasm.
-The two installed endpoint files select the actual IC caller, transport and
-clock through Canic. Keep each role's existing `mount_db_role!` for lifecycle.
-Choose the role's display name independently in the fleetless app build.
-
-To reproduce in an isolated Toko checkout with the shared-schema layout,
-copy the fixture's hub/shard files over the respective `src/lib.rs` files and
-put `register.rs` in the hub's `src` and `provision_user.rs` in the shard's
-`src`. Remove the preceding registration and provisioning handlers and their
-obsolete imports. Keep the other endpoints. Add `roles.toml` from the
-[fixture config](fixtures/provisioning-roles/canic.toml) under `apps/toko`, and
-copy [the installed check](fixtures/provisioning-roles/roles.rs) into the
-qualification tests. With the candidate
-Canic dependency and CLI and the prepared Testkit server, run:
-
-```sh
-canic app build --app roles --config apps/toko/roles.toml
-cargo test --locked --manifest-path qualification/Cargo.toml --test roles
-```
-
-The adapter’s
-unique `issuer,subject` lookup examines at most one candidate and refuses a
-non-unique index. IC DB 0.23.11 returns the decoded entity. Canic re-encodes it
-with the entity’s canonical encoder and checks its size before
-returning the row or changing provisioning state; a row over 1 KiB traps.
-Preserve the same database schema,
-key namespace, original Root and pool when adopting it on existing data.
-Root retains the original generation; after suspension the hub checks the
-allocation and principal. A pending row with no corresponding Root claim
-cannot allocate a replacement. Only the exact original receipt can mark a
-reservation ready. A ready acknowledgement is a local read. When an upgrade
-closes the Auth receiver, its normal authorization rules still apply.
+The independent role-name fixture still supplies [hub metadata](fixtures/provisioning-roles/hub.rs),
+[shard metadata](fixtures/provisioning-roles/shard.rs), a [config](fixtures/provisioning-roles/canic.toml)
+and [installed check](fixtures/provisioning-roles/roles.rs) for the original
+role-name qualification. Its metadata functions are optional test observations.
 
 ## Optional Root snapshot executor
 

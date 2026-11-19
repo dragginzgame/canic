@@ -3,9 +3,9 @@
 use canic::{
     auth::protocol::SessionView,
     db,
-    sharding::provisioning::{self, Account, Binding, HubRoute, Record},
+    sharding::provisioning::{self, Account, Binding, Progress, Request},
 };
-use ic_db::{Database, Principal, Ulid};
+use ic_db::{Principal, Ulid};
 use user_directory_schema::{Users, user_hub::Route};
 
 // Open the hub database and mount its Auth session and readiness endpoints.
@@ -22,9 +22,50 @@ canic::mount_db_role! {
 // Reserve the signed-in account and confirm insertion on its assigned shard.
 // scope  : write
 // limits : default
-#[canic::update(scope = Hub::SCOPE)]
-async fn register(session: SessionView) -> canic::sharding::provisioning::Progress {
-    provisioning::provision::<Hub>(&session, (), provisioning::new_ulid).await
+#[canic::update(scope = WRITE)]
+async fn register(session: SessionView) -> Progress {
+    let account = Account::from(&session);
+    let lookup = || provisioning::account_row::<Route>(&db!(), account);
+    let existing = lookup();
+    if existing.as_ref().is_some_and(|row| row.ready) {
+        return Progress::Ready;
+    }
+    let assignment =
+        match provisioning::place::<Users>(&session, WRITE, existing.as_ref().map(|row| row.shard))
+            .await
+        {
+            Ok(assignment) => assignment,
+            Err(progress) => return progress,
+        };
+    // Another registration may have won during placement. Only the winner allocates an ID.
+    let row = existing.or_else(lookup).unwrap_or_else(|| {
+        let row = Route {
+            id: Ulid::generate_prand(),
+            issuer: account.issuer,
+            subject: account.subject,
+            shard: assignment.shard(),
+            ready: false,
+        };
+        db!().insert(&row).expect("reserve account");
+
+        row
+    });
+    let request = Request {
+        binding: binding(&row),
+        data: (),
+    };
+    let receipt = match assignment.send(&request).await {
+        Ok(receipt) => receipt,
+        Err(progress) => return progress,
+    };
+    let mut retained = lookup().expect("missing reservation");
+    receipt.require_same(&binding(&retained));
+    if !retained.ready {
+        retained.ready = true;
+        db!().replace(&retained).expect("confirm reservation");
+    }
+
+    Progress::Ready
 }
 
 // my_shard
@@ -38,57 +79,15 @@ fn my_shard(session: SessionView) -> Option<Principal> {
         .map(|row| row.shard)
 }
 
-///
-/// Hub
-/// Maps the application's retained row into Canic provisioning.
-///
+const WRITE: &str = "write";
 
-pub struct Hub;
-
-impl HubRoute for Hub {
-    const SCOPE: &'static str = "write";
-    type Initial = ();
-
-    fn normalize((): ()) {}
-
-    fn pending(binding: Binding<[u8; 16]>, (): ()) -> Route {
-        Route {
-            id: Ulid::from_bytes(binding.id),
-            issuer: binding.account.issuer,
-            subject: binding.account.subject,
-            shard: binding.shard,
-            ready: false,
-        }
-    }
-
-    fn retained(row: &Route) -> (Principal, ()) {
-        (row.shard, ())
-    }
-
-    fn ready(row: &Route) -> bool {
-        row.ready
-    }
-
-    fn mark_ready(row: &mut Route) {
-        row.ready = true;
-    }
-}
-
-impl Record for Hub {
-    type Row = Route;
-    type Resource = Users;
-
-    fn with_store<T>(f: impl FnOnce(&mut Database) -> T) -> T {
-        database::store::with(f)
-    }
-
-    fn identity(row: &Route) -> (Account, [u8; 16]) {
-        (
-            Account {
-                issuer: row.issuer,
-                subject: row.subject,
-            },
-            row.id.to_bytes(),
-        )
+fn binding(row: &Route) -> Binding<[u8; 16]> {
+    Binding {
+        id: row.id.to_bytes(),
+        account: Account {
+            issuer: row.issuer,
+            subject: row.subject,
+        },
+        shard: row.shard,
     }
 }

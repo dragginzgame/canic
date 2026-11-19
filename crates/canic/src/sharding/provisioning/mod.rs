@@ -4,9 +4,6 @@
 #[cfg(all(test, feature = "provisioning", not(target_arch = "wasm32")))]
 mod tests;
 
-#[cfg(feature = "db-store")]
-mod directory;
-
 #[cfg(feature = "provisioning")]
 mod actor;
 #[cfg(feature = "provisioning")]
@@ -14,23 +11,11 @@ mod rows;
 
 use crate::method::Contract;
 #[cfg(feature = "provisioning")]
-pub use actor::{provision, receive};
-#[cfg(feature = "db-store")]
-pub use directory::{Data, HubRoute, Id, Record, ShardRecord, Ticket};
+pub use actor::{Assignment, place};
 use ic_platform_types::Principal;
 #[cfg(feature = "provisioning")]
-pub use rows::session_row;
+pub use rows::{account_row, session_row};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-
-/// Generate the 16-byte IC DB ULID used by conventional account routes.
-/// Pass this function to `provision` so retries can reuse an existing reservation.
-/// # Panics
-/// Propagates IC DB's refusal if its monotonic ULID stream is exhausted.
-#[cfg(feature = "provisioning")]
-#[must_use]
-pub fn new_ulid() -> [u8; 16] {
-    ic_db::Ulid::generate_prand().to_bytes()
-}
 
 /// Durable account selector derived from the authenticated issuer and subject.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
@@ -92,6 +77,17 @@ pub struct Binding<I> {
     pub account: Account,
     /// Admitted target principal.
     pub shard: Principal,
+}
+
+impl<I: Eq> Binding<I> {
+    /// Compare all immutable fields before acknowledging or committing a reservation.
+    /// # Panics
+    /// Traps if the ID, issuer, subject or shard changed.
+    pub fn require_same(&self, retained: &Self) {
+        if self != retained {
+            crate::method::fail("changed provisioning binding");
+        }
+    }
 }
 
 /// Exact provisioning request. Retries use the retained payload.

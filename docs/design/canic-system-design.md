@@ -894,28 +894,16 @@ The local installed witness exercises this contract on a fresh Root with the
 an independently installed hub. Putting the hub and both shards under the same
 Root's creation journal still requires the general child-capacity expansion.
 Toko owns login, account identity, user ID generation, payload validation and
-the private user record. The opt-in Canic hub adapter owns provisioning from an
-authenticated session. Its IC DB binding uses the application's existing route
-row as the only reservation. Native and Wasm builds check the same row mappings.
-Both targets compile the store accessor. The installed actor obtains the candidate
-ID from the configured generator. The adapter selects the complete unique
-issuer/subject index and checks the canonical row size before exposing it.
-App configuration supplies the optional display name when building a provisioning
-component. Standalone Rust builds may supply a constant. The hub or shard behavior belongs to its Rust
-implementation. Renaming a role changes neither provisioning
-behavior, Auth enrollment, nor retained keys.
-For Canic #43 the role binds its existing store to the original shared IC DB
-entity with ordinary Rust functions. The hub implements `HubRoute`; the shard
-implements `ShardRecord`. The IC DB entity may live in a separate application
-crate. Neither host implements or forwards IC DB's Entity trait. Application
-endpoints call `provision` and `receive` directly. Configuration and role names
-do not select a schema by inference. The hub supplies its candidate ID function
-and shares one write-scope constant with post-await authorization. The shard
-validates even a repeated request before acknowledging the existing row.
-This reuses the legacy placement decision recorded below.
-A racing request reads the winner before insertion.
-The shard admits its installed parent and inserts once. An exact receipt for the
-original user and destination permits marking the same reservation ready.
+the private user record. In the User Directory example the authenticated hub calls
+`place` with its pending shard, if any. After placement it reloads the unique
+account row, inserts only on a miss, and sends the winning reservation. Canic
+checks session authority, the account, the original allocation and the returned
+binding. Before updating, the application reloads and compares the exact row.
+The shard checks its installed parent and target before synchronously inserting or
+acknowledging the immutable identity. Mutable profile fields do not identify a
+reservation. These ordinary application branches replace the row mapping traits.
+The optional bounded IC DB account lookup remains independent of this protocol.
+This reuses the frozen HRW and capacity evidence above.
 
 Root already retains the immutable allocation generation for each placement key
 and reports a replaced generation as unavailable. For a pending predecessor row,
@@ -985,25 +973,9 @@ Store-bound approval; older custody endpoints refuse once pool work is admitted.
 Compatible Root upgrades reopen the pool lease. Existing Root images need a
 separately qualified migration before enabling this feature.
 
-For Toko signup, keep the authenticated `provision::<Hub>` operation. Toko’s
-`user_hub::register` already uses it. The existing and recommended call sites are:
-
-```rust
-// Existing Toko handler
-provision::<Hub>(&session, name, || Ulid::generate_prand().to_bytes()).await
-
-// With Canic’s standard IC DB generator
-provision::<Hub>(&session, name, new_ulid).await
-```
-
-The hub owns the ID and the pending/ready route. The shard owns the private
-record and accepts provisioning from its configured parent. Canic normalizes
-the input through the app’s policy, checks the session again after suspension
-before issuing new effects, and confirms the original allocation and receipt.
-A retry reuses the original ID and payload. Use the lower-level `assign` and
-`lookup` calls above for applications that need placement alone. Adding another
-placement name would leave the same reservation, retry and authorization work
-in a signup handler.
+For Toko signup, retain the existing pending payload and generate a native IC DB
+ULID only on insertion. Use the same write scope on the endpoint and assignment.
+The checked-in User Directory actors show the application-owned transitions.
 
 ### Physical placement
 

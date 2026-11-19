@@ -1,8 +1,5 @@
-use super::{
-    rows::{accept, confirm, reserve, ticket},
-    *,
-};
-use ic_db::{Database, Entity, Schema};
+use super::*;
+use ic_db::{Database, DatabaseSession, Entity, Schema};
 use ic_storage::{StableKey, VectorMemory};
 
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -52,104 +49,65 @@ struct Route {}
 )]
 struct User {}
 
-struct Hub;
-struct Shard;
+// These are application operations on real IC DB rows, including a mutable name.
+fn reserve(db: &DatabaseSession, binding: &Binding<u64>, name: String) -> Route {
+    account_row::<Route>(db, binding.account).unwrap_or_else(|| {
+        let row = pending(binding, name);
+        db.insert(&row).unwrap();
 
-fn schema() -> Schema {
-    Schema::new(&[Route::SCHEMA, User::SCHEMA]).unwrap()
+        row
+    })
 }
 
-crate::declare_db_store!(mod store, key = "test.accounts.v1", schema = super::schema);
-
-#[test]
-fn declared_rows_share_the_attached_store() {
-    let host =
-        crate::storage::bootstrap(Default::default(), true, "test", &["test.accounts.v1"], 128);
-    store::attach(&host, Some([7; 16]));
-    assert_eq!(Hub::with_store(|db| db.incarnation()), [7; 16]);
-    assert_eq!(Shard::with_store(|db| db.incarnation()), [7; 16]);
-}
-impl Record for Hub {
-    type Row = Route;
-    type Resource = Users;
-
-    fn with_store<T>(f: impl FnOnce(&mut Database) -> T) -> T {
-        store::with(f)
+fn pending(binding: &Binding<u64>, name: String) -> Route {
+    Route {
+        id: binding.id,
+        issuer: binding.account.issuer,
+        subject: binding.account.subject,
+        shard: binding.shard,
+        name,
+        status: false,
     }
+}
 
-    fn identity(row: &Route) -> (Account, u64) {
-        (
-            Account {
+fn ticket(row: &Route) -> Request<u64, String> {
+    Request {
+        binding: Binding {
+            id: row.id,
+            account: Account {
                 issuer: row.issuer,
                 subject: row.subject,
             },
-            row.id,
-        )
+            shard: row.shard,
+        },
+        data: row.name.clone(),
     }
 }
 
-impl Record for Shard {
-    type Row = User;
-    type Resource = Users;
-
-    fn with_store<T>(f: impl FnOnce(&mut Database) -> T) -> T {
-        store::with(f)
-    }
-
-    fn identity(row: &User) -> (Account, u64) {
-        (
-            Account {
-                issuer: row.issuer,
-                subject: row.subject,
-            },
-            row.id,
-        )
-    }
-}
-
-impl HubRoute for Hub {
-    const SCOPE: &'static str = "write";
-    type Initial = String;
-
-    fn normalize(name: String) -> String {
-        name
-    }
-
-    fn pending(binding: Binding<u64>, name: String) -> Route {
-        Route {
-            id: binding.id,
-            issuer: binding.account.issuer,
-            subject: binding.account.subject,
-            shard: binding.shard,
-            name,
-            status: false,
-        }
-    }
-
-    fn retained(row: &Route) -> (Principal, String) {
-        (row.shard, row.name.clone())
-    }
-
-    fn ready(row: &Route) -> bool {
-        row.status
-    }
-
-    fn mark_ready(row: &mut Route) {
+fn confirm(db: &DatabaseSession, receipt: &Binding<u64>) {
+    let mut row = account_row::<Route>(db, receipt.account).unwrap();
+    receipt.require_same(&ticket(&row).binding);
+    if !row.status {
         row.status = true;
+        db.replace(&row).unwrap();
     }
 }
 
-impl ShardRecord for Shard {
-    fn create(request: Ticket<Self>) -> User {
-        assert!(!request.data.is_empty());
-        let binding = request.binding;
-        User {
-            id: binding.id,
-            issuer: binding.account.issuer,
-            subject: binding.account.subject,
-            name: request.data,
-        }
+fn accept(db: &DatabaseSession, request: Request<u64, String>) -> bool {
+    assert!(!request.data.is_empty());
+    let binding = request.binding;
+    if let Some(user) = account_row::<User>(db, binding.account) {
+        return user.id == binding.id;
     }
+    db.insert(&User {
+        id: binding.id,
+        issuer: binding.account.issuer,
+        subject: binding.account.subject,
+        name: request.data,
+    })
+    .unwrap();
+
+    true
 }
 
 #[test]
@@ -167,7 +125,7 @@ fn racing_id_and_lost_receipt_reopen_the_original_reservation() {
         } else {
             Database::open(memory, schema)
         };
-        (host, db.unwrap())
+        (host, DatabaseSession::new(db.unwrap()))
     };
     let account = Account {
         issuer: Principal::from_slice(&[3, 1]),
@@ -180,37 +138,40 @@ fn racing_id_and_lost_receipt_reopen_the_original_reservation() {
     };
     let competing = Binding { id: 20, ..binding };
     {
-        let (_host, mut database) = open(true);
-        let db = &mut database;
-        let winner = reserve::<Hub>(db, &binding, "Ada".into());
-        let raced = reserve::<Hub>(db, &competing, "replace me".into());
-        assert_eq!(ticket::<Hub>(&raced).binding, binding);
+        let (_host, database) = open(true);
+        let db = &database;
+        let winner = reserve(db, &binding, "Ada".into());
+        let raced = reserve(db, &competing, "replace me".into());
+        assert_eq!(ticket(&raced).binding, binding);
         assert_eq!(raced.name, winner.name);
-        assert!(accept::<Shard>(db, ticket::<Hub>(&winner)));
-        assert!(!Hub::ready(&winner));
+        assert!(accept(db, ticket(&winner)));
+        assert!(!winner.status);
+        let mut edited = db.get::<User>(19).unwrap().unwrap();
+        edited.name = "Ada edited".into();
+        db.replace(&edited).unwrap();
     }
     {
-        let (_host, mut database) = open(false);
-        let db = &mut database;
-        let winner = reserve::<Hub>(db, &competing, "late".into());
-        assert_eq!(ticket::<Hub>(&winner).binding, binding);
-        assert!(!Hub::ready(&winner));
-        assert!(!accept::<Shard>(
+        let (_host, database) = open(false);
+        let db = &database;
+        let winner = reserve(db, &competing, "late".into());
+        assert_eq!(ticket(&winner).binding, binding);
+        assert!(!winner.status);
+        assert!(!accept(
             db,
             Request {
                 binding: competing.clone(),
                 data: "late".into()
             }
         ));
-        assert!(catch_unwind(AssertUnwindSafe(|| confirm::<Hub>(db, &competing))).is_err());
-        assert!(accept::<Shard>(db, ticket::<Hub>(&winner)));
-        confirm::<Hub>(db, &binding);
-        confirm::<Hub>(db, &binding);
-        let mut invalid_replay = ticket::<Hub>(&winner);
+        assert!(catch_unwind(AssertUnwindSafe(|| confirm(db, &competing))).is_err());
+        assert!(accept(db, ticket(&winner)));
+        confirm(db, &binding);
+        confirm(db, &binding);
+        let mut invalid_replay = ticket(&winner);
         invalid_replay.data.clear();
-        assert!(catch_unwind(AssertUnwindSafe(|| accept::<Shard>(db, invalid_replay))).is_err());
+        assert!(catch_unwind(AssertUnwindSafe(|| accept(db, invalid_replay))).is_err());
         assert!(db.get::<Route>(19).unwrap().unwrap().status);
-        assert_eq!(db.get::<User>(19).unwrap().unwrap().name, "Ada");
+        assert_eq!(db.get::<User>(19).unwrap().unwrap().name, "Ada edited");
         assert!(db.get::<User>(20).unwrap().is_none());
     }
 }
@@ -227,7 +188,9 @@ fn confirmation_checks_encoded_size_before_updating_a_retained_route() {
     let memory = host
         .open_memory(&StableKey::parse("test.rows.v1").unwrap())
         .unwrap();
-    let mut db = Database::create(memory, Schema::new(&[Route::SCHEMA]).unwrap(), [7; 16]).unwrap();
+    let db = DatabaseSession::new(
+        Database::create(memory, Schema::new(&[Route::SCHEMA]).unwrap(), [7; 16]).unwrap(),
+    );
     for (id, size) in [(1, 1024), (2, 1025)] {
         let binding = Binding {
             id,
@@ -237,7 +200,7 @@ fn confirmation_checks_encoded_size_before_updating_a_retained_route() {
             },
             shard: Principal::from_slice(&[3]),
         };
-        let mut row = Hub::pending(binding.clone(), "x".repeat(1024));
+        let mut row = pending(&binding, "x".repeat(1024));
         let overhead = row.encode().unwrap().len() - row.name.len();
         row.name.truncate(size - overhead);
         assert_eq!(row.encode().unwrap().len(), size);
@@ -245,7 +208,7 @@ fn confirmation_checks_encoded_size_before_updating_a_retained_route() {
         batch.insert(&row).unwrap();
         db.commit(batch).unwrap();
 
-        let result = catch_unwind(AssertUnwindSafe(|| confirm::<Hub>(&mut db, &binding)));
+        let result = catch_unwind(AssertUnwindSafe(|| confirm(&db, &binding)));
         assert_eq!(result.is_ok(), size == 1024);
         assert_eq!(db.get::<Route>(id).unwrap().unwrap().status, size == 1024);
     }
@@ -285,8 +248,9 @@ fn a_nonunique_account_index_cannot_authorize_provisioning() {
         subject: Principal::from_slice(&[2]),
     };
     assert!(
-        catch_unwind(AssertUnwindSafe(|| super::rows::find::<Nonunique>(
-            &db, account
+        catch_unwind(AssertUnwindSafe(|| account_row::<Nonunique>(
+            &DatabaseSession::new(db),
+            account
         )))
         .is_err()
     );
