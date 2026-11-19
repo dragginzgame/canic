@@ -287,7 +287,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -428,7 +428,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -437,7 +437,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -453,7 +453,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -1034,7 +1034,7 @@ checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
 name = "ex-counter"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "clap",

@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic-host",
  "canic-management-protocol",
@@ -310,7 +310,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "base64",
  "canic",
@@ -343,7 +343,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -353,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -371,7 +371,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -385,7 +385,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -837,7 +837,7 @@ checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
 name = "ex-counter"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "clap",
@@ -852,7 +852,7 @@ dependencies = [
 
 [[package]]
 name = "ex-template"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "serde",
@@ -861,7 +861,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-hub"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -871,7 +871,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-schema"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -881,7 +881,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-shard"
-version = "0.236.0"
+version = "0.237.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",

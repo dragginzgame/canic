@@ -1,9 +1,8 @@
 # Migrating Toko signup to ordinary application rows
 
-**Canic implementation tested:** `9af0094d6e6950e61e4ce245b9d912b8e75e33cb`,
-a local commit after v0.236.0. The v0.236.0 registry archive contains the
-previous API. For a reproducible local dependency select a checkout at this
-commit in both workspaces.
+Use Canic **0.237.0** in Toko’s product and qualification workspaces. The
+provisioning implementation was tested at `9af0094d6e6950e61e4ce245b9d912b8e75e33cb`.
+Version 0.236.0 contains the previous API.
 
 The migration targets Toko source `3ea25ea2d48d9c47356c99a8c585a7120e9506e3`.
 Its hub owns the ID, initial name and pending/ready transition. Its shard owns
@@ -145,7 +144,7 @@ remain separate qualification paths.
 
 ### Run in Toko after migration
 
-Use the same candidate in Toko's product and qualification workspaces. For a
+Select `canic = "=0.237.0"` in both workspace dependency tables and update both lockfiles. For a
 local sibling trial, add this override at the workspace roots (paths relative
 to the manifest), then reconcile both lockfiles with Cargo and verify the
 resolved `canic` source with `cargo tree -i canic` in each workspace.
