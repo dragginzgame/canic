@@ -31,6 +31,9 @@ pub struct ShardPoolConfig {
     pub max_shards: u8,
     /// Maximum lifetime keys per shard.
     pub keys_per_shard: u16,
+    /// Previous approved pool count when planning an increase on an existing Root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub increase_from: Option<u8>,
     /// Total authorized creation attachments in cycles.
     pub creation_budget: u64,
     /// Final deadline for dispatching new creation work, in IC nanoseconds.
@@ -52,6 +55,9 @@ pub struct InstancePoolConfig {
     pub install_args: Option<PathBuf>,
     /// Maximum dedicated allocations.
     pub max_instances: u8,
+    /// Previous approved pool count when planning an increase on an existing Root.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub increase_from: Option<u8>,
     /// Total authorized creation attachments in cycles.
     pub creation_budget: u64,
     /// Deadline for new work, required when planning.
@@ -78,6 +84,36 @@ fn grant<T: Serialize>(approval: T, method: u64) -> Result<PoolGrant<T>> {
     )
     .map_err(supplier)?;
     Ok(PoolGrant { approval, request })
+}
+
+pub(super) fn validate_capacity(
+    limit: Option<u8>,
+    shards: Option<&ShardPoolConfig>,
+    instances: Option<&InstancePoolConfig>,
+) -> Result<()> {
+    if limit.is_some_and(|n| {
+        !(1..=stored::MAX_SUBNET_CHILDREN).contains(&n) || (shards.is_none() && instances.is_none())
+    }) {
+        return Err(Error::Invalid(
+            "subnet_child_limit requires placement pools and a supported positive count".into(),
+        ));
+    }
+    for (count, previous) in [
+        shards.map(|p| (p.max_shards, p.increase_from)),
+        instances.map(|p| (p.max_instances, p.increase_from)),
+    ]
+    .into_iter()
+    .flatten()
+    {
+        if count > limit.unwrap_or(2)
+            || previous.is_some_and(|old| limit.is_none() || old == 0 || old >= count)
+        {
+            return Err(Error::Invalid(
+                "pool count exceeds subnet_child_limit or increase_from is invalid".into(),
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn inputs(
@@ -144,6 +180,36 @@ pub(crate) fn preview(
             )
         })
         .transpose()?;
+    let capacity = |root: &str| {
+        selected
+            .config
+            .subnet_child_limit
+            .map(|max_children| {
+                grant(
+                    stored::SubnetCapacity {
+                        root: root.to_owned(),
+                        max_children,
+                    },
+                    stored::CONFIGURE_CAPACITY,
+                )
+            })
+            .transpose()
+    };
+    let mut increases = Vec::new();
+    if let Some((shard, old)) = shards.as_ref().zip(
+        selected
+            .config
+            .shard_pool
+            .as_ref()
+            .and_then(|pool| pool.increase_from),
+    ) {
+        let mut prior = shard.approval.clone();
+        let next = std::mem::replace(&mut prior.max_shards, old);
+        increases.push(grant(
+            stored::IncreasePool::Shards(prior, next),
+            stored::INCREASE_POOL,
+        )?);
+    }
     let network = selected.config.network.clone();
     let controller = controller.to_owned();
     if let Some(pool) = &selected.config.instance_pool {
@@ -176,7 +242,17 @@ pub(crate) fn preview(
             },
             stored::CONFIGURE_INSTANCES,
         )?;
+        if let Some(old) = pool.increase_from {
+            let mut prior = instances.approval.clone();
+            let next = std::mem::replace(&mut prior.max_instances, old);
+            increases.push(grant(
+                stored::IncreasePool::Instances(prior, next),
+                stored::INCREASE_POOL,
+            )?);
+        }
         return Ok(FleetPlanning::PlacementPools {
+            capacity: capacity(&instances.approval.root)?,
+            increases,
             app: selected.app.clone(),
             fleet: selected.fleet.clone(),
             network,
@@ -188,6 +264,8 @@ pub(crate) fn preview(
     let PoolGrant { approval, request } =
         shards.ok_or_else(|| Error::Invalid("no placement pools".into()))?;
     Ok(FleetPlanning::ShardPool {
+        capacity: capacity(&approval.root)?,
+        increases,
         request,
         deployment: DeploymentName {
             app: selected.app.clone(),
@@ -226,7 +304,7 @@ impl ShardPoolConfig {
             &self.release,
             self.install_args.as_deref(),
         )?;
-        if !(1..=stored::SHARD_SLOTS.len()).contains(&usize::from(self.max_shards))
+        if !(1..=usize::from(stored::MAX_SUBNET_CHILDREN)).contains(&usize::from(self.max_shards))
             || !(1..=stored::MAX_KEYS_PER_SHARD).contains(&self.keys_per_shard)
             || self.expires_at_ns == Some(0)
         {

@@ -1,4 +1,6 @@
-//! Bounded two-child management engine. Canisters own endpoints and lifecycle composition.
+//! Bounded child management engine. Ordinary approvals address two child slots.
+//! The optional placement engine retains separate shard and project identities under
+//! one controller-approved subnet ceiling. Canisters own endpoints and lifecycle.
 //! Host consumers use canic-management-protocol without this runtime.
 
 #[cfg(feature = "backup")]

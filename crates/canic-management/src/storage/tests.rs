@@ -350,3 +350,37 @@ fn project_custody_requires_four_ordered_records_and_its_own_format() {
     assert!(journals.to_bytes().is_err());
     assert!(artifacts.to_bytes().is_err());
 }
+
+#[test]
+fn extended_custody_round_trips_sparse_placement_identities() {
+    let mut journals = Journals::default();
+    let mut artifacts = Artifacts::default();
+    let slot = ChildId::SHARDS[6];
+    journals.0.insert(slot, journal("shard"));
+    artifacts.0.insert(slot, Artifact::default());
+    let encoded_journals = journals.to_bytes().unwrap();
+    let encoded_artifacts = artifacts.to_bytes().unwrap();
+    assert!(encoded_journals.starts_with(b"CUJB"));
+    assert!(encoded_artifacts.starts_with(b"CUA7"));
+    assert_eq!(
+        Journals::from_bytes(&encoded_journals)
+            .unwrap()
+            .0
+            .keys()
+            .collect::<Vec<_>>(),
+        journals.0.keys().collect::<Vec<_>>()
+    );
+    assert_eq!(
+        Artifacts::from_bytes(encoded_artifacts)
+            .unwrap()
+            .0
+            .keys()
+            .collect::<Vec<_>>(),
+        artifacts.0.keys().collect::<Vec<_>>()
+    );
+    for ids in [[0_u8, 1, 4, 4], [0, 1, 5, 4], [0, 1, 4, 16]] {
+        let entries = ids.map(|id| (id, Artifact::default())).to_vec();
+        let bytes = encoded(b"CUA7", &entries, ARTIFACT_LIMITS);
+        assert!(Artifacts::from_bytes(bytes.into()).is_err());
+    }
+}

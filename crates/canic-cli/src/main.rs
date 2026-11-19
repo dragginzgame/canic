@@ -395,12 +395,16 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 )?;
                 if !cli.json {
                     let (digest, mut text) = match &result {
-                        canic_host::FleetPlanning::ShardPool { deployment, network, controller, approval, .. } =>
-                            return Ok(Output::Text(status::pool_preview(deployment, network, controller, approval)?)),
-                        canic_host::FleetPlanning::PlacementPools { app, fleet, network, controller, shards, instances } => {
+                        canic_host::FleetPlanning::ShardPool { deployment, network, controller, approval, capacity, increases, .. } => {
+                            let mut text = status::pool_preview(deployment, network, controller, approval)?;
+                            status::pool_capacity(&mut text, capacity.as_ref(), increases);
+                            return Ok(Output::Text(text));
+                        }
+                        canic_host::FleetPlanning::PlacementPools { app, fleet, network, controller, shards, instances, capacity, increases } => {
                             let mut text = format!("Placement approvals · {app}/{fleet}\nNetwork binding: {}\nController: {controller}\n", network.binding_id()?);
                             let projects = &instances.approval;
                             text.push_str(&format!("Root: {}\nStore: {}\n", projects.root, projects.reference.store));
+                            status::pool_capacity(&mut text, capacity.as_ref(), increases);
                             if let Some(shared) = shards {
                                 let a = &shared.approval;
                                 text.push_str(&format!("\nShared shards · {}\nHub: {}\nCapacity: {} shards × {} lifetime keys per shard\n", a.pool, a.hub, a.max_shards, a.keys_per_shard));

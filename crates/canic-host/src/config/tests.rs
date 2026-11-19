@@ -148,6 +148,7 @@ fn config() -> SelectedFleet {
         fleet: "demo".into(),
         config: FleetConfig {
             receiver_policy: None,
+            subnet_child_limit: None,
             instance_pool: None,
             shard_pool: None,
             auth: Vec::new(),
@@ -253,6 +254,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                     selected.fleet.clone(),
                     FleetDeclaration {
                         receiver_policy: None,
+                        subnet_child_limit: None,
                         instance_pool: None,
                         shard_pool: None,
                         auth: Vec::new(),
@@ -1245,7 +1247,21 @@ creation_budget = 2000000000000
         toml::from_str::<Config>(&toml::to_string(&config).unwrap()).unwrap(),
         config
     );
+    let expanded = source
+        .replace(
+            "[apps.toko.fleets.local]",
+            "[apps.toko.fleets.local]\nsubnet_child_limit = 8",
+        )
+        .replace("max_shards = 2", "max_shards = 3\nincrease_from = 2");
+    toml::from_str::<Config>(&expanded)
+        .unwrap()
+        .validate()
+        .unwrap();
     for invalid in [
+        expanded.replace("increase_from = 2", "increase_from = 0"),
+        expanded.replace("increase_from = 2", "increase_from = 3"),
+        expanded.replace("subnet_child_limit = 8", "subnet_child_limit = 2"),
+        expanded.replace("subnet_child_limit = 8", "subnet_child_limit = 9"),
         source.replace("keys_per_shard = 1", "keys_per_shard = 0"),
         source.replace("max_shards = 2", "max_shards = 3"),
         source.replace("kind = \"Local\"", "kind = \"Local\", url = \"http://localhost:8000\""),

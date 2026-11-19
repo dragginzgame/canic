@@ -43,6 +43,13 @@ async fn exercise_pool(toko_wasm: Option<PathBuf>) {
     owner.client_mut().stop_live().await;
     let pic = owner.client();
     let root_wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let project_predecessor = std::env::var_os("CANIC_PREDECESSOR_PLACEMENT_ROOT_WASM")
+        .map(|path| {
+            let wasm = std::fs::read(path).unwrap();
+            assert_ne!(management::digest(&wasm), management::digest(&root_wasm));
+            wasm
+        })
+        .unwrap_or_else(|| root_wasm.clone());
     let initial_root = if let Some(path) = std::env::var_os("CANIC_PREDECESSOR_SHARD_ROOT_WASM") {
         let predecessor = std::fs::read(path).unwrap();
         assert!(
@@ -51,7 +58,7 @@ async fn exercise_pool(toko_wasm: Option<PathBuf>) {
         );
         predecessor
     } else {
-        root_wasm.clone()
+        project_predecessor.clone()
     };
     let (root, supplier) = readiness_tests::fixture_with_root(pic, initial_root).await;
     let hub = pic
@@ -134,7 +141,7 @@ expires_at_ns={}
             root.id,
             supplier.id,
             hub,
-            2 * management::CREATION_CYCLES,
+            6 * management::CREATION_CYCLES,
             pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000
         ),
     )
@@ -316,7 +323,7 @@ expires_at_ns={}
     }
     assert_eq!(user(pic, hub, eve, "signup").await, Placement::Full);
     assert_eq!(user(pic, hub, eve, "lookup").await, Placement::Unknown);
-    for (id, wasm) in [(hub, hub_wasm), (root.id, root_wasm.clone())] {
+    for (id, wasm) in [(hub, hub_wasm), (root.id, project_predecessor)] {
         canic_qualification::upgrade_stopped(pic, id, wasm, vec![], Some(root.operator))
             .await
             .unwrap();
@@ -476,9 +483,15 @@ expires_at_ns = {}
         .await
         .unwrap_err();
     }
-    canic_qualification::upgrade_stopped(pic, root.id, root_wasm, vec![], Some(root.operator))
-        .await
-        .unwrap();
+    canic_qualification::upgrade_stopped(
+        pic,
+        root.id,
+        root_wasm.clone(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
     configure_project(&root, &projects).await.unwrap();
     assert_eq!(
         project(pic, unrelated, alice, "project", 1).await,
@@ -493,7 +506,7 @@ expires_at_ns = {}
             &root,
             &stored::InstancePool {
                 creation_budget: 0,
-                ..projects
+                ..projects.clone()
             }
         )
         .await,
@@ -506,6 +519,139 @@ expires_at_ns = {}
             .await
             .is_err()
     );
+    // The two old grants have spare funding but cannot grow until the controller approves a count change.
+    let text = std::fs::read_to_string(&config)
+        .unwrap()
+        .replace(
+            "[apps.toko.fleets.demo]",
+            "[apps.toko.fleets.demo]\nsubnet_child_limit = 8",
+        )
+        .replace("max_shards=2", "max_shards=6\nincrease_from=2")
+        .replace("max_instances = 2", "max_instances = 6\nincrease_from=2");
+    std::fs::write(&config, text).unwrap();
+    let expanded: serde_json::Value = serde_json::from_slice(&plan(true)).unwrap();
+    let cap: stored::SubnetCapacity =
+        serde_json::from_value(expanded["capacity"]["approval"].clone()).unwrap();
+    assert_eq!(cap.max_children, 8);
+    let changes = expanded["increases"].as_array().unwrap();
+    assert_eq!(changes.len(), 2);
+    for (item, endpoint, method) in std::iter::once((
+        &expanded["capacity"],
+        "configure_capacity",
+        stored::CONFIGURE_CAPACITY,
+    ))
+    .chain(
+        changes
+            .iter()
+            .map(|item| (item, "increase_pool", stored::INCREASE_POOL)),
+    ) {
+        let req: Vec<u8> = serde_json::from_value(item["request"].clone()).unwrap();
+        assert!(
+            pic.update_call(root.id, alice, endpoint, req.clone())
+                .await
+                .is_err()
+        );
+        for _ in 0..2 {
+            let bytes = pic
+                .update_call(root.id, root.operator, endpoint, req.clone())
+                .await
+                .unwrap();
+            ic_wire::decode::<Result<(), management::Refusal>>(
+                &bytes,
+                ic_wire::Encoding::Frame {
+                    method,
+                    direction: ic_wire::Direction::Response,
+                },
+                stored::LIMITS,
+            )
+            .unwrap()
+            .unwrap();
+        }
+    }
+    for forged in [
+        stored::InstancePool {
+            creation_budget: projects.creation_budget + 1,
+            ..projects.clone()
+        },
+        stored::InstancePool {
+            expires_at_ns: projects.expires_at_ns + 1,
+            ..projects.clone()
+        },
+    ] {
+        let result: Result<(), management::Refusal> = root
+            .update(
+                "increase_pool",
+                stored::INCREASE_POOL,
+                &stored::IncreasePool::Instances(forged, 6),
+                stored::LIMITS,
+            )
+            .await;
+        assert_eq!(result, Err(management::Refusal::Binding));
+    }
+    let stale: Result<(), management::Refusal> = root
+        .update(
+            "increase_pool",
+            stored::INCREASE_POOL,
+            &stored::IncreasePool::Instances(projects.clone(), 7),
+            stored::LIMITS,
+        )
+        .await;
+    assert_eq!(stale, Err(management::Refusal::Occupied));
+    pic.add_cycles(root.id, 12_000_000_000_000).await;
+    assert!(matches!(
+        user(pic, hub, eve, "signup").await,
+        Placement::Pending(_)
+    ));
+    assert!(matches!(
+        project(pic, unrelated, alice, "project", 3).await,
+        Placement::Pending(_)
+    ));
+    settle(pic).await;
+    let third_shard = user(pic, hub, eve, "lookup").await;
+    let third_project = project(pic, unrelated, alice, "lookup_project", 3).await;
+    assert!(matches!(third_shard, Placement::Assigned(..)));
+    assert!(matches!(third_project, Placement::Assigned(..)));
+    assert!(matches!(
+        project(pic, unrelated, alice, "project", 4).await,
+        Placement::Pending(_)
+    ));
+    settle(pic).await;
+
+    // Two hubs contend for the eighth slot. Drop both responses and resolve by their original keys.
+    let fourth_user = CanisterId::self_authenticating(b"fourth");
+    let _shard_call = pic
+        .submit_call(hub, fourth_user, "signup", vec![])
+        .await
+        .unwrap();
+    let _project_call = pic
+        .submit_call(unrelated, alice, "project", vec![5; 32])
+        .await
+        .unwrap();
+    settle(pic).await;
+    canic_qualification::upgrade_stopped(pic, root.id, root_wasm, vec![], Some(root.operator))
+        .await
+        .unwrap();
+    let shard = user(pic, hub, fourth_user, "signup").await;
+    let project_retry = project(pic, unrelated, alice, "project", 5).await;
+    assert!(
+        matches!(
+            (&shard, &project_retry),
+            (Placement::Assigned(..), Placement::Full) | (Placement::Full, Placement::Assigned(..))
+        ),
+        "{shard:?} / {project_retry:?}"
+    );
+    assert_eq!(user(pic, hub, eve, "lookup").await, third_shard);
+    assert_eq!(
+        project(pic, unrelated, alice, "lookup_project", 3).await,
+        third_project
+    );
+    assert_eq!(user(pic, hub, alice, "lookup").await, original);
+    assert_eq!(
+        project(pic, unrelated, alice, "lookup_project", 1).await,
+        project_a
+    );
+    configure(&root, &approval).await.unwrap();
+    configure_project(&root, &projects).await.unwrap();
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted
@@ -698,7 +844,7 @@ fn instance_grant(
         )
         .unwrap(),
         max_instances: 2,
-        creation_budget: 2 * management::CREATION_CYCLES,
+        creation_budget: 6 * management::CREATION_CYCLES,
         expires_at_ns,
     }
 }
@@ -749,6 +895,18 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
         )
         .await;
     }
+    let ceiling = stored::SubnetCapacity {
+        root: root.id.to_text(),
+        max_children: 2,
+    };
+    root.update::<_, Result<(), management::Refusal>>(
+        "configure_capacity",
+        stored::CONFIGURE_CAPACITY,
+        &ceiling,
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
     let grant = stored::ShardPool {
         arguments: management::application::Arguments::new(vec![]).unwrap(),
         root: root.id.to_text(),
@@ -804,6 +962,30 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
         }
     }
     assert_eq!(user(pic, hub, bob, "lookup").await, Placement::Unknown);
+    // The unknown shard creation still consumes one of this subnet's two slots.
+    let peer = pic.create_canister().await;
+    pic.install_canister(
+        peer,
+        std::fs::read(artifacts().join("hub.wasm")).unwrap(),
+        root.id.as_slice().to_vec(),
+        None,
+    )
+    .await;
+    configure_project(
+        &root,
+        &instance_grant(root.id, peer, grant.reference.clone(), grant.expires_at_ns),
+    )
+    .await
+    .unwrap();
+    assert!(matches!(
+        project(pic, peer, bob, "project", 1).await,
+        Placement::Pending(_)
+    ));
+    assert_eq!(project(pic, peer, bob, "project", 2).await, Placement::Full);
+    assert_eq!(
+        project(pic, peer, bob, "lookup_project", 2).await,
+        Placement::Unknown
+    );
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

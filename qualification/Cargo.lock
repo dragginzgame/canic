@@ -287,7 +287,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.239.0"
+version = "0.240.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.239.0"
+version = "0.240.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.239.0"
+version = "0.240.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -438,7 +438,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.239.0"
+version = "0.240.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -454,7 +454,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.239.0"
+version = "0.240.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -1038,7 +1038,7 @@ dependencies = [
 
 [[package]]
 name = "ex-counter"
-version = "0.239.0"
+version = "0.240.0"
 dependencies = [
  "canic",
  "clap",
@@ -1522,9 +1522,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-artifacts"
-version = "0.80.6"
+version = "0.80.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85a2dde3da173216b499a8e272e226207577ef0ee0344e172e3d40b248af8030"
+checksum = "72ce4d058e0c7d95236311ac00bf274feefff7820dcbf70ad9528559db6ca491"
 dependencies = [
  "sha2 0.11.1",
  "thiserror 2.0.18",
@@ -1532,9 +1532,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-fs"
-version = "0.80.6"
+version = "0.80.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee05d23138ab61cb33014fb7d46983f21887e5eec0f9ce9bcf4c712a3643704b"
+checksum = "cbb8bec15385be7577cae7630b6852744c1150993ef56931ec38c763ff1fc90f"
 dependencies = [
  "ic-host-artifacts",
  "rustix",
@@ -1580,9 +1580,9 @@ dependencies = [
 
 [[package]]
 name = "ic-host-text"
-version = "0.77.4"
+version = "0.77.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cec976fd35c86caa0bef16c93e9a28df5856a90df08d1ff0f86a0af08f3764cb"
+checksum = "948047dbda816d2ed6dc22a5aef1a0bd4b356b1f007c87b2f48ed92c0904575f"
 dependencies = [
  "unicode-width",
 ]
@@ -1778,9 +1778,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wasm-store"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "061c6c31d074e45e0f2cec259ecfce6776fc32a9c6a373530fed388b974cb9d0"
+checksum = "7d463968301e3e86d4bc26631a7cdcb088ba961a192f491dde1daefdabac2b6f"
 dependencies = [
  "ic-platform-protocol",
  "ic-platform-runtime",
@@ -1794,9 +1794,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wasm-store-protocol"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a77864a973e1ec5c14c8cd8d4d314d11e3639e820584e711bb831e700e3165ef"
+checksum = "59431cc18f243ae6addc620b04335122c719841534140bf0d7997d68a92fa84a"
 dependencies = [
  "ic-wire",
  "serde",

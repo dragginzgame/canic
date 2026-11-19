@@ -994,6 +994,25 @@ does not itself replicate application data or provide failover. Qualify each
 selected arrangement with its actual effect owner and provider before supporting
 it; this design does not claim all combinations currently work.
 
+Elastic pools may change their desired count as demand changes. New creation
+must fit both the pool's approved growth allowance and an operator-approved
+hard ceiling on managed child canisters on the target subnet. All participating
+pools share that ceiling. Assigning another account to an existing shard consumes
+a key slot in that shard and zero additional subnet slots.
+
+Reserve one subnet slot before issuing a create. A pending or uncertain create
+keeps its reservation across retries and upgrades. Drained or stopped children
+still occupy slots until their release is proven. At the ceiling, refuse new
+creation and continue serving existing assignments. If multiple Roots share a
+subnet budget, give them non-overlapping allowances under the rules for
+[delegated capacity and reclamation](#delegated-capacity-and-reclamation). This bounds the managed population within that authority's scope.
+The numeric ceiling and changes to it require operator approval. Qualification
+must race two pools for the final slot and retain the winner's reservation after
+reply loss. The first implementation scopes the allowance to one Root per managed subnet.
+An operator may raise a live pool's child count under an approval bound to its
+current grant. The change carries forward reserved slots, spent cycles, and the
+original deadline. Changes to funding or expiry require separate authority.
+
 Same-subnet work is the preferred execution path. Protected placement classifies a route as same-subnet, cross-subnet or unknown. Unknown is never assumed local. Directory paging must carry a generation or comparable consistency marker; mixed pages cannot masquerade as one complete inventory. Large dynamic Fleets require indexes by owner, subnet, role and unfinished operation, including children created after initial deployment.
 
 Shared tenancy is a first-class qualification workload. Do not equate one logical user with one canister. Placement policy accepts application capacity signals without requiring Canic to understand user records. Subnet outages, pressure and lack of funding cause bounded queueing or typed refusal; no hidden unbounded backlog.
@@ -1001,9 +1020,10 @@ Shared tenancy is a first-class qualification workload. Do not equate one logica
 ### Delivery and upgrade qualification
 
 The four patterns are the intended product scope; their implementations enter
-incrementally with a named consumer and bounded fixture. Today the Root
-journey qualifies up to two fixed child slots and bounded serial upgrades, not general singleton
-admission, scaling, sharding or keyed-instance APIs. Keep those limits visible;
+incrementally with a named consumer and bounded fixture. Ordinary Root deployments qualify two fixed child slots and bounded serial
+upgrades. The placement witness upgrades a populated four-child Root and qualifies up to
+eight managed children across both pools under one subnet owner. General singleton
+admission, elastic worker pools and multi-Root coordination remain separate work. Keep those limits visible;
 do not add unused configuration variants or a general pool catalogue in advance.
 
 A completed one-child fleet can add the second child through a separate
@@ -1402,7 +1422,7 @@ retry acknowledges the original terms, including the original deadline.
 The project hub calls `canic::sharding::assign_instance(root, key)` with a stable
 application request key. `lookup_instance(root, key)` observes the same claim
 after a lost reply. First admission retains the key and Store-backed creation
-together. Two dedicated child identities (2 and 3) share the engine's existing
+together. The initial two dedicated child identities (2 and 3) share the engine's existing
 storage leases and timers. The first accepted creation writes the extended
 journal, artifact and placement formats. Ordinary two-slot request decoding
 continues to reject these identities. The installed witness recovers both
@@ -1430,6 +1450,20 @@ The `placement_pools` result carries `instances.request` for
 `configure_instances` and, when configured, `shards.request` for
 `configure_shards`. Planning is local. Root checks the submitting controller.
 
+For one Root serving one managed subnet, set `subnet_child_limit` in the fleet
+table (1–8). Set `max_shards` or `max_instances` in each pool. A fresh fleet
+submits the planned `capacity.request` to `configure_capacity` before its pool
+grants. The subnet ceiling is fixed once admitted. Each pool still consumes its
+own approved cycle budget and observes its own deadline.
+
+To raise a live pool from two to six, keep its original release, install bytes,
+cycle budget and deadline. Set its count to six and `increase_from = 2` in the
+same pool table. Submit its `increases[].request` to `increase_pool` as the
+Root controller. Replaying an exact increase acknowledges the retained change.
+A stale count cannot authorize a different change. An unresolved creation still
+occupies capacity. The 0.239.0 two-slot whole-fleet approval and custody APIs
+retain their original scope.
+
 For #53, start with the predecessor's named, directional permissions. The
 receiver admits the actual IC caller locally. Outbound selection checks the
 permitted target. A handler revalidates its ticket after an await before a new
@@ -1438,8 +1472,12 @@ an effect is suspended and the original ticket stays fenced across Root
 restart. Toko still checks the account and its administrator rights. Its two
 independently declared hubs need an explicit fleet binding across components;
 the legacy fixture's same-component permission alone cannot authorize them.
-The delivery and acknowledgement boundary for replacing a peer remains to be
-qualified in Canic.
+Project sync may pause during peer replacement. The user hub must commit
+revocation of the old binding before admitting the replacement. While paused,
+it refuses project-sync calls. A suspended handler must recheck its original
+binding before any further protected effect, including after admission resumes.
+The installed witness must exercise the pause, a late continuation from the old
+hub, and successful sync from the replacement. These are qualification criteria.
 [Legacy admission API](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/access/caller_authority/mod.rs)
 and [installed denial regression](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/qualification/canic-tests/src/pic/fleet_registry/baseline/tests/caller_authority/mod.rs).
 

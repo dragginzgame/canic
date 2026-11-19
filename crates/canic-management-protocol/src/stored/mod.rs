@@ -156,8 +156,32 @@ pub struct InstancePool {
 
 /// Approve a dedicated instance pool independently of the shared shard grant.
 pub const CONFIGURE_INSTANCES: u64 = 93;
-/// Dedicated instance capacity selected for the two-project witness.
-pub const MAX_INSTANCES: u8 = 2;
+/// Maximum managed children across both pools of the single subnet owner.
+pub const MAX_SUBNET_CHILDREN: u8 = 8;
+/// Dedicated instances also consume the shared subnet allowance.
+pub const MAX_INSTANCES: u8 = MAX_SUBNET_CHILDREN;
+
+/// Controller's immutable child ceiling for this subnet owner.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SubnetCapacity {
+    /// Addressed management owner.
+    pub root: String,
+    /// Lifetime allocation limit across both pools.
+    pub max_children: u8,
+}
+/// Admit the shared ceiling before configuring larger pools.
+pub const CONFIGURE_CAPACITY: u64 = ic_wire::method_id("canic.configure_capacity.v1");
+
+/// Count-only change bound to the complete previous grant.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum IncreasePool {
+    /// Current shared-shard grant and its new count.
+    Shards(ShardPool, u8),
+    /// Current dedicated-instance grant and its new count.
+    Instances(InstancePool, u8),
+}
+/// Increase one pool count without renewing funding or time.
+pub const INCREASE_POOL: u64 = ic_wire::method_id("canic.increase_pool.v1");
 
 /// Permanent Root slots eligible for the existing shared-shard approval. Their order
 /// is part of HRW placement and their indices address the retained shard ledger.

@@ -35,6 +35,34 @@ fn configure_instances(input: stored::InstancePool) -> Result<(), Refusal> {
     sharding::configure_instances(input)
 }
 
+/// Set this subnet owner's shared placement ceiling.
+#[runtime::update(
+    runtime = runtime,
+    name = "configure_capacity",
+    guard = controller,
+    decode = approval::<stored::SubnetCapacity, {stored::CONFIGURE_CAPACITY}>,
+    encode = configured::<{stored::CONFIGURE_CAPACITY}>,
+    max_bytes = 65536,
+    on_error = fail,
+)]
+fn configure_capacity(input: stored::SubnetCapacity) -> Result<(), Refusal> {
+    sharding::configure_capacity(input)
+}
+
+/// Raise one pool count under its existing funding and deadline.
+#[runtime::update(
+    runtime = runtime,
+    name = "increase_pool",
+    guard = controller,
+    decode = approval::<stored::IncreasePool, {stored::INCREASE_POOL}>,
+    encode = configured::<{stored::INCREASE_POOL}>,
+    max_bytes = 65536,
+    on_error = fail,
+)]
+fn increase_pool(input: stored::IncreasePool) -> Result<(), Refusal> {
+    sharding::increase_pool(input)
+}
+
 /// Return the hub's retained placement for a key or assign it within the approved limits.
 #[runtime::update(
     runtime = runtime,

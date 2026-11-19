@@ -1,4 +1,7 @@
 //! Independent hub grants and shared-shard placement over Store-backed child effects.
+mod capacity;
+pub use capacity::{configure_capacity, increase_pool};
+
 use super::{STATE, api, delivery, snapshot};
 use crate::{
     placement::{self, score, select},
@@ -22,13 +25,31 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: 24,
 };
 
-#[derive(Serialize, Deserialize)]
-struct Ledger {
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(bound(
+    serialize = "[u16; N]: Serialize, [Option<[u8; 32]>; N]: Serialize, [Option<String>; N]: Serialize",
+    deserialize = "[u16; N]: Deserialize<'de>, [Option<[u8; 32]>; N]: Deserialize<'de>, [Option<String>; N]: Deserialize<'de>"
+))]
+struct Ledger<const N: usize> {
     approval: ShardPool,
     claims: BTreeMap<Key, ChildId>,
-    counts: [u16; stored::SHARD_SLOTS.len()],
-    generations: [Option<[u8; 32]>; stored::SHARD_SLOTS.len()],
-    principals: [Option<String>; stored::SHARD_SLOTS.len()],
+    counts: [u16; N],
+    generations: [Option<[u8; 32]>; N],
+    principals: [Option<String>; N],
+}
+
+const SLOT_COUNT: usize = ChildId::SHARDS.len() + ChildId::INSTANCES.len();
+
+impl<const N: usize> Ledger<N> {
+    fn resize<const M: usize>(self) -> Ledger<M> {
+        Ledger {
+            approval: self.approval,
+            claims: self.claims,
+            counts: std::array::from_fn(|i| self.counts.get(i).copied().unwrap_or_default()),
+            generations: std::array::from_fn(|i| self.generations.get(i).copied().flatten()),
+            principals: std::array::from_fn(|i| self.principals.get(i).cloned().flatten()),
+        }
+    }
 }
 
 // The historical untagged Option starts with 0 or 1. Once an instance grant
@@ -37,7 +58,10 @@ const INSTANCE_LAYOUT: &[u8] = b"CPL1";
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Pools {
-    shards: Option<Ledger>,
+    shards: Option<Ledger<SLOT_COUNT>>,
+    capacity: Option<stored::SubnetCapacity>,
+    shard_increases: Vec<u8>,
+    instance_increases: Vec<u8>,
     instances: Option<stored::InstancePool>,
     projects: Vec<ProjectClaim>,
 }
@@ -50,25 +74,55 @@ struct ProjectClaim {
 }
 
 impl Pools {
+    fn pool_limit(&self) -> u8 {
+        self.capacity.as_ref().map_or(2, |c| c.max_children)
+    }
+
+    fn used(&self) -> usize {
+        self.projects.len()
+            + self
+                .shards
+                .as_ref()
+                .map_or(0, |l| l.generations.iter().flatten().count())
+    }
+
+    fn full(&self) -> bool {
+        self.capacity
+            .as_ref()
+            .is_some_and(|c| self.used() >= usize::from(c.max_children))
+    }
+
     pub(super) fn encode(&self) -> Vec<u8> {
-        if self.instances.is_none() {
-            return ic_wire::encode(&self.shards, ic_wire::Encoding::Payload, LIMITS)
-                .expect("bounded shard ledger");
-        }
-        let (tag, payload) = if self.projects.is_empty() {
+        let (tag, payload) = if self.capacity.is_some() {
             (
-                INSTANCE_LAYOUT,
-                ic_wire::encode(
-                    &(&self.shards, &self.instances),
-                    ic_wire::Encoding::Payload,
-                    LIMITS,
-                ),
-            )
-        } else {
-            (
-                b"CPL2".as_slice(),
+                b"CPL3".as_slice(),
                 ic_wire::encode(self, ic_wire::Encoding::Payload, LIMITS),
             )
+        } else {
+            let historical = self.shards.clone().map(Ledger::resize::<2>);
+            if self.instances.is_none() {
+                return ic_wire::encode(&historical, ic_wire::Encoding::Payload, LIMITS)
+                    .expect("bounded shard ledger");
+            }
+            if self.projects.is_empty() {
+                (
+                    INSTANCE_LAYOUT,
+                    ic_wire::encode(
+                        &(historical, &self.instances),
+                        ic_wire::Encoding::Payload,
+                        LIMITS,
+                    ),
+                )
+            } else {
+                (
+                    b"CPL2".as_slice(),
+                    ic_wire::encode(
+                        &(historical, &self.instances, &self.projects),
+                        ic_wire::Encoding::Payload,
+                        LIMITS,
+                    ),
+                )
+            }
         };
         let mut bytes = tag.to_vec();
         bytes.extend(payload.expect("bounded placement grants"));
@@ -78,30 +132,86 @@ impl Pools {
 }
 
 pub(super) fn open(bytes: &[u8]) -> Pools {
-    let pools = if let Some(payload) = bytes.strip_prefix(b"CPL2") {
-        let pools: Pools =
-            ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("project claims");
-        assert!(!pools.projects.is_empty(), "missing project claims");
+    type LegacyShards = Option<Ledger<2>>;
+    let pools = if let Some(payload) = bytes.strip_prefix(b"CPL3") {
+        let pools: Pools = ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
+            .expect("expanded placement ledger");
+        let capacity = pools.capacity.as_ref().expect("subnet capacity");
+        assert!(
+            capacity::valid_capacity(capacity)
+                && pools.used() <= usize::from(capacity.max_children)
+        );
         pools
-    } else if let Some(payload) = bytes.strip_prefix(INSTANCE_LAYOUT) {
-        let (shards, instances) =
-            ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("placement grants");
-        Pools {
-            shards,
-            instances,
-            projects: vec![],
-        }
     } else {
+        let (shards, instances, projects): (
+            LegacyShards,
+            Option<stored::InstancePool>,
+            Vec<ProjectClaim>,
+        ) = if let Some(payload) = bytes.strip_prefix(b"CPL2") {
+            let old: (
+                LegacyShards,
+                Option<stored::InstancePool>,
+                Vec<ProjectClaim>,
+            ) = ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
+                .expect("project claims");
+            assert!(old.1.is_some() && !old.2.is_empty());
+            old
+        } else if let Some(payload) = bytes.strip_prefix(INSTANCE_LAYOUT) {
+            let (shards, grant): (LegacyShards, Option<stored::InstancePool>) =
+                ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
+                    .expect("placement grants");
+            (shards, Some(grant.expect("instance grant")), vec![])
+        } else {
+            (
+                ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS).expect("shard ledger"),
+                None,
+                vec![],
+            )
+        };
         Pools {
-            shards: ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS)
-                .expect("shard ledger"),
+            shards: shards.map(Ledger::resize),
+            instances,
+            projects,
             ..Default::default()
         }
     };
-    if bytes.starts_with(b"CPL") {
-        let grant = pools.instances.as_ref().expect("instance grant");
+    for (initial, increases) in [
+        (
+            pools.instances.as_ref().map(|a| a.max_instances),
+            &pools.instance_increases,
+        ),
+        (
+            pools.shards.as_ref().map(|l| l.approval.max_shards),
+            &pools.shard_increases,
+        ),
+    ] {
+        if !increases.is_empty() {
+            let cap = pools
+                .capacity
+                .as_ref()
+                .expect("approved subnet ceiling")
+                .max_children;
+            let original = initial.expect("original pool grant");
+            assert!(
+                original < increases[0]
+                    && increases.windows(2).all(|w| w[0] < w[1])
+                    && increases.last() <= Some(&cap)
+            );
+        }
+    }
+    if let Some(grant) = &pools.instances {
+        assert!(grant.max_instances <= pools.pool_limit());
         validate_instance(grant).expect("retained instance grant");
-        assert!(pools.projects.len() <= usize::from(grant.max_instances));
+        assert!(
+            pools.projects.len()
+                <= usize::from(
+                    pools
+                        .instance_increases
+                        .last()
+                        .copied()
+                        .unwrap_or(grant.max_instances)
+                )
+        );
         assert!(pools.projects.len() as u64 * CREATION_CYCLES <= grant.creation_budget);
         if let Some(shared) = &pools.shards {
             assert!(
@@ -111,10 +221,19 @@ pub(super) fn open(bytes: &[u8]) -> Pools {
         }
     }
     if let Some(l) = &pools.shards {
-        assert!(valid_limits(&l.approval));
-        let mut counts = [0_u16; stored::SHARD_SLOTS.len()];
+        assert!(valid_limits(&l.approval) && l.approval.max_shards <= pools.pool_limit());
+        let mut counts = [0_u16; SLOT_COUNT];
         for slot in l.claims.values() {
-            assert!(slot.index() < usize::from(l.approval.max_shards));
+            assert!(
+                ChildId::SHARDS[..usize::from(
+                    pools
+                        .shard_increases
+                        .last()
+                        .copied()
+                        .unwrap_or(l.approval.max_shards)
+                )]
+                    .contains(slot)
+            );
             counts[slot.index()] += 1;
             assert!(counts[slot.index()] <= l.approval.keys_per_shard);
         }
@@ -123,19 +242,16 @@ pub(super) fn open(bytes: &[u8]) -> Pools {
             l.generations.iter().flatten().count() as u64 * CREATION_CYCLES
                 <= l.approval.creation_budget
         );
-        for slot in stored::SHARD_SLOTS {
-            assert!(l.principals[slot.index()].is_none() || counts[slot.index()] > 0);
-            assert_eq!(
-                counts[slot.index()] > 0,
-                l.generations[slot.index()].is_some()
-            );
+        for (index, count) in counts.iter().copied().enumerate() {
+            assert!(l.principals[index].is_none() || count > 0);
+            assert_eq!(count > 0, l.generations[index].is_some());
         }
     }
     pools
 }
 
 fn valid_limits(a: &ShardPool) -> bool {
-    (1..=stored::SHARD_SLOTS.len()).contains(&usize::from(a.max_shards))
+    (1..=ChildId::SHARDS.len()).contains(&usize::from(a.max_shards))
         && (1..=stored::MAX_KEYS_PER_SHARD).contains(&a.keys_per_shard)
         && !a.pool.is_empty()
         && a.pool.len() <= 64
@@ -143,8 +259,9 @@ fn valid_limits(a: &ShardPool) -> bool {
 
 pub(crate) fn occupied() -> bool {
     STATE.with_borrow(|s| {
-        s.as_ref()
-            .is_some_and(|s| s.pools.shards.is_some() || s.pools.instances.is_some())
+        s.as_ref().is_some_and(|s| {
+            s.pools.capacity.is_some() || s.pools.shards.is_some() || s.pools.instances.is_some()
+        })
     })
 }
 
@@ -170,6 +287,9 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
     assert!(api::is_controller(&api::caller()));
     if let Some(result) = STATE.with_borrow(|s| {
         let pools = &s.as_ref().expect("open Root").pools;
+        if a.max_shards > pools.pool_limit() {
+            return Some(Err(Refusal::Binding));
+        }
         if let Some(l) = &pools.shards {
             return Some(if l.approval == a {
                 Ok(())
@@ -205,9 +325,9 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
         state.pools.shards = Some(Ledger {
             approval: a,
             claims: BTreeMap::new(),
-            counts: [0; stored::SHARD_SLOTS.len()],
-            generations: [None; stored::SHARD_SLOTS.len()],
-            principals: [None, None],
+            counts: [0; SLOT_COUNT],
+            generations: [None; SLOT_COUNT],
+            principals: Default::default(),
         });
         state.pool.set(state.pools.encode());
     });
@@ -269,6 +389,9 @@ pub fn configure_instances(a: stored::InstancePool) -> Result<(), Refusal> {
     assert!(api::is_controller(&api::caller()));
     let prior = STATE.with_borrow(|s| {
         let pools = &s.as_ref().expect("open Root").pools;
+        if a.max_instances > pools.pool_limit() {
+            return Some(Err(Refusal::Binding));
+        }
         if let Some(previous) = &pools.instances {
             return Some(if previous == &a {
                 Ok(())
@@ -318,7 +441,7 @@ pub(super) fn bind_ready(slot: ChildId, pid: &str) {
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
         let (generation, original) =
-            if let Some(index) = ChildId::PROJECT.iter().position(|id| *id == slot) {
+            if let Some(index) = ChildId::INSTANCES.iter().position(|id| *id == slot) {
                 let claim = state
                     .pools
                     .projects
@@ -374,8 +497,15 @@ pub fn assign(key: Key) -> Placement {
         return retained;
     }
     let (approval, counts, generations) = STATE.with_borrow(|s| {
-        let ledger = s.as_ref().unwrap().pools.shards.as_ref().unwrap();
-        (ledger.approval.clone(), ledger.counts, ledger.generations)
+        let pools = &s.as_ref().unwrap().pools;
+        let ledger = pools.shards.as_ref().unwrap();
+        let mut approval = ledger.approval.clone();
+        approval.max_shards = pools
+            .shard_increases
+            .last()
+            .copied()
+            .unwrap_or(approval.max_shards);
+        (approval, ledger.counts, ledger.generations)
     });
     if counts.iter().sum::<u16>() == u16::from(approval.max_shards) * approval.keys_per_shard {
         return Placement::Full;
@@ -383,7 +513,7 @@ pub fn assign(key: Key) -> Placement {
     let mut ready = None;
     let mut free = None;
     let mut blocked = false;
-    for &slot in &stored::SHARD_SLOTS[..usize::from(approval.max_shards)] {
+    for &slot in &ChildId::SHARDS[..usize::from(approval.max_shards)] {
         if let Some(generation) = generations[slot.index()] {
             if counts[slot.index()] < approval.keys_per_shard {
                 match resolve(slot, generation) {
@@ -419,6 +549,9 @@ pub fn assign(key: Key) -> Placement {
         let Some((_, slot)) = free else {
             return Placement::Full;
         };
+        if STATE.with_borrow(|s| s.as_ref().unwrap().pools.full()) {
+            return Placement::Full;
+        }
         let issued = generations.iter().flatten().count() as u64;
         let now = api::time();
         if (issued + 1) * CREATION_CYCLES > approval.creation_budget
@@ -504,12 +637,31 @@ fn create(
 
 pub(super) fn validate_claims(state: &super::State) {
     let claims = &state.pools.projects;
-    assert_eq!(
-        state.journal.0.len() > ChildId::ALL.len(),
-        !claims.is_empty()
-    );
-    for (index, slot) in ChildId::PROJECT.into_iter().enumerate() {
+    let pools = &state.pools;
+    if pools.capacity.is_none() {
+        assert_eq!(state.journal.0.len() > 2, !claims.is_empty());
+    }
+    for (index, slot) in ChildId::SHARDS.into_iter().enumerate() {
+        let generation = pools
+            .shards
+            .as_ref()
+            .and_then(|ledger| ledger.generations[slot.index()]);
+        if index >= 2
+            || pools.shards.is_some()
+            || pools.instances.is_some()
+            || pools.capacity.is_some()
+        {
+            let source = state.artifact.0.get(&slot).and_then(Artifact::sources);
+            assert_eq!(
+                generation,
+                source.map(|s| s.creation.operation),
+                "shard journal binding"
+            );
+        }
+    }
+    for (index, slot) in ChildId::INSTANCES.into_iter().enumerate() {
         let Some(journal) = state.journal.0.get(&slot) else {
+            assert!(claims.get(index).is_none());
             continue;
         };
         let source = state.artifact.0[&slot].sources();
@@ -563,7 +715,7 @@ pub fn lookup_instance(key: &Key) -> Placement {
         else {
             return Placement::Unknown;
         };
-        let slot = ChildId::PROJECT[i];
+        let slot = ChildId::INSTANCES[i];
         placement::resolve(
             Allocation {
                 slot: slot.index() as u32,
@@ -589,16 +741,24 @@ pub fn assign_instance(key: Key) -> Placement {
     }
     let (grant, count) = STATE.with_borrow(|s| {
         let pools = &s.as_ref().unwrap().pools;
-        (pools.instances.clone().unwrap(), pools.projects.len())
+        let mut grant = pools.instances.clone().unwrap();
+        grant.max_instances = pools
+            .instance_increases
+            .last()
+            .copied()
+            .unwrap_or(grant.max_instances);
+        (grant, pools.projects.len())
     });
-    if count >= usize::from(grant.max_instances) {
+    if STATE.with_borrow(|s| s.as_ref().unwrap().pools.full())
+        || count >= usize::from(grant.max_instances)
+    {
         return Placement::Full;
     }
     let now = api::time();
     if now >= grant.expires_at_ns || (count as u64 + 1) * CREATION_CYCLES > grant.creation_budget {
         return Placement::GrowthRefused;
     }
-    let slot = ChildId::PROJECT[count];
+    let slot = ChildId::INSTANCES[count];
     let Some(generation) = create(
         slot,
         grant.reference,

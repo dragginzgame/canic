@@ -107,6 +107,9 @@ pub struct FleetDeclaration {
     /// Optional install-time policy for explicitly selected application roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_policy: Option<crate::ReceiverPolicy>,
+    /// Combined lifetime capacity of all placement pools on this Root's managed subnet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subnet_child_limit: Option<u8>,
     /// Dedicated children owned by one keyed-instance hub.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instance_pool: Option<InstancePoolConfig>,
@@ -137,6 +140,9 @@ pub struct FleetConfig {
     /// Optional install-time policy for explicitly selected application roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_policy: Option<crate::ReceiverPolicy>,
+    /// Combined lifetime capacity of all placement pools on this Root's managed subnet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subnet_child_limit: Option<u8>,
     /// Dedicated children owned by one keyed-instance hub.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instance_pool: Option<InstancePoolConfig>,
@@ -273,6 +279,11 @@ impl Config {
                     if let Some(policy) = &config.receiver_policy {
                         policy.validate(&slots)?;
                     }
+                    sharding::validate_capacity(
+                        config.subnet_child_limit,
+                        config.shard_pool.as_ref(),
+                        config.instance_pool.as_ref(),
+                    )?;
                     if let Some(pool) = &config.shard_pool {
                         pool.validate(&slots)?;
                     }
@@ -340,6 +351,7 @@ impl AppConfig {
         };
         let mut config = FleetConfig {
             receiver_policy: fleet.receiver_policy.clone(),
+            subnet_child_limit: fleet.subnet_child_limit,
             instance_pool: fleet.instance_pool.clone(),
             shard_pool: fleet.shard_pool.clone(),
             auth: fleet.auth.clone(),
@@ -445,6 +457,11 @@ impl FleetConfig {
         if let Some(policy) = &self.receiver_policy {
             policy.validate(&self.canisters)?;
         }
+        sharding::validate_capacity(
+            self.subnet_child_limit,
+            self.shard_pool.as_ref(),
+            self.instance_pool.as_ref(),
+        )?;
         if let Some(pool) = &self.shard_pool {
             pool.validate(&self.canisters)?;
         }
@@ -780,6 +797,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
             fleet.into(),
             FleetDeclaration {
                 receiver_policy: None,
+                subnet_child_limit: None,
                 instance_pool: None,
                 shard_pool: None,
                 auth: Vec::new(),

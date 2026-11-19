@@ -29,7 +29,12 @@ With both user slots full, one user submits two project keys through the project
 hub. The fixture discards the first reply, retries the key, and verifies two distinct
 ready children with the approved project hub as their database owner. The third
 key is refused. Reopening Root preserves both projects and the user's shard.
-Cross-hub placement requests are refused in both directions. A separate case
+Set `CANIC_PREDECESSOR_PLACEMENT_ROOT_WASM` to the released 0.239.0
+sharding Root to create both projects before installing the candidate. The
+controller then raises both pool counts from two to six under one eight-child
+subnet ceiling using the planned Wire requests. The hubs race for the final
+slot and replay their keys after Root reopens. Forged funding, extended expiry
+and stale count changes refuse. Cross-hub placement requests are refused in both directions. A separate case
 approves the project hub first and proves a zero creation budget leaves no claim.
 Set `TOKO_USER_SHARD_WASM` to a built Toko user shard to repeat the same installed
 CLI journey with its actual Wasm and 16-byte installation nonce. The fixture
@@ -627,8 +632,9 @@ fixtures do not yet replace all of their obligations:
 The separate native M0 harness has been removed; all tests now share the native
 qualification package. The two probe implementations remain intentionally
 isolated. Delete one only after product regressions cover its remaining cases.
-The current Root-plus-two-child scope is described in the [Root guide](../docs/demos/root.md);
-dated decisions and measured results live in [qualification history](../docs/qualification/history.md).
+The [Root guide](../docs/demos/root.md) covers ordinary two-child deployments.
+The [runtime placement witness](#runtime-shard-placement) covers shared shards and dedicated projects under one eight-child subnet ceiling. Dated decisions and measured results
+live in [qualification history](../docs/qualification/history.md).
 
 ## Management-effect boundaries
 

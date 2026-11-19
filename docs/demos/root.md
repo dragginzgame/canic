@@ -8,6 +8,13 @@ See the [executor contract](../design/canic-system-design.md#backup-signing-and-
 The installed local witness is `bash scripts/dev/test-root.sh snapshot::` after simulator
 preparation. This is not yet a Backup CLI workflow or an upgrade for existing fleets.
 
+Ordinary fleet plans can deploy up to two application children. A Root built with
+`sharding` can serve up to eight placement children across its shard and project
+pools. The fleet owner sets `subnet_child_limit` and approves the shared ceiling
+on Root before raising either pool above two. Existing fleets keep their grants
+until the controller explicitly raises them. The Wasm Store has its own identity outside these limits.
+[Installed two-hub placement journey](../../qualification/README.md#runtime-shard-placement)
+
 The generated starter begins with a Wasm Store and one approved Hello World
 application; a fresh or completed one-child fleet can include a second application:
 
@@ -218,8 +225,8 @@ support downgrading to the pre-migration Root.
 The initial approval fixes its names and permanent slots. A completed one-child
 fleet can add its second child under a separate approval, as described above;
 renaming or removing retained children is refused. This walkthrough does not
-change the existing mainnet starter. Arbitrary tree depth, growth beyond two
-children and subtree cascades remain future qualification work.
+change the existing mainnet starter. Arbitrary tree depth, ordinary whole-fleet plans beyond two
+named children and subtree cascades remain future qualification work.
 
 ## Inspect the starter inputs
 

@@ -14,6 +14,12 @@ use serde::Serialize;
 pub enum FleetPlanning {
     /// Offline review of a pool grant for supplied infrastructure. Creates no journal operation.
     ShardPool {
+        /// Shared ceiling to approve before pool growth.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        capacity: Option<crate::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
+        /// Count-only changes for existing approvals, bound to their original terms.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        increases: Vec<crate::PoolGrant<canic_management_protocol::stored::IncreasePool>>,
         /// Application and fleet whose pool would be configured.
         deployment: crate::DeploymentName,
         /// Configured replica and trust binding.
@@ -27,6 +33,12 @@ pub enum FleetPlanning {
     },
     /// Independent pool approvals for a fleet with dedicated instances.
     PlacementPools {
+        /// Shared ceiling to approve before pool growth.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        capacity: Option<crate::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
+        /// Count-only changes for existing approvals, bound to their original terms.
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        increases: Vec<crate::PoolGrant<canic_management_protocol::stored::IncreasePool>>,
         /// Application name.
         app: String,
         /// Fleet name.

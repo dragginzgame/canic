@@ -1,6 +1,22 @@
 # Changelog
 
-## [Unreleased]
+## [0.240.0] - 2026-11-19
+
+### 🚀 Features
+
+A placement Root can admit up to eight managed children across its subnet’s
+shared-shard and dedicated-project pools. A live count increase preserves the
+original creation budget, expiry, assignments and outstanding work.
+
+For a bound fleet with built artifacts, set `subnet_child_limit` on the fleet
+and the desired count on each pool. For an existing pool, set `increase_from`
+to its current approved count. Preview the requests locally, or run the
+installed upgrade and contention test on a prepared simulator.
+
+```sh
+canic --json fleet plan --config apps/toko/canic.toml --controller "$CONTROLLER"
+bash scripts/dev/test-store.sh sharding
+```
 
 ## [0.239.0] - 2026-11-19
 

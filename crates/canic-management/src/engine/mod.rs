@@ -338,6 +338,7 @@ fn schedule(slot: ChildId) {
         .map_or(OnceDemand::Inactive, OnceDemand::At);
     TIMER.with_borrow_mut(|timers| {
         let timer = timers.entry(slot).or_insert_with(|| {
+            let name = format!("child-{}", slot.index());
             ic_timers::bind_once(
                 [
                     "profile",
@@ -347,7 +348,7 @@ fn schedule(slot: ChildId) {
                         ChildId::SECOND => "second-worker",
                         s if s == ChildId::PROJECT[0] => "first-project",
                         s if s == ChildId::PROJECT[1] => "second-project",
-                        _ => unreachable!("unsupported child timer identity"),
+                        _ => &name,
                     },
                 ],
                 // Child slots keep their identities across creation and all upgrades.
@@ -446,24 +447,19 @@ fn admit(slot: ChildId, approval: Approval, artifact: Artifact) -> Result<Status
     }
     let mut artifacts =
         STATE.with_borrow(|state| state.as_ref().expect("open engine").artifact.clone());
-    // Grow the two existing leases only when the first project creation is admitted.
-    let first_project = slot == ChildId::PROJECT[0] && !artifacts.0.contains_key(&slot);
-    if first_project {
-        artifacts
-            .0
-            .extend(ChildId::PROJECT.map(|id| (id, Artifact::default())));
+    // The released four-child format opens both original project slots together.
+    if slot == ChildId::PROJECT[0] {
+        artifacts.0.entry(ChildId::PROJECT[1]).or_default();
     }
-    *artifacts.0.get_mut(&slot).expect("known child") = artifact;
+    artifacts.0.insert(slot, artifact);
     if !artifacts.fits() {
         return Err(Refusal::Artifact);
     }
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
-        if first_project {
-            state
-                .journal
-                .0
-                .extend(ChildId::PROJECT.map(|id| (id, Default::default())));
+        state.journal.0.entry(slot).or_default();
+        if slot == ChildId::PROJECT[0] {
+            state.journal.0.entry(ChildId::PROJECT[1]).or_default();
         }
         state.set_artifact(artifacts);
     });

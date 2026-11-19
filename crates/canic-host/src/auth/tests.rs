@@ -11,6 +11,7 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
         fleet: "local".into(),
         config: FleetConfig {
             receiver_policy: None,
+            subnet_child_limit: None,
             instance_pool: None,
             shard_pool: None,
             network: Network::Local {

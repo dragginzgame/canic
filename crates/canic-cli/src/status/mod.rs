@@ -548,3 +548,24 @@ fn cycles(value: u64) -> String {
     };
     format!("{amount}{unit} cycles ({value})")
 }
+
+pub(super) fn pool_capacity(
+    text: &mut String,
+    capacity: Option<&canic_host::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
+    increases: &[canic_host::PoolGrant<canic_management_protocol::stored::IncreasePool>],
+) {
+    if let Some(cap) = capacity {
+        text.push_str(&format!(
+            "\nManaged subnet ceiling: {} children\n",
+            cap.approval.max_children
+        ));
+    }
+    for change in increases {
+        use canic_management_protocol::stored::IncreasePool;
+        let (pool, old, new) = match &change.approval {
+            IncreasePool::Shards(a, n) => (&a.pool, a.max_shards, n),
+            IncreasePool::Instances(a, n) => (&a.component, a.max_instances, n),
+        };
+        text.push_str(&format!("Increase {pool}: {old} → {new} children\n"));
+    }
+}

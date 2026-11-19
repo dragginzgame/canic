@@ -118,8 +118,11 @@ fn unsupported_identities_cannot_enter_runtime_or_retained_authority() {
 }
 
 #[test]
-fn project_slots_round_trip_and_cannot_enter_ordinary_requests() {
-    for slot in ChildId::PROJECT {
+fn placement_slots_round_trip_and_cannot_enter_ordinary_requests() {
+    for slot in ChildId::INSTANCES
+        .into_iter()
+        .chain(ChildId::SHARDS.into_iter().skip(2))
+    {
         assert!(ChildId::new(slot.index()).is_none());
         let frame = ic_wire::Encoding::Payload;
         let id = ic_wire::encode(&slot, frame, crate::LIMITS).unwrap();

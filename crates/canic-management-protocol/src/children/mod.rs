@@ -1,4 +1,4 @@
-//! Two independently retained child slots under one management owner.
+//! Stable child identities and the ordinary two-slot management request and custody contracts.
 
 #[cfg(test)]
 mod tests;
@@ -16,12 +16,44 @@ impl ChildId {
     pub const FIRST: Self = Self(0);
     /// Additional allocation with independent authority and evidence.
     pub const SECOND: Self = Self(1);
-    /// Qualified child identities in permanent custody order.
-    /// This is the current protocol bound, not an operator capacity setting.
+    /// Slots addressable by ordinary management requests, in custody order.
+    /// Shared-shard placement uses this same pair. Pool identities are listed in [`Self::SHARDS`] and [`Self::INSTANCES`].
     pub const ALL: [Self; 2] = [Self::FIRST, Self::SECOND];
 
-    /// Dedicated child identities reserved for controller-approved project pools.
+    /// Original dedicated children retained by the four-child Root format.
     pub const PROJECT: [Self; 2] = [Self(2), Self(3)];
+
+    /// Stable identities available to each pool. The first four keep their deployed encoding.
+    pub const SHARDS: [Self; 8] = [
+        Self(0),
+        Self(1),
+        Self(4),
+        Self(5),
+        Self(6),
+        Self(7),
+        Self(8),
+        Self(9),
+    ];
+    /// Keyed instances use a disjoint identity range.
+    pub const INSTANCES: [Self; 8] = [
+        Self(2),
+        Self(3),
+        Self(10),
+        Self(11),
+        Self(12),
+        Self(13),
+        Self(14),
+        Self(15),
+    ];
+    /// Reopen a placement identity held in the Root journals.
+    #[must_use]
+    pub const fn placement(index: usize) -> Option<Self> {
+        if index < Self::SHARDS.len() + Self::INSTANCES.len() {
+            Some(Self(index as u8))
+        } else {
+            None
+        }
+    }
 
     /// Construct an ordinary management request identity; unsupported values refuse.
     #[must_use]
@@ -48,6 +80,7 @@ enum RecordId {
     Second,
     FirstProject,
     SecondProject,
+    Placement(u8),
 }
 
 impl Serialize for ChildId {
@@ -57,7 +90,7 @@ impl Serialize for ChildId {
             1 => RecordId::Second,
             2 => RecordId::FirstProject,
             3 => RecordId::SecondProject,
-            _ => return Err(serde::ser::Error::custom("unsupported child identity")),
+            id => RecordId::Placement(id),
         };
         record.serialize(serializer)
     }
@@ -70,6 +103,9 @@ impl<'de> Deserialize<'de> for ChildId {
             RecordId::Second => Self::SECOND,
             RecordId::FirstProject => Self::PROJECT[0],
             RecordId::SecondProject => Self::PROJECT[1],
+            RecordId::Placement(id) => Self::placement(usize::from(id))
+                .filter(|_| id >= 4)
+                .ok_or_else(|| serde::de::Error::custom("unsupported placement identity"))?,
         })
     }
 }
