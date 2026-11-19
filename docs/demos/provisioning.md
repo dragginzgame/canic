@@ -1,5 +1,10 @@
 # Migrating Toko signup to ordinary application rows
 
+**Canic implementation tested:** `9af0094d6e6950e61e4ce245b9d912b8e75e33cb`,
+a local commit after v0.236.0. The v0.236.0 registry archive contains the
+previous API. For a reproducible local dependency select a checkout at this
+commit in both workspaces.
+
 The migration targets Toko source `3ea25ea2d48d9c47356c99a8c585a7120e9506e3`.
 Its hub owns the ID, initial name and pending/ready transition. Its shard owns
 the current name and account record. Canic owns authenticated placement, the
@@ -109,6 +114,7 @@ From Canic with a prepared local simulator:
 ```sh
 cargo test --locked -p canic --features provisioning sharding::
 bash scripts/dev/test-store.sh user-directory
+bash scripts/dev/test-store.sh sharding
 ```
 
 The installed User Directory test runs a real Root, hub and two managed shards.
@@ -119,6 +125,23 @@ A controlled responder at the disposable shard then returns a wrong ID and,
 separately, the correct ID after logout. Neither response changes the pending
 hub. The native IC DB test also reopens a populated record after editing its
 name and checks a stale local confirmation against the winning reservation.
+
+### Disposable Toko rehearsal
+
+In a separate copy of the Toko source identified above, both role libraries
+compiled natively and as IC Wasm. The installed `signup` and `user_shard`
+cases passed on fresh installations and using these copied predecessor Wasms:
+
+| Role | Original SHA-256 |
+| --- | --- |
+| Hub | `4cda0d86c2dac8399f209759c437c8b870a32c479b879942994150da384fe988` |
+| Shard | `c9bf11a2f6168eee07881c004f0779b32c933e6520676593a4cd01b4fc8c464b` |
+
+The rehearsal extended signup with the direct parent retry after rename
+described below. The private profile still contained “Alice B” and the shard
+stable bytes were identical. It used Toko's prepared Root, Store and fixture
+issuer Wasms on PocketIC. Real Internet Identity login and production rollout
+remain separate qualification paths.
 
 ### Run in Toko after migration
 
