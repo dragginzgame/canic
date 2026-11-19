@@ -1,3 +1,15 @@
+pub(crate) mod application;
+#[cfg(feature = "blob")]
+pub(crate) mod blob;
+mod delivery;
+pub(super) mod metrics;
+#[cfg(feature = "sharding")]
+pub mod sharding;
+pub(crate) mod store_maintenance;
+pub(crate) mod stored_api;
+
+pub(crate) mod upgrade;
+
 use crate::{
     Readiness,
     storage::{
@@ -28,17 +40,6 @@ use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
 };
-pub(crate) mod application;
-#[cfg(feature = "blob")]
-pub(crate) mod blob;
-mod delivery;
-pub(super) mod metrics;
-#[cfg(feature = "sharding")]
-pub mod sharding;
-pub(crate) mod store_maintenance;
-pub(crate) mod stored_api;
-
-pub(crate) mod upgrade;
 
 /// Read all retained approvals without scheduling or dispatching work.
 /// # Panics

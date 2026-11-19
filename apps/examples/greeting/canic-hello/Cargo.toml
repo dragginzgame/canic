@@ -7,8 +7,8 @@ license-file.workspace = true
 publish = false
 description = "First deployable Canic greeting application"
 
-[target.'cfg(any())'.dev-dependencies]
-toko-tooling.workspace = true
+[package.metadata.toko-tooling.loc]
+category = "examples"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -21,6 +21,9 @@ canic = { workspace = true, features = ["greeting", "metrics", "readiness"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
+
+[dev-dependencies]
+toko-tooling.workspace = true
 
 [lints]
 workspace = true

@@ -7,6 +7,11 @@ use ic_db::Schema;
 use ic_storage::StableKey;
 use std::cell::RefCell;
 
+#[doc(hidden)]
+pub use ic_db::Database;
+#[doc(hidden)]
+pub use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
+
 /// Declare in actor-local state. The key and schema must match the retained database.
 pub struct Store {
     key: &'static str,
@@ -55,11 +60,6 @@ impl Store {
         )
     }
 }
-
-#[doc(hidden)]
-pub use ic_db::Database;
-#[doc(hidden)]
-pub use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
 
 /// Declare an actor-local database module with `attach` and synchronous `with`.
 /// Supply only the allocation key to bind IC DB's generated `OUT_DIR/schema.rs`

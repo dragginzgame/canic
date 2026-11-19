@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod tests;
 
+mod inventory;
+mod metrics;
+
 use super::roles;
 use canic_host::Fleet;
 use ic_host_text::escape;
 use std::{collections::BTreeMap, fmt::Write as _};
-
-mod inventory;
-mod metrics;
 
 fn paint(value: &str, style: &str, color: bool) -> String {
     let value = escape(value);

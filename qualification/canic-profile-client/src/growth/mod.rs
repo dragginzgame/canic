@@ -1,9 +1,10 @@
+mod records;
+
 use super::{Action, Cli, invoke, invoke_arguments};
 use canic_management_protocol::{
     Approval, CREATION_CYCLES, LIMITS, MAX_WASM, RECONCILE, Refusal, STAGE, STAGE_LIMITS, STATUS,
     Stage, Status, digest,
 };
-mod records;
 use std::{
     fs::File,
     io::Read as _,

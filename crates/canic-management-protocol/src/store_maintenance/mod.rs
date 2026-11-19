@@ -3,6 +3,9 @@
 #[cfg(test)]
 mod tests;
 
+mod preservation;
+
+pub use preservation::{Preservation, Scan};
 use serde::{Deserialize, Serialize};
 
 /// Retain one immutable maintenance approval before remote effects.
@@ -131,6 +134,3 @@ pub struct Installation {
     /// Exact Store activation frame commitment; absent until explicitly issued.
     pub activation_request: Option<[u8; 32]>,
 }
-
-mod preservation;
-pub use preservation::{Preservation, Scan};

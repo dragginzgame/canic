@@ -1,8 +1,8 @@
 //! Application-owned counter contract. Persistence and endpoints compile only for Wasm.
-use serde::{Deserialize, Serialize};
-
 #[cfg(target_arch = "wasm32")]
 mod actor;
+
+use serde::{Deserialize, Serialize};
 
 /// Wire identity of the replicated `counter` endpoint.
 pub const METHOD: u64 = 1;

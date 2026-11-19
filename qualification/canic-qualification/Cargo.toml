@@ -9,9 +9,6 @@ description = "Installed Canic effect and product qualification"
 # Helper modules beside these entrypoints are not standalone test crates.
 autotests = false
 
-[target.'cfg(any())'.dev-dependencies]
-toko-tooling.workspace = true
-
 [package.metadata.toko-tooling.loc]
 category = "tests"
 
@@ -52,6 +49,7 @@ serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
 tokio = { workspace = true, features = ["io-util", "net", "signal", "sync"] }
+toko-tooling.workspace = true
 toml.workspace = true
 
 [[test]]

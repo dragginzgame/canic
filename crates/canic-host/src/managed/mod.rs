@@ -4,6 +4,12 @@
 mod tests;
 
 mod application;
+
+pub(crate) mod recovery;
+pub(crate) mod stored;
+pub(crate) mod upgrade;
+mod wire;
+
 use crate::{
     ApplyOutcome, DeploymentName, Error, ManagedOwner, Plan, PlanInput, Receipt, Result,
     SelectedFleet,
@@ -16,13 +22,8 @@ pub use application::activate;
 use canic_management_protocol::{Approval, LIMITS, Phase, Refusal, STAGE_LIMITS, Stage, Status};
 use ic_platform::native::ReadClient;
 use std::path::Path;
-
-pub(crate) mod recovery;
-pub(crate) mod stored;
-mod wire;
 use wire::Method;
 pub(crate) use wire::{observation, same_slot};
-pub(crate) mod upgrade;
 
 pub(crate) const OBSERVATIONS: usize = 32;
 

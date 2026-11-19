@@ -1,6 +1,7 @@
 //! Application-owned profile client; ICP CLI owns identity and network submission.
 #![forbid(unsafe_code)]
 mod growth;
+
 use canic_profile_protocol::{
     BIND, CHECK, CheckResult, GET, INFO, Info, LIMITS, PUT, ProfileResult, Put, ROUTE, Route,
     RouteResult,

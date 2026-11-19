@@ -11,9 +11,6 @@ description = "Installed embedded Blob and application catalog composition witne
 ic-platform-runtime.workspace = true
 ic-storage.workspace = true
 
-[target.'cfg(any())'.dev-dependencies]
-toko-tooling.workspace = true
-
 [package.metadata.toko-tooling.loc]
 category = "tests"
 
@@ -31,6 +28,9 @@ canic-profile-worker = { workspace = true, optional = true }
 ic-platform-types.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
+
+[dev-dependencies]
+toko-tooling.workspace = true
 
 [lints]
 workspace = true

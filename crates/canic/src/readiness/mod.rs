@@ -3,10 +3,10 @@
 #[cfg(test)]
 mod tests;
 
-use serde::{Deserialize, Serialize};
-
 #[cfg(feature = "readiness")]
 pub mod endpoint;
+
+use serde::{Deserialize, Serialize};
 
 /// Identity of the replicated, observational `readiness` method.
 pub const METHOD: u64 = 3;

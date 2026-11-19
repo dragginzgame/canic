@@ -89,6 +89,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 wasm,
                 manifest,
                 package,
+                features,
                 client,
             } => {
                 let path = selection.config.path(selection.app.as_deref())?;
@@ -106,6 +107,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                             |(manifest, package)| canic_host::BuildInput {
                                 manifest: manifest.clone(),
                                 package: package.clone(),
+                                features: features.clone(),
                                 client: client.clone(),
                             },
                         ),

@@ -7,9 +7,6 @@ license-file.workspace = true
 publish.workspace = true
 description = "Installed typed Canic database composition witness"
 
-[target.'cfg(any())'.dev-dependencies]
-toko-tooling.workspace = true
-
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 ic-db.workspace = true
 ic-platform-runtime.workspace = true
@@ -37,6 +34,7 @@ canic-qualification.workspace = true
 ic-testkit.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
+toko-tooling.workspace = true
 toml.workspace = true
 
 [lints]

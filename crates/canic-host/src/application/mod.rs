@@ -3,14 +3,14 @@
 #[cfg(test)]
 mod tests;
 
+pub mod codec;
+
 use crate::{
     Artifact, Error, Plan, PlanAction, Result, SelectedFleet, artifact, plan, signed, store,
     supplier,
 };
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, path::Path};
-
-pub mod codec;
 
 /// Transport request ceiling, independent of the application's codec budget.
 pub const MAX_REQUEST_BYTES: usize = 65_536;

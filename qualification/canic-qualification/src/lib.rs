@@ -2,6 +2,9 @@
 
 mod counter;
 
+/// Bounded footprint measurements for the installed profile and growth fixtures.
+pub mod footprint;
+
 pub use counter::counter;
 
 /// Apply Canic's Runtime upgrade contract to a running installed fixture.
@@ -104,6 +107,3 @@ pub fn isolated_signer(
             .to_owned(),
     )
 }
-
-/// Bounded footprint measurements for the installed profile and growth fixtures.
-pub mod footprint;

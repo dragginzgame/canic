@@ -1,4 +1,13 @@
 //! Installed Root ownership and preservation, using synthetic cycles only.
+mod children;
+mod fleet_children;
+mod greeting;
+mod metrics;
+mod predecessor;
+mod profile_store;
+mod snapshot;
+mod storage_reopen;
+
 use canic_management_protocol::{
     Approval, CREATION_CYCLES, LIMITS, Phase, Refusal, STAGE, STAGE_LIMITS, STATUS, Stage, Status,
     digest,
@@ -8,15 +17,6 @@ use ic_testkit::{
     server::{Limits, PreparedServer, Server},
 };
 use std::{path::PathBuf, time::Duration};
-
-mod children;
-mod fleet_children;
-mod greeting;
-mod metrics;
-mod predecessor;
-mod profile_store;
-mod snapshot;
-mod storage_reopen;
 
 fn repo() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))

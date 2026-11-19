@@ -10,6 +10,9 @@ pub mod store;
 #[cfg(all(feature = "stateful-role", target_arch = "wasm32"))]
 pub mod role;
 
+#[cfg(feature = "db")]
+#[doc(hidden)]
+pub mod endpoint;
 /// Passive bounded inspection contract, usable independently of the database engine.
 pub mod inspection;
 /// Optional projection of compiled DB metadata; application authorization stays external.
@@ -33,9 +36,6 @@ pub enum Operation {
     /// Application-defined atomic writes.
     Write,
 }
-#[cfg(feature = "db")]
-#[doc(hidden)]
-pub mod endpoint;
 
 /// Mount typed `db_inspect`, `db_query` and `db_write` methods.
 ///

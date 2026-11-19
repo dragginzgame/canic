@@ -3,17 +3,17 @@
 #[cfg(test)]
 mod tests;
 
+mod discovery;
+mod sharding;
+
 use crate::{Error, Network, Plan, PlanInput, Result, plan, store, supplier};
+pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
 use serde::{Deserialize, Serialize};
+pub use sharding::ShardPoolConfig;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
-
-mod discovery;
-mod sharding;
-pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
-pub use sharding::ShardPoolConfig;
 
 const MAX_CONFIG_BYTES: usize = 32 * 1024;
 
@@ -62,6 +62,9 @@ pub struct BuildInput {
     pub manifest: PathBuf,
     /// Cargo package producing one Wasm library.
     pub package: String,
+    /// Cargo features selected for the Wasm library build.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub features: Vec<String>,
     /// Optional app-owned native command codec binary target, built beside the Wasm.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client: Option<String>,
@@ -233,6 +236,9 @@ impl Config {
             for canister in definition.canisters.values() {
                 if let Some(build) = &canister.build {
                     name(&build.package)?;
+                    for feature in &build.features {
+                        name(feature)?;
+                    }
                     if let Some(client) = &build.client {
                         name(client)?;
                     }

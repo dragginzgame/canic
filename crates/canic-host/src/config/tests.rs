@@ -22,6 +22,7 @@ fn fleetless_apps_validate_definitions_and_preserve_existing_workspace() {
         build: Some(BuildInput {
             manifest: "Cargo.toml".into(),
             package: "toko-app".into(),
+            features: vec!["backup".into()],
             client: None,
         }),
         ..Default::default()

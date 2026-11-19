@@ -1,15 +1,13 @@
 # canic
 
-Canic's first native CLI and deployable greeting application. The CLI lives in
-`crates/canic-cli`, deployment logic in `crates/canic-host`, the small shared
-Wire contract in `crates/canic`, and the demo in `apps/demo/canic-hello`.
+[Example fleets](apps/examples/) include a standalone greeting, a managed
+persistent counter, a Root-controlled counter with Backup, and an authenticated
+user hub with pooled shards. Each app has
+its own buildable config and local exercise. The CLI lives in `crates/canic-cli`
+and deployment logic in `crates/canic-host`.
 
-The [ongoing demo fleet](docs/demos/demo.md) has a fresh `demo/mainnet`
-declaration under `apps/demo`, ready to evolve alongside Toko. Its persistent
-counter and fresh Root build on Storage 0.78.0. The local fleet CLI witness now
-qualifies managed creation, value-preserving upgrade and closed readiness.
-Use `make demo` for the explicit disposable local edit/build/call/upgrade session;
-it prints ordinary `canic` commands and opens no windows.
+Use `make demo` for the [counter's interactive local session](docs/demos/demo.md).
+It prints ordinary Canic commands and opens no windows.
 
 The standalone [Wasm Store](https://github.com/dragginzgame/ic-wasm-store) owns
 artifact custody and its own qualification. Canic locks its crates.io protocol
@@ -45,14 +43,14 @@ See the [upgrade walkthrough](docs/demos/root.md).
 Add `--watch` for the read-only localhost view without opening a browser.
 Public Root reports remain distinct from completion receipts retained by apply.
 The root config retains the existing `hello-world/mainnet` deployment. Use
-`--config apps/demo/canic.toml` for the fresh demo. Bare commands infer scope only
+`--config apps/examples/counter/canic.toml` for the fresh demo. Bare commands infer scope only
 in a config with a sole app/fleet, such as a newly generated project.
 
 The selected stateful demo is a **persistent counter**, with operator-triggered
 backup/restore and explicit acceptance before reopening. Its Storage 0.78.0
 integration now passes local installed value/fence preservation and failed-upgrade
 rollback (`make counter-test`). The separate managed CLI witness runs with
-`bash scripts/dev/test-publication.sh counter_managed::`. Backup remains pending;
+`bash scripts/dev/test-publication.sh counter_managed::`. The Backup example exercises local snapshot restoration;
 `make demo` prepares a local Root/Store/counter session with named `read` and
 `increment` commands through `canic fleet call`. The former
 profile application has moved out of the product into qualification fixtures.
@@ -78,12 +76,12 @@ For a release, prepare the simulator with `make qualification-setup` in the
 clean delivery checkout or set `IC_TESTKIT_SERVER_DIRECTORY` to an absolute
 prepared directory. Run `make publication-admission` to exercise the package
 gate locally without uploading. It fetches both locked workspaces, verifies the
-simulator with Testkit and runs the CI coverage for the six eligible packages.
+simulator with Testkit and runs the CI coverage for the seven eligible packages.
 `CARGO_NET_OFFLINE=true` selects cache-only dependency resolution.
 
 | Published packages | Coverage in the shared gate |
 | --- | --- |
-| `canic` | Library, endpoints, counter and optional Blob, Auth and DB composition |
+| `canic-macros`, `canic` | Library, endpoint attributes, endpoints, counter and optional Blob, Auth and DB composition |
 | `canic-management-protocol`, `canic-management`, `canic-root` | Creation, funding, maintenance, growth, Root, Store and custody |
 | `canic-host`, `canic-cli` | Planning, journal, CLI journey and installed Store publication |
 
@@ -470,7 +468,7 @@ but has no retained receipts.
 
 ```sh
 canic fleet show --app hello-world --fleet mainnet
-canic fleet canister list --config apps/demo/canic.toml
+canic fleet canister list --config apps/examples/counter/canic.toml
 ```
 
 Initialization does not automatically adopt canisters.

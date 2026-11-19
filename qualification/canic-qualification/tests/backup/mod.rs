@@ -3,6 +3,7 @@ mod gateway;
 mod managed;
 mod signed_bindings;
 mod signer_failures;
+
 use canic_demo::{Error as CounterError, Request as CounterRequest};
 use canic_host::backup::{CounterRecoveryGuard, DirectSigner, SnapshotCodec};
 use canic_management_protocol::backup::Step;

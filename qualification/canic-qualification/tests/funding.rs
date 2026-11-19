@@ -1,12 +1,12 @@
 //! Direct-deposit evidence across successful and rejecting callbacks.
 
+mod support;
+
 use canic_effect_probe::{
     FUND, FUNDING_STATUS, Fault, FundingOutcome, FundingRequest, FundingStatus, LIMITS,
     MAX_FUNDING_CYCLES, Phase,
 };
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
-
-mod support;
 
 async fn status(pic: &PocketIc, executor: CanisterId) -> FundingStatus {
     let bytes = ic_wire::encode(

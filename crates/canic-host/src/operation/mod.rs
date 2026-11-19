@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests;
 
+mod status;
+
 use crate::{
     Error, Network, Plan, Result,
     network::{bounded, principal},
@@ -13,13 +15,11 @@ use ic_platform::native::ReadClient;
 use ic_platform_protocol::{candid::Limits, ledger, management as mgmt};
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
-use std::path::Path;
-
-mod status;
 pub use status::{
     CanisterStatus, FleetChildStatus, FleetStatus, FleetStepStatus, ManagementStatus,
     OperationStatus, StatusDetail,
 };
+use std::path::Path;
 
 const LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 const LEDGER_FEE: u64 = 100_000_000;

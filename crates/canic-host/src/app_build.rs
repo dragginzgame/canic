@@ -125,8 +125,13 @@ pub fn build_app(
             )
             .map_err(crate::artifact::cargo_failure)?;
         }
-        let crate::artifact::BuildReport { wasm, artifact } =
-            crate::artifact::build_for_role(&manifest, &recipe.package, &[], Some(&output), role)?;
+        let crate::artifact::BuildReport { wasm, artifact } = crate::artifact::build_for_role(
+            &manifest,
+            &recipe.package,
+            &recipe.features,
+            Some(&output),
+            role,
+        )?;
         let client = recipe
             .client
             .as_ref()

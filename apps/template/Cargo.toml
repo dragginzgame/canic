@@ -5,9 +5,6 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
-[target.'cfg(any())'.dev-dependencies]
-toko-tooling.workspace = true
-
 [package.metadata.canic.layout]
 
 [lib]
@@ -15,6 +12,9 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 canic = { workspace = true, features = ["greeting", "method", "readiness"] }
+
+[dev-dependencies]
+toko-tooling.workspace = true
 
 [lints]
 workspace = true

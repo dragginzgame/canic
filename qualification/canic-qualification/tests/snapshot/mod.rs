@@ -5,6 +5,7 @@ use canic_management_protocol::backup::{
     management as m,
 };
 use ic_platform_protocol::candid::Limits as CandidLimits;
+
 const DECODE: CandidLimits = CandidLimits {
     bytes: protocol::MAX_INNER,
     header: 65_536,

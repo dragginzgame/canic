@@ -13,10 +13,13 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
     let parent = crate::tests::directory();
     let destination = parent.join("starter");
     let config = create_starter(&destination, "hello", &source()).unwrap();
-    assert_eq!(
-        std::fs::read(destination.join("starter-app/src/lib.rs")).unwrap(),
-        std::fs::read(source().join("apps/template/src/lib.rs")).unwrap()
-    );
+    for path in ["src/lib.rs", "src/endpoints/mod.rs"] {
+        assert_eq!(
+            std::fs::read(destination.join("starter-app").join(path)).unwrap(),
+            std::fs::read(source().join("apps/template").join(path)).unwrap(),
+            "starter template {path}"
+        );
+    }
     let initial = crate::load_config(&config).unwrap();
     assert!(initial.apps["hello"].fleets.is_empty());
     assert!(!destination.join(".canic").exists());
@@ -69,7 +72,10 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
         Some(false)
     );
     let before = std::fs::read(&config).unwrap();
-    assert!(create_starter(&destination, "other", &source()).is_err());
+    assert!(matches!(
+        create_starter(&destination, "other", &source()),
+        Err(Error::Invalid(reason)) if reason == "starter destination already exists; nothing changed"
+    ));
     assert_eq!(std::fs::read(config).unwrap(), before);
     assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 1);
     std::fs::remove_dir_all(parent).unwrap();
@@ -78,10 +84,18 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
 #[test]
 fn invalid_names_or_source_are_refused_before_any_staging() {
     let parent = crate::tests::directory();
-    for (app, selected_source) in [("../escape", source()), ("hello", parent.clone())] {
-        assert!(create_starter(&parent.join("new"), app, &selected_source).is_err());
-        assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 0);
-    }
+    let destination = parent.join("new");
+    assert!(matches!(
+        create_starter(&destination, "../escape", &source()),
+        Err(Error::Invalid(reason)) if reason.contains("names must be")
+    ));
+    assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 0);
+    assert!(matches!(
+        create_starter(&destination, "hello", &parent),
+        Err(Error::Supplier(error)) if error.downcast_ref::<std::io::Error>()
+            .is_some_and(|io| io.kind() == std::io::ErrorKind::NotFound)
+    ));
+    assert_eq!(std::fs::read_dir(&parent).unwrap().count(), 0);
     std::fs::remove_dir_all(parent).unwrap();
 }
 

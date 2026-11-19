@@ -3,24 +3,24 @@
 #[cfg(test)]
 mod tests;
 
+mod cancellation;
+mod convergence;
+mod history;
+mod record;
+mod releases;
+
 use crate::{
     ApplyOutcome, Artifact, DeploymentName, Error, ManagedOwner, Plan, Receipt, Result,
     SelectedFleet, artifact, operation, plan,
     store::{self, Store},
     supplier,
 };
-use canic_management_protocol::children::ChildId;
-use serde::{Deserialize, Serialize};
-use std::path::Path;
-
-mod cancellation;
-mod convergence;
-mod history;
-mod record;
-mod releases;
 pub use cancellation::{Cancellation, cancel_fleet_plan};
+use canic_management_protocol::children::ChildId;
 pub use convergence::FleetPlanning;
 pub(crate) use history::permits_upgrade;
+use serde::{Deserialize, Serialize};
+use std::path::Path;
 
 /// A typed result reference, never a guessed principal or a mutable config lookup.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

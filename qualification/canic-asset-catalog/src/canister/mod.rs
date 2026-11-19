@@ -1,11 +1,12 @@
 //! Explicit application lifecycle and local transactions; no self calls or timers.
-use canic::blob::RPC_LIMITS;
 #[cfg(feature = "profile")]
 mod profile;
 mod state;
+
 use crate::protocol::{
     self, AUTHORIZE, Asset, Draft, Entry, Error, FAULT, INIT, INSPECT, PUBLISH, REMOVE, UPGRADE,
 };
+use canic::blob::RPC_LIMITS;
 use canic::blob::{
     endpoint,
     supplier::{

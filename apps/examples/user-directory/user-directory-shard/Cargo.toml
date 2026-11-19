@@ -1,0 +1,28 @@
+[package]
+name = "user-directory-shard"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish = false
+
+[package.metadata.toko-tooling.loc]
+category = "examples"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+canic = { workspace = true, features = ["provisioning"] }
+ic-db.workspace = true
+user-directory-schema.workspace = true
+
+[build-dependencies]
+ic-db = { workspace = true, features = ["build"] }
+user-directory-schema.workspace = true
+
+[dev-dependencies]
+toko-tooling.workspace = true
+
+[lints]
+workspace = true

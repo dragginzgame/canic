@@ -2,6 +2,9 @@
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
+#[cfg(all(target_arch = "wasm32", feature = "storage"))]
+pub use actor::{attach_parent, parent, require_parent};
+
 const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
     method: ic_wire::method_id("canic.shard_install.v1"),
     direction: ic_wire::Direction::Request,
@@ -61,9 +64,6 @@ impl Install {
             .ok_or("conflicting installation Root")
     }
 }
-
-#[cfg(all(target_arch = "wasm32", feature = "storage"))]
-pub use actor::{attach_parent, parent, require_parent};
 #[cfg(all(target_arch = "wasm32", feature = "storage"))]
 mod actor {
     use super::{Install, Principal};

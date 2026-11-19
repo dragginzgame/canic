@@ -1,0 +1,22 @@
+[package]
+name = "user-directory-schema"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish = false
+
+[package.metadata.toko-tooling.loc]
+category = "examples"
+
+[dependencies]
+canic = { workspace = true, features = ["sharding", "method"] }
+ic-db.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+toko-tooling.workspace = true
+
+[lints]
+workspace = true

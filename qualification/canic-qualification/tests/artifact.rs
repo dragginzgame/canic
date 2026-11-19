@@ -1,13 +1,13 @@
 //! Retained bytes support one autonomous install and evidence-only reconciliation.
 
+mod support;
+
 use canic_artifact_probe::{
     ARTIFACT_LIMITS, AdmissionError, Approval, Fault, LIMITS, Phase, RECONCILE, STAGE, STATUS,
     Status, UPGRADE, artifact_hash,
 };
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
 use std::{path::PathBuf, time::Duration};
-
-mod support;
 
 async fn status(pic: &PocketIc, executor: CanisterId, operator: CanisterId) -> Status {
     let bytes = pic

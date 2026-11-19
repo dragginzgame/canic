@@ -1,0 +1,7 @@
+[apps.greeting.canisters.greeting]
+role = "app"
+wasm = "artifacts/greeting.wasm"
+build = { manifest = "../../../Cargo.toml", package = "canic-hello" }
+
+[apps.greeting.fleets.local]
+network = { kind = "Local" }

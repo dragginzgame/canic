@@ -21,7 +21,7 @@ for entry in root-faults:canic-root:fault-injection store-candidate:ic-wasm-stor
     cp -- "$(jq -r .wasm "target/publication/$name.json")" "target/publication/$name.wasm"
 done
 if [[ $# == 0 || "${1:-}" == counter_managed:: ]]; then
-    "$cli" app build --config apps/demo/canic.toml --canister app --json > target/publication/counter-client.json
+    "$cli" app build --config apps/examples/counter/canic.toml --canister app --json > target/publication/counter-client.json
     for variant in v1 v2 fenced; do
         features=()
         case "$variant" in

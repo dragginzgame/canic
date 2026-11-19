@@ -3,6 +3,15 @@
 #[cfg(test)]
 mod tests;
 
+#[cfg(target_arch = "wasm32")]
+mod client;
+
+/// Optional hub and shard composition for an issuer-qualified account.
+#[cfg(feature = "method")]
+pub mod provisioning;
+
+#[cfg(target_arch = "wasm32")]
+pub use client::{assign, lookup};
 use serde::{Deserialize, Serialize};
 
 /// Assign a key to an admitted shard or reserve its first allocation.
@@ -66,12 +75,3 @@ impl Placement {
         Ok(Some((allocation, principal)))
     }
 }
-
-#[cfg(target_arch = "wasm32")]
-mod client;
-#[cfg(target_arch = "wasm32")]
-pub use client::{assign, lookup};
-
-/// Optional hub and shard composition for an issuer-qualified account.
-#[cfg(feature = "method")]
-pub mod provisioning;

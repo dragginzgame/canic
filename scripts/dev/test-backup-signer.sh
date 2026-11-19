@@ -7,8 +7,7 @@ repo=$PWD
 export CANIC_BACKUP_SIGNER="$repo/target/backup-sign-tools/bin/ic-sign"
 [[ -x "$CANIC_BACKUP_SIGNER" ]] || { echo 'Run make backup-signer-setup first.' >&2; exit 1; }
 mkdir -p target/backup
-canic artifact build --package canic-root --features backup --output target/backup/managed-root.wasm --json > target/backup/managed-root.json
-canic artifact build --package canic-demo --output target/backup/managed-counter.wasm --json > target/backup/managed-counter.json
+canic app build --config apps/examples/backup-counter/canic.toml --json > target/backup/example-build.json
 export CANIC_BACKUP_FIXTURE
 CANIC_BACKUP_FIXTURE=$(mktemp -d)
 trap 'rm -rf -- "$CANIC_BACKUP_FIXTURE"' EXIT
@@ -25,5 +24,5 @@ dbus-run-session -- bash -seu -o pipefail <<'SESSION'
     done
     gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus --method org.freedesktop.DBus.NameHasOwner org.freedesktop.secrets | grep -q true
     icp identity new canic-backup-test --storage keyring --json >/dev/null 2>&1
-    cargo test --locked --offline --manifest-path qualification/Cargo.toml -p canic-qualification --features backup --test backup -- --nocapture
+    cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features backup --test backup -- --nocapture
 SESSION

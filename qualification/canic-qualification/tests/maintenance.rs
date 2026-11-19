@@ -1,12 +1,12 @@
 //! Controller-led maintenance preserves effect custody across two executables.
 
+mod support;
+
 use canic_effect_probe::{
     CREATION_CYCLES, EXECUTABLE, FUND, FUNDING_STATUS, Fault, FundingOutcome, FundingRequest,
     FundingStatus, LIMITS, MAX_FUNDING_CYCLES, Phase, START, STATUS, Status, UPGRADE,
 };
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
-
-mod support;
 
 #[derive(Debug, Eq, PartialEq)]
 struct Checkpoint {

@@ -8,20 +8,22 @@ license-file.workspace = true
 publish.workspace = true
 description = "Reusable bounded child management engine"
 
-[target.'cfg(any())'.dev-dependencies]
-toko-tooling.workspace = true
-
 [features]
 backup = ["canic-management-protocol/backup"]
-sharding = ["canic/sharding", "dep:sha2"]
-blob = ["canic/blob"]
+sharding = ["dep:canic", "canic/sharding", "dep:sha2"]
+blob = ["canic?/blob"]
 fault-injection = []
 maintenance-candidate = []
 
 [dependencies]
 canic-management-protocol.workspace = true
 ic-wasm-store-protocol.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
 sha2 = { workspace = true, optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+canic = { workspace = true, optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 canic = { workspace = true, features = ["storage"] }
@@ -30,14 +32,13 @@ ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "syst
 ic-platform-types.workspace = true
 ic-storage.workspace = true
 ic-timers = { workspace = true, features = ["metrics"] }
-ic-wire.workspace = true
-serde.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 canic = { workspace = true, features = ["storage"] }
 ic-storage.workspace = true
-ic-wire.workspace = true
-serde.workspace = true
+
+[dev-dependencies]
+toko-tooling.workspace = true
 
 [lints]
 workspace = true

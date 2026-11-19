@@ -84,7 +84,7 @@ async fn fleet_counter_preserves_value_and_never_treats_fenced_as_ready() {
         });
         std::fs::copy(counter_wasm, dir.join("app.wasm")).unwrap();
         std::fs::copy(
-            repo.join("apps/demo/artifacts/app.client"),
+            repo.join("apps/examples/counter/artifacts/app.client"),
             dir.join("app.client"),
         )
         .unwrap();

@@ -28,9 +28,6 @@ pub mod lifecycle;
 #[cfg(feature = "method")]
 pub mod method;
 
-#[cfg(feature = "method")]
-pub use canic_macros::{query, update};
-
 /// Passive operational reports; the optional `metrics` feature enables endpoint mounting.
 pub mod metrics;
 
@@ -39,6 +36,20 @@ pub mod readiness;
 
 #[cfg(feature = "recovery")]
 pub mod recovery;
+
+#[cfg(feature = "storage")]
+pub mod storage;
+
+/// Optional runtime shard assignment and lookup for application hubs.
+#[cfg(feature = "sharding")]
+pub mod sharding;
+
+/// Fleet-approved shard installation context.
+#[cfg(feature = "topology")]
+pub mod topology;
+
+#[cfg(feature = "method")]
+pub use canic_macros::{query, update};
 
 use serde::{Deserialize, Serialize};
 
@@ -60,14 +71,3 @@ pub struct Greeting {
     /// Human-readable greeting from the installed executable.
     pub message: String,
 }
-
-#[cfg(feature = "storage")]
-pub mod storage;
-
-/// Optional runtime shard assignment and lookup for application hubs.
-#[cfg(feature = "sharding")]
-pub mod sharding;
-
-/// Fleet-approved shard installation context.
-#[cfg(feature = "topology")]
-pub mod topology;

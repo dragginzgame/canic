@@ -5,6 +5,8 @@ use super::{
 use ic_db::{Database, Entity, Schema};
 use ic_storage::{StableKey, VectorMemory};
 
+use std::panic::{AssertUnwindSafe, catch_unwind};
+
 struct Users;
 impl Resource for Users {
     type Id = u64;
@@ -39,8 +41,6 @@ struct Route {}
     )
 )]
 struct User {}
-
-use std::panic::{AssertUnwindSafe, catch_unwind};
 
 struct Hub;
 struct Shard;
@@ -274,6 +274,29 @@ fn a_nonunique_account_index_cannot_authorize_provisioning() {
             &db, account
         )))
         .is_err()
+    );
+}
+
+#[test]
+fn provisioning_requires_both_an_identified_issuer_and_subject() {
+    let account = Account {
+        issuer: Principal::from_slice(&[1]),
+        subject: Principal::from_slice(&[2]),
+    };
+    assert!(account.valid());
+    assert!(
+        !Account {
+            issuer: Principal::anonymous(),
+            ..account
+        }
+        .valid()
+    );
+    assert!(
+        !Account {
+            subject: Principal::anonymous(),
+            ..account
+        }
+        .valid()
     );
 }
 

@@ -1,5 +1,7 @@
 #[cfg(test)]
 mod inspection_tests;
+mod source_layout;
+mod store_source;
 #[cfg(test)]
 mod tests;
 
@@ -11,8 +13,6 @@ use std::{
     process::Command,
     time::Duration,
 };
-mod source_layout;
-mod store_source;
 
 // Leave at least 190 KiB for Candid/envelope overhead below the IC's 2 MiB ingress limit.
 // This is Host direct installation, independent of Root's retained inline-child quota.

@@ -5,19 +5,20 @@
 //! Ingress handlers receive the actual caller unchanged. Only an application's
 //! separately authorized local catalog operation may use its application authority.
 
+#[doc(hidden)]
+pub mod endpoint;
+
 /// The independent supplier; its DTOs and Service retain their original identities.
 pub use ic_blob_storage as supplier;
 /// Request and reply budgets defined by the Blob protocol.
 pub use supplier::protocol::RPC_LIMITS;
+
 /// Wire identity for the captured-caller mutation endpoint.
 pub const UPDATE: u64 = ic_wire::method_id("blob_update");
 /// Wire identity for captured-caller inspection.
 pub const QUERY: u64 = ic_wire::method_id("blob_query");
 /// Replicated management observation, authorized by the supplier's configured manager.
 pub const MANAGEMENT: u64 = ic_wire::method_id("blob_management");
-
-#[doc(hidden)]
-pub mod endpoint;
 
 /// Mount the three Blob methods with synchronous application-supplied handlers.
 ///

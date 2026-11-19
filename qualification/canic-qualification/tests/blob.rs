@@ -1,4 +1,8 @@
 //! Installed Canic adapter + real Blob Service + application-owned catalog.
+mod blob_fleet_tests;
+mod blob_profile_tests;
+mod support;
+
 use canic::blob::{
     self, RPC_LIMITS,
     supplier::{
@@ -11,9 +15,6 @@ use canic_asset_catalog::protocol as app;
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
 use serde::{Serialize, de::DeserializeOwned};
 use std::{num::NonZeroU128, path::PathBuf};
-mod blob_fleet_tests;
-mod blob_profile_tests;
-mod support;
 
 fn id(n: u128) -> NonZeroU128 {
     n.try_into().unwrap()

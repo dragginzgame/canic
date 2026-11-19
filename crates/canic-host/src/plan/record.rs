@@ -3,6 +3,7 @@
 use super::{ManagedOwner, Plan, PlanAction, UpgradeTarget};
 use crate::{Artifact, Error, Network, Result};
 use serde::{Deserialize, Serialize};
+
 // Field order and omitted options are part of retained approval digests.
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]

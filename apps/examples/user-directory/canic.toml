@@ -1,0 +1,46 @@
+[apps.user-directory.canisters.root]
+role = "root"
+wasm = "artifacts/root.wasm"
+build = { manifest = "../../../Cargo.toml", package = "canic-root", features = ["auth", "sharding"] }
+
+[apps.user-directory.canisters.store]
+role = "wasm-store"
+parent = "root"
+wasm = "artifacts/store.wasm"
+build = { manifest = "../../../Cargo.toml", package = "ic-wasm-store" }
+
+[apps.user-directory.canisters.user_hub]
+role = "user_hub"
+wasm = "artifacts/user_hub.wasm"
+build = { manifest = "../../../Cargo.toml", package = "user-directory-hub" }
+
+[apps.user-directory.canisters.user_shard]
+role = "user_shard"
+parent = "user_hub"
+wasm = "artifacts/user_shard.wasm"
+build = { manifest = "../../../Cargo.toml", package = "user-directory-shard" }
+
+[apps.user-directory.fleets.local]
+# Bind the simulator and installed principals before approving placement.
+network = { kind = "Local" }
+
+[apps.user-directory.fleets.local.shard_pool]
+component = "user_shard"
+root = "root"
+store = "store"
+release = { name = "user_shard", version = "1" }
+install_topology = true
+install_args = "shard-nonce.bin"
+keys_per_shard = 1
+max_shards = 2
+creation_budget = 2_000_000_000_000
+
+[apps.user-directory.fleets.local.receiver_policy]
+root = "root"
+roles = ["user_hub", "user_shard"]
+# Replace the local fixture issuer with the installed test issuer before planning.
+issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai"
+role = "user"
+network_id = "1111111111111111111111111111111111111111111111111111111111111111"
+application_id = "2222222222222222222222222222222222222222222222222222222222222222"
+limits = { default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns = 60000000000 }

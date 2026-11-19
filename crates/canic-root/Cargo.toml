@@ -8,9 +8,6 @@ license-file.workspace = true
 publish.workspace = true
 description = "Root for bounded controller-approved application canisters"
 
-[target.'cfg(any())'.dev-dependencies]
-toko-tooling.workspace = true
-
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -29,6 +26,9 @@ canic-management-protocol.workspace = true
 ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
 ic-wire.workspace = true
 serde = { workspace = true, optional = true }
+
+[dev-dependencies]
+toko-tooling.workspace = true
 
 [lints]
 workspace = true

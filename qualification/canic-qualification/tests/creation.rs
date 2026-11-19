@@ -1,9 +1,9 @@
 //! Observe actual management creation across deliberately interrupted executions.
 
+mod support;
+
 use canic_effect_probe::{CREATION_CYCLES, Fault, LIMITS, Phase, START, STATUS, Status};
 use ic_testkit::pocket_ic::nonblocking::PocketIc;
-
-mod support;
 
 async fn count(pic: &PocketIc, executor: ic_testkit::pocket_ic::CanisterId) -> u64 {
     let subnet = pic.get_subnet(executor).await.expect("executor subnet");

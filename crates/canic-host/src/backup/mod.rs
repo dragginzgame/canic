@@ -1,6 +1,7 @@
 //! Original-request signing and the optional Root exchange for Backup.
 mod recovery;
 mod root;
+
 use ic_backup::store::{BackupSigner, OperationSigningContent, OperationSigningRequest};
 use ic_host_sign::{
     Error, Signer,

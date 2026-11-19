@@ -522,6 +522,12 @@ owns the missing generic shard allocation/lookup contract;
 [Canic #20](https://github.com/dragginzgame/canic/issues/20) tracks DB-backed upgrade preservation under the revised Storage contract in §13. Neither library tests nor greeting/probe success establish
 installed database/schema admission or authenticated application readiness.
 
+Example apps live in `apps/examples/<name>/`. An app's build recipe may select
+Cargo features for the Wasm artifact through `build.features`. For example,
+the Backup counter selects the supplied Root's `backup` feature. This choice
+is shared by the app's fleets. It grants no controller or snapshot authority.
+The native command codec uses its existing package and binary target.
+
 App build validates all declared output destinations before invoking Cargo,
 including when only one recipe is selected. Outputs cannot overlap the app's
 config, any declared workspace manifest or its existing/future Cargo lockfile.

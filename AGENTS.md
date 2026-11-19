@@ -55,7 +55,7 @@ installer, never by editing installed bytes.
   frontend integration and Toko deployment integration remain deferred. Toko's
   existing workspace shell is admitted for fleetless definition/build qualification;
   the selected persistence/recovery consumer is a small counter in the fresh
-  [demo fleet](docs/demos/demo.md), declared under `apps/demo`. Capture and restore
+  [demo fleet](docs/demos/demo.md), declared under `apps/examples/counter`. Capture and restore
   are operator-triggered; restore stays fenced until explicit acceptance/reopening.
   Counter increments are public; the application owns its explicit readiness and
   fence report. Observing readiness cannot activate or reopen application writes.
@@ -123,8 +123,8 @@ remain separate; do not pull optional supplier runtimes into default application
 | Owner | Responsibility | Affected checks |
 | --- | --- | --- |
 | `canic` | Small greeting contract and optional local actor adapters | `make test`, `make clippy`, `make doc` |
-| `canic-host`, `canic-cli`, `apps/demo/canic-hello` | Native planning, custody and hands-on greeting journey | `make journey-test`, `make journey-clippy`, `make journey-doc` |
-| `apps/demo` | Persistent public counter, explicit owner-only fencing and readiness | `make counter-test`, `make counter-clippy`, `make counter-doc` |
+| `canic-host`, `canic-cli`, `apps/examples/greeting` | Native planning, custody and hands-on greeting journey | `make journey-test`, `make journey-clippy`, `make journey-doc` |
+| `apps/examples/counter` | Persistent public counter, explicit owner-only fencing and readiness | `make counter-test`, `make counter-clippy`, `make counter-doc` |
 | `canic-management`, `canic-management-protocol`, `canic-root` | Shared bounded effect engine, passive contracts and explicit Root mounts | `make root-test`, `make root-clippy`, `make root-doc`; `make growth-test` for shared effect boundaries |
 | `qualification/canic-profile-*` | Retained ownership, composition, discovery and autonomous-management fixtures; not a product demo | `make profile-test`, `make profile-clippy`, `make profile-doc` |
 | `ic-wasm-store` supplier; Canic's Root/Host integration | Supplier owns artifacts, pins and admission; Canic owns orchestration | `make store-test`, `make store-clippy`; `make root-doc` covers management contracts |

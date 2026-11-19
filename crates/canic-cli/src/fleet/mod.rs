@@ -1,14 +1,14 @@
 #[cfg(test)]
 mod tests;
 
-use canic_host::{Error, Fleet, Result};
-use std::{fmt::Write as _, path::Path};
-
 mod metrics;
 mod roles;
 mod stores;
 mod terminal;
 mod watch;
+
+use canic_host::{Error, Fleet, Result};
+use std::{fmt::Write as _, path::Path};
 pub(crate) use terminal::render as terminal;
 pub(crate) use watch::{collect, watch};
 

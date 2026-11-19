@@ -10,6 +10,8 @@ mod readiness_tests;
 mod removal_tests;
 mod root_custody_tests;
 mod sharding_tests;
+mod user_directory_tests;
+
 use super::{Client, store, support};
 use canic_management_protocol::{
     self as management,

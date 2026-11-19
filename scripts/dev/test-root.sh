@@ -3,15 +3,15 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root"
 prepare_snapshot() {
-    cargo test --locked --offline -p canic-management --features backup --lib
-    cargo test --locked --offline -p canic-management-protocol --features backup backup::tests
+    cargo test --locked -p canic-management --features backup --lib
+    cargo test --locked -p canic-management-protocol --features backup backup::tests
     mkdir -p target/backup
     "$1" artifact build --package canic-root --features backup,fault-injection --output target/backup/root.wasm --json > target/backup/root.json
     "$1" artifact build --package canic-demo --output target/backup/app.wasm --json > target/backup/app.json
 }
 if [[ $# == 1 && $1 == snapshot:: ]]; then
     prepare_snapshot canic
-    exec cargo test --locked --offline --manifest-path qualification/Cargo.toml -p canic-qualification --test root snapshot:: -- --nocapture
+    exec cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test root snapshot:: -- --nocapture
 fi
 mkdir -p target/root
 cargo test --locked -p canic-management --lib

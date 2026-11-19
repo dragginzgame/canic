@@ -27,7 +27,7 @@ canic = { path = "../crates/canic" }
 canic-artifact-probe = { path = "canic-artifact-probe" }
 canic-asset-catalog = { path = "canic-asset-catalog" }
 canic-auth-witness = { path = "canic-auth-witness" }
-canic-demo = { path = "../apps/demo" }
+canic-demo = { path = "../apps/examples/counter/canic-demo" }
 canic-effect-probe = { path = "canic-effect-probe" }
 canic-host = { path = "../crates/canic-host" }
 canic-management = { path = "../crates/canic-management" }
@@ -58,7 +58,7 @@ serde_bytes = "0.11.19"
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
-toko-tooling = "=0.45.11"
+toko-tooling = "=0.45.13"
 toml = "1.2.1"
 wasmparser = { version = "0.263.0", default-features = false, features = ["std", "validate", "features"] }
 

@@ -12,9 +12,6 @@ description = "Reviewed deployment plans and retained signed attempts for Canic"
 [target.'cfg(any())'.dependencies]
 ic-wasm-store.workspace = true
 
-[target.'cfg(any())'.dev-dependencies]
-toko-tooling.workspace = true
-
 [features]
 backup = ["canic-management-protocol/backup", "dep:ic-backup", "dep:ic-host-sign"]
 
@@ -47,6 +44,7 @@ url.workspace = true
 
 [dev-dependencies]
 ic-platform = { workspace = true, features = ["ed25519"] }
+toko-tooling.workspace = true
 
 [lints]
 workspace = true

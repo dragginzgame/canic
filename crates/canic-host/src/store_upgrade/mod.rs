@@ -3,16 +3,16 @@
 #[cfg(test)]
 mod tests;
 
+mod continuation;
+
 use crate::{
     ApplyOutcome, Error, Plan, Receipt, Result, network::principal, operation, signed, store,
     supplier,
 };
 use canic_management_protocol::store_maintenance::{self as wire, Phase, Status};
+pub use continuation::{StoreContinuation, store_continuation};
 use ic_platform::native::ReadClient;
 use std::path::{Path, PathBuf};
-
-mod continuation;
-pub use continuation::{StoreContinuation, store_continuation};
 
 const OBSERVATIONS: usize = 4096;
 const STEPS_PER_APPLY: usize = 32;

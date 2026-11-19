@@ -1,5 +1,7 @@
 //! Exercise the shipped CLI process, with PocketIC confined to its own graph.
 
+mod demo_actor;
+
 use ic_testkit::{
     pocket_ic::{CanisterId, PocketIcBuilder},
     server::{Limits, PreparedServer, Server},
@@ -10,7 +12,6 @@ use std::{
     process::Command,
     time::Duration,
 };
-mod demo_actor;
 
 fn cli(root: &Path, args: &[&str]) -> Value {
     let uses_journal = args.first() == Some(&"fleet")

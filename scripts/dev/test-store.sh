@@ -7,6 +7,7 @@ scope=${1:-all}
 case "$scope" in
     all) filter= ;;
     sharding) filter=store_root_tests::sharding_tests ;;
+    user-directory) filter=store_root_tests::user_directory_tests ;;
     readiness) filter=store_readiness_ ;;
     publication) filter=store_root_tests::publication_tests ;;
     dispatch) filter=store_root_tests::dispatch_tests ;;
@@ -17,7 +18,7 @@ case "$scope" in
     preservation) filter=store_root_tests::preservation_limits_tests ;;
     removal) filter=store_root_tests::removal_tests ;;
     root-maintenance) filter=store_root_tests::root_custody_tests ;;
-    *) printf 'Usage: %s [all|sharding|readiness|publication|dispatch|custody|admission|quiescence|maintenance|preservation|removal|root-maintenance]\n' "$0" >&2; exit 2 ;;
+    *) printf 'Usage: %s [all|user-directory|sharding|readiness|publication|dispatch|custody|admission|quiescence|maintenance|preservation|removal|root-maintenance]\n' "$0" >&2; exit 2 ;;
 esac
 records=$(mktemp target/store/cli.XXXXXX.jsonl)
 cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$records"
@@ -29,6 +30,13 @@ build() {
     "$cli" artifact build --package "$package" "$@" --json > "target/store/$name.json"
     cp -- "$(jq -r .wasm "target/store/$name.json")" "target/store/$name.wasm"
 }
+if [[ "$scope" == all || "$scope" == user-directory ]]; then
+    "$cli" app build --config apps/examples/user-directory/canic.toml
+fi
+if [[ "$scope" == user-directory ]]; then
+    cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
+    exit
+fi
 if [[ "$scope" == all || "$scope" == sharding ]]; then
     cargo test --locked -p canic --features sharding sharding::tests
     cargo test --locked -p canic-management --features sharding placement::

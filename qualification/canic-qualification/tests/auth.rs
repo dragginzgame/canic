@@ -4,27 +4,22 @@ mod auth_host_tests;
 mod auth_issuer_tests;
 mod auth_logout_tests;
 mod auth_single_root_tests;
+mod credential;
+
 use canic::auth::protocol::wire as auth_wire;
 use canic_auth_witness::{
-    KEY, LIMITS, OBSERVE, Observation, audience, enrollment,
+    KEY, LIMITS, OBSERVE, Observation, enrollment,
     protocol::{
         CredentialEnvelope, EstablishSession, Logout, ReadSession, SessionInput,
-        model::{
-            AdmissionRefusal, LogoutResult, PortableCredential, PortableProof, SessionReadRefusal,
-        },
+        model::{AdmissionRefusal, LogoutResult, PortableProof, SessionReadRefusal},
     },
 };
-use ic_auth::{
-    claims::encode_claims,
-    verification::{Ed25519Key, browser_principal},
-};
-use ic_auth_protocol_types::{DelegatedRoleGrant, PortableClaims, PortableMechanism, Principal};
+use ic_auth_protocol_types::Principal;
 use ic_platform_crypto::ed25519::{Signer, SigningKey};
 use ic_testkit::{
     pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc},
     server::{Instance, Limits, PreparedServer, Server},
 };
-use sha2::{Digest, Sha256};
 use std::{path::PathBuf, time::Duration};
 
 const SECOND: u64 = 1_000_000_000;
@@ -34,43 +29,13 @@ fn input(now: u64) -> (CanisterId, SessionInput) {
 }
 
 fn input_for_device(now: u64, device: u8, slot: u8) -> (CanisterId, SessionInput) {
-    let key = SigningKey::from_bytes(&[7; 32]);
-    assert_eq!(key.verifying_key().to_bytes(), KEY);
-    let browser = SigningKey::from_bytes(&[device; 32])
-        .verifying_key()
-        .to_bytes();
-    let claims = encode_claims(&PortableClaims {
-        mechanism: PortableMechanism::Ed25519,
-        audience: audience(),
-        issuer: Principal::from_slice(&[1]),
-        key_binding_id: Ed25519Key::new(KEY).unwrap().binding(),
-        browser_public_key: browser,
-        account_subject: Principal::from_slice(&[2]),
-        device_slot: slot,
-        device_generation: 1,
-        login_started_at_ns: now,
-        login_deadline_ns: now + 300 * SECOND,
-        issued_at_ns: now,
-        admission_expires_at_ns: now + 60 * SECOND,
-        nonce: [slot; 16],
-        grants: vec![DelegatedRoleGrant {
-            target: "user".parse().unwrap(),
-            scopes: vec!["read".parse().unwrap()],
-        }],
-    })
-    .unwrap();
-    let signature = key.sign(&Sha256::digest(&claims)).to_bytes();
-    (
-        CanisterId::from_slice(browser_principal(&browser).as_slice()),
-        SessionInput {
-            credential: PortableCredential {
-                claims: auth_wire::Bytes::new(claims).unwrap(),
-                proof: PortableProof::Ed25519(auth_wire::Bytes::new(signature.to_vec()).unwrap()),
-            },
-            scopes: auth_wire::List::new(vec![auth_wire::Text::new("read".to_owned()).unwrap()])
-                .unwrap(),
-            ttl_secs: Some(60),
-        },
+    credential::signed(
+        now,
+        device,
+        slot,
+        Principal::from_slice(&[1]),
+        Principal::from_slice(&[2]),
+        &["read"],
     )
 }
 

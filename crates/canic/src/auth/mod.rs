@@ -6,9 +6,6 @@
 //! supply either. Auth owns proof, session, replay and logout semantics; the
 //! application owns current scope/resource permission and lifecycle composition.
 
-/// Independent supplier contracts; numeric identities and directional budgets stay unchanged.
-pub use ic_auth_wire as protocol;
-
 /// Explicit, volatile single-grant enrollment. Does not mount or activate itself.
 pub mod enrollment;
 
@@ -20,6 +17,13 @@ pub mod issuer;
 #[cfg(target_arch = "wasm32")]
 #[doc(hidden)]
 pub mod endpoint;
+
+/// Volatile enrolled session adapter with application-selected limits and role.
+#[cfg(feature = "auth-enrollment")]
+pub mod session;
+
+/// Independent supplier contracts; numeric identities and directional budgets stay unchanged.
+pub use ic_auth_wire as protocol;
 
 /// Mount admission, session read and logout under the supplier's export names.
 ///
@@ -112,7 +116,3 @@ macro_rules! mount_auth_endpoints {
         }
     };
 }
-
-/// Volatile enrolled session adapter with application-selected limits and role.
-#[cfg(all(feature = "auth-enrollment", any(target_arch = "wasm32", test)))]
-pub mod session;

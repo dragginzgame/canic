@@ -3,6 +3,9 @@
 #[cfg(test)]
 mod tests;
 
+pub(crate) mod management;
+pub(crate) mod store;
+
 use canic_host::{
     CanisterStatus, Error, ManagementStatus, Network, OperationStatus, Result, StatusDetail,
 };
@@ -13,9 +16,6 @@ use std::{
     path::Path,
     time::{SystemTime, UNIX_EPOCH},
 };
-
-pub(crate) mod management;
-pub(crate) mod store;
 
 pub(crate) fn pool_preview(
     deployment: &canic_host::DeploymentName,

@@ -13,7 +13,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 canic = { workspace = true, features = ["greeting", "method", "readiness"] }
 
-[target.'cfg(any())'.dev-dependencies]
+[dev-dependencies]
 toko-tooling.workspace = true
 
 [lints]

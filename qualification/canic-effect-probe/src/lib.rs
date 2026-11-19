@@ -6,10 +6,10 @@
 #[cfg(test)]
 mod tests;
 
-use serde::{Deserialize, Serialize};
-
 #[cfg(target_family = "wasm")]
 mod canister;
+
+use serde::{Deserialize, Serialize};
 
 /// Wire identity of the sole creation attempt.
 pub const START: u64 = 1;

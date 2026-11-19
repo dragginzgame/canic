@@ -1,7 +1,14 @@
 //! Bounded two-child management engine. Canisters own endpoints and lifecycle composition.
 //! Host consumers use canic-management-protocol without this runtime.
 
-#[cfg(all(feature = "backup", any(target_arch = "wasm32", test)))]
+#[cfg(feature = "backup")]
+#[cfg_attr(
+    all(not(target_arch = "wasm32"), not(test)),
+    expect(
+        dead_code,
+        reason = "the installed Backup executor owns the private ledger"
+    )
+)]
 pub mod backup;
 #[cfg(target_arch = "wasm32")]
 pub mod endpoint;
@@ -11,8 +18,25 @@ mod engine;
 pub mod publication;
 #[cfg(target_arch = "wasm32")]
 mod single;
-#[cfg(any(target_arch = "wasm32", test))]
+#[cfg_attr(
+    all(not(target_arch = "wasm32"), not(test)),
+    expect(
+        dead_code,
+        reason = "the installed management engine owns the retained records"
+    )
+)]
 mod storage;
+
+#[cfg(feature = "sharding")]
+#[cfg_attr(
+    all(not(target_arch = "wasm32"), not(test)),
+    expect(
+        dead_code,
+        reason = "the installed shard pool calls these placement decisions"
+    )
+)]
+mod placement;
+
 #[cfg(target_arch = "wasm32")]
 pub use engine::{custody, metrics::snapshot as metrics, open};
 #[cfg(all(target_arch = "wasm32", feature = "fault-injection"))]
@@ -21,6 +45,10 @@ pub use single::inject_fault;
 pub use single::{
     observe_upgrade, reconcile, reconcile_upgrade, stage, stage_upgrade, status, upgrade_status,
 };
+
+/// Operator approval and authenticated hub operations for one Root-owned shard pool.
+#[cfg(all(feature = "sharding", target_arch = "wasm32"))]
+pub use engine::sharding;
 
 /// Explicit child-scoped operations. The wrapper decides which endpoints to mount.
 #[cfg(target_arch = "wasm32")]
@@ -72,10 +100,3 @@ pub mod store_maintenance {
         activate, advance, install, observe, observe_attempt, recover, stage,
     };
 }
-
-/// Operator approval and authenticated hub operations for one Root-owned shard pool.
-#[cfg(all(feature = "sharding", target_arch = "wasm32"))]
-pub use engine::sharding;
-
-#[cfg(all(feature = "sharding", any(target_arch = "wasm32", test)))]
-mod placement;

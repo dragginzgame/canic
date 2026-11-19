@@ -1,3 +1,5 @@
+//! Mount the public greeting and report readiness for this stateless app.
+
 canic::mount_greeting_endpoints!(crate::endpoints::greeting);
 
 canic::mount_readiness_endpoint!(crate::endpoints::readiness);

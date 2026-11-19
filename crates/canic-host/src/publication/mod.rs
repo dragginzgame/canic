@@ -3,6 +3,9 @@
 #[cfg(test)]
 mod tests;
 
+pub(crate) mod list;
+pub(crate) mod removal;
+
 use crate::{
     ApplyOutcome, DeploymentName, Error, Plan, PlanAction, Result, SelectedFleet, UpgradeTarget,
     artifact, network::principal, operation, plan, signed, store, supplier,
@@ -13,8 +16,6 @@ use ic_wasm_store_protocol as protocol;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
 
-pub(crate) mod list;
-pub(crate) mod removal;
 const OBSERVATIONS: usize = 32;
 
 /// Exact canister/code identities and immutable release label; no deployment authority.

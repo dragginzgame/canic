@@ -7,12 +7,12 @@ license-file.workspace = true
 publish = false
 description = "Persistent counter application for the Canic demo fleet"
 
-[target.'cfg(any())'.dev-dependencies]
-toko-tooling.workspace = true
-
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 clap.workspace = true
 serde_json.workspace = true
+
+[package.metadata.toko-tooling.loc]
+category = "examples"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -36,6 +36,9 @@ ic-storage.workspace = true
 [dependencies]
 ic-wire.workspace = true
 serde.workspace = true
+
+[dev-dependencies]
+toko-tooling.workspace = true
 
 [lints]
 workspace = true

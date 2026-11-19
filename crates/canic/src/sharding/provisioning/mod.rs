@@ -3,7 +3,26 @@
 #[cfg(all(test, feature = "provisioning", not(target_arch = "wasm32")))]
 mod tests;
 
+#[cfg(feature = "db-store")]
+mod directory;
+
+#[cfg(all(feature = "provisioning", target_arch = "wasm32"))]
+mod actor;
+#[cfg(feature = "provisioning")]
+#[cfg_attr(
+    all(not(target_arch = "wasm32"), not(test)),
+    expect(
+        dead_code,
+        reason = "installed provisioning handlers access these private row operations"
+    )
+)]
+mod rows;
+
 use crate::method::Contract;
+#[cfg(all(feature = "provisioning", target_arch = "wasm32"))]
+pub use actor::{provision, receive};
+#[cfg(feature = "db-store")]
+pub use directory::{Data, HubRoute, Id, Record, ShardRecord, Ticket};
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
@@ -16,14 +35,28 @@ pub struct Account {
     pub subject: Principal,
 }
 
-#[cfg(all(feature = "provisioning", target_arch = "wasm32"))]
+#[cfg(feature = "provisioning")]
 impl Account {
+    #[cfg_attr(
+        all(not(target_arch = "wasm32"), not(test)),
+        expect(
+            dead_code,
+            reason = "the installed hub and shard validate the account before provisioning"
+        )
+    )]
     fn valid(self) -> bool {
         self.issuer != Principal::anonymous() && self.subject != Principal::anonymous()
     }
 }
 
-#[cfg(all(feature = "provisioning", any(test, target_arch = "wasm32")))]
+#[cfg(feature = "provisioning")]
+#[cfg_attr(
+    all(not(target_arch = "wasm32"), not(test)),
+    expect(
+        dead_code,
+        reason = "the installed hub checks the observed shard after suspension"
+    )
+)]
 fn matches_target(
     observation: &super::Placement,
     allocation: &super::Allocation,
@@ -32,7 +65,14 @@ fn matches_target(
     observation.assigned_target().ok().flatten() == Some((allocation, shard))
 }
 
-#[cfg(all(feature = "provisioning", any(test, target_arch = "wasm32")))]
+#[cfg(feature = "provisioning")]
+#[cfg_attr(
+    all(not(target_arch = "wasm32"), not(test)),
+    expect(
+        dead_code,
+        reason = "the installed hub derives the placement key at signup"
+    )
+)]
 fn placement_key<R: Resource>(account: Account) -> super::Key {
     use sha2::{Digest, Sha256};
     let mut digest = Sha256::new().chain_update(R::DOMAIN);
@@ -103,15 +143,3 @@ pub enum Progress {
     /// The pool cannot verify the original target.
     PlacementUnavailable,
 }
-
-#[cfg(feature = "db-store")]
-mod directory;
-
-#[cfg(all(feature = "provisioning", any(test, target_arch = "wasm32")))]
-mod rows;
-#[cfg(feature = "db-store")]
-pub use directory::{Data, HubRoute, Id, Record, ShardRecord, Ticket};
-#[cfg(all(feature = "provisioning", target_arch = "wasm32"))]
-mod actor;
-#[cfg(all(feature = "provisioning", target_arch = "wasm32"))]
-pub use actor::{provision, receive};

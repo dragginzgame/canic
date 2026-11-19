@@ -7,8 +7,8 @@ license-file.workspace = true
 publish.workspace = true
 description = "Retained persistent ownership and composition qualification fixture"
 
-[target.'cfg(any())'.dev-dependencies]
-toko-tooling.workspace = true
+[package.metadata.toko-tooling.loc]
+category = "tests"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -28,6 +28,9 @@ serde.workspace = true
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 canic = { workspace = true, optional = true, features = ["method"] }
 ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
+
+[dev-dependencies]
+toko-tooling.workspace = true
 
 [lints]
 workspace = true

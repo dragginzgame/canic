@@ -4,11 +4,11 @@
 #[cfg(test)]
 mod tests;
 
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-
 #[cfg(target_family = "wasm")]
 mod canister;
+
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// Stage one exact artifact and its installation authority.
 pub const STAGE: u64 = 1;
@@ -167,7 +167,13 @@ pub struct Status {
     pub stable_pages: u64,
 }
 
-#[cfg(any(target_family = "wasm", test))]
+#[cfg_attr(
+    all(not(target_family = "wasm"), not(test)),
+    expect(
+        dead_code,
+        reason = "the canister persists this record and native tests check its encoding"
+    )
+)]
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 struct Retained {
     approval: Option<Approval>,

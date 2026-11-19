@@ -1,12 +1,12 @@
 //! Independent siblings, aggregate reservations and preservation in Storage records.
+mod discovery;
+mod identity;
+
 use super::*;
 use canic_management_protocol::{
     children::{self, ChildId, Request},
     custody, upgrade,
 };
-
-mod discovery;
-mod identity;
 
 async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
     let reply = pic

@@ -1,4 +1,4 @@
-# Ongoing Canic demo fleet
+# Managed counter example
 
 ## Accepted application command boundary
 
@@ -33,11 +33,10 @@ no raw endpoint or lifecycle exception; the existing counter actor is unchanged.
 The selected stateful application is now a small persistent counter, replacing
 the profile app as the hands-on consumer. Capture and restore will be explicit
 operator maintenance operations; restoration keeps writes fenced until the
-operator explicitly accepts and reopens the application. These are accepted
-requirements, not implemented backup commands.
+operator explicitly accepts and reopens the application. The Backup signer exercise below qualifies this path locally.
 
 The counter stores a bounded 256-byte payload in a named Storage 0.78 cell.
-Its installed local witness checks an eight-page backing limit. The app lives directly in `apps/demo`; it owns its protocol, value,
+Its installed local witness checks an eight-page backing limit. The app lives in `apps/examples/counter/canic-demo`; it owns its protocol, value,
 installation authority and maintenance attempts. No temporary raw memory
 implementation or fallback Storage owner is added. The profile packages
 now live only in `qualification/`, preserving existing regression cases. Its old
@@ -60,7 +59,7 @@ activate it. The local Backup witness below exercises Root-mediated fencing and 
 
 This is the small Canic-owned companion to Toko development. Both use the same
 app declarations, Cargo build recipes and explicit actor composition. The demo
-has its own [configuration](../../apps/demo/canic.toml), separate from the
+has its own [configuration](../../apps/examples/counter/canic.toml), separate from the
 existing hello-world and profile mainnet deployments. `canic-demo` is one
 application crate; its native contract does not link the Storage runtime.
 
@@ -80,7 +79,7 @@ From the repository root, install the current CLI, then enter the demo directory
 
 ```sh
 make canic
-cd apps/demo
+cd apps/examples/counter
 canic app canister list
 canic fleet list
 canic app build
@@ -89,8 +88,8 @@ canic artifact inspect artifacts/app.wasm
 
 These commands require no identity, funding or network deployment. Build uses
 the locked workspace graph and produces counter, Root and Store under
-`apps/demo/artifacts/`. Use `--canister app` to rebuild only the counter.
-The [actor](../../apps/demo/src/actor.rs) explicitly creates or opens its record
+`apps/examples/counter/artifacts/`. Use `--canister app` to rebuild only the counter.
+The [actor](../../apps/examples/counter/canic-demo/src/actor.rs) explicitly creates or opens its record
 and mounts readiness; its `counter` endpoint accepts application-owned Wire
 `Read`, `Increment`, `Fence { attempt }` and `Activate { attempt }` requests.
 An uncertain increment must not be automatically retried: this simple app has
@@ -141,9 +140,9 @@ and `make qualification-setup` once; ordinary sessions download no simulator.
 No terminal or browser opens automatically. Leave this command running and use
 another terminal for the `cd` command it prints.
 
-The session creates a separate `demo/local` declaration beneath a new
+The session creates a separate `counter/local` declaration beneath a new
 `target/demo/` directory. It contains Root, separate Wasm Store and the counter,
-an explicit local trust binding and a fresh journal. The `demo/mainnet`
+an explicit local trust binding and a fresh journal. The `counter/mainnet`
 configuration remains unchanged. Only a routing canister is prepared
 automatically; managed deployment still requires your plan/apply.
 
@@ -160,7 +159,7 @@ canic fleet status OPERATION
 
 Use the operation from the plan; repeat apply on that same operation while Root
 is pending. The local anonymous identity spends synthetic cycles, not the mainnet
-wallet. Edit the counter in `apps/demo/src/actor.rs`, then run `canic app build`.
+wallet. Edit the counter in `apps/examples/counter/canic-demo/src/actor.rs`, then run `canic app build`.
 `canic fleet plan --identity anonymous` first selects publication, then upgrade;
 apply each returned operation. A compatible upgrade keeps the value and identity.
 
@@ -188,7 +187,7 @@ process restart remains outside both witnesses.
 
 ## Actor composition
 
-The [actor file](../../apps/demo/canic-hello/src/actor.rs) selects two adapters:
+The [actor file](../../apps/examples/greeting/canic-hello/src/actor.rs) selects two adapters:
 
 ```rust
 canic::mount_greeting_endpoints!(crate::greeting);

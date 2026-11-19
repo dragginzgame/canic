@@ -1,4 +1,7 @@
 //! Root retains Store maintenance intent and evidence; Host retains replacement bytes.
+mod installation;
+mod preservation;
+
 use super::{MANAGEMENT_LIMITS, OBSERVING, STATE, State, api, digest, management};
 use canic_management_protocol::{
     Failure, Refusal,
@@ -12,8 +15,6 @@ use ic_platform_protocol::{
 use ic_platform_runtime::call::{Call, Wait};
 use ic_platform_types::Principal;
 use ic_wasm_store_protocol as store;
-mod installation;
-mod preservation;
 pub use installation::{activate, install};
 
 pub(crate) fn active() -> bool {

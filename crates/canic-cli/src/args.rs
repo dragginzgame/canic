@@ -155,6 +155,9 @@ pub(super) enum AppCanisterCommand {
         /// Cargo package producing this canister's Wasm.
         #[arg(long, requires = "manifest")]
         package: Option<String>,
+        /// Cargo features for the Wasm build.
+        #[arg(long, requires = "package", value_delimiter = ',')]
+        features: Vec<String>,
         /// Native command codec target in the same package, built by app build.
         #[arg(long, requires = "package")]
         client: Option<String>,

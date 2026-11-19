@@ -41,6 +41,7 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
                             build: Some(crate::BuildInput {
                                 manifest: source.join("Cargo.toml"),
                                 package: "canic-root".into(),
+                                features: Vec::new(),
                                 client: None,
                             }),
                             ..Default::default()
@@ -55,6 +56,7 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
                             build: Some(crate::BuildInput {
                                 manifest: source.join("Cargo.toml"),
                                 package: "ic-wasm-store".into(),
+                                features: Vec::new(),
                                 client: None,
                             }),
                         },
@@ -68,6 +70,7 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
                             build: Some(crate::BuildInput {
                                 manifest: "Cargo.toml".into(),
                                 package: "starter-app".into(),
+                                features: Vec::new(),
                                 client: None,
                             }),
                         },

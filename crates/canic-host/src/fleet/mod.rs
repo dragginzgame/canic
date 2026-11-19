@@ -2,15 +2,16 @@
 mod tests;
 
 mod report;
-use crate::{Error, Network, Result, network, operation, store, supplier};
-use canic_management_protocol::children::{self, ChildId};
-pub use report::save_fleet_report;
-use serde::Serialize;
-use std::{collections::BTreeMap, path::Path, time::Duration};
 
 mod metrics;
 mod stores;
+
+use crate::{Error, Network, Result, network, operation, store, supplier};
+use canic_management_protocol::children::{self, ChildId};
 pub use metrics::FleetMetrics;
+pub use report::save_fleet_report;
+use serde::Serialize;
+use std::{collections::BTreeMap, path::Path, time::Duration};
 pub use stores::FleetStoreMaintenance;
 
 const MAX_OPERATIONS: usize = 128;

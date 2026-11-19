@@ -1,4 +1,7 @@
 //! Explicit demo composition. Neither mount initializes a service or owns lifecycle.
+#[cfg(target_arch = "wasm32")]
+use ic_platform_runtime::system::time as now_ns;
+
 canic::mount_greeting_endpoints!(crate::greeting);
 
 canic::mount_readiness_endpoint!(crate::actor::readiness);
@@ -16,9 +19,6 @@ fn snapshot() -> canic::metrics::Snapshot {
         timers: None,
     }
 }
-
-#[cfg(target_arch = "wasm32")]
-use ic_platform_runtime::system::time as now_ns;
 
 #[cfg(not(target_arch = "wasm32"))]
 fn now_ns() -> u64 {

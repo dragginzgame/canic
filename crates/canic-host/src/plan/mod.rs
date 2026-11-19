@@ -1,3 +1,5 @@
+mod action;
+mod record;
 #[cfg(test)]
 mod tests;
 
@@ -8,11 +10,9 @@ use crate::{
     store::{self, Store},
     supplier,
 };
+pub use action::{PlanAction, StoreMaintenance, UpgradeTarget};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-mod action;
-mod record;
-pub use action::{PlanAction, StoreMaintenance, UpgradeTarget};
 
 /// One explicit effect approval, including application calls. No implicit funding conversions.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

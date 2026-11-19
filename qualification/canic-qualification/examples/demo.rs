@@ -91,66 +91,21 @@ async fn session(
         std::process::id()
     ));
     std::fs::create_dir(&directory)?;
-    let manifest = repo.join("Cargo.toml");
-    cli(&directory, &["app", "init", "demo"])?;
-    let manifest = manifest.to_str().ok_or("manifest path is not UTF-8")?;
-    cli(
-        &directory,
-        &[
-            "app",
-            "canister",
-            "add",
-            "root",
-            "--role",
-            "root",
-            "--manifest",
-            manifest,
-            "--package",
-            "canic-root",
-            "--wasm",
-            "artifacts/root.wasm",
-        ],
-    )?;
-    cli(
-        &directory,
-        &[
-            "app",
-            "canister",
-            "add",
-            "store",
-            "--role",
-            "wasm-store",
-            "--parent",
-            "root",
-            "--manifest",
-            manifest,
-            "--package",
-            "ic-wasm-store",
-            "--wasm",
-            "artifacts/store.wasm",
-        ],
-    )?;
-    cli(
-        &directory,
-        &[
-            "app",
-            "canister",
-            "add",
-            "app",
-            "--role",
-            "app",
-            "--parent",
-            "root",
-            "--manifest",
-            manifest,
-            "--package",
-            "canic-demo",
-            "--client",
-            "canic-demo-client",
-            "--wasm",
-            "artifacts/app.wasm",
-        ],
-    )?;
+    let example = repo.join("apps/examples/counter");
+    let mut config = canic_host::load_config(&example.join("canic.toml"))?;
+    let app = config
+        .apps
+        .get_mut("counter")
+        .ok_or("missing counter example")?;
+    app.fleets.clear();
+    for canister in app.canisters.values_mut() {
+        let recipe = canister
+            .build
+            .as_mut()
+            .ok_or("counter component needs a build recipe")?;
+        recipe.manifest = example.join(&recipe.manifest).canonicalize()?;
+    }
+    canic_host::init_config(&directory.join("canic.toml"), &config)?;
     cli(
         &directory,
         &[
@@ -178,7 +133,7 @@ async fn session(
     );
     println!(
         "Edit {} and rebuild with canic app build.",
-        shell(&repo.join("apps/demo/src/actor.rs"))?
+        shell(&repo.join("apps/examples/counter/canic-demo/src/actor.rs"))?
     );
     println!(
         "After a rebuild, fleet plan selects publication, then upgrade. Apply each returned operation. Repeat apply on the same operation while Root is pending; wait for completion before calling the app."

@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.231.0] - 2026-11-19
+
+Both workspaces adopt Toko Tooling 0.45.13. Example package directories now
+match their Cargo names. Each fleet keeps its existing config and build commands.
+
+The [example fleets](apps/examples/) each have a buildable config and a local exercise.
+The persistent counter moved from `apps/demo` to `apps/examples/counter`. The Backup
+example selects its Root plugin with `build.features = ["backup"]`. With the current
+CLI installed, these commands list the apps and build the Backup example locally:
+
+```sh
+cd apps/examples
+canic app list
+cd backup-counter
+canic app canister list
+canic app build
+```
+
+The fourth example uses an Auth-enrolled hub and a pool of user shards.
+From the repository root, inspect the roles and run the installed signup exercise
+with the local simulator prepared:
+
+```sh
+canic app canister list --config apps/examples/user-directory/canic.toml
+bash scripts/dev/test-store.sh user-directory
+```
+
 ## [0.230.0] - 2026-11-19
 
 ### 🔧 Changed

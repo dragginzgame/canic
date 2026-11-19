@@ -1,10 +1,12 @@
 //! Canic application installation and Root integration with the standalone Store.
+mod credential;
+mod store_root_tests;
+mod support;
+
 use canic_management_protocol::stored::{STORE_CHUNK_LIMITS, STORE_LIMITS};
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
 use ic_wasm_store_protocol as store;
 use serde::{Serialize, de::DeserializeOwned};
-mod store_root_tests;
-mod support;
 
 struct Client<'a> {
     pic: &'a PocketIc,

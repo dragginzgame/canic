@@ -9,9 +9,10 @@ pub(super) async fn install(
     pic: &PocketIc,
     caller: CanisterId,
 ) -> (CanisterId, CanisterId, Vec<u8>, Vec<u8>) {
-    let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/backup");
-    let root_wasm = fs::read(assets.join("managed-root.wasm")).unwrap();
-    let child_wasm = fs::read(assets.join("managed-counter.wasm")).unwrap();
+    let assets = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../apps/examples/backup-counter/artifacts");
+    let root_wasm = fs::read(assets.join("root.wasm")).unwrap();
+    let child_wasm = fs::read(assets.join("counter.wasm")).unwrap();
     let root = pic.create_canister().await;
     pic.add_cycles(root, 10_000_000_000_000).await;
     pic.install_canister(root, root_wasm.clone(), vec![], None)

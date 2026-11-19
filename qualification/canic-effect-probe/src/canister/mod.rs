@@ -1,9 +1,9 @@
 //! Installed probes sharing only authentication and dispatch fault injection.
-use ic_platform_types::Principal;
-
 mod creation;
 mod funding;
 mod maintenance;
+
+use ic_platform_types::Principal;
 
 use crate::{Fault, LIMITS};
 use ic_platform_runtime::{

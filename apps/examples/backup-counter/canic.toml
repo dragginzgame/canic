@@ -1,0 +1,13 @@
+[apps.backup-counter.canisters.root]
+role = "root"
+wasm = "artifacts/root.wasm"
+build = { manifest = "../../../Cargo.toml", package = "canic-root", features = ["backup"] }
+
+[apps.backup-counter.canisters.counter]
+role = "app"
+parent = "root"
+wasm = "artifacts/counter.wasm"
+build = { manifest = "../../../Cargo.toml", package = "canic-demo" }
+
+[apps.backup-counter.fleets.local]
+network = { kind = "Local" }
