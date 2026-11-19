@@ -148,6 +148,7 @@ fn config() -> SelectedFleet {
         fleet: "demo".into(),
         config: FleetConfig {
             receiver_policy: None,
+            instance_pool: None,
             shard_pool: None,
             auth: Vec::new(),
             network: Network::Mainnet,
@@ -252,6 +253,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                     selected.fleet.clone(),
                     FleetDeclaration {
                         receiver_policy: None,
+                        instance_pool: None,
                         shard_pool: None,
                         auth: Vec::new(),
                         network: FleetNetwork::Bound(selected.config.network.clone()),
@@ -1248,6 +1250,34 @@ creation_budget = 2000000000000
         source.replace("max_shards = 2", "max_shards = 3"),
         source.replace("kind = \"Local\"", "kind = \"Local\", url = \"http://localhost:8000\""),
         source.replace("[apps.toko.fleets.local.shard_pool]", "[apps.toko.fleets.local.canisters]\nhub = { id = \"aaaaa-aa\" }\n[apps.toko.fleets.local.shard_pool]"),
+    ] {
+        assert!(toml::from_str::<Config>(&invalid).map_or(true, |c| c.validate().is_err()));
+    }
+}
+
+#[test]
+fn dedicated_pool_can_be_declared_before_fleet_binding() {
+    let source = r#"
+[apps.toko.canisters.project_hub]
+[apps.toko.canisters.project]
+parent = "project_hub"
+[apps.toko.fleets.local]
+network = { kind = "Local" }
+[apps.toko.fleets.local.instance_pool]
+component = "project"
+root = "root"
+store = "store"
+release = { name = "project", version = "v1" }
+max_instances = 2
+creation_budget = 2000000000000
+"#;
+    let config: Config = toml::from_str(source).unwrap();
+    assert!(config.select_app(Some("toko")).is_ok());
+    assert!(config.select(Some("toko"), Some("local")).is_err());
+    for invalid in [
+        source.replace("max_instances = 2", "max_instances = 3"),
+        source.replace("parent = \"project_hub\"", ""),
+        source.replace("max_instances = 2", "max_instances = 2\nkeys_per_shard = 1"),
     ] {
         assert!(toml::from_str::<Config>(&invalid).map_or(true, |c| c.validate().is_err()));
     }

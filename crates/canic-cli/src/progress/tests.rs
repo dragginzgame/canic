@@ -123,3 +123,35 @@ fn planning_requires_exactly_one_controller_source() {
         assert!(crate::args::Cli::try_parse_from(base.into_iter().chain(args)).is_ok());
     }
 }
+
+#[test]
+fn app_build_summary_shows_mounts_and_omits_unused_codec_column() {
+    let mut build = BuiltCanister {
+        canister: "user_shard".into(),
+        wasm: "artifacts/user_shard.wasm".into(),
+        artifact: canic_host::Artifact {
+            bytes: 956_693,
+            sha256: "fixture digest".into(),
+        },
+        parent: Some("user_hub".into()),
+        modules: vec!["DB", "Auth"],
+        build_ms: 2_340,
+        client: None,
+    };
+    let table = built(std::slice::from_ref(&build));
+    assert!(table.contains("PARENT"));
+    assert!(table.contains("user_hub"));
+    assert!(table.contains("934.27 KiB"));
+    assert!(table.contains("DB, Auth"));
+    assert!(table.contains("2.34 s"));
+    assert!(!table.contains("COMMAND CODEC"));
+
+    let json = serde_json::to_value(&build).unwrap();
+    assert_eq!(json["artifact"]["bytes"], 956_693);
+    assert_eq!(json["artifact"]["sha256"], "fixture digest");
+
+    build.client = Some("artifacts/user_shard.codec".into());
+    let table = built(&[build]);
+    assert!(table.contains("COMMAND CODEC"));
+    assert!(table.contains("artifacts/user_shard.codec"));
+}

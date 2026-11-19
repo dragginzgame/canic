@@ -25,6 +25,22 @@ pub enum FleetPlanning {
         /// Exact Wire request bytes for the bound Root, ready for local qualification.
         request: Vec<u8>,
     },
+    /// Independent pool approvals for a fleet with dedicated instances.
+    PlacementPools {
+        /// Application name.
+        app: String,
+        /// Fleet name.
+        fleet: String,
+        /// Selected network and trust anchor.
+        network: crate::Network,
+        /// Proposed controller.
+        controller: String,
+        /// Shared-shard grant when configured.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        shards: Option<Box<crate::PoolGrant<canic_management_protocol::stored::ShardPool>>>,
+        /// Dedicated-instance grant.
+        instances: Box<crate::PoolGrant<canic_management_protocol::stored::InstancePool>>,
+    },
     /// Create or resume the original Root-plus-child approval.
     Create {
         /// Original approval digest.

@@ -10,7 +10,7 @@ description = "Reusable bounded child management engine"
 
 [features]
 backup = ["canic-management-protocol/backup"]
-sharding = ["dep:canic", "canic/sharding", "dep:sha2"]
+sharding = ["dep:canic", "canic/sharding", "canic/topology", "dep:sha2"]
 blob = ["canic?/blob"]
 fault-injection = []
 maintenance-candidate = []

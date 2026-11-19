@@ -215,3 +215,23 @@ fn source_layout_requires_real_source_directory_and_regular_rust_files() {
             .contains("expected a regular Rust source file at src/pipe.rs")
     );
 }
+
+#[test]
+fn build_modules_read_custom_sections_from_the_artifact() {
+    let mut wasm = b"\0asm\x01\0\0\0".to_vec();
+    assert!(compiled_modules(&wasm).is_empty());
+    for name in [
+        "canic:module:auth",
+        "canic:module:db",
+        "canic:module:db",
+        "other",
+    ] {
+        let len = u8::try_from(name.len()).unwrap();
+        wasm.extend([0, len + 2, len]);
+        wasm.extend(name.bytes());
+        wasm.push(1);
+    }
+    assert_eq!(compiled_modules(&wasm), ["DB", "Auth"]);
+    wasm.pop();
+    assert!(compiled_modules(&wasm).is_empty());
+}

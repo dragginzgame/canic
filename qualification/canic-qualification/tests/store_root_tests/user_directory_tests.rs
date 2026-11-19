@@ -371,6 +371,61 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
         assigned.push((shard, id));
     }
     assert_eq!(assigned.len(), 2);
+    // A populated volatile shard must reopen its rows without renewing lost Auth authority.
+    let (second, _) = assigned[1];
+    let retained = pic.get_stable_memory(second).await;
+    canic_qualification::upgrade_stopped(pic, second, wasm("user_shard"), vec![], Some(root.id))
+        .await
+        .unwrap();
+    assert!(pic.get_stable_memory(second).await == retained);
+    assert_eq!(
+        root.update::<_, Result<(), enrollment::Error>>(
+            "refresh_auth_receiver",
+            enrollment::TRIGGER_REFRESH,
+            &Principal::from_slice(second.as_slice()),
+            enrollment::LIMITS,
+        )
+        .await,
+        Err(enrollment::Error::Closed)
+    );
+    let (browser, fresh) = crate::credential::signed(
+        pic.get_time().await.as_nanos_since_unix_epoch(),
+        10,
+        1,
+        install.issuer,
+        Principal::from_slice(&[10, 2]),
+        &["read"],
+    );
+    let reader = Client {
+        pic,
+        id: second,
+        operator: browser,
+    };
+    assert!(
+        query::<Option<[u8; 16]>>(&reader, "my_id")
+            .await
+            .unwrap_err()
+            .contains("user authorization: Unavailable")
+    );
+    let reply = pic
+        .update_call(
+            second,
+            browser,
+            "establish_portable_session",
+            EstablishSession::encode_request(&fresh).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        EstablishSession::decode_response(&reply).unwrap(),
+        Err(model::AdmissionRefusal::Unavailable)
+    );
+    assert_eq!(
+        query::<Option<Principal>>(&Client { id: hub, ..reader }, "my_shard")
+            .await
+            .unwrap(),
+        Some(Principal::from_slice(second.as_slice()))
+    );
     let (snapshot, browser) = replay_snapshot.unwrap();
     pic.stop_canister(hub, Some(root.operator)).await.unwrap();
     pic.load_canister_snapshot(hub, Some(root.operator), snapshot)

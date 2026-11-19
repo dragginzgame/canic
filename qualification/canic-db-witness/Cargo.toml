@@ -16,7 +16,7 @@ crate-type = ["cdylib", "rlib"]
 [features]
 fault-injection = ["canic/db-store"]
 incompatible-schema = []
-managed-fixture = ["canic/readiness"]
+managed-fixture = ["canic/readiness", "canic/topology"]
 
 [dependencies]
 canic = { workspace = true, features = ["db-schema", "storage"] }

@@ -9,13 +9,17 @@ mod client;
 #[cfg(feature = "method")]
 pub mod provisioning;
 
-pub use client::{assign, lookup};
+pub use client::{assign, assign_instance, lookup, lookup_instance};
 use serde::{Deserialize, Serialize};
 
 /// Assign a key to an admitted shard or reserve its first allocation.
 pub const ASSIGN: u64 = 91;
 /// Observe the original allocation without reserving capacity.
 pub const LOOKUP: u64 = 92;
+/// Reserve a child exclusively for one project key.
+pub const ASSIGN_INSTANCE: u64 = ic_wire::method_id("canic.assign_instance.v1");
+/// Observe a project key at the originally selected Root.
+pub const LOOKUP_INSTANCE: u64 = ic_wire::method_id("canic.lookup_instance.v1");
 /// An application-owned stable key, independent of the current login session.
 pub type Key = [u8; 32];
 /// Small request and reply frames for the hub.

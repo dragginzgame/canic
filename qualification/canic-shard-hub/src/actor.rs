@@ -51,7 +51,7 @@ fn reopen() {
 async fn signup((): ()) -> Placement {
     sharding::assign(ROOT.get().unwrap(), key())
         .await
-        .expect("inspect original key")
+        .unwrap_or_else(|reason| fail(reason))
 }
 
 /// Look up the authenticated caller's existing assignment.
@@ -67,7 +67,48 @@ async fn signup((): ()) -> Placement {
 async fn lookup((): ()) -> Placement {
     sharding::lookup(ROOT.get().unwrap(), key())
         .await
-        .expect("lookup transport")
+        .unwrap_or_else(|reason| fail(reason))
+}
+
+/// Assign one authenticated user's project key through the configured Root.
+#[runtime::update(
+    runtime = runtime,
+    name = "project",
+    guard = user,
+    decode = project_request,
+    encode = reply,
+    max_bytes = 32,
+    on_error = fail,
+)]
+async fn project(key: sharding::Key) -> Placement {
+    sharding::assign_instance(ROOT.get().unwrap(), key)
+        .await
+        .unwrap_or_else(|reason| fail(reason))
+}
+
+/// Look up one authenticated user's original project.
+#[runtime::update(
+    runtime = runtime,
+    name = "lookup_project",
+    guard = user,
+    decode = project_request,
+    encode = reply,
+    max_bytes = 32,
+    on_error = fail,
+)]
+async fn lookup_project(key: sharding::Key) -> Placement {
+    sharding::lookup_instance(ROOT.get().unwrap(), key)
+        .await
+        .unwrap_or_else(|reason| fail(reason))
+}
+
+fn project_request(raw: &[u8]) -> Result<sharding::Key, &'static str> {
+    let request: [u8; 32] = raw.try_into().map_err(|_| "project request key")?;
+    Ok(Sha256::new()
+        .chain_update(key())
+        .chain_update(request)
+        .finalize()
+        .into())
 }
 
 fn key() -> sharding::Key {

@@ -124,6 +124,8 @@ macro_rules! declare_db_store {
         $vis mod $name {
             use $crate::db::store::{Database, DatabaseSession, DefaultMemoryImpl, MemoryRuntime, Store};
 
+            $crate::__canic_report_mount!("canic:module:db");
+
             std::thread_local! { static STORE: Store = const { Store::new($key, $schema) }; }
 
             /// Attach using the actor's existing directory and install-only incarnation.

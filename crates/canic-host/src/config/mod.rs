@@ -4,12 +4,12 @@
 mod tests;
 
 mod discovery;
-mod sharding;
+pub(crate) mod sharding;
 
 use crate::{Error, Network, Plan, PlanInput, Result, plan, store, supplier};
 pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
 use serde::{Deserialize, Serialize};
-pub use sharding::ShardPoolConfig;
+pub use sharding::{InstancePoolConfig, PoolGrant, ShardPoolConfig};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -107,6 +107,9 @@ pub struct FleetDeclaration {
     /// Optional install-time policy for explicitly selected application roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_policy: Option<crate::ReceiverPolicy>,
+    /// Dedicated children owned by one keyed-instance hub.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instance_pool: Option<InstancePoolConfig>,
     /// Optional fleet-owned bounds for the declared shard component.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shard_pool: Option<ShardPoolConfig>,
@@ -134,6 +137,9 @@ pub struct FleetConfig {
     /// Optional install-time policy for explicitly selected application roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_policy: Option<crate::ReceiverPolicy>,
+    /// Dedicated children owned by one keyed-instance hub.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub instance_pool: Option<InstancePoolConfig>,
     /// Optional fleet-owned bounds for the declared shard component.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shard_pool: Option<ShardPoolConfig>,
@@ -270,6 +276,9 @@ impl Config {
                     if let Some(pool) = &config.shard_pool {
                         pool.validate(&slots)?;
                     }
+                    if let Some(pool) = &config.instance_pool {
+                        pool.validate(&slots, config.shard_pool.as_ref())?;
+                    }
                     total += slots.len();
                     continue;
                 }
@@ -331,6 +340,7 @@ impl AppConfig {
         };
         let mut config = FleetConfig {
             receiver_policy: fleet.receiver_policy.clone(),
+            instance_pool: fleet.instance_pool.clone(),
             shard_pool: fleet.shard_pool.clone(),
             auth: fleet.auth.clone(),
             network: network.clone(),
@@ -343,8 +353,13 @@ impl AppConfig {
 
     fn resolve_slots(&self, fleet: &FleetDeclaration) -> Result<BTreeMap<String, CanisterConfig>> {
         let mut canisters = self.resolve_canisters(&fleet.canisters);
-        if let Some(pool) = &fleet.shard_pool {
-            for (slot, role) in [(&pool.root, "root"), (&pool.store, "wasm-store")] {
+        for (root, store) in fleet
+            .shard_pool
+            .iter()
+            .map(|p| (&p.root, &p.store))
+            .chain(fleet.instance_pool.iter().map(|p| (&p.root, &p.store)))
+        {
+            for (slot, role) in [(root, "root"), (store, "wasm-store")] {
                 if self.canisters.contains_key(slot) {
                     continue;
                 }
@@ -432,6 +447,9 @@ impl FleetConfig {
         }
         if let Some(pool) = &self.shard_pool {
             pool.validate(&self.canisters)?;
+        }
+        if let Some(pool) = &self.instance_pool {
+            pool.validate(&self.canisters, self.shard_pool.as_ref())?;
         }
         if self.auth.len() > canic::auth::enrollment::MAX_RECEIVERS {
             return Err(Error::Invalid("too many Auth receiver declarations".into()));
@@ -762,6 +780,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
             fleet.into(),
             FleetDeclaration {
                 receiver_policy: None,
+                instance_pool: None,
                 shard_pool: None,
                 auth: Vec::new(),
                 network: FleetNetwork::Bound(network),

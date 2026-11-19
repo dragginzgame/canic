@@ -4,7 +4,7 @@ use crate::{
     ApplyOutcome, Plan, PlanAction, Publication, Receipt, Result, StoredArtifact, UpgradeTarget,
     artifact, operation, plan, publication, store, supplier,
 };
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 impl FleetChild {
     pub(super) fn artifact_limit(&self) -> usize {
@@ -145,17 +145,29 @@ pub(super) async fn apply(
     Ok(())
 }
 
-pub(super) fn status(
+// Rebuild the expected plan from the approved child and retained Root/Store receipts.
+fn retained_publication(
     dir: &Path,
     fleet: &FleetPlan,
     slot: ChildId,
-) -> Result<Option<crate::CanisterStatus>> {
+) -> Result<Option<(PathBuf, Plan)>> {
     let path = dir.join(record::child_leaf(slot)).join("publication");
     if !path.join("plan.json").try_exists().map_err(supplier)? {
         return Ok(None);
     }
     let root = root_receipt(dir, fleet)?.ok_or_else(invalid)?;
     let value = fleet.publication(&root, store_receipt(dir, fleet)?.as_ref(), slot)?;
+    Ok(Some((path, value)))
+}
+
+pub(super) fn status(
+    dir: &Path,
+    fleet: &FleetPlan,
+    slot: ChildId,
+) -> Result<Option<crate::CanisterStatus>> {
+    let Some((path, value)) = retained_publication(dir, fleet, slot)? else {
+        return Ok(None);
+    };
     operation::status_at(&path, &value.digest()?).map(Some)
 }
 
@@ -169,12 +181,9 @@ pub(super) fn inventory(
         .children()
         .filter(|(_, child)| child.release.is_some())
     {
-        let path = dir.join(record::child_leaf(slot)).join("publication");
-        if !path.join("plan.json").try_exists().map_err(supplier)? {
+        let Some((path, expected)) = retained_publication(dir, fleet, slot)? else {
             continue;
-        }
-        let root = root_receipt(dir, fleet)?.ok_or_else(invalid)?;
-        let expected = fleet.publication(&root, store_receipt(dir, fleet)?.as_ref(), slot)?;
+        };
         let digest = expected.digest()?;
         let (plan, bytes) = plan::load(&path, &digest)?;
         result.push(crate::publication::list::project(
@@ -191,10 +200,7 @@ pub(super) async fn reconcile(
     icp: &Path,
 ) -> Result<()> {
     for (slot, _) in fleet.children().filter(|(_, c)| c.release.is_some()) {
-        let path = dir.join(record::child_leaf(slot)).join("publication");
-        if path.join("plan.json").try_exists().map_err(supplier)? {
-            let root = root_receipt(dir, fleet)?.ok_or_else(invalid)?;
-            let value = fleet.publication(&root, store_receipt(dir, fleet)?.as_ref(), slot)?;
+        if let Some((path, value)) = retained_publication(dir, fleet, slot)? {
             operation::reconcile_at(
                 dir.parent().ok_or_else(invalid)?,
                 &path,
@@ -213,12 +219,9 @@ pub(super) fn quiesce(dir: &Path, fleet: &FleetPlan, selected: &Plan) -> Result<
         .children()
         .filter(|(_, child)| child.release.is_some())
     {
-        let path = dir.join(record::child_leaf(slot)).join("publication");
-        if !path.join("plan.json").try_exists().map_err(supplier)? {
+        let Some((path, expected)) = retained_publication(dir, fleet, slot)? else {
             continue;
-        }
-        let root = root_receipt(dir, fleet)?.ok_or_else(invalid)?;
-        let expected = fleet.publication(&root, store_receipt(dir, fleet)?.as_ref(), slot)?;
+        };
         let (value, bytes) = plan::load(&path, &expected.digest()?)?;
         publication::removal::quiesce_matching(&path, &value, &bytes, selected)?;
     }

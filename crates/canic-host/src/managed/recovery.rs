@@ -18,20 +18,28 @@ pub(crate) fn call(plan: &Plan) -> Result<signed::Call<'static>> {
     }
 }
 
-fn attempt(dir: &Path) -> Result<PathBuf> {
+pub(super) fn next_observation(dir: &Path) -> Result<PathBuf> {
     for index in 0..OBSERVATIONS {
         let path = dir.join(format!("observe/{index}"));
         if !path.join("reply.bin").try_exists().map_err(supplier)? {
-            // Never insert recovery ahead of an already signed observation.
-            if path.join("signed.json").try_exists().map_err(supplier)? {
-                return Err(Error::Blocked("resume the original apply to settle its retained observation before reconciliation".into()));
-            }
-            return Ok(path.join("reconcile"));
+            return Ok(path);
         }
     }
-    Err(Error::Blocked(
-        "32 retained observation slots exhausted; preserve this journal".into(),
-    ))
+    Err(Error::Blocked(format!(
+        "{OBSERVATIONS} retained observation slots exhausted; preserve this journal"
+    )))
+}
+
+fn attempt(dir: &Path) -> Result<PathBuf> {
+    let path = next_observation(dir)?;
+    // Never insert recovery ahead of an already signed observation.
+    if path.join("signed.json").try_exists().map_err(supplier)? {
+        return Err(Error::Blocked(
+            "resume the original apply to settle its retained observation before reconciliation"
+                .into(),
+        ));
+    }
+    Ok(path.join("reconcile"))
 }
 
 pub(super) fn require_settled(path: &Path) -> Result<()> {

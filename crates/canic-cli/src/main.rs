@@ -397,6 +397,20 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     let (digest, mut text) = match &result {
                         canic_host::FleetPlanning::ShardPool { deployment, network, controller, approval, .. } =>
                             return Ok(Output::Text(status::pool_preview(deployment, network, controller, approval)?)),
+                        canic_host::FleetPlanning::PlacementPools { app, fleet, network, controller, shards, instances } => {
+                            let mut text = format!("Placement approvals · {app}/{fleet}\nNetwork binding: {}\nController: {controller}\n", network.binding_id()?);
+                            let projects = &instances.approval;
+                            text.push_str(&format!("Root: {}\nStore: {}\n", projects.root, projects.reference.store));
+                            if let Some(shared) = shards {
+                                let a = &shared.approval;
+                                text.push_str(&format!("\nShared shards · {}\nHub: {}\nCapacity: {} shards × {} lifetime keys per shard\n", a.pool, a.hub, a.max_shards, a.keys_per_shard));
+                                status::pool_release(&mut text, &a.reference, a.creation_budget, a.expires_at_ns);
+                            }
+                            text.push_str(&format!("\nDedicated instances · {}\nParent hub: {}\nCapacity: {} lifetime instances\n", projects.component, projects.hub, projects.max_instances));
+                            status::pool_release(&mut text, &projects.reference, projects.creation_budget, projects.expires_at_ns);
+                            text.push_str("\nOffline review only. No operation submitted.\n");
+                            return Ok(Output::Text(text));
+                        }
                         canic_host::FleetPlanning::Create { operation, fleet_plan } =>
                             (operation, status::fleet_preview(operation, fleet_plan, &state_dir)?),
                         canic_host::FleetPlanning::AddChild { operation, .. } | canic_host::FleetPlanning::Upgrade { operation, .. } | canic_host::FleetPlanning::Maintenance { operation, .. } | canic_host::FleetPlanning::Publication { operation, .. } =>
@@ -413,7 +427,11 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     ));
                     return Ok(Output::Text(text));
                 }
-                if matches!(result, canic_host::FleetPlanning::ShardPool { .. }) {
+                if matches!(
+                    result,
+                    canic_host::FleetPlanning::ShardPool { .. }
+                        | canic_host::FleetPlanning::PlacementPools { .. }
+                ) {
                     return Ok(Output::Json(
                         serde_json::to_value(result).map_err(|e| Error::Invalid(e.to_string()))?,
                     ));

@@ -22,3 +22,23 @@ pub struct Greeting {
     /// Human-readable greeting from the installed executable.
     pub message: String,
 }
+
+/// Wire contract for the `greet` endpoint.
+struct Greet;
+impl canic::method::Contract for Greet {
+    const NAME: &'static str = "greet";
+    const ID: u64 = GREET;
+    const REQUEST: canic::method::wire::Limits = LIMITS;
+    type Input = String;
+    type Output = Greeting;
+}
+
+/// Wire contract for the `probe` endpoint.
+struct Probe;
+impl canic::method::Contract for Probe {
+    const NAME: &'static str = "probe";
+    const ID: u64 = GREET;
+    const REQUEST: canic::method::wire::Limits = LIMITS;
+    type Input = String;
+    type Output = Greeting;
+}

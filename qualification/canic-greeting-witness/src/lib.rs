@@ -11,10 +11,7 @@ canic::mount_metrics_endpoint!(crate::snapshot);
 // greet
 // Greet a visitor with a name of up to 128 UTF-8 bytes.
 // limits : LIMITS
-#[canic::query(
-    method = GREET,
-    limits = LIMITS,
-)]
+#[canic::query(contract = Greet)]
 fn greet(name: String) -> Greeting {
     greeting(&name)
 }
@@ -22,10 +19,7 @@ fn greet(name: String) -> Greeting {
 // probe
 // Return the replicated greeting for the same bounded name.
 // limits : LIMITS
-#[canic::update(
-    method = GREET,
-    limits = LIMITS,
-)]
+#[canic::update(contract = Probe)]
 fn probe(name: String) -> Greeting {
     greeting(&name)
 }
@@ -77,4 +71,24 @@ fn snapshot() -> canic::metrics::Snapshot {
         observed_at_ns: ic_platform_runtime::system::time(),
         timers: None,
     }
+}
+
+/// Wire contract for the `greet` endpoint.
+struct Greet;
+impl canic::method::Contract for Greet {
+    const NAME: &'static str = "greet";
+    const ID: u64 = GREET;
+    const REQUEST: canic::method::wire::Limits = LIMITS;
+    type Input = String;
+    type Output = Greeting;
+}
+
+/// Wire contract for the `probe` endpoint.
+struct Probe;
+impl canic::method::Contract for Probe {
+    const NAME: &'static str = "probe";
+    const ID: u64 = GREET;
+    const REQUEST: canic::method::wire::Limits = LIMITS;
+    type Input = String;
+    type Output = Greeting;
 }

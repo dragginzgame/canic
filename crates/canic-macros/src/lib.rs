@@ -29,7 +29,6 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut guard: Option<Path> = None;
     let mut scope: Option<Expr> = None;
     let mut name: Option<LitStr> = None;
-    let mut method: Option<Expr> = None;
     let mut limits: Option<Expr> = None;
     let mut reply_limits: Option<Expr> = None;
     syn::meta::parser(|option| {
@@ -41,8 +40,6 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             guard = Some(option.value()?.parse()?);
         } else if option.path.is_ident("name") && name.is_none() {
             name = Some(option.value()?.parse()?);
-        } else if option.path.is_ident("method") && method.is_none() {
-            method = Some(option.value()?.parse()?);
         } else if option.path.is_ident("limits") && limits.is_none() {
             limits = Some(option.value()?.parse()?);
         } else if option.path.is_ident("reply_limits") && reply_limits.is_none() {
@@ -111,7 +108,7 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let argument = parameter.map(|_| quote!(__canic_input));
     let (request, reply, id, request_budget, reply_budget, check) = if let Some(contract) = contract
     {
-        if method.is_some() || limits.is_some() || reply_limits.is_some() {
+        if limits.is_some() || reply_limits.is_some() {
             return Err(syn::Error::new(
                 contract.span(),
                 "the contract supplies the method ID and both budgets",
@@ -132,7 +129,7 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         (
             input,
             output,
-            method.map_or_else(|| quote!(wire::method_id(#export)), |id| quote!(#id)),
+            quote!(wire::method_id(#export)),
             limits.map_or_else(|| quote!(::canic::method::LIMITS), |value| quote!(#value)),
             reply_limits.map_or_else(|| quote!(__CANIC_REQUEST), |value| quote!(#value)),
             quote!(),

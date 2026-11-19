@@ -1,5 +1,6 @@
 use canic_profile_protocol::{
-    BIND, CHECK, CheckResult, LIMITS, ROUTE, Route, RouteError, RouteResult, WorkerCheck,
+    Bind, Check, CheckResult, LIMITS, ReadRoute, Resolve, Route, RouteError, RouteResult,
+    WorkerCheck,
 };
 use ic_platform_runtime::{self as runtime, system as api};
 use ic_platform_types::Principal;
@@ -115,9 +116,7 @@ fn valid_worker(text: &str) -> Result<Principal, RouteError> {
 
 /// Read the retained worker route.
 #[canic::query(
-    method = canic_profile_protocol::ROUTE,
-    limits = canic_profile_protocol::LIMITS,
-    reply_limits = canic_profile_protocol::LIMITS,
+    contract = ReadRoute,
 )]
 fn route() -> RouteResult {
     STATE
@@ -138,8 +137,7 @@ fn route() -> RouteResult {
 /// Read the retained route in replicated execution.
 #[canic::update(
     name = "resolve",
-    method = ROUTE,
-    limits = LIMITS,
+    contract = Resolve,
 )]
 fn replicated_route() -> RouteResult {
     route()
@@ -147,8 +145,7 @@ fn replicated_route() -> RouteResult {
 
 /// Set the entry canister's worker route under the caller's controller authority.
 #[canic::update(
-    method = BIND,
-    limits = LIMITS,
+    contract = Bind,
 )]
 fn bind(input: Route) -> RouteResult {
     if !api::is_controller(&api::caller()) {
@@ -170,8 +167,7 @@ fn bind(input: Route) -> RouteResult {
 
 /// Check the bound worker from the entry canister on a controller's request.
 #[canic::update(
-    method = CHECK,
-    limits = LIMITS,
+    contract = Check,
 )]
 async fn check() -> CheckResult {
     if !api::is_controller(&api::caller()) {

@@ -364,13 +364,13 @@ pub fn plan_fleet(
     execute_at_ns: Option<u64>,
 ) -> Result<FleetPlanning> {
     selected.validate()?;
-    if let Some(pool) = &selected.config.shard_pool {
+    if selected.config.shard_pool.is_some() || selected.config.instance_pool.is_some() {
         if cycles.is_some() || execute_at_ns.is_some() {
             return Err(Error::Invalid(
                 "pool growth uses its declared budget and deadline".into(),
             ));
         }
-        return pool.preview(config_path, selected, controller);
+        return crate::config::sharding::preview(config_path, selected, controller);
     }
     if selected.config.receiver_policy.is_some() {
         return Err(Error::Invalid("receiver install requires a resolved Root; bootstrap infrastructure and plan named Store-backed children".into()));

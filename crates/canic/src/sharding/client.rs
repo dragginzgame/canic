@@ -16,6 +16,20 @@ pub async fn lookup(root: Principal, key: Key) -> Result<Placement, &'static str
     call(root, "lookup_shard", LOOKUP, key).await
 }
 
+/// Request the original dedicated child for a stable application key.
+/// # Errors
+/// A transport or framing failure requires observing the same key.
+pub async fn assign_instance(root: Principal, key: Key) -> Result<Placement, &'static str> {
+    call(root, "assign_instance", super::ASSIGN_INSTANCE, key).await
+}
+
+/// Look up the original project claim without allocating.
+/// # Errors
+/// Returns an error for a missing or invalid reply.
+pub async fn lookup_instance(root: Principal, key: Key) -> Result<Placement, &'static str> {
+    call(root, "lookup_instance", super::LOOKUP_INSTANCE, key).await
+}
+
 async fn call(
     root: Principal,
     name: &str,

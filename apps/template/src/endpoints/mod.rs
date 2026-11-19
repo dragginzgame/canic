@@ -1,15 +1,15 @@
 //! Mount the public greeting and report readiness for this stateless app.
 
-use crate::{GREET, Greeting, LIMITS, MAX_NAME_BYTES};
+use crate::{Greet, Greeting, MAX_NAME_BYTES, Probe};
 
 /// Greet a visitor in a read-only query.
-#[canic::query(method = GREET, limits = LIMITS)]
+#[canic::query(contract = Greet)]
 fn greet(name: String) -> Greeting {
     greeting(&name)
 }
 
 /// Return the same greeting through a replicated update.
-#[canic::update(method = GREET, limits = LIMITS)]
+#[canic::update(contract = Probe)]
 fn probe(name: String) -> Greeting {
     greeting(&name)
 }

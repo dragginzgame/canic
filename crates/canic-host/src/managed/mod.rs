@@ -428,19 +428,7 @@ pub(crate) async fn apply(
         )?
     } else {
         // A replicated read can recover admission even when the staging response was lost.
-        let mut path = None;
-        for index in 0..OBSERVATIONS {
-            let candidate = dir.join(format!("observe/{index}"));
-            if !candidate.join("reply.bin").try_exists().map_err(supplier)? {
-                path = Some(candidate);
-                break;
-            }
-        }
-        let path = path.ok_or_else(|| {
-            Error::Blocked(
-                "32 retained observation attempts exhausted; preserve this journal".into(),
-            )
-        })?;
+        let path = recovery::next_observation(dir)?;
         let call = observation(plan)?;
         recovery::require_settled(&path)?;
         let bytes = signed::observe(&path, plan, &call, identity, icp, client).await?;

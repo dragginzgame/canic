@@ -86,7 +86,7 @@ fn numeric_identities_preserve_deployed_wire_and_request_bytes() {
 
 #[test]
 fn unsupported_identities_cannot_enter_runtime_or_retained_authority() {
-    for value in [2, 3, 255, 256, usize::MAX] {
+    for value in [4, 255, 256, usize::MAX] {
         assert_eq!(ChildId::new(value), None);
         let bytes = ic_wire::encode(&value, ic_wire::Encoding::Payload, crate::LIMITS).unwrap();
         assert!(
@@ -97,12 +97,16 @@ fn unsupported_identities_cannot_enter_runtime_or_retained_authority() {
     enum Candidate {
         First,
         Second,
+        FirstProject,
+        SecondProject,
         Unsupported,
     }
     // Wire identifies enum variants by discriminant, not their Rust names.
     for (candidate, accepted) in [
         (Candidate::First, true),
         (Candidate::Second, true),
+        (Candidate::FirstProject, true),
+        (Candidate::SecondProject, true),
         (Candidate::Unsupported, false),
     ] {
         let bytes = ic_wire::encode(&candidate, ic_wire::Encoding::Payload, crate::LIMITS).unwrap();
@@ -110,5 +114,21 @@ fn unsupported_identities_cannot_enter_runtime_or_retained_authority() {
             ic_wire::decode::<ChildId>(&bytes, ic_wire::Encoding::Payload, crate::LIMITS).is_ok(),
             accepted
         );
+    }
+}
+
+#[test]
+fn project_slots_round_trip_and_cannot_enter_ordinary_requests() {
+    for slot in ChildId::PROJECT {
+        assert!(ChildId::new(slot.index()).is_none());
+        let frame = ic_wire::Encoding::Payload;
+        let id = ic_wire::encode(&slot, frame, crate::LIMITS).unwrap();
+        assert_eq!(
+            ic_wire::decode::<ChildId>(&id, frame, crate::LIMITS).unwrap(),
+            slot
+        );
+        let request =
+            ic_wire::encode(&Request { slot, value: 1_u64 }, frame, crate::LIMITS).unwrap();
+        assert!(ic_wire::decode::<Request<u64>>(&request, frame, crate::LIMITS).is_err());
     }
 }

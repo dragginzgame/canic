@@ -65,33 +65,72 @@ pub(crate) fn next(
     format!("\nNext:\n{}\n", escape(&parts.join(" ")))
 }
 
+fn build_row(item: &BuiltCanister) -> [String; 6] {
+    [
+        item.canister.clone(),
+        item.parent.clone().unwrap_or_else(|| "—".into()),
+        item.wasm.display().to_string(),
+        format!(
+            "{:.2} KiB",
+            f64::from(u32::try_from(item.artifact.bytes).expect("bounded Wasm size")) / 1024.0
+        ),
+        if item.modules.is_empty() {
+            "—".into()
+        } else {
+            item.modules.join(", ")
+        },
+        format!(
+            "{}.{:02} s",
+            item.build_ms / 1000,
+            item.build_ms % 1000 / 10
+        ),
+    ]
+}
+
 pub(crate) fn built(built: &[BuiltCanister]) -> String {
-    let rows: Vec<_> = built
-        .iter()
-        .map(|item| {
-            [
-                item.canister.clone(),
-                item.wasm.display().to_string(),
-                item.artifact.bytes.to_string(),
-                item.client
+    use Alignment::{Left, Right};
+
+    let table = if built.iter().any(|item| item.client.is_some()) {
+        let rows: Vec<_> = built
+            .iter()
+            .map(|item| {
+                let [canister, parent, wasm, size, modules, time] = build_row(item);
+                let codec = item
+                    .client
                     .as_ref()
-                    .map_or_else(|| "—".into(), |path| path.display().to_string()),
-            ]
-        })
-        .collect();
-    format!(
-        "Built app canisters\n\n{}\n\nNothing deployed.\n",
+                    .map_or_else(|| "—".into(), |path| path.display().to_string());
+                [canister, parent, wasm, size, modules, time, codec]
+            })
+            .collect();
         plain_table(
-            &["CANISTER", "WASM", "BYTES", "COMMAND CODEC"],
-            &rows,
             &[
-                Alignment::Left,
-                Alignment::Left,
-                Alignment::Right,
-                Alignment::Left
-            ]
+                "CANISTER",
+                "PARENT",
+                "WASM",
+                "SIZE",
+                "MODULES",
+                "BUILD TIME",
+                "COMMAND CODEC",
+            ],
+            &rows,
+            &[Left, Left, Left, Right, Left, Right, Left],
         )
-    )
+    } else {
+        let rows: Vec<_> = built.iter().map(build_row).collect();
+        plain_table(
+            &[
+                "CANISTER",
+                "PARENT",
+                "WASM",
+                "SIZE",
+                "MODULES",
+                "BUILD TIME",
+            ],
+            &rows,
+            &[Left, Left, Left, Right, Left, Right],
+        )
+    };
+    format!("Built app canisters\n\n{table}\n\nNothing deployed.\n")
 }
 
 fn outcome(value: &ApplyOutcome, text: &mut String, now: Option<u128>) -> bool {

@@ -134,6 +134,8 @@ pub struct BuildReport {
     pub wasm: PathBuf,
     /// Digest and size measured before atomic publication.
     pub artifact: Artifact,
+    #[serde(skip)]
+    pub(crate) modules: Vec<&'static str>,
 }
 
 /// Build and report the original artifact even if another caller replaces its destination.
@@ -279,7 +281,34 @@ pub(crate) fn build_for_role(
         0o700,
         0o600,
     )?;
-    Ok(BuildReport { wasm, artifact })
+    Ok(BuildReport {
+        wasm,
+        artifact,
+        modules: compiled_modules(&bytes),
+    })
+}
+
+// Report mount markers from the same bytes that were hashed and published.
+fn compiled_modules(bytes: &[u8]) -> Vec<&'static str> {
+    use wasmparser::{Parser, Payload};
+
+    let mut has_db = false;
+    let mut has_auth = false;
+    for payload in Parser::new(0).parse_all(bytes) {
+        match payload {
+            Ok(Payload::CustomSection(section)) => match section.name() {
+                "canic:module:db" => has_db = true,
+                "canic:module:auth" => has_auth = true,
+                _ => {}
+            },
+            Err(_) => return Vec::new(),
+            _ => {}
+        }
+    }
+    [("DB", has_db), ("Auth", has_auth)]
+        .into_iter()
+        .filter_map(|(name, present)| present.then_some(name))
+        .collect()
 }
 
 fn selected_wasm(output: &[u8], package_id: &str) -> Result<PathBuf> {

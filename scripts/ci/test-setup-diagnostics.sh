@@ -17,6 +17,8 @@ cat > "$fixture/failure.sh" <<'SH'
 set -eu
 attempt="$TOKO_TOOLING_STORE/rust-fixture/.attempt"
 mkdir -p "$attempt"
+mkdir -p "$TOKO_TOOLING_STORE/unreported"
+printf 'unreported-attempt-sentinel\n' > "$TOKO_TOOLING_STORE/unreported/install.log"
 cat > "$attempt/install.log" <<'LOG'
 error: hidden compiler failure E0425
 Authorization: Bearer hidden-authorization-value
@@ -28,17 +30,21 @@ failed https://user:secretpass@example.com/source?credential=hidden-query-value
 LOG
 printf 'private payload' > "$attempt/source.crate"
 printf 'error: early installer refusal\n'
-printf 'known value: %s\n' "$SETUP_TEST_TOKEN"
 printf 'Cargo tool attempt retained: %s\n' "$attempt"
+# The declared attempt stays selected even after its report leaves the shared tail.
+for ((i=0; i<150; i++)); do echo "later output $i"; done
+printf 'known value: %s\n' "$SETUP_TEST_TOKEN"
 exit 41
 SH
 run_case early 41 bash "$fixture/failure.sh"
 evidence="$fixture/early/canic-setup-diagnostics/early"
 grep -q 'hidden compiler failure E0425' "$evidence/attempt-1.txt"
 grep -q 'hidden compiler failure E0425' "$fixture/early.console"
+grep -q 'later output 149' "$evidence/command.txt"
+if grep -q 'Cargo tool attempt retained:' "$evidence/command.txt"; then exit 1; fi
 grep -q 'status=41' "$evidence/summary.txt"
 [[ $(find "$evidence" -type f | wc -l) == 4 ]]
-if grep -Er 'sentinel-private|hidden-authorization|hidden-password|hidden-key|hidden-query|user:secretpass|private payload' "$evidence" "$fixture/early.console"; then
+if grep -Er 'unreported-attempt-sentinel|sentinel-private|hidden-authorization|hidden-password|hidden-key|hidden-query|user:secretpass|private payload' "$evidence" "$fixture/early.console"; then
     echo 'sensitive fixture escaped sanitation'; exit 1
 fi
 
@@ -47,7 +53,7 @@ run_case missing 29 bash -c 'echo "Cargo tool attempt retained: $TOKO_TOOLING_ST
 grep -q 'collection failed: selected attempt log missing' "$fixture/missing.console"
 grep -q 'status=29' "$fixture/missing/canic-setup-diagnostics/missing/summary.txt"
 run_case empty 19 bash -c 'exit 19'
-grep -q 'no setup output available' "$fixture/empty/canic-setup-diagnostics/empty/command.txt"
+grep -q 'no usable diagnostic output' "$fixture/empty/canic-setup-diagnostics/empty/command.txt"
 grep -q 'No explicit attempt logs' "$fixture/empty/canic-setup-diagnostics/empty/collection.txt"
 
 mkdir -p "$fixture/collector"

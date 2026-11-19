@@ -99,6 +99,15 @@ fn decode_owner(bytes: &[u8]) -> Result<ic_db::Principal, std::convert::Infallib
                 .expect("fixture owner"),
         );
     }
+    #[cfg(feature = "managed-fixture")]
+    if bytes.len() > 29 {
+        let topology = canic::topology::Install::decode(bytes).expect("project topology");
+        topology
+            .check_root(runtime::system::caller())
+            .expect("project installer");
+        assert_eq!(topology.application, [8; 16]);
+        return Ok(ic_db::Principal::from_slice(topology.parent.as_slice()));
+    }
     Ok({ ic_db::Principal::try_from_slice(bytes).expect("installation owner") })
 }
 

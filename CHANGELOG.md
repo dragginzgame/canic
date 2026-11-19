@@ -1,5 +1,59 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.239.0] - 2026-11-19
+
+### 🚀 Features
+
+A sharding Root can retain independent controller approvals for a user hub
+and a project hub. A bound fleet with built Wasm and future grant deadlines
+can preview its `shard_pool` and `instance_pool` together. Set `CONTROLLER` to
+the Root controller principal. Planning reads local inputs and prints the exact
+requests. The last command runs the installed regression on a prepared simulator.
+The approved project hub can now use `canic::sharding::assign_instance` and
+`lookup_instance` to recover the same dedicated child after reply loss or a
+Root upgrade. One Root supports up to two dedicated project children alongside
+both shared shards. [#52 · Dedicated project placement alongside user shards](https://github.com/dragginzgame/canic/issues/52)
+
+```sh
+canic fleet plan --config apps/toko/canic.toml --controller "$CONTROLLER"
+canic --json fleet plan --config apps/toko/canic.toml --controller "$CONTROLLER"
+bash scripts/dev/test-store.sh sharding
+```
+
+App builds report parent slots, compact Wasm sizes, compiled DB and Auth mounts,
+and elapsed build time. The command codec column appears when a recipe produces
+a native codec. JSON includes exact artifact bytes and SHA-256, parent, reported
+mounts and elapsed milliseconds. Older Wasm builds without mount markers show
+a dash in the modules column.
+
+```sh
+canic app build --config apps/template/canic.toml
+canic --json app build --config apps/template/canic.toml
+```
+
+### 🧪 Testing
+
+CI setup now uses Toko Tooling’s shared diagnostic excerpts. Failed phases
+retain the original exit status and up to four explicitly reported attempt
+logs, even when the report scrolls out of the console tail. [#49 · Retain CI setup diagnostics](https://github.com/dragginzgame/canic/issues/49)
+
+### ⚠️ Breaking changes
+
+`#[canic::query]` and `#[canic::update]` derive the Wire ID from the exported
+name. To keep a fixed ID, declare it once on a shared `Contract` and select
+`contract = MyContract` on the handler. The standalone `method = ...` option
+has been removed.
+
+Build the template locally or exercise its fixed-ID greeting protocol with a
+prepared simulator.
+
+```sh
+canic app build --config apps/template/canic.toml
+make journey-test
+```
+
 ## [0.238.0] - 2026-11-19
 
 Receiver enrollment no longer blocks application upgrades. Volatile sessions close on upgrade. Fresh Auth installs can select stable Ed25519 receiver and issuer checkpoints.

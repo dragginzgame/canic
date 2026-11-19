@@ -4,7 +4,7 @@ use serde::Serialize;
 use std::{
     path::{Path, PathBuf},
     process::Command,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 /// A replaceable build output, not retained deployment evidence.
@@ -16,6 +16,13 @@ pub struct BuiltCanister {
     pub wasm: PathBuf,
     /// Exact built bytes.
     pub artifact: Artifact,
+    /// App-declared parent slot, if any.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub parent: Option<String>,
+    /// Mounts declared by the built Wasm.
+    pub modules: Vec<&'static str>,
+    /// Elapsed time for the canister recipe, including any native codec.
+    pub build_ms: u128,
     /// Optional app-owned native codec executable, not a deployment artifact.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub client: Option<PathBuf>,
@@ -92,7 +99,7 @@ pub fn build_app(
         {
             return Err(Error::Invalid("app build outputs must be distinct".into()));
         }
-        recipes.push((name, canister.role.as_deref(), recipe, manifest, output));
+        recipes.push((name, canister, recipe, manifest, output));
     }
     // Check the complete app, including recipes not selected for this build.
     // Missing lockfiles are inputs too: Cargo may create them below.
@@ -102,10 +109,11 @@ pub fn build_app(
         ));
     }
     let mut built = Vec::new();
-    for (name, role, recipe, manifest, output) in recipes {
+    for (name, definition, recipe, manifest, output) in recipes {
         if canister.is_some_and(|selected| selected != name) {
             continue;
         }
+        let started = Instant::now();
         let workspace = manifest
             .parent()
             .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?;
@@ -125,12 +133,16 @@ pub fn build_app(
             )
             .map_err(crate::artifact::cargo_failure)?;
         }
-        let crate::artifact::BuildReport { wasm, artifact } = crate::artifact::build_for_role(
+        let crate::artifact::BuildReport {
+            wasm,
+            artifact,
+            modules,
+        } = crate::artifact::build_for_role(
             &manifest,
             &recipe.package,
             &recipe.features,
             Some(&output),
-            role,
+            definition.role.as_deref(),
         )?;
         let client = recipe
             .client
@@ -146,6 +158,9 @@ pub fn build_app(
             .transpose()?;
         built.push(BuiltCanister {
             canister: name.clone(),
+            parent: definition.parent.clone(),
+            modules,
+            build_ms: started.elapsed().as_millis(),
             artifact,
             wasm,
             client,

@@ -9,7 +9,9 @@ fn refuses_ambiguous_contracts_and_session_signatures() {
         }
     );
     for (options, message) in [
-        (quote!(contract = Read, method = 42), "contract supplies"),
+        (quote!(method = 42), "unknown"),
+        (quote!(contract = Read, method = 42), "unknown"),
+        (quote!(contract = Read, limits = SMALL), "contract supplies"),
         (quote!(limits = SMALL, limits = LARGE), "repeated"),
         (quote!(scope = "read"), "verified session first"),
     ] {

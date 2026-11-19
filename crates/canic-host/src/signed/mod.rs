@@ -269,6 +269,22 @@ fn metadata_call(plan: &Plan, store: Option<Principal>, deadline: u64) -> Result
     }
 }
 
+// A retry must use the deadline recorded before the original submission.
+fn retained_deadline(path: &Path) -> Result<u64> {
+    let directory = crate::output_publication::prepare(path, 0o700)?;
+    let authority = path.join("authority.json");
+    if authority.try_exists().map_err(supplier)? {
+        return store::json(&authority);
+    }
+    let deadline = now()? + 600_000_000_000;
+    store::put_json_in(
+        &directory,
+        std::ffi::OsStr::new("authority.json"),
+        &deadline,
+    )?;
+    Ok(deadline)
+}
+
 async fn observe_metadata(
     path: &Path,
     plan: &Plan,
@@ -277,19 +293,7 @@ async fn observe_metadata(
     icp: &Path,
     client: &ReadClient,
 ) -> Result<Vec<u8>> {
-    let directory = crate::output_publication::prepare(path, 0o700)?;
-    let authority = path.join("authority.json");
-    let expires_at_ns = if authority.try_exists().map_err(supplier)? {
-        store::json::<u64>(&authority)?
-    } else {
-        let deadline = now()? + 600_000_000_000;
-        store::put_json_in(
-            &directory,
-            std::ffi::OsStr::new("authority.json"),
-            &deadline,
-        )?;
-        deadline
-    };
+    let expires_at_ns = retained_deadline(path)?;
     let dispatch_deadline = expires_at_ns
         .checked_sub(300_000_000_000)
         .ok_or_else(|| Error::Invalid("invalid metadata observation authority".into()))?;
@@ -410,19 +414,7 @@ pub(crate) async fn reconcile(
     } else {
         crate::managed::recovery::call(plan)?
     };
-    let directory = crate::output_publication::prepare(path, 0o700)?;
-    let authority = path.join("authority.json");
-    let expires_at_ns = if authority.try_exists().map_err(supplier)? {
-        store::json::<u64>(&authority)?
-    } else {
-        let deadline = now()? + 600_000_000_000;
-        store::put_json_in(
-            &directory,
-            std::ffi::OsStr::new("authority.json"),
-            &deadline,
-        )?;
-        deadline
-    };
+    let expires_at_ns = retained_deadline(path)?;
     execute_with(
         path,
         &Authority {

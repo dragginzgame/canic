@@ -14,6 +14,23 @@ refused and checks the original generation against the argument-bound Store pin.
 
 The witness checks same-key concurrent signup, lost replies, separate shard
 principals and generations, pool exhaustion and replay after hub and Root upgrades.
+An independently installed copy of the hub calls the same Root for the same user.
+Root refuses both lookup and assignment, preserves its retained bytes, and
+continues returning the original assignment to the approved hub.
+To exercise an upgrade from a released sharding Root, set
+`CANIC_PREDECESSOR_SHARD_ROOT_WASM` to its built Wasm. The test installs it,
+fills both slots and upgrades to the candidate before checking replay and exhaustion.
+The fixture adds a project hub and an `instance_pool` to the same fleet, reruns
+`canic fleet plan`, and checks that the original shard request is byte-identical.
+The controller submits the CLI-generated project request to `configure_instances`.
+The fixture checks the topology frame, conflicting grants, unauthorized calls,
+upgrade with both grants and refusal to downgrade to the selected predecessor.
+With both user slots full, one user submits two project keys through the project
+hub. The fixture discards the first reply, retries the key, and verifies two distinct
+ready children with the approved project hub as their database owner. The third
+key is refused. Reopening Root preserves both projects and the user's shard.
+Cross-hub placement requests are refused in both directions. A separate case
+approves the project hub first and proves a zero creation budget leaves no claim.
 Set `TOKO_USER_SHARD_WASM` to a built Toko user shard to repeat the same installed
 CLI journey with its actual Wasm and 16-byte installation nonce. The fixture
 hub requests placements and the Toko shard must report readiness and refuse
@@ -39,6 +56,10 @@ The [hub](../apps/examples/user-directory/hub/src/lib.rs) and
 implementation. Run `bash scripts/dev/test-store.sh user-directory` with the
 prepared simulator. For Toko's existing payload, storage layout, exact migration
 and test commands, see the [provisioning migration](../docs/demos/provisioning.md).
+
+The test also upgrades a populated volatile shard under its actual Root controller.
+The database bytes and hub route survive. The shard refuses the previous session,
+a freshly signed admission and a controller-triggered enrollment refresh.
 
 The independent role-name fixture still supplies [hub metadata](fixtures/provisioning-roles/hub.rs),
 [shard metadata](fixtures/provisioning-roles/shard.rs), a [config](fixtures/provisioning-roles/canic.toml)

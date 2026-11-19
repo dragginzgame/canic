@@ -14,20 +14,27 @@ use std::{borrow::Cow, collections::BTreeMap};
 
 // Persist identities explicitly. The protocol remains the admission ceiling;
 // accepting a new record shape never creates capacity or drops unknown entries.
-type Records<T> = List<(u8, T), { ChildId::ALL.len() }>;
+type Records<T> = List<(u8, T), { ChildId::ALL.len() + ChildId::PROJECT.len() }>;
 
-fn identified<T>(entries: Records<T>) -> Result<BTreeMap<ChildId, T>, &'static str> {
+fn identified<T>(
+    entries: Records<T>,
+    projects: bool,
+) -> Result<BTreeMap<ChildId, T>, &'static str> {
     let entries = entries.into_vec();
-    if entries.len() != ChildId::ALL.len() {
+    let project_slots: &[ChildId] = if projects { &ChildId::PROJECT } else { &[] };
+    let slots = ChildId::ALL
+        .into_iter()
+        .chain(project_slots.iter().copied());
+    if entries.len() != slots.clone().count() {
         return Err("child identities");
     }
     entries
         .into_iter()
-        .enumerate()
-        .map(|(index, (id, value))| {
-            let slot = ChildId::new(usize::from(id))
-                .filter(|slot| slot.index() == index)
-                .ok_or("child identity order")?;
+        .zip(slots)
+        .map(|((id, value), slot)| {
+            if usize::from(id) != slot.index() {
+                return Err("child identity order");
+            }
             Ok((slot, value))
         })
         .collect()
@@ -35,6 +42,10 @@ fn identified<T>(entries: Records<T>) -> Result<BTreeMap<ChildId, T>, &'static s
 
 fn complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
     entries.keys().copied().eq(ChildId::ALL)
+        || entries
+            .keys()
+            .copied()
+            .eq(ChildId::ALL.into_iter().chain(ChildId::PROJECT))
 }
 
 const JOURNAL_TAG: &[u8] = b"CUJ3";
@@ -266,20 +277,25 @@ impl Journals {
             JOURNAL_LIMITS,
         )
         .map_err(|_| "child journals")?;
-        let mut bytes = b"CUJ9".to_vec();
+        let mut bytes = if self.0.len() > 2 { b"CUJA" } else { b"CUJ9" }.to_vec();
         bytes.extend_from_slice(&payload);
         Ok(Cow::Owned(bytes))
     }
 
     pub(super) fn from_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
         let value = if let Some(payload) = bytes
-            .strip_prefix(b"CUJ9")
+            .strip_prefix(b"CUJA")
+            .or_else(|| bytes.strip_prefix(b"CUJ9"))
             .or_else(|| bytes.strip_prefix(b"CUJ8"))
         {
             let (entries, maintenance, history): (Records<Journal>, _, _) =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
                     .map_err(|_| "identified child journals")?;
-            Ok::<_, &'static str>(Self(identified(entries)?, maintenance, history))
+            Ok::<_, &'static str>(Self(
+                identified(entries, bytes.starts_with(b"CUJA"))?,
+                maintenance,
+                history,
+            ))
         } else if let Some(payload) = bytes.strip_prefix(b"CUJ7") {
             let (journals, maintenance, history) =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
@@ -328,7 +344,8 @@ impl Journals {
                 vec![],
             ))
         }?;
-        if !bytes.starts_with(b"CUJ9")
+        if !bytes.starts_with(b"CUJA")
+            && !bytes.starts_with(b"CUJ9")
             && value.1.iter().chain(value.2.iter()).any(|record| {
                 matches!(record.preservation, store_maintenance::Scan::Entries(_))
                     || record.installation.as_ref().is_some_and(|installation| {
@@ -400,7 +417,9 @@ impl Artifacts {
 }
 impl Artifacts {
     pub(super) fn to_bytes(&self) -> Result<Cow<'_, [u8]>, &'static str> {
-        let mut bytes = if self
+        let mut bytes = if self.0.len() > 2 {
+            b"CUA6"
+        } else if self
             .0
             .values()
             .any(|a| matches!(a, Artifact::Application(..)))
@@ -424,13 +443,14 @@ impl Artifacts {
     pub(super) fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, &'static str> {
         let historical = bytes.starts_with(b"CUA4");
         let value = if let Some(payload) = bytes
-            .strip_prefix(b"CUA5")
+            .strip_prefix(b"CUA6")
+            .or_else(|| bytes.strip_prefix(b"CUA5"))
             .or_else(|| bytes.strip_prefix(b"CUA4"))
         {
             let entries: Records<Artifact> =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, ARTIFACT_LIMITS)
                     .map_err(|_| "identified child artifacts")?;
-            Ok::<_, &'static str>(Self(identified(entries)?))
+            Ok::<_, &'static str>(Self(identified(entries, bytes.starts_with(b"CUA6"))?))
         } else if let Some(payload) = bytes.strip_prefix(b"CUA3") {
             let length: [u8; 4] = payload
                 .get(..4)

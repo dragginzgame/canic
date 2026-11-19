@@ -174,6 +174,8 @@ pub enum Refusal {
 macro_rules! mount_auth_issuer_endpoints {
     (issue = $issue:path, renew = $renew:path, reconcile = $reconcile:path,
      logout = $logout:path $(,)?) => {
+        $crate::__canic_report_mount!("canic:module:auth");
+
         mod issue_portable_credential {
             use endpoint::{api, runtime};
             use $crate::auth::{

@@ -46,3 +46,18 @@ pub mod topology;
 
 #[cfg(feature = "method")]
 pub use canic_macros::{query, update};
+
+/// Emit a local build-report marker without adding an IC export.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_report_mount {
+    ($section:literal) => {
+        #[cfg(target_arch = "wasm32")]
+        const _: () = {
+            #[used]
+            #[allow(unsafe_code, reason = "Wasm custom section for local build reporting")]
+            #[unsafe(link_section = $section)]
+            static MODULE: u8 = 1;
+        };
+    };
+}

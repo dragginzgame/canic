@@ -603,6 +603,12 @@ deployment; a selector may be omitted only when its choice is unique. See the
 | Observe | `canic fleet show`, `canic fleet show --watch`, `canic fleet view REPORT` |
 | Call the application or inspect the wallet | `canic fleet call --canister SLOT --identity USER COMMAND`, `canic wallet PRINCIPAL` |
 
+App build reports combine declared parent slots with the completed recipe's
+elapsed time and the exact built Wasm. Canic's DB and Auth macros emit named
+custom sections for mount discovery. Build reads those markers from the bytes
+it hashes and publishes. Missing markers leave the module list unreported.
+Markers describe build composition without establishing readiness or authority.
+
 Only structured output (`--json`) is global. App/fleet selection and journal
 arguments belong to deployment actions, not artifact inspection, saved-report
 viewing or wallet queries. Without a canister, Wasm override or target,
@@ -1359,6 +1365,84 @@ Previously approved and unselected pools retain their original argument bytes.
 This preserves the immediate-parent check from the frozen legacy user hub/shard
 journey at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` without its role catalogue.
 
+### Legacy placement and peer authority for Toko (#52 and #53)
+
+The predecessor fixture already declares both kinds of placement needed by
+Toko. Its user hub shares shards by capacity. Its index hub resolves a named
+key to a dedicated instance. Both declare child roles and separate per-parent
+spawn grants. Use the sharding behavior for accounts and the index behavior
+for project creation requests. A project key identifies one child for its
+lifetime. A shard capacity setting describes how many keys may share a child.
+[Legacy fleet fixture, pinned revision](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/qualification/apps/test/test-configs/managed-component-group.toml)
+
+For #52, carry over exact pending-claim replay, binding only a matching direct
+child of the approved role, and refusing late completion for a recycled
+principal. Keep the rewrite's existing HRW selection for shared shards and
+Root's retained creation evidence for both flows. Elapsed time alone cannot
+release an uncertain creation budget. The predecessor tests exercise both
+placement families; the installed two-hub witness exercises the transition from a full
+two-slot Root to concurrent shared and dedicated placement.
+[Index regressions and history](https://github.com/dragginzgame/canic-legacy/blame/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/placement/index/tests.rs)
+and [sharding regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/placement/sharding/tests.rs).
+
+Existing shared-shard approvals address permanent Root slots 0 and 1, in that
+order. Host and Root use this list when validating a grant. Extending Root's
+child identity space must preserve the existing pool limit, HRW inputs, and
+retained claim bytes. A readiness result belongs to a shard claim only when
+the slot and retained creation generation match. Dedicated project slots need
+their own approval and a custody format that accounts for every issued child.
+
+The Root controller can retain an `InstancePool` grant alongside the shared
+pool. Each approval binds its hub, child component, Store release, creation
+budget and deadline. For projects, Root verifies that the exact installation
+frame names itself as installer and the approved project hub as parent.
+The first project approval changes the placement record format in the existing
+lease. Shared-only fleets retain the predecessor encoding. An exact approval
+retry acknowledges the original terms, including the original deadline.
+The project hub calls `canic::sharding::assign_instance(root, key)` with a stable
+application request key. `lookup_instance(root, key)` observes the same claim
+after a lost reply. First admission retains the key and Store-backed creation
+together. Two dedicated child identities (2 and 3) share the engine's existing
+storage leases and timers. The first accepted creation writes the extended
+journal, artifact and placement formats. Ordinary two-slot request decoding
+continues to reject these identities. The installed witness recovers both
+projects and the full shared pool after a Root upgrade.
+
+Declare the project component and its parent in the app. The fleet can then
+select the dedicated pool alone or alongside its existing shard pool. Both pools
+use the same Root and Store with independent hubs and creation budgets.
+
+```toml
+[apps.toko.fleets.local.instance_pool]
+component = "project"
+root = "root"
+store = "store"
+release = { name = "project", version = "v1" }
+max_instances = 2
+creation_budget = 2000000000000
+# Set expires_at_ns to the agreed future Unix deadline in nanoseconds before planning.
+# Set install_args to a config-relative file if the project requires application bytes.
+```
+
+For a bound fleet with built artifacts, `canic --json fleet plan` with
+`--controller PRINCIPAL` returns each decoded approval and Wire request.
+The `placement_pools` result carries `instances.request` for
+`configure_instances` and, when configured, `shards.request` for
+`configure_shards`. Planning is local. Root checks the submitting controller.
+
+For #53, start with the predecessor's named, directional permissions. The
+receiver admits the actual IC caller locally. Outbound selection checks the
+permitted target. A handler revalidates its ticket after an await before a new
+protected effect. Reuse the regression where denial reaches the receiver while
+an effect is suspended and the original ticket stays fenced across Root
+restart. Toko still checks the account and its administrator rights. Its two
+independently declared hubs need an explicit fleet binding across components;
+the legacy fixture's same-component permission alone cannot authorize them.
+The delivery and acknowledgement boundary for replacing a peer remains to be
+qualified in Canic.
+[Legacy admission API](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/access/caller_authority/mod.rs)
+and [installed denial regression](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/qualification/canic-tests/src/pic/fleet_registry/baseline/tests/caller_authority/mod.rs).
+
 ### Stateful hub and shard setup
 
 A stateful role may select the Auth-enrolled hub or child layout in one setup
@@ -1388,11 +1472,20 @@ types. Both declarations use the same Canic codec and Platform entrypoint.
 The attributes support synchronous queries and synchronous or asynchronous updates. The Rust function supplies its export name and request/reply types. New methods
 default to the Wire hash of that name, a unit request for an empty argument list,
 and a 512-byte frame budget in each direction. An existing protocol supplies
-its original method ID and any different limits. The default permits ingress;
+its fixed method ID once through `Contract::ID` and can specify different limits. The default permits ingress;
 a selected application guard runs before argument copy. The handler owns
 checks on decoded data and must recheck affected authority or state after a
 suspension. A synchronous reply-encoding trap rolls back that message;
 an async callback cannot undo work committed before its await.
+
+For #51, reuse the predecessor's native schema producer pattern. The host
+executable links the actual actor, obtains typed endpoint declarations and
+checks their identities against the finalized Wasm. Supplier-owned raw methods
+can contribute their payload schemas. The legacy typed path requires Wire
+schema support on both roots. Toko also has Serde-only and recursive roots;
+their schema coverage needs its own qualification.
+[Legacy schema producer](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic/src/endpoint/schema/producer/mod.rs)
+and [typed declaration regression](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic/tests/wire_schema/mod.rs).
 
 For a direct call the application protocol can implement `canic::method::Contract`.
 It supplies the export, Wire ID, both shapes and both budgets. The receiving

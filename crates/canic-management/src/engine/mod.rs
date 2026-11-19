@@ -108,7 +108,7 @@ pub(crate) struct State {
     #[cfg(feature = "sharding")]
     pool: StableCell<Vec<u8>>,
     #[cfg(feature = "sharding")]
-    ledger: Option<sharding::Ledger>,
+    pools: sharding::Pools,
     readiness: Readiness,
     timer_window: (u64, u64),
     #[cfg(feature = "backup")]
@@ -185,7 +185,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
         &runtime,
         crate::storage::SHARDS_KEY,
         sharding::BYTES,
-        fresh.then(|| sharding::encode(&None)),
+        fresh.then(|| sharding::Pools::default().encode()),
     );
     let mut state = State {
         journal: Journals::from_bytes(journal_cell.get()).expect("journal custody"),
@@ -193,7 +193,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
             .expect("artifact custody"),
         journal_cell,
         #[cfg(feature = "sharding")]
-        ledger: sharding::open(pool.get()),
+        pools: sharding::open(pool.get()),
         #[cfg(feature = "sharding")]
         pool,
         artifact_cell,
@@ -204,7 +204,20 @@ pub fn open(fresh: bool, readiness: Readiness) {
         readiness,
         timer_window: (api::canister_version(), api::time()),
     };
-    for slot in ChildId::ALL {
+    assert!(
+        state.journal.0.keys().eq(state.artifact.0.keys()),
+        "matching child custody"
+    );
+    let slots: Vec<_> = state.journal.0.keys().copied().collect();
+    #[cfg(feature = "sharding")]
+    sharding::validate_claims(&state);
+    #[cfg(not(feature = "sharding"))]
+    assert_eq!(
+        slots.len(),
+        ChildId::ALL.len(),
+        "project placement required"
+    );
+    for &slot in &slots {
         validate(&state, slot);
         upgrade::validate(&state, slot);
         delivery::validate(&state, slot);
@@ -221,7 +234,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
     state.set_artifact(state.artifact.clone());
     STATE.with_borrow_mut(|slot| *slot = Some(state));
     ic_timers::initialize().expect("one timer runtime");
-    for slot in ChildId::ALL {
+    for slot in slots {
         schedule(slot);
     }
 }
@@ -332,6 +345,8 @@ fn schedule(slot: ChildId) {
                     match slot {
                         ChildId::FIRST => "one-worker",
                         ChildId::SECOND => "second-worker",
+                        s if s == ChildId::PROJECT[0] => "first-project",
+                        s if s == ChildId::PROJECT[1] => "second-project",
                         _ => unreachable!("unsupported child timer identity"),
                     },
                 ],
@@ -431,11 +446,27 @@ fn admit(slot: ChildId, approval: Approval, artifact: Artifact) -> Result<Status
     }
     let mut artifacts =
         STATE.with_borrow(|state| state.as_ref().expect("open engine").artifact.clone());
+    // Grow the two existing leases only when the first project creation is admitted.
+    let first_project = slot == ChildId::PROJECT[0] && !artifacts.0.contains_key(&slot);
+    if first_project {
+        artifacts
+            .0
+            .extend(ChildId::PROJECT.map(|id| (id, Artifact::default())));
+    }
     *artifacts.0.get_mut(&slot).expect("known child") = artifact;
     if !artifacts.fits() {
         return Err(Refusal::Artifact);
     }
-    STATE.with_borrow_mut(|state| state.as_mut().expect("open engine").set_artifact(artifacts));
+    STATE.with_borrow_mut(|state| {
+        let state = state.as_mut().expect("open engine");
+        if first_project {
+            state
+                .journal
+                .0
+                .extend(ChildId::PROJECT.map(|id| (id, Default::default())));
+        }
+        state.set_artifact(artifacts);
+    });
     mutate(slot, |s| {
         s.approval = Some(approval);
         s.phase = Phase::Scheduled;

@@ -47,6 +47,8 @@ pub use ic_auth_wire as protocol;
 #[macro_export]
 macro_rules! mount_auth_endpoints {
     (admit = $admit:path, read = $read:path, logout = $logout:path $(,)?) => {
+        $crate::__canic_report_mount!("canic:module:auth");
+
         mod establish_portable_session {
             use endpoint::{api, runtime};
             use $crate::auth::{

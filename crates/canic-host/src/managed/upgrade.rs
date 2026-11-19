@@ -267,17 +267,7 @@ pub(super) async fn apply(
             &signed::execute(&stage, plan, &call, identity, icp, client).await?,
         )?
     } else {
-        let mut path = None;
-        for index in 0..OBSERVATIONS {
-            let candidate = dir.join(format!("observe/{index}"));
-            if !candidate.join("reply.bin").try_exists().map_err(supplier)? {
-                path = Some(candidate);
-                break;
-            }
-        }
-        let path = path.ok_or_else(|| {
-            Error::Blocked("32 upgrade observations exhausted; preserve journal".into())
-        })?;
+        let path = super::recovery::next_observation(dir)?;
         let read = super::observation(plan)?;
         super::recovery::require_settled(&path)?;
         let bytes = signed::observe(&path, plan, &read, identity, icp, client).await?;

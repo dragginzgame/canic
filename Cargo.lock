@@ -272,7 +272,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -292,7 +292,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic-host",
  "canic-management-protocol",
@@ -310,7 +310,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "base64",
  "canic",
@@ -339,11 +339,12 @@ dependencies = [
  "toml",
  "toml_edit",
  "url",
+ "wasmparser",
 ]
 
 [[package]]
 name = "canic-macros"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -353,7 +354,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -371,7 +372,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -385,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -840,7 +841,7 @@ dependencies = [
 
 [[package]]
 name = "ex-counter"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic",
  "clap",
@@ -855,7 +856,7 @@ dependencies = [
 
 [[package]]
 name = "ex-notebook"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -868,7 +869,7 @@ dependencies = [
 
 [[package]]
 name = "ex-template"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic",
  "serde",
@@ -877,7 +878,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-hub"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -887,7 +888,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-schema"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -897,7 +898,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-shard"
-version = "0.238.0"
+version = "0.239.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1205,9 +1206,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth"
-version = "0.48.6"
+version = "0.48.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e86403a82de7b73875bc0d5b303b6bd0341c681cd947809f1a4636ad4cf77ca1"
+checksum = "6873799df550bb3f6f1827a34528038fed8af5405ed06196a04019d91d1018de"
 dependencies = [
  "ic-auth-protocol-types",
  "ic-platform",
@@ -1285,9 +1286,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.23.20"
+version = "0.23.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "beace62a4a03f278990286dadba62c32863b5bc415c7a164b169b58fb907e10e"
+checksum = "28a7523b42b3a2d708e29abe2b0d4706f31b027ba9a2789221a3c45200965bc2"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1304,9 +1305,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.23.20"
+version = "0.23.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34c22be06089345f2fe09209cf1f816d2174fd5c932111f050708a911677ee7c"
+checksum = "a66390bd0ccf915370cb57c7965f3af776c373a646758ab0f8ea317708dc0df7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2886,9 +2887,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.45.21"
+version = "0.45.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "af1ba8e16aaf1dae0951f08a228a4f00b928d09ff68997bd94ccc397ace5e4be"
+checksum = "4c4177a70760ea774fc0e14938593658b7b87facb3ee3f8848f65a402f778c7b"
 
 [[package]]
 name = "toml"
@@ -3168,6 +3169,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3b1f9c3798725016c6ee5f2f57869ec0831e8bbc0ab0310a86e787e97f41389e"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.263.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f5fa0a054ae153606df820eb0a84213e28cda41bbe04ba2628e71b6ba100fcb"
+dependencies = [
+ "bitflags",
+ "indexmap",
 ]
 
 [[package]]

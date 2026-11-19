@@ -133,6 +133,37 @@ pub struct ShardPool {
 /// Controller approval frame for a fresh shard pool.
 pub const CONFIGURE_SHARDS: u64 = 90;
 
+/// Controller approval for dedicated instances owned by one project hub.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InstancePool {
+    /// Installing Root and effect owner.
+    pub root: String,
+    /// Only this parent may claim a child for a retained key.
+    pub hub: String,
+    /// Declared child component.
+    pub component: String,
+    /// Approved release and supplier.
+    pub reference: Reference,
+    /// Exact installation frame containing the approved Root, parent and application arguments.
+    pub arguments: crate::application::Arguments,
+    /// Maximum distinct dedicated children.
+    pub max_instances: u8,
+    /// Lifetime ceiling for creation attachments.
+    pub creation_budget: u64,
+    /// Deadline for issuing new work.
+    pub expires_at_ns: u64,
+}
+
+/// Approve a dedicated instance pool independently of the shared shard grant.
+pub const CONFIGURE_INSTANCES: u64 = 93;
+/// Dedicated instance capacity selected for the two-project witness.
+pub const MAX_INSTANCES: u8 = 2;
+
+/// Permanent Root slots eligible for the existing shared-shard approval. Their order
+/// is part of HRW placement and their indices address the retained shard ledger.
+pub const SHARD_SLOTS: [children::ChildId; 2] =
+    [children::ChildId::FIRST, children::ChildId::SECOND];
+
 /// Maximum retained account keys per shard in the initial bounded Root layout.
 pub const MAX_KEYS_PER_SHARD: u16 = 64;
 

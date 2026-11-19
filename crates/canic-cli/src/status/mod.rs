@@ -49,6 +49,22 @@ pub(crate) fn pool_preview(
     ))
 }
 
+pub(crate) fn pool_release(
+    text: &mut String,
+    reference: &canic_management_protocol::stored::Reference,
+    budget: u64,
+    deadline: u64,
+) {
+    use std::fmt::Write as _;
+    let m = &reference.manifest;
+    let hash = m
+        .hash
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect::<String>();
+    writeln!(text, "Release: {} @ {}\nWasm SHA-256: {hash}\nCreation budget: {budget} cycles\nGrowth deadline: {deadline} Unix ns", escape(&m.release.name), escape(&m.release.version)).expect("write to String");
+}
+
 pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> {
     let state = match state {
         OperationStatus::Fleet(state) => return render_fleet(state, journal),

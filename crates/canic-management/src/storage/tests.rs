@@ -313,3 +313,40 @@ fn scan_contract_requires_its_journal_version_and_survives_reopen() {
     assert_eq!(loaded.1, journals.1);
     assert!(loaded.to_bytes().unwrap().starts_with(b"CUJ9"));
 }
+
+#[test]
+fn project_custody_requires_four_ordered_records_and_its_own_format() {
+    let mut journals = Journals::default();
+    let mut artifacts = Artifacts::default();
+    for slot in ChildId::PROJECT {
+        journals.0.insert(slot, journal("project"));
+        artifacts.0.insert(slot, Artifact::default());
+    }
+    let mut bytes = journals.to_bytes().unwrap().into_owned();
+    assert!(bytes.starts_with(b"CUJA"));
+    assert_eq!(Journals::from_bytes(&bytes).unwrap().0.len(), 4);
+    bytes[..4].copy_from_slice(b"CUJ9");
+    assert!(Journals::from_bytes(&bytes).is_err());
+
+    let mut bytes = artifacts.to_bytes().unwrap().into_owned();
+    assert!(bytes.starts_with(b"CUA6"));
+    assert_eq!(
+        Artifacts::from_bytes(bytes.as_slice().into())
+            .unwrap()
+            .0
+            .len(),
+        4
+    );
+    bytes[..4].copy_from_slice(b"CUA5");
+    assert!(Artifacts::from_bytes(bytes.into()).is_err());
+
+    for ids in [[0_u8, 1, 3, 2], [0, 1, 2, 2], [0, 1, 2, 4]] {
+        let entries = ids.map(|id| (id, Artifact::default())).to_vec();
+        let bytes = encoded(b"CUA6", &entries, ARTIFACT_LIMITS);
+        assert!(Artifacts::from_bytes(bytes.into()).is_err());
+    }
+    journals.0.remove(&ChildId::PROJECT[0]);
+    artifacts.0.remove(&ChildId::PROJECT[1]);
+    assert!(journals.to_bytes().is_err());
+    assert!(artifacts.to_bytes().is_err());
+}

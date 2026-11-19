@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 /// Stable numeric identity scoped to one management owner, never a canister principal.
 /// Admission order and configuration sorting cannot change it. The current protocol
-/// admits only identities 0 and 1; larger capacity requires a qualified transition.
+/// uses identities 0 and 1 for ordinary requests and separate identities for project grants.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ChildId(u8);
 
@@ -20,7 +20,10 @@ impl ChildId {
     /// This is the current protocol bound, not an operator capacity setting.
     pub const ALL: [Self; 2] = [Self::FIRST, Self::SECOND];
 
-    /// Construct a currently admitted numeric identity; unsupported values refuse.
+    /// Dedicated child identities reserved for controller-approved project pools.
+    pub const PROJECT: [Self; 2] = [Self(2), Self(3)];
+
+    /// Construct an ordinary management request identity; unsupported values refuse.
     #[must_use]
     pub const fn new(value: usize) -> Option<Self> {
         if value < Self::ALL.len() {
@@ -43,6 +46,8 @@ impl ChildId {
 enum RecordId {
     First,
     Second,
+    FirstProject,
+    SecondProject,
 }
 
 impl Serialize for ChildId {
@@ -50,6 +55,8 @@ impl Serialize for ChildId {
         let record = match self.0 {
             0 => RecordId::First,
             1 => RecordId::Second,
+            2 => RecordId::FirstProject,
+            3 => RecordId::SecondProject,
             _ => return Err(serde::ser::Error::custom("unsupported child identity")),
         };
         record.serialize(serializer)
@@ -61,6 +68,8 @@ impl<'de> Deserialize<'de> for ChildId {
         Ok(match RecordId::deserialize(deserializer)? {
             RecordId::First => Self::FIRST,
             RecordId::Second => Self::SECOND,
+            RecordId::FirstProject => Self::PROJECT[0],
+            RecordId::SecondProject => Self::PROJECT[1],
         })
     }
 }
@@ -69,9 +78,15 @@ impl<'de> Deserialize<'de> for ChildId {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Request<T> {
     /// Stable target slot.
+    #[serde(deserialize_with = "ordinary_child")]
     pub slot: ChildId,
     /// Existing creation or upgrade contract.
     pub value: T,
+}
+
+fn ordinary_child<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<ChildId, D::Error> {
+    let slot = ChildId::deserialize(deserializer)?;
+    ChildId::new(slot.index()).ok_or_else(|| serde::de::Error::custom("ordinary child required"))
 }
 
 /// Admit creation in the selected slot.

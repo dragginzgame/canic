@@ -13,7 +13,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 backup = ["canic-management/backup", "dep:serde"]
-sharding = ["canic?/sharding", "canic-management/sharding"]
+sharding = ["canic?/sharding", "canic-management/sharding", "dep:serde"]
 blob = ["canic-management/blob"]
 auth = ["canic/auth-enrollment", "dep:ic-platform-runtime"]
 fault-injection = ["canic-management/fault-injection"]

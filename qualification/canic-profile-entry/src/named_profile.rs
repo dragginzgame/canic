@@ -3,11 +3,11 @@ use canic_profile_protocol::{LIMITS, Profile};
 use ic_platform_runtime::system;
 use std::cell::RefCell;
 
-const REQUEST: ic_wire::Limits = ic_wire::Limits {
+const WRITE_REQUEST: ic_wire::Limits = ic_wire::Limits {
     bytes: 128,
     ..LIMITS
 };
-const REPLY: ic_wire::Limits = ic_wire::Limits {
+const WRITE_REPLY: ic_wire::Limits = ic_wire::Limits {
     bytes: 72,
     ..LIMITS
 };
@@ -44,7 +44,7 @@ mod ops {
 
 /// Return the admitted member's profile if present.
 #[canic::query(
-    method = 20,
+    contract = GetMe,
     guard = member,
 )]
 fn get_me() -> Option<Profile> {
@@ -53,9 +53,7 @@ fn get_me() -> Option<Profile> {
 
 /// Store the admitted member's display name and return the resulting profile.
 #[canic::update(
-    method = 21,
-    limits = REQUEST,
-    reply_limits = REPLY,
+    contract = SetDisplayName,
     guard = member,
 )]
 fn set_display_name(name: String) -> Profile {
@@ -66,4 +64,24 @@ fn set_display_name(name: String) -> Profile {
 #[canic::query]
 fn protocol_version() -> u8 {
     1
+}
+
+/// Wire contract for the `get_me` endpoint.
+struct GetMe;
+impl canic::method::Contract for GetMe {
+    const NAME: &'static str = "get_me";
+    const ID: u64 = 20;
+    type Input = ();
+    type Output = Option<Profile>;
+}
+
+/// Wire contract for the `set_display_name` endpoint.
+struct SetDisplayName;
+impl canic::method::Contract for SetDisplayName {
+    const NAME: &'static str = "set_display_name";
+    const ID: u64 = 21;
+    const REQUEST: canic::method::wire::Limits = WRITE_REQUEST;
+    const REPLY: canic::method::wire::Limits = WRITE_REPLY;
+    type Input = String;
+    type Output = Profile;
 }

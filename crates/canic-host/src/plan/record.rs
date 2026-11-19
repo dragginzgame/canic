@@ -80,54 +80,28 @@ impl TryFrom<PlanRecord> for Plan {
         if maintenance_store.is_some() && maintenance.is_none() {
             return Err(invalid());
         }
+        let has_deployment_fields = creation_cycles != 0
+            || target.is_some()
+            || previous_module.is_some()
+            || management.is_some()
+            || maintenance.is_some()
+            || maintenance_sibling.is_some()
+            || publication.is_some()
+            || store_root.is_some()
+            || maintenance_store.is_some()
+            || store_upgrade_root.is_some();
         let action = if let Some(value) = call {
-            if version != 7
-                || creation_cycles != 0
-                || target.is_some()
-                || previous_module.is_some()
-                || management.is_some()
-                || maintenance.is_some()
-                || maintenance_sibling.is_some()
-                || publication.is_some()
-                || store_root.is_some()
-                || maintenance_store.is_some()
-                || store_upgrade_root.is_some()
-                || removal.is_some()
-                || auth.is_some()
-            {
+            if version != 7 || has_deployment_fields || removal.is_some() || auth.is_some() {
                 return Err(invalid());
             }
             PlanAction::Call(value)
         } else if let Some(value) = auth {
-            if version != 5
-                || creation_cycles != 0
-                || target.is_some()
-                || previous_module.is_some()
-                || management.is_some()
-                || maintenance.is_some()
-                || maintenance_sibling.is_some()
-                || publication.is_some()
-                || store_root.is_some()
-                || maintenance_store.is_some()
-                || store_upgrade_root.is_some()
-                || removal.is_some()
-            {
+            if version != 5 || has_deployment_fields || removal.is_some() {
                 return Err(invalid());
             }
             PlanAction::Auth(value)
         } else if let Some(value) = removal {
-            if version != 4
-                || creation_cycles != 0
-                || target.is_some()
-                || previous_module.is_some()
-                || management.is_some()
-                || maintenance.is_some()
-                || maintenance_sibling.is_some()
-                || publication.is_some()
-                || store_root.is_some()
-                || maintenance_store.is_some()
-                || store_upgrade_root.is_some()
-            {
+            if version != 4 || has_deployment_fields {
                 return Err(invalid());
             }
             PlanAction::Remove(value)

@@ -136,3 +136,43 @@ impl canic::method::Contract for Probe {
     type Input = ();
     type Output = Info;
 }
+
+/// Wire contract for the `route` endpoint.
+pub struct ReadRoute;
+impl canic::method::Contract for ReadRoute {
+    const NAME: &'static str = "route";
+    const ID: u64 = ROUTE;
+    const REQUEST: canic::method::wire::Limits = LIMITS;
+    type Input = ();
+    type Output = RouteResult;
+}
+
+/// Wire contract for the `resolve` endpoint.
+pub struct Resolve;
+impl canic::method::Contract for Resolve {
+    const NAME: &'static str = "resolve";
+    const ID: u64 = ROUTE;
+    const REQUEST: canic::method::wire::Limits = LIMITS;
+    type Input = ();
+    type Output = RouteResult;
+}
+
+/// Wire contract for the `bind` endpoint.
+pub struct Bind;
+impl canic::method::Contract for Bind {
+    const NAME: &'static str = "bind";
+    const ID: u64 = BIND;
+    const REQUEST: canic::method::wire::Limits = LIMITS;
+    type Input = Route;
+    type Output = RouteResult;
+}
+
+/// Wire contract for the `check` endpoint.
+pub struct Check;
+impl canic::method::Contract for Check {
+    const NAME: &'static str = "check";
+    const ID: u64 = CHECK;
+    const REQUEST: canic::method::wire::Limits = LIMITS;
+    type Input = ();
+    type Output = CheckResult;
+}
