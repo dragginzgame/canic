@@ -20,6 +20,16 @@ pub use directory::{Data, HubRoute, Id, Record, ShardRecord, Ticket};
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
+/// Generate the 16-byte IC DB ULID used by conventional account routes.
+/// Pass this function to `provision` so retries can reuse an existing reservation.
+/// # Panics
+/// Propagates IC DB's refusal if its monotonic ULID stream is exhausted.
+#[cfg(feature = "provisioning")]
+#[must_use]
+pub fn new_ulid() -> [u8; 16] {
+    ic_db::Ulid::generate_prand().to_bytes()
+}
+
 /// Durable account selector derived from the authenticated issuer and subject.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 pub struct Account {

@@ -40,7 +40,7 @@ ex-greeting = { path = "../apps/examples/greeting" }
 ic-auth = { version = "0.48.0", features = ["receiver-memory", "ed25519-verification"] }
 ic-auth-protocol-types = "0.43.0"
 ic-backup = "0.105.5"
-ic-db = "0.23.15"
+ic-db = "0.23.17"
 ic-host-artifacts = { version = "0.80.3", default-features = false }
 ic-host-fs = { version = "0.80.3", default-features = false }
 ic-host-process = { version = "0.81.0", default-features = false }
@@ -52,14 +52,14 @@ ic-platform-types = { version = "0.21.2", default-features = false }
 ic-storage = "0.78.0"
 ic-testkit = { version = "0.110.0", default-features = false, features = ["managed-server"] }
 ic-timers = "0.46.3"
-ic-wasm-store-protocol = "0.4.0"
+ic-wasm-store-protocol = "0.5.0"
 ic-wire = { version = "0.26.0", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
-toko-tooling = "=0.45.18"
+toko-tooling = "=0.45.19"
 toml = "1.2.1"
 wasmparser = { version = "0.263.0", default-features = false, features = ["std", "validate", "features"] }
 

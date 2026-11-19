@@ -985,6 +985,26 @@ Store-bound approval; older custody endpoints refuse once pool work is admitted.
 Compatible Root upgrades reopen the pool lease. Existing Root images need a
 separately qualified migration before enabling this feature.
 
+For Toko signup, keep the authenticated `provision::<Hub>` operation. Toko’s
+`user_hub::register` already uses it. The existing and recommended call sites are:
+
+```rust
+// Existing Toko handler
+provision::<Hub>(&session, name, || Ulid::generate_prand().to_bytes()).await
+
+// With Canic’s standard IC DB generator
+provision::<Hub>(&session, name, new_ulid).await
+```
+
+The hub owns the ID and the pending/ready route. The shard owns the private
+record and accepts provisioning from its configured parent. Canic normalizes
+the input through the app’s policy, checks the session again after suspension
+before issuing new effects, and confirms the original allocation and receipt.
+A retry reuses the original ID and payload. Use the lower-level `assign` and
+`lookup` calls above for applications that need placement alone. Adding another
+placement name would leave the same reservation, retry and authorization work
+in a signup handler.
+
 ### Physical placement
 
 The eventual placement choices are same subnet as a named parent or dependency,
@@ -1863,7 +1883,14 @@ schema. Its install hook supplies the application incarnation and its upgrade
 hook strictly opens the original allocation. Both use the application's existing
 Storage bootstrap, authority, prefix and complete directory membership. An
 adjacent principal cell and all endpoint permissions remain application-owned.
-The adapter holds the open database for synchronous operations.
+The adapter holds the open database for synchronous operations. In an operations
+module import `canic::db` and the role’s `database` module. Each `db!()`
+returns an IC DB session for the same lease. Nested helpers can acquire sessions
+and return owned rows. Drop query guards before committing and reacquire a session
+after an await. Existing `database::store::with` callbacks take exclusive ownership
+for their duration. Drop all sessions before entering one. Session acquisition traps
+before attachment or inside a legacy callback. Lifecycle remains the sole owner
+of creation and strict reopening.
 
 Storage 0.77 restores named allocations over upstream stable collections and
 retires the retained-heap build path. The `Keep` and Wasm transformation proposal

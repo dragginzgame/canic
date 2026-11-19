@@ -8,7 +8,7 @@ use ic_storage::StableKey;
 use std::cell::RefCell;
 
 #[doc(hidden)]
-pub use ic_db::Database;
+pub use ic_db::{Database, DatabaseSession};
 #[doc(hidden)]
 pub use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
 
@@ -16,7 +16,13 @@ pub use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
 pub struct Store {
     key: &'static str,
     schema: fn() -> Schema,
-    database: RefCell<Option<Database>>,
+    database: RefCell<Option<Attachment>>,
+}
+
+// Both forms own the same lease. Keep legacy calls allocation-free until a session is requested.
+enum Attachment {
+    Exclusive(Database),
+    Shared(DatabaseSession),
 }
 
 impl Store {
@@ -41,23 +47,51 @@ impl Store {
         let key = StableKey::parse(self.key).expect("database allocation key");
         let memory = host.open_memory(&key).expect("database allocation");
         let schema = (self.schema)();
-        *slot = Some(match incarnation {
+        *slot = Some(Attachment::Exclusive(match incarnation {
             Some(id) => Database::create(memory, schema, id).expect("create declared database"),
             None => Database::open(memory, schema).expect("reopen declared database"),
-        });
+        }));
+    }
+
+    /// Obtain a handle without borrowing database contents.
+    /// # Panics
+    /// Traps before lifecycle attachment or during an exclusive store callback.
+    #[must_use]
+    pub fn session(&self) -> DatabaseSession {
+        let mut slot = self
+            .database
+            .try_borrow_mut()
+            .expect("database is in use by an exclusive store callback");
+        if let Some(Attachment::Shared(session)) = slot.as_ref() {
+            return session.clone();
+        }
+        let Some(Attachment::Exclusive(db)) = slot.take() else {
+            panic!("database lifecycle has not run: {}", self.key);
+        };
+        let session = DatabaseSession::new(db);
+        *slot = Some(Attachment::Shared(session.clone()));
+        session
     }
 
     /// Borrow the attached database for one synchronous application operation.
     ///
     /// # Panics
-    /// Traps before attachment or on a nested borrow of the same store.
+    /// Traps before attachment, during nested legacy access or while session handles are live.
     pub fn with<R>(&self, operation: impl FnOnce(&mut Database) -> R) -> R {
-        operation(
-            self.database
-                .borrow_mut()
-                .as_mut()
-                .expect("database lifecycle has not run"),
-        )
+        let mut slot = self.database.borrow_mut();
+        if let Some(Attachment::Shared(session)) =
+            slot.take_if(|attachment| matches!(attachment, Attachment::Shared(_)))
+        {
+            *slot = Some(match session.try_into_database() {
+                Ok(db) => Attachment::Exclusive(db),
+                Err(session) => Attachment::Shared(session),
+            });
+        }
+        match slot.as_mut() {
+            Some(Attachment::Exclusive(db)) => operation(db),
+            Some(Attachment::Shared(_)) => panic!("drop database sessions before legacy access"),
+            None => panic!("database lifecycle has not run"),
+        }
     }
 }
 
@@ -88,7 +122,7 @@ macro_rules! declare_db_store {
     };
     ($vis:vis mod $name:ident, key = $key:expr, schema = $schema:path $(,)?) => {
         $vis mod $name {
-            use $crate::db::store::{Database, DefaultMemoryImpl, MemoryRuntime, Store};
+            use $crate::db::store::{Database, DatabaseSession, DefaultMemoryImpl, MemoryRuntime, Store};
 
             std::thread_local! { static STORE: Store = const { Store::new($key, $schema) }; }
 
@@ -97,7 +131,17 @@ macro_rules! declare_db_store {
                 STORE.with(|s| s.attach(host, incarnation));
             }
 
+            /// Obtain a session for this attached database.
+            /// # Panics
+            /// Traps before attachment or during an exclusive store callback.
+            #[must_use]
+            #[allow(dead_code, reason = "Mounted consumers may use only the exclusive API")]
+            pub fn session() -> DatabaseSession {
+                STORE.with(Store::session)
+            }
+
             /// Borrow the attached database for a synchronous operation.
+            #[allow(dead_code, reason = "Mounted consumers may use only the session API")]
             pub fn with<R>(op: impl FnOnce(&mut Database) -> R) -> R {
                 STORE.with(|s| s.with(op))
             }
@@ -196,5 +240,14 @@ macro_rules! __canic_mount_db_actor {
     ($($role:tt)*) => {
         #[cfg(target_arch = "wasm32")]
         compile_error!("mount_db_role! requires canic/stateful-role for a deployed actor");
+    };
+}
+
+/// Obtain a session from the single role mount. Import the mounted `database`
+/// module alongside this macro in an application operations module.
+#[macro_export]
+macro_rules! db {
+    () => {
+        database::store::session()
     };
 }

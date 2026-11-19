@@ -486,6 +486,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         Cardinality::Available(6)
     );
     assert_eq!(client.write(&[row(7, 50)]).await.unwrap().inserted, 1);
+    client.control(6).await;
     // A different executable can describe its schema, but cannot silently open
     // or repair the retained database. Inspection itself leaves backing intact.
     canic_qualification::upgrade_stopped(pic, canister, incompatible, vec![], None)
@@ -505,6 +506,18 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         client.inspect().await.cardinality,
         Cardinality::Available(7)
     );
+    request.minimum = 51;
+    let mut reopened = Vec::new();
+    for _ in 0..4 {
+        let page = client.page(&request).await.unwrap();
+        reopened.extend(page.rows);
+        request.after = page.next;
+        if request.after.is_none() {
+            break;
+        }
+    }
+    assert!(request.after.is_none());
+    assert_eq!(reopened, [row(7, 51)]);
     // Model an installation with no directory. Reopen must refuse without
     // allocating even an empty owner/database or accepting new authority.
     let mut corrupt = pic.get_stable_memory(canister).await;

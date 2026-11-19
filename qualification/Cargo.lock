@@ -287,7 +287,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.234.0"
+version = "0.235.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -386,7 +386,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.234.0"
+version = "0.235.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -418,7 +418,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.234.0"
+version = "0.235.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -427,7 +427,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.234.0"
+version = "0.235.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -443,7 +443,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.234.0"
+version = "0.235.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -1024,7 +1024,7 @@ checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
 name = "ex-counter"
-version = "0.234.0"
+version = "0.235.0"
 dependencies = [
  "canic",
  "clap",
@@ -1038,7 +1038,7 @@ dependencies = [
 
 [[package]]
 name = "ex-greeting"
-version = "0.234.0"
+version = "0.235.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -1461,9 +1461,9 @@ dependencies = [
 
 [[package]]
 name = "ic-blob-storage"
-version = "0.106.2"
+version = "0.106.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c2a018f20a9a02c12d023207d0a8a7f9669220a0e81b15800f6ed60f601905f"
+checksum = "7ccfc4cbd9482f980e8ae54947c5dfb3c4167545c0037680e0445640edecc5fe"
 dependencies = [
  "ic-platform-types",
  "ic-storage",
@@ -1486,14 +1486,13 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.23.15"
+version = "0.23.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f05ff7f57304c8cef8980a126779f2c93de901434add6f8095b4ab640edf7b2e"
+checksum = "9cab7a5d95b7baadaaebdb43c664017f29bc512350ddb67a39ba58a7f163e672"
 dependencies = [
  "ethnum",
  "getrandom 0.4.3",
  "ic-db-macros",
- "ic-platform-protocol",
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
@@ -1504,9 +1503,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.23.15"
+version = "0.23.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "98b7d0a048373a516b5880001e9d9f1a752e3888d5e768469887feabb2117534"
+checksum = "12ca64da8b8c0136ce10e084e9710ce373c5c18a79890df8843f7ad4ba610f33"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1730,9 +1729,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.46.9"
+version = "0.46.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4e3fb0203426f4a3b72ced531344983c5371f3797ce242a2168c158ca2075d7a"
+checksum = "cc58e2dc62fdcd5bcf5bbc8701d1830d2f03f5df1e329b492360b5af49e49dce"
 dependencies = [
  "ic-metrics",
  "ic-platform-runtime",
@@ -1771,27 +1770,27 @@ dependencies = [
 
 [[package]]
 name = "ic-wasm-store"
-version = "0.4.6"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f011eb64f712324fdc3db784cc24a35d5efb3d571e5200d04cffeab84be5b664"
+checksum = "7809038a964da1071a122b05606b4c64ab769c2e7f2bbb99419483e09753d65a"
 dependencies = [
  "ic-platform-protocol",
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
  "ic-wasm-store-protocol",
- "ic-wire 0.25.2",
+ "ic-wire 0.26.0",
  "serde",
  "sha2 0.11.1",
 ]
 
 [[package]]
 name = "ic-wasm-store-protocol"
-version = "0.4.6"
+version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a549a4a69b97f5591d93cdbea961255dba50f71b11e33b4b3de80f8c5c9f115"
+checksum = "c4b8f6107db0ebecd8ee08ff792137c34d493e8b50c9fcd5db32e84dbcd8e322"
 dependencies = [
- "ic-wire 0.25.2",
+ "ic-wire 0.26.0",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -3374,9 +3373,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.45.18"
+version = "0.45.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d24c2c13aacee2afda27e77ed8d6c13ff5ad383e08a2f80645561b2a9f935b11"
+checksum = "e43f1a0e1e4c04290daff05316f2ea21bbda86ebe8c1adf70605c6fd018be9e2"
 
 [[package]]
 name = "toml"

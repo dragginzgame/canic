@@ -315,6 +315,38 @@ mod controls {
         REPLY_FAILURE.get()
     }
 
+    // Switch this fixture from per-call opening to the same strictly reopened role store.
+    mod database {
+        canic::declare_db_store!(pub(super) mod store, key = "app.db.v1", schema = crate::canister::schema);
+    }
+
+    fn item(score: u64, id: u64) -> Result<Option<super::Item>, ic_db::Error> {
+        use super::Item;
+        use canic::db;
+        db!()
+            .read()?
+            .query::<Item>()
+            .eq(Item::SCORE, score)
+            .eq(Item::ID, id)
+            .work_limit(1)
+            .try_one()
+    }
+
+    fn nested_update() -> Result<(), ic_db::Error> {
+        use canic::db;
+        database::store::attach(&runtime(), None);
+        let outer = db!();
+        let mut row = item(50, 7)?.expect("installed predecessor row");
+        row.score = 51;
+        let mut batch = ic_db::Batch::new();
+        batch.replace(&row)?;
+        outer.commit(batch)?;
+        assert_eq!(item(51, 7)?.unwrap().score, 51);
+        drop(outer);
+        assert_eq!(database::store::with(|db| db.incarnation()), [91; 16]);
+        Ok(())
+    }
+
     // Deliberately corrupt an otherwise admitted application reply after projection.
     // This qualifies the endpoint's final byte ceiling, not a different DB schema.
     pub(super) fn inspection_reply(
@@ -383,6 +415,7 @@ mod controls {
             1 => REPLY_FAILURE.set(true),
             4 => INSPECTION_FAILURE.set(true),
             5 => INSPECTION_FAILURE.set(false),
+            6 => nested_update().unwrap(),
             2 | 3 => {
                 let host = runtime();
                 let target = Schema::new(&[FutureItem::SCHEMA]).unwrap();

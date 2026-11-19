@@ -2,7 +2,7 @@
 use crate::Hub;
 use canic::{
     auth::protocol::SessionView,
-    sharding::provisioning::{HubRoute, Progress, provision},
+    sharding::provisioning::{HubRoute, Progress, new_ulid, provision},
 };
 use toko::user::signup::LIMITS;
 
@@ -12,5 +12,5 @@ use toko::user::signup::LIMITS;
     limits = LIMITS,
 )]
 async fn register(session: SessionView, name: String) -> Progress {
-    provision::<Hub>(&session, name, || ic_db::Ulid::generate_prand().to_bytes()).await
+    provision::<Hub>(&session, name, new_ulid).await
 }

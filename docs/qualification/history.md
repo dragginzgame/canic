@@ -7,7 +7,29 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Wasm Store 0.4.6 to 0.5.0 — 2026-11-19
+
+The installed Root preservation test used the ordinary Store 0.4.6 Wasm from
+Canic v0.234.0 as its original and the ordinary registry-built 0.5.0 Wasm as
+its replacement. Their SHA-256 digests were
+`db0d1496198dacb8a0696642cf1f92ccb42eef8a8e9ecaebe1b14aaebacbcdee` and
+`6df5cad81f2d334aef17533eb7bb2fae28d3ec876155df77b275afdd6123a936`.
+With live, deleted and cancelled releases in the catalog, Root retained the scan
+cursor across its own upgrade, verified the replacement's stable memory
+byte-for-byte and reached Ready after explicit activation.
+
 ## Shared Toko entities and ordinary provisioning functions — 2026-11-19
+
+For #44, an isolated copy of the Toko working tree (base `e67ddf1f`)
+passed the installed `signup` and `user_shard` tests using Canic’s
+`provisioning::new_ulid`, first on fresh installs and again with populated
+hub/shard predecessors. The predecessor SHA-256 prefixes were `244649dc` and
+`07b63ba5`, and the rebuilt candidates were `c24b14f9` and `f85f5974`.
+The test workspace selected the local Canic products and Store 0.5.0,
+copying the four Auth issuer Wire budget fields across the two client
+codec versions. The separate live Internet Identity case was skipped.
+Canic’s installed `sharding` (three tests) and `user-directory` (one test)
+also passed.
 
 Canic #43 used an isolated copy of the Toko shared-schema working tree (base
 `bdc2bed`) with IC DB 0.23.12. The hub and shard each imported one external

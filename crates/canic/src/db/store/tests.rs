@@ -1,5 +1,5 @@
 use super::*;
-use ic_db::Entity;
+use ic_db::{Entity, Error};
 use ic_storage::{StorageConfig, VectorMemory};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
@@ -118,4 +118,40 @@ fn supplier_created_rows_and_parent_binding_survive_strict_open() {
     );
     assert_eq!(crate::storage::cell(&host, HUB, 29, None).get(), &[8, 1]);
     assert_eq!(*backing.borrow(), retained);
+}
+
+#[test]
+fn independent_handles_share_typed_rows_and_refuse_conflicting_access() {
+    use ic_db::Batch;
+    const KEY: &str = "app.db.v1";
+    let store = Store::new(KEY, || Schema::new(&[Item::SCHEMA, Other::SCHEMA]).unwrap());
+    assert!(catch_unwind(AssertUnwindSafe(|| store.session())).is_err());
+    let host = crate::storage::bootstrap_with_prefix(
+        VectorMemory::default(),
+        true,
+        "app",
+        "app.",
+        &[KEY],
+        StorageConfig::default(),
+    );
+    store.attach(&host, Some([7; 16]));
+    let outer = store.session();
+    let helper = store.session();
+    let read = helper.read().unwrap();
+    assert!(read.get::<Item>(1).unwrap().is_none());
+    assert!(matches!(
+        outer.commit(Batch::new()),
+        Err(Error::BorrowConflict)
+    ));
+    drop(read);
+    let mut batch = Batch::new();
+    batch.insert(&Item { id: 1 }).unwrap();
+    batch.insert(&Other { id: 2 }).unwrap();
+    outer.commit(batch).unwrap();
+    assert!(catch_unwind(AssertUnwindSafe(|| store.with(|_| ()))).is_err());
+    assert_eq!(helper.get::<Item>(1).unwrap().unwrap().id, 1);
+    assert_eq!(helper.get::<Other>(2).unwrap().unwrap().id, 2);
+    drop((outer, helper));
+    assert!(catch_unwind(AssertUnwindSafe(|| store.with(|_| store.session()))).is_err());
+    assert_eq!(store.session().get::<Item>(1).unwrap().unwrap().id, 1);
 }

@@ -14,7 +14,7 @@ category = "tests"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-fault-injection = []
+fault-injection = ["canic/db-store"]
 incompatible-schema = []
 managed-fixture = ["canic/readiness"]
 

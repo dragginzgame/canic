@@ -37,12 +37,13 @@ Run `make store-test` for these and the other installed Store cases.
 Use two ordinary endpoint functions. The hub calls `provision` after Canic has
 admitted the caller's session. It supplies the validated account mapping and a
 candidate ID generator. Canic calls the generator only when it needs to make a
-reservation. The shard calls `receive` under its configured parent guard.
+reservation. Import `new_ulid` from `canic::sharding::provisioning` for the
+standard 16-byte IC DB ID, or supply an application generator. The shard calls `receive` under its configured parent guard.
 
 ```rust
 #[canic::update(scope = Hub::SCOPE, limits = LIMITS)]
 async fn register(session: SessionView, name: String) -> Progress {
-    provision::<Hub>(&session, name, || Ulid::generate_prand().to_bytes()).await
+    provision::<Hub>(&session, name, new_ulid).await
 }
 
 #[canic::update(contract = Provision<Users>, guard = canic::topology::require_parent)]

@@ -1,7 +1,7 @@
 //! The user hub owns its account routes.
 use canic::{
     auth::protocol::SessionView,
-    sharding::provisioning::{Account, Binding, HubRoute, Record},
+    sharding::provisioning::{self, Account, Binding, HubRoute, Record},
 };
 use ic_db::{Database, Principal, Ulid};
 use user_directory_schema::{Users, user_hub::Route};
@@ -70,23 +70,29 @@ impl HubRoute for Hub {
 /// Reserve this session’s account and confirm its shard insertion.
 #[canic::update(scope = Hub::SCOPE)]
 async fn register(session: SessionView) -> canic::sharding::provisioning::Progress {
-    canic::sharding::provisioning::provision::<Hub>(&session, (), || {
-        Ulid::generate_prand().to_bytes()
-    })
-    .await
+    provisioning::provision::<Hub>(&session, (), provisioning::new_ulid).await
 }
 
 /// Return the signed-in user's confirmed shard.
 #[canic::query(scope = "read")]
 fn my_shard(session: SessionView) -> Option<Principal> {
-    database::store::with(|db| {
-        db.query::<Route>()
+    ops::route(&session)
+        .expect("lookup route")
+        .filter(|row| row.ready)
+        .map(|row| row.shard)
+}
+
+mod ops {
+    use super::{Route, SessionView, database};
+    use canic::db;
+
+    pub(super) fn route(session: &SessionView) -> Result<Option<Route>, ic_db::Error> {
+        db!()
+            .read()?
+            .query::<Route>()
             .eq(Route::ISSUER, session.issuer)
             .eq(Route::SUBJECT, session.subject)
             .work_limit(1)
             .try_one()
-    })
-    .expect("lookup route")
-    .filter(|row| row.ready)
-    .map(|row| row.shard)
+    }
 }

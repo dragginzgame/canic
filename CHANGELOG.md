@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.235.0] - 2026-11-19
+
+Both workspaces now use IC DB 0.23.17 and Toko Tooling 0.45.19.
+
+Mounted roles can use `db!()` to obtain independent handles to their attached
+IC DB database. The user-directory hub demonstrates a compound-index lookup
+from an ordinary operations module. Build it from the repository root:
+
+```sh
+canic app build --config apps/examples/user-directory/canic.toml
+```
+
+Hub registrations can pass `canic::sharding::provisioning::new_ulid` to
+`provision` to select the standard IC DB generator.
+
+Canic builds IC Wasm Store 0.5.0 from crates.io and uses the matching protocol’s
+Wire limits directly. From the Canic checkout, build and inspect the Store locally:
+
+```sh
+canic artifact build --package ic-wasm-store --output target/wasm-store.wasm
+canic artifact inspect target/wasm-store.wasm
+```
+
 ## [0.234.0] - 2026-11-19
 
 Both workspaces now use Toko Tooling 0.45.18 and registry IC DB 0.23.15.
