@@ -34,6 +34,7 @@ canic-artifact-probe.workspace = true
 canic-asset-catalog.workspace = true
 canic-auth-witness.workspace = true
 canic-effect-probe.workspace = true
+canic-hello.workspace = true
 canic-host.workspace = true
 canic-management-protocol = { workspace = true, features = ["backup"] }
 canic-profile-protocol.workspace = true

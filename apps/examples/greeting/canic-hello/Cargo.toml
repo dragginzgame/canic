@@ -16,11 +16,12 @@ crate-type = ["cdylib", "rlib"]
 [features]
 greeting-v2 = []
 
-[dependencies]
-canic = { workspace = true, features = ["greeting", "metrics", "readiness"] }
-
 [target.'cfg(target_family = "wasm")'.dependencies]
 ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
+
+[dependencies]
+canic = { workspace = true, features = ["method", "metrics", "readiness"] }
+serde.workspace = true
 
 [dev-dependencies]
 toko-tooling.workspace = true

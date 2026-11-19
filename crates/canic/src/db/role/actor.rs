@@ -1,5 +1,5 @@
-//! Installed hub and child layouts. Readiness observes successful local attachment.
-use crate::{auth::install::Install, readiness::State, storage, topology};
+use super::{Install, ShardConfig, nonce};
+use crate::{readiness::State, storage, topology};
 use ic_platform_runtime::system as api;
 use ic_platform_types::Principal;
 use ic_storage::{DefaultMemoryImpl, MemoryRuntime, StorageConfig};
@@ -35,16 +35,6 @@ thread_local! {
 #[must_use]
 pub fn root() -> Option<Principal> {
     ROOT.get()
-}
-
-fn nonce(bytes: &[u8]) -> Result<[u8; 16], &'static str> {
-    let nonce = bytes
-        .try_into()
-        .map_err(|_| "expected a 16-byte install nonce")?;
-    if nonce == [0; 16] {
-        return Err("zero installation nonce");
-    }
-    Ok(nonce)
 }
 
 impl HubConfig {
@@ -125,25 +115,6 @@ pub fn open_hub(
 }
 
 #[doc(hidden)]
-pub struct ShardConfig {
-    binding: topology::Install,
-    nonce: [u8; 16],
-}
-
-#[doc(hidden)]
-/// Decode the shard's nested topology and check the outer Auth Root.
-/// # Errors
-/// Rejects a missing frame, conflicting Root or invalid nonce.
-pub fn decode_shard(input: &Install) -> Result<ShardConfig, &'static str> {
-    let binding = topology::Install::decode(&input.application)?;
-    binding.check_root(input.root)?;
-    Ok(ShardConfig {
-        nonce: nonce(&binding.application)?,
-        binding,
-    })
-}
-
-#[doc(hidden)]
 /// Attach the two-key shard directory. Parent admission checks the real installer.
 /// # Panics
 /// Traps on invalid storage, parent or database. Never creates on failed reopen.
@@ -168,8 +139,13 @@ pub fn open_shard(
         &[key, parent_key],
         config,
     );
-    topology::attach_parent(&host, parent_key, initial.as_ref().map(|i| &i.binding));
-    attach(&host, initial.map(|i| incarnation(key, i.nonce)));
+    let parts = initial.map(ShardConfig::into_parts);
+    topology::attach_parent(
+        &host,
+        parent_key,
+        parts.as_ref().map(|(binding, _)| binding),
+    );
+    attach(&host, parts.map(|(_, nonce)| incarnation(key, nonce)));
 }
 
 #[doc(hidden)]

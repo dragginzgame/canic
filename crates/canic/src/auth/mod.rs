@@ -43,7 +43,6 @@ pub use ic_auth_wire as protocol;
 ///     logout = crate::logout,
 /// }
 /// ```
-#[cfg(target_arch = "wasm32")]
 // Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
 #[rustfmt::skip]
 #[macro_export]

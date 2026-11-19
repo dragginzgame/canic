@@ -1,3 +1,5 @@
+mod config;
+
 use super::*;
 
 pub(crate) const UNBOUND_FLEET: &str = r#"[apps.app.canisters.root]

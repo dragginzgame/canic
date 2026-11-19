@@ -191,7 +191,6 @@ fn discovery_is_bounded_and_does_not_recurse_into_generated_trees() {
     std::fs::remove_dir_all(dir).unwrap();
 }
 
-#[cfg(unix)]
 #[test]
 fn discovery_does_not_follow_child_symlinks() {
     let dir = directory();
@@ -628,7 +627,6 @@ fn app_limit(root: &Path, many: &Config) {
     assert!(init_app(&all_path, "extra").is_err());
 }
 
-#[cfg(unix)]
 #[test]
 fn fleet_initialization_does_not_follow_config_symlinks() {
     let root = directory();

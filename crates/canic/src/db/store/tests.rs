@@ -3,6 +3,11 @@ use ic_db::Entity;
 use ic_storage::{StorageConfig, VectorMemory};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
+///
+/// Item
+/// Identifies the admitted schema when reopening an existing store.
+///
+
 #[ic_db::entity(
     pk(field = "id"),
     fields(field(name = "id", value(item(prim = "Nat64"))))
@@ -47,6 +52,11 @@ fn open_requires_existing_database_and_preserves_neighbor_and_incarnation() {
     );
     assert_eq!(crate::storage::cell(&host, HUB, 29, None).get(), &[3, 1]);
 }
+
+///
+/// Other
+/// Supplies a different schema to test admission on reopen.
+///
 
 #[ic_db::entity(
     pk(field = "id"),

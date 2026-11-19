@@ -62,10 +62,11 @@ fn provision_user(request: Ticket<Shard>) -> canic::sharding::provisioning::Bind
 #[canic::query(scope = "read")]
 fn my_id(session: SessionView) -> Option<[u8; 16]> {
     database::store::with(|db| {
-        db.get_by_unique::<User>(
-            "issuer,subject",
-            &[session.issuer.into(), session.subject.into()],
-        )
+        db.query::<User>()
+            .eq(User::ISSUER, session.issuer)
+            .eq(User::SUBJECT, session.subject)
+            .work_limit(1)
+            .try_one()
     })
     .expect("lookup user")
     .map(|row| row.id.to_bytes())

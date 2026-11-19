@@ -16,6 +16,11 @@ impl Resource for Users {
     const LIMITS: ic_wire::Limits = crate::method::LIMITS;
 }
 
+///
+/// Route
+/// Retains the hub’s account reservation and assigned shard.
+///
+
 #[ic_db::entity(
     pk(field = "id"),
     index(fields = ["issuer", "subject"], unique),
@@ -29,6 +34,11 @@ impl Resource for Users {
     )
 )]
 struct Route {}
+
+///
+/// User
+/// Stores the provisioned account and name on the shard.
+///
 
 #[ic_db::entity(
     pk(field = "id"),
@@ -243,6 +253,11 @@ fn confirmation_checks_encoded_size_before_updating_a_retained_route() {
 
 #[test]
 fn a_nonunique_account_index_cannot_authorize_provisioning() {
+    ///
+    /// Nonunique
+    /// Exercises refusal of an account lookup backed by a nonunique index.
+    ///
+
     #[ic_db::entity(
         pk(field = "id"),
         index(fields = ["issuer", "subject"]),

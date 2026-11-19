@@ -295,7 +295,6 @@ pub fn logout(caller: Principal, now: u64) -> LogoutResult {
 
 /// Mount the standard volatile receiver and its controller-only refresh.
 /// The application selects the read endpoint's scope and explicitly initializes on install.
-#[cfg(target_arch = "wasm32")]
 #[macro_export]
 macro_rules! mount_auth_session {
     (read = $scope:literal $(,)?) => {
@@ -326,7 +325,6 @@ macro_rules! mount_auth_session {
 /// Use `decode_context` for a decoder taking the complete `&Install` before receiver
 /// initialization, or `decode` for the inner application bytes. The app opens its store with
 /// `Some(decoded)` on install and `None` on upgrade.
-#[cfg(target_arch = "wasm32")]
 #[macro_export]
 macro_rules! mount_auth_lifecycle {
     (decode = $decode:path, open = $open:path $(,)?) => {

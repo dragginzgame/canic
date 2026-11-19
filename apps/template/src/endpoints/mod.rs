@@ -1,11 +1,24 @@
 //! Mount the public greeting and report readiness for this stateless app.
 
-canic::mount_greeting_endpoints!(crate::endpoints::greeting);
+use crate::{GREET, Greeting, LIMITS, MAX_NAME_BYTES};
+
+/// Greet a visitor in a read-only query.
+#[canic::query(method = GREET, limits = LIMITS)]
+fn greet(name: String) -> Greeting {
+    greeting(&name)
+}
+
+/// Return the same greeting through a replicated update.
+#[canic::update(method = GREET, limits = LIMITS)]
+fn probe(name: String) -> Greeting {
+    greeting(&name)
+}
 
 canic::mount_readiness_endpoint!(crate::endpoints::readiness);
 
-fn greeting(name: &str) -> canic::Greeting {
-    canic::Greeting {
+fn greeting(name: &str) -> Greeting {
+    assert!(name.len() <= MAX_NAME_BYTES, "name exceeds 128 UTF-8 bytes");
+    Greeting {
         message: format!("Hello from Canic, {name}!"),
     }
 }

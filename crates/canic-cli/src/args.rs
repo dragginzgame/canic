@@ -112,7 +112,7 @@ pub(super) enum AppCommand {
         /// Generate a new standalone source workspace and its config in this directory.
         #[arg(long, value_name = "DIRECTORY", conflicts_with = "config")]
         source: Option<PathBuf>,
-        /// Matching local Canic checkout supplying the runtime and greeting contract.
+        /// Matching local Canic checkout supplying the runtime and app template.
         #[arg(long, value_name = "DIRECTORY", requires = "source")]
         canic_source: Option<PathBuf>,
     },

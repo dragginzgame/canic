@@ -37,13 +37,18 @@ installer, never by editing installed bytes.
 - Keep one canonical workflow per task. No aliases, convenience shortcuts, duplicate
   configuration mechanisms or generic workflow engines without a demonstrated need.
   Prefer extending existing owners over new packages or parallel paths.
-- Wasm is the product target for canister code. Write actor declarations, schema
-  mappings and helpers as ordinary Rust so they stay visible in VS Code. Use
-  `#[cfg(target_arch = "wasm32")]` only where an actual target difference
-  requires it. This also applies to macro output and qualification actors. For
-  clocks and entropy, select the source at the point of acquisition. Keep codecs,
-  storage access and application handlers portable wherever their APIs allow. Avoid native
-  stubs and extra feature flags solely to make actor code compile on a host.
+- Write endpoints, schema mappings and helpers as ordinary Rust so native builds
+  and VS Code see them. Keep code unconditional whenever it compiles on both
+  targets, even when only an installed canister calls it.
+- Before adding or retaining a `wasm32` guard, identify the shipped Wasm
+  build, required behavior or supported consumer/test that fails without it.
+  Check with the guard removed and the actual features of that caller. A warning
+  in an unsupported host build does not establish a need for a guard.
+  Trace through Canic’s own guards to the underlying dependency. Put the guard
+  at the smallest boundary that needs it, such as reading the IC clock, acquiring
+  IC entropy or issuing an IC call. Keep the surrounding decision logic shared.
+  Apply the same rule to generated code, examples and qualification fixtures.
+  Avoid native stubs and extra feature flags solely to satisfy the compiler.
 - The managed starter uses a Root, separate versioned Wasm Store and application
   children. Root owns effect authority and retained evidence; Store owns durable
   artifact bytes, immutable releases and pins. Do not grow Root into an artifact
@@ -122,7 +127,7 @@ remain separate; do not pull optional supplier runtimes into default application
 
 | Owner | Responsibility | Affected checks |
 | --- | --- | --- |
-| `canic` | Small greeting contract and optional local actor adapters | `make test`, `make clippy`, `make doc` |
+| `canic` | Endpoint composition and optional local actor adapters | `make test`, `make clippy`, `make doc` |
 | `canic-host`, `canic-cli`, `apps/examples/greeting` | Native planning, custody and hands-on greeting journey | `make journey-test`, `make journey-clippy`, `make journey-doc` |
 | `apps/examples/counter` | Persistent public counter, explicit owner-only fencing and readiness | `make counter-test`, `make counter-clippy`, `make counter-doc` |
 | `canic-management`, `canic-management-protocol`, `canic-root` | Shared bounded effect engine, passive contracts and explicit Root mounts | `make root-test`, `make root-clippy`, `make root-doc`; `make growth-test` for shared effect boundaries |

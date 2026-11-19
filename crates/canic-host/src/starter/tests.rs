@@ -138,7 +138,6 @@ fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
     std::fs::remove_dir_all(parent).unwrap();
 }
 
-#[cfg(unix)]
 #[test]
 fn app_build_refuses_output_aliases_before_creating_a_lock_or_output() {
     let parent = crate::tests::directory();
@@ -177,7 +176,6 @@ fn app_build_refuses_output_aliases_before_creating_a_lock_or_output() {
     std::fs::remove_dir_all(parent).unwrap();
 }
 
-#[cfg(unix)]
 #[test]
 fn app_build_preserves_config_and_cargo_inputs_including_unselected_recipes() {
     let parent = crate::tests::directory();
@@ -221,7 +219,6 @@ fn app_build_preserves_config_and_cargo_inputs_including_unselected_recipes() {
     std::fs::remove_dir_all(parent).unwrap();
 }
 
-#[cfg(unix)]
 #[test]
 fn source_alias_resolves_physically_and_destination_symlinks_are_not_replaced() {
     let parent = crate::tests::directory();

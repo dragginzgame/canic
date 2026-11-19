@@ -1,7 +1,12 @@
 //! Private hub routes.
+
 use ic_db::design::prelude::*;
 
-/// One record per issuer-qualified account.
+///
+/// Route
+/// Stores the shard and readiness of an issuer-qualified account.
+///
+
 #[entity(
     name = "Route",
     pk(field = "id"),

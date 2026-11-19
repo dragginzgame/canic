@@ -35,7 +35,6 @@ pub const MANAGEMENT: u64 = ic_wire::method_id("blob_management");
 ///     management = crate::inspect_blob_management,
 /// }
 /// ```
-#[cfg(target_arch = "wasm32")]
 // Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
 #[rustfmt::skip]
 #[macro_export]

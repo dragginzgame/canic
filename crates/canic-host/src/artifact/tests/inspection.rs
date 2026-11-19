@@ -1,4 +1,4 @@
-use super::{MAX_ARTIFACT_BYTES, inspect};
+use crate::artifact::{MAX_ARTIFACT_BYTES, inspect};
 use std::{fs, os::unix::fs::symlink, path::Path};
 
 #[test]

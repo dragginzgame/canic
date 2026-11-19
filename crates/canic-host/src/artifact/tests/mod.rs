@@ -1,3 +1,5 @@
+mod inspection;
+
 use super::*;
 
 #[test]
@@ -179,7 +181,6 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
     );
 }
 
-#[cfg(unix)]
 #[test]
 fn source_layout_requires_real_source_directory_and_regular_rust_files() {
     let project = tempfile::tempdir().unwrap();

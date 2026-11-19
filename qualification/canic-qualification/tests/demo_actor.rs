@@ -1,5 +1,6 @@
 //! Installed fixed greeting and optional metrics composition, with no persistent owner.
-use canic::{GREET, Greeting, LIMITS, metrics, readiness};
+use canic::{metrics, readiness};
+use canic_hello::{GREET, Greeting, LIMITS};
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
 use ic_wire::{Direction, Encoding};
 

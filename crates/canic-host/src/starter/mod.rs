@@ -108,13 +108,15 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
         .get("dependencies")
         .ok_or_else(|| Error::Invalid("missing Canic dependencies".into()))?;
     let mut selected = serde_json::Map::new();
-    let tooling = dependencies
-        .get("toko-tooling")
-        .ok_or_else(|| Error::Invalid("missing Canic dependency toko-tooling".into()))?;
-    selected.insert(
-        "toko-tooling".into(),
-        serde_json::to_value(tooling).map_err(supplier)?,
-    );
+    for name in ["serde", "toko-tooling"] {
+        let dependency = dependencies
+            .get(name)
+            .ok_or_else(|| Error::Invalid(format!("missing Canic dependency {name}")))?;
+        selected.insert(
+            name.into(),
+            serde_json::to_value(dependency).map_err(supplier)?,
+        );
+    }
     selected.insert("canic".into(), json!({"path":source.join("crates/canic")}));
     let lints = workspace
         .get("lints")

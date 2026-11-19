@@ -25,7 +25,6 @@ entropy = [
     "ic-platform-runtime/call-ic0",
     "dep:ic-platform-types",
 ]
-greeting = ["dep:ic-platform-runtime"]
 lifecycle = ["dep:ic-platform-runtime"]
 method = [
     "dep:canic-macros",

@@ -187,19 +187,11 @@ process restart remains outside both witnesses.
 
 ## Actor composition
 
-The [actor file](../../apps/examples/greeting/canic-hello/src/actor.rs) selects two adapters:
-
-```rust
-canic::mount_greeting_endpoints!(crate::greeting);
-canic::mount_metrics_endpoint!(crate::actor::snapshot);
-```
-
-The fixed greeting adapter exposes `greet` and the replicated `probe` used by
-this demo's readiness check. The application owns its response. This probe is
-not a database, Auth or Toko readiness contract. The metrics query reports the
-observation time and unavailable timer data: no timer provider exists here.
-Mounting neither adapter initializes storage, starts timers or grants authority.
-Custom application endpoints can still use Platform entrypoints directly.
+The [greeting actor](../../apps/examples/greeting/canic-hello/src/actor.rs)
+declares its own `greet` query and replicated `probe` update. Both use the same
+application reply and Wire method ID for compatibility with existing callers.
+A separate readiness endpoint reports application readiness. The optional metrics
+endpoint reports observation time and the absence of a timer provider.
 
 ## Deployment boundary
 

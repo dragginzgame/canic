@@ -3,8 +3,6 @@
 #![forbid(unsafe_code)]
 
 #[cfg(test)]
-mod config_tests;
-#[cfg(test)]
 mod tests;
 
 mod application;

@@ -1,3 +1,5 @@
+mod installed;
+
 use super::*;
 use crate::{
     DeploymentName, create_plan,

@@ -3,10 +3,6 @@
 #![forbid(unsafe_code)]
 
 #[cfg(test)]
-mod application_tests;
-#[cfg(test)]
-mod custody_tests;
-#[cfg(test)]
 mod tests;
 
 pub mod application;

@@ -1,11 +1,5 @@
 #[cfg(test)]
-mod lock_tests;
-#[cfg(test)]
-mod parent_tests;
-#[cfg(test)]
-mod publication_tests;
-#[cfg(test)]
-mod read_tests;
+mod tests;
 
 use crate::{Error, Result, supplier};
 use serde::{Serialize, de::DeserializeOwned};

@@ -1423,13 +1423,9 @@ Every retained name must be declared, including currently unused names.
 A directory with extra owners needs its composed grants. Applications reopen
 their cells and validate payload schemas after Storage admits the directory.
 
-The ongoing Canic-owned demo reuses the greeting application with explicit
-greeting and metrics mounts in one actor file. Its fresh `demo/mainnet`
-declaration selects supplied Root and Store; the maintainer selected mainnet
-deployment only after Storage qualification. The stateless app and generated
-starter share one optional fixed greeting adapter, removing copied codec/export
-wrappers. This does not introduce a general actor registry or lifecycle wrapper.
-Toko and the demo share the authoring/build path, not domain state or readiness.
+The stateless example and generated starter own their greeting handlers and Wire
+contract. Canic supplies the ordinary query/update attributes and the readiness
+mount. The managed counter demonstrates application-owned persistent state.
 See the [demo guide](../demos/demo.md) for its current runnable boundary.
 
 The explicitly started local demo session lives in qualification. Testkit owns

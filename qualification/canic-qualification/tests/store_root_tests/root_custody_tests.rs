@@ -184,7 +184,7 @@ async fn host_root_maintenance_preserves_stopped_store_operation_and_signed_inst
         std::env::var_os("CANIC_HOST_CUSTODY_TEST").expect("run test-store.sh root-maintenance"),
     )
     .args([
-        "maintenance::installed_tests::root_maintenance_preserves_store_operation",
+        "maintenance::tests::installed::root_maintenance_preserves_store_operation",
         "--exact",
         "--ignored",
         "--nocapture",
@@ -193,7 +193,8 @@ async fn host_root_maintenance_preserves_stopped_store_operation_and_signed_inst
     .output()
     .unwrap();
     assert!(
-        result.status.success(),
+        result.status.success()
+            && String::from_utf8_lossy(&result.stdout).contains("test result: ok. 1 passed;"),
         "Host witness failed:\n{}\n{}",
         String::from_utf8_lossy(&result.stdout),
         String::from_utf8_lossy(&result.stderr)

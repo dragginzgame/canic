@@ -163,7 +163,6 @@ pub enum Refusal {
 /// Reconciliation is synchronous and lookup-only. Every handler receives the
 /// actual caller and ingress time. Reply encoding traps its final transaction;
 /// earlier async commits remain retained. Volatile loss must stay closed.
-#[cfg(target_arch = "wasm32")]
 // Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
 #[rustfmt::skip]
 #[macro_export]

@@ -249,7 +249,7 @@ pub enum Error {
 /// ```ignore
 /// canic::mount_auth_refresh_endpoint!(crate::auth::pull_enrollment);
 /// ```
-#[cfg(all(target_arch = "wasm32", feature = "auth-enrollment"))]
+#[cfg(feature = "auth-enrollment")]
 // Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
 #[rustfmt::skip]
 #[macro_export]

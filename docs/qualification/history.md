@@ -7954,7 +7954,7 @@ This source review does not extend the previously qualified provider windows.
 Validation: 24 host tests, 15 CLI tests, the installed PocketIC deployment/upgrade/
 recovery journey, M1 Clippy/Rustdoc, formatting and tooling agreement passed.
 Regression cases live in [host config tests](../../crates/canic-host/src/config/tests.rs),
-[CLI config tests](../../crates/canic-cli/src/config_tests.rs) and the
+[CLI config tests](../../crates/canic-cli/src/tests/config.rs) and the
 [installed journey](../../qualification/canic-qualification/tests/journey.rs). Mainnet
 canister code and operation evidence were not changed by these fixes. Comparative
 adoption measurements and broader production lifecycle remain unqualified; this

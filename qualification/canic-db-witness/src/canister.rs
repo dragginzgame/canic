@@ -12,17 +12,36 @@ type Host = MemoryRuntime<DefaultMemoryImpl>;
 
 thread_local! { static HOST: OnceCell<Rc<Host>> = const { OnceCell::new() }; }
 
-#[ic_db::entity(pk(field="id"), index(fields=["score","id"]), fields(
-    field(name="id",value(item(prim="Nat64"))),
-    field(name="score",value(item(prim="Nat64")))
-))]
+///
+/// Item
+/// Stores the indexed scores used by the installed database witness.
+///
+
+#[ic_db::entity(
+    pk(field = "id"),
+    index(fields = ["score", "id"]),
+    fields(
+        field(name = "id", value(item(prim = "Nat64"))),
+        field(name = "score", value(item(prim = "Nat64")))
+    )
+)]
 struct Item {}
 
+///
+/// UnreadableItem
+/// Widens the stored score to exercise incompatible schema admission.
+///
+
 #[cfg(feature = "incompatible-schema")]
-#[ic_db::entity(name="Item", pk(field="id"), index(fields=["score","id"]), fields(
-    field(name="id",value(item(prim="Nat64"))),
-    field(name="score",value(item(prim="Nat128")))
-))]
+#[ic_db::entity(
+    name = "Item",
+    pk(field = "id"),
+    index(fields = ["score", "id"]),
+    fields(
+        field(name = "id", value(item(prim = "Nat64"))),
+        field(name = "score", value(item(prim = "Nat128")))
+    )
+)]
 struct UnreadableItem {}
 
 fn schema() -> Schema {
@@ -325,10 +344,21 @@ mod controls {
         }
         reply
     }
-    #[ic_db::entity(name="Item", pk(field="id"), index(fields=["score","id"]), fields(
-        field(name="id",value(item(prim="Nat64"))),
-        field(name="score",value(item(prim="Nat128")))
-    ))]
+
+    ///
+    /// FutureItem
+    /// Describes the widened score used by the maintenance witness.
+    ///
+
+    #[ic_db::entity(
+        name = "Item",
+        pk(field = "id"),
+        index(fields = ["score", "id"]),
+        fields(
+            field(name = "id", value(item(prim = "Nat64"))),
+            field(name = "score", value(item(prim = "Nat128")))
+        )
+    )]
     struct FutureItem {}
 
     /// Require write access before admitting the bounded fault-control frame.

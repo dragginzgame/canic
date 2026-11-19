@@ -1,11 +1,22 @@
 use super::*;
 use ic_db::Entity as _;
 
+///
+/// Link
+/// Exercises inspection of a recursive field type.
+///
+
 #[ic_db::enum_(
     variant(name = "End"),
     variant(name = "Next", value(item(indirect, is = "Self")))
 )]
 struct Link {}
+
+///
+/// Row
+/// Combines a recursive value with an indexed reference to another row.
+///
+
 #[ic_db::entity(
     pk(field = "id"),
     index(fields = ["next", "id"]),

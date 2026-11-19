@@ -1,4 +1,4 @@
-use super::read;
+use crate::store::read;
 use crate::{Error, tests::directory};
 use std::{error::Error as _, os::unix::fs::symlink};
 

@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.232.0] - 2026-11-19
+
+### 🎯 Qualification
+
+Grouped sibling test suites under one guard per parent ([#45](https://github.com/dragginzgame/canic/issues/45)).
+Both workspaces adopt Toko Tooling 0.45.16. Provisioning uses the admitted
+unique account index for a bounded one-row lookup on IC DB 0.23.14.
+
+### Application endpoints
+
+The Hello World example and starter own their greeting endpoints. The public
+`canic/greeting` feature and its fixed mount have been removed. From the repository
+root, build and inspect the example locally:
+
+```sh
+cd apps/examples/greeting
+canic app build
+canic artifact inspect artifacts/greeting.wasm
+```
+
 ## [0.231.0] - 2026-11-19
 
 Both workspaces adopt Toko Tooling 0.45.13. Example package directories now

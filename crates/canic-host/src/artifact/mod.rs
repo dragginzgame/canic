@@ -1,5 +1,3 @@
-#[cfg(test)]
-mod inspection_tests;
 mod source_layout;
 mod store_source;
 #[cfg(test)]

@@ -9,7 +9,7 @@ mod app_build;
 pub mod application;
 mod artifact;
 mod auth;
-#[cfg(all(unix, feature = "backup"))]
+#[cfg(feature = "backup")]
 pub mod backup;
 mod config;
 mod fleet;

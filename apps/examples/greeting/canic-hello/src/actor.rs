@@ -2,7 +2,19 @@
 #[cfg(target_arch = "wasm32")]
 use ic_platform_runtime::system::time as now_ns;
 
-canic::mount_greeting_endpoints!(crate::greeting);
+use crate::{GREET, Greeting, LIMITS, greeting};
+
+/// Greet a visitor in a read-only query.
+#[canic::query(method = GREET, limits = LIMITS)]
+fn greet(name: String) -> Greeting {
+    greeting(&name)
+}
+
+/// Return the same greeting through a replicated update.
+#[canic::update(method = GREET, limits = LIMITS)]
+fn probe(name: String) -> Greeting {
+    greeting(&name)
+}
 
 canic::mount_readiness_endpoint!(crate::actor::readiness);
 

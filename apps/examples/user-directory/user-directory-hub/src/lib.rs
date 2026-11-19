@@ -81,10 +81,11 @@ async fn register(session: SessionView) -> canic::sharding::provisioning::Progre
 #[canic::query(scope = "read")]
 fn my_shard(session: SessionView) -> Option<Principal> {
     database::store::with(|db| {
-        db.get_by_unique::<Route>(
-            "issuer,subject",
-            &[session.issuer.into(), session.subject.into()],
-        )
+        db.query::<Route>()
+            .eq(Route::ISSUER, session.issuer)
+            .eq(Route::SUBJECT, session.subject)
+            .work_limit(1)
+            .try_one()
     })
     .expect("lookup route")
     .filter(|row| row.ready)

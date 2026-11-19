@@ -1,7 +1,12 @@
 //! Private shard accounts.
+
 use ic_db::design::prelude::*;
 
-/// One record per issuer-qualified account.
+///
+/// User
+/// Stores the local user ID for an issuer-qualified account.
+///
+
 #[entity(
     name = "User",
     pk(field = "id"),

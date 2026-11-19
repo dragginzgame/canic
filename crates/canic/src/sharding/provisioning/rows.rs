@@ -3,12 +3,20 @@ use super::{Account, Binding, HubRoute, Id, Request, ShardRecord, Ticket};
 use ic_db::{Database, Entity};
 
 pub(super) fn find<E: Entity>(db: &Database, account: Account) -> Option<E> {
+    assert!(
+        E::SCHEMA.indexes.iter().any(|index| {
+            index.unique && index.name == "issuer,subject" && index.fields == ["issuer", "subject"]
+        }),
+        "provisioning requires a unique issuer,subject index"
+    );
     let row = db
-        .get_by_unique::<E>(
+        .index_prefix::<E>(
             "issuer,subject",
             &[account.issuer.into(), account.subject.into()],
+            1,
         )
-        .expect("lookup provisioned account")?;
+        .expect("lookup provisioned account")
+        .pop()?;
     let encoded = row.encode().expect("encode provisioned account");
     assert!(encoded.len() <= 1024, "provisioning row exceeds 1 KiB");
     Some(row)

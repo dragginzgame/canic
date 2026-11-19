@@ -1,8 +1,6 @@
 //! Root maintenance checks around the existing direct installation owner.
 
 #[cfg(test)]
-mod installed_tests;
-#[cfg(test)]
 mod tests;
 
 mod stored;
