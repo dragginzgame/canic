@@ -76,3 +76,36 @@ fn inspection_refuses_non_wasm_oversize_and_nonregular_inputs() {
     );
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn endpoints_only_list_callable_function_exports() {
+    // One empty function and one memory. Several export names can reference either.
+    let mut wasm = b"\0asm\x01\0\0\0\x01\x04\x01\x60\0\0\x03\x02\x01\0\x05\x03\x01\0\x01".to_vec();
+    let mut exports = vec![5];
+    for (name, kind) in [
+        ("canister_update z", 0),
+        ("canister_composite_query m", 0),
+        ("canister_query a", 0),
+        ("canister_query memory", 2),
+        ("canister_init", 0),
+    ] {
+        exports.push(u8::try_from(name.len()).unwrap());
+        exports.extend_from_slice(name.as_bytes());
+        exports.extend([kind, 0]);
+    }
+    wasm.extend([7, u8::try_from(exports.len()).unwrap()]);
+    wasm.extend(exports);
+    wasm.extend([10, 4, 1, 2, 0, 11]);
+    let file = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(file.path(), &wasm).unwrap();
+    let methods = crate::endpoints(file.path()).unwrap();
+    let actual: Vec<_> = methods.iter().map(|e| (e.mode, e.name.as_str())).collect();
+    assert_eq!(
+        actual,
+        [("query", "a"), ("composite_query", "m"), ("update", "z")]
+    );
+
+    wasm.truncate(wasm.len() - 7);
+    std::fs::write(file.path(), wasm).unwrap();
+    assert!(crate::endpoints(file.path()).is_err());
+}

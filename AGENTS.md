@@ -104,6 +104,9 @@ bytes, recovery boundaries and qualified predecessor paths:
   exact-code transitions; never fall back to endpoints omitting retained evidence.
   Reconciliation observes admitted effects without renewing budgets or authority;
   Store uses its restricted recovery contract, not generic advance.
+- For new topology formats use a hard cut and fresh installs. Keep the role in
+  stable storage and verify the addressed role on delivery, including for unnamed
+  children. Support upgrades between executables using the new format.
 - Reopen state and preserve leases/formats; never initialize after load failure or
   reset consumed authority. Unsupported old executables must refuse newer records.
 - Reports, watchers and listings project existing owners. They grant no completion,

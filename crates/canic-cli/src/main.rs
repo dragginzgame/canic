@@ -174,6 +174,24 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 features,
                 output.as_deref()
             )?)),
+            ArtifactCommand::Endpoints { wasm } => {
+                use std::fmt::Write;
+                let endpoints = canic_host::endpoints(wasm)?;
+                if !cli.json {
+                    let mut text = format!("{} endpoints\n", endpoints.len());
+                    for endpoint in &endpoints {
+                        writeln!(
+                            text,
+                            "{}  {}",
+                            endpoint.mode,
+                            ic_host_text::escape(&endpoint.name)
+                        )
+                        .expect("write to String");
+                    }
+                    return Ok(Output::Text(text));
+                }
+                Ok(serde_json::json!({"endpoints": endpoints}))
+            }
             ArtifactCommand::Inspect { wasm } => Ok(serde_json::json!(canic_host::inspect(wasm)?)),
         },
         Commands::Fleet(command) => return run_fleet(cli, command).await,

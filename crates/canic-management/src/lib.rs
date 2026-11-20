@@ -73,6 +73,8 @@ pub mod application {
     #[cfg(feature = "blob")]
     pub use crate::engine::blob::activate;
     pub use crate::engine::directory::publish_directory;
+    #[cfg(feature = "peers")]
+    pub use crate::engine::directory::{change_peer, observe_peer};
 }
 
 /// Root-owned Store maintenance custody, mounted explicitly by Root.

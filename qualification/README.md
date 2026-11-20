@@ -924,28 +924,42 @@ The native service-directory receiver checks bounded, ordered service rows,
 role lookup, exact replay, rejection of stale or conflicting revisions and
 reopen from an IC Storage cell. Run
 `cargo test --locked -p canic --features topology,storage topology::directory`.
-In `bash scripts/dev/test-root.sh children::`, Root creates and installs two
-directory recipients. Each captures the actual installing principal in its own
-storage. Both an ingress call from Root's operator and a call issued by the other
-installed recipient are refused. Root upgrades the first recipient; its publisher
-and stable bytes survive. Both recipients begin without a directory revision.
+In `bash scripts/dev/test-root.sh children::`, Root installs and upgrades a
+directory recipient. It refuses ingress publication and preserves its publisher
+and stable bytes across the upgrade. The two-service Store fixture separately
+checks that an installed sibling cannot publish to the recipient.
 With `bash scripts/dev/test-store.sh directory`, a real Root installs two named
 services from the test artifact supplier. First readiness schedules automatic
-publication to both new and existing named recipients. One installed case checks both recipients advance.
+publication to both new and existing named recipients. One installed case checks both recipients advance. The project hub resolves `accounts_hub` by name from its local directory and calls it without being given a principal. The accounts hub refuses that sibling’s attempt to publish a directory.
 A second stops the first recipient in delivery order; the second still advances.
-After restart the first serves its old revision until Root reopens and replays
+After restart the first still serves its old revision when a new project joins the other branch. The project receives the current directory through its own hub. The first hub catches up when Root reopens and replays
 the current directory. An explicit exact replay preserves the stable bytes.
-A third case uses ordinary install slots for a named hub and its unnamed child.
-Root installs both. The hub forwards its committed revision to the child through
-a fixture endpoint. The child resolves the hub locally and rejects a foreign publisher.
+A separate replay case upgrades the lagging recipient while Root stays online.
+It still resolves one hub at revision one. The operator replays revision two;
+the same role then resolves to both hubs and single-target lookup refuses ambiguity.
+The simulator also injects a delayed revision and a conflicting current revision
+as the retained Root. The installed receiver rejects both and preserves its exact
+stable bytes. The production Root replay endpoint emits only the current projection.
+Another case uses ordinary install slots for a named hub and its unnamed child.
+Root installs both and automatically publishes through the hub. After upgrading,
+the unnamed child still resolves the hub locally and rejects both a foreign sender
+and a message from its parent addressed to the wrong role. A stopped project
+remains a revision behind while its hub advances. After the hub upgrades it
+retains the old child acknowledgement. Operator replay catches the child up.
 This qualifies the parent binding and delivery across the second hop. On the sharding build, three installed cases exercise the shared child backstop.
 A scheduled hub fills a one-child ceiling before dispatch. Two Root-installed hubs
 race their shard and dedicated-instance grants for one remaining slot, and replay
 after Root upgrade recovers the winning allocation. With one additional subnet
 slot, the full shard pool leaves room for a project. The installed child resolves
 both hubs after its parent forwards the directory. The Store in this fixture is
-supplied by the simulator. Automatic parent fanout, durable
-per-target reporting and service replacement also remain open.
+supplied by the simulator. The peer-enabled Root case grants project sync to the project hub alone. It stops
+the receiving accounts hub during revocation, upgrades Root, observes the pending
+decision, retries it and reopens the receiver. Testkit holds a real call across a
+later revoke and regrant: the stale continuation cannot increment the witness
+counter, and the fresh call can. These tests use Root endpoints directly;
+fleet TOML/Host approval and sender-side permission selection remain open for #53.
+
+A published hub retains its principal across upgrades. A fleet-wide delivery report remains open.
 
 `make profile-test` runs the [retired profile fixture](../docs/demos/profile.md)
 through the existing deployment CLI, with private ownership, bounded capacity,
@@ -1083,9 +1097,9 @@ pages = 65536, auth_read = "read"` and obtains its retained routing Root from
 `canic::db::role::root()`. The shard uses `canic::topology::require_parent` to
 authorize a parent-only method. Declare `parent = "user_hub"` once in the
 shard's app definition in `canic.toml`. With `install_topology = true`, Host
-resolves that parent component's fleet binding and puts its principal in the approved install
-envelope. The shard mount retains it under the declared prefix plus `hub.v1`,
-which reopens Toko’s original allocation. If an older app used a different key,
+binds the parent principal and the app's explicit child role into the v2 install
+envelope. The shard retains both under the declared prefix plus `hub.v1`.
+Fresh installations use the new payload format. If an older app used a different key,
 supply `parent_storage_key = "…"` immediately after `database`. Use the original
 key on upgrade. Both mounts own their install/upgrade hooks,
 the standard Auth endpoints and a read-only readiness report. Readiness means

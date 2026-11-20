@@ -1,5 +1,50 @@
 # Changelog
 
+## [0.243.0] - 2026-11-20
+
+### ✨ Features
+
+Internal coordinators can call `canic::auth::session::authorize("write")?` to
+obtain a scoped authorization or a typed refusal. Call `auth.reauthorize()?`
+after each await before recording progress or starting another protected effect.
+[Canic #59 — Fallible scoped authorization for internal async operations](https://github.com/dragginzgame/canic/issues/59).
+
+```sh
+# Exercise admission and logout during an outstanding call on the prepared simulator.
+bash scripts/dev/test-auth.sh stable_session_and_logout
+```
+
+Inspect callable IC exports and their modes before deployment:
+
+```sh
+# Inspect a built Wasm artifact.
+canic artifact endpoints WASM_FILE
+```
+
+The opt-in `peers` Root build retains grants and revocations for a named sender,
+receiver and method. `observe_peer` reports pending until the receiver acknowledges
+the exact decision. Retry the same `change_peer` after the receiver restarts.
+
+Applications can look up a published service by its exact name with `Directory::by_name`, even when two hubs share a role.
+Applications can resolve one target with `Directory::unique_by_role`.
+A missing role and a role shared by several services give distinct refusals.
+The installed demo exercises a hub reopening with its previous directory,
+then catching up through an operator replay while Root stays online.
+Root now refuses a permanent child install whose topology frame names another
+installer or a parent absent from its ready installation records before reserving a slot or issuing a creation call. Topology-enabled
+pools now require an explicit component role and fresh installs. The v2 install
+frame binds the role and parent. Directory recipients retain their own role,
+check it on delivery and forward the approved branch to unnamed children.
+Each parent retains the revision acknowledged by each child across upgrades.
+Recipients reject directory revisions that remove or change a published hub's name, role or principal.
+Adding an unnamed shard or project sends the current directory only along its branch.
+
+```sh
+# Include the peer revocation and held-callback journey.
+# Run the directory journeys on the prepared local simulator.
+bash scripts/dev/test-store.sh directory
+```
+
 ## [0.242.0] - 2026-11-20
 
 New starter apps declare their endpoints in `src/lib.rs`. Native builds now

@@ -32,6 +32,7 @@ build() {
     cp -- "$(jq -r .wasm "target/store/$name.json")" "target/store/$name.wasm"
 }
 if [[ "$scope" == all || "$scope" == directory ]]; then
+    build peer-root canic-root --features peers
     build directory canic-directory-witness --manifest qualification/Cargo.toml --features placement
 fi
 if [[ "$scope" == directory ]]; then

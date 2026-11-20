@@ -122,18 +122,27 @@ impl Authorization {
     }
 }
 
+/// Admit the current IC caller for an application-selected scope.
+/// Call `reauthorize` on the returned authorization after each await and before
+/// committing progress or issuing another protected effect.
+///
+/// # Errors
+/// Returns the receiver's typed refusal for missing scope, session or current enrollment.
+pub fn authorize(scope: &'static str) -> Result<Authorization, SessionReadRefusal> {
+    authorized(api::caller(), api::time(), scope, |r| Authorization {
+        caller: r.caller,
+        issuer: r.issuer,
+        subject: r.subject,
+        scope,
+    })
+}
+
 /// Invoke the scoped endpoint under the actual caller's current authorization.
 /// # Panics
 /// Traps if the receiver refuses admission.
 #[doc(hidden)]
 pub fn with_authorization<R>(scope: &'static str, handler: impl FnOnce(Authorization) -> R) -> R {
-    authorized(api::caller(), api::time(), scope, |r| {
-        handler(Authorization {
-            caller: r.caller,
-            issuer: r.issuer,
-            subject: r.subject,
-            scope,
-        })
-    })
-    .unwrap_or_else(|error| api::trap(&format!("user authorization: {error:?}")))
+    let auth = authorize(scope)
+        .unwrap_or_else(|error| api::trap(&format!("user authorization: {error:?}")));
+    handler(auth)
 }

@@ -1,11 +1,12 @@
 //! Explicit topology for a newly created shard. The pool approval owns these bytes.
 pub mod directory;
+pub mod peer;
 
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "storage")]
-pub use actor::{attach_parent, parent, require_parent};
+pub use actor::{attach_parent, parent, require_parent, role};
 
 /// Check the actual caller against a locally retained topology authority.
 /// # Errors
@@ -19,7 +20,7 @@ pub fn require_sender(expected: Principal) -> Result<(), &'static str> {
 }
 
 const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
-    method: ic_wire::method_id("canic.shard_install.v1"),
+    method: ic_wire::method_id("canic.shard_install.v2"),
     direction: ic_wire::Direction::Request,
 };
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
@@ -36,11 +37,14 @@ pub struct Install {
     pub root: Principal,
     /// Application's approved immediate parent.
     pub parent: Principal,
+    /// Role selected by the application definition.
+    pub role: String,
     /// Inner application arguments, e.g. a nonce.
     pub application: Vec<u8>,
 }
 impl Install {
     fn validate(&self) -> Result<(), &'static str> {
+        directory::check_name(&self.role)?;
         if self.root == self.parent
             || self.root.as_slice().last() != Some(&1)
             || self.parent.as_slice().last() != Some(&1)
@@ -95,52 +99,61 @@ impl Install {
 mod actor {
     use super::{Install, Principal};
     use ic_platform_runtime::system as api;
-    use ic_storage::{
-        Memory, MemoryRuntime, StableKey,
-        adapter::{StableCell, storable::Blob},
-    };
-    use std::cell::Cell;
+    use ic_storage::{MemoryBacking, MemoryRuntime};
+    use std::cell::OnceCell;
 
-    thread_local! { static PARENT: Cell<Option<Principal>> = const {Cell::new(None)}; }
+    #[derive(serde::Serialize, serde::Deserialize)]
+    struct Identity {
+        parent: Principal,
+        role: String,
+    }
 
-    /// Create the bounded parent cell on install or strictly reopen its predecessor format.
+    thread_local! { static IDENTITY: OnceCell<Identity> = const {OnceCell::new()}; }
+
+    /// Create or reopen the receiver's parent and role in its named allocation.
     /// # Panics
-    /// Traps on wrong installer, invalid or self parent, duplicate attachment or invalid storage.
-    pub fn attach_parent<M: Memory>(host: &MemoryRuntime<M>, key: &str, install: Option<&Install>) {
-        assert!(PARENT.get().is_none(), "parent already attached");
-        let memory = host
-            .open_memory(&StableKey::parse(key).expect("parent key"))
-            .expect("parent lease");
-        let cell = match install {
-            Some(input) => {
-                let parent = input.installing_parent();
-                assert_eq!(memory.size(), 0, "occupied parent allocation");
-                StableCell::create(
-                    memory,
-                    Blob::<29>::try_from(parent.as_slice()).expect("parent bytes"),
-                )
-            }
-            None => {
-                ic_storage::stable_cell_payload_length(&memory, 29)
-                    .expect("bounded retained parent");
-                StableCell::<Blob<29>, _>::load(memory).expect("retained parent")
-            }
-        };
-        let bytes = cell.get().as_ref();
-        assert_eq!(bytes.last(), Some(&1), "invalid retained parent");
-        let parent = Principal::try_from_slice(bytes).expect("retained parent principal");
+    /// Traps on an invalid install, duplicate attachment or invalid retained identity.
+    pub fn attach_parent<M: MemoryBacking>(
+        host: &MemoryRuntime<M>,
+        key: &str,
+        install: Option<&Install>,
+    ) {
+        let initial = install.map(|input| {
+            let identity = Identity {
+                parent: input.installing_parent(),
+                role: input.role.clone(),
+            };
+            ic_wire::encode(&identity, ic_wire::Encoding::Payload, super::LIMITS)
+                .expect("parent and role")
+        });
+        let cell = crate::storage::cell(host, key, 128, initial);
+        let retained: Identity =
+            ic_wire::decode(cell.get(), ic_wire::Encoding::Payload, super::LIMITS)
+                .expect("retained parent and role");
+        super::directory::check_name(&retained.role).expect("invalid retained role");
+        assert_eq!(
+            retained.parent.as_slice().last(),
+            Some(&1),
+            "invalid retained parent"
+        );
         assert_ne!(
-            parent,
+            retained.parent,
             api::canister_self(),
             "parent must differ from shard"
         );
-        PARENT.set(Some(parent));
+        IDENTITY.with(|cell| assert!(cell.set(retained).is_ok(), "parent already attached"));
     }
 
     /// Parent recovered from this actor's own admitted storage.
     #[must_use]
     pub fn parent() -> Option<Principal> {
-        PARENT.get()
+        IDENTITY.with(|cell| cell.get().map(|id| id.parent))
+    }
+
+    /// Role recovered from this actor's own admitted storage.
+    #[must_use]
+    pub fn role() -> Option<String> {
+        IDENTITY.with(|cell| cell.get().map(|id| id.role.clone()))
     }
 
     /// Pre-decode guard for a parent-only endpoint.

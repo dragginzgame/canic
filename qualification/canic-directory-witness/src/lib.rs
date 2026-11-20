@@ -1,53 +1,66 @@
 //! Installed hub that captures its fleet Root and opens one service index.
 use canic::topology::Install;
-use canic::topology::directory::{Directory, ReceiveDirectory, ServiceInstall, retained::Index};
+use canic::topology::directory::{
+    Delivery, Directory, Hop, ReceiveDirectory, ServiceInstall,
+    retained::{self, Index},
+};
 use ic_platform_types::Principal;
 use ic_storage::DefaultMemoryImpl;
 use std::cell::RefCell;
 
+mod peer;
+
 const KEY: &str = "hub.services.v1";
 thread_local! { static INDEX: RefCell<Option<Index<DefaultMemoryImpl>>> = const { RefCell::new(None) }; }
 
-fn open(fresh: bool, child: Option<&Install>) {
-    let runtime = canic::storage::bootstrap(DefaultMemoryImpl::default(), fresh, "hub", &[KEY], 16);
-    INDEX.set(Some(if fresh {
-        match child {
-            Some(child) => Index::install_child(&runtime, KEY, child),
-            None => Index::install(&runtime, KEY),
-        }
-    } else {
-        Index::open(&runtime, KEY)
+enum Installation {
+    Service(String),
+    Child(Install),
+}
+
+fn open(installation: Option<Installation>) {
+    let runtime = canic::storage::bootstrap(
+        DefaultMemoryImpl::default(),
+        installation.is_some(),
+        "hub",
+        &[KEY, peer::KEY],
+        16,
+    );
+    peer::open(&runtime, installation.is_some());
+    INDEX.set(Some(match installation {
+        Some(Installation::Service(role)) => Index::install(&runtime, KEY, &role),
+        Some(Installation::Child(child)) => Index::install_child(&runtime, KEY, &child),
+        None => Index::open(&runtime, KEY),
     }));
 }
 
-fn install_args(bytes: &[u8]) -> Result<Option<Install>, &'static str> {
+fn install_args(bytes: &[u8]) -> Result<Installation, &'static str> {
+    // The inline fixture has one compiled role; Store-backed installs declare it.
     if bytes.is_empty() {
-        return Ok(None);
+        return Ok(Installation::Service("hub".into()));
     }
     if let Ok(child) = Install::decode(bytes) {
         return child
             .application
             .is_empty()
-            .then_some(Some(child))
+            .then_some(Installation::Child(child))
             .ok_or("expected empty witness payload");
     }
     let named = ServiceInstall::decode(bytes)?;
     named
         .application
         .is_empty()
-        .then_some(None)
+        .then_some(Installation::Service(named.role))
         .ok_or("expected empty witness payload")
 }
-
-#[allow(clippy::needless_pass_by_value)]
-fn install(child: Option<Install>) {
-    open(true, child.as_ref());
+fn install(value: Installation) {
+    open(Some(value));
 }
 fn reopen() {
-    open(false, None);
+    open(None);
 }
 canic::mount_lifecycle!(
-    input = Option<Install>,
+    input = Installation,
     max_bytes = 4096,
     decode = install_args,
     install = install,
@@ -81,52 +94,62 @@ fn resolve_service(role: String) -> Option<(u64, Vec<Principal>)> {
     })
 }
 
+// Select one target only when the local revision identifies a unique service.
+#[canic::query]
+fn unique_service(role: String) -> Option<(u64, Result<Principal, String>)> {
+    INDEX.with_borrow(|index| {
+        let directory = index.as_ref()?.current()?;
+        Some((
+            directory.revision,
+            directory.unique_by_role(&role).map_err(str::to_owned),
+        ))
+    })
+}
+
 // Accept a directory update under the retained installer authority.
 #[canic::update(contract = ReceiveDirectory)]
-fn receive_directory(directory: Directory) {
-    INDEX.with_borrow_mut(|index| {
-        index
-            .as_mut()
-            .expect("open service index")
-            .receive(directory)
-            .unwrap_or_else(|reason| ic_platform_runtime::system::trap(reason))
-    });
+async fn receive_directory(update: Delivery) -> Result<(), String> {
+    retained::receive(&INDEX, update).await
+}
+
+// Inspect the role and direct-child acknowledgement held by this actor.
+#[canic::query]
+fn topology_status(child: Principal) -> (String, Option<Option<u64>>) {
+    INDEX.with_borrow(|index| {
+        let index = index.as_ref().expect("open service index");
+        (
+            index.role().to_owned(),
+            index.child_delivery(child).map(|(_, revision)| revision),
+        )
+    })
 }
 
 // Have a real installed sibling try to publish while impersonation is impossible.
 #[canic::update]
-async fn attempt_delivery(target: Principal) -> bool {
+async fn attempt_delivery() -> Principal {
+    let target = INDEX
+        .with_borrow(|index| index.as_ref()?.current()?.by_name("accounts_hub"))
+        .expect("accounts_hub must be published");
     let result = canic::method::call::<ReceiveDirectory>(
         target,
         5,
-        &Directory {
-            revision: 1,
-            services: Vec::new(),
+        &Delivery {
+            directory: Directory {
+                revision: 1,
+                services: Vec::new(),
+            },
+            path: vec![Hop {
+                canister: target,
+                role: "hub".into(),
+                generation: [0; 32],
+            }],
         },
     )
     .await;
     match result {
-        Ok(()) => true,
-        Err(
-            canic::method::CallError::Rejected(reason) | canic::method::CallError::Unknown(reason),
-        ) if reason.message().contains("unexpected topology sender") => false,
+        Ok(Err(reason)) if reason == "unexpected topology sender" => target,
         other => panic!("unexpected directory outcome: {other:?}"),
     }
-}
-
-// Exercise forwarding of the hub's actual committed directory in the installed fixture.
-#[canic::update]
-async fn forward_directory(child: Principal) {
-    let directory = INDEX.with_borrow(|index| {
-        index
-            .as_ref()
-            .and_then(Index::current)
-            .expect("published directory")
-            .clone()
-    });
-    canic::method::call::<ReceiveDirectory>(child, 5, &directory)
-        .await
-        .expect("child directory delivery");
 }
 
 // Use the installed hub's identity and retained Root for placement qualification.

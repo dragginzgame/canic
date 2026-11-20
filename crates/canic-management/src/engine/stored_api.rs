@@ -148,6 +148,11 @@ pub fn root_history() -> canic_management_protocol::custody::RootHistory {
 }
 
 pub(super) fn root_history_complete() -> canic_management_protocol::custody::RootHistory {
+    #[cfg(feature = "peers")]
+    assert!(
+        STATE.with_borrow(|s| s.as_ref().expect("open engine").peers.is_empty()),
+        "peer permission custody required"
+    );
     canic_management_protocol::custody::RootHistory {
         current: current_root_custody(),
         store_history: STATE

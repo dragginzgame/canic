@@ -1,7 +1,7 @@
 //! Direct recipients bind to the real installing Root, including across a managed upgrade.
 use super::*;
 use canic::method::Contract;
-use canic::topology::directory::{Directory, ReceiveDirectory};
+use canic::topology::directory::{Delivery, Directory, Hop, ReceiveDirectory};
 
 fn frame(method: &str, direction: ic_wire::Direction) -> ic_wire::Encoding {
     ic_wire::Encoding::Frame {
@@ -59,62 +59,39 @@ async fn directory_recipients_retain_the_installing_root() {
     pic.add_cycles(root, 10_000_000_000_000).await;
     let wasm = artifact("directory.wasm");
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    for slot in ChildId::ALL {
-        admit(pic, root, slot, input(root, wasm.clone(), now))
-            .await
-            .unwrap();
-    }
+    admit(pic, root, ChildId::FIRST, input(root, wasm.clone(), now))
+        .await
+        .unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
-    let [hub, sibling] = read(pic, root).await.map(|c| {
-        assert_eq!(c.creation.phase, Phase::Ready);
-        CanisterId::from_text(c.creation.worker.unwrap()).unwrap()
-    });
-    assert_ne!(hub, sibling);
-    for recipient in [hub, sibling] {
-        assert_eq!(view(pic, recipient).await, (root, None));
-    }
+    let [first, _] = read(pic, root).await;
+    assert_eq!(first.creation.phase, Phase::Ready);
+    let hub = CanisterId::from_text(first.creation.worker.unwrap()).unwrap();
+    assert_eq!(view(pic, hub).await, (root, None));
     let original = pic.get_stable_memory(hub).await;
     let refusal = pic
         .update_call(
             hub,
             CanisterId::anonymous(),
             ReceiveDirectory::NAME,
-            ReceiveDirectory::encode_request(&Directory {
-                revision: 1,
-                services: vec![],
+            ReceiveDirectory::encode_request(&Delivery {
+                directory: Directory {
+                    revision: 1,
+                    services: vec![],
+                },
+                path: vec![Hop {
+                    canister: hub.to_text().parse().unwrap(),
+                    role: "hub".into(),
+                    generation: [0; 32],
+                }],
             })
             .unwrap(),
         )
         .await
-        .unwrap_err();
-    assert!(
-        refusal
-            .reject_message
-            .contains("unexpected topology sender"),
-        "{refusal:?}"
-    );
-    let reply = pic
-        .update_call(
-            sibling,
-            CanisterId::anonymous(),
-            "attempt_delivery",
-            ic_wire::encode(
-                &hub,
-                frame("attempt_delivery", ic_wire::Direction::Request),
-                canic::method::LIMITS,
-            )
-            .unwrap(),
-        )
-        .await
         .unwrap();
-    assert!(
-        !ic_wire::decode::<bool>(
-            &reply,
-            frame("attempt_delivery", ic_wire::Direction::Response),
-            canic::method::LIMITS
-        )
-        .unwrap()
+    assert_eq!(
+        ReceiveDirectory::decode_reply(&refusal).unwrap(),
+        Err("unexpected topology sender".into())
     );
     assert_eq!(pic.get_stable_memory(hub).await, original);
     let mut successor = wasm.clone();

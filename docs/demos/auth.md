@@ -389,6 +389,21 @@ For other async workflows, pass the local binding by reference and call
 `auth.reauthorize()?` before another privileged effect, mapping the refusal
 into the application's error type.
 
+An internal coordinator can obtain the same binding with the fallible
+`canic::auth::session::authorize("write")`. It takes the browser principal
+and time from the current IC execution and returns `SessionReadRefusal` on
+denial. Keep the binding across calls and recheck before each protected effect.
+For example, Toko's project coordinator can use:
+
+```rust
+let auth = canic::auth::session::authorize("write").map_err(|_| CreationError::Forbidden)?;
+let owner = Identity::from_authenticated_subject(auth.issuer(), auth.subject())
+    .map_err(|_| CreationError::Forbidden)?;
+host.associate(user, project).await?;
+auth.reauthorize().map_err(|_| CreationError::Forbidden)?;
+key.mark_ready(project)?;
+```
+
 For native contract generation, link each inspected actor into the CI executable
 (for example, `use toko_user_hub as _;`) and enable `canic/inspection` in that
 executable. Serialize `canic::inspection::methods("toko_user_hub", &schemas)?`.

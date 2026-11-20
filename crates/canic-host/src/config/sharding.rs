@@ -228,7 +228,13 @@ pub(crate) fn preview(
         if selected.config.receiver_selected(&pool.component) {
             return Err(Error::Invalid("dedicated children require a topology install frame; receiver installation is unsupported".into()));
         }
-        let arguments = topology(&root, &hub, &args)?;
+        let arguments = topology(
+            &selected.config.canisters,
+            &pool.component,
+            &root,
+            &hub,
+            &args,
+        )?;
         let instances = grant(
             stored::InstancePool {
                 root,
@@ -336,7 +342,7 @@ impl FleetConfig {
         let (root, hub, store) =
             self.pool_bindings(&policy.component, &policy.root, &policy.store)?;
         let arguments = if policy.install_topology {
-            topology(&root, &hub, &arguments)?
+            topology(&self.canisters, &policy.component, &root, &hub, &arguments)?
         } else {
             arguments
         };
@@ -412,6 +418,8 @@ impl FleetConfig {
 }
 
 fn topology(
+    canisters: &BTreeMap<String, CanisterConfig>,
+    component: &str,
     root: &str,
     hub: &str,
     arguments: &canic_management_protocol::application::Arguments,
@@ -419,6 +427,13 @@ fn topology(
     let bytes = canic::topology::Install {
         root: crate::network::principal(root)?,
         parent: crate::network::principal(hub)?,
+        role: canisters
+            .get(component)
+            .and_then(|entry| entry.role.as_ref())
+            .ok_or_else(|| {
+                Error::Invalid(format!("topology install requires a role for {component}"))
+            })?
+            .clone(),
         application: arguments.as_slice().to_vec(),
     }
     .encode()

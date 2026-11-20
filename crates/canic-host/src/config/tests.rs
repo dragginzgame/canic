@@ -1161,6 +1161,7 @@ fn pool_only_supplies_its_two_declared_infrastructure_bindings() {
     let source = r#"
 [apps.toko.canisters.hub]
 [apps.toko.canisters.shard]
+role = "account_worker"
 parent = "hub"
 [apps.toko.fleets.local]
 network = { kind = "Mainnet" }
@@ -1194,10 +1195,21 @@ expires_at_ns = 1800000000000000000
         .unwrap();
     assert_eq!(old.arguments, nonce);
     fleet.shard_pool.as_mut().unwrap().install_topology = true;
+    let mut missing_role = fleet.clone();
+    missing_role.canisters.get_mut("shard").unwrap().role = None;
+    let refusal = missing_role
+        .shard_pool_approval(manifest.clone(), nonce.clone())
+        .unwrap_err();
+    assert!(
+        refusal
+            .to_string()
+            .contains("topology install requires a role for shard")
+    );
     let approved = fleet.shard_pool_approval(manifest, nonce.clone()).unwrap();
     let install = canic::topology::Install::decode(approved.arguments.as_slice()).unwrap();
     assert_eq!(install.root.to_text(), approved.root);
     assert_eq!(install.parent.to_text(), approved.hub);
+    assert_eq!(install.role, "account_worker");
     assert_eq!(install.application, nonce.as_slice());
     assert!(install.check_root(install.parent).is_err());
     assert!(canic::topology::Install::decode(old.arguments.as_slice()).is_err());

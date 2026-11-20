@@ -63,6 +63,29 @@ pub fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Statu
     if input.arguments.as_slice().is_empty() {
         return Err(Refusal::Binding);
     }
+    if let Ok(binding) = canic::topology::Install::decode(input.arguments.as_slice()) {
+        binding
+            .check_root(api::canister_self())
+            .map_err(|_| Refusal::Binding)?;
+        // A declared parent receives authority over this child. Check Root's
+        // own installation evidence before reserving capacity or cycles.
+        let parent = binding.parent.to_text();
+        let owns_parent = STATE.with_borrow(|state| {
+            state
+                .as_ref()
+                .expect("open engine")
+                .journal
+                .0
+                .values()
+                .any(|journal| {
+                    journal.0.phase == canic_management_protocol::Phase::Ready
+                        && journal.0.worker.as_ref() == Some(&parent)
+                })
+        });
+        if !owns_parent {
+            return Err(Refusal::Binding);
+        }
+    }
     if let Ok(named) = ServiceInstall::decode(input.arguments.as_slice())
         && ChildId::ALL
             .into_iter()

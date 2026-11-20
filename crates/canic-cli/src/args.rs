@@ -187,6 +187,11 @@ pub(super) enum ArtifactCommand {
         #[arg(long, value_name = "WASM_FILE")]
         output: Option<PathBuf>,
     },
+    /// List query, composite query and update exports from a local Wasm file.
+    Endpoints {
+        #[arg(value_name = "WASM_FILE")]
+        wasm: PathBuf,
+    },
     /// Report the SHA-256 and size of a local Wasm file; no network calls.
     Inspect {
         #[arg(value_name = "WASM_FILE")]

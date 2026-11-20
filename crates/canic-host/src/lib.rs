@@ -37,7 +37,7 @@ pub mod subnet_comparison;
 mod wallet;
 
 pub use app_build::{BuiltCanister, build_app};
-pub use artifact::{Artifact, BuildReport, build, build_report, inspect};
+pub use artifact::{Artifact, BuildReport, WasmEndpoint, build, build_report, endpoints, inspect};
 pub use auth::{
     AuthApproval, AuthConfig, AuthReceipt, ReceiverController, ReceiverPolicy, create_auth_plan,
     create_auth_revocation, create_receiver_auth_plan,

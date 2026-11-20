@@ -112,6 +112,54 @@ pub fn inspect(path: &Path) -> Result<Artifact> {
     admit_bounded(&bytes, MAX_ARTIFACT_BYTES)
 }
 
+/// A callable method name and its IC export mode.
+#[derive(Debug, Serialize)]
+pub struct WasmEndpoint {
+    /// Public IC method name.
+    pub name: String,
+    /// One of query, composite_query or update.
+    pub mode: &'static str,
+}
+
+/// Read callable function exports in name order without executing the module.
+/// # Errors
+/// Refuses unreadable, oversized or malformed export sections.
+pub fn endpoints(path: &Path) -> Result<Vec<WasmEndpoint>> {
+    use wasmparser::{ExternalKind, Parser, Payload};
+
+    let bytes = crate::store::read(&path.canonicalize().map_err(supplier)?, MAX_ARTIFACT_BYTES)?;
+    admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
+    let mut methods = Vec::new();
+    for payload in Parser::new(0).parse_all(&bytes) {
+        let Payload::ExportSection(exports) = payload.map_err(supplier)? else {
+            continue;
+        };
+        for export in exports {
+            let export = export.map_err(supplier)?;
+            if export.kind != ExternalKind::Func {
+                continue;
+            }
+            let Some((prefix, name)) = export.name.split_once(' ') else {
+                continue;
+            };
+            let mode = match prefix {
+                "canister_query" => "query",
+                "canister_update" => "update",
+                "canister_composite_query" => "composite_query",
+                _ => continue,
+            };
+            if !name.is_empty() {
+                methods.push(WasmEndpoint {
+                    name: name.to_owned(),
+                    mode,
+                });
+            }
+        }
+    }
+    methods.sort_by(|a, b| (&a.name, a.mode).cmp(&(&b.name, b.mode)));
+    Ok(methods)
+}
+
 /// Build one explicit Cargo package and select its Wasm from artifact records.
 /// `ic-wasm-store` uses the workspace's locked registry artifact input and its packaged lockfile.
 /// An output path atomically receives a copy, replacing a prior build input.

@@ -100,6 +100,8 @@ const MANAGEMENT_LIMITS: Limits = Limits {
 };
 
 pub(crate) struct State {
+    #[cfg(feature = "peers")]
+    peers: canic::topology::peer::Permissions<DefaultMemoryImpl>,
     journal: Journals,
     artifact: Artifacts,
     journal_cell: StableCell<Vec<u8>>,
@@ -189,6 +191,8 @@ pub fn open(fresh: bool, readiness: Readiness) {
         fresh.then(|| sharding::Pools::default().encode()),
     );
     let mut state = State {
+        #[cfg(feature = "peers")]
+        peers: canic::topology::peer::Permissions::attach(&runtime, "manager.peers.v1", fresh),
         journal: Journals::from_bytes(journal_cell.get()).expect("journal custody"),
         artifact: Artifacts::from_bytes(artifact_cell.get().as_slice().into())
             .expect("artifact custody"),
@@ -239,7 +243,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
         schedule(slot);
     }
     if !fresh {
-        directory::schedule();
+        directory::schedule(None);
     }
 }
 
@@ -764,8 +768,8 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
                 s.phase = Phase::Ready;
                 s.failure = None;
             });
-            if before.phase != Phase::Ready && directory::named_service(slot).is_some() {
-                directory::schedule();
+            if before.phase != Phase::Ready {
+                directory::schedule(Some(slot));
             }
         }
         _ => {} // No observation can invent a lost creation principal.

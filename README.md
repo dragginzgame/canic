@@ -175,6 +175,7 @@ have no aliases.
 | `app build` | Build the selected app’s declared workspace/package recipes; `--canister NAME` builds only that canister. Prepare missing Cargo locks once and preserve existing locks. |
 | `app list` | List apps in the current/direct-child configs, or only `--config PATH`. Duplicate names require explicit config selection. |
 | `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. `ic-wasm-store` builds from the workspace's locked supplier protocol source. `--output WASM_FILE` atomically replaces a build input at a configured path. App names do not select packages. |
+| `artifact endpoints WASM_FILE` | List exported IC methods and their call modes from local Wasm. Use `--json` for structured output. |
 | `artifact inspect WASM_FILE` | Read a local uncompressed Wasm file and report its SHA-256 and size. No live-canister inspection or full Wasm validation. |
 | `fleet list` | Read fleet declarations; optional `--app APP` filters them. |
 | `fleet artifact list` | Read retained publication approvals/completion for the selected app, fleet and exact network. Includes materialized bootstrap publications; no network calls. `--json` retains full hashes and operation IDs. |

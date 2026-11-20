@@ -1169,20 +1169,54 @@ Root tracks delivery separately. No local lookup establishes current permission.
 The first one-hop publisher reads the named service and role from the exact
 Store-backed installation arguments. Only ordinary permanent slots with committed
 readiness contribute. For this append-only set the number of published services
-is a monotonic revision. Root reconstructs it on reopen. Replacing or removing a
-service requires a durable revision independent of the member count before that
-transition can be admitted. First readiness schedules one pass over the ready
+is a monotonic revision. Root reconstructs it on reopen. A published hub keeps its service name, role and principal for the life of the fleet.
+Code upgrades use that principal. Legacy `377fbce` explicitly refuses authority
+replacement and removal during scale-out in
+`crates/canic-core/src/ops/fleet_registry/tests.rs`
+(`scale_out_service_append_rejects_authority_replacement_and_removal`).
+The corresponding Root install checks preserve the occupied slot and the published
+name. An exact creation retry returns the recorded canister. First readiness schedules one pass over the ready
 named services. Each delivery has a bounded wait and checks the selected
 revision before sending. Reopening Root schedules a pass from the retained ready
 records. A failed recipient keeps its previous revision while other recipients
 can advance. The operator can replay the current expected revision to a named
-recipient after recovery. A pass makes no fleet-wide completion claim.
+recipient after recovery. When an unnamed child becomes ready, Root delivers the current revision only along the path to that child. Sibling branches receive updates on directory changes, Root reopen or an explicit replay. Root builds each branch
+from its ready installation records; each addressed hop carries the principal,
+app role and creation operation. A recipient verifies the actual sender against
+its retained publisher, checks its own identity, and forwards the remaining path.
+Before awaiting the child it records the child binding. Only a successful reply
+for the same installation and current revision advances its acknowledgement.
+Replaying the branch after a missed reply is safe. A pass makes no fleet-wide completion claim.
+
+Legacy `377fbce` validates the receiver, its immediate parent and its role, then
+forwards only the remaining path to the next declared child. Its topology
+validation regressions reject missing child rows, conflicting ownership and
+role mismatches. State fanout visits all direct children and records unconfirmed
+outcomes separately. The approved directory cascade keeps child membership
+with the hub: Root supplies installed, ready child identities and the hub owns
+their directory acknowledgements. Fresh child install frames bind Root, parent and application role. The recipient
+retains its role in stable storage and checks the addressed principal and role
+on each directory delivery, including for unnamed children. This is a hard cut
+for the child install frame and local topology cells. No predecessor migration
+or role inference from directory membership is admitted.
+A new permanent creation that supplies a child topology frame must name the
+actual installing Root and a parent with a ready creation record in that Root’s
+journal before Root reserves the slot. Controller status alone cannot establish
+parentage.
+[Legacy topology validation](https://github.com/dragginzgame/canic-legacy/blob/377fbce/crates/canic-core/src/ops/cascade/tests/mod.rs)
+and [state fanout](https://github.com/dragginzgame/canic-legacy/blob/377fbce/crates/canic-core/src/workflow/cascade/state.rs).
 
 Qualify the stored directory and topology cascade in a Canic fleet before
 adding Toko peer admission. Exercise a lookup inside the installed application:
 a Host inventory reconstructed from Root's public child reports proves only
-operator discovery. The historical profile entry preserves one immutable worker
-binding; it cannot demonstrate directory updates. Deliver a replacement while
+operator discovery. The installed recipient uses `Directory::unique_by_role`
+when an application needs one target. This adapts the missing/ambiguous-role
+regression from legacy `377fbce`,
+`crates/canic-host/src/protocol_binding/installed/tests.rs`, to a local,
+revision-labelled service directory. A reopened hub can still resolve its
+previous revision until Root replays the current one.
+The historical profile entry preserves one immutable worker
+binding; it cannot demonstrate directory updates. Publish a newly installed named service while
 one branch is unavailable, retain that branch's unconfirmed result, and replay
 the original delivery after recovery. After upgrading a recipient, verify its
 local lookup, its own parent and direct children, and refusal of an older or
@@ -1414,13 +1448,12 @@ Domain transitions consume logical bounded values. Endpoint adapters select and 
 
 A pool may opt into `install_topology = true`. Host resolves the declared
 hub and Root in the selected fleet and binds them into the original shard
-installation arguments. With a receiver policy, those arguments sit inside
+installation arguments together with the child role from the app definition. With a receiver policy, those arguments sit inside
 the receiver envelope; both Root bindings must agree. The installing Root is
-the management caller for this flow. Each shard reopens its original bounded
-parent-principal cell on upgrade, with the same authority, allocation and bytes.
+the management caller for this flow. Fresh shards persist the parent and role together and reopen both on upgrade.
 The hub reopens its existing routing Root. Parent admission compares the actual
 caller before argument copying. Topology grants no controller or Auth authority.
-Previously approved and unselected pools retain their original argument bytes.
+Planning an unselected pool preserves its application argument bytes. Topology-enabled pools require a fresh approval with the v2 install frame.
 This preserves the immediate-parent check from the frozen legacy user hub/shard
 journey at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` without its role catalogue.
 
@@ -1531,12 +1564,22 @@ independently declared hubs need an explicit fleet binding across components;
 the legacy fixture's same-component permission alone cannot authorize them.
 The operator approves binding changes through Root. Each hub accepts updates
 only from its retained routing Root, even when independently controlled.
-Project sync may pause during peer replacement. The user hub must commit
-revocation of the old binding before admitting the replacement. While paused,
-it refuses project-sync calls. A suspended handler must recheck its original
-binding before any further protected effect, including after admission resumes.
-The installed witness must exercise the pause, a late continuation from the old
-hub, and successful sync from the replacement. These are qualification criteria.
+Root's opt-in `peers` build retains up to 16 directional method bindings, including
+revoked entries. The controller submits the two published service names, exported
+method, next generation and grant or revoke decision to `change_peer`. Root
+resolves both principals from its own ready installation records and commits
+the decision before delivery. Only an exact durable receiver acknowledgement
+marks it applied. A stopped or unreachable receiver leaves revocation pending;
+the prior grant can still be used there until revocation arrives. Read
+`observe_peer` for the retained decision and status. Retrying the exact
+`change_peer` delivers it again. A newer grant is refused while revocation
+is pending. Recipient upgrades strictly reopen the method permissions and the
+installer from the same storage key. A peer-enabled Root's application custody
+report refuses to omit nonempty peer evidence from a managed maintenance plan.
+Revoking project-sync permission fences any suspended handler before its next
+protected effect. The installed witness must show that a fresh call succeeds
+after permission is granted again to the same project hub, while a continuation
+holding the revoked permission still fails.
 [Legacy admission API](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/access/caller_authority/mod.rs)
 and [installed denial regression](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/qualification/canic-tests/src/pic/fleet_registry/baseline/tests/caller_authority/mod.rs).
 
@@ -1555,7 +1598,7 @@ parent binding without introducing a new allocation or recovery authority.
 The child mount derives the parent allocation key by appending `hub.v1` to the
 declared storage prefix. A predecessor with another allocation name supplies
 that exact `parent_storage_key`. The approved install context supplies the
-principal, and upgrade strictly reopens the same cell.
+parent principal and role. Upgrades between role-aware executables strictly reopen the same cell.
 
 ### Endpoint ownership and actor composition
 

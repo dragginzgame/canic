@@ -84,6 +84,7 @@ async fn display_names_preserve_behavior_and_storage() {
     assert!(pic.get_stable_memory(hub).await == before);
     pic.set_controllers(shard, None, vec![root]).await.unwrap();
     let topology = canic::topology::Install {
+            role: "user_shard".into(),
         root: principal(root),
         parent: principal(hub),
         application: vec![7; 16],

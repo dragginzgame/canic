@@ -348,6 +348,7 @@ expires_at_ns={}
             r#"{original_config}
 [apps.toko.canisters.project_hub]
 [apps.toko.canisters.project]
+role = "project"
 parent = "project_hub"
 wasm = "project.wasm"
 [apps.toko.fleets.demo.canisters.project_hub]
@@ -835,6 +836,7 @@ fn instance_grant(
         reference,
         arguments: management::application::Arguments::new(
             canic::topology::Install {
+                role: "project".into(),
                 root: root.to_text().parse().unwrap(),
                 parent: hub.to_text().parse().unwrap(),
                 application: vec![8; 16],

@@ -12,6 +12,7 @@ description = "Root for bounded controller-approved application canisters"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+peers = ["canic-management/peers"]
 backup = ["canic-management/backup", "dep:serde"]
 sharding = ["canic/sharding", "canic-management/sharding", "dep:serde"]
 blob = ["canic-management/blob"]

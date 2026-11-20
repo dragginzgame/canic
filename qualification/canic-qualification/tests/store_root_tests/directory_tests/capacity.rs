@@ -16,6 +16,57 @@ pub(super) async fn approve(root: &Client<'_>, max_children: u8) {
     .unwrap();
 }
 
+pub(super) async fn ready_project(
+    root: &Client<'_>,
+    hub: CanisterId,
+    source: &stored::Stage<management::Approval>,
+) -> CanisterId {
+    let install = canic::topology::Install {
+        root: root.id.to_text().parse().unwrap(),
+        parent: hub.to_text().parse().unwrap(),
+        role: "project".into(),
+        application: vec![],
+    };
+    let grant = stored::InstancePool {
+        arguments: management::application::Arguments::new(install.encode().unwrap()).unwrap(),
+        root: root.id.to_text(),
+        hub: hub.to_text(),
+        component: "project".into(),
+        max_instances: 1,
+        creation_budget: management::CREATION_CYCLES,
+        expires_at_ns: source.approval.expires_at_ns,
+        reference: source.reference.clone(),
+    };
+    root.update::<_, Result<(), management::Refusal>>(
+        "configure_instances",
+        stored::CONFIGURE_INSTANCES,
+        &grant,
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
+    let hub = Client {
+        pic: root.pic,
+        id: hub,
+        operator: root.operator,
+    };
+    let place = async || {
+        hub.update::<_, Placement>(
+            "place",
+            ic_wire::method_id("place"),
+            &(true, 1u8),
+            canic::sharding::LIMITS,
+        )
+        .await
+    };
+    assert!(matches!(place().await, Placement::Pending(_)));
+    settle(root.pic).await;
+    let Placement::Assigned(_, id) = place().await else {
+        panic!("project must be ready")
+    };
+    CanisterId::from_text(id).unwrap()
+}
+
 pub(super) async fn exercise(
     root: &Client<'_>,
     source: &stored::Stage<management::Approval>,
@@ -26,6 +77,12 @@ pub(super) async fn exercise(
     let args = |parent: CanisterId| {
         management::application::Arguments::new(
             canic::topology::Install {
+                role: (if parent == hub {
+                    "user_shard"
+                } else {
+                    "project"
+                })
+                .into(),
                 root: root.id.to_text().parse().unwrap(),
                 parent: parent.to_text().parse().unwrap(),
                 application: vec![],
@@ -122,18 +179,9 @@ pub(super) async fn exercise(
                 // A child receives the directory without appearing among the named hubs.
                 let parent = if dedicated { project } else { hub };
                 let child = CanisterId::from_text(id).unwrap();
-                Client {
-                    pic: root.pic,
-                    id: parent,
-                    operator: root.operator,
-                }
-                .update::<_, ()>(
-                    "forward_directory",
-                    ic_wire::method_id("forward_directory"),
-                    &child,
-                    canic::method::LIMITS,
-                )
-                .await;
+                let status: (String, Option<Option<u64>>) =
+                    query_service(root.pic, parent, "topology_status", child).await;
+                assert_eq!(status.1, Some(Some(2)));
                 assert_eq!(
                     resolve(root.pic, child).await,
                     Some((2, vec![hub, project]))

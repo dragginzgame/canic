@@ -9,6 +9,7 @@ publish.workspace = true
 description = "Reusable bounded child management engine"
 
 [features]
+peers = []
 backup = ["canic-management-protocol/backup"]
 sharding = ["canic/sharding", "canic/topology", "dep:sha2"]
 blob = ["canic/blob"]

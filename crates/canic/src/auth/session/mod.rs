@@ -33,7 +33,7 @@ impl Engine {
     }
 }
 
-pub use actor::{Authorization, init, install, refresh, with_authorization};
+pub use actor::{Authorization, authorize, init, install, refresh, with_authorization};
 
 use super::{
     enrollment::{

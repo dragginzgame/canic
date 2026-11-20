@@ -19,7 +19,13 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
     )
     .unwrap();
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    let grant = grant(target, now);
+    let mut grant = grant(target, now);
+    grant.grant.scopes = auth_wire::List::new(
+        ["read", "write"]
+            .map(|s| auth_wire::Text::new(s.into()).unwrap())
+            .to_vec(),
+    )
+    .unwrap();
     let args = Install {
         storage: Storage::Stable,
         root: Principal::from_slice(f.root.as_slice()),
@@ -55,6 +61,7 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
     let (browser, input) = input(now);
     let frame = EstablishSession::encode_request(&input).unwrap();
     let session = admit(pic, target, browser, &frame).await.unwrap();
+    exercise_coordinator(pic, target, browser, grant.issuer, session.subject, now).await;
     let issue = issuer_test::request(1);
     let issued = issuer_test::call(&f, issuer_test::account(), issuer::ISSUE, &issue)
         .await
@@ -175,5 +182,124 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
         admit(pic, target, browser, &frame).await,
         Err(AdmissionRefusal::Revoked | AdmissionRefusal::ReplayConflict)
     ));
+    let revoked = pic
+        .update_call(
+            f.root,
+            f.installer,
+            "revoke_auth",
+            enrollment_request(enrollment::REVOKE, &grant),
+        )
+        .await
+        .unwrap();
+    enrollment_response::<Result<(), enrollment::Error>>(enrollment::REVOKE, &revoked).unwrap();
+    receiver_refresh(pic, target, f.installer).await.unwrap();
+    assert_eq!(
+        coordinator_write(pic, target, browser).await,
+        Err(SessionReadRefusal::Revoked)
+    );
+    pic.advance_time(Duration::from_secs(601)).await;
+    pic.tick().await;
+    assert_eq!(
+        coordinator_write(pic, target, browser).await,
+        Err(SessionReadRefusal::Unavailable)
+    );
     f.close().await;
+}
+
+async fn exercise_coordinator(
+    pic: &PocketIc,
+    target: CanisterId,
+    browser: CanisterId,
+    issuer: Principal,
+    subject: Principal,
+    now: u64,
+) {
+    let write = async |caller| coordinator_write(pic, target, caller).await;
+    assert_eq!(write(browser).await, Err(SessionReadRefusal::ScopeRejected));
+    let (writer, proof) = credential::signed(now, 10, 1, issuer, subject, &["read", "write"]);
+    assert_eq!(
+        write(writer).await,
+        Err(SessionReadRefusal::MissingOrExpired)
+    );
+    // Refill the receiver’s proof verification budget after the first browser login.
+    pic.advance_time(Duration::from_secs(3)).await;
+    pic.tick().await;
+    admit(
+        pic,
+        target,
+        writer,
+        &EstablishSession::encode_request(&proof).unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(write(writer).await, Ok((issuer, subject)));
+    let (gate, mut held) = auth_enrollment_tests::held_gate(pic).await;
+    let message = pic
+        .submit_call(
+            target,
+            writer,
+            "coordinate_write",
+            write_request(Some(gate)),
+        )
+        .await
+        .unwrap();
+    let token = auth_enrollment_tests::pending(&held, pic, 1)
+        .await
+        .pop()
+        .unwrap();
+    let logout = pic
+        .update_call(
+            target,
+            writer,
+            "logout_portable_session",
+            Logout::encode_request(&()).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        Logout::decode_response(&logout).unwrap(),
+        LogoutResult::Revoked(_)
+    ));
+    held.release(pic, &token).await.unwrap();
+    assert!(matches!(
+        write_result(&pic.await_call(message).await.unwrap()),
+        Err(SessionReadRefusal::MissingOrExpired | SessionReadRefusal::Revoked)
+    ));
+}
+
+fn write_frame(direction: ic_wire::Direction) -> ic_wire::Encoding {
+    ic_wire::Encoding::Frame {
+        method: ic_wire::method_id("coordinate_write"),
+        direction,
+    }
+}
+
+fn write_request(gate: Option<CanisterId>) -> Vec<u8> {
+    ic_wire::encode(
+        &gate,
+        write_frame(ic_wire::Direction::Request),
+        canic::method::LIMITS,
+    )
+    .unwrap()
+}
+
+fn write_result(bytes: &[u8]) -> Result<(Principal, Principal), SessionReadRefusal> {
+    ic_wire::decode(
+        bytes,
+        write_frame(ic_wire::Direction::Response),
+        canic::method::LIMITS,
+    )
+    .unwrap()
+}
+
+async fn coordinator_write(
+    pic: &PocketIc,
+    target: CanisterId,
+    caller: CanisterId,
+) -> Result<(Principal, Principal), SessionReadRefusal> {
+    write_result(
+        &pic.update_call(target, caller, "coordinate_write", write_request(None))
+            .await
+            .unwrap(),
+    )
 }

@@ -115,3 +115,29 @@ fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
 fn lifecycle_decode(_bytes: &[u8]) -> Result<(), std::convert::Infallible> {
     Ok(())
 }
+
+/// Approve or retry an exact directional permission at its original generation.
+#[cfg(feature = "peers")]
+#[canic::update(guard = directory_controller)]
+async fn change_peer(
+    request: (String, String, String, u64, bool),
+) -> Result<canic::topology::peer::Status, String> {
+    let (sender, receiver, method, generation, allow) = request;
+    management::application::change_peer(&sender, &receiver, &method, generation, allow).await
+}
+
+/// Observe delivery evidence without contacting the receiver.
+#[cfg(feature = "peers")]
+#[canic::query(guard = directory_controller)]
+fn observe_peer(
+    request: (String, String, String),
+) -> Result<
+    Option<(
+        canic::topology::peer::Decision,
+        canic::topology::peer::Status,
+    )>,
+    String,
+> {
+    let (sender, receiver, method) = request;
+    management::application::observe_peer(&sender, &receiver, &method)
+}

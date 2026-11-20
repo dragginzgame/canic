@@ -466,7 +466,7 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
     }
 }
 
-async fn held_gate(pic: &PocketIc) -> (CanisterId, ic_testkit::held::Fixture) {
+pub(super) async fn held_gate(pic: &PocketIc) -> (CanisterId, ic_testkit::held::Fixture) {
     use ic_testkit::held::{Catalog, Fixture as Held, Limits, Reply};
     let gate = pic.create_canister().await;
     let catalog = Catalog::new(
@@ -496,7 +496,7 @@ async fn held_gate(pic: &PocketIc) -> (CanisterId, ic_testkit::held::Fixture) {
     (gate, held)
 }
 
-async fn pending(
+pub(super) async fn pending(
     held: &ic_testkit::held::Fixture,
     pic: &PocketIc,
     count: usize,
