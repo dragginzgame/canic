@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [0.244.0] - 2026-11-20
 
 An opt-in Root can issue receiver-bound, two-hour role proofs to its ready shared
 shards. Root retains its Ed25519 key and the renewal deadlines for closed assignments
