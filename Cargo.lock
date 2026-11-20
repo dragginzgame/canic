@@ -2925,9 +2925,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.45.23"
+version = "0.45.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34f25161ac689c2204ba923e506286b8dd06d0490d2f4143f1cd2e606e2c6067"
+checksum = "8ee626aa8f6e773f28e9132fb5e9e63d66212ed4b0fe8de67f3468a46f5dc50e"
 
 [[package]]
 name = "toml"

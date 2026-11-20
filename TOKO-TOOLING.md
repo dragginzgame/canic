@@ -582,6 +582,15 @@ records and hash inputs with Wire through an explicit format/identity migration.
 Read the [encoding contract](https://github.com/dragginzgame/toko-tooling/blob/a716b501274678a8ebf163ef576bbb549e974acd/rules/engineering-details.md#ic-application-encoding)
 and [RPC budgets](https://github.com/dragginzgame/toko-tooling/blob/626da7cd9626cc2e152594862a2d82ea82ef51da/rules/rpc-budgets.md) for codecs, bindings or protocol changes.
 
+For canisters with a supported public Wire API, PR CI must regenerate the
+per-method manifests from the mounted contracts and compare them with the
+reviewed baseline. Match names and call modes against the callable exports of
+the selected release Wasm, accounting explicitly for non-Wire exports.
+An added, removed or changed contract requires explicit baseline review.
+For changes to the byte representation, check representative supported client
+bytes as well. Reuse the existing artifact build and the
+[shared comparison runner](https://github.com/dragginzgame/toko-tooling/blob/7a5236b0be7f037eb5cc44e806a21c9ada7cf2f6/docs/validation/source-helpers.md#api-baseline-comparison).
+
 ## Wasm optimization
 
 Toko Tooling owns optimization selection and evidence rules; IC Tooling's

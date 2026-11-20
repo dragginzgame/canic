@@ -77,7 +77,7 @@ serde_json = "1.0.154"
 toml = "1.2.1"
 
 # Tests and tooling
-toko-tooling = "=0.45.23"
+toko-tooling = "=0.45.25"
 
 [workspace.lints.cargo]
 unused_dependencies = "deny"
