@@ -2,7 +2,7 @@
 use canic::inspection::{Schemas, methods};
 use ex_user_directory_hub as _;
 use ex_user_directory_shard as _;
-use std::{collections::BTreeSet, path::Path};
+use std::path::Path;
 
 #[test]
 fn inventory_matches_built_hub_and_shard() {
@@ -12,31 +12,17 @@ fn inventory_matches_built_hub_and_shard() {
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
             "../../apps/examples/user-directory/artifacts/user_{role}.wasm"
         ));
-        let wasm = std::fs::read(path).expect("build the user-directory fleet before inspection");
-        let mut exports = BTreeSet::new();
-        for payload in wasmparser::Parser::new(0).parse_all(&wasm) {
-            if let wasmparser::Payload::ExportSection(section) = payload.unwrap() {
-                for export in section {
-                    let name = export.unwrap().name;
-                    if let Some(method) = name
-                        .strip_prefix("canister_query ")
-                        .or_else(|| name.strip_prefix("canister_update "))
-                    {
-                        exports.insert((
-                            method,
-                            name.strip_prefix("canister_")
-                                .unwrap()
-                                .split_once(' ')
-                                .unwrap()
-                                .0,
-                        ));
-                    }
-                }
-            }
-        }
+        let exports =
+            canic_host::endpoints(&path).expect("inspect the built user-directory canister");
         assert_eq!(
-            exports,
-            inventory.iter().map(|(&name, m)| (name, m.mode)).collect()
+            exports
+                .iter()
+                .map(|e| (e.name.as_str(), e.mode))
+                .collect::<Vec<_>>(),
+            inventory
+                .iter()
+                .map(|(&name, m)| (name, m.mode))
+                .collect::<Vec<_>>()
         );
         assert_eq!(inventory["readiness"].id, canic::readiness::METHOD);
         assert_eq!(

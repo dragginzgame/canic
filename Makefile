@@ -135,6 +135,13 @@ ci-wasm:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features blob,auth --target wasm32-unknown-unknown --no-deps
 
+# Compare mounted declarations with the two application Wasms exercised by inspection.
+.PHONY: check-wire-endpoints
+check-wire-endpoints:
+	cargo run --locked -p canic-cli -- app build --config apps/examples/user-directory/canic.toml --canister ex-user-directory-hub
+	cargo run --locked -p canic-cli -- app build --config apps/examples/user-directory/canic.toml --canister ex-user-directory-shard
+	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features inspection --test inspection
+
 # The runner selects the Wasm path from Cargo artifact messages.
 qualification-setup:
 	bash scripts/dev/prepare-server.sh

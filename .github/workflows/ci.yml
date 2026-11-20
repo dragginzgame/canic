@@ -111,6 +111,9 @@ jobs:
         run: make ci-native
       - name: Wasm product checks
         run: make ci-wasm
+      - name: Verify mounted Wire contracts against Wasm exports
+        if: runner.os == 'Linux'
+        run: make check-wire-endpoints
       - name: Retain failed setup diagnostics
         id: setup-evidence
         if: ${{ failure() && (steps.setup.outcome == 'failure' || steps.dependencies.outcome == 'failure') }}
