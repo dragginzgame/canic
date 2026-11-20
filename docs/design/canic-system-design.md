@@ -531,7 +531,8 @@ Example apps live in `apps/examples/<name>/`. An app's build recipe may select
 Cargo features for the Wasm artifact through `build.features`. For example,
 the user directory selects `auth` and `sharding` for Root. The app's fleets
 share this build choice. Enrollment and placement require separate approvals.
-The native command codec uses its existing package and binary target.
+The native command codec uses its existing package, binary target and the
+same selected package features.
 
 App build validates all declared output destinations before invoking Cargo,
 including when only one recipe is selected. Outputs cannot overlap the app's
@@ -1571,6 +1572,108 @@ operator grant, generation or per-method delivery ledger. This is a hard cut for
 the experimental peer-enabled installation layout; use a fresh installation.
 [Legacy admission API](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/access/caller_authority/mod.rs).
 
+#### Role admission for dynamic children
+
+A named directory guard covers fixed services. The next consumer is a receiver
+whose method admits any installed `user_shard` of its fleet. Keep individual
+shards out of the shared directory. Issuance must derive membership from Root's
+installation records. At legacy revision `377fbce` the prepare-admission
+workflow matched the member's role and authority epoch before signing. In the
+rewrite the generation comes from the creation operation. Root cross-checks each
+claimed pool slot with its creation journal, Store release, initial arguments and
+ready principal on reopen. A direct topology frame in a shared-shard grant must
+name the same Root and hub as the grant itself. An opaque initialization payload
+or a pool label alone cannot establish a caller's role. The Host can also place
+topology inside an Auth install envelope; that path needs explicit qualification
+before using it as issuer evidence. Verification must bind the trusted fleet Root, actual
+transport caller, expected role, receiver and validity window.
+
+At legacy revision `377fbce`, Root prepared a canister-signature claim in an
+update and returned the proof in a caller-bound certified query. The installed
+regression called PocketIC's query API with the member's principal supplied by
+the harness. It covered claim verification but did not demonstrate that an
+installed shard can fetch or renew a proof while the operator is absent.
+The rewrite's installed directory witness queried the same method two ways.
+A direct PocketIC query returned a data certificate; a normal bounded Canic call
+from the installed project hub reached the accounts hub and returned no certificate.
+Copying the legacy retrieval endpoint cannot supply a proof on that call path.
+An opted-in Root generates one Ed25519 key from IC entropy. Its stable issuer
+record retains the seed and closed assignment generations. Controller retries return
+the same public key, including after a same-layout Root upgrade. The installed
+receiver pins that public key and the installing Root. Renewal takes one bounded
+update from a ready shared shard. The receiver verifies the signature locally.
+At fresh Store-backed fleet bootstrap, `role_receivers` names the permanent
+services whose install frames must contain the prepared key. The approved
+fleet digest covers the Root executable, receiver names and service roles.
+After Store publication, Host checks Root control and module hash, signs
+`prepare_role_key` once using the existing attempt journal, and resolves the
+retained reply into each selected child's exact install frame. Apply resumes
+from that result. The role-enabled child observation covers installation
+evidence only. Legacy whole-Root maintenance observations stay fenced.
+
+A role receiver decodes its `ServiceInstall` and uses
+`RoleVerifier::new(installing_root, &install.application)?.attach()?` during
+install or strict reopen. A shared method implements `RoleMethod` with its
+required role. Both `#[canic::query(role_contract = M)]` and
+`#[canic::update(role_contract = M)]` verify the proof before invoking the
+ordinary application handler. Its effective Wire request is `(Proof, M::Input)`
+under the contract's existing method ID and byte budget. The sender uses
+`RoleCalls::new(retained_root)` once at attach time. Its update call checks
+application authority, renews on a cache miss, rechecks authority after the
+await, and submits one application request. Cached-only calls return a renewal
+error before dispatch if the proof is missing or expired. Each client holds
+one volatile audience entry and schedules no background work.
+Issuer loss requires explicit approval to change receiver trust.
+Each proof lasts two hours. Closing issuance binds the principal and original
+creation generation and retains a conservative two-hour deadline. Replaying
+closure returns that deadline. A signature committed before closure keeps its
+original expiration. Older custody endpoints refuse a prepared issuer until
+Host can verify its complete maintenance evidence.
+The controller uses the supplied Root command codec with `fleet call`.
+`inspect-shard PRINCIPAL` reads the slot, generation and live placements in a
+signed replicated call. `drain-shard PRINCIPAL SLOT GENERATION` starts drain
+for the reviewed allocation. This fences new
+placements while allowing the shard to renew proofs for its existing accounts.
+After committing a route migration or removal, the approved hub may release
+one exact key, principal and allocation generation. Repeating that release
+leaves other keys and generations untouched. Managed closure of role issuance
+requires the drained generation to have zero live placements.
+Returning keys keep their original route during drain. Root reports the closed
+generation's proof deadline and live placement count separately. The count
+describes routing records. Only the application knows what data the shard holds.
+
+Managed retirement requires a drained shard with zero live placements. While
+assignments remain, the shard stays available on its existing routes. The
+application owns migration or release of its records and any corresponding
+updates to hub references. Root checks placement counts for the exact allocation
+generation. A lookup retry must never route an old key to a reused principal.
+
+Legacy `377fbce`, `crates/canic-core/src/workflow/placement/sharding/release`
+and its tests (history `e8605c4`), validates pool ownership before removing a
+partition key and decreasing its count. The rewrite retains the creation generation
+and validates counts against actual claims on reopen. A closed issuer by itself
+cannot release a single application key.
+
+After drain, the proposed dormancy transition keeps the principal under Root
+control through the proof wait. The dormant child has no renewal timer or outgoing work.
+Root checks the deadline and confirmed dormancy before releasing a principal;
+a new fleet receives clean application storage.
+
+Provide a separately approved early re-adoption decision binding the original
+fleet, principal and assignment, the intended destination and the outstanding
+deadline. Retain that decision and the remaining exposure through retries and
+Root upgrades. Early re-adoption does not invalidate proofs that receivers
+already trust. The operator may choose the same or a different fleet and role,
+including changing both at once. Each approval names one exact destination and
+a fresh allocation generation. The operator accepts that this principal can
+present a saved proof to its previous receiver until the original expiry.
+Early approval skips only the proof wait. Drain, clean storage, destination
+admission and controller custody still require evidence. Retry resumes the
+approved handover to that same destination.
+The first acceptance test must distinguish the actual shard from a canister
+presenting a copied proof and reject a proof issued for a different receiver.
+[Legacy installed role-attestation regression](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/qualification/canic-tests/src/pic/fleet_registry/role_attestation/mod.rs).
+
 ### Stateful hub and shard setup
 
 A stateful role may select the Auth-enrolled hub or child layout in one setup
@@ -2267,6 +2370,9 @@ Backup owns certificate replay and finite host observations. Its normal capture 
 Adopt the paused FR1 outcome as a first-class managed operation. Retain complete inventory and custody outside retiring canisters before clearing any authority owner. Stop new producers, settle uncertain effects, obtain application data-discard approval, transfer controller custody before wiping a sole controller, then reset and verify empty assets. Preserve observed cycles and controlled ledger accounts.
 
 A surviving same-subnet executor may receive ready capacity. Otherwise assets remain explicitly held by the operator until fresh bootstrap. An executor cannot place itself in its own pool. Recommissioning is fresh admission; old receipts or missing historical state are not automatic prerequisites. Bypass only irrelevant historical metadata, never unresolved spending or custody.
+
+For assets with outstanding role proofs, the default wait and optional
+destination-bound early approval follow the [role admission contract](#role-admission-for-dynamic-children).
 
 Physical deletion is separate, explicit and irreversible. It requires a disposition and conservation proof; whole-Fleet release must not silently substitute deletion for a failed reset.
 

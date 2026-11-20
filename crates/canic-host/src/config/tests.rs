@@ -246,6 +246,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                     selected.fleet.clone(),
                     FleetDeclaration {
                         receiver_policy: None,
+                        role_receivers: vec![],
                         subnet_child_limit: None,
                         instance_pool: None,
                         shard_pool: None,

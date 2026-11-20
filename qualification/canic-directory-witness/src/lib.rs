@@ -8,11 +8,12 @@ use ic_platform_types::Principal;
 use ic_storage::DefaultMemoryImpl;
 
 mod peer;
+mod role_probe;
 
 const KEY: &str = "hub.services.v1";
 
 enum Installation {
-    Service(String),
+    Service(String, Vec<u8>),
     Child(Install),
 }
 
@@ -21,20 +22,25 @@ fn open(installation: Option<Installation>) {
         DefaultMemoryImpl::default(),
         installation.is_some(),
         "hub",
-        &[KEY],
+        &[KEY, role_probe::KEY],
         16,
     );
+    let pin = installation.as_ref().map(|i| match i {
+        Installation::Service(_, key) => (ic_platform_runtime::system::caller(), key.clone()),
+        Installation::Child(child) => (child.root, vec![]),
+    });
     DIRECTORY.set(Some(match installation {
-        Some(Installation::Service(role)) => Index::install(&runtime, KEY, &role),
+        Some(Installation::Service(role, _)) => Index::install(&runtime, KEY, &role),
         Some(Installation::Child(child)) => Index::install_child(&runtime, KEY, &child),
         None => Index::open(&runtime, KEY),
     }));
+    role_probe::open(&runtime, pin);
 }
 
 fn install_args(bytes: &[u8]) -> Result<Installation, &'static str> {
     // The inline fixture has one compiled role; Store-backed installs declare it.
     if bytes.is_empty() {
-        return Ok(Installation::Service("hub".into()));
+        return Ok(Installation::Service("hub".into(), vec![]));
     }
     if let Ok(child) = Install::decode(bytes) {
         return child
@@ -44,11 +50,10 @@ fn install_args(bytes: &[u8]) -> Result<Installation, &'static str> {
             .ok_or("expected empty witness payload");
     }
     let named = ServiceInstall::decode(bytes)?;
-    named
-        .application
-        .is_empty()
-        .then_some(Installation::Service(named.role))
-        .ok_or("expected empty witness payload")
+    if !matches!(named.application.len(), 0 | 32) {
+        return Err("expected empty payload or issuer key");
+    }
+    Ok(Installation::Service(named.role, named.application))
 }
 fn install(value: Installation) {
     open(Some(value));
@@ -161,4 +166,16 @@ async fn place(request: (bool, u8)) -> canic::sharding::Placement {
         canic::sharding::assign(root, [key; 32]).await
     }
     .expect("placement call")
+}
+
+/// Have the installed hub release one qualified route using its retained Root.
+#[cfg(feature = "placement")]
+#[canic::update(limits = canic::sharding::LIMITS)]
+async fn release_route(
+    input: (canic::sharding::Key, canic::sharding::ShardTarget),
+) -> Result<(), String> {
+    let root = DIRECTORY.with_borrow(|index| index.as_ref().expect("open hub").publisher());
+    canic::method::call::<canic::sharding::ReleaseShard>(root, 5, &input)
+        .await
+        .expect("release transport")
 }

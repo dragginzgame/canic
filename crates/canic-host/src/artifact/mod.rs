@@ -125,12 +125,15 @@ pub struct WasmEndpoint {
 /// # Errors
 /// Refuses unreadable, oversized or malformed export sections.
 pub fn endpoints(path: &Path) -> Result<Vec<WasmEndpoint>> {
-    use wasmparser::{ExternalKind, Parser, Payload};
-
     let bytes = crate::store::read(&path.canonicalize().map_err(supplier)?, MAX_ARTIFACT_BYTES)?;
-    admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
+    exported_methods(&bytes)
+}
+
+pub(crate) fn exported_methods(bytes: &[u8]) -> Result<Vec<WasmEndpoint>> {
+    use wasmparser::{ExternalKind, Parser, Payload};
+    admit_bounded(bytes, MAX_ARTIFACT_BYTES)?;
     let mut methods = Vec::new();
-    for payload in Parser::new(0).parse_all(&bytes) {
+    for payload in Parser::new(0).parse_all(bytes) {
         let Payload::ExportSection(exports) = payload.map_err(supplier)? else {
             continue;
         };
@@ -296,6 +299,17 @@ pub(crate) fn build_for_role(
         .arg("--target-dir")
         .arg(private.path())
         .env("CARGO_BUILD_BUILD_DIR", cache);
+    // Sharding Roots with Auth or role issuance exceed direct-install limits with symbol names.
+    // Strip symbols at link time, before computing the reviewed module hash.
+    if package == "canic-root"
+        && (features.iter().any(|f| f == "role-issuer")
+            || (features.iter().any(|f| f == "auth") && features.iter().any(|f| f == "sharding")))
+    {
+        command.args([
+            "--config",
+            "profile.release.package.canic-root.strip='symbols'",
+        ]);
+    }
     let role_input = format!("CANIC_APP_ROLE_{package}");
     if let Some(name) = role {
         command.env(role_input, name);

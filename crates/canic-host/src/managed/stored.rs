@@ -185,7 +185,7 @@ pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
             application::LIMITS,
         )
         .map_err(supplier),
-        application::CUSTODY => ic_wire::encode(
+        application::CUSTODY | application::CHILD_EVIDENCE => ic_wire::encode(
             &(),
             ic_wire::Encoding::Frame {
                 method,
@@ -238,11 +238,11 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
         .management()
         .and_then(|owner| owner.source.as_ref())
         .ok_or_else(invalid)?;
-    let value = if plan.management().is_some_and(|m| m.arguments.is_some()) {
+    let value = if plan.version == 8 || plan.management().is_some_and(|m| m.arguments.is_some()) {
         let value: application::Custody = ic_wire::decode(
             bytes,
             ic_wire::Encoding::Frame {
-                method: application::CUSTODY,
+                method: super::Method::Observe.id(plan),
                 direction: ic_wire::Direction::Response,
             },
             application::LIMITS,
@@ -270,8 +270,8 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
                     return Err(invalid());
                 }
             }
-        } else if value.root.current.stored.children[slot(plan).index()].creation
-            != Status::default()
+        } else if plan.management().is_some_and(|m| m.arguments.is_some())
+            && value.root.current.stored.children[slot(plan).index()].creation != Status::default()
         {
             return Err(invalid());
         }
@@ -343,7 +343,7 @@ pub(super) fn maintenance(plan: &Plan, bytes: &[u8]) -> Result<Option<applicatio
     let value: application::Custody = ic_wire::decode(
         bytes,
         ic_wire::Encoding::Frame {
-            method: application::CUSTODY,
+            method: super::Method::Observe.id(plan),
             direction: ic_wire::Direction::Response,
         },
         application::LIMITS,

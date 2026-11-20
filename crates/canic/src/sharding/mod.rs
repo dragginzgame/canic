@@ -39,6 +39,65 @@ pub struct Allocation {
     pub generation: [u8; 32],
 }
 
+/// Exact original destination of a placement under the addressed Root.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShardTarget {
+    /// Original slot and creation generation.
+    pub allocation: Allocation,
+    /// Installed shard principal.
+    pub shard: ic_platform_types::Principal,
+}
+
+/// Operator observation of one installed shard allocation.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ShardStatus {
+    /// Target to bind into a subsequent drain decision.
+    pub target: ShardTarget,
+    /// Whether the allocation has stopped accepting new placements.
+    pub draining: bool,
+    /// Current count of placement keys in Root's ledger.
+    pub live_placements: u16,
+}
+
+/// Observe a shard by principal under the selected Root.
+#[cfg(feature = "method")]
+pub struct InspectShard;
+
+#[cfg(feature = "method")]
+impl crate::method::Contract for InspectShard {
+    const NAME: &'static str = "inspect_shard";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REQUEST: ic_wire::Limits = LIMITS;
+    type Input = ic_platform_types::Principal;
+    type Output = Result<ShardStatus, String>;
+}
+
+/// Approve drain for an exact installed shard allocation.
+#[cfg(feature = "method")]
+pub struct BeginShardDrain;
+
+#[cfg(feature = "method")]
+impl crate::method::Contract for BeginShardDrain {
+    const NAME: &'static str = "begin_shard_drain";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REQUEST: ic_wire::Limits = LIMITS;
+    type Input = ShardTarget;
+    type Output = Result<u16, String>;
+}
+
+/// Release one route after the hub has durably retired its application binding.
+#[cfg(feature = "method")]
+pub struct ReleaseShard;
+
+#[cfg(feature = "method")]
+impl crate::method::Contract for ReleaseShard {
+    const NAME: &'static str = "release_shard";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REQUEST: ic_wire::Limits = LIMITS;
+    type Input = (Key, ShardTarget);
+    type Output = Result<(), String>;
+}
+
 /// Lookup and assignment use the same explicit outcomes.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Placement {

@@ -21,6 +21,8 @@ struct Child {
     artifact: crate::Artifact,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     release: Option<ic_wasm_store_protocol::Manifest>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    receiver_role: Option<String>,
     creation_cycles: u64,
     execute_at_ns: u64,
 }
@@ -32,6 +34,7 @@ impl Child {
             parent: self.parent,
             artifact: self.artifact,
             release: self.release,
+            receiver_role: self.receiver_role,
             creation_cycles: self.creation_cycles,
             execute_at_ns: self.execute_at_ns,
         }
@@ -43,6 +46,7 @@ impl Child {
             parent: c.parent.clone(),
             artifact: c.artifact.clone(),
             release: c.release.clone(),
+            receiver_role: c.receiver_role.clone(),
             creation_cycles: c.creation_cycles,
             execute_at_ns: c.execute_at_ns,
         }
@@ -54,7 +58,7 @@ impl Serialize for FleetPlan {
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
         let record = match self.children.as_slice() {
-            [first] if first.slot == ChildId::FIRST && self.version == 1 => Record {
+            [first] if first.slot == ChildId::FIRST && matches!(self.version, 1 | 3) => Record {
                 version: self.version,
                 root: self.root.clone(),
                 child: Child::from_child(first),
@@ -64,7 +68,7 @@ impl Serialize for FleetPlan {
             [first, second]
                 if first.slot == ChildId::FIRST
                     && second.slot == ChildId::SECOND
-                    && self.version == 2 =>
+                    && matches!(self.version, 2 | 4) =>
             {
                 Record {
                     version: self.version,

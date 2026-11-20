@@ -126,6 +126,11 @@ macro_rules! mount_endpoints {
             [async] (input: $crate::endpoint::protocol::children::Request<$crate::endpoint::protocol::application::Upgrade>) -> Result<$crate::endpoint::protocol::application::Maintenance, $crate::endpoint::protocol::Failure>,
             $crate::application::activate(input.slot, input.value).await);
     };
+    (@select observe_role_children) => {
+        $crate::mount_endpoints!(@method observe_role_children, "observe_role_children", update, true, application::CHILD_EVIDENCE, LIMITS,
+            [] () -> $crate::endpoint::protocol::application::Custody,
+            $crate::application::child_evidence());
+    };
     (@select observe_application_children) => {
         $crate::mount_endpoints!(@method observe_application_children, "observe_application_children", update, true, application::CUSTODY, LIMITS,
             [] () -> $crate::endpoint::protocol::application::Custody,

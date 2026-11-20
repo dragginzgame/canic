@@ -1,4 +1,6 @@
 //! Explicit topology for a newly created shard. The pool approval owns these bytes.
+#[cfg(feature = "method")]
+pub mod attestation;
 pub mod directory;
 
 use ic_platform_types::Principal;
@@ -18,8 +20,9 @@ pub fn require_sender(expected: Principal) -> Result<(), &'static str> {
     }
 }
 
+const INSTALL_ID: u64 = ic_wire::method_id("canic.shard_install.v2");
 const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
-    method: ic_wire::method_id("canic.shard_install.v2"),
+    method: INSTALL_ID,
     direction: ic_wire::Direction::Request,
 };
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
@@ -83,6 +86,21 @@ impl Install {
             ic_wire::decode(bytes, FRAME, LIMITS).map_err(|_| "shard install frame")?;
         input.validate()?;
         Ok(input)
+    }
+
+    /// Inspect application bytes for the direct topology request frame.
+    /// # Errors
+    /// Rejects an invalid payload under the recognized header. Other application
+    /// protocols remain opaque to this decoder.
+    pub fn decode_if_present(bytes: &[u8]) -> Result<Option<Self>, &'static str> {
+        if bytes
+            .first_chunk()
+            .is_some_and(|header| ic_wire::validate_request_header(INSTALL_ID, header).is_ok())
+        {
+            Self::decode(bytes).map(Some)
+        } else {
+            Ok(None)
+        }
     }
 
     /// Check the enclosing receiver policy when the application selects Auth.

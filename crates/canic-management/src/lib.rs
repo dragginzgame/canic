@@ -9,6 +9,8 @@ pub mod backup;
 pub mod endpoint;
 
 mod engine;
+#[cfg(feature = "role-issuer")]
+pub use engine::role_issuer;
 mod mount;
 
 pub mod publication;
@@ -67,7 +69,7 @@ pub mod stored {
 /// Exact application lifecycle bindings, mounted explicitly by Root.
 
 pub mod application {
-    pub use crate::engine::application::{custody, reconcile, stage};
+    pub use crate::engine::application::{child_evidence, custody, reconcile, stage};
     #[cfg(feature = "blob")]
     pub use crate::engine::application::{reconcile_upgrade, stage_upgrade};
     #[cfg(feature = "blob")]

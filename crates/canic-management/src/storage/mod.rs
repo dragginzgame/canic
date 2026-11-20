@@ -60,6 +60,8 @@ pub(super) const ARTIFACT_KEY: &str = "manager.artifacts.v1";
 #[cfg(feature = "sharding")]
 pub(super) const SHARDS_KEY: &str = "manager.shards.v1";
 pub(super) const KEYS: &[&str] = &[
+    #[cfg(feature = "role-issuer")]
+    super::role_issuer::KEY,
     JOURNAL_KEY,
     ARTIFACT_KEY,
     #[cfg(feature = "sharding")]

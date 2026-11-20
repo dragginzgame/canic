@@ -32,6 +32,8 @@ pub(super) fn arguments(slot: ChildId, upgrade: bool) -> Vec<u8> {
 }
 
 pub(super) fn require_legacy() {
+    #[cfg(feature = "role-issuer")]
+    super::role_issuer::require_unprepared();
     assert!(
         ChildId::ALL
             .into_iter()
@@ -155,6 +157,16 @@ pub async fn reconcile(slot: ChildId, input: application::Stage<Approval>) -> St
 /// Traps if storage has not opened.
 #[must_use]
 pub fn custody() -> application::Custody {
+    #[cfg(feature = "role-issuer")]
+    super::role_issuer::require_unprepared();
+    child_evidence()
+}
+
+/// Observe child deployments. This endpoint grants no Root maintenance authority.
+/// # Panics
+/// Requires open Root storage.
+#[must_use]
+pub fn child_evidence() -> application::Custody {
     application::Custody {
         root: super::stored_api::root_history_complete(),
         applications: ChildId::ALL.map(lifecycle),

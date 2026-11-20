@@ -2,6 +2,48 @@
 
 ## Unreleased
 
+An opt-in Root can issue receiver-bound, two-hour role proofs to its ready shared
+shards. Root retains its Ed25519 key and the renewal deadlines for closed assignments
+across same-layout upgrades. In a fresh Store-backed fleet, set
+`role_receivers = ["accounts_hub"]` in the fleet table and build its Root with
+`role-issuer`. The selected receiver opens the install pin and mounts methods
+with `#[canic::update(role_contract = M)]` or `#[canic::query(role_contract = M)]`.
+The sender’s `RoleCalls` renews on demand. Both endpoints use the role declared
+by the shared method. The controller can call `begin_shard_drain` to stop new placements
+and inspect the remaining count. Existing accounts keep their routes and
+the shard can renew its proof during drain. After committing its application
+change, the approved hub calls `ReleaseShard` for the exact key and allocation.
+Closing issuance requires an empty draining shard.
+
+```sh
+# With built fleet artifacts, review the Root and selected receiver.
+canic fleet plan --identity operator
+# Use the displayed digest to deploy or resume with the same key.
+canic fleet apply DIGEST --identity operator
+```
+
+For a deployed shard pool with the Root client built and a controller identity,
+inspect the shard first. Use the slot and generation from that reply to start
+the drain. Inspect again to see the current count.
+
+```sh
+canic fleet call --canister root --identity operator inspect-shard "$SHARD"
+canic fleet call --canister root --identity operator drain-shard "$SHARD" "$SLOT" "$GENERATION"
+```
+
+Root now rejects a shared-shard grant when its direct Canic topology frame
+names a different Root or parent hub. On upgrade, both placement pool types
+cross-check their retained grants against the installed arguments, Store release,
+allocation generation and ready principal. Existing consistent records keep
+their format. A conflicting retained record stops reopening.
+
+```sh
+# Inspect the declared pool before submitting its operator approval.
+canic fleet placements --help
+# With the local simulator prepared, exercise grant refusal and Root reopen.
+bash scripts/dev/test-store.sh directory
+```
+
 Application endpoints can guard a method with a fixed fleet service name. The
 guard runs before request decoding and composes with ordinary Rust
 `Result::and_then` and `Result::or_else`. Existing zero-argument guard paths

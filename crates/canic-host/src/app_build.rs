@@ -152,6 +152,7 @@ pub fn build_app(
                     &manifest,
                     &recipe.package,
                     client,
+                    &recipe.features,
                     &crate::application::codec::output(&wasm),
                 )
             })
@@ -173,24 +174,30 @@ fn build_client(
     manifest: &Path,
     package: &str,
     client: &str,
+    features: &[String],
     destination: &Path,
 ) -> Result<PathBuf> {
+    let mut command = Command::new("cargo");
+    command
+        .current_dir(
+            manifest
+                .parent()
+                .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?,
+        )
+        .args([
+            "build",
+            "--locked",
+            "--release",
+            "--message-format=json-render-diagnostics",
+            "--manifest-path",
+        ])
+        .arg(manifest)
+        .args(["--package", package, "--bin", client]);
+    if !features.is_empty() {
+        command.arg("--features").arg(features.join(","));
+    }
     let output = crate::process::capture(
-        Command::new("cargo")
-            .current_dir(
-                manifest
-                    .parent()
-                    .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?,
-            )
-            .args([
-                "build",
-                "--locked",
-                "--release",
-                "--message-format=json-render-diagnostics",
-                "--manifest-path",
-            ])
-            .arg(manifest)
-            .args(["--package", package, "--bin", client]),
+        &mut command,
         8 * 1024 * 1024,
         1024 * 1024,
         Duration::from_secs(600),

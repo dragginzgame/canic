@@ -280,6 +280,7 @@ dependencies = [
  "ic-auth-wire",
  "ic-blob-storage",
  "ic-db",
+ "ic-platform",
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
@@ -361,6 +362,7 @@ version = "0.243.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
+ "ic-platform",
  "ic-platform-protocol",
  "ic-platform-runtime",
  "ic-platform-types",
@@ -394,9 +396,12 @@ dependencies = [
  "canic",
  "canic-management",
  "canic-management-protocol",
+ "clap",
  "ic-platform-runtime",
+ "ic-platform-types",
  "ic-wire 0.27.1",
  "serde",
+ "serde_json",
  "toko-tooling",
 ]
 
@@ -1289,9 +1294,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb93bacaf70c0075844bcd532eadfbd3ff352a0bd9cba8ab9e6fb6f2f479297c"
+checksum = "5a8b7d9192f416042c73e0a2570ca563013a840aa9d291976950ed3a5e402945"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1308,9 +1313,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.24.2"
+version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06d88c9d0ca1bf07d0e9a9bd01f45b9454fee1449942228826799df0aed50300"
+checksum = "322f05eeed6f5d5da0ad3c0350f4fcd8f0f02c5122e462262699fadff99ddef4"
 dependencies = [
  "proc-macro2",
  "quote",

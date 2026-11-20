@@ -25,7 +25,7 @@ ic-host-fs.workspace = true
 ic-host-process.workspace = true
 ic-host-sign = { workspace = true, optional = true }
 ic-host-text.workspace = true
-ic-platform = { workspace = true, features = ["native-signed-secp256k1"] }
+ic-platform = { workspace = true, features = ["ingress-packets", "native-signed-secp256k1"] }
 ic-platform-protocol = { workspace = true, features = ["ledger"] }
 ic-platform-types.workspace = true
 ic-query-topology.workspace = true

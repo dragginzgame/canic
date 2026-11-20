@@ -9,6 +9,7 @@ publish.workspace = true
 description = "Reusable bounded child management engine"
 
 [features]
+role-issuer = ["sharding", "canic/entropy", "dep:ic-platform"]
 backup = ["canic-management-protocol/backup"]
 sharding = ["canic/sharding", "canic/topology", "dep:sha2"]
 blob = ["canic/blob"]
@@ -18,6 +19,7 @@ maintenance-candidate = []
 [dependencies]
 canic = { workspace = true, features = ["method", "storage", "topology"] }
 canic-management-protocol.workspace = true
+ic-platform = { workspace = true, features = ["ed25519"], optional = true }
 ic-platform-protocol = { workspace = true, features = ["management"] }
 ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
 ic-platform-types.workspace = true

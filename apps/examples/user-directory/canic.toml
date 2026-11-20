@@ -1,7 +1,7 @@
 [apps.ex-user-directory.canisters.root]
 role = "root"
 wasm = "artifacts/root.wasm"
-build = { manifest = "../../../Cargo.toml", package = "canic-root", features = ["auth", "sharding"] }
+build = { manifest = "../../../Cargo.toml", package = "canic-root", client = "canic-root-client", features = ["auth", "sharding"] }
 
 [apps.ex-user-directory.canisters.store]
 role = "wasm-store"

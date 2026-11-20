@@ -8,6 +8,7 @@ mod convergence;
 mod history;
 mod record;
 mod releases;
+mod role_key;
 
 use crate::{
     ApplyOutcome, Artifact, DeploymentName, Error, ManagedOwner, Plan, Receipt, Result,
@@ -45,6 +46,9 @@ pub struct FleetChild {
     /// Immutable release in this fleet's approved Store; absent in retained inline fleets.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub release: Option<ic_wasm_store_protocol::Manifest>,
+    /// Resolve this service role and Root public key into the approved install.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receiver_role: Option<String>,
     /// Child attachment drawn from Root's funded budget, not another host debit.
     pub creation_cycles: u64,
     /// Earliest autonomous dispatch; admission must precede this time.
@@ -128,7 +132,13 @@ impl FleetPlan {
                 .iter()
                 .map(|child| child.slot)
                 .eq(ChildId::ALL[..self.children.len()].iter().copied())
-            || self.version != self.children.len() as u32
+            || self.version
+                != self.children.len() as u32
+                    + if self.children.iter().any(|c| c.receiver_role.is_some()) {
+                        2
+                    } else {
+                        0
+                    }
             || !matches!(self.root.action, crate::PlanAction::Create { .. })
             || self.root.version != 2
             || self.root.creation_cycles() < (1 + self.children.len() as u64) * 1_000_000_000_000
@@ -144,7 +154,8 @@ impl FleetPlan {
         }
         for (_, child) in self.children() {
             child.deployment.validate()?;
-            if child.deployment.app != root.app
+            if (self.version > 2 && child.release.is_none())
+                || child.deployment.app != root.app
                 || child.deployment.fleet != root.fleet
                 || child.deployment.canister == root.canister
                 || child.parent.operation != self.root.digest()?
@@ -230,7 +241,7 @@ impl FleetPlan {
                 arguments: None,
                 blob_attempt: None,
                 source: self.source(receipt, store, slot)?,
-                slot: (self.version == 2).then_some(slot),
+                slot: (self.children.len() == 2).then_some(slot),
                 root: receipt.canister.clone(),
                 root_module: self.root.artifact.sha256.clone(),
                 execute_at_ns: child.execute_at_ns,
@@ -240,6 +251,37 @@ impl FleetPlan {
             deployment: Some(child.deployment.clone()),
         };
         plan.validate()?;
+        Ok(plan)
+    }
+
+    fn resolved_child(
+        &self,
+        dir: &Path,
+        receipt: &Receipt,
+        store: Option<&Receipt>,
+        slot: ChildId,
+    ) -> Result<Plan> {
+        let mut plan = self.child_plan(receipt, store, slot)?;
+        if self.version > 2 {
+            let definition = self.child(slot)?;
+            plan.version = 8;
+            if let crate::PlanAction::CreateChild(owner) = &mut plan.action {
+                owner.arguments = definition
+                    .receiver_role
+                    .as_ref()
+                    .map(|role| {
+                        canic::topology::directory::ServiceInstall {
+                            name: definition.deployment.canister.clone(),
+                            role: role.clone(),
+                            application: role_key::retained(dir, self, receipt)?,
+                        }
+                        .encode()
+                        .map_err(|e| Error::Invalid(e.into()))
+                    })
+                    .transpose()?;
+            }
+            plan.validate()?;
+        }
         Ok(plan)
     }
 
@@ -305,7 +347,7 @@ pub(crate) fn load(dir: &Path, id: &str) -> Result<FleetPlan> {
         if path.join("plan.json").try_exists().map_err(supplier)? {
             let receipt = root_receipt(dir, &value)?.ok_or_else(invalid)?;
             let expected =
-                value.child_plan(&receipt, store_receipt(dir, &value)?.as_ref(), index)?;
+                value.resolved_child(dir, &receipt, store_receipt(dir, &value)?.as_ref(), index)?;
             if plan::load(&path, &expected.digest()?)?.0 != expected {
                 return Err(invalid());
             }
@@ -411,6 +453,25 @@ pub fn plan_fleet(
         &selected.wasm_path(config_path, root_name, None)?,
         artifact::MAX_WASM,
     )?;
+    if !selected.config.role_receivers.is_empty() {
+        let methods = artifact::exported_methods(&root_bytes)?;
+        if [
+            "prepare_role_key",
+            "issue_role",
+            "close_role_issuance",
+            "observe_role_children",
+        ]
+        .iter()
+        .any(|required| {
+            !methods
+                .iter()
+                .any(|m| m.mode == "update" && m.name == *required)
+        }) {
+            return Err(Error::Invalid(
+                "build the selected Root with role-issuer before planning role receivers".into(),
+            ));
+        }
+    }
     let mut child_bytes: Vec<_> = children
         .iter()
         .map(|(name, _)| {
@@ -480,12 +541,23 @@ pub fn plan_fleet(
                     &child_bytes[index],
                 )
             }),
+            receiver_role: selected
+                .config
+                .role_receivers
+                .contains(children[index].0)
+                .then(|| children[index].1.role.clone())
+                .flatten(),
             creation_cycles: canic_management_protocol::CREATION_CYCLES,
             execute_at_ns: dispatch,
         })
     };
     let mut value = FleetPlan {
-        version: children.len() as u32,
+        version: children.len() as u32
+            + if selected.config.role_receivers.is_empty() {
+                0
+            } else {
+                2
+            },
         children: (0..children.len()).map(definition).collect::<Result<_>>()?,
         root,
         store: stores
@@ -598,9 +670,24 @@ pub fn plan_fleet(
         }
         // Existing approvals keep their delivery contract; a Store alone never migrates inline custody.
         for (child, retained) in value.children.iter_mut().zip(&old.children) {
+            if child.receiver_role != retained.receiver_role {
+                return Err(Error::Blocked(
+                    "changing installed receiver trust requires a separate approval".into(),
+                ));
+            }
             if retained.release.is_none() {
                 child.release = None;
             }
+        }
+        if old.children.len() < value.children.len()
+            && value.children[old.children.len()..]
+                .iter()
+                .any(|c| c.receiver_role.is_some())
+        {
+            return Err(Error::Blocked(
+                "adding receiver trust after bootstrap needs a separately approved installation"
+                    .into(),
+            ));
         }
         return convergence::plan(
             &store,
@@ -739,9 +826,12 @@ pub(crate) async fn apply(
         None
     };
     releases::apply(dir, &value, &root, store.as_ref(), identity, icp).await?;
+    if value.version > 2 {
+        role_key::prepare(dir, &value, &root, identity, icp).await?;
+    }
     let mut outcomes = Vec::new();
     for (index, definition) in value.children() {
-        let child = value.child_plan(&root, store.as_ref(), index)?;
+        let child = value.resolved_child(dir, &root, store.as_ref(), index)?;
         let child_id = child.digest()?;
         let path = dir.join(record::child_leaf(index));
         if !path.join("plan.json").try_exists().map_err(supplier)? {
@@ -823,7 +913,9 @@ pub(crate) async fn reconcile(
             outcome: operation::reconcile_at(
                 dir.parent().ok_or_else(invalid)?,
                 &path,
-                &value.child_plan(&root, store.as_ref(), index)?.digest()?,
+                &value
+                    .resolved_child(dir, &root, store.as_ref(), index)?
+                    .digest()?,
                 identity,
                 icp,
             )
@@ -859,7 +951,7 @@ pub(crate) fn status(dir: &Path, id: &str) -> Result<crate::FleetStatus> {
             Some(operation::status_at(
                 &path,
                 &value
-                    .child_plan(&receipt, store_receipt(dir, &value)?.as_ref(), index)?
+                    .resolved_child(dir, &receipt, store_receipt(dir, &value)?.as_ref(), index)?
                     .digest()?,
             )?)
         } else {
@@ -910,7 +1002,7 @@ pub(crate) fn inventory(
             records.push(crate::fleet::local_operation_at(
                 &path,
                 &value
-                    .child_plan(&receipt, store_receipt(dir, &value)?.as_ref(), index)?
+                    .resolved_child(dir, &receipt, store_receipt(dir, &value)?.as_ref(), index)?
                     .digest()?,
                 now,
             )?);

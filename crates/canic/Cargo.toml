@@ -47,6 +47,7 @@ metrics = ["dep:ic-platform-runtime"]
 recovery = []
 provisioning = ["sharding", "stateful-role", "method"]
 readiness = ["dep:ic-platform-runtime"]
+role-verification = ["topology", "method", "dep:ic-platform"]
 sharding = ["dep:ic-platform-runtime", "dep:ic-platform-types"]
 stateful-role = ["auth-enrollment", "db-store", "readiness", "topology"]
 storage = ["dep:ic-storage"]
@@ -63,6 +64,7 @@ ic-auth-protocol-types = { workspace = true, optional = true }
 ic-auth-wire = { workspace = true, optional = true }
 ic-blob-storage = { workspace = true, optional = true }
 ic-db = { workspace = true, optional = true }
+ic-platform = { workspace = true, optional = true, features = ["ed25519"] }
 ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
 ic-platform-types = { workspace = true, optional = true }
 ic-storage = { workspace = true, optional = true }

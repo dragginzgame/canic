@@ -40,6 +40,17 @@ pub(super) async fn exercise(root: &Client<'_>, accounts: CanisterId, project: C
         )
         .unwrap()
     };
+    assert!(query_service::<bool>(pic, accounts, "certificate_available", ()).await);
+    assert!(
+        !sender
+            .update::<_, bool>(
+                "probe_certificate",
+                ic_wire::method_id("probe_certificate"),
+                &(),
+                canic::method::LIMITS
+            )
+            .await
+    );
     for caller in [root.id, accounts, root.operator] {
         // Even malformed input is refused by the guard before Wire decoding.
         let reject = pic

@@ -21,6 +21,10 @@ for entry in root-faults:canic-root:fault-injection store-candidate:ic-wasm-stor
     "$cli" artifact build --package "${rest%%:*}" --features "${rest#*:}" --json > "target/publication/$name.json"
     cp -- "$(jq -r .wasm "target/publication/$name.json")" "target/publication/$name.wasm"
 done
+if [[ $# == 0 || "${1:-}" == role_fleet* ]]; then
+    "$cli" artifact build --package canic-root --features role-issuer --output target/publication/role-root.wasm --json > target/publication/role-root.json
+    "$cli" artifact build --manifest qualification/Cargo.toml --package canic-directory-witness --output target/publication/role-hub.wasm --json > target/publication/role-hub.json
+fi
 if [[ $# == 0 || "${1:-}" == counter_managed:: ]]; then
     "$cli" app build --config apps/examples/counter/canic.toml --canister ex-counter --json > target/publication/counter-client.json
     for variant in v1 v2 fenced; do

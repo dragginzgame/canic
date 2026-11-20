@@ -53,7 +53,9 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
 pub fn response_limits(method: u64) -> wire::Limits {
     if matches!(
         method,
-        protocol::application::CUSTODY | protocol::application::ACTIVATE
+        protocol::application::CUSTODY
+            | protocol::application::CHILD_EVIDENCE
+            | protocol::application::ACTIVATE
     ) {
         return protocol::application::LIMITS;
     }

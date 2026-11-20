@@ -952,12 +952,45 @@ race their shard and dedicated-instance grants for one remaining slot, and repla
 after Root upgrade recovers the winning allocation. With one additional subnet
 slot, the full shard pool leaves room for a project. The installed child resolves
 both hubs after its parent forwards the directory. The Store in this fixture is
-supplied by the simulator. The accounts hub's endpoint checks the actual caller against the locally published
+supplied by the simulator. Before the shared pool is approved, the mixed-pool fixture submits direct
+topology frames naming the wrong Root and the wrong parent. Both grants are
+refused, then the original valid grant is accepted. The winning placement
+retains its original generation and principal across Root upgrade.
+
+The accounts hub's endpoint checks the actual caller against the locally published
 `project_hub`. The installed test withholds the publication, replays it, upgrades
 the receiver, and checks calls from the project hub, a different hub and controllers.
 The update requires both the named caller and open writes. A read-only query
 accepts either the named caller or the controller. Pausing and reopening writes
 while a call is suspended fences the original continuation.
+
+The directory suite installs a Root built with `role-issuer`, two permanent
+hubs and actual placed children. The controller prepares Root's stable Ed25519
+key and supplies its public key in the accounts hub's approved installation.
+The shared shard uses `RoleCalls` to obtain a two-hour proof in one call. A mounted role contract admits writes and query reads while Root is stopped. Expiry requires renewal before the next write. The verifier checks the
+caller, receiver, role, time and signature locally even while Root is stopped.
+The test checks generation, refusal of unrelated callers, tampering, expiry,
+renewal and closure. A Root upgrade preserves the public key and original
+closure deadline. The suite builds the user-directory Root companion through its app recipe.
+The controller uses its native codec to inspect the installed allocation, then
+starts drain with the returned principal, slot and generation.
+A draining shard with a spare seat refuses new placements, serves its
+original assignments and renews after two hours. The installed hub releases
+each exact placement. A release retry preserves the remaining assignment;
+a stale generation and a direct controller release are refused. Root reopens
+with one live assignment, and later reopens the empty allocation with its
+original proof deadline. The allocation continues to consume subnet capacity.
+After a simulator controller forcibly reinstalls the same principal as a worker, renewal
+remains closed. A saved proof still works until its original expiry.
+The simulator performs the controller handover directly. Managed dormancy,
+early handover approvals, rotation and
+Host verification of signing-key custody remain open. This issuer currently
+accepts shared shards installed with the direct topology frame.
+
+The CLI case `bash scripts/dev/test-publication.sh role_fleet` builds a fresh
+receiver-enabled fleet. It interrupts signing immediately before child staging,
+then resumes the same approval and compares the retained signed key request
+and child install plan byte for byte through completion.
 
 A published hub retains its principal across upgrades. A fleet-wide delivery report remains open.
 

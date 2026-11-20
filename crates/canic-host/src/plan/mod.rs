@@ -94,11 +94,21 @@ impl Plan {
         let controller = principal(&self.controller)?;
         if !matches!(
             (self.version, self.deployment.is_some()),
-            (1, false) | (2, true) | (3, true) | (4, true) | (5, true) | (6, true) | (7, true)
+            (1, false)
+                | (2, true)
+                | (3, true)
+                | (4, true)
+                | (5, true)
+                | (6, true)
+                | (7, true)
+                | (8, true)
         ) || (self.version == 3) != self.publication().is_some()
             || (self.version == 4) != self.removal().is_some()
             || (self.version == 5) != self.auth().is_some()
-            || (self.version == 6) != self.management().is_some_and(|m| m.arguments.is_some())
+            || (self.version != 8
+                && (self.version == 6) != self.management().is_some_and(|m| m.arguments.is_some()))
+            || (self.version == 8
+                && !matches!(&self.action, PlanAction::CreateChild(m) if m.source.is_some()))
             || (self.version == 7) != self.application_call().is_some()
             || self.artifact.bytes > self.artifact_limit()
             || self.artifact.sha256.len() != 64
@@ -147,7 +157,7 @@ impl Plan {
             {
                 return Err(Error::Invalid("invalid child upgrade target".into()));
             }
-            if !matches!(self.version, 2 | 6)
+            if !matches!(self.version, 2 | 6 | 8)
                 || (managed.source.is_none()
                     && self.artifact.bytes > canic_management_protocol::MAX_WASM)
                 || crate::unhex(&managed.root_module)?.len() != 32

@@ -28,6 +28,15 @@ canic app canister list
 canic app build
 ```
 
+For a deployed shard pool with the Root client built and a controller identity,
+inspect the shard first. Use the slot and generation from that reply to start
+the drain. Inspect again to see the current count.
+
+```sh
+canic fleet call --canister root --identity operator inspect-shard "$SHARD"
+canic fleet call --canister root --identity operator drain-shard "$SHARD" "$SLOT" "$GENERATION"
+```
+
 From the repository root, run the installed example with synthetic cycles:
 
 ```sh

@@ -15,7 +15,7 @@ fn writable() -> Result<(), &'static str> {
     (!PAUSED.get()).then_some(()).ok_or("writes paused")
 }
 
-fn controller() -> Result<(), &'static str> {
+pub(super) fn controller() -> Result<(), &'static str> {
     system::is_controller(&system::caller())
         .then_some(())
         .ok_or("controller required")
@@ -76,4 +76,32 @@ async fn send_sync(barrier: Option<Principal>) -> Result<u64, String> {
     canic::method::call::<ProjectSync>(target, 300, &barrier)
         .await
         .map_err(|_| "sync unconfirmed")?
+}
+
+// Legacy proof retrieval requires a data certificate in the signing canister.
+struct CertificateAvailable;
+impl Contract for CertificateAvailable {
+    const NAME: &'static str = "certificate_available";
+    const ID: u64 = wire::method_id(Self::NAME);
+    type Input = ();
+    type Output = bool;
+}
+
+// Platform Runtime 0.23.23 exposes this system primitive only on IC Wasm.
+#[cfg(target_arch = "wasm32")]
+#[canic::query(contract = CertificateAvailable)]
+fn certificate_available() -> bool {
+    system::data_certificate(65536)
+        .expect("certificate budget")
+        .is_some()
+}
+
+#[canic::update(guard = controller)]
+async fn probe_certificate() -> bool {
+    let receiver = DIRECTORY
+        .with_borrow(|s| s.as_ref()?.current()?.by_name("accounts_hub"))
+        .expect("published accounts hub");
+    canic::method::call::<CertificateAvailable>(receiver, 5, &())
+        .await
+        .expect("replicated query call")
 }

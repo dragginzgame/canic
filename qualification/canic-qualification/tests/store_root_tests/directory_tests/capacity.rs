@@ -73,6 +73,7 @@ pub(super) async fn exercise(
     hub: CanisterId,
     project: CanisterId,
     limit: u8,
+    module: &str,
 ) {
     let args = |parent: CanisterId| {
         management::application::Arguments::new(
@@ -98,7 +99,7 @@ pub(super) async fn exercise(
         hub: hub.to_text(),
         pool: "users".into(),
         max_shards: 1,
-        keys_per_shard: 1,
+        keys_per_shard: if module == "role-root.wasm" { 3 } else { 1 },
         creation_budget: management::CREATION_CYCLES,
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
@@ -113,6 +114,42 @@ pub(super) async fn exercise(
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
     };
+    // A different ready hub or Root cannot substitute for the approved binding.
+    for (issuer, parent) in [(root.id, project), (project, hub)] {
+        let wrong = canic::topology::Install {
+            root: issuer.to_text().parse().unwrap(),
+            parent: parent.to_text().parse().unwrap(),
+            role: "user_shard".into(),
+            application: vec![],
+        };
+        let mut mismatched = shard.clone();
+        mismatched.arguments =
+            management::application::Arguments::new(wrong.encode().unwrap()).unwrap();
+        assert_eq!(
+            root.update::<_, Result<(), management::Refusal>>(
+                "configure_shards",
+                stored::CONFIGURE_SHARDS,
+                &mismatched,
+                stored::LIMITS
+            )
+            .await,
+            Err(management::Refusal::Binding)
+        );
+    }
+    let mut truncated = shard.clone();
+    let bytes = shard.arguments.as_slice();
+    truncated.arguments =
+        management::application::Arguments::new(bytes[..bytes.len() - 1].to_vec()).unwrap();
+    assert_eq!(
+        root.update::<_, Result<(), management::Refusal>>(
+            "configure_shards",
+            stored::CONFIGURE_SHARDS,
+            &truncated,
+            stored::LIMITS
+        )
+        .await,
+        Err(management::Refusal::Binding)
+    );
     root.update::<_, Result<(), management::Refusal>>(
         "configure_shards",
         stored::CONFIGURE_SHARDS,
@@ -148,7 +185,11 @@ pub(super) async fn exercise(
     } else {
         let users = place(false, 1).await;
         settle(root.pic).await;
-        assert_eq!(place(false, 2).await, Placement::Full);
+        if shard.keys_per_shard == 1 {
+            assert_eq!(place(false, 2).await, Placement::Full);
+        } else {
+            assert!(matches!(place(false, 2).await, Placement::Assigned(..)));
+        }
         (users, place(true, 1).await)
     };
     let outcomes = [(false, users), (true, projects)];
@@ -163,7 +204,7 @@ pub(super) async fn exercise(
     canic_qualification::upgrade_stopped(
         root.pic,
         root.id,
-        std::fs::read(artifacts().join("pool-root.wasm")).unwrap(),
+        std::fs::read(artifacts().join(module)).unwrap(),
         vec![],
         Some(root.operator),
     )

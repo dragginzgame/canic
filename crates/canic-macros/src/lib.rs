@@ -26,13 +26,17 @@ pub fn update(options: TokenStream, item: TokenStream) -> TokenStream {
 
 fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut contract: Option<Path> = None;
+    let mut role_contract = false;
     let mut guard: Option<Expr> = None;
     let mut scope: Option<Expr> = None;
     let mut name: Option<LitStr> = None;
     let mut limits: Option<Expr> = None;
     let mut reply_limits: Option<Expr> = None;
     syn::meta::parser(|option| {
-        if option.path.is_ident("contract") && contract.is_none() {
+        if (option.path.is_ident("contract") || option.path.is_ident("role_contract"))
+            && contract.is_none()
+        {
+            role_contract = option.path.is_ident("role_contract");
             contract = Some(option.value()?.parse()?);
         } else if option.path.is_ident("scope") && scope.is_none() {
             scope = Some(option.value()?.parse()?);
@@ -118,7 +122,8 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         ReturnType::Type(_, ty) => quote!(#ty),
     };
     let argument = parameter.map(|_| quote!(__canic_input));
-    let (request, reply, id, request_budget, reply_budget, check) = if let Some(contract) = contract
+    let (request, reply, id, request_budget, reply_budget, check) = if let Some(contract) =
+        &contract
     {
         if limits.is_some() || reply_limits.is_some() {
             return Err(syn::Error::new(
@@ -165,12 +170,24 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         }
     });
     let input_type = parameter.map(|_| &request);
+    let admitted_type = if role_contract {
+        quote!((::canic::topology::attestation::Proof,#request))
+    } else {
+        request.clone()
+    };
     let return_type = if asynchronous.is_some() {
         quote!(_)
     } else {
         reply.clone()
     };
     let unit = parameter.is_none().then(|| quote!(let () = __canic_input;));
+    let admit_proof = role_contract.then(|| {
+        quote! {
+            let (__canic_proof,__canic_input) = __canic_input;
+            ::canic::topology::attestation::admit_role::<#contract>(&__canic_proof)
+                .unwrap_or_else(|e| ::canic::method::fail(e));
+        }
+    });
     Ok(quote! {
         #[allow(clippy::needless_pass_by_value)]
         #function
@@ -186,9 +203,9 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             const __CANIC_ID: u64 = #id;
             const __CANIC_REQUEST: wire::Limits = #request_budget;
             const __CANIC_REPLY: wire::Limits = #reply_budget;
-            ::canic::__canic_inspect!(wire, #export, #kind, __CANIC_ID, #request, #reply);
+            ::canic::__canic_inspect!(wire, #export, #kind, __CANIC_ID, #admitted_type, #reply);
 
-            fn __canic_decode(bytes: &[u8]) -> Result<#request, wire::Error> {
+            fn __canic_decode(bytes: &[u8]) -> Result<#admitted_type, wire::Error> {
                 wire::decode(bytes, wire::Encoding::Frame { method: __CANIC_ID, direction: wire::Direction::Request }, __CANIC_REQUEST)
             }
 
@@ -216,7 +233,8 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
                     name = #export,
                     encode = __canic_encode,
                 )]
-                #asynchronous fn __canic_invoke(__canic_input: #request) -> #reply {
+                #asynchronous fn __canic_invoke(__canic_input: #admitted_type) -> #reply {
+                    #admit_proof
                     #unit
                     __canic_handler(#argument)#wait
                 }

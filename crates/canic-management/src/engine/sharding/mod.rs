@@ -1,6 +1,8 @@
 //! Independent hub grants and shared-shard placement over Store-backed child effects.
 mod capacity;
+mod drain;
 pub use capacity::{configure_capacity, increase_pool};
+pub use drain::{begin_shard_drain, inspect_shard, release_shard};
 
 use super::{STATE, api, delivery, snapshot};
 use crate::{
@@ -60,6 +62,8 @@ const INSTANCE_LAYOUT: &[u8] = b"CPL1";
 pub(super) struct Pools {
     #[serde(skip)]
     permanent: [bool; 2],
+    #[serde(skip)]
+    draining: BTreeMap<ChildId, [u8; 32]>,
     shards: Option<Ledger<SLOT_COUNT>>,
     capacity: Option<stored::SubnetCapacity>,
     shard_increases: Vec<u8>,
@@ -118,7 +122,16 @@ impl Pools {
     }
 
     pub(super) fn encode(&self) -> Vec<u8> {
-        let (tag, payload) = if self.permanent.contains(&true) {
+        let (tag, payload) = if !self.draining.is_empty() {
+            (
+                b"CPL5".as_slice(),
+                ic_wire::encode(
+                    &(self.permanent, &self.draining, self),
+                    ic_wire::Encoding::Payload,
+                    LIMITS,
+                ),
+            )
+        } else if self.permanent.contains(&true) {
             (
                 b"CPL4".as_slice(),
                 ic_wire::encode(&(self.permanent, self), ic_wire::Encoding::Payload, LIMITS),
@@ -163,7 +176,23 @@ impl Pools {
 
 pub(super) fn open(bytes: &[u8]) -> Pools {
     type LegacyShards = Option<Ledger<2>>;
-    let pools = if bytes.starts_with(b"CPL3") || bytes.starts_with(b"CPL4") {
+    let pools = if let Some(payload) = bytes.strip_prefix(b"CPL5") {
+        let (permanent, draining, mut pools): (_, BTreeMap<ChildId, [u8; 32]>, Pools) =
+            ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
+                .expect("draining shard ledger");
+        assert!(!draining.is_empty());
+        let ledger = pools.shards.as_ref().expect("draining pool");
+        for (&slot, generation) in &draining {
+            assert!(
+                ChildId::SHARDS.contains(&slot)
+                    && ledger.generations[slot.index()].as_ref() == Some(generation)
+                    && ledger.principals[slot.index()].is_some()
+            );
+        }
+        pools.permanent = permanent;
+        pools.draining = draining;
+        pools
+    } else if bytes.starts_with(b"CPL3") || bytes.starts_with(b"CPL4") {
         let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"CPL4") {
             let (permanent, mut pools): ([bool; 2], Pools) =
                 ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
@@ -175,11 +204,7 @@ pub(super) fn open(bytes: &[u8]) -> Pools {
             ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS)
                 .expect("expanded placement ledger")
         };
-        let capacity = pools.capacity.as_ref().expect("subnet capacity");
-        assert!(
-            capacity::valid_capacity(capacity)
-                && pools.used() <= usize::from(capacity.max_children)
-        );
+        pools.capacity.as_ref().expect("subnet capacity");
         pools
     } else {
         let (shards, instances, projects): (
@@ -214,6 +239,12 @@ pub(super) fn open(bytes: &[u8]) -> Pools {
             ..Default::default()
         }
     };
+    if let Some(capacity) = &pools.capacity {
+        assert!(
+            capacity::valid_capacity(capacity)
+                && pools.used() <= usize::from(capacity.max_children)
+        );
+    }
     for (initial, increases) in [
         (
             pools.instances.as_ref().map(|a| a.max_instances),
@@ -252,6 +283,7 @@ pub(super) fn open(bytes: &[u8]) -> Pools {
     }
     if let Some(l) = &pools.shards {
         assert!(valid_limits(&l.approval) && l.approval.max_shards <= pools.pool_limit());
+        check_shard_topology(&l.approval).expect("retained shard topology");
         let mut counts = [0_u16; SLOT_COUNT];
         let slots = pools.shard_slots(&l.approval);
         for slot in l.claims.values() {
@@ -265,8 +297,9 @@ pub(super) fn open(bytes: &[u8]) -> Pools {
                 <= l.approval.creation_budget
         );
         for (index, count) in counts.iter().copied().enumerate() {
-            assert!(l.principals[index].is_none() || count > 0);
-            assert_eq!(count > 0, l.generations[index].is_some());
+            let occupied = count > 0 || pools.draining.keys().any(|slot| slot.index() == index);
+            assert!(l.principals[index].is_none() || occupied);
+            assert_eq!(occupied, l.generations[index].is_some());
         }
     }
     pools
@@ -277,6 +310,18 @@ fn valid_limits(a: &ShardPool) -> bool {
         && (1..=stored::MAX_KEYS_PER_SHARD).contains(&a.keys_per_shard)
         && !a.pool.is_empty()
         && a.pool.len() <= 64
+}
+
+// Only the direct topology envelope declares a placement parent here. Other
+// application arguments keep their original bytes and confer no role evidence.
+fn check_shard_topology(grant: &ShardPool) -> Result<(), Refusal> {
+    if let Some(install) = canic::topology::Install::decode_if_present(grant.arguments.as_slice())
+        .map_err(|_| Refusal::Binding)?
+        && (install.root.to_text() != grant.root || install.parent.to_text() != grant.hub)
+    {
+        return Err(Refusal::Binding);
+    }
+    Ok(())
 }
 
 pub(crate) fn occupied() -> bool {
@@ -368,6 +413,7 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
     {
         return Err(Refusal::Binding);
     }
+    check_shard_topology(&a)?;
     if a.expires_at_ns <= api::time() {
         return Err(Refusal::Time);
     }
@@ -554,12 +600,18 @@ pub fn assign(key: Key) -> Placement {
         let ledger = pools.shards.as_ref().unwrap();
         (
             ledger.approval.clone(),
-            pools.shard_slots(&ledger.approval),
+            pools
+                .shard_slots(&ledger.approval)
+                .into_iter()
+                .filter(|slot| !pools.draining.contains_key(slot))
+                .collect::<Vec<_>>(),
             ledger.counts,
             ledger.generations,
         )
     });
-    if usize::from(counts.iter().sum::<u16>()) == slots.len() * usize::from(approval.keys_per_shard)
+    if slots
+        .iter()
+        .all(|s| counts[s.index()] == approval.keys_per_shard)
     {
         return Placement::Full;
     }
@@ -570,11 +622,10 @@ pub fn assign(key: Key) -> Placement {
         if let Some(generation) = generations[slot.index()] {
             if counts[slot.index()] < approval.keys_per_shard {
                 match resolve(slot, generation) {
-                    Placement::Assigned(_, pid) => select(
-                        &mut ready,
-                        score(&[&key, Principal::from_text(pid).unwrap().as_slice()]),
-                        slot,
-                    ),
+                    Placement::Assigned(_, pid) => {
+                        let subject = Principal::from_text(pid).expect("retained shard principal");
+                        select(&mut ready, score(&[&key, subject.as_slice()]), slot);
+                    }
                     _ => blocked = true,
                 }
             } else if !matches!(resolve(slot, generation), Placement::Assigned(..)) {
@@ -691,6 +742,10 @@ fn create(
 }
 
 pub(super) fn validate_claims(state: &super::State) {
+    #[cfg(feature = "role-issuer")]
+    super::role_issuer::validate_closures(state, |p, g| {
+        drain::closed_assignment(&state.pools, p, g)
+    });
     let claims = &state.pools.projects;
     let pools = &state.pools;
     if pools.capacity.is_some() {
@@ -708,27 +763,36 @@ pub(super) fn validate_claims(state: &super::State) {
         assert_eq!(state.journal.0.len() > 2, !claims.is_empty());
     }
     for (index, slot) in ChildId::SHARDS.into_iter().enumerate() {
-        let generation = pools
-            .shards
-            .as_ref()
-            .and_then(|ledger| ledger.generations[slot.index()]);
+        let shard = pools.shards.as_ref().and_then(|ledger| {
+            ledger.generations[slot.index()].map(|generation| (ledger, generation))
+        });
         if pools.permanent.get(slot.index()) == Some(&true) {
             assert!(
-                generation.is_none() && state.journal.0[&slot].0.approval.is_some(),
+                shard.is_none() && state.journal.0[&slot].0.approval.is_some(),
                 "permanent child custody"
             );
-            continue;
-        }
-        if index >= 2
+        } else if let Some((ledger, generation)) = shard {
+            validate_allocation(
+                state,
+                slot,
+                generation,
+                ledger.principals[slot.index()].as_deref(),
+                &ledger.approval.reference,
+                &ledger.approval.arguments,
+            );
+        } else if index >= 2
             || pools.shards.is_some()
             || pools.instances.is_some()
             || pools.capacity.is_some()
         {
-            let source = state.artifact.0.get(&slot).and_then(Artifact::sources);
-            assert_eq!(
-                generation,
-                source.map(|s| s.creation.operation),
-                "shard journal binding"
+            assert!(
+                state
+                    .artifact
+                    .0
+                    .get(&slot)
+                    .and_then(Artifact::sources)
+                    .is_none(),
+                "unclaimed shard source"
             );
         }
     }
@@ -741,20 +805,54 @@ pub(super) fn validate_claims(state: &super::State) {
         if let Some(claim) = claims.get(index) {
             assert!(claims[..index].iter().all(|other| other.key != claim.key));
             let grant = state.pools.instances.as_ref().expect("project grant");
-            let Artifact::Application(sources, app) = &state.artifact.0[&slot] else {
-                panic!("project install custody")
-            };
-            assert_eq!(app.creation, grant.arguments);
-            assert_eq!(sources.creation.reference, grant.reference);
-            assert_eq!(sources.creation.operation, claim.generation);
-            assert!(journal.0.approval.is_some());
-            if claim.principal.is_some() {
-                assert_eq!(claim.principal, journal.0.worker);
-            }
-            assert_eq!(claim.principal.is_some(), journal.0.phase == Phase::Ready);
+            validate_allocation(
+                state,
+                slot,
+                claim.generation,
+                claim.principal.as_deref(),
+                &grant.reference,
+                &grant.arguments,
+            );
         } else {
             assert!(source.is_none() && journal.0.phase == Phase::Empty);
         }
+    }
+}
+
+// A role can only be derived from the exact bytes Root installed. Check both
+// pool families against the same retained installation and readiness evidence.
+fn validate_allocation(
+    state: &super::State,
+    slot: ChildId,
+    generation: [u8; 32],
+    principal: Option<&str>,
+    reference: &stored::Reference,
+    arguments: &canic_management_protocol::application::Arguments,
+) {
+    let (sources, installed_args) = match &state.artifact.0[&slot] {
+        Artifact::Stored(sources) => (sources, &[][..]),
+        Artifact::Application(sources, app) => (sources, app.creation.as_slice()),
+        Artifact::Inline(_) => panic!("placement requires a Store source"),
+    };
+    assert_eq!(
+        installed_args,
+        arguments.as_slice(),
+        "placement install arguments"
+    );
+    assert_eq!(&sources.creation.reference, reference, "placement release");
+    assert_eq!(
+        sources.creation.operation, generation,
+        "placement generation"
+    );
+    let journal = &state.journal.0[&slot].0;
+    assert!(journal.approval.is_some());
+    assert_eq!(
+        principal.is_some(),
+        journal.phase == Phase::Ready,
+        "placement readiness"
+    );
+    if principal.is_some() {
+        assert_eq!(principal, journal.worker.as_deref(), "placement principal");
     }
 }
 
@@ -847,4 +945,52 @@ pub fn assign_instance(key: Key) -> Placement {
         state.pool.set(state.pools.encode());
     });
     lookup_instance(&key)
+}
+
+#[cfg(feature = "role-issuer")]
+pub(super) fn assigned_role(
+    subject: Principal,
+) -> Result<(String, [u8; 32], u16, bool), &'static str> {
+    let caller = subject.to_text();
+    STATE.with_borrow(|s| {
+        let state = s.as_ref().expect("open Root");
+        let ledger = state.pools.shards.as_ref().ok_or("unassigned caller")?;
+        let slot = ChildId::SHARDS
+            .into_iter()
+            .find(|slot| ledger.principals[slot.index()].as_deref() == Some(&caller))
+            .ok_or("unassigned caller")?;
+        let journal = &state.journal.0[&slot];
+        if journal.0.phase != Phase::Ready
+            || journal.0.failure.is_some()
+            || journal.0.worker.as_deref() != Some(caller.as_str())
+            || journal.1.failure.is_some()
+            || !matches!(
+                journal.1.phase,
+                canic_management_protocol::upgrade::Phase::Empty
+                    | canic_management_protocol::upgrade::Phase::Ready
+            )
+        {
+            return Err("shard unavailable");
+        }
+        let Artifact::Application(sources, app) = &state.artifact.0[&slot] else {
+            return Err("missing shard topology");
+        };
+        let generation = sources.creation.operation;
+        if ledger.generations[slot.index()] != Some(generation)
+            || app.creation != ledger.approval.arguments
+            || sources.creation.reference != ledger.approval.reference
+        {
+            return Err("shard assignment changed");
+        }
+        let install = canic::topology::Install::decode(app.creation.as_slice())?;
+        if install.root != api::canister_self() || install.parent.to_text() != ledger.approval.hub {
+            return Err("shard topology mismatch");
+        }
+        Ok((
+            install.role,
+            generation,
+            ledger.counts[slot.index()],
+            state.pools.draining.contains_key(&slot),
+        ))
+    })
 }

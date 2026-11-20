@@ -63,6 +63,18 @@ pub fn create_managed_plan(
         })
         .transpose()?;
     selection.validate()?;
+    if input.target.is_none()
+        && selection
+            .config
+            .role_receivers
+            .iter()
+            .any(|n| n == canister)
+    {
+        return Err(Error::Invalid(
+            "plan the whole fleet to approve a receiver installation with its Root signing key"
+                .into(),
+        ));
+    }
     let child = selection
         .config
         .canisters
@@ -354,6 +366,7 @@ pub(crate) fn evidence_with_source(
                     canic_management_protocol::stored::CUSTODY
                         | canic_management_protocol::custody::ROOT
                         | canic_management_protocol::custody::ROOT_HISTORY
+                        | canic_management_protocol::application::CHILD_EVIDENCE
                         | canic_management_protocol::application::CUSTODY
                 ) {
                     stored::creation_evidence(plan, &bytes)?
@@ -509,6 +522,7 @@ fn decode_observation(plan: &Plan, method: u64, bytes: &[u8]) -> Result<Status> 
         canic_management_protocol::stored::CUSTODY
             | canic_management_protocol::custody::ROOT
             | canic_management_protocol::custody::ROOT_HISTORY
+            | canic_management_protocol::application::CHILD_EVIDENCE
             | canic_management_protocol::application::CUSTODY
     ) {
         stored::creation(plan, bytes)

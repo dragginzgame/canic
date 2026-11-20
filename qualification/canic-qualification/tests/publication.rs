@@ -3,6 +3,7 @@ mod counter_managed;
 mod fleet_growth;
 mod greeting;
 mod publication_removal_tests;
+mod role_fleet;
 mod store_upgrade_tests;
 
 use ic_testkit::{
@@ -199,15 +200,8 @@ async fn maintain_root(
     );
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
-    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .ancestors()
-        .nth(2)
-        .unwrap()
-        .to_owned();
-    let assets = PathBuf::from(std::env::var_os("CANIC_PUBLICATION_ARTIFACTS").unwrap());
-    let mut server = Server::start(
+async fn fleet_server() -> (Server, ic_testkit::server::Instance) {
+    let server = Server::start(
         PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
         Limits {
             startup: Duration::from_secs(30),
@@ -217,7 +211,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         },
     )
     .unwrap();
-    let mut owner = server
+    let owner = server
         .instance(
             PocketIcBuilder::new()
                 .with_nns_subnet()
@@ -226,6 +220,18 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         )
         .await
         .unwrap();
+    (server, owner)
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
+    let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .nth(2)
+        .unwrap()
+        .to_owned();
+    let assets = PathBuf::from(std::env::var_os("CANIC_PUBLICATION_ARTIFACTS").unwrap());
+    let (mut server, mut owner) = fleet_server().await;
     let routing = owner.client().create_canister().await;
     let subnet = owner.client().get_subnet(routing).await.unwrap();
     let url = owner.client_mut().make_live(None).await.to_string();

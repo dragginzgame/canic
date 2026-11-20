@@ -10,6 +10,8 @@ pub type Arguments = ic_wire::Bytes<MAX_ARGUMENT_BYTES>;
 pub const STAGE: u64 = 61;
 /// Reconcile only that complete configured creation.
 pub const RECONCILE: u64 = 62;
+/// Child-only deployment evidence. Never an input to Root maintenance.
+pub const CHILD_EVIDENCE: u64 = ic_wire::method_id("observe_role_children");
 /// Complete Root custody including lifecycle arguments.
 pub const CUSTODY: u64 = 63;
 /// Admit an exact Blob maintenance upgrade.

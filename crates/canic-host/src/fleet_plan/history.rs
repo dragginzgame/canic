@@ -228,7 +228,12 @@ fn child_completion(
     {
         return Ok(None);
     }
-    let child = fleet.child_plan(&root, super::store_receipt(dir, fleet)?.as_ref(), index)?;
+    let child = fleet.resolved_child(
+        dir,
+        &root,
+        super::store_receipt(dir, fleet)?.as_ref(),
+        index,
+    )?;
     Ok(
         completed(&dir.join(super::record::child_leaf(index)), &child)?
             .map(|receipt| (child, receipt)),

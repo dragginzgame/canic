@@ -485,6 +485,13 @@ pub(crate) fn fleet_preview(
             child.artifact.sha256
         )
         .expect("String write");
+        if child.receiver_role.is_some() {
+            writeln!(
+                modules,
+                "  Role verifier: pin the signing key from this Root at install"
+            )
+            .expect("String write");
+        }
         if let Some(release) = &child.release {
             writeln!(
                 modules,

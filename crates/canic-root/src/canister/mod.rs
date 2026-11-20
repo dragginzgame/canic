@@ -48,6 +48,9 @@ management::mount_endpoints! {
     stage_child_upgrade, observe_child_upgrade, child_upgrade_status, reconcile_child_upgrade,
 }
 
+#[cfg(feature = "role-issuer")]
+management::mount_endpoints! { observe_role_children, }
+
 #[cfg(feature = "blob")]
 management::mount_endpoints! {
     stage_application_upgrade, reconcile_application_upgrade, activate_application_upgrade,

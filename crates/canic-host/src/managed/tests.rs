@@ -1072,7 +1072,17 @@ fn assert_application_arguments(
     let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
         panic!("creation")
     };
-    owner.arguments = Some(vec![1, 2, 255]);
+    let named = |key| {
+        canic::topology::directory::ServiceInstall {
+            name: "accounts_hub".into(),
+            role: "hub".into(),
+            application: vec![key; 32],
+        }
+        .encode()
+        .unwrap()
+    };
+    let approved_args = named(1);
+    owner.arguments = Some(approved_args.clone());
     plan.validate().unwrap();
     let digest = plan.digest().unwrap();
     assert_ne!(digest, original.digest().unwrap());
@@ -1091,6 +1101,7 @@ fn assert_application_arguments(
         application::LIMITS,
     )
     .unwrap();
+    assert_eq!(request.value.arguments.as_slice(), approved_args);
     let mut value = application::Custody {
         root: RootHistory {
             current: Root {
@@ -1131,14 +1142,14 @@ fn assert_application_arguments(
         custody.children[0].creation
     );
     value.applications[0].as_mut().unwrap().creation =
-        application::Arguments::new(vec![9]).unwrap();
+        application::Arguments::new(named(2)).unwrap();
     assert!(decode_observation(&plan, application::CUSTODY, &encode(&value)).is_err());
     value.applications[0] = None;
     assert!(decode_observation(&plan, application::CUSTODY, &encode(&value)).is_err());
     let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
         unreachable!()
     };
-    owner.arguments = Some(vec![9]);
+    owner.arguments = Some(named(2));
     assert_ne!(digest, plan.digest().unwrap());
     assert!(!crate::plan::same_authority(original, &plan));
     for arguments in [vec![], vec![0; application::MAX_ARGUMENT_BYTES + 1]] {

@@ -22,6 +22,12 @@ impl Method {
     }
 
     fn contract(self, plan: &Plan) -> (&'static str, u64) {
+        if plan.version == 8 && matches!(self, Self::Observe) {
+            return (
+                "observe_role_children",
+                protocol::application::CHILD_EVIDENCE,
+            );
+        }
         if plan.management().is_some_and(|m| m.arguments.is_some()) {
             use protocol::application;
             return match self {

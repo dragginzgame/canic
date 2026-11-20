@@ -107,6 +107,9 @@ pub struct FleetDeclaration {
     /// Optional install-time policy for explicitly selected application roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_policy: Option<crate::ReceiverPolicy>,
+    /// Named permanent services whose installation pins the fleet Root's role key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub role_receivers: Vec<String>,
     /// Combined lifetime capacity of all placement pools on this Root's managed subnet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subnet_child_limit: Option<u8>,
@@ -140,6 +143,9 @@ pub struct FleetConfig {
     /// Optional install-time policy for explicitly selected application roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_policy: Option<crate::ReceiverPolicy>,
+    /// Named permanent services whose installation pins the fleet Root's role key.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub role_receivers: Vec<String>,
     /// Combined lifetime capacity of all placement pools on this Root's managed subnet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subnet_child_limit: Option<u8>,
@@ -276,6 +282,7 @@ impl Config {
                     }
                     let slots = definition.resolve_slots(config)?;
                     validate_canisters(&slots)?;
+                    validate_role_receivers(&slots, &config.role_receivers)?;
                     if let Some(policy) = &config.receiver_policy {
                         policy.validate(&slots)?;
                     }
@@ -351,6 +358,7 @@ impl AppConfig {
         };
         let mut config = FleetConfig {
             receiver_policy: fleet.receiver_policy.clone(),
+            role_receivers: fleet.role_receivers.clone(),
             subnet_child_limit: fleet.subnet_child_limit,
             instance_pool: fleet.instance_pool.clone(),
             shard_pool: fleet.shard_pool.clone(),
@@ -454,6 +462,7 @@ fn select<'a, T>(
 
 impl FleetConfig {
     fn validate(&self) -> Result<()> {
+        validate_role_receivers(&self.canisters, &self.role_receivers)?;
         if let Some(policy) = &self.receiver_policy {
             policy.validate(&self.canisters)?;
         }
@@ -487,6 +496,29 @@ impl FleetConfig {
         }
         validate_canisters(&self.canisters)
     }
+}
+
+fn validate_role_receivers(
+    slots: &BTreeMap<String, CanisterConfig>,
+    names: &[String],
+) -> Result<()> {
+    let mut seen = std::collections::BTreeSet::new();
+    for receiver in names {
+        let slot = slots
+            .get(receiver)
+            .ok_or_else(|| Error::Invalid(format!("unknown role receiver {receiver}")))?;
+        let parent = slot.parent.as_ref().and_then(|p| slots.get(p));
+        if !seen.insert(receiver)
+            || !parent.is_some_and(|p| p.parent.is_none() && p.role.as_deref() == Some("root"))
+            || slot.role.as_deref().is_none_or(|r| r == "wasm-store")
+            || !slots
+                .values()
+                .any(|s| s.role.as_deref() == Some("wasm-store") && s.parent == slot.parent)
+        {
+            return Err(Error::Invalid("role receivers must name distinct direct services with declared roles and a fleet Store".into()));
+        }
+    }
+    Ok(())
 }
 
 fn validate_canisters(canisters: &BTreeMap<String, CanisterConfig>) -> Result<()> {
@@ -797,6 +829,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
             fleet.into(),
             FleetDeclaration {
                 receiver_policy: None,
+                role_receivers: vec![],
                 subnet_child_limit: None,
                 instance_pool: None,
                 shard_pool: None,

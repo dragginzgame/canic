@@ -161,3 +161,57 @@ fn encode<const METHOD: u64>(value: Placement) -> Result<Vec<u8>, ic_wire::Error
 fn fail(error: impl std::fmt::Debug) -> ! {
     runtime::system::trap(&format!("shard placement: {error:?}"))
 }
+
+/// Create or recover the same Root verifying key for receiver setup.
+#[cfg(feature = "role-issuer")]
+#[canic::update(guard = super::directory_controller)]
+async fn prepare_role_key() -> Result<ic_wire::Bytes<32>, String> {
+    canic_management::role_issuer::prepare().await
+}
+
+/// Issue a two-hour credential only for a ready shared-shard caller.
+#[cfg(feature = "role-issuer")]
+#[canic::update(contract = canic::topology::attestation::Issue)]
+fn issue_role(
+    receiver: ic_platform_types::Principal,
+) -> Result<canic::topology::attestation::Proof, String> {
+    canic_management::role_issuer::issue(receiver)
+}
+
+/// Observe placement custody using the signed operator call path.
+#[canic::update(contract = canic::sharding::InspectShard, guard = controller)]
+fn inspect_shard(
+    shard: ic_platform_types::Principal,
+) -> Result<canic::sharding::ShardStatus, String> {
+    sharding::inspect_shard(shard)
+}
+
+/// Stop accepting new keys while continuing to serve existing routes.
+#[canic::update(contract = canic::sharding::BeginShardDrain, guard = controller)]
+fn begin_shard_drain(target: canic::sharding::ShardTarget) -> Result<u16, String> {
+    sharding::begin_shard_drain(&target)
+}
+
+/// Release an exact placement after its hub has committed its application change.
+#[canic::update(contract = canic::sharding::ReleaseShard, guard = hub)]
+fn release_shard((key, target): (Key, canic::sharding::ShardTarget)) -> Result<(), String> {
+    sharding::release_shard(&key, &target)
+}
+
+/// Close this assignment's renewal before beginning its reuse wait.
+#[cfg(feature = "role-issuer")]
+#[canic::update(guard = super::directory_controller)]
+fn close_role_issuance(
+    (subject, generation): (ic_platform_types::Principal, ic_wire::Bytes<32>),
+) -> Result<u64, String> {
+    canic_management::role_issuer::close(subject, &generation)
+}
+
+/// Report the proof deadline and live placement count for this closed generation.
+#[cfg(feature = "role-issuer")]
+#[canic::query(guard = super::directory_controller)]
+fn retirement_status(
+    (subject, generation): (ic_platform_types::Principal, ic_wire::Bytes<32>),
+) -> Result<(u64, u16), String> {
+    canic_management::role_issuer::retirement_status(subject, &generation)
+}

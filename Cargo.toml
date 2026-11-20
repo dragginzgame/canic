@@ -67,7 +67,7 @@ wasmparser = { version = "0.263.0", default-features = false, features = ["std"]
 
 # Production and tests
 canic = { path = "crates/canic", version = "0.243.0" }
-ic-platform = { version = "0.34.13", default-features = false, features = ["ingress-packets"] }
+ic-platform = { version = "0.34.13", default-features = false }
 ic-query-topology = "0.110.6"
 ic-storage = "0.78.0"
 ic-wire = { version = "0.27.0", default-features = false }

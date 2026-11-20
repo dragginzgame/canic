@@ -80,9 +80,11 @@ async fn refused_delivery(
 
 mod capacity;
 mod peer;
+mod role_proof;
 
 enum Scenario {
     Capacity(u8),
+    RoleProof,
     BothHubs,
     Peer,
     StoppedHub,
@@ -136,8 +138,20 @@ async fn scheduled_permanent_child_blocks_a_second_direct_creation() {
     installed_publication(Scenario::Capacity(1)).await;
 }
 
+#[tokio::test]
+async fn shard_renews_and_uses_role_until_retirement() {
+    installed_publication(Scenario::RoleProof).await;
+}
+
 async fn installed_publication(scenario: Scenario) {
-    let module = if matches!(
+    let capacity = match scenario {
+        Scenario::Capacity(limit) => Some(limit),
+        Scenario::RoleProof => Some(4),
+        _ => None,
+    };
+    let module = if matches!(scenario, Scenario::RoleProof) {
+        "role-root.wasm"
+    } else if matches!(
         scenario,
         Scenario::Capacity(_) | Scenario::StoppedChild | Scenario::StoppedHub
     ) {
@@ -189,11 +203,20 @@ async fn installed_publication(scenario: Scenario) {
         )
         .await
     };
+    let pin = if matches!(scenario, Scenario::RoleProof) {
+        Some(role_proof::prepare(&root).await)
+    } else {
+        None
+    };
     let named = |name: &str| {
         ServiceInstall {
             name: name.into(),
             role: "hub".into(),
-            application: vec![],
+            application: if name == "accounts_hub" {
+                pin.clone().unwrap_or_default()
+            } else {
+                vec![]
+            },
         }
         .encode()
         .unwrap()
@@ -234,7 +257,7 @@ async fn installed_publication(scenario: Scenario) {
         publish(&root, "accounts_hub", 1).await,
         Err("no ready named services".into())
     );
-    if let Scenario::Capacity(limit) = scenario {
+    if let Some(limit) = capacity {
         // First hub already has an outstanding install. Second hub will stage under the ceiling.
         capacity::approve(&root, limit).await;
     }
@@ -511,8 +534,8 @@ async fn installed_publication(scenario: Scenario) {
             Some((2, Err("service role ambiguous".into())))
         );
     }
-    if let Scenario::Capacity(limit) = scenario {
-        capacity::exercise(&root, &source, user, project, limit).await;
+    if let Some(limit) = capacity {
+        capacity::exercise(&root, &source, user, project, limit, module).await;
     }
     canic_qualification::upgrade_stopped(
         pic,
@@ -529,6 +552,9 @@ async fn installed_publication(scenario: Scenario) {
     let bytes = pic.get_stable_memory(user).await;
     assert_eq!(publish(&root, "accounts_hub", 2).await, Ok(2));
     assert_eq!(pic.get_stable_memory(user).await, bytes);
+    if let Some(pin) = pin {
+        role_proof::exercise(&root, user, project, pin).await;
+    }
     assert_eq!(
         instance.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

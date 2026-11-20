@@ -4,6 +4,8 @@ pub(crate) mod blob;
 mod delivery;
 pub(crate) mod directory;
 pub(super) mod metrics;
+#[cfg(feature = "role-issuer")]
+pub mod role_issuer;
 #[cfg(feature = "sharding")]
 pub mod sharding;
 pub(crate) mod store_maintenance;
@@ -110,6 +112,8 @@ pub(crate) struct State {
     pool: StableCell<Vec<u8>>,
     #[cfg(feature = "sharding")]
     pools: sharding::Pools,
+    #[cfg(feature = "role-issuer")]
+    role_key: StableCell<Vec<u8>>,
     readiness: Readiness,
     timer_window: (u64, u64),
     #[cfg(feature = "backup")]
@@ -192,6 +196,8 @@ pub fn open(fresh: bool, readiness: Readiness) {
         journal: Journals::from_bytes(journal_cell.get()).expect("journal custody"),
         artifact: Artifacts::from_bytes(artifact_cell.get().as_slice().into())
             .expect("artifact custody"),
+        #[cfg(feature = "role-issuer")]
+        role_key: role_issuer::open(&runtime, fresh),
         journal_cell,
         #[cfg(feature = "sharding")]
         pools: sharding::open(pool.get()),
