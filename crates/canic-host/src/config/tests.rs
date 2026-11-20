@@ -245,6 +245,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                 fleets: BTreeMap::from([(
                     selected.fleet.clone(),
                     FleetDeclaration {
+                        lifetime: None,
                         receiver_policy: None,
                         role_receivers: vec![],
                         subnet_child_limit: None,
@@ -1301,5 +1302,23 @@ creation_budget = 2000000000000
         source.replace("max_instances = 2", "max_instances = 2\nkeys_per_shard = 1"),
     ] {
         assert!(toml::from_str::<Config>(&invalid).map_or(true, |c| c.validate().is_err()));
+    }
+}
+
+#[test]
+fn ephemeral_fleet_requires_fresh_bindings_and_journal() {
+    let source = "[apps.a.canisters.hub]\n[apps.a.fleets.test]\nlifetime = 'ephemeral'\nnetwork = { kind = 'Local' }";
+    let config: Config = toml::from_str(source).unwrap();
+    config.validate().unwrap();
+    assert!(config.select(Some("a"), Some("test")).is_err());
+    for invalid in [
+        format!("{source}\njournal = 'existing'"),
+        format!("{source}\n[apps.a.fleets.test.canisters.hub]\nid = 'aaaaa-aa'"),
+        source.replace("'Local'", "'Mainnet'"),
+        source.replace("'ephemeral'", "'typo'"),
+    ] {
+        assert!(
+            toml::from_str::<Config>(&invalid).map_or(true, |config| config.validate().is_err())
+        );
     }
 }

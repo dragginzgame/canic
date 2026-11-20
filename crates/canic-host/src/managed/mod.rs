@@ -63,13 +63,13 @@ pub fn create_managed_plan(
         })
         .transpose()?;
     selection.validate()?;
-    if input.target.is_none()
+    let role_service = input.target.is_none()
         && selection
             .config
             .role_receivers
             .iter()
-            .any(|n| n == canister)
-    {
+            .any(|n| n == canister);
+    if role_service && !selection.config.receiver_selected(canister) {
         return Err(Error::Invalid(
             "plan the whole fleet to approve a receiver installation with its Root signing key"
                 .into(),
@@ -90,21 +90,20 @@ pub fn create_managed_plan(
             "Store bootstrap is not qualified through the application-child contract".into(),
         ));
     }
+    let children: Vec<_> = selection
+        .config
+        .canisters
+        .iter()
+        .filter(|(_, slot)| {
+            slot.parent.as_ref() == Some(parent) && slot.role.as_deref() != Some("wasm-store")
+        })
+        .map(|(name, _)| name.as_str())
+        .collect();
     if input.network != selection.config.network
         || (input.target.is_none() && (child.id.is_some() || input.previous_module.is_some()))
         || owner.role.as_deref() != Some("root")
         || owner.parent.is_some()
-        || (input.target.is_none()
-            && selection
-                .config
-                .canisters
-                .values()
-                .filter(|slot| {
-                    slot.parent.as_ref() == Some(parent)
-                        && slot.role.as_deref() != Some("wasm-store")
-                })
-                .count()
-                != 1)
+        || (input.target.is_none() && !role_service && children.len() != 1)
     {
         return Err(Error::Invalid(
             "select one child of a top-level Root on this fleet's network; creation requires an unbound slot".into(),
@@ -178,6 +177,7 @@ pub fn create_managed_plan(
     let root = roots
         .pop_first()
         .ok_or_else(|| Error::Invalid("missing Root identity".into()))?;
+    let mut slot = creation.and_then(|(_, slot)| slot);
     let arguments = if input.target.is_none() && selection.config.receiver_selected(canister) {
         if selection
             .config
@@ -194,11 +194,37 @@ pub fn create_managed_plan(
                 "configured receiver creation requires a Store release".into(),
             ));
         }
-        Some(selection.config.receiver_install_args(
-            canister,
-            &root,
-            arguments.unwrap_or_default(),
-        )?)
+        if role_service {
+            if children.len() > canic_management_protocol::children::ChildId::ALL.len() {
+                return Err(Error::Invalid(
+                    "too many permanent children for this Root".into(),
+                ));
+            }
+            let index = children
+                .iter()
+                .position(|&name| name == canister)
+                .ok_or_else(|| Error::Invalid("child missing from permanent slots".into()))?;
+            slot = canic_management_protocol::children::ChildId::new(index);
+            let pin = crate::application::issuer_pin(
+                journal,
+                selection,
+                parent,
+                &root,
+                &input.controller,
+            )?;
+            Some(selection.config.db_service_install_args(
+                canister,
+                &root,
+                &arguments.unwrap_or_default(),
+                pin,
+            )?)
+        } else {
+            Some(selection.config.receiver_install_args(
+                canister,
+                &root,
+                arguments.unwrap_or_default(),
+            )?)
+        }
     } else {
         arguments
     };
@@ -219,7 +245,7 @@ pub fn create_managed_plan(
         Some(ManagedOwner {
             arguments,
             blob_attempt,
-            slot: creation.and_then(|(_, slot)| slot),
+            slot,
             root,
             source,
             root_module: root_module.into(),

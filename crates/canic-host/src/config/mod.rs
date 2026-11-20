@@ -100,10 +100,21 @@ pub enum UnboundLocal {
     Local {},
 }
 
+/// Lifetime policy for a simulator created for one test run.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum FleetLifetime {
+    /// Start a fresh local simulator and discard it after the run.
+    Ephemeral,
+}
+
 /// Deployment inputs for one instance of an app's shared definitions.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetDeclaration {
+    /// Opt in to a run-owned local simulator and temporary journal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifetime: Option<FleetLifetime>,
     /// Optional install-time policy for explicitly selected application roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_policy: Option<crate::ReceiverPolicy>,
@@ -255,7 +266,12 @@ impl Config {
                 if let Some(build) = &canister.build {
                     name(&build.package)?;
                     for feature in &build.features {
-                        name(feature)?;
+                        if let Some((dependency, feature)) = feature.split_once('/') {
+                            name(dependency)?;
+                            name(feature)?;
+                        } else {
+                            name(feature)?;
+                        }
                     }
                     if let Some(client) = &build.client {
                         name(client)?;
@@ -273,6 +289,15 @@ impl Config {
             }
             for (fleet, config) in &definition.fleets {
                 name(fleet)?;
+                if config.lifetime.is_some()
+                    && (!matches!(config.network, FleetNetwork::Unbound(_))
+                        || config.journal.is_some())
+                {
+                    return Err(Error::Invalid(
+                        "ephemeral fleet requires an unbound local network and a run-owned journal"
+                            .into(),
+                    ));
+                }
                 if matches!(config.network, FleetNetwork::Unbound(_)) {
                     if !config.canisters.is_empty() || !config.auth.is_empty() {
                         return Err(Error::Invalid(
@@ -346,6 +371,32 @@ impl Config {
             fleet: fleet.clone(),
             config: definition.resolve(config)?,
         })
+    }
+}
+
+impl FleetDeclaration {
+    /// Bind this ephemeral declaration in memory to the current simulator and its journal.
+    /// # Errors
+    /// Refuses persistent targets, existing bindings and relative journal paths.
+    pub fn bind_ephemeral(&mut self, network: Network, journal: &Path) -> Result<()> {
+        if self.lifetime != Some(FleetLifetime::Ephemeral)
+            || !matches!(self.network, FleetNetwork::Unbound(_))
+            || !matches!(network, Network::Local { .. })
+            || !journal.is_absolute()
+            || self.journal.is_some()
+            || !self.canisters.is_empty()
+            || !self.auth.is_empty()
+        {
+            return Err(Error::Invalid(
+                "expected a fresh local fleet and a run-owned journal".into(),
+            ));
+        }
+        network.validate()?;
+        self.network = FleetNetwork::Bound(network);
+        self.journal = Some(journal.to_owned());
+        self.lifetime = None;
+
+        Ok(())
     }
 }
 
@@ -828,6 +879,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
         definition.fleets.insert(
             fleet.into(),
             FleetDeclaration {
+                lifetime: None,
                 receiver_policy: None,
                 role_receivers: vec![],
                 subnet_child_limit: None,

@@ -3,8 +3,9 @@ use super::enrollment::types::Principal;
 use ic_wire::{Direction, Encoding, Limits};
 use serde::{Deserialize, Serialize};
 
+const METHOD: u64 = 0x4341_5554_4807;
 const FRAME: Encoding = Encoding::Frame {
-    method: 0x4341_5554_4807,
+    method: METHOD,
     direction: Direction::Request,
 };
 const LIMITS: Limits = Limits {
@@ -61,6 +62,15 @@ pub struct Install {
 }
 
 impl Install {
+    /// Recognize this receiver envelope without treating arbitrary application bytes as Auth.
+    #[must_use]
+    #[cfg(feature = "topology")]
+    pub(crate) fn is_frame(bytes: &[u8]) -> bool {
+        bytes
+            .first_chunk()
+            .is_some_and(|header| ic_wire::validate_request_header(METHOD, header).is_ok())
+    }
+
     /// Encode exact bytes for this fresh installation.
     /// # Errors
     /// Refuses an envelope exceeding the install budget.

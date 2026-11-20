@@ -283,3 +283,56 @@ async fn resumed_call_issues_read_state_only() {
     assert!(!path.join("reply.bin").exists());
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[test]
+fn resolved_issuer_requires_the_completed_call_for_this_root_and_fleet() {
+    use crate::fleet_plan::role_key;
+    let (dir, fleet) = setup();
+    let journal = fleet.journal_path(&dir.join("canic.toml"));
+    let caller = crate::signed::tests::controller();
+    let root = target(&journal, &fleet, "app").unwrap();
+    let bytes = role_key::request().unwrap();
+    let (id, plan) = prepare(
+        &journal,
+        &fleet,
+        "app",
+        caller.clone(),
+        vec!["prepare-role-key".into()],
+        Request {
+            method: role_key::METHOD.into(),
+            arguments: bytes.clone(),
+        },
+    )
+    .unwrap();
+    let path = journal.join(id).join("call");
+    std::fs::create_dir(&path).unwrap();
+    let read = || issuer_pin(&journal, &fleet, "app", &root, &caller);
+    assert!(read().is_err());
+    let signed = crate::signed::tests::signed_fixture(
+        &plan,
+        &call(&plan, &bytes).unwrap(),
+        crate::now().unwrap() - 1,
+    );
+    let response: std::result::Result<ic_wire::Bytes<32>, String> =
+        Ok(ic_wire::Bytes::new(vec![9; 32]).unwrap());
+    std::fs::write(
+        path.join("reply.bin"),
+        ic_wire::encode(
+            &response,
+            ic_wire::Encoding::Frame {
+                method: ic_wire::method_id(role_key::METHOD),
+                direction: ic_wire::Direction::Response,
+            },
+            canic_management_protocol::LIMITS,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    assert!(read().is_err());
+    std::fs::write(path.join("signed.json"), signed).unwrap();
+    assert_eq!(read().unwrap(), [9; 32]);
+    assert!(issuer_pin(&journal, &fleet, "app", &root, "2vxsx-fae").is_err());
+    assert!(issuer_pin(&journal, &fleet, "app", "aaaaa-aa", &caller).is_err());
+    assert!(issuer_pin(&journal, &fleet, "other", &root, &caller).is_err());
+    std::fs::remove_dir_all(dir).unwrap();
+}

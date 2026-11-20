@@ -1,5 +1,107 @@
 # Changelog
 
+## [0.245.0] - 2026-11-20
+
+Packages selecting `canic/entropy` can use the consolidated ic-entropy 0.6.0 crate with the shared
+metrics and logging hooks. Call `canic::entropy::supplier::fresh_seed()` for
+a fresh acquisition. On the prepared local simulator:
+
+```sh
+make db-test  # installed package composition, including Entropy after reopen
+```
+
+Root and application packages now share `canic::lifecycle::initialize_timers()`.
+Select `timers` or `jobs`, and add `metrics` to record timer activity. Canic
+lifecycle mounts initialize diagnostics automatically. Start timers explicitly
+before binding application work.
+
+```sh
+# Installed Root timer accounting before and after upgrade
+bash scripts/dev/test-root.sh metrics::
+```
+
+The embedded Blob adapter uses IC Blob Storage 0.108.0. Selecting `blob` with
+`metrics` or `logging` attaches the service to the hosting canister’s diagnostics
+on install and reopen. Run `make blob-test` on the prepared simulator.
+
+Canic lifecycle mounts attach selected DB and Jobs metrics to the canister’s
+shared store and forward DB diagnostics to its shared log when logging is enabled.
+Run the package-composition witness on the prepared local simulator:
+
+```sh
+make db-test
+```
+
+Both Cargo workspaces pin Toko Tooling 0.46.0. Verify the installed snapshot
+with `make toko-tooling-check`.
+
+Any actor can select `canic/role-attestation` and call a named service through
+`canic::topology::call_service`. A fresh DB hub or shard gets the same wiring
+from `mount_db_role!`; a plain store needs only `canic/db-store`.
+For a resolved Root built with `auth,role-issuer` and its command codec, retain
+the signer’s public key before planning named DB receivers. Each hub needs an
+Auth policy, a `role_receivers` entry and a 16-byte nonzero installation nonce.
+
+```sh
+canic fleet call --canister root prepare-role-key
+# Installed DB shard → named project hub, using the prepared local simulator
+bash scripts/dev/test-store.sh db-roles
+```
+
+Unbound local fleets can opt into `lifetime = "ephemeral"`. The Canic Host `ephemeral` feature runs installed tests with a dedicated Testkit simulator and temporary journal.
+
+Root now requires IC Timers 0.46.13 for its shared timer metrics storage. Run
+`make metrics-test` for the example and `bash scripts/dev/test-root.sh metrics::`
+for timer reporting across a Root upgrade.
+
+The local demo builds and deploys its fleet before opening an application prompt in the same terminal. Metrics automatically counts completed synchronous Canic updates and reports latest, average and maximum handler instructions by endpoint. The fleet operator reads them through Root. The app recipe selects `features = ["canic/endpoint-metrics"]`. Canic supplies the guarded reader automatically. The builder checks its module and query export before replacing the Wasm. Both interactive demos offer the same `metrics` and `logs [before]` commands for the application’s endpoint measurements and Root’s operational log.
+
+```sh
+make demo DEMO_APP=metrics
+# At metrics> enter each command
+ping hello
+checksum hello
+metrics
+# Root controller: read newest operational log entries
+logs
+exit
+```
+
+Canic #61 changes the shard provisioning reply to `Result<Binding, Refusal>`.
+The hub can return an application refusal while retaining the original reservation
+for uncertain calls. Upgrade hub and shard together. With a prepared simulator,
+run the installed User Directory example:
+
+```sh
+bash scripts/dev/test-store.sh user-directory
+```
+
+Rename the provisioning selector `Account` to `AuthSubject`. Import
+`canic::sharding::provisioning::AuthSubject` for the issuer and subject
+used at signup. Ledger accounts continue to use IC Platform’s `Account`.
+
+```sh
+# Build the example hub with the renamed provisioning type.
+canic app build --config apps/examples/user-directory/canic.toml --canister ex-user-directory-hub
+```
+
+On a Root built with `role-issuer`, the controller can close proof renewal
+for an empty, drained shard. Use the generation returned by `inspect-shard`.
+The reply reports the original deadline as a decimal string in IC nanoseconds,
+including on retry after a Root upgrade.
+
+```sh
+canic fleet call --canister root --identity operator inspect-shard "$SHARD"
+canic fleet call --canister root --identity operator close-role-issuance "$SHARD" "$GENERATION"
+```
+
+Build the supplied dormant canister for local retirement qualification. The
+artifact records the source Root, retired principal, generation and proof deadline.
+
+```sh
+canic artifact build --package canic-dormant
+```
+
 ## [0.244.0] - 2026-11-20
 
 An opt-in Root can issue receiver-bound, two-hour role proofs to its ready shared

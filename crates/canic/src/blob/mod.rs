@@ -10,6 +10,52 @@ pub mod endpoint;
 
 /// The independent supplier; its DTOs and Service retain their original identities.
 pub use ic_blob_storage as supplier;
+
+use ic_platform_types::Principal;
+use ic_storage::{Memory, RuntimeMemory};
+use supplier::{
+    local::persistence::{OpenError, Service},
+    protocol::Installation,
+};
+
+#[cfg(feature = "metrics")]
+impl crate::metrics::store::Source for supplier::metrics::MetricsStorage {
+    type Storage = Self;
+}
+
+/// Attach a service to the application-granted lease with this canister’s selected diagnostics.
+/// Supply installation settings only on fresh install. Reopen uses the existing record.
+/// The application owns the service and its maintenance admission.
+///
+/// # Errors
+/// Propagates the supplier's create or reopen refusal.
+/// # Panics
+/// Backing memory failures trap the lifecycle message.
+pub fn open_service<M: Memory>(
+    memory: RuntimeMemory<M>,
+    installation: Principal,
+    fresh: Option<Installation>,
+) -> Result<Service<M>, OpenError> {
+    #[cfg(feature = "metrics")]
+    let service = {
+        let metrics = crate::metrics::store::open::<supplier::metrics::MetricsStorage>();
+        match fresh {
+            Some(input) => Service::create_with_metrics(memory, installation, input, metrics),
+            None => Service::open_with_metrics(memory, installation, metrics),
+        }
+    }?;
+    #[cfg(not(feature = "metrics"))]
+    let service = match fresh {
+        Some(input) => Service::create(memory, installation, input),
+        None => Service::open(memory, installation),
+    }?;
+
+    #[cfg(feature = "logging")]
+    let service = service.with_logging(crate::logging::record);
+
+    Ok(service)
+}
+
 /// Request and reply budgets defined by the Blob protocol.
 pub const RPC_LIMITS: ic_wire::Limits = {
     let limits = supplier::protocol::RPC_LIMITS;

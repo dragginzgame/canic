@@ -14,15 +14,16 @@ category = "tests"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-fault-injection = ["canic/db-store"]
+fault-injection = ["canic/db-store", "canic/jobs", "canic/entropy", "dep:ic-timers"]
 incompatible-schema = []
 managed-fixture = ["canic/readiness", "canic/topology"]
 
 [dependencies]
-canic = { workspace = true, features = ["db-schema", "storage"] }
+canic = { workspace = true, features = ["db-schema", "logging", "metrics", "storage"] }
 ic-db.workspace = true
 ic-platform-runtime.workspace = true
 ic-storage.workspace = true
+ic-timers = { workspace = true, optional = true, features = ["metrics"] }
 ic-wire.workspace = true
 serde.workspace = true
 

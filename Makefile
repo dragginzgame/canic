@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 FORMAT_RUST_ARGS := --extra-workspace qualification
 IC_TOOLS := icp
-CARGO_PUBLISH_PACKAGES := canic-macros canic canic-management-protocol canic-management canic-root canic-host canic-cli
+CARGO_PUBLISH_PACKAGES := canic-macros canic canic-dormant canic-management-protocol canic-management canic-root canic-host canic-cli
 CARGO_PUBLISH_REGISTRY := crates-io
 CARGO_PUBLISH_VERIFY_TARGETS := publication-admission
 include vendor/toko-tooling/make/consumer.mk
@@ -57,9 +57,10 @@ canic:
 	@printf '%s\n' 'Ready: canic --help'
 
 .PHONY: demo
+DEMO_APP ?= counter
 demo: canic
 	$(MAKE) ic-tools-check
-	cargo run --locked --manifest-path qualification/Cargo.toml -p canic-qualification --example demo
+	cargo run --locked --manifest-path qualification/Cargo.toml -p canic-qualification --example demo -- --app "$(DEMO_APP)"
 
 .PHONY: counter-test counter-clippy counter-doc
 counter-test:
@@ -100,7 +101,13 @@ notebook-test:
 	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/notebook/canic.toml
 	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test notebook
 
-CI_TEST_TARGETS := notebook-test test effect-test artifact-custody-test journey-test counter-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
+.PHONY: metrics-test
+metrics-test:
+	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/metrics/canic.toml --canister root
+	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/metrics/canic.toml --canister ex-metrics
+	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test metrics_example
+
+CI_TEST_TARGETS := metrics-test notebook-test test effect-test artifact-custody-test journey-test counter-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
 ci: lint
 	$(MAKE) -j1 $(CI_TEST_TARGETS)
 
@@ -131,7 +138,7 @@ ci-native:
 
 ci-wasm:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-greeting-witness --lib --target wasm32-unknown-unknown --all-features -- -D warnings
-	cargo clippy --locked -p canic -p ex-counter -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked -p canic -p canic-dormant -p ex-counter -p ex-metrics -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features blob,auth --target wasm32-unknown-unknown --no-deps
 

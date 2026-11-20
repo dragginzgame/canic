@@ -1,6 +1,81 @@
 //! Explicit install and strict empty-argument reopen hooks.
+
 #[doc(hidden)]
 pub use ic_platform_runtime as runtime;
+
+#[cfg(all(feature = "metrics", any(feature = "db-store", feature = "db-schema")))]
+impl crate::metrics::store::Source for ic_db::metrics::MetricsStorage {
+    type Storage = Self;
+}
+
+#[cfg(all(feature = "metrics", feature = "entropy"))]
+impl crate::metrics::store::Source for ic_entropy::MetricsStorage {
+    type Storage = Self;
+}
+
+#[cfg(all(feature = "metrics", feature = "jobs"))]
+impl crate::metrics::store::Source for ic_jobs::MetricsStorage {
+    type Storage = Self;
+}
+
+#[cfg(all(feature = "metrics", feature = "timers"))]
+impl crate::metrics::store::Source for ic_timers::MetricsStorage {
+    type Storage = Self;
+}
+
+/// Initialize this canister's timer runtime before binding timers or restoring jobs.
+/// With `metrics`, Timers writes to the shared metrics store. Repeated calls in
+/// the same incarnation reuse its recorder. No callback or job is bound here.
+///
+/// # Errors
+/// Propagates the timer provider's initialization error, including a conflicting recorder.
+#[cfg(feature = "timers")]
+pub fn initialize_timers() -> Result<(), ic_timers::Error> {
+    #[cfg(feature = "metrics")]
+    {
+        use ic_timers::{MetricsStorage, initialize_with_metrics};
+
+        initialize_with_metrics(crate::metrics::store::open::<MetricsStorage>())
+    }
+    #[cfg(not(feature = "metrics"))]
+    {
+        ic_timers::initialize()
+    }
+}
+
+/// Attach the selected suppliers to this canister’s diagnostics before application work.
+/// Canic lifecycle mounts call this once on install and on reopen. Actors with
+/// custom lifecycle entrypoints call it themselves at the same boundary.
+///
+/// # Panics
+/// Traps if an enabled supplier has already selected a different recorder or log sink.
+pub fn initialize_diagnostics() {
+    #[cfg(feature = "logging")]
+    crate::logging::initialize();
+
+    #[cfg(all(feature = "logging", any(feature = "db-store", feature = "db-schema")))]
+    ic_db::logging::initialize_with_logger(crate::logging::record).expect("attach DB log sink");
+
+    #[cfg(all(feature = "metrics", any(feature = "db-store", feature = "db-schema")))]
+    {
+        use ic_db::metrics::{MetricsStorage, initialize_with_metrics};
+        initialize_with_metrics(crate::metrics::store::open::<MetricsStorage>())
+            .expect("attach DB metrics");
+    }
+
+    #[cfg(all(feature = "logging", feature = "entropy"))]
+    ic_entropy::set_log_sink(Some(crate::logging::record)).expect("attach Entropy log sink");
+
+    #[cfg(all(feature = "metrics", feature = "entropy"))]
+    ic_entropy::initialize_with_metrics(crate::metrics::store::open::<
+        ic_entropy::MetricsStorage,
+    >())
+    .expect("attach Entropy metrics");
+
+    #[cfg(all(feature = "metrics", feature = "jobs"))]
+    ic_jobs::initialize_with_metrics(crate::metrics::store::open::<ic_jobs::MetricsStorage>())
+        .expect("attach Jobs metrics");
+}
 
 #[doc(hidden)]
 pub fn empty_arguments(bytes: &[u8]) -> Result<(), &'static str> {
@@ -46,6 +121,7 @@ macro_rules! mount_lifecycle {
             )]
             #[allow(clippy::needless_pass_by_value)]
             fn init($binding: $input) {
+                $crate::lifecycle::initialize_diagnostics();
                 $call;
             }
 
@@ -57,6 +133,7 @@ macro_rules! mount_lifecycle {
                 on_error = fail,
             )]
             fn post_upgrade((): ()) {
+                $crate::lifecycle::initialize_diagnostics();
                 $reopen();
             }
         };

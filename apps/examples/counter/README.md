@@ -16,11 +16,12 @@ canic artifact inspect artifacts/app.wasm
 ```
 
 From the repository root, run `make demo` with the simulator and tools prepared.
-Use the plan and apply commands printed by the session. In its working directory:
+After deployment, enter these commands at the `counter>` prompt in the same terminal.
 
-```sh
-canic fleet call --canister ex-counter --identity anonymous increment
-canic fleet call --canister ex-counter --identity anonymous read
+```text
+increment
+read
+exit
 ```
 
 Both calls return the same stored value. A compatible upgrade preserves it.

@@ -14,16 +14,17 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "canic-root-client"
 path = "client/main.rs"
-required-features = ["sharding"]
+required-features = ["operator-client"]
 
 [features]
+operator-client = ["dep:clap", "dep:serde_json"]
+child-metrics = ["operator-client"]
 role-issuer = ["sharding", "canic-management/role-issuer"]
 backup = ["canic-management/backup", "dep:serde"]
 sharding = [
     "canic/sharding",
     "canic-management/sharding",
-    "dep:clap",
-    "dep:serde_json",
+    "operator-client",
     "dep:ic-platform-types",
     "dep:serde",
 ]
@@ -33,7 +34,7 @@ fault-injection = ["canic-management/fault-injection"]
 maintenance-candidate = ["canic-management/maintenance-candidate"]
 
 [dependencies]
-canic = { workspace = true, features = ["method", "metrics"] }
+canic = { workspace = true, features = ["logging", "metrics"] }
 canic-management.workspace = true
 canic-management-protocol.workspace = true
 ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }

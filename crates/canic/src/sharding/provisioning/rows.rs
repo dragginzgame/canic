@@ -1,5 +1,5 @@
 //! Optional bounded reads of application-owned IC DB rows.
-use super::Account;
+use super::AuthSubject;
 use crate::auth::session::Authorization;
 use ic_db::{DatabaseSession, Entity};
 
@@ -9,14 +9,14 @@ use ic_db::{DatabaseSession, Entity};
 /// Traps on conflicting database access, an incompatible index, or an oversized row.
 #[must_use]
 pub fn session_row<E: Entity>(database: &DatabaseSession, view: &Authorization) -> Option<E> {
-    account_row(database, Account::from(view))
+    account_row(database, AuthSubject::from(view))
 }
 
 /// Optional IC DB lookup for applications with a unique issuer/subject index.
 /// # Panics
 /// Refuses an incompatible index, oversized row or conflicting access.
 #[must_use]
-pub fn account_row<E: Entity>(database: &DatabaseSession, account: Account) -> Option<E> {
+pub fn account_row<E: Entity>(database: &DatabaseSession, account: AuthSubject) -> Option<E> {
     let db = database.read().expect("read provisioned account");
     assert!(
         E::SCHEMA.indexes.iter().any(|index| {
@@ -38,7 +38,7 @@ pub fn account_row<E: Entity>(database: &DatabaseSession, account: Account) -> O
     Some(row)
 }
 
-impl From<&Authorization> for Account {
+impl From<&Authorization> for AuthSubject {
     fn from(view: &Authorization) -> Self {
         Self {
             issuer: view.issuer(),

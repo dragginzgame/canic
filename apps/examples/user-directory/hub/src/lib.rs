@@ -2,10 +2,10 @@
 
 use canic::{
     db,
-    sharding::provisioning::{self, Account, Binding, Progress, Request},
+    sharding::provisioning::{self, AuthSubject, Binding, Progress, Request, SendError},
 };
 use ic_db::{Principal, Ulid};
-use user_directory_schema::{Users, model::user_hub::Route};
+use user_directory_schema::{ProvisionRefusal, Users, model::user_hub::Route};
 
 // Open the hub database and mount its Auth session and readiness endpoints.
 canic::mount_db_role! {
@@ -22,17 +22,17 @@ canic::mount_db_role! {
 // scope  : write
 // limits : default
 #[canic::update(scope = WRITE)]
-async fn register() -> Progress {
-    let account = Account::from(&auth);
+async fn register() -> Result<Progress, ProvisionRefusal> {
+    let account = AuthSubject::from(&auth);
     let lookup = || provisioning::account_row::<Route>(&db!(), account);
     let existing = lookup();
     if existing.as_ref().is_some_and(|row| row.ready) {
-        return Progress::Ready;
+        return Ok(Progress::Ready);
     }
     let assignment =
         match provisioning::place::<Users>(&auth, existing.as_ref().map(|row| row.shard)).await {
             Ok(assignment) => assignment,
-            Err(progress) => return progress,
+            Err(progress) => return Ok(progress),
         };
     // Another registration may have won during placement. Only the winner allocates an ID.
     let row = existing.or_else(lookup).unwrap_or_else(|| {
@@ -53,7 +53,8 @@ async fn register() -> Progress {
     };
     let receipt = match assignment.send(&request).await {
         Ok(receipt) => receipt,
-        Err(progress) => return progress,
+        Err(SendError::Progress(progress)) => return Ok(progress),
+        Err(SendError::Refused(reason)) => return Err(reason),
     };
     let mut retained = lookup().expect("missing reservation");
     receipt.require_same(&binding(&retained));
@@ -62,7 +63,7 @@ async fn register() -> Progress {
         db!().replace(&retained).expect("confirm reservation");
     }
 
-    Progress::Ready
+    Ok(Progress::Ready)
 }
 
 // my_shard
@@ -81,10 +82,32 @@ const WRITE: &str = "write";
 fn binding(row: &Route) -> Binding<[u8; 16]> {
     Binding {
         id: row.id.to_bytes(),
-        account: Account {
+        account: AuthSubject {
             issuer: row.issuer,
             subject: row.subject,
         },
         shard: row.shard,
     }
+}
+
+/// Return the original reservation to a verified shard.
+#[cfg(feature = "role-service")]
+#[canic::update(role_contract = user_directory_schema::ReserveProject)]
+fn reserve_project(account: AuthSubject) -> [u8; 16] {
+    let shard = canic::method::runtime::system::caller();
+    if let Some(row) = provisioning::account_row::<Route>(&db!(), account) {
+        assert_eq!(row.shard, shard, "reservation belongs to another shard");
+        return row.id.to_bytes();
+    }
+    let id = Ulid::generate_prand();
+    db!()
+        .insert(&Route {
+            id,
+            issuer: account.issuer,
+            subject: account.subject,
+            shard,
+            ready: true,
+        })
+        .expect("reserve project");
+    id.to_bytes()
 }

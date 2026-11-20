@@ -7,6 +7,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 struct Users;
 impl Resource for Users {
     type Id = u64;
+    type Refusal = ();
     type Data = String;
     const METHOD: &'static str = "provision_user";
     const DOMAIN: &'static [u8] = b"toko.user.placement.v1";
@@ -76,7 +77,7 @@ fn ticket(row: &Route) -> Request<u64, String> {
     Request {
         binding: Binding {
             id: row.id,
-            account: Account {
+            account: AuthSubject {
                 issuer: row.issuer,
                 subject: row.subject,
             },
@@ -129,7 +130,7 @@ fn racing_id_and_lost_receipt_reopen_the_original_reservation() {
         };
         (host, DatabaseSession::new(db.unwrap()))
     };
-    let account = Account {
+    let account = AuthSubject {
         issuer: Principal::from_slice(&[3, 1]),
         subject: Principal::from_slice(&[4, 2]),
     };
@@ -196,7 +197,7 @@ fn confirmation_checks_encoded_size_before_updating_a_retained_route() {
     for (id, size) in [(1, 1024), (2, 1025)] {
         let binding = Binding {
             id,
-            account: Account {
+            account: AuthSubject {
                 issuer: Principal::from_slice(&[1]),
                 subject: Principal::from_slice(&[u8::try_from(id).unwrap()]),
             },
@@ -246,7 +247,7 @@ fn a_nonunique_account_index_cannot_authorize_provisioning() {
         .open_memory(&StableKey::parse("test.accounts.v1").unwrap())
         .unwrap();
     let db = Database::create(memory, Schema::new(&[Nonunique::SCHEMA]).unwrap(), [7; 16]).unwrap();
-    let account = Account {
+    let account = AuthSubject {
         issuer: Principal::from_slice(&[1]),
         subject: Principal::from_slice(&[2]),
     };
@@ -261,20 +262,20 @@ fn a_nonunique_account_index_cannot_authorize_provisioning() {
 
 #[test]
 fn provisioning_requires_both_an_identified_issuer_and_subject() {
-    let account = Account {
+    let account = AuthSubject {
         issuer: Principal::from_slice(&[1]),
         subject: Principal::from_slice(&[2]),
     };
     assert!(account.valid());
     assert!(
-        !Account {
+        !AuthSubject {
             issuer: Principal::anonymous(),
             ..account
         }
         .valid()
     );
     assert!(
-        !Account {
+        !AuthSubject {
             subject: Principal::anonymous(),
             ..account
         }
@@ -325,7 +326,7 @@ fn published_account_key_and_flat_provisioning_frame_remain_compatible() {
     let issuer = Principal::from_slice(&[3, 1]);
     let subject = Principal::from_slice(&[4, 2]);
     let shard = Principal::from_slice(&[7, 1]);
-    let account = Account { issuer, subject };
+    let account = AuthSubject { issuer, subject };
     assert_eq!(
         placement_key::<Users>(account),
         [

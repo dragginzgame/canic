@@ -113,6 +113,39 @@ impl FleetConfig {
             })
     }
 
+    /// Bind the DB incarnation and verified issuer independently inside the Auth install.
+    /// # Errors
+    /// Refuses an unselected service, invalid nonce, invalid Root or Auth policy.
+    pub fn db_service_install_args(
+        &self,
+        name: &str,
+        root: &str,
+        nonce: &[u8],
+        issuer_key: [u8; 32],
+    ) -> Result<Vec<u8>> {
+        use canic::topology::directory::{DbService, ServiceInstall};
+        if !self.role_receivers.iter().any(|service| service == name) {
+            return Err(invalid("DB service must be selected for role verification"));
+        }
+        let role = self
+            .canisters
+            .get(name)
+            .and_then(|c| c.role.clone())
+            .ok_or_else(|| invalid("missing service role"))?;
+        let nonce = nonce
+            .try_into()
+            .map_err(|_| invalid("DB service needs a 16-byte installation nonce"))?;
+        let application = DbService { nonce, issuer_key }.encode().map_err(invalid)?;
+        let service = ServiceInstall {
+            name: name.into(),
+            role,
+            application,
+        }
+        .encode()
+        .map_err(invalid)?;
+        self.receiver_install_args(name, root, service)
+    }
+
     /// Compile a fresh-install payload for a selected component and resolved Root.
     /// The caller must retain these exact bytes with its install approval.
     /// # Errors

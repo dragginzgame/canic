@@ -329,6 +329,12 @@ pub(crate) fn build_for_role(
     let path = selected_wasm(&output, package_id)?;
     let bytes = crate::store::read(&path, MAX_ARTIFACT_BYTES)?;
     let artifact = admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
+    let modules = compiled_modules(
+        &bytes,
+        features
+            .iter()
+            .any(|feature| feature == "canic/endpoint-metrics"),
+    )?;
     let wasm = match destination {
         Some(path) => path.to_owned(),
         None => outputs.join(&artifact.sha256).join(
@@ -346,31 +352,50 @@ pub(crate) fn build_for_role(
     Ok(BuildReport {
         wasm,
         artifact,
-        modules: compiled_modules(&bytes),
+        modules,
     })
 }
 
-// Report mount markers from the same bytes that were hashed and published.
-fn compiled_modules(bytes: &[u8]) -> Vec<&'static str> {
-    use wasmparser::{Parser, Payload};
+// Verify the selected metrics build before publishing the exact bytes we inspected.
+fn compiled_modules(bytes: &[u8], endpoint_metrics: bool) -> Result<Vec<&'static str>> {
+    use wasmparser::{ExternalKind, Parser, Payload};
 
     let mut has_db = false;
     let mut has_auth = false;
+    let mut mount = false;
+    let mut query = false;
     for payload in Parser::new(0).parse_all(bytes) {
-        match payload {
-            Ok(Payload::CustomSection(section)) => match section.name() {
+        match payload.map_err(supplier)? {
+            Payload::CustomSection(section) => match section.name() {
                 "canic:module:db" => has_db = true,
                 "canic:module:auth" => has_auth = true,
+                "canic:module:endpoint-metrics" => mount = true,
                 _ => {}
             },
-            Err(_) => return Vec::new(),
+            Payload::ExportSection(exports) => {
+                for export in exports {
+                    let export = export.map_err(supplier)?;
+                    query |= export.kind == ExternalKind::Func
+                        && export.name == "canister_query endpoint_metrics";
+                }
+            }
             _ => {}
         }
     }
-    [("DB", has_db), ("Auth", has_auth)]
-        .into_iter()
-        .filter_map(|(name, present)| present.then_some(name))
-        .collect()
+    if endpoint_metrics && !(mount && query) {
+        return Err(Error::Invalid("canic/endpoint-metrics was selected but the built Wasm is missing the Canic controller query".into()));
+    }
+    if !endpoint_metrics && mount {
+        return Err(Error::Invalid("endpoint metrics compiled without an explicit selection; select canic/endpoint-metrics in the build recipe or remove the dependency feature".into()));
+    }
+    Ok([
+        ("DB", has_db),
+        ("Auth", has_auth),
+        ("Endpoint Metrics", mount),
+    ]
+    .into_iter()
+    .filter_map(|(name, present)| present.then_some(name))
+    .collect())
 }
 
 fn selected_wasm(output: &[u8], package_id: &str) -> Result<PathBuf> {

@@ -1,6 +1,9 @@
 //! Small contracts and explicitly selected actor adapters.
 //! No host dependencies or management surface enters a Wasm consumer.
 
+// Endpoint attributes use the same absolute crate path in Canic and in applications.
+extern crate self as canic;
+
 /// Optional caller-bound Auth endpoints; lifecycle remains explicit.
 #[cfg(feature = "auth")]
 pub mod auth;
@@ -16,13 +19,21 @@ pub mod blob;
 #[cfg(any(feature = "db", feature = "db-store"))]
 pub mod db;
 
-/// One bounded management entropy request, with no local generator or retry.
-#[cfg(feature = "entropy")]
+/// Fresh platform requests and an optional supplier with shared diagnostics.
+#[cfg(feature = "raw-rand")]
 pub mod entropy;
+
+/// Opt-in Jobs runtime. The application owns job binding and timer initialization.
+#[cfg(feature = "jobs")]
+pub use ic_jobs as jobs;
 
 /// Explicit lifecycle hooks independent of storage and Auth.
 #[cfg(feature = "lifecycle")]
 pub mod lifecycle;
+
+/// Bounded operational diagnostics owned by the hosting canister.
+#[cfg(feature = "logging")]
+pub mod logging;
 
 #[cfg(feature = "method")]
 pub mod method;
@@ -35,6 +46,10 @@ pub mod readiness;
 
 #[cfg(feature = "recovery")]
 pub mod recovery;
+
+/// Actor composition for Auth-enrolled stateful hubs and shards.
+#[cfg(feature = "db-store")]
+pub mod role;
 
 #[cfg(feature = "storage")]
 pub mod storage;

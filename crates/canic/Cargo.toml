@@ -18,17 +18,23 @@ auth-enrollment = [
     "auth",
     "ic-auth/receiver-memory",
     "ic-auth/ed25519-verification",
-    "entropy",
+    "raw-rand",
     "lifecycle",
     "dep:sha2",
 ]
 auth-receiver-stable = ["auth-enrollment", "ic-auth/receiver-stable", "storage"]
 auth-issuer-stable = ["auth", "ic-auth/issuer-stable"]
-blob = ["dep:ic-blob-storage", "dep:ic-platform-runtime"]
+blob = [
+    "dep:ic-blob-storage",
+    "dep:ic-platform-runtime",
+    "dep:ic-platform-types",
+    "dep:ic-storage",
+]
 db = ["dep:ic-platform-runtime"]
 db-schema = ["db", "dep:ic-db"]
 db-store = ["dep:ic-db", "storage"]
-entropy = ["dep:ic-platform-runtime", "ic-platform-runtime/raw-rand"]
+endpoint-metrics = ["method", "dep:ic-metrics"]
+entropy = ["dep:ic-entropy", "raw-rand"]
 inspection = [
     "dep:inventory",
     "dep:serde_json",
@@ -36,21 +42,40 @@ inspection = [
     "ic-wire/platform-types",
     "ic-auth-wire?/typescript",
 ]
+jobs = ["dep:ic-jobs", "timers"]
 lifecycle = ["dep:ic-platform-runtime"]
+logging = [
+    "method",
+    "lifecycle",
+    "dep:ic-logging",
+    "ic-blob-storage?/logging",
+    "ic-db?/logging",
+    "ic-entropy?/logging",
+]
 method = [
     "dep:canic-macros",
     "dep:ic-platform-runtime",
     "ic-platform-runtime/call-ic0",
     "dep:ic-platform-types",
 ]
-metrics = ["dep:ic-platform-runtime"]
+metrics = [
+    "lifecycle",
+    "ic-blob-storage?/metrics",
+    "ic-db?/metrics",
+    "ic-entropy?/metrics",
+    "ic-jobs?/metrics",
+    "ic-timers?/metrics",
+]
+raw-rand = ["dep:ic-platform-runtime", "ic-platform-runtime/raw-rand"]
 recovery = []
 provisioning = ["sharding", "stateful-role", "method"]
 readiness = ["dep:ic-platform-runtime"]
+role-attestation = ["role-verification", "storage"]
 role-verification = ["topology", "method", "dep:ic-platform"]
 sharding = ["dep:ic-platform-runtime", "dep:ic-platform-types"]
 stateful-role = ["auth-enrollment", "db-store", "readiness", "topology"]
 storage = ["dep:ic-storage"]
+timers = ["dep:ic-timers", "lifecycle"]
 topology = ["dep:ic-platform-types", "dep:ic-platform-runtime"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
@@ -64,10 +89,15 @@ ic-auth-protocol-types = { workspace = true, optional = true }
 ic-auth-wire = { workspace = true, optional = true }
 ic-blob-storage = { workspace = true, optional = true }
 ic-db = { workspace = true, optional = true }
+ic-entropy = { workspace = true, optional = true }
+ic-jobs = { workspace = true, optional = true, features = ["execution"] }
+ic-logging = { workspace = true, optional = true }
+ic-metrics = { workspace = true, optional = true }
 ic-platform = { workspace = true, optional = true, features = ["ed25519"] }
 ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
 ic-platform-types = { workspace = true, optional = true }
 ic-storage = { workspace = true, optional = true }
+ic-timers = { workspace = true, optional = true }
 ic-wire.workspace = true
 serde.workspace = true
 sha2 = { workspace = true, optional = true }

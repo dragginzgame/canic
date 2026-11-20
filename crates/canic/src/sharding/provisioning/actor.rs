@@ -1,9 +1,8 @@
 //! Placement and dispatch under the original authenticated account.
-use super::{Account, Binding, Progress, Provision, Request, Resource};
+use super::{AuthSubject, Binding, Progress, Provision, Request, Resource, SendError};
 use crate::{
     auth::session::Authorization,
-    db::role,
-    method,
+    method, role,
     sharding::{self, Allocation, Placement},
     topology,
 };
@@ -49,7 +48,7 @@ pub async fn place<'a, R: Resource>(
     retained: Option<Principal>,
 ) -> Result<Assignment<'a, R>, Progress> {
     admit(auth);
-    let account = Account::from(auth);
+    let account = AuthSubject::from(auth);
     assert!(account.valid(), "invalid provisioning account");
     let root = role::root().expect("installed provisioning hub");
     let key = super::placement_key::<R>(account);
@@ -84,27 +83,33 @@ impl<R: Resource> Assignment<'_, R> {
 
     /// Send the application's retained request, then verify the reply and original allocation.
     /// # Errors
+    /// An admitted shard refusal carries the application error.
     /// An uncertain shard reply leaves provisioning pending. A changed allocation is unavailable.
     /// # Panics
     /// Refuses expired authority, invalid request encoding or a conflicting acknowledgement.
-    pub async fn send(self, request: &Request<R::Id, R::Data>) -> Result<Binding<R::Id>, Progress> {
+    pub async fn send(
+        self,
+        request: &Request<R::Id, R::Data>,
+    ) -> Result<Binding<R::Id>, SendError<R::Refusal>> {
         let expected = &request.binding;
-        if expected.account != Account::from(self.auth) || expected.shard != self.shard {
-            return Err(Progress::PlacementUnavailable);
+        if expected.account != AuthSubject::from(self.auth) || expected.shard != self.shard {
+            return Err(SendError::Progress(Progress::PlacementUnavailable));
         }
         admit(self.auth);
-        self.verify().await?;
+        self.verify().await.map_err(SendError::Progress)?;
         let result = method::call::<Provision<R>>(self.shard, 10, request).await;
         admit(self.auth);
         let receipt = match result {
-            Ok(binding) => binding,
+            Ok(reply) => reply,
             Err(method::CallError::Request(e)) => method::fail(e),
-            Err(_) => return Err(Progress::ProvisionPending),
+            Err(_) => return Err(SendError::Progress(Progress::ProvisionPending)),
         };
-        receipt.require_same(expected);
-        self.verify().await?;
+        if let Ok(binding) = &receipt {
+            binding.require_same(expected);
+        }
+        self.verify().await.map_err(SendError::Progress)?;
 
-        Ok(receipt)
+        receipt.map_err(SendError::Refused)
     }
 
     async fn verify(&self) -> Result<(), Progress> {
@@ -121,11 +126,15 @@ impl<R: Resource> Assignment<'_, R> {
 impl<I> Binding<I> {
     /// Admit a shard request from the installed parent for this exact canister.
     /// # Panics
-    /// Traps on a foreign parent, anonymous account component or wrong destination.
-    pub fn require_target(&self) {
+    /// Traps on a foreign parent.
+    /// # Errors
+    /// Refuses an anonymous account component or wrong destination.
+    pub fn check_target(&self) -> Result<(), &'static str> {
         topology::require_parent().unwrap_or_else(|e| method::fail(e));
         if !self.account.valid() || self.shard != api::canister_self() {
-            method::fail("BindingConflict");
+            return Err("invalid provisioning target");
         }
+
+        Ok(())
     }
 }

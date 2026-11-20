@@ -2,6 +2,12 @@
 #[cfg(feature = "method")]
 pub mod attestation;
 pub mod directory;
+#[cfg(feature = "role-attestation")]
+mod service;
+#[cfg(feature = "role-attestation")]
+pub use service::{attach_role_calls, call_service};
+#[cfg(feature = "method")]
+pub mod dormancy;
 
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
@@ -101,6 +107,23 @@ impl Install {
         } else {
             Ok(None)
         }
+    }
+
+    /// Resolve the approved topology in a direct or Auth-wrapped child install.
+    /// # Errors
+    /// Refuses a malformed recognized frame or disagreeing outer/inner Root.
+    pub fn approved(bytes: &[u8]) -> Result<Option<Self>, &'static str> {
+        #[cfg(feature = "auth")]
+        if crate::auth::install::Install::is_frame(bytes) {
+            let receiver = crate::auth::install::Install::decode(bytes)
+                .map_err(|_| "malformed receiver installation")?;
+            let binding = Self::decode_if_present(&receiver.application)?;
+            if let Some(binding) = &binding {
+                binding.check_root(receiver.root)?;
+            }
+            return Ok(binding);
+        }
+        Self::decode_if_present(bytes)
     }
 
     /// Check the enclosing receiver policy when the application selects Auth.

@@ -312,10 +312,9 @@ fn valid_limits(a: &ShardPool) -> bool {
         && a.pool.len() <= 64
 }
 
-// Only the direct topology envelope declares a placement parent here. Other
-// application arguments keep their original bytes and confer no role evidence.
+// The approved parent and Root must agree through every recognized envelope.
 fn check_shard_topology(grant: &ShardPool) -> Result<(), Refusal> {
-    if let Some(install) = canic::topology::Install::decode_if_present(grant.arguments.as_slice())
+    if let Some(install) = canic::topology::Install::approved(grant.arguments.as_slice())
         .map_err(|_| Refusal::Binding)?
         && (install.root.to_text() != grant.root || install.parent.to_text() != grant.hub)
     {
@@ -982,7 +981,8 @@ pub(super) fn assigned_role(
         {
             return Err("shard assignment changed");
         }
-        let install = canic::topology::Install::decode(app.creation.as_slice())?;
+        let install = canic::topology::Install::approved(app.creation.as_slice())?
+            .ok_or("missing shard topology")?;
         if install.root != api::canister_self() || install.parent.to_text() != ledger.approval.hub {
             return Err("shard topology mismatch");
         }

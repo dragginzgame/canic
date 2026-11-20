@@ -1,5 +1,5 @@
-//! Project supplier counters; no recording, persistence or recovery authority.
-use canic::metrics::{Counter, Snapshot, Timers};
+//! Project the shared timer counters for reporting.
+use canic::metrics::{Counter, Snapshot, Timers, store};
 
 /// Aggregate public timer diagnostics for this management owner.
 /// # Panics
@@ -10,7 +10,8 @@ pub fn snapshot() -> Snapshot {
         super::STATE.with_borrow(|state| state.as_ref().expect("initialized manager").timer_window);
     Snapshot {
         observed_at_ns: super::api::time(),
-        timers: ic_timers::metrics().ok().map(|m| {
+        timers: store::get::<ic_timers::MetricsStorage>().map(|storage| {
+            let m = storage.snapshot();
             let [
                 accepted,
                 completed,

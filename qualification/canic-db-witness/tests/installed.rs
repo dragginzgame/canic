@@ -404,6 +404,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
     canic_qualification::upgrade_stopped(pic, canister, fault.clone(), vec![], None)
         .await
         .unwrap();
+    client.control(7).await;
     let before_limit = client.catalogue().await;
     let backing = pic.get_stable_memory(canister).await;
     client.control(4).await;

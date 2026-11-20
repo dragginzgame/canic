@@ -17,20 +17,18 @@ pub(crate) mod test_store {
 #[cfg(feature = "db-store")]
 pub mod store;
 
-/// Auth-enrolled stateful hub and shard lifecycle.
-#[cfg(feature = "stateful-role")]
-pub mod role;
-
 #[cfg(feature = "db")]
 #[doc(hidden)]
 pub mod endpoint;
 /// Passive bounded inspection contract, usable independently of the database engine.
+#[cfg(feature = "db")]
 pub mod inspection;
 /// Optional projection of compiled DB metadata; application authorization stays external.
 #[cfg(feature = "db-schema")]
 pub mod schema;
 
 /// Fixed transport envelope, independent of the application's narrower work bounds.
+#[cfg(feature = "db")]
 pub const RPC_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 65_536,
     allocation: 8 * 1024 * 1024,
@@ -38,6 +36,7 @@ pub const RPC_LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: 32,
 };
 /// Surface presented to the application's synchronous pre-decode authorization.
+#[cfg(feature = "db")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operation {
     /// Application-selected schema/status information.

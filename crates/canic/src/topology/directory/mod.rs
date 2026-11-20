@@ -36,6 +36,23 @@ impl ServiceInstall {
         direction: ic_wire::Direction::Request,
     };
 
+    /// Read a named service from its direct install or from a DB receiver policy.
+    /// # Errors
+    /// Refuses malformed bindings and an enclosing Auth policy naming a different Root.
+    pub fn approved(bytes: &[u8], root: Principal) -> Result<Self, &'static str> {
+        #[cfg(feature = "auth")]
+        if crate::auth::install::Install::is_frame(bytes) {
+            let receiver = crate::auth::install::Install::decode(bytes)
+                .map_err(|_| "malformed receiver installation")?;
+            if receiver.root != root {
+                return Err("conflicting service Root");
+            }
+            return Self::decode(&receiver.application);
+        }
+        let _ = root;
+        Self::decode(bytes)
+    }
+
     /// Encode the service declaration into an existing bounded install approval.
     /// # Errors
     /// Refuses invalid names or excessive arguments.
@@ -163,6 +180,22 @@ impl crate::method::Contract for ReceiveDirectory {
     const REPLY: ic_wire::Limits = crate::method::LIMITS;
     type Input = Delivery;
     type Output = Result<(), String>;
+}
+
+/// Mount delivery into the actor’s retained service directory. Install or reopen the
+/// index during the actor's lifecycle before receiving the first publication.
+#[cfg(all(feature = "storage", feature = "method"))]
+#[macro_export]
+macro_rules! mount_service_directory {
+    () => {
+        #[$crate::update(contract = $crate::topology::directory::ReceiveDirectory)]
+        async fn receive_directory(
+            update: $crate::topology::directory::Delivery,
+        ) -> Result<(), String> {
+            use $crate::topology::directory::retained::{self, DIRECTORY};
+            retained::receive(&DIRECTORY, update).await
+        }
+    };
 }
 
 /// Bounded directory frames and retained records.
@@ -449,5 +482,67 @@ pub mod retained {
             }
             Ok(())
         })
+    }
+}
+
+/// Approved stateful service arguments inside the named service declaration.
+/// Database identity and verifier trust have independent owners and lengths.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct DbService {
+    /// Application selected incarnation nonce.
+    pub nonce: [u8; 16],
+    /// Public half of the installing Root's role signer.
+    pub issuer_key: [u8; 32],
+}
+
+impl DbService {
+    const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
+        method: ic_wire::method_id("canic.db_role_service.v1"),
+        direction: ic_wire::Direction::Request,
+    };
+    /// Read DB bindings when an Auth receiver declares a named service.
+    /// # Errors
+    /// Refuses missing or malformed bindings and a different installing Root.
+    pub fn from_receiver(bytes: &[u8], root: Principal) -> Result<Option<Self>, &'static str> {
+        #[cfg(feature = "auth")]
+        if crate::auth::install::Install::is_frame(bytes) {
+            let receiver = crate::auth::install::Install::decode(bytes)
+                .map_err(|_| "malformed receiver installation")?;
+            if receiver.application.first_chunk().is_some_and(|header| {
+                ic_wire::validate_request_header(
+                    ic_wire::method_id("canic.service_install.v1"),
+                    header,
+                )
+                .is_ok()
+            }) {
+                if receiver.root != root {
+                    return Err("conflicting service Root");
+                }
+                let service = ServiceInstall::decode(&receiver.application)?;
+                return Self::decode(&service.application).map(Some);
+            }
+        }
+        let _ = (bytes, root);
+        Ok(None)
+    }
+    /// Encode the independent bindings.
+    /// # Errors
+    /// Refuses a zero nonce or a framing failure.
+    pub fn encode(&self) -> Result<Vec<u8>, &'static str> {
+        if self.nonce == [0; 16] {
+            return Err("zero installation nonce");
+        }
+        ic_wire::encode(self, Self::FRAME, super::LIMITS).map_err(|_| "DB service frame")
+    }
+    /// Open the exact approved frame.
+    /// # Errors
+    /// Refuses a malformed frame or zero nonce.
+    pub fn decode(bytes: &[u8]) -> Result<Self, &'static str> {
+        let value: Self =
+            ic_wire::decode(bytes, Self::FRAME, super::LIMITS).map_err(|_| "DB service frame")?;
+        if value.nonce == [0; 16] {
+            return Err("zero installation nonce");
+        }
+        Ok(value)
     }
 }

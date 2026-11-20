@@ -1,9 +1,9 @@
 # Toko Tooling snapshot v1
-# version	0.45.25
+# version	0.46.0
 # layout	vendor
 format	1
 source	https://crates.io/crates/toko-tooling
-revision	8ee626aa8f6e773f28e9132fb5e9e63d66212ed4b0fe8de67f3468a46f5dc50e
+revision	4601d2785aaa14e01fd8656d6b3a57653337b214e027810c953595f1d91d6a8d
 # entrypoint	TOKO-TOOLING.md
 # entrypoint	vendor/toko-tooling/make/consumer.mk
 # entrypoint	vendor/toko-tooling/make/cargo-dependencies.mk
@@ -17,7 +17,7 @@ revision	8ee626aa8f6e773f28e9132fb5e9e63d66212ed4b0fe8de67f3468a46f5dc50e
 # entrypoint	vendor/toko-tooling/make/cargo-publication.mk
 # entrypoint	vendor/toko-tooling/scripts/ci/run-validation-stage.pl
 # entrypoint	vendor/toko-tooling/scripts/ci/SetupDiagnostics.pm
-file	b3ac5d79f3b4d6431c6c0a758cfabad9e3ac7f53784843ba9d5fa0092c3ea8ad	-	TOKO-TOOLING.md
+file	6750a18a92577ae4fea265c60f34cc80e442335c6f9edeccd498f75debbaa283	-	TOKO-TOOLING.md
 file	e5be6f538ee619be119aef9b3fca9d156f35c08732d9775e4e2efd698db8cbd7	-	vendor/toko-tooling/make/consumer.mk
 file	07b59f8cc784c79c648d379561f2493e40bac5b7c2809e8eda960cba661fae7d	-	vendor/toko-tooling/make/cargo-dependencies.mk
 file	1085e5521dfacb38aed065b70f905aab666ab73ef49dd5a25270c2ec2cf63710	x	vendor/toko-tooling/.githooks/pre-commit
@@ -28,7 +28,7 @@ file	e0f1b194ddbe5e5ae35864edc67727993511e093cff07506b4ffa503681edd52	x	vendor/t
 file	9b6997e3549c9a45220e6aa7d0a34082e3898acbc95811f01da88a58511251c5	x	vendor/toko-tooling/scripts/ci/check-dependency-pins.sh
 file	3f2971bfefccf71cf4929cabd1fa000e0c7b3d4002b9a08ca58821ccb048c123	-	LICENSE.md
 file	f83e4bd3143a04e954f77eb23d38b1924658aa298b0c1d3486748197861d696d	-	vendor/toko-tooling/make/cargo-publication.mk
-file	4a3da285875cf66dbcd07a5eca328199779f981340f27528f7e4e6bdfe8e08d1	x	vendor/toko-tooling/scripts/ci/run-validation-stage.pl
+file	33c006822ca31a883ace2f59659a4d172f44210d1e28a008912278eaa37c52be	x	vendor/toko-tooling/scripts/ci/run-validation-stage.pl
 file	5c4b137ef1c611246d62a033b5f3f35acdf377ca1a5153c595d28fe4b0db644a	-	vendor/toko-tooling/scripts/ci/SetupDiagnostics.pm
 file	578a5f7217e378280fe378328d39e4b7dcea653bd868159b57362461bd4e8555	x	vendor/toko-tooling/scripts/ci/verify-file-checksum.sh
 file	aec8dfcff940adbf7ca69d0e9edb4cd31b65648e1deef299ffb194e94e64c536	x	vendor/toko-tooling/scripts/ci/verify-toko-tooling-snapshot.sh

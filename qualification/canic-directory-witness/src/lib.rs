@@ -2,7 +2,7 @@
 use canic::topology::Install;
 use canic::topology::directory::{
     Delivery, Directory, Hop, ReceiveDirectory, ServiceInstall,
-    retained::{self, DIRECTORY, Index},
+    retained::{DIRECTORY, Index},
 };
 use ic_platform_types::Principal;
 use ic_storage::DefaultMemoryImpl;
@@ -125,10 +125,7 @@ fn unique_service(role: String) -> Option<(u64, Result<Principal, String>)> {
 }
 
 // Accept a directory update under the retained installer authority.
-#[canic::update(contract = ReceiveDirectory)]
-async fn receive_directory(update: Delivery) -> Result<(), String> {
-    retained::receive(&DIRECTORY, update).await
-}
+canic::mount_service_directory!();
 
 // Inspect the role and direct-child acknowledgement held by this actor.
 #[canic::query]

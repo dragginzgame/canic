@@ -35,6 +35,7 @@ pub(super) struct State {
 }
 impl State {
     pub fn open(input: Option<protocol::Installation>, installation: Principal) -> Self {
+        canic::lifecycle::initialize_diagnostics();
         let backing = DefaultMemoryImpl::default();
         assert_eq!(
             backing.size() == 0,
@@ -107,14 +108,14 @@ impl State {
             let bytes = ic_wire::encode(&catalog, ic_wire::Encoding::Payload, RPC_LIMITS)
                 .expect("initial catalog");
             let cell = StableCell::create(catalog_memory, bytes);
-            let blob = Service::create(
+            let blob = canic::blob::open_service(
                 blob_memory,
                 installation,
-                Installation {
+                Some(Installation {
                     application: installation,
                     manager: input.manager,
                     limits: input.limits,
-                },
+                }),
             )
             .expect("fresh Blob");
             Self {
@@ -125,7 +126,7 @@ impl State {
                 catalog,
             }
         } else {
-            let blob = Service::open(blob_memory, installation)
+            let blob = canic::blob::open_service(blob_memory, installation, None)
                 .expect("existing Blob; no initialization fallback");
             ic_storage::stable_cell_payload_length(&catalog_memory, RPC_LIMITS.bytes)
                 .expect("bounded catalog");

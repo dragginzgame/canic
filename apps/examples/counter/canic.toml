@@ -1,7 +1,7 @@
 [apps.ex-counter.canisters.root]
 role = "root"
 wasm = "artifacts/root.wasm"
-build = { manifest = "../../../Cargo.toml", package = "canic-root" }
+build = { manifest = "../../../Cargo.toml", package = "canic-root", features = ["child-metrics"], client = "canic-root-client" }
 
 [apps.ex-counter.canisters.store]
 role = "wasm-store"
@@ -13,7 +13,7 @@ build = { manifest = "../../../Cargo.toml", package = "ic-wasm-store" }
 role = "app"
 parent = "root"
 wasm = "artifacts/app.wasm"
-build = { manifest = "../../../Cargo.toml", package = "ex-counter", client = "ex-counter-client" }
+build = { manifest = "../../../Cargo.toml", package = "ex-counter", features = ["canic/endpoint-metrics"], client = "ex-counter-client" }
 
 [apps.ex-counter.fleets.mainnet]
 network = { kind = "Mainnet" }

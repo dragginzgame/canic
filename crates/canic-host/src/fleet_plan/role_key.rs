@@ -3,12 +3,21 @@ use super::{FleetPlan, Receipt, invalid};
 use crate::{Result, network::principal, operation, signed, store, supplier};
 use std::path::Path;
 
-const METHOD: &str = "prepare_role_key";
+pub(crate) const METHOD: &str = "prepare_role_key";
 fn frame(direction: ic_wire::Direction) -> ic_wire::Encoding {
     ic_wire::Encoding::Frame {
         method: ic_wire::method_id(METHOD),
         direction,
     }
+}
+
+pub(crate) fn request() -> Result<Vec<u8>> {
+    ic_wire::encode(
+        &(),
+        frame(ic_wire::Direction::Request),
+        canic_management_protocol::LIMITS,
+    )
+    .map_err(supplier)
 }
 
 fn call(root: &Receipt) -> Result<signed::Call<'static>> {
@@ -17,12 +26,7 @@ fn call(root: &Receipt) -> Result<signed::Call<'static>> {
         canister: id,
         effective: id,
         method: METHOD,
-        args: ic_wire::encode(
-            &(),
-            frame(ic_wire::Direction::Request),
-            canic_management_protocol::LIMITS,
-        )
-        .map_err(supplier)?,
+        args: request()?,
     })
 }
 
@@ -30,17 +34,18 @@ pub(super) fn retained(dir: &Path, fleet: &FleetPlan, root: &Receipt) -> Result<
     fleet.verify_root_receipt(root)?;
     let path = dir.join("role-key");
     signed::validate_retained(&path, &fleet.root, &call(root)?)?;
+    decode(&store::read(&path.join("reply.bin"), 512)?).map(Vec::from)
+}
+
+pub(crate) fn decode(reply: &[u8]) -> Result<[u8; 32]> {
     let key: std::result::Result<ic_wire::Bytes<32>, String> = ic_wire::decode(
-        &store::read(&path.join("reply.bin"), 512)?,
+        reply,
         frame(ic_wire::Direction::Response),
         canic_management_protocol::LIMITS,
     )
     .map_err(supplier)?;
     let key = key.map_err(crate::Error::Blocked)?.into_vec();
-    if key.len() != 32 {
-        return Err(invalid());
-    }
-    Ok(key)
+    key.try_into().map_err(|_| invalid())
 }
 
 pub(super) async fn prepare(

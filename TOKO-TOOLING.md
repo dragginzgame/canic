@@ -759,8 +759,10 @@ These rules apply to handwritten and generated Rust.
   macro. Start with a bare `///`, put the exact type name alone on the next
   line, then describe its role on one or more lines. Close with a bare `///`
   and leave one blank source line before the code.
-- Use the same header for handwritten entity structs and their adapter structs,
-  including unit structs that map an application row to a trait contract.
+- Use the same header for handwritten structs and enums, including private
+  helper enums, entities and unit adapter structs. Prefer module-wide types
+  near the top, after imports and any required endpoint group. Place a type
+  used by just one section immediately above that section.
   After the declaration, leave a blank line and place its inherent `impl`
   blocks first, followed by its trait `impl` blocks alphabetically by trait
   name. Leave a blank line between blocks. If there is no inherent `impl`,
@@ -775,6 +777,9 @@ These rules apply to handwritten and generated Rust.
   adjacent methods, tests and test helpers. Keep comments and attributes attached
   to their item. Give each named argument its own line in multi-argument endpoint
   mounts and attributes. Document each mount’s role and each guard’s access policy.
+- In longer function bodies, separate distinct steps with one blank line.
+  Keep closely related statements together. When a comment introduces the next
+  step, put the blank line above the comment and keep the code directly below it.
 - In a Rust function or method, leave one blank line between preceding
   statements and the returned value. This applies to an explicit `return`
   (including an early `return;`) and to an implicit tail expression such as
@@ -925,8 +930,8 @@ empty_line_after_doc_comments = "allow"
 ```
 
 Allow `clippy::empty_line_after_doc_comments` in the workspace lint table (or
-the package lint table for a standalone crate). The blank line after an entity
-or adapter header is intentional. Never add an item-level `#[expect]` or
+the package lint table for a standalone crate). The blank line after a type
+header is intentional. Never add an item-level `#[expect]` or
 `#[allow]` for this lint.
 
 Use `unsafe_code = "forbid"` for packages requiring no unsafe constructs. Keep

@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 /// Durable account selector derived from the authenticated issuer and subject.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
-pub struct Account {
+pub struct AuthSubject {
     /// Admitted issuer.
     pub issuer: Principal,
     /// Stable subject within this issuer.
@@ -28,7 +28,7 @@ pub struct Account {
 }
 
 #[cfg(feature = "provisioning")]
-impl Account {
+impl AuthSubject {
     fn valid(self) -> bool {
         self.issuer != Principal::anonymous() && self.subject != Principal::anonymous()
     }
@@ -44,7 +44,7 @@ fn matches_target(
 }
 
 #[cfg(feature = "provisioning")]
-fn placement_key<R: Resource>(account: Account) -> super::Key {
+fn placement_key<R: Resource>(account: AuthSubject) -> super::Key {
     use sha2::{Digest, Sha256};
     let mut digest = Sha256::new().chain_update(R::DOMAIN);
     for principal in [account.issuer, account.subject] {
@@ -61,6 +61,8 @@ pub trait Resource {
     type Id: Serialize + DeserializeOwned + Clone + Eq;
     /// Initial data retained by the hub until the original operation is confirmed.
     type Data: Serialize + DeserializeOwned;
+    /// Application refusal acknowledged by the shard.
+    type Refusal: Serialize + DeserializeOwned;
     /// Published parent-only update export.
     const METHOD: &'static str;
     /// Domain separator for the permanent placement key.
@@ -75,8 +77,8 @@ pub trait Resource {
 pub struct Binding<I> {
     /// Application-supplied ID.
     pub id: I,
-    /// Account owning this ID.
-    pub account: Account,
+    /// Issuer-qualified identity owning this ID.
+    pub account: AuthSubject,
     /// Admitted target principal.
     pub shard: Principal,
 }
@@ -110,7 +112,16 @@ impl<R: Resource> Contract for Provision<R> {
     const REQUEST: ic_wire::Limits = R::LIMITS;
     const REPLY: ic_wire::Limits = R::LIMITS;
     type Input = Request<R::Id, R::Data>;
-    type Output = Binding<R::Id>;
+    type Output = Result<Binding<R::Id>, R::Refusal>;
+}
+
+/// Outcome of an unsuccessful hub dispatch.
+#[derive(Debug, Eq, PartialEq)]
+pub enum SendError<E> {
+    /// Transport or placement could not establish an exact reply.
+    Progress(Progress),
+    /// The assigned shard acknowledged an application-defined refusal.
+    Refused(E),
 }
 
 /// Result of one bounded signup attempt, in the existing Toko Wire order.

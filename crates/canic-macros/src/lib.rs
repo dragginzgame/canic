@@ -188,6 +188,11 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 .unwrap_or_else(|e| ::canic::method::fail(e));
         }
     });
+    let invoke = if update && asynchronous.is_none() {
+        quote!(::canic::__canic_measure_update!(#export, __canic_handler(#argument)))
+    } else {
+        quote!(__canic_handler(#argument)#wait)
+    };
     Ok(quote! {
         #[allow(clippy::needless_pass_by_value)]
         #function
@@ -236,7 +241,7 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 #asynchronous fn __canic_invoke(__canic_input: #admitted_type) -> #reply {
                     #admit_proof
                     #unit
-                    __canic_handler(#argument)#wait
+                    #invoke
                 }
             }
         };

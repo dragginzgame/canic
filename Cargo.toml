@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "apps/examples/counter",
+    "apps/examples/metrics",
     "apps/examples/notebook",
     "apps/examples/user-directory/hub",
     "apps/examples/user-directory/schema",
@@ -8,6 +9,7 @@ members = [
     "apps/template",
     "crates/canic",
     "crates/canic-cli",
+    "crates/canic-dormant",
     "crates/canic-host",
     "crates/canic-macros",
     "crates/canic-management",
@@ -18,7 +20,7 @@ exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.244.0"
+version = "0.245.0"
 edition = "2024"
 rust-version = "1.100.0"
 repository = "https://github.com/dragginzgame/canic"
@@ -28,27 +30,32 @@ publish = ["crates-io"]
 [workspace.dependencies]
 # Production
 base64 = "0.23.1"
-canic-host = { path = "crates/canic-host", version = "0.244.0" }
-canic-macros = { path = "crates/canic-macros", version = "0.244.0" }
-canic-management = { path = "crates/canic-management", version = "0.244.0" }
-canic-management-protocol = { path = "crates/canic-management-protocol", version = "0.244.0" }
+canic-host = { path = "crates/canic-host", version = "0.245.0" }
+canic-macros = { path = "crates/canic-macros", version = "0.245.0" }
+canic-management = { path = "crates/canic-management", version = "0.245.0" }
+canic-management-protocol = { path = "crates/canic-management-protocol", version = "0.245.0" }
 clap = { version = "4.6.7", features = ["derive"] }
 ex-user-directory-schema = { path = "apps/examples/user-directory/schema" }
-ic-auth = "0.48.6"
+ic-auth = "0.48.8"
 ic-auth-protocol-types = "0.43.0"
-ic-auth-wire = "0.45.0"
+ic-auth-wire = "0.46.0"
 ic-backup = "0.105.5"
-ic-blob-storage = "0.107.0"
-ic-db = "0.24.0"
+ic-blob-storage = "0.108.0"
+ic-db = "0.26.2"
+ic-entropy = { version = "0.6.0", default-features = false }
 ic-host-artifacts = "0.80.3"
 ic-host-fs = { version = "0.80.3", default-features = false }
 ic-host-process = { version = "0.81.0", default-features = false }
 ic-host-sign = "0.1.0"
 ic-host-text = { version = "0.77.4", default-features = false }
+ic-jobs = { version = "0.39.11", default-features = false }
+ic-logging = "0.25.19"
+ic-metrics = "0.30.20"
 ic-platform-protocol = { version = "0.3.5", default-features = false }
 ic-platform-runtime = { version = "0.23.21", default-features = false }
 ic-platform-types = { version = "0.21.2", default-features = false }
-ic-timers = "0.46.3"
+ic-testkit = { version = "0.110.3", default-features = false }
+ic-timers = "0.46.13"
 ic-wasm-store = "0.5.0"
 ic-wasm-store-protocol = "0.5.0"
 proc-macro2 = "1.0.107"
@@ -66,7 +73,7 @@ url = "2.5.8"
 wasmparser = { version = "0.263.0", default-features = false, features = ["std"] }
 
 # Production and tests
-canic = { path = "crates/canic", version = "0.244.0" }
+canic = { path = "crates/canic", version = "0.245.0" }
 ic-platform = { version = "0.34.13", default-features = false }
 ic-query-topology = "0.110.6"
 ic-storage = "0.78.0"
@@ -77,7 +84,7 @@ serde_json = "1.0.154"
 toml = "1.2.1"
 
 # Tests and tooling
-toko-tooling = "=0.45.25"
+toko-tooling = "=0.46.0"
 
 [workspace.lints.cargo]
 unused_dependencies = "deny"

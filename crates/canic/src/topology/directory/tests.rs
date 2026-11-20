@@ -149,3 +149,56 @@ fn full_directory_fits_and_bad_publications_are_refused() {
     directory.revision = 0;
     assert!(directory.validate().is_err());
 }
+
+#[cfg(feature = "auth")]
+#[test]
+fn approved_shard_topology_checks_both_install_envelopes() {
+    use crate::{auth::install, topology::Install};
+    let root = Principal::from_slice(&[3, 1]);
+    let parent = Principal::from_slice(&[4, 1]);
+    let direct = Install {
+        root,
+        parent,
+        role: "user_shard".into(),
+        application: vec![7; 16],
+    }
+    .encode()
+    .unwrap();
+    let mut auth = install::Install {
+        storage: install::Storage::Volatile,
+        root,
+        issuer: parent,
+        network: [1; 32],
+        audience: [2; 32],
+        role: "user".into(),
+        limits: install::LimitsPolicy {
+            default_session_secs: 60,
+            max_session_secs: 60,
+            max_proof_ttl_ns: 60,
+            max_sessions: None,
+        },
+        application: direct.clone(),
+    };
+    for frame in [direct, auth.encode().unwrap()] {
+        let selected = Install::approved(&frame).unwrap().unwrap();
+        assert_eq!(
+            (selected.root, selected.parent, selected.role.as_str()),
+            (root, parent, "user_shard")
+        );
+        assert_eq!(selected.application, [7; 16]);
+    }
+    auth.root = parent;
+    assert!(Install::approved(&auth.encode().unwrap()).is_err());
+    auth.root = root;
+    auth.application.pop();
+    assert!(Install::approved(&auth.encode().unwrap()).is_err());
+    auth.application = vec![5; 16];
+    assert!(
+        Install::approved(&auth.encode().unwrap())
+            .unwrap()
+            .is_none()
+    );
+    let mut truncated = auth.encode().unwrap();
+    truncated.pop();
+    assert!(Install::approved(&truncated).is_err());
+}

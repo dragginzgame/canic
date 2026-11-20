@@ -12,6 +12,8 @@ mod auth;
 #[cfg(feature = "backup")]
 pub mod backup;
 mod config;
+#[cfg(feature = "ephemeral")]
+pub mod ephemeral;
 mod fleet;
 mod fleet_plan;
 mod inspection;
@@ -45,7 +47,7 @@ pub use auth::{
 pub use canic_management_protocol::Phase as ManagementPhase;
 pub use config::{
     AppConfig, BuildInput, CanisterBinding, CanisterConfig, CanisterDefinition, Config,
-    DeploymentName, DiscoveredConfig, FleetConfig, FleetDeclaration, FleetNetwork,
+    DeploymentName, DiscoveredConfig, FleetConfig, FleetDeclaration, FleetLifetime, FleetNetwork,
     InstancePoolConfig, PoolGrant, SelectedFleet, ShardPoolConfig, UnboundLocal, add_app_canister,
     bind_canister, create_configured_plan, discover_configs, init_app, init_config, init_fleet,
     load_config, resolve_config_path,

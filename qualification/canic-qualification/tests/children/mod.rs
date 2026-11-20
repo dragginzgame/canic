@@ -38,7 +38,7 @@ async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
     .unwrap()
 }
 
-async fn admit(
+pub(super) async fn admit(
     pic: &PocketIc,
     root: CanisterId,
     slot: ChildId,

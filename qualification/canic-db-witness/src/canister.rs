@@ -3,7 +3,7 @@ use crate::protocol::{
     InspectReply, InspectRequest, Page, QueryReply, QueryRequest, Receipt, Refusal, Row,
     WriteReply, WriteRequest,
 };
-use canic::db::{Operation, endpoint::runtime};
+use canic::db::Operation;
 use ic_db::{Batch, Comparison, Database, Entity, Error, QueryCursor, Schema};
 use ic_storage::{DefaultMemoryImpl, MemoryRuntime, RuntimeMemory, StableKey, StorageConfig};
 use std::{cell::OnceCell, rc::Rc};
@@ -61,6 +61,24 @@ fn schema() -> Schema {
 }
 
 fn bootstrap(fresh: bool) -> Rc<Host> {
+    #[cfg(feature = "fault-injection")]
+    {
+        assert!(matches!(
+            ic_timers::metrics(),
+            Err(ic_timers::Error::Uninitialized)
+        ));
+        canic::lifecycle::initialize_timers().unwrap();
+        canic::lifecycle::initialize_timers().unwrap();
+        let timers = canic::metrics::store::get::<ic_timers::MetricsStorage>().unwrap();
+        assert_eq!(ic_timers::metrics().unwrap(), timers.snapshot());
+        assert!(ic_timers::inventory().unwrap().timers.is_empty());
+
+        let jobs = canic::metrics::store::get::<canic::jobs::MetricsStorage>()
+            .expect("Jobs metrics attached before opening application state");
+        assert_eq!(canic::jobs::metrics(), Some(jobs.snapshot()));
+        // Jobs refuses a different recorder, even one with identical counters.
+        canic::jobs::initialize_with_metrics(jobs).unwrap();
+    }
     let host = Rc::new(canic::storage::bootstrap(
         DefaultMemoryImpl::default(),
         fresh,
@@ -111,7 +129,7 @@ fn decode_owner(bytes: &[u8]) -> Result<ic_db::Principal, std::convert::Infallib
     if bytes.len() > 29 {
         let topology = canic::topology::Install::decode(bytes).expect("project topology");
         topology
-            .check_root(runtime::system::caller())
+            .check_root(ic_platform_runtime::system::caller())
             .expect("project installer");
         assert_eq!(topology.application, [8; 16]);
         return Ok(ic_db::Principal::from_slice(topology.parent.as_slice()));
@@ -119,14 +137,15 @@ fn decode_owner(bytes: &[u8]) -> Result<ic_db::Principal, std::convert::Infallib
     Ok({ ic_db::Principal::try_from_slice(bytes).expect("installation owner") })
 }
 
-/// Initialize the db witness state for this installation.
-#[runtime::init(
-    runtime = runtime,
-    guard = lifecycle_guard,
-    decode = decode_owner,
+// Open diagnostics and the application's named storage at install and upgrade.
+canic::mount_lifecycle! {
+    input = ic_db::Principal,
     max_bytes = 2097152,
-    on_error = endpoint_error,
-)]
+    decode = decode_owner,
+    install = initialize,
+    reopen = reopen,
+}
+
 fn initialize(owner: ic_db::Principal) {
     assert_ne!(owner, ic_db::Principal::anonymous());
     let host = bootstrap(true);
@@ -158,23 +177,7 @@ fn retained_owner(host: &Host) -> ic_db::Principal {
     owner
 }
 
-fn decode_upgrade(bytes: &[u8]) -> Result<(), &'static str> {
-    if bytes.is_empty() {
-        Ok(())
-    } else {
-        Err("unexpected DB upgrade arguments")
-    }
-}
-
-/// Reopen the db witness state from the preceding executable.
-#[runtime::post_upgrade(
-    runtime = runtime,
-    guard = lifecycle_guard,
-    decode = decode_upgrade,
-    max_bytes = 0,
-    on_error = endpoint_error,
-)]
-fn reopen((): ()) {
+fn reopen() {
     let host = bootstrap(false);
     retained_owner(&host);
     match open(&host) {
@@ -290,7 +293,21 @@ fn write(_caller: ic_db::Principal, rows: WriteRequest, _time: u64) -> WriteRepl
             })
             .map_err(refusal)?;
     }
-    db.commit(batch).map_err(refusal)?;
+    let recorder = canic::metrics::store::get::<ic_db::metrics::MetricsStorage>()
+        .expect("attached DB metrics");
+    let before = recorder.snapshot();
+    let result = db.commit(batch);
+    let after = recorder.snapshot();
+    assert_eq!(after.commits.total(), before.commits.total() + 1);
+    if result.is_err() {
+        assert_eq!(
+            after.commit_failures.total(),
+            before.commit_failures.total() + 1
+        );
+        let logs = canic::logging::page(None);
+        assert_eq!(logs.entries[0].source, "ic-db.commit");
+    }
+    result.map_err(refusal)?;
     let receipt = Receipt {
         inserted,
         note: String::new(),
@@ -320,7 +337,7 @@ mod controls {
     type EmptyReply = ();
     use super::{Entity, Operation, Schema, authorize, memory, open, runtime, schema};
     use canic::db::endpoint;
-    use endpoint::api;
+    use endpoint::{api, runtime};
     use ic_db::{Maintenance, SchemaTransition};
     use std::cell::Cell;
 
@@ -417,6 +434,30 @@ mod controls {
         endpoint::admit::<991>()
     }
 
+    // Exercise the selected supplier in the same installed actor as DB, Jobs and Timers.
+    async fn verify_entropy() {
+        use canic::entropy::supplier;
+        let recorder = canic::metrics::store::get::<supplier::MetricsStorage>()
+            .expect("attached entropy recorder");
+        let before = recorder.snapshot();
+        supplier::fresh_seed().await.expect("fresh IC entropy");
+        assert_eq!(
+            recorder.snapshot().fresh.succeeded.total(),
+            before.fresh.succeeded.total() + 1
+        );
+
+        supplier::suspend().unwrap();
+        assert!(matches!(
+            supplier::fresh_seed().await,
+            Err(supplier::Error::Disabled)
+        ));
+        supplier::resume_fresh_requests().unwrap();
+        let logs = canic::logging::page(None);
+        assert_eq!(logs.entries[0].source, "ic-entropy");
+        assert_eq!(logs.entries[0].message, "Fresh requests resumed");
+        assert_eq!(logs.entries[1].message, "Entropy suspended");
+    }
+
     /// Select a database failure point for the installed rollback witness.
     #[runtime::update(
         runtime = runtime,
@@ -427,8 +468,9 @@ mod controls {
         name = "db_test_control",
         encode = endpoint::encode::<EmptyReply, 991>,
     )]
-    fn db_test_control(control: u8) -> EmptyReply {
+    async fn db_test_control(control: u8) -> EmptyReply {
         match control {
+            7 => verify_entropy().await,
             0 => REPLY_FAILURE.set(false),
             1 => REPLY_FAILURE.set(true),
             4 => INSPECTION_FAILURE.set(true),
@@ -450,13 +492,4 @@ mod controls {
             _ => panic!("unknown fixture control"),
         }
     }
-}
-
-fn endpoint_error(error: impl std::fmt::Debug) -> ! {
-    ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
-}
-
-/// The IC admits lifecycle calls. The declared argument budget still applies.
-fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
-    Ok(())
 }

@@ -8,7 +8,7 @@ mod convergence;
 mod history;
 mod record;
 mod releases;
-mod role_key;
+pub(crate) mod role_key;
 
 use crate::{
     ApplyOutcome, Artifact, DeploymentName, Error, ManagedOwner, Plan, Receipt, Result,

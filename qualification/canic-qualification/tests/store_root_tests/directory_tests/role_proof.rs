@@ -1,6 +1,16 @@
 //! Real Root ledger, signing key, placed caller and install-time verifier pin.
-use super::*;
-use canic::{sharding::Placement, topology::attestation::Proof};
+
+use super::{CanisterId, Client, artifacts};
+use canic::{
+    method::Contract,
+    sharding::Placement,
+    topology::{
+        attestation::Proof,
+        directory::ServiceInstall,
+        dormancy::{DormancyReceipt, Receipt},
+    },
+};
+use std::time::Duration;
 
 pub(super) async fn prepare(root: &Client<'_>) -> Vec<u8> {
     root.update::<_, Result<ic_wire::Bytes<32>, String>>(
@@ -88,7 +98,7 @@ pub(super) async fn exercise(
     assert_eq!(present().await, Err("role refused".into()));
     let visit = async || {
         child
-            .update::<_, Result<u64, String>>("visit_hub", id("visit_hub"), &receiver.id, limits)
+            .update::<_, Result<u64, String>>("visit_hub", id("visit_hub"), &(), limits)
             .await
     };
     let read_visits = async || {
@@ -242,6 +252,7 @@ pub(super) async fn exercise(
             .update_call(issuer.id, owner, &request.method, request.arguments)
             .await
             .unwrap();
+
         canic_host::application::codec::decode(&codec, &bytes).unwrap()
     };
     let inspect = async || command(vec!["inspect-shard".into(), child.id.to_text()]).await;
@@ -343,7 +354,17 @@ pub(super) async fn exercise(
     assert_eq!(place(2u8).await, placed);
     assert_eq!(release(2u8, target.clone()).await, Ok(()));
     assert_eq!(inspect().await["live_placements"], 0);
-    let deadline = close(copy.0.generation.clone()).await.unwrap();
+    let close_request = vec![
+        "close-role-issuance".into(),
+        child.id.to_text(),
+        observed["generation"].as_str().unwrap().into(),
+    ];
+    let closed = command(close_request.clone()).await;
+    let deadline: u64 = closed["proof_deadline_ns"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
     assert!(deadline >= copy.0.expiry().unwrap());
     canic_qualification::upgrade_stopped(
         pic,
@@ -354,12 +375,65 @@ pub(super) async fn exercise(
     )
     .await
     .unwrap();
-    assert_eq!(close(copy.0.generation.clone()).await, Ok(deadline));
+    assert_eq!(command(close_request).await, closed);
     assert_eq!(renew(&child).await, Err("role issuance closed".into()));
     assert_eq!(retirement_status().await, Ok((deadline, 0)));
     assert_eq!(place(1u8).await, Placement::Full);
     assert_eq!(place(3u8).await, Placement::Full);
-    // The simulator controller performs the reinstall to exercise proof expiry.
+    // Exercise the shipped dormant actor independently of Root's effect orchestration.
+    let wasm = std::fs::read(artifacts().join("dormant.wasm")).unwrap();
+    let binding = Receipt {
+        root: issuer.id.to_text().parse().unwrap(),
+        subject: copy.0.subject,
+        generation: ic_wire::ByteArray::new(allocation.generation),
+        proof_deadline_ns: deadline,
+    };
+    for wrong in [
+        Receipt {
+            root: project.to_text().parse().unwrap(),
+            ..binding.clone()
+        },
+        Receipt {
+            subject: project.to_text().parse().unwrap(),
+            ..binding.clone()
+        },
+    ] {
+        assert!(
+            pic.reinstall_canister(
+                child.id,
+                wasm.clone(),
+                wrong.encode().unwrap(),
+                Some(issuer.id)
+            )
+            .await
+            .is_err()
+        );
+    }
+    pic.reinstall_canister(
+        child.id,
+        wasm.clone(),
+        binding.encode().unwrap(),
+        Some(issuer.id),
+    )
+    .await
+    .unwrap();
+    let observe = async || {
+        child
+            .update::<_, Receipt>(DormancyReceipt::NAME, DormancyReceipt::ID, &(), limits)
+            .await
+    };
+    assert_eq!(observe().await, binding);
+    canic_qualification::upgrade_stopped(pic, child.id, wasm, vec![], Some(issuer.id))
+        .await
+        .unwrap();
+    assert_eq!(observe().await, binding);
+    assert!(
+        pic.update_call(child.id, owner, "renew_role", vec![])
+            .await
+            .is_err()
+    );
+
+    // The simulator controller performs the subsequent handover to exercise proof expiry.
     let owner = pic.create_canister().await;
     pic.set_controllers(child.id, Some(issuer.id), vec![owner])
         .await

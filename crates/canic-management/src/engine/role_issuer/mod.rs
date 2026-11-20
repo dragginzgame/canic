@@ -95,6 +95,15 @@ fn public(key: &[u8; 32]) -> Bytes<32> {
     .expect("public key size")
 }
 
+pub(super) fn retained_public() -> Option<Bytes<32>> {
+    STATE.with_borrow(|s| {
+        Issuer::load(&s.as_ref().expect("open Root").role_key)
+            .seed
+            .as_ref()
+            .map(public)
+    })
+}
+
 /// Prepare the signing key once. Concurrent preparations converge on the first commit.
 /// # Errors
 /// Refuses unauthorized callers or unsuccessful entropy acquisition.
@@ -105,12 +114,7 @@ pub async fn prepare() -> Result<Bytes<32>, String> {
     if !api::is_controller(&controller) {
         return Err("controller required".into());
     }
-    if let Some(key) = STATE.with_borrow(|s| {
-        Issuer::load(&s.as_ref().expect("open Root").role_key)
-            .seed
-            .as_ref()
-            .map(public)
-    }) {
+    if let Some(key) = retained_public() {
         return Ok(key);
     }
     let fresh = canic::entropy::fresh(5)

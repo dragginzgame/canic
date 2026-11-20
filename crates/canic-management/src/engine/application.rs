@@ -65,7 +65,9 @@ pub fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Statu
     if input.arguments.as_slice().is_empty() {
         return Err(Refusal::Binding);
     }
-    if let Ok(binding) = canic::topology::Install::decode(input.arguments.as_slice()) {
+    if let Some(binding) = canic::topology::Install::approved(input.arguments.as_slice())
+        .map_err(|_| Refusal::Binding)?
+    {
         binding
             .check_root(api::canister_self())
             .map_err(|_| Refusal::Binding)?;
@@ -88,7 +90,25 @@ pub fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Statu
             return Err(Refusal::Binding);
         }
     }
-    if let Ok(named) = ServiceInstall::decode(input.arguments.as_slice())
+    if let Some(bindings) = canic::topology::directory::DbService::from_receiver(
+        input.arguments.as_slice(),
+        api::canister_self(),
+    )
+    .map_err(|_| Refusal::Binding)?
+    {
+        #[cfg(feature = "role-issuer")]
+        let trusted = super::role_issuer::retained_public()
+            .is_some_and(|pin| pin.as_slice() == bindings.issuer_key);
+        #[cfg(not(feature = "role-issuer"))]
+        let trusted = {
+            let _ = bindings;
+            false
+        };
+        if !trusted {
+            return Err(Refusal::Binding);
+        }
+    }
+    if let Ok(named) = ServiceInstall::approved(input.arguments.as_slice(), api::canister_self())
         && ChildId::ALL
             .into_iter()
             .filter_map(super::directory::named_service)

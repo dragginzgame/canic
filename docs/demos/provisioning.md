@@ -1,45 +1,30 @@
 # Migrating Toko signup to ordinary application rows
 
-The row-based provisioning API first shipped in Canic **0.237.0**. The
-scoped handler signatures below require the unreleased handler-local Auth change.
-The original provisioning implementation was tested at `9af0094d6e6950e61e4ce245b9d912b8e75e33cb`.
-Version 0.236.0 contains the previous API.
+The current checkout names the provisioning identity `AuthSubject { issuer, subject }`.
+Canic 0.244.0 and earlier expose it as `Account`. Updating the Rust type name
+preserves the published provisioning frame and the account’s shard placement key.
 
-The migration targets Toko source `3ea25ea2d48d9c47356c99a8c585a7120e9506e3`.
-Its hub owns the ID, initial name and pending/ready transition. Its shard owns
-the current name and account record. Canic owns authenticated placement, the
-parent and destination checks, transport and verification of the acknowledgement.
+## Coordinated hub and shard update (Canic #61)
 
-## Replace the two handlers
+In Toko’s `crates/toko/src/user/provisioning.rs`, add
+`type Refusal = ProvisionRefusal;` to `Users: Resource`. Derive Serde
+serialization and deserialization on Toko’s existing refusal enum. Include
+Wire schema evidence when building endpoint inspection or browser codecs.
+Keep the existing ULID, name validation, method name, limits and placement domain.
 
-Previously the hub and shard delegated their entire bodies to these calls.
-
-```rust
-// Hub, under #[canic::update(scope = Hub::SCOPE)]
-provisioning::provision::<Hub>(&session, name, provisioning::new_ulid).await
-
-// Shard, under the Provision<Users> contract and require_parent guard
-provisioning::receive::<Shard>(request)
-```
-
-The **complete replacement Rust handlers** below use Toko's real entities and
-display-name policy. Merge their imports with the existing module imports and
-keep the other endpoints in each module.
-
-| In toko-new | Edit |
-| --- | --- |
-| `apps/toko/user_hub/src/endpoints/outbound.rs` | Replace `register` with [the after implementation, scope and binding helper](../../qualification/fixtures/provisioning-roles/register.rs). Keep the two project/authority endpoints and their imports. |
-| `apps/toko/user_shard/src/endpoints/mod.rs` | Replace `provision_user` with [the after implementation](../../qualification/fixtures/provisioning-roles/provision_user.rs). Keep the contract attribute and its pre-decode parent guard. |
-| Both roles' `src/ops/provisioning.rs` | Delete both files. This removes `Hub`, `Shard`, both `Record` implementations, `HubRoute` and `ShardRecord`. Remove `mod provisioning;` from both `src/ops/mod.rs` files. |
-| Both roles' `src/lib.rs` | Remove the `Hub` and `Shard` re-exports. Keep the existing role mount, database module, row types and remaining exports. |
-| `crates/toko/src/user/provisioning.rs` | Keep `Users: Resource`. It describes the existing Wire call and placement-key domain. It contains no persistence hooks. |
-| Toko schema and user operations | Keep the existing entities, indexes, validation, profile reads/edits and private authorization. Keep the scoped read and write endpoints. |
+- In the [shard handler](../../qualification/fixtures/provisioning-roles/provision_user.rs),
+  keep the parent guard, map a failed target check to `BindingConflict` and use
+  `user::provision(&binding, &request.data)?`. Return `Ok(binding)` only on success.
+- In the [hub handler](../../qualification/fixtures/provisioning-roles/register.rs),
+  pass `SendError::Progress` to the existing progress handler. Map
+  `SendError::Refused` into Toko’s existing `AccountError` before the ready transition.
+  This preserves Toko’s public registration reply.
 
 ## Public API
 
 All names below live in `canic::sharding::provisioning`. Enable the existing
-`provisioning` feature on the actor graph. `Request`, `Binding`, `Resource`,
-`Provision<R>` and `Progress` retain their Wire definitions.
+`provisioning` feature on the actor graph. `Request`, `Binding`,
+and `Progress` keep their data shapes. The provisioning reply changes as described below.
 
 ```rust
 pub async fn place<'a, R: Resource>(
@@ -50,17 +35,17 @@ pub async fn place<'a, R: Resource>(
 impl<R: Resource> Assignment<'_, R> {
     pub fn shard(&self) -> Principal;
     pub async fn send(self, request: &Request<R::Id, R::Data>)
-        -> Result<Binding<R::Id>, Progress>;
+        -> Result<Binding<R::Id>, SendError<R::Refusal>>;
 }
 
 impl<I> Binding<I> {
-    pub fn require_target(&self);
+    pub fn check_target(&self) -> Result<(), &'static str>;
 }
 impl<I: Eq> Binding<I> {
     pub fn require_same(&self, retained: &Self);
 }
 
-pub fn account_row<E: Entity>(database: &DatabaseSession, account: Account) -> Option<E>;
+pub fn account_row<E: Entity>(database: &DatabaseSession, account: AuthSubject) -> Option<E>;
 pub fn session_row<E: Entity>(database: &DatabaseSession, auth: &Authorization) -> Option<E>;
 ```
 
@@ -79,7 +64,7 @@ pub fn session_row<E: Entity>(database: &DatabaseSession, auth: &Authorization) 
    original request. Reload the local reservation, call `receipt.require_same`
    and update that row synchronously. Keep the interval between verification
    and the database write free of awaits.
-4. At the shard, call `binding.require_target()` before touching the database.
+4. At the shard, check `binding.check_target()` before touching the database.
    Validate the initial name even on replay. Match the immutable ID for the
    bound account. Insert only when the unique lookup misses. A matching retry
    acknowledges the original binding without replacing the current profile.
@@ -93,6 +78,7 @@ and transport APIs take no schema, database handle, callback or field names.
 | --- | --- |
 | `PlacementPending` | Root reports an in-progress claim or busy creation. |
 | `ProvisionPending` | A reservation exists and the shard call produced no usable acknowledgement. Retry its original binding and payload. |
+| `SendError::Refused(reason)` | The shard returned the application refusal and the hub reverified the allocation. Propagate the reason and leave the reservation pending. |
 | `PoolFull` | The approved pool's capacity is exhausted. |
 | `PlacementUnavailable` | Root or the original target/allocation could not be verified. Preserve any pending reservation. |
 | `Ready` | An existing ready row was read, or the matching reservation was confirmed. |
@@ -102,11 +88,13 @@ reservation survives. Controller membership does not authorize signup.
 
 ## Compatibility and qualification
 
-The change is a Rust API hard cut. The published method names/IDs, directional
-Wire bytes and budgets, placement key (domain plus length-prefixed issuer and
+The shard reply changes from a bare binding to `Result<Binding<Id>, Resource::Refusal>`.
+Rebuild both ends and regenerate clients or manifests that decode it. Quiesce
+signups during the coordinated change. An undecodable mixed-version reply is
+uncertain even if the shard committed. Requests, method names/IDs, budgets, placement key (domain plus length-prefixed issuer and
 subject), HRW selector, install envelopes, fleet configuration, database leases,
 schemas and stored row bytes are unchanged. Toko continues to use a native ULID
-in its database and `[u8; 16]` on the existing Wire boundary.
+in its database and provisioning contract.
 
 From Canic with a prepared local simulator:
 
@@ -120,14 +108,14 @@ The installed User Directory test runs a real Root, hub and two managed shards.
 It checks overlapping registrations, bounded capacity, independent Auth, a
 stopped shard, an unavailable Root and replay with a pending hub and a populated
 shard. The replay leaves the shard's stable memory byte-for-byte unchanged.
-A controlled responder at the disposable shard then returns a wrong ID and,
+A conflicting row on the real shard returns the typed refusal through the hub and preserves both stores. A controlled responder at the disposable shard then returns a wrong ID and,
 separately, the correct ID after logout. Neither response changes the pending
 hub. The native IC DB test also reopens a populated record after editing its
 name and checks a stale local confirmation against the winning reservation.
 
 ### Disposable Toko rehearsal
 
-In a separate copy of the Toko source identified above, both role libraries
+Before typed refusals, in a separate copy of Toko at `3ea25ea2d48d9c47356c99a8c585a7120e9506e3`, both role libraries
 compiled natively and as IC Wasm. The installed `signup` and `user_shard`
 cases passed on fresh installations and using these copied predecessor Wasms:
 
@@ -144,8 +132,7 @@ remain separate qualification paths.
 
 ### Run in Toko after migration
 
-Select `canic = "=0.237.0"` in both workspace dependency tables and update both lockfiles. For a
-local sibling trial, add this override at the workspace roots (paths relative
+The typed reply is in the local Canic checkout. For a local trial, select a compatible workspace version in both manifests and add this override at the workspace roots (paths relative
 to the manifest), then reconcile both lockfiles with Cargo and verify the
 resolved `canic` source with `cargo tree -i canic` in each workspace.
 

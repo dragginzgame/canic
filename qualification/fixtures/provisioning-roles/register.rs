@@ -1,38 +1,46 @@
-//! Registration items for Toko's hub outbound endpoint module.
-use crate::{Status, database};
+//! Toko hub migration for typed provisioning refusals.
+
+use crate::{Status, database, ops};
 use canic::{
     db,
-    sharding::provisioning::{self, Account, Binding, Progress, Request},
+    sharding::provisioning::{self, AuthSubject, Progress, Request, SendError},
 };
 use ic_db::Ulid;
-use toko::user::{initial_display_name, provisioning::Users};
-use toko_schema::entity::user_hub::UserRoute;
+use toko::user::{
+    account::AccountError,
+    display_name,
+    provisioning::{ProvisionRefusal, Users},
+};
+use toko_schema::canister::user_hub::UserRoute;
 
 // register
 // Reserve the signed-in account and confirm insertion on its assigned shard.
 // scope  : write
 // limits : default
 #[canic::update(scope = WRITE)]
-async fn register(name: String) -> Progress {
-    let name = initial_display_name(name);
-    let account = Account::from(&auth);
-    let lookup = || provisioning::account_row::<UserRoute>(&db!(), account);
-    let existing = lookup();
+async fn register(name: String) -> Result<Progress, AccountError> {
+    let name = display_name(&name)?;
+    let account = AuthSubject::from(&auth);
+    let existing = ops::reservation(account)?;
     if existing
         .as_ref()
         .is_some_and(|row| row.status == Status::Ready)
     {
-        return Progress::Ready;
+        return Ok(Progress::Ready);
     }
     let assignment =
-        match provisioning::place::<Users>(&auth, existing.as_ref().map(|row| row.shard))
-            .await
-        {
+        match provisioning::place::<Users>(&auth, existing.as_ref().map(|row| row.shard)).await {
             Ok(assignment) => assignment,
-            Err(progress) => return progress,
+            Err(progress) => return ops::registration_progress(account, progress),
         };
     // Another registration may have won during placement. Only the winner allocates an ID.
-    let row = existing.or_else(lookup).unwrap_or_else(|| {
+    let row = if let Some(row) = ops::reservation(account)? {
+        if row.status == Status::Ready {
+            return Ok(Progress::Ready);
+        }
+
+        row
+    } else {
         let row = UserRoute {
             id: Ulid::generate_prand(),
             issuer: account.issuer,
@@ -41,37 +49,36 @@ async fn register(name: String) -> Progress {
             status: Status::Pending,
             display_name: name,
         };
-        db!().insert(&row).expect("reserve account");
+        db!().insert(&row)?;
 
         row
-    });
+    };
     let request = Request {
-        binding: binding(&row),
+        binding: ops::binding(&row),
         data: row.display_name.0,
     };
     let receipt = match assignment.send(&request).await {
         Ok(receipt) => receipt,
-        Err(progress) => return progress,
+        Err(SendError::Progress(progress)) => return ops::registration_progress(account, progress),
+        Err(SendError::Refused(reason)) => {
+            return Err(match reason {
+                ProvisionRefusal::InvalidDisplayName => AccountError::InvalidInput,
+                ProvisionRefusal::BindingConflict => AccountError::Rejected,
+                ProvisionRefusal::Limit => AccountError::Limit,
+                ProvisionRefusal::Database => AccountError::Database,
+            });
+        }
     };
-    let mut retained = lookup().expect("missing reservation");
-    receipt.require_same(&binding(&retained));
+    let mut retained = ops::reservation(account)?.ok_or(AccountError::NotFound)?;
+    if receipt != ops::binding(&retained) {
+        return Err(AccountError::OutcomeUnknown);
+    }
     if retained.status != Status::Ready {
         retained.status = Status::Ready;
-        db!().replace(&retained).expect("confirm reservation");
+        db!().replace(&retained)?;
     }
 
-    Progress::Ready
+    Ok(Progress::Ready)
 }
 
 const WRITE: &str = "write";
-
-fn binding(row: &UserRoute) -> Binding<[u8; 16]> {
-    Binding {
-        id: row.id.to_bytes(),
-        account: Account {
-            issuer: row.issuer,
-            subject: row.subject,
-        },
-        shard: row.shard,
-    }
-}

@@ -1,0 +1,22 @@
+[package]
+name = "canic-dormant"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+license-file.workspace = true
+publish.workspace = true
+description = "Dormant Canic canister that retains one retirement receipt"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+canic = { workspace = true, features = ["lifecycle", "method", "storage", "topology"] }
+ic-storage.workspace = true
+
+[dev-dependencies]
+toko-tooling.workspace = true
+
+[lints]
+workspace = true

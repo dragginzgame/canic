@@ -462,6 +462,8 @@ Contracts are organized by the protocol a consumer actually speaks. A runtime co
 
 ## 5 Configuration and operator experience
 
+An unbound local fleet can declare `lifetime = "ephemeral"` for installed tests. Canic Host starts a dedicated IC Testkit server and instance. Each run owns a temporary journal and binds fresh identities in memory. Source declarations with an existing journal, network binding or canister identities are refused before startup. The session owner explicitly closes the instance and server. Dropping the owner also releases the process and temporary directory. Omission preserves existing fleet behavior.
+
 ### Source format decision — 2026-11-17
 
 The maintainer selected `canic.toml` as the single source configuration format.
@@ -910,7 +912,9 @@ the private user record. In the User Directory example the authenticated hub cal
 `place` with its pending shard, if any. After placement it reloads the unique
 account row, inserts only on a miss, and sends the winning reservation. Canic
 checks session authority, the account, the original allocation and the returned
-binding. Before updating, the application reloads and compares the exact row.
+binding. An admitted shard can return its application-defined refusal. The hub
+rechecks write authority and the original allocation before propagating it. A
+transport rejection or undecodable reply leaves the reservation pending. Before updating, the application reloads and compares the exact row.
 The shard checks its installed parent and target before synchronously inserting or
 acknowledging the immutable identity. Mutable profile fields do not identify a
 reservation. These ordinary application branches replace the row mapping traits.
@@ -1289,6 +1293,33 @@ Do not assume synchronized cross-canister clocks. Preserve upstream signed deadl
 | Build/query/host utilities | Generic platform and host mechanics | Product artifact selection, trust, plan and deployment semantics |
 | ICRC | Required external standards and representations | Explicitly selected application adapter and guards |
 
+Root and its management engine share one heap-backed `ic-logging` log per
+installed incarnation. Root records successful install/reopen and management
+records child outcomes. The controller reads up to eight entries at a time
+through `logs`. The log retains up to 128 entries and 8 KiB of text.
+Upgrade starts a new log. Durable operation evidence stays in the journal.
+The legacy managed lifecycle probe at `377fbce`
+(`qualification/canisters/test/managed_lifecycle_probe/src/logging/mod.rs`)
+checked that reading logs did not add entries or rearm timers. The reader
+preserves that property and reports the initialization version for pagination.
+
+Supplier diagnostics are composed per canister package. Selecting `metrics` with
+`db-store`, `db-schema` or `jobs` attaches the supplier’s typed recorder to
+Canic’s metrics store. Selecting `logging` with either DB integration forwards
+DB failures to the canister’s bounded log. The Canic lifecycle mount does this
+before install/reopen application code. A custom lifecycle calls
+`canic::lifecycle::initialize_diagnostics()` once at the same boundary.
+Select `timers` for standalone timers or `jobs` for a job runtime that uses them.
+Both use `canic::lifecycle::initialize_timers()` before binding timers or
+restoring jobs. With `metrics`, this attaches the timer recorder. Initializing
+diagnostics alone leaves timers stopped. Each producer retains its own counters.
+Packages selecting `entropy` can call `canic::entropy::supplier::fresh_seed()`.
+With `metrics` or `logging`, the lifecycle attaches the supplier's recorder or
+sink. Its fresh source admits one pending request per canister with a fixed
+300-second wait. Root key preparation and Auth keep independent Platform
+requests and their existing deadlines. These bypass the supplier recorder. Endpoint instruction measurements are selected
+independently with `endpoint-metrics`.
+
 Qualify the selected service arrangement, embedded or separately deployed. If both arrangements are eventually supported, they must use the same independently owned service engine, with each arrangement qualified for its actual composition boundaries. Supplier packages remain usable without Canic. Direct supplier types are preferred where identity is shared; duplicate DTOs require an actual boundary. Pin and qualify type/runtime identities that must agree. Do not force unrelated tools and product packages to advance as one dependency generation.
 
 ### Optional Auth receiver composition
@@ -1611,6 +1642,22 @@ retained reply into each selected child's exact install frame. Apply resumes
 from that result. The role-enabled child observation covers installation
 evidence only. Legacy whole-Root maintenance observations stay fenced.
 
+For a Root that already exists, a DB hub can select both the Auth receiver policy
+and `role_receivers`. The operator calls `prepare-role-key` on the resolved Root.
+Host verifies the retained signed attempt for this fleet, Root and controller.
+The named child approval embeds its 16-byte database nonce and that 32-byte issuer
+key in the named service frame inside the Auth install envelope. Root checks its
+current signer before admitting the effect. The database incarnation depends on
+the nonce. Role attestation belongs to topology. A worker can select
+`role-attestation`, attach its trusted Root during install or reopen, mount
+directory delivery, and call `canic::topology::call_service` without IC DB.
+For a DB-backed hub or shard, the actor composition in `mount_db_role!` supplies
+that wiring and includes the directory in the actor's one Storage bootstrap.
+A standalone `db-store` consumer declares its schema, attaches its store and
+uses `db!()` without enabling topology or Auth. Existing DB layouts
+require a separately qualified migration to enable this feature. A placed shard
+uses its retained Root and a locally resolved service name for a role-bound call.
+
 A role receiver decodes its `ServiceInstall` and uses
 `RoleVerifier::new(installing_root, &install.application)?.attach()?` during
 install or strict reopen. A shared method implements `RoleMethod` with its
@@ -1637,7 +1684,9 @@ placements while allowing the shard to renew proofs for its existing accounts.
 After committing a route migration or removal, the approved hub may release
 one exact key, principal and allocation generation. Repeating that release
 leaves other keys and generations untouched. Managed closure of role issuance
-requires the drained generation to have zero live placements.
+requires the drained generation to have zero live placements. The role-enabled
+Root command codec exposes `close-role-issuance PRINCIPAL GENERATION` and
+returns the original proof deadline in nanoseconds as a decimal string.
 Returning keys keep their original route during drain. Root reports the closed
 generation's proof deadline and live placement count separately. The count
 describes routing records. Only the application knows what data the shard holds.
@@ -1658,6 +1707,15 @@ After drain, the proposed dormancy transition keeps the principal under Root
 control through the proof wait. The dormant child has no renewal timer or outgoing work.
 Root checks the deadline and confirmed dormancy before releasing a principal;
 a new fleet receives clean application storage.
+
+The supplied `canic-dormant` Wasm is built independently like Root. It accepts
+one installation binding with the original generation and deadline, checks its own
+principal and installing controller, and retains that receipt across upgrades.
+Its only replicated endpoint reads that receipt. Legacy reset selection at
+`377fbce` (`canic-host/.../operation_selection/retirement/reset`, history
+`e2e35cec`) bound the replacement artifact before retiring old custody and
+blocked reset on an unresolved paid effect. Keep those requirements on the
+effect owner when driving the dormant installation.
 
 Provide a separately approved early re-adoption decision binding the original
 fleet, principal and assignment, the intended destination and the outstanding
@@ -2383,14 +2441,29 @@ Keep Observatory, rendering, comparisons and aggregation on the host. Canisters 
 Reusable suppliers keep instrumentation feature-gated. Root and the profile
 manager enable the selected timer metrics in their normal builds; applications
 select instrumentation and endpoint mounting explicitly. Canic owns the shared
-metrics adapter and passive transport types, without owning another recorder.
+store, reporting adapter and passive transport types.
 The initial public report exposes only fixed aggregate timer counters, preserves
 supplier overflow quality and names the volatile initialization window. Host
 observes it once per selected management owner, after operational observations
 and within the existing snapshot budget. Missing reports remain unknown. Metrics
 do not establish readiness, authorize recovery or replace durable effect evidence.
-Historical metrics, persistence and additional provider families need their own
-admitted consumer; mounting an endpoint starts no sampler or lifecycle work.
+Metrics retention is a separate choice from which sources an application enables.
+Canic coordinates one heap store per canister. Each producer has a typed source
+with its own recording and reporting semantics. Timer events share the host's
+timer counters directly, and endpoint instrumentation records instruction
+summaries in its own source. Both reset on upgrade. Public timer totals and
+controller-only endpoint performance retain their existing access rules. Applications
+should eventually be able to opt into retaining metric aggregates across upgrades.
+The candidate layout is one stable B-tree per canister, shared by its enabled
+sources and keyed by source and metric identity. Each source defines what its
+observations mean. A future IC Storage integration would obtain its memory
+through the application's existing bootstrap. The storage layout and integration
+remain open until an installed upgrade demonstrates preservation.
+
+Historical time series and additional provider families need their own admitted
+consumer. Mounting a reader starts no sampler or storage lifecycle work.
+
+The [metrics fleet](../../apps/examples/metrics/DESIGN.md) also admits per-handler instruction summaries for synchronous Canic updates. The application build recipe selects volatile instrumentation through the Cargo dependency feature `canic/endpoint-metrics`. Canic supplies the reader and its guard. Host checks the module marker and query export in the finished Wasm before publishing the artifact. Supplier callbacks and authority checks remain typed Rust. Only its actual controller reads the paged report. A Root controller can request one page for a ready managed child slot through the fixed child metrics method.
 
 Every status states observation age/generation and completeness. An unreachable subnet is unknown, not empty or healthy. Dynamic inventory must include autonomous children. A terminal initial deployment plan is not a perpetual inventory source. Correlate plans, local operations, remote effects and readiness with durable operation IDs.
 

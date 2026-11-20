@@ -1,4 +1,6 @@
 //! Explicit Root operations for controller-approved shard pools.
+
+use super::controller;
 use canic::sharding::{ASSIGN, ASSIGN_INSTANCE, Key, LIMITS, LOOKUP, LOOKUP_INSTANCE, Placement};
 use canic_management::sharding;
 use canic_management_protocol::{
@@ -124,13 +126,6 @@ fn hub() -> Result<(), &'static str> {
     sharding::hub()
 }
 
-/// Require a current controller of this Root.
-fn controller() -> Result<(), &'static str> {
-    runtime::system::is_controller(&runtime::system::caller())
-        .then_some(())
-        .ok_or("controller required")
-}
-
 fn frame(method: u64, direction: ic_wire::Direction) -> ic_wire::Encoding {
     ic_wire::Encoding::Frame { method, direction }
 }
@@ -164,7 +159,7 @@ fn fail(error: impl std::fmt::Debug) -> ! {
 
 /// Create or recover the same Root verifying key for receiver setup.
 #[cfg(feature = "role-issuer")]
-#[canic::update(guard = super::directory_controller)]
+#[canic::update(contract = canic::topology::attestation::PrepareRoleKey, guard = controller)]
 async fn prepare_role_key() -> Result<ic_wire::Bytes<32>, String> {
     canic_management::role_issuer::prepare().await
 }
@@ -198,18 +193,27 @@ fn release_shard((key, target): (Key, canic::sharding::ShardTarget)) -> Result<(
     sharding::release_shard(&key, &target)
 }
 
-/// Close this assignment's renewal before beginning its reuse wait.
+// close_role_issuance
+// Return the original proof deadline for an empty, drained allocation.
+// guard  : Root controller
+// limits : default
 #[cfg(feature = "role-issuer")]
-#[canic::update(guard = super::directory_controller)]
+#[canic::update(
+    contract = canic::topology::attestation::CloseRoleIssuance,
+    guard = controller,
+)]
 fn close_role_issuance(
     (subject, generation): (ic_platform_types::Principal, ic_wire::Bytes<32>),
 ) -> Result<u64, String> {
     canic_management::role_issuer::close(subject, &generation)
 }
 
-/// Report the proof deadline and live placement count for this closed generation.
+// retirement_status
+// Report the proof deadline and live placement count for this closed generation.
+// guard  : Root controller
+// limits : default
 #[cfg(feature = "role-issuer")]
-#[canic::query(guard = super::directory_controller)]
+#[canic::query(guard = controller)]
 fn retirement_status(
     (subject, generation): (ic_platform_types::Principal, ic_wire::Bytes<32>),
 ) -> Result<(u64, u16), String> {

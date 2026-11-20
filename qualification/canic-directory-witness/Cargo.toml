@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 placement = ["canic/sharding"]
-role-probe = ["canic/role-verification"]
+role-probe = ["canic/role-attestation"]
 
 [dependencies]
 canic = { workspace = true, features = ["lifecycle", "method", "readiness", "topology", "storage"] }

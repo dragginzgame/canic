@@ -79,11 +79,29 @@ canic::mount_blob_endpoints! {
 
 fn execute_blob(caller: Principal, command: Command, now: u64) -> Result<Outcome, BlobError> {
     STATE.with_borrow_mut(|state| {
-        state
-            .as_mut()
-            .expect("catalog")
-            .blob
-            .execute(caller, command, now)
+        use canic::blob::supplier::metrics::{CommandKind, MetricsStorage};
+        let service = &mut state.as_mut().expect("catalog").blob;
+        let recorder = canic::metrics::store::get::<MetricsStorage>().expect("shared Blob metrics");
+        let kind = CommandKind::from(&command);
+        let before = recorder.snapshot().commands(kind);
+        let drained = service.is_drained();
+        let result = service.execute(caller, command, now);
+        if result.is_ok() {
+            let after = recorder.snapshot().commands(kind);
+            assert_eq!(after.succeeded.total(), before.succeeded.total() + 1);
+        }
+        if service.is_drained() != drained {
+            let logs = canic::logging::page(None);
+            assert_eq!(logs.entries[0].source, "blob");
+            let expected = if service.is_drained() {
+                "admission drained"
+            } else {
+                "admission reopened"
+            };
+            assert_eq!(logs.entries[0].message, expected);
+        }
+
+        result
     })
 }
 

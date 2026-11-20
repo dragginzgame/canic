@@ -4,12 +4,22 @@ use canic::auth::{
     enrollment,
     protocol::{EstablishSession, model, wire},
 };
-use canic::sharding::provisioning::Progress;
+use canic::sharding::provisioning::{AuthSubject, Binding, Progress, Request};
 use ic_auth_protocol_types::Principal;
 use ic_testkit::pocket_ic::{CanisterId, PocketIcBuilder};
 use std::{path::Path, time::Duration};
 
-async fn enroll(root: &Client<'_>, target: CanisterId, grant: &enrollment::Grant, managed: bool) {
+use user_directory_schema::ProvisionRefusal;
+
+type ShardReply = Result<Binding<[u8; 16]>, ProvisionRefusal>;
+type Registration = Result<Progress, ProvisionRefusal>;
+
+pub(super) async fn enroll(
+    root: &Client<'_>,
+    target: CanisterId,
+    grant: &enrollment::Grant,
+    managed: bool,
+) {
     let grant = enrollment::Grant {
         receiver: Principal::from_slice(target.as_slice()),
         ..grant.clone()
@@ -47,7 +57,7 @@ async fn enroll(root: &Client<'_>, target: CanisterId, grant: &enrollment::Grant
     }
 }
 
-async fn query<T: serde::de::DeserializeOwned>(
+pub(super) async fn query<T: serde::de::DeserializeOwned>(
     client: &Client<'_>,
     method: &str,
 ) -> Result<T, String> {
@@ -224,7 +234,7 @@ async fn directory(revoke: bool) {
             operator: browser,
         };
         let register = || {
-            client.update::<_, Progress>(
+            client.update::<_, Registration>(
                 "register",
                 ic_wire::method_id("register"),
                 &(),
@@ -232,7 +242,7 @@ async fn directory(revoke: bool) {
             )
         };
         if device == 11 {
-            assert_eq!(register().await, Progress::PoolFull);
+            assert_eq!(register().await, Ok(Progress::PoolFull));
             assert_eq!(
                 query::<Option<Principal>>(&client, "my_shard")
                     .await
@@ -241,7 +251,7 @@ async fn directory(revoke: bool) {
             );
             break;
         }
-        assert_eq!(register().await, Progress::PlacementPending);
+        assert_eq!(register().await, Ok(Progress::PlacementPending));
         super::settle(pic).await;
         if device == 9 {
             // Observe through the actual hub's Root lookup. Derive the public key independently.
@@ -265,11 +275,11 @@ async fn directory(revoke: bool) {
             let shard = observation.assigned_target().unwrap().unwrap().1;
             let shard = CanisterId::from_slice(shard.as_slice());
             pic.stop_canister(shard, Some(root.id)).await.unwrap();
-            assert_eq!(register().await, Progress::ProvisionPending);
+            assert_eq!(register().await, Ok(Progress::ProvisionPending));
             pic.stop_canister(root.id, Some(root.operator))
                 .await
                 .unwrap();
-            assert_eq!(register().await, Progress::PlacementUnavailable);
+            assert_eq!(register().await, Ok(Progress::PlacementUnavailable));
             pic.start_canister(root.id, Some(root.operator))
                 .await
                 .unwrap();
@@ -279,8 +289,53 @@ async fn directory(revoke: bool) {
                 .await
                 .unwrap();
             pic.start_canister(hub, Some(root.operator)).await.unwrap();
+            let empty = pic
+                .take_canister_snapshot(shard, Some(root.id), None)
+                .await
+                .unwrap();
             pic.start_canister(shard, Some(root.id)).await.unwrap();
-            assert_eq!(register().await, Progress::Ready);
+
+            // Give the real shard a conflicting account ID before retrying the hub reservation.
+            let conflict = Binding {
+                id: [0xff; 16],
+                account: AuthSubject {
+                    issuer: install.issuer,
+                    subject: Principal::from_slice(&[device, 2]),
+                },
+                shard: Principal::from_slice(shard.as_slice()),
+            };
+            let parent = Client {
+                pic,
+                id: shard,
+                operator: hub,
+            };
+            assert_eq!(
+                parent
+                    .update::<_, ShardReply>(
+                        "provision_user",
+                        ic_wire::method_id("provision_user"),
+                        &Request {
+                            binding: conflict.clone(),
+                            data: ()
+                        },
+                        canic::sharding::LIMITS
+                    )
+                    .await,
+                Ok(conflict)
+            );
+            let pending_rows = pic.get_stable_memory(hub).await;
+            let conflicting_rows = pic.get_stable_memory(shard).await;
+            assert_eq!(register().await, Err(ProvisionRefusal::BindingConflict));
+            assert!(pic.get_stable_memory(hub).await == pending_rows);
+            assert!(pic.get_stable_memory(shard).await == conflicting_rows);
+
+            // Restore the empty test shard and exercise exact replay under the same assignment.
+            pic.stop_canister(shard, Some(root.id)).await.unwrap();
+            pic.load_canister_snapshot(shard, Some(root.id), empty.id)
+                .await
+                .unwrap();
+            pic.start_canister(shard, Some(root.id)).await.unwrap();
+            assert_eq!(register().await, Ok(Progress::Ready));
             let populated = pic.get_stable_memory(shard).await;
             // Recreate exactly a lost acknowledgement: pending hub, already committed shard.
             pic.stop_canister(hub, Some(root.operator)).await.unwrap();
@@ -294,7 +349,7 @@ async fn directory(revoke: bool) {
                     .unwrap(),
                 None
             );
-            assert_eq!(register().await, Progress::Ready);
+            assert_eq!(register().await, Ok(Progress::Ready));
             assert!(pic.get_stable_memory(shard).await == populated);
             replay_snapshot = Some((pending.id, browser));
         } else {
@@ -321,18 +376,18 @@ async fn directory(revoke: bool) {
             for ingress in [first, second] {
                 let bytes = pic.await_call(ingress).await.unwrap();
                 assert_eq!(
-                    ic_wire::decode::<Progress>(
+                    ic_wire::decode::<Registration>(
                         &bytes,
                         frame(ic_wire::Direction::Response),
                         canic::method::LIMITS
                     )
                     .unwrap(),
-                    Progress::Ready
+                    Ok(Progress::Ready)
                 );
             }
         }
-        assert_eq!(register().await, Progress::Ready);
-        assert_eq!(register().await, Progress::Ready);
+        assert_eq!(register().await, Ok(Progress::Ready));
+        assert_eq!(register().await, Ok(Progress::Ready));
         let shard = query::<Option<Principal>>(&client, "my_shard")
             .await
             .unwrap()
@@ -459,7 +514,7 @@ async fn directory(revoke: bool) {
     let (shard, id) = assigned[0];
     let expected = canic::sharding::provisioning::Binding {
         id,
-        account: canic::sharding::provisioning::Account {
+        account: canic::sharding::provisioning::AuthSubject {
             issuer: install.issuer,
             subject: Principal::from_slice(&[9, 2]),
         },
@@ -496,28 +551,41 @@ async fn check_receipts(
     let original_rows = pic.get_stable_memory(shard).await;
     let mut wrong_target = expected.clone();
     wrong_target.shard = Principal::from_slice(root.as_slice());
-    for (caller, binding) in [
-        (root, expected.clone()),
-        (client.id, wrong_target),
-        (client.id, wrong.clone()),
-    ] {
-        let bytes = ic_wire::encode(
+    let mut invalid_subject = expected.clone();
+    invalid_subject.account.subject = Principal::anonymous();
+    let encode = |binding| {
+        ic_wire::encode(
             &canic::sharding::provisioning::Request { binding, data: () },
             frame("provision_user", Direction::Request),
             canic::sharding::LIMITS,
         )
-        .unwrap();
-        assert!(
-            pic.update_call(shard, caller, "provision_user", bytes)
-                .await
-                .is_err()
+        .unwrap()
+    };
+    assert!(
+        pic.update_call(shard, root, "provision_user", encode(expected.clone()))
+            .await
+            .is_err()
+    );
+    for binding in [wrong_target, invalid_subject, wrong.clone()] {
+        let reply = pic
+            .update_call(shard, client.id, "provision_user", encode(binding))
+            .await
+            .unwrap();
+        assert_eq!(
+            ic_wire::decode::<ShardReply>(
+                &reply,
+                frame("provision_user", Direction::Response),
+                canic::sharding::LIMITS
+            )
+            .unwrap(),
+            Err(ProvisionRefusal::BindingConflict)
         );
     }
     assert!(pic.get_stable_memory(shard).await == original_rows);
     let issuer = expected.account.issuer;
-    let replies = [wrong, expected].map(|binding| {
+    let replies = [Ok::<_, ProvisionRefusal>(wrong), Ok(expected)].map(|reply| {
         ic_wire::encode(
-            &binding,
+            &reply,
             frame("provision_user", Direction::Response),
             canic::sharding::LIMITS,
         )

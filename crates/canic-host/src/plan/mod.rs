@@ -303,8 +303,19 @@ pub(crate) fn retain(
             ));
         }
     };
+    let role_service = if let PlanAction::CreateChild(owner) = &action
+        && let Some(bytes) = &owner.arguments
+    {
+        canic::topology::directory::DbService::from_receiver(bytes, principal(&owner.root)?)
+            .map_err(|e| Error::Invalid(e.into()))?
+            .is_some()
+    } else {
+        false
+    };
     let plan = Plan {
-        version: if matches!(&action, PlanAction::CreateChild(owner) | PlanAction::UpgradeChild { owner, .. } if owner.arguments.is_some())
+        version: if role_service {
+            8
+        } else if matches!(&action, PlanAction::CreateChild(owner) | PlanAction::UpgradeChild { owner, .. } if owner.arguments.is_some())
         {
             6
         } else if deployment.is_some() {

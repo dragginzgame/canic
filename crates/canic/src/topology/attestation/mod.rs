@@ -54,6 +54,30 @@ impl Claim {
 /// Claim and detached Ed25519 signature.
 pub type Proof = (Claim, wire::Bytes<64>);
 
+///
+/// CloseRoleIssuance
+/// Controller approval to end renewal for one empty, drained allocation.
+///
+
+pub struct CloseRoleIssuance;
+
+impl Contract for CloseRoleIssuance {
+    const NAME: &'static str = "close_role_issuance";
+    const ID: u64 = wire::method_id(Self::NAME);
+    type Input = (Principal, wire::Bytes<32>);
+    /// Original proof expiry ceiling in IC nanoseconds.
+    type Output = Result<u64, String>;
+}
+
+/// Recover the installing Root's stable Ed25519 public key.
+pub struct PrepareRoleKey;
+impl Contract for PrepareRoleKey {
+    const NAME: &'static str = "prepare_role_key";
+    const ID: u64 = wire::method_id(Self::NAME);
+    type Input = ();
+    type Output = Result<wire::Bytes<32>, String>;
+}
+
 /// One replicated request by the actual shard for a proof addressed to a receiver.
 pub struct Issue;
 impl Contract for Issue {

@@ -6,6 +6,11 @@ mod tests;
 #[cfg(feature = "metrics")]
 pub mod endpoint;
 
+#[cfg(feature = "method")]
+pub mod performance;
+
+pub mod store;
+
 use serde::{Deserialize, Serialize};
 
 /// Shared read-only metrics query. This version reports aggregate timer counters only.

@@ -7,7 +7,7 @@ its own buildable config and local exercise. The CLI lives in `crates/canic-cli`
 and deployment logic in `crates/canic-host`.
 
 Use `make demo` for the [counter's interactive local session](docs/demos/demo.md).
-It prints ordinary Canic commands and opens no windows.
+Use `make demo DEMO_APP=metrics` for the [IC Metrics example](apps/examples/metrics/README.md). Both sessions build and deploy a fresh local fleet, then accept app commands in the same terminal.
 
 The standalone [Wasm Store](https://github.com/dragginzgame/ic-wasm-store) owns
 artifact custody and its own qualification. Canic locks its crates.io protocol

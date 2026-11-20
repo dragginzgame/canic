@@ -331,6 +331,33 @@ fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
     assert_eq!(decoded.application, [5, 4]);
     assert_eq!(decoded.audience, [0x22; 32]);
     assert_eq!(decoded.encode().unwrap(), args);
+    assert!(
+        config
+            .db_service_install_args("receiver", root, &[5; 16], [7; 32])
+            .is_err()
+    );
+    config.role_receivers.push("receiver".into());
+    for nonce in [&[0; 16][..], &[5; 15][..]] {
+        assert!(
+            config
+                .db_service_install_args("receiver", root, nonce, [7; 32])
+                .is_err()
+        );
+    }
+    let args = config
+        .db_service_install_args("receiver", root, &[5; 16], [7; 32])
+        .unwrap();
+    let service =
+        canic::topology::directory::ServiceInstall::approved(&args, decoded.root).unwrap();
+    assert_eq!(
+        (service.name.as_str(), service.role.as_str()),
+        ("receiver", "shard")
+    );
+    let bindings = canic::topology::directory::DbService::from_receiver(&args, decoded.root)
+        .unwrap()
+        .unwrap();
+    assert_eq!(bindings.nonce, [5; 16]);
+    assert_eq!(bindings.issuer_key, [7; 32]);
     assert!(config.auth.is_empty());
     assert!(config.receiver_install_args("root", root, vec![]).is_err());
     assert!(

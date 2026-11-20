@@ -200,6 +200,50 @@ fn receipt(dir: &Path, plan: &Plan, bytes: &[u8]) -> Result<Option<Reply>> {
     }))
 }
 
+/// Recover the pinned key from the controller's completed call to this exact Root.
+pub(crate) fn issuer_pin(
+    journal: &Path,
+    fleet: &SelectedFleet,
+    slot: &str,
+    root: &str,
+    controller: &str,
+) -> Result<[u8; 32]> {
+    use crate::fleet_plan::role_key;
+    let request = role_key::request()?;
+    let (ids, issues) = crate::fleet::operation_ids(journal, true)?;
+    if !issues.is_empty() {
+        return Err(Error::Invalid("invalid role key journal".into()));
+    }
+    let mut keys = BTreeSet::new();
+    for id in ids {
+        let dir = journal.join(&id);
+        if !dir.join("call/reply.bin").try_exists().map_err(supplier)? {
+            continue;
+        }
+        let (plan, bytes) = plan::load(&dir, &id)?;
+        if plan.network == fleet.config.network
+            && plan.controller == controller
+            && plan
+                .deployment
+                .as_ref()
+                .is_some_and(|d| d.app == fleet.app && d.fleet == fleet.fleet && d.canister == slot)
+            && plan
+                .application_call()
+                .is_some_and(|a| a.canister == root && a.method == role_key::METHOD)
+            && bytes == request
+            && let Some(reply) = receipt(&dir, &plan, &bytes)?
+        {
+            keys.insert(role_key::decode(&reply.bytes)?);
+        }
+    }
+    if keys.len() != 1 {
+        return Err(Error::Blocked(format!(
+            "need one retained issuer key from {slot}; use fleet call --canister {slot} prepare-role-key"
+        )));
+    }
+    Ok(keys.pop_first().expect("one key"))
+}
+
 pub(crate) async fn apply(
     dir: &Path,
     plan: &Plan,

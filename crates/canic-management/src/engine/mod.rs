@@ -240,7 +240,8 @@ pub fn open(fresh: bool, readiness: Readiness) {
     state.set_journal(state.journal.clone());
     state.set_artifact(state.artifact.clone());
     STATE.with_borrow_mut(|slot| *slot = Some(state));
-    ic_timers::initialize().expect("one timer runtime");
+    canic::lifecycle::initialize_diagnostics();
+    canic::lifecycle::initialize_timers().expect("one timer runtime");
     for slot in slots {
         schedule(slot);
     }
@@ -326,7 +327,28 @@ fn mutate(slot: ChildId, f: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
         let mut journal = state.journal.clone();
-        f(&mut journal.0.get_mut(&slot).expect("known child").0);
+        let previous = &state.journal.0[&slot].0;
+        let next = &mut journal.0.get_mut(&slot).expect("known child").0;
+        f(next);
+        if previous.phase != next.phase || previous.failure != next.failure {
+            use canic::logging::{Level, record};
+            let phase = next.phase;
+            let id = slot.index();
+            if let Some(reason) = &next.failure {
+                record(
+                    Level::Warn,
+                    "management",
+                    &format!("child {id} at {phase:?}: {reason:?}"),
+                );
+            } else if matches!(phase, Phase::Expired | Phase::ReserveBlocked | Phase::Ready) {
+                let level = if phase == Phase::Ready {
+                    Level::Info
+                } else {
+                    Level::Warn
+                };
+                record(level, "management", &format!("child {id}: {phase:?}"));
+            }
+        }
         state.set_journal(journal);
     });
 }

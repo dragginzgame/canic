@@ -40,11 +40,12 @@ canic-qualification = { path = "canic-qualification" }
 clap = { version = "4.6.7", features = ["derive"] }
 ex-counter = { path = "../apps/examples/counter" }
 ex-user-directory-hub = { path = "../apps/examples/user-directory/hub" }
+ex-user-directory-schema = { path = "../apps/examples/user-directory/schema" }
 ex-user-directory-shard = { path = "../apps/examples/user-directory/shard" }
-ic-auth = { version = "0.48.6", features = ["receiver-memory", "ed25519-verification"] }
+ic-auth = { version = "0.48.8", features = ["receiver-memory", "ed25519-verification"] }
 ic-auth-protocol-types = "0.43.0"
 ic-backup = "0.105.5"
-ic-db = "0.24.0"
+ic-db = "0.26"
 ic-host-artifacts = { version = "0.80.3", default-features = false }
 ic-host-fs = { version = "0.80.3", default-features = false }
 ic-host-process = { version = "0.81.0", default-features = false }
@@ -55,16 +56,17 @@ ic-platform-runtime = { version = "0.23.21", default-features = false, features 
 ic-platform-types = { version = "0.21.2", default-features = false }
 ic-storage = "0.78.0"
 ic-testkit = { version = "0.110.0", default-features = false, features = ["managed-server"] }
-ic-timers = "0.46.3"
+ic-timers = "0.46.13"
 ic-wasm-store-protocol = "0.5.0"
 ic-wire = { version = "0.27.0", default-features = false }
+rustyline-async = "0.4.9"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"
 serde_json = "1.0.154"
 sha2 = "0.11.1"
 tempfile = { version = "3.27.0", default-features = false }
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
-toko-tooling = "=0.45.25"
+toko-tooling = "=0.46.0"
 toml = "1.2.1"
 wasmparser = { version = "0.263.0", default-features = false, features = ["std", "validate", "features"] }
 

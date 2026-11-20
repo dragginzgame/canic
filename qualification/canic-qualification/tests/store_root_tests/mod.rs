@@ -1,5 +1,6 @@
 //! Actual Root is the Store caller and sole child controller, not an impersonated ingress sender.
 mod admission_tests;
+mod db_role_tests;
 mod directory_tests;
 mod dispatch_tests;
 mod maintenance_history_tests;

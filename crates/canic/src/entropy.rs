@@ -1,4 +1,9 @@
 //! Fresh IC entropy for application operations. Callers retain their own deadlines.
+
+/// Supplier-managed fresh acquisition, lifecycle controls and selected diagnostics.
+/// Its fresh request has a 300-second wait and at most one outstanding acquisition.
+#[cfg(feature = "entropy")]
+pub use ic_entropy as supplier;
 use ic_platform_runtime::raw_rand;
 
 /// The single source request failed, or its reply was invalid.
@@ -10,7 +15,8 @@ pub enum Error {
     InvalidFrame,
 }
 
-/// Request exactly 32 fresh bytes with an explicit bounded wait, in seconds.
+/// Request exactly 32 fresh bytes from Platform with a caller-selected wait in seconds.
+/// These independent requests are outside the supplier recorder.
 /// # Errors
 /// Propagates failure without issuing a replacement or producing fallback bytes.
 pub async fn fresh(wait_seconds: u32) -> Result<[u8; 32], Error> {

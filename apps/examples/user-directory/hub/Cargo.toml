@@ -12,6 +12,9 @@ category = "examples"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+role-service = ["canic/role-attestation", "ex-user-directory-schema/role-service"]
+
 [dependencies]
 canic = { workspace = true, features = ["provisioning"] }
 ex-user-directory-schema.workspace = true

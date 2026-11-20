@@ -137,31 +137,24 @@ make demo
 This installs the current CLI on PATH, verifies the prepared ICP tool and starts
 an explicitly owned local simulator. If setup is missing, run `make install-tools`
 and `make qualification-setup` once; ordinary sessions download no simulator.
-No terminal or browser opens automatically. Leave this command running and use
-another terminal for the `cd` command it prints.
+The demo builds and deploys the example in a fresh local simulator using synthetic
+cycles. It retains its config, artifacts and journal in the printed session
+directory under `target/demo/`. Once Root, Store and the child are installed,
+enter commands directly at the `counter>` prompt. Both interactive demos use
+`metrics` for the selected child’s endpoint measurements and `logs [before]`
+for Root’s controller-only log. Help shows shared commands when the built
+canisters export their methods and Root has its command codec.
 
-The session creates a separate `ex-counter/local` declaration beneath a new
-`target/demo/` directory. It contains Root, separate Wasm Store and the counter,
-an explicit local trust binding and a fresh journal. The `ex-counter/mainnet`
-configuration remains unchanged. Only a routing canister is prepared
-automatically; managed deployment still requires your plan/apply.
-
-From the printed session directory:
-
-```sh
-canic app build
-canic fleet plan --identity anonymous
-canic fleet apply OPERATION --identity anonymous
-canic fleet call --canister ex-counter --identity anonymous read
-canic fleet call --canister ex-counter --identity anonymous increment
-canic fleet status OPERATION
+```text
+increment
+read
+metrics
+logs
+exit
 ```
 
-Use the operation from the plan; repeat apply on that same operation while Root
-is pending. The local anonymous identity spends synthetic cycles, not the mainnet
-wallet. Edit the counter in `apps/examples/counter/src/lib.rs`, then run `canic app build`.
-`canic fleet plan --identity anonymous` first selects publication, then upgrade;
-apply each returned operation. A compatible upgrade keeps the value and identity.
+For the [metrics example](../../apps/examples/metrics/README.md), run
+`make demo DEMO_APP=metrics` and try `ping hello`, `checksum hello` and `metrics`.
 
 Application commands use `build.client = "ex-counter-client"`. This executable
 implements `encode COMMAND [ARGS...]` returning JSON `{method, arguments}` and
@@ -176,7 +169,8 @@ original signed request; it cannot issue another increment. Recovery reports raw
 reply bytes. Expired uncertainty remains blocked. Calls share the existing
 128-operation inventory bound; no history eviction or uncertainty reset is added.
 
-Press Enter in the first terminal to stop. Ctrl-C, input EOF and the one-hour
+Both demos use the same line editor. Enter shows a fresh prompt. Type `exit`
+to stop the simulator. Ctrl-C, input EOF and the one-hour
 session limit also end the session. Shutdown attempts instance deletion and stops
 the owned server; deletion-attempt completion is not independent proof of remote
 deletion. Local config, artifacts and journals remain for inspection. A new run

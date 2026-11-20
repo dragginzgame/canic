@@ -14,9 +14,11 @@ pub(super) fn named_service(slot: ChildId) -> Option<ServiceInstall> {
     }
     STATE.with_borrow(
         |state| match &state.as_ref().expect("open engine").artifact.0[&slot] {
-            Artifact::Application(_, lifecycle) => {
-                ServiceInstall::decode(lifecycle.creation.as_slice()).ok()
-            }
+            Artifact::Application(_, lifecycle) => ServiceInstall::approved(
+                lifecycle.creation.as_slice(),
+                ic_platform_runtime::system::canister_self(),
+            )
+            .ok(),
             _ => None,
         },
     )
@@ -76,8 +78,8 @@ fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
                     generation,
                     role: recipient.role.clone(),
                 });
-            } else if let Ok(binding) =
-                canic::topology::Install::decode(lifecycle.creation.as_slice())
+            } else if let Ok(Some(binding)) =
+                canic::topology::Install::approved(lifecycle.creation.as_slice())
                 && binding.root == ic_platform_runtime::system::canister_self()
             {
                 children.push((
@@ -187,11 +189,13 @@ pub(super) fn schedule(ready: Option<ChildId>) {
                 return None;
             };
             let args = lifecycle.creation.as_slice();
-            if ServiceInstall::decode(args).is_ok() {
+            if ServiceInstall::approved(args, ic_platform_runtime::system::canister_self()).is_ok()
+            {
                 Some(None)
             } else {
-                canic::topology::Install::decode(args)
+                canic::topology::Install::approved(args)
                     .ok()
+                    .flatten()
                     .map(|_| Some(super::worker(&state.journal.0[&slot].0)))
             }
         });

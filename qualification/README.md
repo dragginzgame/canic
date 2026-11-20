@@ -9,6 +9,19 @@ contract, Auth and readiness mounts, a recursive request and a nested enum
 change. Custom Serde layouts still require application byte fixtures.
 [Consumer instructions](../docs/demos/auth.md)
 
+## Database-backed role calls
+
+`bash scripts/dev/test-store.sh db-roles` installs two DB hubs and one shared
+shard through Root and Store. An enrolled browser registers, then requests a
+project from its shard. The shard checks the browser’s write permission and
+looks up `project_hub` in its cascaded directory. The receiver admits the
+shard’s role, inserts an application row, and returns the same ID after a
+receiver upgrade and retry. The test also submits missing and incorrect issuer
+pins to Root before staging the valid install. The directory witness also calls a named
+service from a worker built with role attestation and no database. Run
+`bash scripts/dev/test-store.sh directory` for copied proofs, expiry and retirement.
+Toko owns qualification of its project payload, reservation rules and account association.
+
 ## Runtime shard placement
 
 Run `bash scripts/dev/test-store.sh sharding` after `make qualification-setup`.
@@ -72,6 +85,10 @@ prepared simulator. For Toko's existing payload, storage layout, exact migration
 and test commands, see the [provisioning migration](../docs/demos/provisioning.md).
 
 The scoped reads and async registration use the handler-local `auth` identity.
+With a conflicting account ID on the installed shard, registration returns
+`BindingConflict` and both stores retain their original bytes. Stopping the
+shard returns `ProvisionPending`. Replaying a pending hub reservation against
+the populated shard confirms the original ID without rewriting the shard.
 During a suspended registration a second browser uses its own read scope. A
 late provision acknowledgement after logout or after Root revocation and
 refresh leaves the hub's pending row untouched.
@@ -118,7 +135,7 @@ encoding and allocation. The local counter upgrade and Root snapshot tests run o
 Testkit 0.110.1. Keep deployed 0.76 records with their qualified executable until
 a physical-image migration is separately qualified.
 
-The DB 0.24.0 witness and Blob 0.107.1 catalog use Storage 0.78.7 directly.
+The DB 0.24.4 witness and Blob 0.107.1 catalog use Storage 0.78.7 directly.
 The DB installed suite covers populated upgrades, refused upgrades and damaged storage. The installed Blob suite covers fresh composition, the managed fleet journey and refusal to upgrade the populated 0.100.6 catalog. The refusal preserves
 the predecessor's stable bytes, management report and surviving asset.
 [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8) records the decision to retain the original executable for this directory.
@@ -335,7 +352,7 @@ intent/result/renewal engine.
 `auth_logout_tests` adds browser-bound revocation, two independent devices,
 in-flight initial/renewal fencing, retained results/deadlines, real pruning,
 malformed input, reply rollback and closed state after upgrade. Registry Auth
-0.48.6 / Auth Wire 0.45.0 and Types 0.43.2 supply the sole retained binding engine; the private
+0.48.8 / Auth Wire 0.46.0 and Types 0.43.2 supply the sole retained binding engine; the private
 browser package remains the separately pinned 0.47.1 source.
 `make auth-browser-prepare` explicitly prepares the immutable browser supplier;
 `make auth-browser-test` checks generated codecs, native frame parity and the
@@ -608,7 +625,9 @@ not invoke signing or continue maintenance.
 Native fleet tests admit both full 8 MiB manifests and
 preserve existing inline fleets with or without Store and their retained digests.
 `make blob-test` builds Blob-only and profile-composed executable pairs using the optional
-Canic adapter. The registry Blob 0.107.1 fixtures cover user
+Canic adapter. The registry Blob 0.108.0 fixtures check command counts in the
+shared Canic recorder and drain/activation events in the same canister’s log,
+including after reopen. They also cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,
 non-resurrecting replay, drain/reopen/exact activation, and reopen refusal. The populated 0.100.6 predecessor must refuse the incompatible upgrade and preserve its original state. The optional profile composition shares one
 Storage bootstrap with Blob, preserves both owners across upgrade, closes profile
@@ -971,7 +990,7 @@ The shared shard uses `RoleCalls` to obtain a two-hour proof in one call. A moun
 caller, receiver, role, time and signature locally even while Root is stopped.
 The test checks generation, refusal of unrelated callers, tampering, expiry,
 renewal and closure. A Root upgrade preserves the public key and original
-closure deadline. The suite builds the user-directory Root companion through its app recipe.
+closure deadline. The suite builds the role-enabled Root companion.
 The controller uses its native codec to inspect the installed allocation, then
 starts drain with the returned principal, slot and generation.
 A draining shard with a spare seat refuses new placements, serves its
@@ -980,6 +999,9 @@ each exact placement. A release retry preserves the remaining assignment;
 a stale generation and a direct controller release are refused. Root reopens
 with one live assignment, and later reopens the empty allocation with its
 original proof deadline. The allocation continues to consume subnet capacity.
+The simulator installs the supplied dormant Wasm as the controlling Root. A
+different declared installer or target is refused. The dormant canister returns
+the same retirement receipt before and after its own upgrade.
 After a simulator controller forcibly reinstalls the same principal as a worker, renewal
 remains closed. A saved proof still works until its original expiry.
 The simulator performs the controller handover directly. Managed dormancy,
@@ -1048,7 +1070,7 @@ explicitly and supplies synchronous inspect/query/write handlers to
 Canic. Its passive `db::inspection` contract is versioned independently as
 `method_id("canic.db.inspect.v1")`. The separate optional `db-schema` feature adds
 stateless projection of compiled IC DB metadata, with no database executor,
-storage owner or permission policy. The witness consumes crates.io IC DB 0.24.0; transport never becomes its durable codec.
+storage owner or permission policy. The witness consumes crates.io IC DB and its schema macros at 0.24.4; transport never becomes its durable codec.
 
 ```sh
 make qualification-setup
@@ -1127,7 +1149,7 @@ canic::mount_db_role! {
 
 The hub selects `hub, database = toko_schema::model::Routes, config = "...", authority = "toko",
 pages = 65536, auth_read = "read"` and obtains its retained routing Root from
-`canic::db::role::root()`. The shard uses `canic::topology::require_parent` to
+`canic::role::root()`. The shard uses `canic::topology::require_parent` to
 authorize a parent-only method. Declare `parent = "user_hub"` once in the
 shard's app definition in `canic.toml`. With `install_topology = true`, Host
 binds the parent principal and the app's explicit child role into the v2 install

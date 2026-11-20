@@ -36,7 +36,7 @@ pub(super) fn open(
     let (root, pin): (Principal, wire::Bytes<32>) =
         wire::decode(cell.get(), wire::Encoding::Payload, canic::method::LIMITS)
             .expect("retained issuer binding");
-    CALLS.with(|slot| assert!(slot.set(Rc::new(RoleCalls::new(root))).is_ok()));
+    CALLS.with(|slot| assert!(slot.set(canic::topology::attach_role_calls(root)).is_ok()));
     if !pin.as_slice().is_empty() {
         let verifier = RoleVerifier::new(root, pin.as_slice()).expect("valid issuer pin");
         verifier.attach().unwrap();
@@ -100,17 +100,15 @@ fn visit() -> Result<u64, String> {
 }
 
 #[canic::update(guard = controller)]
-async fn visit_hub(receiver: Principal) -> Result<u64, String> {
+async fn visit_hub() -> Result<u64, String> {
     let caller = ic_platform_runtime::system::caller();
-    let calls = CALLS.with(|s| s.get().expect("installed issuer").clone());
-    calls
-        .call::<Visit>(receiver, 5, (), || {
-            ic_platform_runtime::system::is_controller(&caller)
-                .then_some(())
-                .ok_or_else(|| "controller changed".into())
-        })
-        .await
-        .map_err(|e| format!("{e:?}"))?
+    canic::topology::call_service::<Visit>("accounts_hub", 5, (), || {
+        ic_platform_runtime::system::is_controller(&caller)
+            .then_some(())
+            .ok_or_else(|| "controller changed".into())
+    })
+    .await
+    .map_err(|e| format!("{e:?}"))?
 }
 
 struct Visits;

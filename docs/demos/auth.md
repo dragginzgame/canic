@@ -599,9 +599,9 @@ not another shipped adapter package or default Canic dependency.
 
 ## Inputs and limits
 
-Both lockfiles select registry engine `ic-auth` 0.48.6 from
-`b66a252b7914f7b77b7b6cb8cc86ca2a354aec04` and passive
-`ic-auth-wire` 0.45.0 and `ic-auth-protocol-types` 0.43.2. The browser package remains
+Both lockfiles select registry engine `ic-auth` 0.48.8 from
+`fd9ba379e1edb84d8732be86180642da5ca4ebf4` and passive
+`ic-auth-wire` 0.46.0 and `ic-auth-protocol-types` 0.43.2. The browser package remains
 pinned to `a05b5ddd4099a3f64b95deb173a0c16746d98ac5` (0.47.1); the installed
 journey qualifies that actual combination. The basic `auth` feature selects
 only passive contracts; `auth-enrollment` selects `receiver-memory` and
@@ -614,7 +614,7 @@ Application signing and the native test verifier now select registry Platform
 0.34.13's `ed25519` capability as `ic-platform-crypto`. Enrollment and the qualification issuer both call `canic::entropy::fresh(300)`.
 The helper uses Platform’s `raw_rand` codec with a six-byte request budget and
 a 42-byte reply budget.
-Application canisters can enable Canic's `entropy` feature and call
+Application canisters can enable Canic's `raw-rand` feature and call
 `canic::entropy::fresh(10).await` for 32 bytes with a ten-second bounded wait.
 A failure returns to the caller after that attempt. The application owns ID
 generation and rechecks authorization after the await. Enrollment separately

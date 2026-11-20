@@ -114,9 +114,11 @@ ref($env) eq 'HASH' && defined($env->{PATH}) && !ref($env->{PATH}) && length($en
     or die "stage requires an explicit bounded string environment including PATH\n";
 # Preserve invocation-scoped Cargo policy across the bounded child environment.
 # It is part of the context hashed for proof lookup and subsequent execution.
-if (exists $ENV{CARGO_NET_OFFLINE}) {
-    !exists $env->{CARGO_NET_OFFLINE} || $env->{CARGO_NET_OFFLINE} eq $ENV{CARGO_NET_OFFLINE}
+if (exists $env->{CARGO_NET_OFFLINE}) {
+    exists $ENV{CARGO_NET_OFFLINE} && $env->{CARGO_NET_OFFLINE} eq $ENV{CARGO_NET_OFFLINE}
         or die "conflicting invocation and stage CARGO_NET_OFFLINE settings\n";
+}
+if (exists $ENV{CARGO_NET_OFFLINE}) {
     $env->{CARGO_NET_OFFLINE} = $ENV{CARGO_NET_OFFLINE};
 }
 safe_route($observer);

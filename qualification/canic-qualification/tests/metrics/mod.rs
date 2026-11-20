@@ -1,6 +1,7 @@
 //! Installed public metrics do not grant authority, mutate custody or survive owner upgrades.
 use super::*;
 use canic::metrics::{METHOD, REQUEST_LIMITS, RESPONSE_LIMITS, Snapshot};
+use canic::{logging::Logs, method::Contract};
 
 fn request() -> Vec<u8> {
     ic_wire::encode(
@@ -58,6 +59,32 @@ async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
     let root = pic.create_canister().await;
     pic.install_canister(root, children::artifact("root.wasm"), vec![], None)
         .await;
+    let logs = async |before: Option<u64>| {
+        let bytes = pic
+            .update_call(
+                root,
+                CanisterId::anonymous(),
+                Logs::NAME,
+                Logs::encode_request(&before).unwrap(),
+            )
+            .await
+            .unwrap();
+        Logs::decode_reply(&bytes).unwrap()
+    };
+    let denied = pic
+        .update_call(
+            root,
+            CanisterId::self_authenticating(b"other operator"),
+            Logs::NAME,
+            Logs::encode_request(&None).unwrap(),
+        )
+        .await
+        .unwrap_err();
+    assert!(denied.reject_message.contains("controller required"));
+    let first = logs(None).await;
+    assert_eq!(first.entries.len(), 1);
+    assert_eq!(first.entries[0].source, "root");
+    assert_eq!(first.entries[0].message, "installed");
     let empty = read(pic, root).await.timers.unwrap();
     assert_eq!(empty.accepted.total, 0);
     let input = children::input(
@@ -70,6 +97,11 @@ async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
     settle(pic).await;
     let complete = status(pic, root).await;
     assert_eq!(complete.phase, Phase::Ready);
+    let ready = logs(None).await;
+    assert_eq!(ready.entries[0].source, "management");
+    assert_eq!(ready.entries[0].message, "child 0: Ready");
+    assert_eq!(logs(Some(ready.entries[0].sequence)).await, first);
+    assert_eq!(logs(None).await, ready);
     let before = read(pic, root).await;
     let timers = before.timers.unwrap();
     assert!(timers.accepted.total > 0);
@@ -121,6 +153,28 @@ async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
     after.maintenance_candidate = complete.maintenance_candidate;
     assert_eq!(after, complete);
     assert_eq!(pic.get_stable_memory(root).await, stable);
+    let reopened = logs(None).await;
+    assert!(reopened.started_at_version > ready.started_at_version);
+    assert_eq!(reopened.entries.len(), 1);
+    assert_eq!(reopened.entries[0].message, "reopened after upgrade");
+    let late = children::input(
+        root,
+        children::artifact("app.wasm"),
+        pic.get_time().await.as_nanos_since_unix_epoch(),
+    );
+    children::admit(
+        pic,
+        root,
+        canic_management_protocol::children::ChildId::SECOND,
+        late,
+    )
+    .await
+    .unwrap();
+    pic.advance_time(Duration::from_secs(121)).await;
+    settle(pic).await;
+    let expired = logs(None).await;
+    assert_eq!(expired.entries[0].message, "child 1: Expired");
+    assert_eq!(expired.entries[0].level, "Warn");
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

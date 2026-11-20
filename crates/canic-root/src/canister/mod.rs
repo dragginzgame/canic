@@ -19,6 +19,7 @@ canic::mount_metrics_endpoint!(canic_management::metrics);
 )]
 fn init((): ()) {
     management::open(true, readiness());
+    canic::logging::record(canic::logging::Level::Info, "root", "installed");
     #[cfg(feature = "auth")]
     crate::auth::fresh();
 }
@@ -33,6 +34,11 @@ fn init((): ()) {
 )]
 fn post_upgrade((): ()) {
     management::open(false, readiness());
+    canic::logging::record(
+        canic::logging::Level::Info,
+        "root",
+        "reopened after upgrade",
+    );
 }
 
 management::mount_endpoints! {
@@ -56,8 +62,14 @@ management::mount_endpoints! {
     stage_application_upgrade, reconcile_application_upgrade, activate_application_upgrade,
 }
 
+/// Read one page of Root diagnostics using the operator’s signed call.
+#[canic::update(contract = canic::logging::Logs, guard = controller)]
+fn logs(before: Option<u64>) -> canic::logging::Page {
+    canic::logging::page(before)
+}
+
 /// Deliver one exact revision to a ready named service under the operator's approval.
-#[canic::update(guard = directory_controller)]
+#[canic::update(guard = controller)]
 async fn publish_directory(request: (String, u64)) -> Result<u64, String> {
     let (name, revision) = request;
     management::application::publish_directory(&name, revision)
@@ -65,7 +77,37 @@ async fn publish_directory(request: (String, u64)) -> Result<u64, String> {
         .map_err(String::from)
 }
 
-fn directory_controller() -> Result<(), &'static str> {
+/// Read bounded performance observations from an installed, ready child of this Root.
+#[cfg(feature = "child-metrics")]
+#[canic::update(contract = canic::metrics::performance::ChildMetrics, guard = controller)]
+async fn child_metrics(request: (u8, Option<String>)) -> canic::metrics::performance::Page {
+    use canic::metrics::performance::EndpointMetrics;
+    use canic_management_protocol::{Phase, children::ChildId};
+    let (slot, after) = request;
+    let slot = ChildId::new(usize::from(slot))
+        .unwrap_or_else(|| runtime::system::trap("unknown child slot"));
+    let status = management::children::status(slot);
+    if status.phase != Phase::Ready {
+        runtime::system::trap("child is not ready");
+    }
+    let target = status
+        .worker
+        .expect("ready child")
+        .parse()
+        .expect("retained child principal");
+    let caller = runtime::system::caller();
+    let page = canic::method::call::<EndpointMetrics>(target, 5, &after)
+        .await
+        .unwrap_or_else(|error| canic::method::fail(error));
+    assert!(
+        runtime::system::is_controller(&caller),
+        "controller required"
+    );
+    page
+}
+
+/// Require a current controller of this Root.
+fn controller() -> Result<(), &'static str> {
     runtime::system::is_controller(&runtime::system::caller())
         .then_some(())
         .ok_or("controller required")

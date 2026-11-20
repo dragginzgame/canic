@@ -13,6 +13,7 @@ description = "Reviewed deployment plans and retained signed attempts for Canic"
 ic-wasm-store.workspace = true
 
 [features]
+ephemeral = ["dep:ic-testkit"]
 backup = ["canic-management-protocol/backup", "dep:ic-backup", "dep:ic-host-sign"]
 
 [dependencies]
@@ -29,6 +30,7 @@ ic-platform = { workspace = true, features = ["ingress-packets", "native-signed-
 ic-platform-protocol = { workspace = true, features = ["ledger"] }
 ic-platform-types.workspace = true
 ic-query-topology.workspace = true
+ic-testkit = { workspace = true, optional = true, features = ["managed-server"] }
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true
 serde.workspace = true

@@ -5,7 +5,7 @@ use canic::{
     sharding::provisioning::{self, Binding, Provision, Request},
 };
 use ic_db::Ulid;
-use user_directory_schema::{Users, model::user_shard::User};
+use user_directory_schema::{ProvisionRefusal, Users, model::user_shard::User};
 
 // Open the shard database and mount its Auth session and readiness endpoints.
 canic::mount_db_role! {
@@ -24,13 +24,15 @@ canic::mount_db_role! {
     contract = Provision<Users>,
     guard = canic::topology::require_parent,
 )]
-fn provision_user(request: Request<[u8; 16], ()>) -> Binding<[u8; 16]> {
+fn provision_user(request: Request<[u8; 16], ()>) -> Result<Binding<[u8; 16]>, ProvisionRefusal> {
     let binding = request.binding;
-    binding.require_target();
+    binding
+        .check_target()
+        .map_err(|_| ProvisionRefusal::BindingConflict)?;
     let account = binding.account;
     if let Some(user) = provisioning::account_row::<User>(&db!(), account) {
         if user.id.to_bytes() != binding.id {
-            canic::method::fail("BindingConflict");
+            return Err(ProvisionRefusal::BindingConflict);
         }
     } else {
         db!()
@@ -39,10 +41,15 @@ fn provision_user(request: Request<[u8; 16], ()>) -> Binding<[u8; 16]> {
                 issuer: account.issuer,
                 subject: account.subject,
             })
-            .expect("insert user");
+            .map_err(|error| match error {
+                ic_db::Error::Exists | ic_db::Error::UniqueViolation => {
+                    ProvisionRefusal::BindingConflict
+                }
+                _ => ProvisionRefusal::Database,
+            })?;
     }
 
-    binding
+    Ok(binding)
 }
 
 // my_id
@@ -52,4 +59,23 @@ fn provision_user(request: Request<[u8; 16], ()>) -> Binding<[u8; 16]> {
 #[canic::query(scope = "read")]
 fn my_id() -> Option<[u8; 16]> {
     provisioning::session_row::<User>(&db!(), &auth).map(|row| row.id.to_bytes())
+}
+
+/// Reserve at the published project hub for the signed-in account on this shard.
+#[cfg(feature = "role-service")]
+#[canic::update(scope = "write")]
+async fn request_project() -> Result<[u8; 16], String> {
+    let account = provisioning::AuthSubject::from(&auth);
+    canic::topology::call_service::<user_directory_schema::ReserveProject>(
+        "project_hub",
+        5,
+        account,
+        || {
+            auth.reauthorize().map_err(|e| format!("{e:?}"))?;
+            provisioning::account_row::<User>(&db!(), account).ok_or("unregistered account")?;
+            Ok(())
+        },
+    )
+    .await
+    .map_err(|e| format!("{e:?}"))
 }
