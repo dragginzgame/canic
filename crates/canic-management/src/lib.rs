@@ -4,57 +4,35 @@
 //! Host consumers use canic-management-protocol without this runtime.
 
 #[cfg(feature = "backup")]
-#[cfg_attr(
-    all(not(target_arch = "wasm32"), not(test)),
-    expect(
-        dead_code,
-        reason = "the installed Backup executor owns the private ledger"
-    )
-)]
 pub mod backup;
-#[cfg(target_arch = "wasm32")]
+
 pub mod endpoint;
-#[cfg(target_arch = "wasm32")]
+
 mod engine;
 mod mount;
-#[cfg(target_arch = "wasm32")]
+
 pub mod publication;
-#[cfg(target_arch = "wasm32")]
+
 mod single;
-#[cfg_attr(
-    all(not(target_arch = "wasm32"), not(test)),
-    expect(
-        dead_code,
-        reason = "the installed management engine owns the retained records"
-    )
-)]
 mod storage;
 
 #[cfg(feature = "sharding")]
-#[cfg_attr(
-    all(not(target_arch = "wasm32"), not(test)),
-    expect(
-        dead_code,
-        reason = "the installed shard pool calls these placement decisions"
-    )
-)]
 mod placement;
 
-#[cfg(target_arch = "wasm32")]
 pub use engine::{custody, metrics::snapshot as metrics, open};
-#[cfg(all(target_arch = "wasm32", feature = "fault-injection"))]
+#[cfg(feature = "fault-injection")]
 pub use single::inject_fault;
-#[cfg(target_arch = "wasm32")]
+
 pub use single::{
     observe_upgrade, reconcile, reconcile_upgrade, stage, stage_upgrade, status, upgrade_status,
 };
 
 /// Operator approval and authenticated hub operations for one Root-owned shard pool.
-#[cfg(all(feature = "sharding", target_arch = "wasm32"))]
+#[cfg(feature = "sharding")]
 pub use engine::sharding;
 
 /// Explicit child-scoped operations. The wrapper decides which endpoints to mount.
-#[cfg(target_arch = "wasm32")]
+
 pub mod children {
     #[cfg(feature = "fault-injection")]
     pub use crate::engine::inject_fault;
@@ -79,7 +57,7 @@ pub struct Readiness {
 }
 
 /// Store-bound operations, mounted explicitly by the owning canister.
-#[cfg(target_arch = "wasm32")]
+
 pub mod stored {
     pub use crate::engine::stored_api::{
         custody, reconcile, reconcile_upgrade, root_custody, root_history, stage, stage_upgrade,
@@ -87,17 +65,18 @@ pub mod stored {
 }
 
 /// Exact application lifecycle bindings, mounted explicitly by Root.
-#[cfg(target_arch = "wasm32")]
+
 pub mod application {
     pub use crate::engine::application::{custody, reconcile, stage};
     #[cfg(feature = "blob")]
     pub use crate::engine::application::{reconcile_upgrade, stage_upgrade};
     #[cfg(feature = "blob")]
     pub use crate::engine::blob::activate;
+    pub use crate::engine::directory::publish_directory;
 }
 
 /// Root-owned Store maintenance custody, mounted explicitly by Root.
-#[cfg(target_arch = "wasm32")]
+
 pub mod store_maintenance {
     pub use crate::engine::store_maintenance::{
         activate, advance, install, observe, observe_attempt, recover, stage,

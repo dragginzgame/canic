@@ -2,6 +2,7 @@ pub(crate) mod application;
 #[cfg(feature = "blob")]
 pub(crate) mod blob;
 mod delivery;
+pub(crate) mod directory;
 pub(super) mod metrics;
 #[cfg(feature = "sharding")]
 pub mod sharding;
@@ -237,6 +238,9 @@ pub fn open(fresh: bool, readiness: Readiness) {
     for slot in slots {
         schedule(slot);
     }
+    if !fresh {
+        directory::schedule();
+    }
 }
 
 fn validate(state: &State, slot: ChildId) {
@@ -433,13 +437,33 @@ pub fn stage(slot: ChildId, input: Stage) -> Result<Status, Refusal> {
     }
     input.validate(&api::canister_self().to_text(), api::time())?;
     admit(
+        Origin::Permanent,
         slot,
         input.approval,
         Artifact::Inline(crate::storage::Inline(input.wasm, vec![])),
     )
 }
 
-fn admit(slot: ChildId, approval: Approval, artifact: Artifact) -> Result<Status, Refusal> {
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Origin {
+    Permanent,
+    #[cfg(feature = "sharding")]
+    Placement,
+}
+
+fn admit(
+    origin: Origin,
+    slot: ChildId,
+    approval: Approval,
+    artifact: Artifact,
+) -> Result<Status, Refusal> {
+    if origin == Origin::Permanent && !ChildId::ALL.contains(&slot) {
+        return Err(Refusal::Binding);
+    }
+    #[cfg(feature = "sharding")]
+    if sharding::at_capacity() {
+        return Err(Refusal::Occupied);
+    }
     if ic_platform_runtime::raw::liquid_cycle_balance()
         < reserved_cycles() + u128::from(CREATION_CYCLES)
     {
@@ -467,6 +491,10 @@ fn admit(slot: ChildId, approval: Approval, artifact: Artifact) -> Result<Status
         s.approval = Some(approval);
         s.phase = Phase::Scheduled;
     });
+    #[cfg(feature = "sharding")]
+    if origin == Origin::Permanent {
+        sharding::retain_permanent(slot);
+    }
     schedule(slot);
     Ok(status(slot))
 }
@@ -736,6 +764,9 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
                 s.phase = Phase::Ready;
                 s.failure = None;
             });
+            if before.phase != Phase::Ready && directory::named_service(slot).is_some() {
+                directory::schedule();
+            }
         }
         _ => {} // No observation can invent a lost creation principal.
     }

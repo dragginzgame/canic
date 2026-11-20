@@ -674,7 +674,7 @@ or artifact bytes.
 ## Upgrade the starter
 
 In the template used above, edit the greeting returned by
-`apps/template/src/endpoints/mod.rs`. Build the edited application and use its
+`apps/template/src/lib.rs`. Build the edited application and use its
 new module hash to plan an upgrade of the same canister.
 
 ```sh
@@ -763,3 +763,17 @@ To update tooling, deliberately change its exact pin in both workspace catalogs,
 run `make deps-update DEPENDENCY_PACKAGE=toko-tooling`, then
 `make toko-tooling-preview` and `make toko-tooling-update`.
 Verify with `make toko-tooling-check`.
+
+### Inspect an application database
+
+Use the Canic CLI to read the catalogue exposed by an application. Add
+`--entity Item --count` for a selected entity and its permitted maintained count.
+
+```sh
+canic db inspect --network ic --canister "$CANISTER_ID" --identity "$IDENTITY_PEM"
+```
+
+Use `--anonymous` to select the anonymous caller and `--json` for structured
+output. Local inspection uses the same explicit URL, trusted root key, root
+subnet and routing canister as other Canic network reads. Run
+`canic db inspect --help` for those options.

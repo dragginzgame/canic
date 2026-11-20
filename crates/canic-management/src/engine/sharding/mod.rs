@@ -58,6 +58,8 @@ const INSTANCE_LAYOUT: &[u8] = b"CPL1";
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Pools {
+    #[serde(skip)]
+    permanent: [bool; 2],
     shards: Option<Ledger<SLOT_COUNT>>,
     capacity: Option<stored::SubnetCapacity>,
     shard_increases: Vec<u8>,
@@ -78,13 +80,17 @@ impl Pools {
         self.capacity.as_ref().map_or(2, |c| c.max_children)
     }
 
-    fn shard_slots(&self, grant: &ShardPool) -> &'static [ChildId] {
+    fn shard_slots(&self, grant: &ShardPool) -> Vec<ChildId> {
         let count = self
             .shard_increases
             .last()
             .copied()
             .unwrap_or(grant.max_shards);
-        &ChildId::SHARDS[..usize::from(count)]
+        ChildId::SHARDS
+            .into_iter()
+            .filter(|slot| !self.permanent.get(slot.index()).copied().unwrap_or(false))
+            .take(usize::from(count))
+            .collect()
     }
 
     fn instance_slots(&self, grant: &stored::InstancePool) -> &'static [ChildId] {
@@ -97,7 +103,8 @@ impl Pools {
     }
 
     fn used(&self) -> usize {
-        self.projects.len()
+        self.permanent.iter().filter(|&&used| used).count()
+            + self.projects.len()
             + self
                 .shards
                 .as_ref()
@@ -111,7 +118,12 @@ impl Pools {
     }
 
     pub(super) fn encode(&self) -> Vec<u8> {
-        let (tag, payload) = if self.capacity.is_some() {
+        let (tag, payload) = if self.permanent.contains(&true) {
+            (
+                b"CPL4".as_slice(),
+                ic_wire::encode(&(self.permanent, self), ic_wire::Encoding::Payload, LIMITS),
+            )
+        } else if self.capacity.is_some() {
             (
                 b"CPL3".as_slice(),
                 ic_wire::encode(self, ic_wire::Encoding::Payload, LIMITS),
@@ -151,9 +163,18 @@ impl Pools {
 
 pub(super) fn open(bytes: &[u8]) -> Pools {
     type LegacyShards = Option<Ledger<2>>;
-    let pools = if let Some(payload) = bytes.strip_prefix(b"CPL3") {
-        let pools: Pools = ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
-            .expect("expanded placement ledger");
+    let pools = if bytes.starts_with(b"CPL3") || bytes.starts_with(b"CPL4") {
+        let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"CPL4") {
+            let (permanent, mut pools): ([bool; 2], Pools) =
+                ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
+                    .expect("mixed child ledger");
+            assert!(permanent.contains(&true));
+            pools.permanent = permanent;
+            pools
+        } else {
+            ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS)
+                .expect("expanded placement ledger")
+        };
         let capacity = pools.capacity.as_ref().expect("subnet capacity");
         assert!(
             capacity::valid_capacity(capacity)
@@ -266,6 +287,36 @@ pub(crate) fn occupied() -> bool {
     })
 }
 
+/// Ordinary staging is available alongside placement only under an explicit backstop.
+pub(crate) fn has_capacity() -> bool {
+    STATE.with_borrow(|s| s.as_ref().is_some_and(|s| s.pools.capacity.is_some()))
+}
+
+pub(super) fn ordinary_slot(slot: ChildId) -> bool {
+    STATE.with_borrow(|s| {
+        let pools = &s.as_ref().expect("open Root").pools;
+        ChildId::ALL.contains(&slot)
+            && pools
+                .shards
+                .as_ref()
+                .is_none_or(|l| l.generations[slot.index()].is_none())
+    })
+}
+
+pub(super) fn retain_permanent(slot: ChildId) {
+    STATE.with_borrow_mut(|s| {
+        let state = s.as_mut().expect("open Root");
+        if state.pools.capacity.is_some() {
+            state.pools.permanent[slot.index()] = true;
+            state.pool.set(state.pools.encode());
+        }
+    });
+}
+
+pub(super) fn at_capacity() -> bool {
+    STATE.with_borrow(|s| s.as_ref().expect("open Root").pools.full())
+}
+
 /// Ingress guard before accepting an account key.
 /// # Errors
 /// Refuses any principal other than the approved hub.
@@ -306,7 +357,7 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
     }) {
         return result;
     }
-    admit_pool_change()?;
+    admit_pool_change(false)?;
     let hub = Principal::from_text(&a.hub).map_err(|_| Refusal::Binding)?;
     if !valid_limits(&a)
         || a.root != api::canister_self().to_text()
@@ -335,15 +386,16 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
     Ok(())
 }
 
-// Only placement grants may coexist. Before the first grant, exclude direct
-// deployments whose effect custody the pool endpoints cannot represent.
-fn admit_pool_change() -> Result<(), Refusal> {
+// An explicit backstop accounts for existing ordinary reservations. Historical
+// grants without that backstop retain their placement-only layout.
+fn admit_pool_change(admitting_capacity: bool) -> Result<(), Refusal> {
     #[cfg(feature = "backup")]
     if crate::backup::occupied() {
         return Err(Refusal::Occupied);
     }
     if super::store_maintenance::observe().is_some()
-        || (!occupied()
+        || (!admitting_capacity
+            && !occupied()
             && ChildId::ALL
                 .into_iter()
                 .any(|s| snapshot(s).phase != Phase::Empty))
@@ -409,7 +461,7 @@ pub fn configure_instances(a: stored::InstancePool) -> Result<(), Refusal> {
     if let Some(result) = prior {
         return result;
     }
-    admit_pool_change()?;
+    admit_pool_change(false)?;
     validate_instance(&a)?;
     if a.expires_at_ns <= api::time() {
         return Err(Refusal::Time);
@@ -514,7 +566,7 @@ pub fn assign(key: Key) -> Placement {
     let mut ready = None;
     let mut free = None;
     let mut blocked = false;
-    for &slot in slots {
+    for slot in slots {
         if let Some(generation) = generations[slot.index()] {
             if counts[slot.index()] < approval.keys_per_shard {
                 match resolve(slot, generation) {
@@ -610,6 +662,7 @@ fn create(
     let admitted = if arguments.as_slice().is_empty() {
         let creation = delivery::retained(slot, stored::STAGE, &input);
         super::admit(
+            super::Origin::Placement,
             slot,
             input.approval,
             Artifact::Stored(stored::Sources {
@@ -619,6 +672,7 @@ fn create(
         )
     } else {
         super::application::admit_creation(
+            super::Origin::Placement,
             slot,
             canic_management_protocol::application::Stage {
                 source: input,
@@ -639,7 +693,18 @@ fn create(
 pub(super) fn validate_claims(state: &super::State) {
     let claims = &state.pools.projects;
     let pools = &state.pools;
-    if pools.capacity.is_none() {
+    if pools.capacity.is_some() {
+        assert_eq!(
+            pools.used(),
+            state
+                .journal
+                .0
+                .values()
+                .filter(|entry| entry.0.approval.is_some())
+                .count(),
+            "subnet reservation custody"
+        );
+    } else {
         assert_eq!(state.journal.0.len() > 2, !claims.is_empty());
     }
     for (index, slot) in ChildId::SHARDS.into_iter().enumerate() {
@@ -647,6 +712,13 @@ pub(super) fn validate_claims(state: &super::State) {
             .shards
             .as_ref()
             .and_then(|ledger| ledger.generations[slot.index()]);
+        if pools.permanent.get(slot.index()) == Some(&true) {
+            assert!(
+                generation.is_none() && state.journal.0[&slot].0.approval.is_some(),
+                "permanent child custody"
+            );
+            continue;
+        }
         if index >= 2
             || pools.shards.is_some()
             || pools.instances.is_some()

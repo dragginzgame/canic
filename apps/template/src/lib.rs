@@ -1,8 +1,24 @@
 //! Stateless starter canister.
 
-mod endpoints;
-
 use serde::{Deserialize, Serialize};
+
+// greet
+// Greet a visitor whose name is at most 128 UTF-8 bytes.
+// limits : Greet
+#[canic::query(contract = Greet)]
+fn greet(name: String) -> Greeting {
+    greeting(&name)
+}
+
+// probe
+// Return the greeting for a name of up to 128 UTF-8 bytes through a replicated update.
+// limits : Probe
+#[canic::update(contract = Probe)]
+fn probe(name: String) -> Greeting {
+    greeting(&name)
+}
+
+canic::mount_readiness_endpoint!(crate::readiness);
 
 /// Identity of the greeting RPC, including its Wire request/response envelope.
 pub const GREET: u64 = 1;
@@ -41,4 +57,15 @@ impl canic::method::Contract for Probe {
     const REQUEST: canic::method::wire::Limits = LIMITS;
     type Input = String;
     type Output = Greeting;
+}
+
+fn greeting(name: &str) -> Greeting {
+    assert!(name.len() <= MAX_NAME_BYTES, "name exceeds 128 UTF-8 bytes");
+    Greeting {
+        message: format!("Hello from Canic, {name}!"),
+    }
+}
+
+fn readiness() -> canic::readiness::State {
+    canic::readiness::State::Ready
 }

@@ -4,6 +4,7 @@ members = [
     "canic-asset-catalog",
     "canic-auth-witness",
     "canic-db-witness",
+    "canic-directory-witness",
     "canic-effect-probe",
     "canic-greeting-witness",
     "canic-profile-client",
@@ -38,6 +39,8 @@ canic-profile-worker = { path = "canic-profile-worker", default-features = false
 canic-qualification = { path = "canic-qualification" }
 clap = { version = "4.6.7", features = ["derive"] }
 ex-counter = { path = "../apps/examples/counter" }
+ex-user-directory-hub = { path = "../apps/examples/user-directory/hub" }
+ex-user-directory-shard = { path = "../apps/examples/user-directory/shard" }
 ic-auth = { version = "0.48.6", features = ["receiver-memory", "ed25519-verification"] }
 ic-auth-protocol-types = "0.43.0"
 ic-backup = "0.105.5"
@@ -59,6 +62,7 @@ serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"
 serde_json = "1.0.154"
 sha2 = "0.11.1"
+tempfile = { version = "3.27.0", default-features = false }
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
 toko-tooling = "=0.45.22"
 toml = "1.2.1"

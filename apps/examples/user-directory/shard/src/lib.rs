@@ -1,7 +1,6 @@
 //! The user shard owns its account records.
 
 use canic::{
-    auth::protocol::SessionView,
     db,
     sharding::provisioning::{self, Binding, Provision, Request},
 };
@@ -51,6 +50,6 @@ fn provision_user(request: Request<[u8; 16], ()>) -> Binding<[u8; 16]> {
 // scope  : read
 // limits : default
 #[canic::query(scope = "read")]
-fn my_id(session: SessionView) -> Option<[u8; 16]> {
-    provisioning::session_row::<User>(&db!(), &session).map(|row| row.id.to_bytes())
+fn my_id() -> Option<[u8; 16]> {
+    provisioning::session_row::<User>(&db!(), &auth).map(|row| row.id.to_bytes())
 }

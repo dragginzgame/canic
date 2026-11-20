@@ -1,5 +1,14 @@
 # Canic qualification
 
+## Native endpoint inspection
+
+`bash scripts/dev/test-store.sh user-directory` builds the hub and shard, compares
+their IC query and update exports to the native descriptor maps, then runs the
+installed signup journey. The inspection suite checks a scoped request, a named
+contract, Auth and readiness mounts, a recursive request and a nested enum
+change. Custom Serde layouts still require application byte fixtures.
+[Consumer instructions](../docs/demos/auth.md)
+
 ## Runtime shard placement
 
 Run `bash scripts/dev/test-store.sh sharding` after `make qualification-setup`.
@@ -61,6 +70,11 @@ The [hub](../apps/examples/user-directory/hub/src/lib.rs) and
 implementation. Run `bash scripts/dev/test-store.sh user-directory` with the
 prepared simulator. For Toko's existing payload, storage layout, exact migration
 and test commands, see the [provisioning migration](../docs/demos/provisioning.md).
+
+The scoped reads and async registration use the handler-local `auth` identity.
+During a suspended registration a second browser uses its own read scope. A
+late provision acknowledgement after logout or after Root revocation and
+refresh leaves the hub's pending row untouched.
 
 The test also upgrades a populated volatile shard under its actual Root controller.
 The database bytes and hub route survive. The shard refuses the previous session,
@@ -905,6 +919,33 @@ the diagnostics section starts collapsed, exact decimal totals and overflow
 quality match terminal details, unknown readings never become zero, and owner,
 network and error text is escaped. Rendering preserves the source snapshot and
 uses the existing bounded localhost viewer; it adds no browser RPC client.
+
+The native service-directory receiver checks bounded, ordered service rows,
+role lookup, exact replay, rejection of stale or conflicting revisions and
+reopen from an IC Storage cell. Run
+`cargo test --locked -p canic --features topology,storage topology::directory`.
+In `bash scripts/dev/test-root.sh children::`, Root creates and installs two
+directory recipients. Each captures the actual installing principal in its own
+storage. Both an ingress call from Root's operator and a call issued by the other
+installed recipient are refused. Root upgrades the first recipient; its publisher
+and stable bytes survive. Both recipients begin without a directory revision.
+With `bash scripts/dev/test-store.sh directory`, a real Root installs two named
+services from the test artifact supplier. First readiness schedules automatic
+publication to both new and existing named recipients. One installed case checks both recipients advance.
+A second stops the first recipient in delivery order; the second still advances.
+After restart the first serves its old revision until Root reopens and replays
+the current directory. An explicit exact replay preserves the stable bytes.
+A third case uses ordinary install slots for a named hub and its unnamed child.
+Root installs both. The hub forwards its committed revision to the child through
+a fixture endpoint. The child resolves the hub locally and rejects a foreign publisher.
+This qualifies the parent binding and delivery across the second hop. On the sharding build, three installed cases exercise the shared child backstop.
+A scheduled hub fills a one-child ceiling before dispatch. Two Root-installed hubs
+race their shard and dedicated-instance grants for one remaining slot, and replay
+after Root upgrade recovers the winning allocation. With one additional subnet
+slot, the full shard pool leaves room for a project. The installed child resolves
+both hubs after its parent forwards the directory. The Store in this fixture is
+supplied by the simulator. Automatic parent fanout, durable
+per-target reporting and service replacement also remain open.
 
 `make profile-test` runs the [retired profile fixture](../docs/demos/profile.md)
 through the existing deployment CLI, with private ownership, bounded capacity,

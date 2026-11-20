@@ -245,6 +245,11 @@ Use direct functions and domain modules first. A module may contain its transiti
 
 ### Infrastructure roles
 
+The operator bootstraps Root. Root installs every other canister in its managed
+fleet, including the Wasm Store, service hubs and dynamically allocated children.
+A hub can request a shard and remain its application parent while Root performs
+and records the installation.
+
 The generated managed starter has one Root/management owner controlling a Wasm Store and one application canister. The Store is an infrastructure role, separate from application allocation cardinality. Retain an explicit external controller for Root's maintenance and recovery; show that principal as controller metadata outside the canister tree. Qualify the exact graph before deployment. Across subnets, globally scarce budgets and membership changes may justify a coordination owner, while executors retain local custody and finite delegated authority. A Coordinator, when selected, must not be needed for every continuation of previously admitted local work.
 
 Application canisters remain freeform: they own their data model, public methods,
@@ -961,7 +966,7 @@ uses the existing Store-only path. Replaying the exact grant is idempotent.
 One Root can authorize a shared-shard pool and a dedicated-instance pool. Each
 shard admits 1–64 lifetime keys. Without an explicit subnet ceiling each pool
 is limited to two children. A controller-approved subnet ceiling allows up to eight
-children in total across the two pools. Each creation reserves the engine's fixed creation attachment.
+children in total, including permanent children created by that Root. Each creation reserves the engine's fixed creation attachment.
 The deadline restricts new child effects. Existing capacity and lookup persist.
 
 After Toko authenticates a user and derives a stable 32-byte key, its hub can call:
@@ -1150,6 +1155,38 @@ parent, receiver, role, allocation generation, revision and content commitments.
 Exact replay is harmless; conflicting or stale projections refuse. Dynamic
 children join through the same publication owner. Global directories, Coordinator
 and legacy Store-specific topology transport are not prerequisites.
+
+The first managed fleet has one service directory. Root publishes a named
+service from its own retained successful installation and the service's admitted
+role and readiness evidence. A configured principal or a placement grant alone
+cannot publish a service. A child can receive the directory without becoming a service: adding a
+shard, project instance or worker leaves the shared index unchanged. Each parent
+owns its direct-child records. Avoid copying a pool's potentially thousands of
+children to every canister. Local reads return the last committed revision,
+including while a recipient is behind; before first delivery they are unavailable.
+Root tracks delivery separately. No local lookup establishes current permission.
+
+The first one-hop publisher reads the named service and role from the exact
+Store-backed installation arguments. Only ordinary permanent slots with committed
+readiness contribute. For this append-only set the number of published services
+is a monotonic revision. Root reconstructs it on reopen. Replacing or removing a
+service requires a durable revision independent of the member count before that
+transition can be admitted. First readiness schedules one pass over the ready
+named services. Each delivery has a bounded wait and checks the selected
+revision before sending. Reopening Root schedules a pass from the retained ready
+records. A failed recipient keeps its previous revision while other recipients
+can advance. The operator can replay the current expected revision to a named
+recipient after recovery. A pass makes no fleet-wide completion claim.
+
+Qualify the stored directory and topology cascade in a Canic fleet before
+adding Toko peer admission. Exercise a lookup inside the installed application:
+a Host inventory reconstructed from Root's public child reports proves only
+operator discovery. The historical profile entry preserves one immutable worker
+binding; it cannot demonstrate directory updates. Deliver a replacement while
+one branch is unavailable, retain that branch's unconfirmed result, and replay
+the original delivery after recovery. After upgrading a recipient, verify its
+local lookup, its own parent and direct children, and refusal of an older or
+conflicting revision. Repeated roles must remain individually discoverable.
 
 A subtree operation binds its selected root, tree revision, complete bounded
 target set, action and operation generation. Authorize the request at its owner
@@ -1407,10 +1444,10 @@ two-slot Root to concurrent shared and dedicated placement.
 [Index regressions and history](https://github.com/dragginzgame/canic-legacy/blame/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/placement/index/tests.rs)
 and [sharding regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/placement/sharding/tests.rs).
 
-Existing shared-shard approvals address permanent Root slots 0 and 1, in that
-order. Host and Root use this list when validating a grant. Extending Root's
-child identity space must preserve the existing pool limit, HRW inputs, and
-retained claim bytes. A readiness result belongs to a shard claim only when
+The original two-shard grant addresses permanent Root slots 0 and 1 in that
+order. Root selects the approved prefix of the stable shard identity list for
+larger grants. A count increase preserves existing assignments, HRW inputs and
+retained claim identities. A readiness result belongs to a shard claim only when
 the slot and retained creation generation match. Dedicated project slots need
 their own approval and a custody format that accounts for every issued child.
 
@@ -1458,6 +1495,24 @@ submits the planned `capacity.request` to `configure_capacity` before its pool
 grants. The subnet ceiling is fixed once admitted. Each pool still consumes its
 own approved cycle budget and observes its own deadline.
 
+For a fleet combining permanent canisters and elastic placement, the approved
+`subnet_child_limit` is the absolute backstop for every child this Root creates
+on its managed subnet. Permanent hubs and a Root-created Store consume it too.
+Each placement system also enforces its own count ceiling. Pool ceilings can
+sum to more than the backstop: they grant permission to grow subject to remaining
+subnet capacity. Root must reserve new capacity before dispatch, in the same
+local commit as the creation intent. An unresolved create keeps its reservation.
+Returning an existing assignment or placing another key on an existing shard
+consumes no additional child capacity. A pool count increase cannot raise the
+subnet backstop.
+
+Root counts ordinary reservations already present when the ceiling is admitted.
+Its mixed-fleet ledger records which ordinary slots belong to permanent children.
+Shard selection skips these slots. On reopen Root checks total reservations
+against its creation journal. Pool-only ledgers retain their historical encoding
+and allocation identities. The installed directory suite races both placement
+systems for the last slot and recovers the winning assignment after Root upgrade.
+
 To raise a live pool from two to six, keep its original release, install bytes,
 cycle budget and deadline. Set its count to six and `increase_from = 2` in the
 same pool table. Submit its `increases[].request` to `increase_pool` as the
@@ -1474,6 +1529,8 @@ an effect is suspended and the original ticket stays fenced across Root
 restart. Toko still checks the account and its administrator rights. Its two
 independently declared hubs need an explicit fleet binding across components;
 the legacy fixture's same-component permission alone cannot authorize them.
+The operator approves binding changes through Root. Each hub accepts updates
+only from its retained routing Root, even when independently controlled.
 Project sync may pause during peer replacement. The user hub must commit
 revocation of the old binding before admitting the replacement. While paused,
 it refuses project-sync calls. A suspended handler must recheck its original
@@ -1502,11 +1559,20 @@ principal, and upgrade strictly reopens the same cell.
 
 ### Endpoint ownership and actor composition
 
+Native inspection is opt-in. Endpoint declarations own the effective name, mode,
+Wire ID and Rust request and reply roots. The native tool collects the linked
+actor's declarations and uses Wire's named schema graph or explicit typed
+consumer evidence. A missing schema reports the method and direction. Legacy
+revision `377fbce` emitted name and mode in `canic-macros/src/adapter`; those
+fields alone cannot detect nested payload changes. The Wasm request path has no
+schema inventory.
+
 The agreed application interface is a Rust function with `#[canic::query]` or
 `#[canic::update]` and Canic's `method` feature. Public functions use standard
 Wire defaults. A private function selects `scope = "write"` (or its required
-scope) and takes the verified session as its first parameter. This parameter
-comes from the actual caller. An existing shared protocol selects
+scope). Its Rust parameters describe only the Wire request. The attribute binds
+`auth` locally to the verified caller's issuer, subject and required scope.
+An async invocation retains its own binding and rechecks before further effects. An existing shared protocol selects
 `contract = path::Type` to retain its original ID, directional budgets and
 types. Both declarations use the same Canic codec and Platform entrypoint.
 The attributes support synchronous queries and synchronous or asynchronous updates. The Rust function supplies its export name and request/reply types. New methods

@@ -76,6 +76,15 @@ async fn query<T: serde::de::DeserializeOwned>(
 
 #[tokio::test]
 async fn accounts_register_on_distinct_shards_with_independent_auth() {
+    directory(false).await;
+}
+
+#[tokio::test]
+async fn enrollment_revocation_during_delivery_fences_registration() {
+    directory(true).await;
+}
+
+async fn directory(revoke: bool) {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/examples/user-directory");
     let wasm = |name: &str| std::fs::read(dir.join(format!("artifacts/{name}.wasm"))).unwrap();
     let initial_roles = std::env::var_os("CANIC_PREDECESSOR_DIRECTORY_ROLES")
@@ -456,7 +465,7 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
         },
         shard: Principal::from_slice(shard.as_slice()),
     };
-    check_receipts(&client, root.id, shard, expected).await;
+    check_receipts(&client, &root, shard, expected, revoke.then_some(&grant)).await;
     assert_eq!(
         instance.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted
@@ -467,10 +476,12 @@ async fn accounts_register_on_distinct_shards_with_independent_auth() {
 // Replace just the disposable test receiver to control reply contents and delivery order.
 async fn check_receipts(
     client: &Client<'_>,
-    root: CanisterId,
+    owner: &Client<'_>,
     shard: CanisterId,
     expected: canic::sharding::provisioning::Binding<[u8; 16]>,
+    revoke: Option<&enrollment::Grant>,
 ) {
+    let root = owner.id;
     use canic::auth::protocol::Logout;
     use ic_testkit::held::{Catalog, Fixture, Limits, Reply};
     use ic_wire::{Direction, Encoding};
@@ -503,6 +514,7 @@ async fn check_receipts(
         );
     }
     assert!(pic.get_stable_memory(shard).await == original_rows);
+    let issuer = expected.account.issuer;
     let replies = [wrong, expected].map(|binding| {
         ic_wire::encode(
             &binding,
@@ -559,7 +571,73 @@ async fn check_receipts(
             .pop()
             .expect("provisioning call reached assigned shard");
         assert_eq!(token.slot(), slot);
-        if slot == 1 {
+        if slot == 0 {
+            // A second browser completes a scoped read while the first write is suspended.
+            pic.advance_time(Duration::from_secs(3)).await;
+            let (browser, input) = crate::credential::signed(
+                pic.get_time().await.as_nanos_since_unix_epoch(),
+                12,
+                0,
+                issuer,
+                Principal::from_slice(&[12, 2]),
+                &["read"],
+            );
+            let reply = pic
+                .update_call(
+                    client.id,
+                    browser,
+                    "establish_portable_session",
+                    EstablishSession::encode_request(&input).unwrap(),
+                )
+                .await
+                .unwrap();
+            EstablishSession::decode_response(&reply).unwrap().unwrap();
+            let denied = pic
+                .update_call(client.id, browser, "register", args.clone())
+                .await
+                .unwrap_err();
+            assert!(
+                denied.reject_message.contains("ScopeRejected"),
+                "{denied:?}"
+            );
+            assert_eq!(
+                query::<Option<Principal>>(
+                    &Client {
+                        operator: browser,
+                        ..*client
+                    },
+                    "my_shard"
+                )
+                .await
+                .unwrap(),
+                None
+            );
+        }
+        if slot == 1
+            && let Some(grant) = revoke
+        {
+            owner
+                .update::<_, Result<(), enrollment::Error>>(
+                    "revoke_auth",
+                    enrollment::REVOKE,
+                    grant,
+                    enrollment::LIMITS,
+                )
+                .await
+                .unwrap();
+            Client {
+                id: client.id,
+                ..*owner
+            }
+            .update::<_, Result<(), enrollment::Error>>(
+                enrollment::REFRESH_METHOD,
+                enrollment::REFRESH,
+                &(),
+                enrollment::LIMITS,
+            )
+            .await
+            .unwrap();
+        } else if slot == 1 {
             let bytes = pic
                 .update_call(
                     client.id,

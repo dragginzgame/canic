@@ -38,7 +38,7 @@ pub const RESPONSE_LIMITS: Limits = Limits {
 
 /// Untrusted initial intent. No account, policy, issuer key or deadline is accepted.
 #[cfg_attr(
-    feature = "auth-browser",
+    any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -59,7 +59,7 @@ pub struct Issue {
 }
 /// Browser-authenticated selection. Naming an account grants no account authority.
 #[cfg_attr(
-    feature = "auth-browser",
+    any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -78,7 +78,7 @@ pub struct Renew {
 }
 /// Select the original login. Only the captured caller authenticates its browser.
 #[cfg_attr(
-    feature = "auth-browser",
+    any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -93,7 +93,7 @@ pub struct Logout {
 }
 /// Local issuer revocation only. Other receivers still need explicit cleanup.
 #[cfg_attr(
-    feature = "auth-browser",
+    any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -104,7 +104,7 @@ pub struct Revoked {
 }
 /// Select lookup under the original signer role; never fall back to issuance.
 #[cfg_attr(
-    feature = "auth-browser",
+    any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -122,7 +122,7 @@ pub enum Lookup {
 }
 /// Retained evidence, not permission to issue or extend any lifetime.
 #[cfg_attr(
-    feature = "auth-browser",
+    any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -140,7 +140,7 @@ pub enum Status {
 }
 /// Bounded transport refusals; ordinary refusals retain applicable work charges.
 #[cfg_attr(
-    feature = "auth-browser",
+    any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
     wire(crate = "ic_auth_wire::wire")
 )]
@@ -183,17 +183,18 @@ macro_rules! mount_auth_issuer_endpoints {
                 issuer::{ISSUE, Issue, Refusal, Status},
             };
 
-            #[runtime::update(
-                runtime = runtime,
-                guard = endpoint::admit::<ISSUE>,
-                decode = endpoint::decode::<Issue, ISSUE>,
-                max_bytes = 8192,
-                on_error = endpoint::fail,
-                name = "issue_portable_credential",
-                encode = endpoint::encode::<Result<Status, Refusal>, ISSUE>,
-            )]
-            async fn issue_portable_credential(input: Issue) -> Result<Status, Refusal> {
-                $issue(api::caller(), input, api::time()).await
+            $crate::__canic_builtin! {
+                auth, ISSUE, runtime::update, "issue_portable_credential", (
+                    runtime = runtime,
+                    guard = endpoint::admit::<ISSUE>,
+                    decode = endpoint::decode::<Issue, ISSUE>,
+                    max_bytes = 8192,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<Result<Status, Refusal>, ISSUE>,
+                ),
+                [async] fn issue_portable_credential(input: Issue) -> Result<Status, Refusal> {
+                    $issue(api::caller(), input, api::time()).await
+                }
             }
         }
         mod renew_portable_credential {
@@ -203,17 +204,18 @@ macro_rules! mount_auth_issuer_endpoints {
                 issuer::{RENEW, Refusal, Renew, Status},
             };
 
-            #[runtime::update(
-                runtime = runtime,
-                guard = endpoint::admit::<RENEW>,
-                decode = endpoint::decode::<Renew, RENEW>,
-                max_bytes = 8192,
-                on_error = endpoint::fail,
-                name = "renew_portable_credential",
-                encode = endpoint::encode::<Result<Status, Refusal>, RENEW>,
-            )]
-            async fn renew_portable_credential(input: Renew) -> Result<Status, Refusal> {
-                $renew(api::caller(), input, api::time()).await
+            $crate::__canic_builtin! {
+                auth, RENEW, runtime::update, "renew_portable_credential", (
+                    runtime = runtime,
+                    guard = endpoint::admit::<RENEW>,
+                    decode = endpoint::decode::<Renew, RENEW>,
+                    max_bytes = 8192,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<Result<Status, Refusal>, RENEW>,
+                ),
+                [async] fn renew_portable_credential(input: Renew) -> Result<Status, Refusal> {
+                    $renew(api::caller(), input, api::time()).await
+                }
             }
         }
         mod reconcile_portable_credential {
@@ -223,17 +225,18 @@ macro_rules! mount_auth_issuer_endpoints {
                 issuer::{Lookup, RECONCILE, Refusal, Status},
             };
 
-            #[runtime::update(
-                runtime = runtime,
-                guard = endpoint::admit::<RECONCILE>,
-                decode = endpoint::decode::<Lookup, RECONCILE>,
-                max_bytes = 8192,
-                on_error = endpoint::fail,
-                name = "reconcile_portable_credential",
-                encode = endpoint::encode::<Result<Status, Refusal>, RECONCILE>,
-            )]
-            fn reconcile_portable_credential(input: Lookup) -> Result<Status, Refusal> {
-                $reconcile(api::caller(), input, api::time())
+            $crate::__canic_builtin! {
+                auth, RECONCILE, runtime::update, "reconcile_portable_credential", (
+                    runtime = runtime,
+                    guard = endpoint::admit::<RECONCILE>,
+                    decode = endpoint::decode::<Lookup, RECONCILE>,
+                    max_bytes = 8192,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<Result<Status, Refusal>, RECONCILE>,
+                ),
+                [] fn reconcile_portable_credential(input: Lookup) -> Result<Status, Refusal> {
+                    $reconcile(api::caller(), input, api::time())
+                }
             }
         }
         mod revoke_portable_login {
@@ -243,17 +246,18 @@ macro_rules! mount_auth_issuer_endpoints {
                 issuer::{LOGOUT, Logout, Refusal, Revoked},
             };
 
-            #[runtime::update(
-                runtime = runtime,
-                guard = endpoint::admit::<LOGOUT>,
-                decode = endpoint::decode::<Logout, LOGOUT>,
-                max_bytes = 8192,
-                on_error = endpoint::fail,
-                name = "revoke_portable_login",
-                encode = endpoint::encode::<Result<Revoked, Refusal>, LOGOUT>,
-            )]
-            fn revoke_portable_login(input: Logout) -> Result<Revoked, Refusal> {
-                $logout(api::caller(), input, api::time())
+            $crate::__canic_builtin! {
+                auth, LOGOUT, runtime::update, "revoke_portable_login", (
+                    runtime = runtime,
+                    guard = endpoint::admit::<LOGOUT>,
+                    decode = endpoint::decode::<Logout, LOGOUT>,
+                    max_bytes = 8192,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<Result<Revoked, Refusal>, LOGOUT>,
+                ),
+                [] fn revoke_portable_login(input: Logout) -> Result<Revoked, Refusal> {
+                    $logout(api::caller(), input, api::time())
+                }
             }
         }
     };

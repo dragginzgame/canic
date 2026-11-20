@@ -362,21 +362,51 @@ the receiver. With a topology-enabled shard pool, decode the inner
 bytes as the nonce. Attach the parent using the existing bounded principal cell.
 On upgrade the hook accepts empty arguments and reopens only the app's stores.
 
-In a private handler, `canic::auth::session::authorize("read")?` returns the
-admitted issuer and subject for the actual caller. Toko uses them for its account
-lookup and checks ownership. A write that suspends must recheck its captured
-user's scope and account before its next effect with
-`session::reauthorize(&original, "write")?`. A named method can declare the
-scope and receive the admitted identity directly:
+Legacy revision `377fbce` checked the observed browser against the actual IC
+caller before applying local scope policy in
+`crates/canic-auth/src/api/application_authorization`. The rewrite retains that
+check at entry and on resumption. IC Auth owns the current session decision.
+
+Scoped handlers take only their Wire arguments. The endpoint attribute supplies a
+handler-local `auth` binding for the admitted browser, account and declared scope.
+Synchronous handlers run inside IC Auth's authorization callback. Each async
+invocation owns its binding and checks it again before a subsequent privileged
+effect. Provisioning checks it across placement, delivery and allocation lookup.
 
 ```rust
-use canic::auth::protocol::SessionView;
-
 #[canic::query(scope = "read", contract = signup::GetMe)]
-fn get_me(account: SessionView) -> Option<MyProfile> {
-    profiles::find(account.issuer, account.subject)
+fn get_me() -> Option<MyProfile> {
+    profiles::find(auth.issuer(), auth.subject())
 }
 ```
+
+For Toko, change `get_my_route(session: SessionView)` to `get_my_route()`
+and use `Identity::from_authenticated_subject(auth.issuer(), auth.subject())?`.
+Change `register(session: SessionView, name: String)` to `register(name: String)`
+and call `provisioning::place::<Users>(&auth, retained_shard)`. Account validation,
+row updates and post-await application ownership checks still belong to Toko.
+For other async workflows, pass the local binding by reference and call
+`auth.reauthorize()?` before another privileged effect, mapping the refusal
+into the application's error type.
+
+For native contract generation, link each inspected actor into the CI executable
+(for example, `use toko_user_hub as _;`) and enable `canic/inspection` in that
+executable. Serialize `canic::inspection::methods("toko_user_hub", &schemas)?`.
+This replaces parsing Rust signatures and mount macro bodies. The map uses the
+effective IC export name and includes the mode, Wire ID, request and reply.
+Each direction carries its Rust root and the Wire registry’s reachable definitions.
+JSON represents each 64-bit ID as a hexadecimal string. The normal Wasm build omits the collector.
+
+Start with `canic::inspection::Schemas::default()`. For a Serde-only root,
+register its exact type and checked layout, for example
+`schemas.describe_as::<Option<ProjectFilter>, Option<ProjectFilterLayout>>()`.
+Use a named Wire layout for recursive types and keep Toko’s application byte
+fixtures to demonstrate that the projected layout matches its Serde codec.
+An unavailable projection identifies the export and failing direction.
+
+Existing clients still send unit for the read and a string
+for registration. The portable session establishment and read replies still use
+`SessionView`.
 
 Controller refresh pulls the individual
 receiver's grant. Repeated install refuses. A post-upgrade handler may reopen the
@@ -389,13 +419,13 @@ or a newly issued credential cannot distinguish those histories.
 [Supplier decision](https://github.com/dragginzgame/ic-auth/blob/49b3927758828665d887fcb47a280f7e65b56bd6/docs/design/authentication.md#receiver-recovery-after-complete-volatile-loss)
 and [installed witness](https://github.com/dragginzgame/ic-auth/blob/49b3927758828665d887fcb47a280f7e65b56bd6/qualification/ic-auth-host-conformance/README.md#complete-loss-recovery-witness).
 
-Toko can reopen the retained account and shard route on upgrade. To authorize a
-private read on that upgraded receiver, Auth would also need independently
-surviving replay and revocation evidence or an authoritative cutoff for all
-pre-upgrade credentials and outstanding operations. The volatile profile
-supplies neither. Returning on a new browser key after ordinary logout exercises
-a receiver whose safety state survived. The post-upgrade returning-user case
-remains open in [Canic #31](https://github.com/dragginzgame/canic/issues/31).
+The stable Ed25519 receiver already preserves its replay and logout history
+across upgrade and requires a fresh Root refresh. The standard DB hub and shard
+mount currently open the application’s two-key layout with volatile Auth.
+The remaining installed case for [Canic #31](https://github.com/dragginzgame/canic/issues/31)
+is a fresh login on an upgraded stateful role that reaches the same private row
+and rejects a different account. See the stable receiver lifecycle below for
+the existing supplier and adapter qualification.
 
 ## Toko signup and private shard reads
 

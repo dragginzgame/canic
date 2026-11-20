@@ -1,6 +1,6 @@
 # Getting started
 
-Edit the greeting in `starter-app/src/endpoints/mod.rs`. From this directory, build the
+Edit the greeting in `starter-app/src/lib.rs`. From this directory, build the
 application and inspect its Wasm:
 
 ```sh
@@ -8,7 +8,7 @@ canic app build --canister app
 canic artifact inspect artifacts/app.wasm
 ```
 
-Keep callable methods under `starter-app/src/endpoints/` and local entities under
+Keep callable methods in `starter-app/src/lib.rs` and local entities under
 `starter-app/src/schema/`. Put handwritten install/upgrade hooks in `src/lifecycle.rs`
 within the crate, or a declarative database role in `src/setup.rs`. Each crate can
 override `endpoints`, `schema` or `lifecycle` in `[package.metadata.canic.layout]`.

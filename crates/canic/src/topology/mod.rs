@@ -1,9 +1,22 @@
 //! Explicit topology for a newly created shard. The pool approval owns these bytes.
+pub mod directory;
+
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "storage")]
 pub use actor::{attach_parent, parent, require_parent};
+
+/// Check the actual caller against a locally retained topology authority.
+/// # Errors
+/// Refuses an invalid authority or a call from another principal.
+pub fn require_sender(expected: Principal) -> Result<(), &'static str> {
+    if expected.as_slice().last() == Some(&1) && expected == ic_platform_runtime::system::caller() {
+        Ok(())
+    } else {
+        Err("unexpected topology sender")
+    }
+}
 
 const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
     method: ic_wire::method_id("canic.shard_install.v1"),
@@ -35,6 +48,20 @@ impl Install {
             return Err("expected distinct Root and parent canisters");
         }
         Ok(())
+    }
+
+    #[cfg(feature = "storage")]
+    fn installing_parent(&self) -> Principal {
+        self.validate().expect("shard topology");
+        if require_sender(self.root).is_err() {
+            ic_platform_runtime::system::trap("wrong shard installer");
+        }
+        assert_ne!(
+            self.parent,
+            ic_platform_runtime::system::canister_self(),
+            "parent must differ from shard"
+        );
+        self.parent
     }
 
     /// Encode a bounded, structurally valid install frame.
@@ -86,14 +113,11 @@ mod actor {
             .expect("parent lease");
         let cell = match install {
             Some(input) => {
-                input.validate().expect("shard topology");
-                if input.root != api::caller() {
-                    api::trap("wrong shard installer");
-                }
+                let parent = input.installing_parent();
                 assert_eq!(memory.size(), 0, "occupied parent allocation");
                 StableCell::create(
                     memory,
-                    Blob::<29>::try_from(input.parent.as_slice()).expect("parent bytes"),
+                    Blob::<29>::try_from(parent.as_slice()).expect("parent bytes"),
                 )
             }
             None => {

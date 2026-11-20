@@ -17,7 +17,7 @@ pub fn configure_capacity(capacity: stored::SubnetCapacity) -> Result<(), Refusa
     if !valid_capacity(&capacity) {
         return Err(Refusal::Binding);
     }
-    admit_pool_change()?;
+    admit_pool_change(true)?;
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
         if let Some(old) = &state.pools.capacity {
@@ -27,7 +27,16 @@ pub fn configure_capacity(capacity: stored::SubnetCapacity) -> Result<(), Refusa
                 Err(Refusal::Occupied)
             };
         }
-        if state.pools.used() > usize::from(capacity.max_children)
+        let permanent = canic_management_protocol::children::ChildId::ALL.map(|slot| {
+            state.journal.0[&slot].0.approval.is_some()
+                && state
+                    .pools
+                    .shards
+                    .as_ref()
+                    .is_none_or(|l| l.generations[slot.index()].is_none())
+        });
+        if state.pools.used() + permanent.iter().filter(|&&used| used).count()
+            > usize::from(capacity.max_children)
             || state
                 .pools
                 .shards
@@ -41,6 +50,7 @@ pub fn configure_capacity(capacity: stored::SubnetCapacity) -> Result<(), Refusa
         {
             return Err(Refusal::Occupied);
         }
+        state.pools.permanent = permanent;
         state.pools.capacity = Some(capacity);
         state.pool.set(state.pools.encode());
         Ok(())

@@ -13,18 +13,14 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 backup = ["canic-management/backup", "dep:serde"]
-sharding = ["canic?/sharding", "canic-management/sharding", "dep:serde"]
+sharding = ["canic/sharding", "canic-management/sharding", "dep:serde"]
 blob = ["canic-management/blob"]
-auth = ["canic/auth-enrollment", "dep:ic-platform-runtime"]
+auth = ["canic/auth-enrollment"]
 fault-injection = ["canic-management/fault-injection"]
 maintenance-candidate = ["canic-management/maintenance-candidate"]
 
 [dependencies]
-canic = { workspace = true, optional = true }
-ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-canic = { workspace = true, features = ["metrics"] }
+canic = { workspace = true, features = ["method", "metrics"] }
 canic-management.workspace = true
 canic-management-protocol.workspace = true
 ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }

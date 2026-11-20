@@ -1,7 +1,6 @@
 //! Registration items for Toko's hub outbound endpoint module.
 use crate::{Status, database};
 use canic::{
-    auth::protocol::SessionView,
     db,
     sharding::provisioning::{self, Account, Binding, Progress, Request},
 };
@@ -14,9 +13,9 @@ use toko_schema::entity::user_hub::UserRoute;
 // scope  : write
 // limits : default
 #[canic::update(scope = WRITE)]
-async fn register(session: SessionView, name: String) -> Progress {
+async fn register(name: String) -> Progress {
     let name = initial_display_name(name);
-    let account = Account::from(&session);
+    let account = Account::from(&auth);
     let lookup = || provisioning::account_row::<UserRoute>(&db!(), account);
     let existing = lookup();
     if existing
@@ -26,7 +25,7 @@ async fn register(session: SessionView, name: String) -> Progress {
         return Progress::Ready;
     }
     let assignment =
-        match provisioning::place::<Users>(&session, WRITE, existing.as_ref().map(|row| row.shard))
+        match provisioning::place::<Users>(&auth, existing.as_ref().map(|row| row.shard))
             .await
         {
             Ok(assignment) => assignment,

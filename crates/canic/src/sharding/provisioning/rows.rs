@@ -1,6 +1,6 @@
 //! Optional bounded reads of application-owned IC DB rows.
 use super::Account;
-use crate::auth::protocol::SessionView;
+use crate::auth::session::Authorization;
 use ic_db::{DatabaseSession, Entity};
 
 /// Read the provisioning row for a session already authorized by the endpoint.
@@ -8,7 +8,7 @@ use ic_db::{DatabaseSession, Entity};
 /// # Panics
 /// Traps on conflicting database access, an incompatible index, or an oversized row.
 #[must_use]
-pub fn session_row<E: Entity>(database: &DatabaseSession, view: &SessionView) -> Option<E> {
+pub fn session_row<E: Entity>(database: &DatabaseSession, view: &Authorization) -> Option<E> {
     account_row(database, Account::from(view))
 }
 
@@ -38,11 +38,11 @@ pub fn account_row<E: Entity>(database: &DatabaseSession, account: Account) -> O
     Some(row)
 }
 
-impl From<&SessionView> for Account {
-    fn from(view: &SessionView) -> Self {
+impl From<&Authorization> for Account {
+    fn from(view: &Authorization) -> Self {
         Self {
-            issuer: view.issuer,
-            subject: view.subject,
+            issuer: view.issuer(),
+            subject: view.subject(),
         }
     }
 }

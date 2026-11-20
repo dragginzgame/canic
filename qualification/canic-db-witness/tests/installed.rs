@@ -1,5 +1,6 @@
 //! Installed application + Canic mount + actual IC DB. Expected rows are literal
 //! application outcomes; no engine codec/query implementation in this host.
+mod inspection;
 mod managed;
 
 use canic::db::{

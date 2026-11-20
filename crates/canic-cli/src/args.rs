@@ -44,6 +44,9 @@ pub(super) enum Commands {
     /// Build or inspect local Wasm artifacts.
     #[command(subcommand)]
     Artifact(ArtifactCommand),
+    /// Inspect a database exposed by a Canic application.
+    #[command(subcommand)]
+    Db(crate::inspection::DbCommand),
     /// List, deploy and observe fleets, or view a saved fleet report.
     #[command(subcommand)]
     Fleet(FleetCommand),

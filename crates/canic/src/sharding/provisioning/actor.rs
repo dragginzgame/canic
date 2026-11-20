@@ -1,7 +1,7 @@
 //! Placement and dispatch under the original authenticated account.
 use super::{Account, Binding, Progress, Provision, Request, Resource};
 use crate::{
-    auth::{protocol::SessionView, session},
+    auth::session::Authorization,
     db::role,
     method,
     sharding::{self, Allocation, Placement},
@@ -25,14 +25,13 @@ fn target(placement: &Placement, root: Principal) -> Result<(Allocation, Princip
     }
 }
 
-fn admit(view: &SessionView, scope: &str) {
-    session::reauthorize(view, scope).unwrap_or_else(|e| method::fail(e));
+fn admit(auth: &Authorization) {
+    auth.reauthorize().unwrap_or_else(|e| method::fail(e));
 }
 
 /// One verified allocation for this signup attempt. The application retains its own row.
 pub struct Assignment<'a, R> {
-    session: &'a SessionView,
-    scope: &'a str,
+    auth: &'a Authorization,
     root: Principal,
     key: sharding::Key,
     allocation: Allocation,
@@ -46,13 +45,11 @@ pub struct Assignment<'a, R> {
 /// # Panics
 /// Traps on a foreign caller, invalid account or expired scope.
 pub async fn place<'a, R: Resource>(
-    view: &'a SessionView,
-    scope: &'a str,
+    auth: &'a Authorization,
     retained: Option<Principal>,
 ) -> Result<Assignment<'a, R>, Progress> {
-    assert_eq!(api::caller(), view.caller, "session caller mismatch");
-    admit(view, scope);
-    let account = Account::from(view);
+    admit(auth);
+    let account = Account::from(auth);
     assert!(account.valid(), "invalid provisioning account");
     let root = role::root().expect("installed provisioning hub");
     let key = super::placement_key::<R>(account);
@@ -62,15 +59,14 @@ pub async fn place<'a, R: Resource>(
     } else {
         sharding::assign(root, key).await
     };
-    admit(view, scope);
+    admit(auth);
     let (allocation, shard) = target(&result.map_err(|_| Progress::PlacementUnavailable)?, root)?;
     if retained.is_some_and(|p| p != shard) {
         return Err(Progress::PlacementUnavailable);
     }
 
     Ok(Assignment {
-        session: view,
-        scope,
+        auth,
         root,
         key,
         allocation,
@@ -93,13 +89,13 @@ impl<R: Resource> Assignment<'_, R> {
     /// Refuses expired authority, invalid request encoding or a conflicting acknowledgement.
     pub async fn send(self, request: &Request<R::Id, R::Data>) -> Result<Binding<R::Id>, Progress> {
         let expected = &request.binding;
-        if expected.account != Account::from(self.session) || expected.shard != self.shard {
+        if expected.account != Account::from(self.auth) || expected.shard != self.shard {
             return Err(Progress::PlacementUnavailable);
         }
-        admit(self.session, self.scope);
+        admit(self.auth);
         self.verify().await?;
         let result = method::call::<Provision<R>>(self.shard, 10, request).await;
-        admit(self.session, self.scope);
+        admit(self.auth);
         let receipt = match result {
             Ok(binding) => binding,
             Err(method::CallError::Request(e)) => method::fail(e),
@@ -113,7 +109,7 @@ impl<R: Resource> Assignment<'_, R> {
 
     async fn verify(&self) -> Result<(), Progress> {
         let observation = sharding::lookup(self.root, self.key).await;
-        admit(self.session, self.scope);
+        admit(self.auth);
         if !observation.is_ok_and(|p| super::matches_target(&p, &self.allocation, self.shard)) {
             return Err(Progress::PlacementUnavailable);
         }

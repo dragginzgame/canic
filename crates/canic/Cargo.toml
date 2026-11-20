@@ -29,6 +29,13 @@ db = ["dep:ic-platform-runtime"]
 db-schema = ["db", "dep:ic-db"]
 db-store = ["dep:ic-db", "storage"]
 entropy = ["dep:ic-platform-runtime", "ic-platform-runtime/raw-rand"]
+inspection = [
+    "dep:inventory",
+    "dep:serde_json",
+    "ic-wire/derive",
+    "ic-wire/platform-types",
+    "ic-auth-wire?/typescript",
+]
 lifecycle = ["dep:ic-platform-runtime"]
 method = [
     "dep:canic-macros",
@@ -45,15 +52,18 @@ stateful-role = ["auth-enrollment", "db-store", "readiness", "topology"]
 storage = ["dep:ic-storage"]
 topology = ["dep:ic-platform-types", "dep:ic-platform-runtime"]
 
-[dependencies]
-ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+inventory = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
+[dependencies]
 canic-macros = { workspace = true, optional = true }
 ic-auth = { workspace = true, optional = true }
 ic-auth-protocol-types = { workspace = true, optional = true }
 ic-auth-wire = { workspace = true, optional = true }
 ic-blob-storage = { workspace = true, optional = true }
 ic-db = { workspace = true, optional = true }
+ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }
 ic-platform-types = { workspace = true, optional = true }
 ic-storage = { workspace = true, optional = true }
 ic-wire.workspace = true

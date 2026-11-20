@@ -146,10 +146,6 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
             crate::store::read(&source.join("apps/template/src/lib.rs"), 65_536)?,
         ),
         (
-            "starter-app/src/endpoints/mod.rs".into(),
-            crate::store::read(&source.join("apps/template/src/endpoints/mod.rs"), 65_536)?,
-        ),
-        (
             "rust-toolchain.toml".into(),
             crate::store::read(&source.join("rust-toolchain.toml"), 4096)?,
         ),

@@ -7,6 +7,4 @@
 #[cfg(feature = "auth")]
 mod auth;
 
-// Management currently needs the IC timer executor and raw cycle/stable-memory observations.
-#[cfg(target_arch = "wasm32")]
 mod canister;

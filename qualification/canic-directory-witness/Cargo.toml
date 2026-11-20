@@ -1,0 +1,29 @@
+[package]
+name = "canic-directory-witness"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish.workspace = true
+description = "Installed recipient of the managed fleet service directory"
+
+[package.metadata.toko-tooling.loc]
+category = "tests"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+placement = ["canic/sharding"]
+
+[dependencies]
+canic = { workspace = true, features = ["lifecycle", "method", "readiness", "storage", "topology"] }
+ic-platform-runtime.workspace = true
+ic-platform-types.workspace = true
+ic-storage.workspace = true
+
+[dev-dependencies]
+toko-tooling.workspace = true
+
+[lints]
+workspace = true

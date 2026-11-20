@@ -33,7 +33,7 @@ impl Engine {
     }
 }
 
-pub use actor::{authorize, init, install, reauthorize, refresh};
+pub use actor::{Authorization, init, install, refresh, with_authorization};
 
 use super::{
     enrollment::{
@@ -237,6 +237,15 @@ pub fn read_scope(
     now: u64,
     scope: &str,
 ) -> Result<SessionView, SessionReadRefusal> {
+    authorized(caller, now, scope, |receipt| view(*receipt))
+}
+
+fn authorized<R>(
+    caller: Principal,
+    now: u64,
+    scope: &str,
+    project: impl FnOnce(&SessionReceipt) -> R,
+) -> Result<R, SessionReadRefusal> {
     STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(SessionReadRefusal::Unavailable)?;
         let snapshot = s
@@ -273,13 +282,13 @@ pub fn read_scope(
         };
         s.receiver
             .state()
-            .read(
+            .authorize(
                 &authority,
                 &[scope
                     .parse()
                     .map_err(|_| SessionReadRefusal::ScopeRejected)?],
+                project,
             )
-            .map(view)
             .map_err(|error| match error {
                 MemoryError::Closed | MemoryError::Enrollment(_) => SessionReadRefusal::Unavailable,
                 MemoryError::Policy(SessionPolicyError::MissingOrExpired) => {

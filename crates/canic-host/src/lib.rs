@@ -14,6 +14,7 @@ pub mod backup;
 mod config;
 mod fleet;
 mod fleet_plan;
+mod inspection;
 mod maintenance;
 mod managed;
 mod network;
@@ -57,6 +58,7 @@ pub use fleet_plan::{
     Cancellation, CreatedCanister, FleetChild, FleetPlan, FleetPlanning, FleetStore,
     cancel_fleet_plan, plan_fleet,
 };
+pub use inspection::InspectionClient;
 pub use managed::{activate, create_managed_plan, stored::StoredArtifact};
 pub use network::Network;
 pub use operation::{

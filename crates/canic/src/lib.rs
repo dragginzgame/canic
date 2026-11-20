@@ -64,3 +64,50 @@ macro_rules! __canic_report_mount {
         };
     };
 }
+
+/// Opt-in host inventory. Normal canister builds omit the collectors.
+#[cfg(all(feature = "inspection", not(target_arch = "wasm32")))]
+pub mod inspection;
+
+#[cfg(all(feature = "inspection", not(target_arch = "wasm32")))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_inspect {
+    (@root wire, $ty:ty) => {
+        |schemas| {
+            use $crate::inspection::Describe as _;
+            (&&$crate::inspection::Type::<$ty>(::core::marker::PhantomData)).describe(schemas)
+        }
+    };
+    (@root auth, $ty:ty) => {
+        $crate::inspection::auth_root::<$ty>
+    };
+    ($source:ident, $name:expr, $mode:ident, $id:expr, $input:ty, $output:ty) => {
+        $crate::inspection::inventory::submit! {
+            $crate::inspection::Declaration {
+                module: module_path!(), name: $name, mode: stringify!($mode), id: $id,
+                request: $crate::__canic_inspect!(@root $source, $input),
+                reply: $crate::__canic_inspect!(@root $source, $output),
+            }
+        }
+    };
+}
+
+#[cfg(not(all(feature = "inspection", not(target_arch = "wasm32"))))]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_inspect {
+    ($($tokens:tt)*) => {};
+}
+
+/// Mount a built-in framed endpoint and describe the same signature to an opted-in host.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_builtin {
+    ($source:ident, $id:expr, $platform:ident :: $mode:ident, $name:literal, ($($options:tt)*),
+     [$($async:ident)?] fn $handler:ident($arg:tt : $input:ty $(,)?) -> $output:ty $body:block) => {
+        $crate::__canic_inspect!($source, $name, $mode, $id, $input, $output);
+        #[$platform::$mode(name = $name, $($options)*)]
+        $($async)? fn $handler($arg: $input) -> $output $body
+    };
+}

@@ -1,5 +1,5 @@
 //! Install, refresh and authorize the volatile receiver on the IC.
-use super::{Policy, STATE, SessionReadRefusal, SessionView, enrollment, initialize, read_scope};
+use super::{Policy, Principal, STATE, SessionReadRefusal, authorized, enrollment, initialize};
 use crate::auth::install::Install;
 use ic_auth::{receiver_memory::MemoryConfig, session_request::SessionTtlPolicy};
 use ic_platform_runtime::system as api;
@@ -75,22 +75,65 @@ pub async fn refresh() -> Result<(), enrollment::Error> {
     })
 }
 
-/// Authorize the actual caller for this operation using the current time.
-/// After an await, use [`reauthorize`] with the originally admitted session.
-/// # Errors
-/// Returns the current enrollment or session refusal for this scope.
-pub fn authorize(scope: &str) -> Result<SessionView, SessionReadRefusal> {
-    read_scope(api::caller(), api::time(), scope)
+/// Identity and required scope captured for one handler invocation.
+///
+/// An old scoped signature must fail to build even if it imports the session reply
+/// under another name. Turning it into Wire input would let a client choose the identity.
+///
+/// ```compile_fail,E0119
+/// use canic::auth::protocol::SessionView as FormerSession;
+/// #[canic::query(scope = "read")]
+/// fn profile(session: FormerSession) -> bool { session.issuer == session.subject }
+/// ```
+pub struct Authorization {
+    caller: Principal,
+    issuer: Principal,
+    subject: Principal,
+    scope: &'static str,
 }
 
-/// Check the original browser and account again before a subsequent effect.
-/// # Errors
-/// Refuses stale sessions, a changed account or insufficient current scope.
-pub fn reauthorize(original: &SessionView, scope: &str) -> Result<(), SessionReadRefusal> {
-    let current = read_scope(original.caller, api::time(), scope)?;
-    if current.issuer == original.issuer && current.subject == original.subject {
-        Ok(())
-    } else {
-        Err(SessionReadRefusal::AuthorityUnavailable)
+impl Authorization {
+    /// Issuer of the admitted account.
+    #[must_use]
+    pub const fn issuer(&self) -> Principal {
+        self.issuer
     }
+
+    /// Stable subject under this issuer.
+    #[must_use]
+    pub const fn subject(&self) -> Principal {
+        self.subject
+    }
+
+    /// Check the original browser, issuer, subject, enrollment and scope before another effect.
+    /// # Errors
+    /// Refuses when the original account no longer has the declared scope.
+    pub fn reauthorize(&self) -> Result<(), SessionReadRefusal> {
+        if api::caller() != self.caller {
+            return Err(SessionReadRefusal::AuthorityUnavailable);
+        }
+        authorized(self.caller, api::time(), self.scope, |r| {
+            if (r.issuer, r.subject) == (self.issuer, self.subject) {
+                Ok(())
+            } else {
+                Err(SessionReadRefusal::AuthorityUnavailable)
+            }
+        })?
+    }
+}
+
+/// Invoke the scoped endpoint under the actual caller's current authorization.
+/// # Panics
+/// Traps if the receiver refuses admission.
+#[doc(hidden)]
+pub fn with_authorization<R>(scope: &'static str, handler: impl FnOnce(Authorization) -> R) -> R {
+    authorized(api::caller(), api::time(), scope, |r| {
+        handler(Authorization {
+            caller: r.caller,
+            issuer: r.issuer,
+            subject: r.subject,
+            scope,
+        })
+    })
+    .unwrap_or_else(|error| api::trap(&format!("user authorization: {error:?}")))
 }

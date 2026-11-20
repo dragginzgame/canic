@@ -10,10 +10,6 @@ thread_local! {
     static STATE: RefCell<Option<BTreeMap<Principal, Authority>>> = const { RefCell::new(None) };
 }
 
-#[cfg_attr(
-    not(target_arch = "wasm32"),
-    expect(dead_code, reason = "only Root's installed init hook opens enrollment")
-)]
 pub(crate) fn fresh() {
     STATE.with_borrow_mut(|state| *state = Some(BTreeMap::new()));
 }

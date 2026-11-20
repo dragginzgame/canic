@@ -1,5 +1,41 @@
 # Changelog
 
+## [0.242.0] - 2026-11-20
+
+New starter apps declare their endpoints in `src/lib.rs`. Native builds now
+type-check Root and its management engine. Native actor inspectors can enable
+`canic/inspection` to read the Wire contracts behind app, Auth and readiness
+methods. The User Directory check compares those contracts with both built actors.
+
+```sh
+# Create a fresh starter and build its declared artifacts.
+canic app init sample --source ./sample
+canic app build --config ./sample/canic.toml
+```
+
+Scoped queries and updates now take only their Wire arguments. Use the local
+`auth` binding for the admitted issuer and subject and pass `&auth` to
+provisioning. The User Directory exercises registration while a shard reply is held.
+
+```sh
+# Build the actors, then exercise private reads and registration on the prepared simulator.
+canic app build --config apps/examples/user-directory/canic.toml
+bash scripts/dev/test-store.sh user-directory
+```
+
+When a named service first becomes ready, Root automatically delivers the new
+directory to all ready named hubs. Root replays the current revision on upgrade.
+An operator can retry a missed delivery to one recipient. Run the installed
+directory tests with synthetic cycles and a prepared local simulator. They also
+exercise an unnamed child receiving its hub’s directory under a Root-approved
+parent binding. With an approved subnet ceiling, direct installations and both
+placement pools share one child count. A pending creation consumes a slot.
+Retries and Root upgrades preserve the original reservation.
+
+```sh
+bash scripts/dev/test-store.sh directory
+```
+
 ## [0.241.0] - 2026-11-20
 
 IC DB 0.24.0 moves schema compilation into the schema owner. In `mount_db_role!`,

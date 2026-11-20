@@ -19,6 +19,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 /// Durable account selector derived from the authenticated issuer and subject.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 pub struct Account {
     /// Admitted issuer.
     pub issuer: Principal,
@@ -70,6 +71,7 @@ pub trait Resource {
 
 /// Exact identity acknowledged by the originally called shard.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 pub struct Binding<I> {
     /// Application-supplied ID.
     pub id: I,
@@ -92,6 +94,7 @@ impl<I: Eq> Binding<I> {
 
 /// Exact provisioning request. Retries use the retained payload.
 #[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 pub struct Request<I, D> {
     /// Immutable assignment.
     pub binding: Binding<I>,
@@ -112,6 +115,7 @@ impl<R: Resource> Contract for Provision<R> {
 
 /// Result of one bounded signup attempt, in the existing Toko Wire order.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 pub enum Progress {
     /// The hub holds an exact confirmation.
     Ready,

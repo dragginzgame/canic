@@ -1,5 +1,6 @@
 //! Application arguments share the existing creation journal, artifact lease and timers.
 use super::{Artifact, STATE, delivery, snapshot};
+use canic::topology::directory::ServiceInstall;
 use canic_management_protocol::{
     Approval, Refusal, Status, application, children::ChildId, stored,
 };
@@ -62,16 +63,25 @@ pub fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Statu
     if input.arguments.as_slice().is_empty() {
         return Err(Refusal::Binding);
     }
+    if let Ok(named) = ServiceInstall::decode(input.arguments.as_slice())
+        && ChildId::ALL
+            .into_iter()
+            .filter_map(super::directory::named_service)
+            .any(|other| other.name == named.name)
+    {
+        return Err(Refusal::Binding);
+    }
     input
         .source
         .approval
         .validate(&api::canister_self().to_text(), api::time())?;
     delivery::admit(&input.source.reference, &input.source.approval.module_hash)?;
-    admit_creation(slot, input)
+    admit_creation(super::Origin::Permanent, slot, input)
 }
 
 /// Caller has already admitted the effect owner, source and exact nonempty bytes.
 pub(super) fn admit_creation(
+    origin: super::Origin,
     slot: ChildId,
     input: application::Stage<Approval>,
 ) -> Result<Status, Refusal> {
@@ -86,6 +96,7 @@ pub(super) fn admit_creation(
         upgrades: vec![],
     };
     super::admit(
+        origin,
         slot,
         input.source.approval,
         Artifact::Application(

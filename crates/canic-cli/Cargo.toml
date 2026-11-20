@@ -17,11 +17,13 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
+canic = { workspace = true, features = ["db"] }
 canic-host.workspace = true
 canic-management-protocol.workspace = true
 clap.workspace = true
 ic-host-process.workspace = true
 ic-host-text.workspace = true
+ic-wire.workspace = true
 serde_json.workspace = true
 time.workspace = true
 tiny_http.workspace = true

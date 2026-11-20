@@ -1,7 +1,6 @@
 //! The user hub owns its account routes.
 
 use canic::{
-    auth::protocol::SessionView,
     db,
     sharding::provisioning::{self, Account, Binding, Progress, Request},
 };
@@ -23,17 +22,15 @@ canic::mount_db_role! {
 // scope  : write
 // limits : default
 #[canic::update(scope = WRITE)]
-async fn register(session: SessionView) -> Progress {
-    let account = Account::from(&session);
+async fn register() -> Progress {
+    let account = Account::from(&auth);
     let lookup = || provisioning::account_row::<Route>(&db!(), account);
     let existing = lookup();
     if existing.as_ref().is_some_and(|row| row.ready) {
         return Progress::Ready;
     }
     let assignment =
-        match provisioning::place::<Users>(&session, WRITE, existing.as_ref().map(|row| row.shard))
-            .await
-        {
+        match provisioning::place::<Users>(&auth, existing.as_ref().map(|row| row.shard)).await {
             Ok(assignment) => assignment,
             Err(progress) => return progress,
         };
@@ -73,8 +70,8 @@ async fn register(session: SessionView) -> Progress {
 // scope  : read
 // limits : default
 #[canic::query(scope = "read")]
-fn my_shard(session: SessionView) -> Option<Principal> {
-    provisioning::session_row::<Route>(&db!(), &session)
+fn my_shard() -> Option<Principal> {
+    provisioning::session_row::<Route>(&db!(), &auth)
         .filter(|row| row.ready)
         .map(|row| row.shard)
 }

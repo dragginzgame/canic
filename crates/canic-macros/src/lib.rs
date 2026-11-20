@@ -50,7 +50,7 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         Ok(())
     })
     .parse2(options)?;
-    let function: ItemFn = syn::parse2(item)?;
+    let mut function: ItemFn = syn::parse2(item)?;
     let cfg = function
         .attrs
         .iter()
@@ -74,24 +74,36 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     }
     let wait = asynchronous.map(|_| quote!(.await));
     let mut parameters = signature.inputs.iter();
-    if scope.is_some() && !matches!(parameters.next(), Some(FnArg::Typed(_))) {
-        return Err(syn::Error::new(
-            signature.span(),
-            "a scoped endpoint takes the verified session first",
-        ));
+    let scoped = scope.is_some();
+    if let Some(scope) = scope {
+        let body = &function.block;
+        function.block = if asynchronous.is_some() {
+            syn::parse_quote!({
+                const __CANIC_SCOPE: &str = #scope;
+                let auth = ::canic::auth::session::with_authorization(__CANIC_SCOPE, |identity| identity);
+                let _ = &auth;
+                #body
+            })
+        } else {
+            syn::parse_quote!({
+                const __CANIC_SCOPE: &str = #scope;
+                ::canic::auth::session::with_authorization(__CANIC_SCOPE, |auth| { let _ = &auth; #body })
+            })
+        };
     }
-    let scope_constant = scope
-        .as_ref()
-        .map(|value| quote!(const __CANIC_SCOPE: &str = #value;));
-    let session = scope.map(|_| {
-        quote!(
-            ::canic::auth::session::authorize(__CANIC_SCOPE).unwrap_or_else(|error| {
-                ::canic::auth::endpoint::api::trap(&format!("user authorization: {error:?}"))
-            }),
-        )
-    });
     let parameter = match (parameters.next(), parameters.next()) {
-        (Some(FnArg::Typed(arg)), None) => Some(&arg.ty),
+        (Some(FnArg::Typed(arg)), None) => {
+            if scoped
+                && let syn::Pat::Ident(binding) = &*arg.pat
+                && binding.ident == "auth"
+            {
+                return Err(syn::Error::new(
+                    binding.span(),
+                    "auth is reserved for the admitted identity",
+                ));
+            }
+            Some(&arg.ty)
+        }
         (None, None) => None,
         _ => {
             return Err(syn::Error::new(
@@ -136,7 +148,15 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         )
     };
     let guard = guard.map(|g| quote!(#g().map_err(|error| format!("{error:?}"))?;));
-    let session_type = session.as_ref().map(|_| quote!(_,));
+    // A predecessor read with just SessionView must fail to compile, even through a type alias.
+    // Otherwise the old server-supplied identity would silently become client-controlled input.
+    let checked_request = scoped.then(|| {
+        quote! {
+            trait ScopedRequestCannotBeSessionView {}
+            impl ScopedRequestCannotBeSessionView for ::canic::auth::protocol::SessionView {}
+            impl ScopedRequestCannotBeSessionView for #request {}
+        }
+    });
     let input_type = parameter.map(|_| &request);
     let return_type = if asynchronous.is_some() {
         quote!(_)
@@ -152,13 +172,14 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         const _: () = {
             use ::canic::method::wire;
 
-            let _: fn(#session_type #input_type) -> #return_type = #handler;
+            let _: fn(#input_type) -> #return_type = #handler;
             #check
+            #checked_request
 
-            #scope_constant
             const __CANIC_ID: u64 = #id;
             const __CANIC_REQUEST: wire::Limits = #request_budget;
             const __CANIC_REPLY: wire::Limits = #reply_budget;
+            ::canic::__canic_inspect!(wire, #export, #kind, __CANIC_ID, #request, #reply);
 
             fn __canic_decode(bytes: &[u8]) -> Result<#request, wire::Error> {
                 wire::decode(bytes, wire::Encoding::Frame { method: __CANIC_ID, direction: wire::Direction::Request }, __CANIC_REQUEST)
@@ -190,7 +211,7 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
                 )]
                 #asynchronous fn __canic_invoke(__canic_input: #request) -> #reply {
                     #unit
-                    __canic_handler(#session #argument)#wait
+                    __canic_handler(#argument)#wait
                 }
             }
         };

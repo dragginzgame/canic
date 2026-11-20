@@ -6,6 +6,7 @@ mkdir -p target/store
 scope=${1:-all}
 case "$scope" in
     all) filter= ;;
+    directory) filter=store_root_tests::directory_tests ;;
     sharding) filter=store_root_tests::sharding_tests ;;
     user-directory) filter=store_root_tests::user_directory_tests ;;
     readiness) filter=store_readiness_ ;;
@@ -18,7 +19,7 @@ case "$scope" in
     preservation) filter=store_root_tests::preservation_limits_tests ;;
     removal) filter=store_root_tests::removal_tests ;;
     root-maintenance) filter=store_root_tests::root_custody_tests ;;
-    *) printf 'Usage: %s [all|user-directory|sharding|readiness|publication|dispatch|custody|admission|quiescence|maintenance|preservation|removal|root-maintenance]\n' "$0" >&2; exit 2 ;;
+    *) printf 'Usage: %s [all|directory|user-directory|sharding|readiness|publication|dispatch|custody|admission|quiescence|maintenance|preservation|removal|root-maintenance]\n' "$0" >&2; exit 2 ;;
 esac
 records=$(mktemp target/store/cli.XXXXXX.jsonl)
 cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$records"
@@ -30,8 +31,19 @@ build() {
     "$cli" artifact build --package "$package" "$@" --json > "target/store/$name.json"
     cp -- "$(jq -r .wasm "target/store/$name.json")" "target/store/$name.wasm"
 }
+if [[ "$scope" == all || "$scope" == directory ]]; then
+    build directory canic-directory-witness --manifest qualification/Cargo.toml --features placement
+fi
+if [[ "$scope" == directory ]]; then
+    build pool-root canic-root --features sharding
+    build root canic-root
+    build original ic-wasm-store
+    CANIC_STORE_APP_DIRECTORY="$root/target/store" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
+    exit
+fi
 if [[ "$scope" == all || "$scope" == user-directory ]]; then
     "$cli" app build --config apps/examples/user-directory/canic.toml
+    cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features inspection --test inspection
 fi
 if [[ "$scope" == user-directory ]]; then
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture

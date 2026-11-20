@@ -10,32 +10,23 @@ description = "Reusable bounded child management engine"
 
 [features]
 backup = ["canic-management-protocol/backup"]
-sharding = ["dep:canic", "canic/sharding", "canic/topology", "dep:sha2"]
-blob = ["canic?/blob"]
+sharding = ["canic/sharding", "canic/topology", "dep:sha2"]
+blob = ["canic/blob"]
 fault-injection = []
 maintenance-candidate = []
 
 [dependencies]
+canic = { workspace = true, features = ["method", "storage", "topology"] }
 canic-management-protocol.workspace = true
-ic-wasm-store-protocol.workspace = true
-ic-wire.workspace = true
-serde.workspace = true
-sha2 = { workspace = true, optional = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-canic = { workspace = true, optional = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-canic = { workspace = true, features = ["storage"] }
 ic-platform-protocol = { workspace = true, features = ["management"] }
 ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
 ic-platform-types.workspace = true
 ic-storage.workspace = true
 ic-timers = { workspace = true, features = ["metrics"] }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-canic = { workspace = true, features = ["storage"] }
-ic-storage.workspace = true
+ic-wasm-store-protocol.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
+sha2 = { workspace = true, optional = true }
 
 [dev-dependencies]
 toko-tooling.workspace = true

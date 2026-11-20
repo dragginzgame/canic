@@ -28,6 +28,7 @@ pub const RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
 /// Application-owned state at observation time, not permission or a readiness lease.
 /// Observers must bind the response to their approved target and executable.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 pub enum State {
     /// The application has not established its prerequisites for service.
     /// This includes unavailable or unopened state; observation must not initialize it.
@@ -55,17 +56,18 @@ macro_rules! mount_readiness_endpoint {
             use endpoint::runtime;
             use $crate::readiness::{State, endpoint};
 
-            #[runtime::update(
-                runtime = runtime,
-                guard = endpoint::admit,
-                decode = endpoint::decode,
-                max_bytes = 32,
-                on_error = endpoint::fail,
-                name = "readiness",
-                encode = endpoint::encode,
-            )]
-            fn readiness((): ()) -> State {
-                $snapshot()
+            $crate::__canic_builtin! {
+                wire, $crate::readiness::METHOD, runtime::update, "readiness", (
+                    runtime = runtime,
+                    guard = endpoint::admit,
+                    decode = endpoint::decode,
+                    max_bytes = 32,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode,
+                ),
+                [] fn readiness((): ()) -> State {
+                    $snapshot()
+                }
             }
         }
     };

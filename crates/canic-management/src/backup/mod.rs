@@ -3,18 +3,17 @@
 #[cfg(test)]
 mod tests;
 
-#[cfg(target_arch = "wasm32")]
 mod runtime;
 
 use canic_management_protocol::backup::{
     Binding, Error, MAX_RETAINED, MAX_STEPS, Outcome, Record, Step,
 };
-#[cfg(all(target_arch = "wasm32", feature = "fault-injection"))]
+#[cfg(feature = "fault-injection")]
 #[doc(hidden)]
 pub use runtime::inject;
-#[cfg(target_arch = "wasm32")]
+
 pub(crate) use runtime::occupied;
-#[cfg(target_arch = "wasm32")]
+
 pub use runtime::{execute, lookup};
 use serde::Serialize;
 

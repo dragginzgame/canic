@@ -39,6 +39,7 @@ cp -- "$(jq -r .wasm target/root/store-maintenance.json)" target/root/store-main
 cp -- "$(jq -r .wasm target/root/maintenance.json)" target/root/maintenance.wasm
 "$cli" artifact build --json --package canic-root --features fault-injection > target/root/faults.json
 cp -- "$(jq -r .wasm target/root/faults.json)" target/root/faults.wasm
+"$cli" artifact build --package canic-directory-witness --manifest qualification/Cargo.toml --output target/root/directory.wasm --json > target/root/directory.json
 # Exact profile-free selections avoid building unrelated historical applications.
 # All other filters retain the complete preparation contract.
 profile=true

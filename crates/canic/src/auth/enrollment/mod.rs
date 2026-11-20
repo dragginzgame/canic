@@ -221,6 +221,7 @@ fn digest(value: &impl Serialize) -> Result<[u8; 32], Error> {
 }
 /// Enrollment refusal; none authorizes recreation of lost state.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 pub enum Error {
     /// Original volatile owner is absent or not configured.
     Closed,
@@ -261,18 +262,19 @@ macro_rules! mount_auth_refresh_endpoint {
                 enrollment::{Error, REFRESH, transport},
             };
 
-            #[runtime::update(
-                runtime = runtime,
-                guard = transport::admit::<REFRESH>,
-                decode = transport::decode::<(), REFRESH>,
-                max_bytes = 8192,
-                on_error = fail,
-                name = "refresh_auth",
-                encode = transport::encode::<Result<(), Error>, REFRESH>,
-            )]
-            async fn refresh_auth((): ()) -> Result<(), Error> {
-                transport::authorize_refresh()?;
-                $pull().await
+            $crate::__canic_builtin! {
+                wire, REFRESH, runtime::update, "refresh_auth", (
+                    runtime = runtime,
+                    guard = transport::admit::<REFRESH>,
+                    decode = transport::decode::<(), REFRESH>,
+                    max_bytes = 8192,
+                    on_error = fail,
+                    encode = transport::encode::<Result<(), Error>, REFRESH>,
+                ),
+                [async] fn refresh_auth((): ()) -> Result<(), Error> {
+                    transport::authorize_refresh()?;
+                    $pull().await
+                }
             }
         }
     };

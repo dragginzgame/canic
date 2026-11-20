@@ -1,5 +1,13 @@
 # Root and its children
 
+The native Root build type-checks the same management mounts and engine as the
+installed canister. For example, `stage_child` checks the actual controller,
+decodes its request and stages the child in the engine. Scheduled creation
+reaches `management_completion("create_canister", …)` and awaits Platform’s
+`Call::execute`. Outside a canister, polling that call yields
+`SubmitError::OutsideCanister`; reading the message caller requires IC execution.
+The installed child suite exercises these paths with real simulator principals.
+
 The optional `backup` build exposes authenticated snapshot execute/lookup for a
 fresh Root. It uses one surviving original-result ledger alongside the existing
 Storage records. After admitting snapshot work it fences ordinary private
@@ -9,10 +17,11 @@ The installed local witness is `bash scripts/dev/test-root.sh snapshot::` after 
 preparation. This is not yet a Backup CLI workflow or an upgrade for existing fleets.
 
 Ordinary fleet plans can deploy up to two application children. A Root built with
-`sharding` can serve up to eight placement children across its shard and project
-pools. The fleet owner sets `subnet_child_limit` and approves the shared ceiling
+`sharding` can approve a backstop of up to eight children across direct creation,
+shard pools and project pools. The fleet owner sets `subnet_child_limit` and approves the shared ceiling
 on Root before raising either pool above two. Existing fleets keep their grants
-until the controller explicitly raises them. The Wasm Store has its own identity outside these limits.
+until the controller explicitly raises them. Root-created infrastructure consumes a child slot. The starter’s Store is created
+by the operator and subsequently handed to Root, so it consumes no Root creation slot.
 [Installed two-hub placement journey](../../qualification/README.md#runtime-shard-placement)
 
 The generated starter begins with a Wasm Store and one approved Hello World

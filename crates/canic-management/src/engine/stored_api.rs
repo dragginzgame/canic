@@ -33,6 +33,7 @@ pub fn stage(slot: ChildId, input: stored::Stage<Approval>) -> Result<Status, Re
     delivery::admit(&input.reference, &input.approval.module_hash)?;
     let creation = delivery::retained(slot, stored::STAGE, &input);
     super::admit(
+        super::Origin::Permanent,
         slot,
         input.approval,
         Artifact::Stored(stored::Sources {

@@ -1,4 +1,5 @@
 //! Independent siblings, aggregate reservations and preservation in Storage records.
+mod directory;
 mod discovery;
 mod identity;
 

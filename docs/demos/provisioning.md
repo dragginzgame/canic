@@ -1,7 +1,8 @@
 # Migrating Toko signup to ordinary application rows
 
-Use Canic **0.237.0** in Toko’s product and qualification workspaces. The
-provisioning implementation was tested at `9af0094d6e6950e61e4ce245b9d912b8e75e33cb`.
+The row-based provisioning API first shipped in Canic **0.237.0**. The
+scoped handler signatures below require the unreleased handler-local Auth change.
+The original provisioning implementation was tested at `9af0094d6e6950e61e4ce245b9d912b8e75e33cb`.
 Version 0.236.0 contains the previous API.
 
 The migration targets Toko source `3ea25ea2d48d9c47356c99a8c585a7120e9506e3`.
@@ -42,8 +43,7 @@ All names below live in `canic::sharding::provisioning`. Enable the existing
 
 ```rust
 pub async fn place<'a, R: Resource>(
-    view: &'a SessionView,
-    scope: &'a str,
+    auth: &'a Authorization,
     retained: Option<Principal>,
 ) -> Result<Assignment<'a, R>, Progress>;
 
@@ -61,12 +61,12 @@ impl<I: Eq> Binding<I> {
 }
 
 pub fn account_row<E: Entity>(database: &DatabaseSession, account: Account) -> Option<E>;
-pub fn session_row<E: Entity>(database: &DatabaseSession, view: &SessionView) -> Option<E>;
+pub fn session_row<E: Entity>(database: &DatabaseSession, auth: &Authorization) -> Option<E>;
 ```
 
 1. Validate the name synchronously, including on retries. An already-ready row
-   can return locally under the endpoint's write scope. Pass the same scope to
-   `place`. Supply the original shard for a pending row. That selects lookup
+   can return locally under the endpoint's write scope. Pass `&auth` to
+   `place`; it retains the scope declared on the endpoint. Supply the original shard for a pending row. That selects lookup
    only. On a miss, Root's assign first looks for an existing claim for that key.
 2. After placement, reuse the original row or reload the winner before inserting.
    Generate `Ulid::generate_prand()` only in the missing-row branch. The unique

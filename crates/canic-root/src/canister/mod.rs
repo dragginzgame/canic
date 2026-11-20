@@ -53,6 +53,21 @@ management::mount_endpoints! {
     stage_application_upgrade, reconcile_application_upgrade, activate_application_upgrade,
 }
 
+/// Deliver one exact revision to a ready named service under the operator's approval.
+#[canic::update(guard = directory_controller)]
+async fn publish_directory(request: (String, u64)) -> Result<u64, String> {
+    let (name, revision) = request;
+    management::application::publish_directory(&name, revision)
+        .await
+        .map_err(String::from)
+}
+
+fn directory_controller() -> Result<(), &'static str> {
+    runtime::system::is_controller(&runtime::system::caller())
+        .then_some(())
+        .ok_or("controller required")
+}
+
 fn readiness() -> Readiness {
     Readiness {
         method: "readiness",

@@ -49,6 +49,9 @@ installer, never by editing installed bytes.
   IC entropy or issuing an IC call. Keep the surrounding decision logic shared.
   Apply the same rule to generated code, examples and qualification fixtures.
   Avoid native stubs and extra feature flags solely to satisfy the compiler.
+- The operator bootstraps Root. Root installs every other managed fleet canister.
+  Use Root's retained installation evidence for directory publication. A hub's
+  application parentage and its ability to request children are separate from installation.
 - The managed starter uses a Root, separate versioned Wasm Store and application
   children. Root owns effect authority and retained evidence; Store owns durable
   artifact bytes, immutable releases and pins. Do not grow Root into an artifact

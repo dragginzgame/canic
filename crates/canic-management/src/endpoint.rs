@@ -19,6 +19,15 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
     #[cfg(feature = "sharding")]
     if crate::sharding::occupied()
         && !(private
+            && crate::sharding::has_capacity()
+            && matches!(
+                _method,
+                protocol::children::STAGE
+                    | protocol::application::STAGE
+                    | protocol::stored::STAGE
+                    | protocol::children::RECONCILE
+            ))
+        && !(private
             && matches!(
                 _method,
                 protocol::stored::RECONCILE

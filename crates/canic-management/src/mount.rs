@@ -275,7 +275,7 @@ macro_rules! mount_endpoints {
         [$($asynchronous:ident)?] ($($input:ident: $request:ty)?) -> $reply:ty,
         $body:expr) => {
         mod $name {
-            #[cfg(target_arch = "wasm32")]
+
             mod installed {
                 use $crate::endpoint::{runtime, protocol, wire};
                 type Reply = $reply;

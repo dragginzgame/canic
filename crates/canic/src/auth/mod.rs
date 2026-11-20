@@ -57,19 +57,20 @@ macro_rules! mount_auth_endpoints {
             };
             const ID: u64 = EstablishSession::ID;
 
-            #[runtime::update(
-                runtime = runtime,
-                guard = endpoint::admit::<ID>,
-                decode = endpoint::decode::<SessionInput, ID>,
-                max_bytes = 2097152,
-                on_error = endpoint::fail,
-                name = "establish_portable_session",
-                encode = endpoint::encode::<Result<SessionView, AdmissionRefusal>, ID>,
-            )]
-            fn establish_portable_session(
-                input: SessionInput,
-            ) -> Result<SessionView, AdmissionRefusal> {
-                $admit(api::caller(), input, api::time())
+            $crate::__canic_builtin! {
+                auth, ID, runtime::update, "establish_portable_session", (
+                    runtime = runtime,
+                    guard = endpoint::admit::<ID>,
+                    decode = endpoint::decode::<SessionInput, ID>,
+                    max_bytes = 2097152,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<Result<SessionView, AdmissionRefusal>, ID>,
+                ),
+                [] fn establish_portable_session(
+                    input: SessionInput,
+                ) -> Result<SessionView, AdmissionRefusal> {
+                    $admit(api::caller(), input, api::time())
+                }
             }
         }
         mod portable_session_read {
@@ -80,17 +81,18 @@ macro_rules! mount_auth_endpoints {
             };
             const ID: u64 = ReadSession::ID;
 
-            #[runtime::query(
-                runtime = runtime,
-                guard = endpoint::admit::<ID>,
-                decode = endpoint::decode::<(), ID>,
-                max_bytes = 2097152,
-                on_error = endpoint::fail,
-                name = "portable_session_read",
-                encode = endpoint::encode::<Result<SessionView, SessionReadRefusal>, ID>,
-            )]
-            fn portable_session_read((): ()) -> Result<SessionView, SessionReadRefusal> {
-                $read(api::caller(), api::time())
+            $crate::__canic_builtin! {
+                auth, ID, runtime::query, "portable_session_read", (
+                    runtime = runtime,
+                    guard = endpoint::admit::<ID>,
+                    decode = endpoint::decode::<(), ID>,
+                    max_bytes = 2097152,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<Result<SessionView, SessionReadRefusal>, ID>,
+                ),
+                [] fn portable_session_read((): ()) -> Result<SessionView, SessionReadRefusal> {
+                    $read(api::caller(), api::time())
+                }
             }
         }
         mod logout_portable_session {
@@ -101,17 +103,18 @@ macro_rules! mount_auth_endpoints {
             };
             const ID: u64 = Logout::ID;
 
-            #[runtime::update(
-                runtime = runtime,
-                guard = endpoint::admit::<ID>,
-                decode = endpoint::decode::<(), ID>,
-                max_bytes = 2097152,
-                on_error = endpoint::fail,
-                name = "logout_portable_session",
-                encode = endpoint::encode::<LogoutResult, ID>,
-            )]
-            fn logout_portable_session((): ()) -> LogoutResult {
-                $logout(api::caller(), api::time())
+            $crate::__canic_builtin! {
+                auth, ID, runtime::update, "logout_portable_session", (
+                    runtime = runtime,
+                    guard = endpoint::admit::<ID>,
+                    decode = endpoint::decode::<(), ID>,
+                    max_bytes = 2097152,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<LogoutResult, ID>,
+                ),
+                [] fn logout_portable_session((): ()) -> LogoutResult {
+                    $logout(api::caller(), api::time())
+                }
             }
         }
     };

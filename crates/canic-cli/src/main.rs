@@ -11,6 +11,7 @@ mod artifacts;
 mod auth;
 mod catalog;
 mod fleet;
+mod inspection;
 mod placements;
 mod progress;
 mod status;
@@ -57,6 +58,9 @@ fn error_text(error: &Error, json: bool) -> String {
 
 async fn run(cli: &Cli) -> canic_host::Result<Output> {
     let result = match &cli.command {
+        Commands::Db(inspection::DbCommand::Inspect(options)) => {
+            return inspection::run(options, cli.json).await;
+        }
         Commands::App(AppCommand::Build {
             selection,
             canister,
@@ -136,7 +140,7 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 let path = canic_host::create_starter(source, name, canic_source)?;
                 if !cli.json {
                     return Ok(Output::Text(format!(
-                        "Initialized app {name}\nConfig: {}\n\nRoot\n├─ Wasm Store\n└─ Application\n\nEdit starter-app/src/endpoints/mod.rs, then run `canic app build --canister app` from the new directory.\n",
+                        "Initialized app {name}\nConfig: {}\n\nRoot\n├─ Wasm Store\n└─ Application\n\nEdit starter-app/src/lib.rs, then run `canic app build --canister app` from the new directory.\n",
                         ic_host_text::escape(&path.to_string_lossy()),
                     )));
                 }
