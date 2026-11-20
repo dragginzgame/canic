@@ -100,6 +100,17 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
         })).unwrap();
         package.validate()
     };
+    let metadata: toml::Table = std::fs::read_to_string(&manifest).unwrap().parse().unwrap();
+    let starter_policy = serde_json::to_value(&metadata["package"]["metadata"]).unwrap();
+    validate(starter_policy.clone()).unwrap();
+    // Exercise a second role which explicitly adopts the conventional directory layout.
+    create_dir_all(package.join("src/endpoints")).unwrap();
+    std::fs::rename(
+        package.join("src/lib.rs"),
+        package.join("src/endpoints/mod.rs"),
+    )
+    .unwrap();
+    write(package.join("src/lib.rs"), "mod endpoints;").unwrap();
     let default = serde_json::json!({"canic":{"layout":{}}});
     validate(default.clone()).unwrap();
     for (label, decl, expected) in [
@@ -148,7 +159,7 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
     crate::create_starter(&independent, "other", source).unwrap();
     let other: super::source_layout::Package = serde_json::from_value(serde_json::json!({
         "id": "other", "name": "other", "manifest_path": independent.join("starter-app/Cargo.toml"),
-        "metadata": default
+        "metadata": starter_policy
     }))
     .unwrap();
     let mount = r#"canic::mount_db_role! { hub, database = schema::Accounts, config = "app.config", authority = "app", pages = 8, auth_read = "read" }"#;
@@ -167,6 +178,7 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
     validate(default).unwrap();
     std::fs::rename(package.join("src/endpoints"), package.join("src/api")).unwrap();
     validate(serde_json::json!({"canic":{"layout":{"endpoints":"src/api"}}})).unwrap();
+    other.validate().unwrap();
     write(
         independent.join("starter-app/src/api.rs"),
         "#[canic::update] fn put() {}",
@@ -177,7 +189,7 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
             .validate()
             .unwrap_err()
             .to_string()
-            .contains("src/endpoints")
+            .contains("expected src/lib.rs")
     );
 }
 
