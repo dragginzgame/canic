@@ -15,9 +15,10 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 placement = ["canic/sharding"]
+role-probe = ["canic/role-verification"]
 
 [dependencies]
-canic = { workspace = true, features = ["lifecycle", "method", "readiness", "role-verification", "storage"] }
+canic = { workspace = true, features = ["lifecycle", "method", "readiness", "topology", "storage"] }
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
 ic-storage.workspace = true

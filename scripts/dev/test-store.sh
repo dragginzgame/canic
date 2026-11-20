@@ -35,7 +35,7 @@ if [[ "$scope" == all || "$scope" == directory ]]; then
     "$cli" app build --config apps/examples/user-directory/canic.toml --canister root
     cp -- apps/examples/user-directory/artifacts/root.client target/store/role-root.client
     build role-root canic-root --features role-issuer
-    build directory canic-directory-witness --manifest qualification/Cargo.toml --features placement
+    build directory canic-directory-witness --manifest qualification/Cargo.toml --features placement,role-probe
 fi
 if [[ "$scope" == directory ]]; then
     build pool-root canic-root --features sharding

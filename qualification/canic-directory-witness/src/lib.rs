@@ -8,12 +8,13 @@ use ic_platform_types::Principal;
 use ic_storage::DefaultMemoryImpl;
 
 mod peer;
+#[cfg(feature = "role-probe")]
 mod role_probe;
 
 const KEY: &str = "hub.services.v1";
 
 enum Installation {
-    Service(String, Vec<u8>),
+    Service(ServiceInstall),
     Child(Install),
 }
 
@@ -22,25 +23,38 @@ fn open(installation: Option<Installation>) {
         DefaultMemoryImpl::default(),
         installation.is_some(),
         "hub",
-        &[KEY, role_probe::KEY],
+        &[
+            KEY,
+            #[cfg(feature = "role-probe")]
+            role_probe::KEY,
+        ],
         16,
     );
+    #[cfg(feature = "role-probe")]
     let pin = installation.as_ref().map(|i| match i {
-        Installation::Service(_, key) => (ic_platform_runtime::system::caller(), key.clone()),
+        Installation::Service(service) => (
+            ic_platform_runtime::system::caller(),
+            service.application.clone(),
+        ),
         Installation::Child(child) => (child.root, vec![]),
     });
     DIRECTORY.set(Some(match installation {
-        Some(Installation::Service(role, _)) => Index::install(&runtime, KEY, &role),
+        Some(Installation::Service(service)) => Index::install(&runtime, KEY, &service.role),
         Some(Installation::Child(child)) => Index::install_child(&runtime, KEY, &child),
         None => Index::open(&runtime, KEY),
     }));
+    #[cfg(feature = "role-probe")]
     role_probe::open(&runtime, pin);
 }
 
 fn install_args(bytes: &[u8]) -> Result<Installation, &'static str> {
     // The inline fixture has one compiled role; Store-backed installs declare it.
     if bytes.is_empty() {
-        return Ok(Installation::Service("hub".into(), vec![]));
+        return Ok(Installation::Service(ServiceInstall {
+            name: "hub".into(),
+            role: "hub".into(),
+            application: vec![],
+        }));
     }
     if let Ok(child) = Install::decode(bytes) {
         return child
@@ -50,10 +64,12 @@ fn install_args(bytes: &[u8]) -> Result<Installation, &'static str> {
             .ok_or("expected empty witness payload");
     }
     let named = ServiceInstall::decode(bytes)?;
-    if !matches!(named.application.len(), 0 | 32) {
+    if !(named.application.is_empty()
+        || (cfg!(feature = "role-probe") && named.application.len() == 32))
+    {
         return Err("expected empty payload or issuer key");
     }
-    Ok(Installation::Service(named.role, named.application))
+    Ok(Installation::Service(named))
 }
 fn install(value: Installation) {
     open(Some(value));
