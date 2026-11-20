@@ -62,8 +62,6 @@ pub(super) const SHARDS_KEY: &str = "manager.shards.v1";
 pub(super) const KEYS: &[&str] = &[
     JOURNAL_KEY,
     ARTIFACT_KEY,
-    #[cfg(feature = "peers")]
-    "manager.peers.v1",
     #[cfg(feature = "sharding")]
     SHARDS_KEY,
     #[cfg(feature = "backup")]

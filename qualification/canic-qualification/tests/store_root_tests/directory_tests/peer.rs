@@ -1,6 +1,5 @@
 //! One real sender and receiver under the same installing Root.
 use super::*;
-use canic::topology::peer::{ApplyPeer, Decision, Status};
 use ic_testkit::held::{Catalog, Fixture, Limits, Reply};
 
 pub(super) async fn exercise(root: &Client<'_>, accounts: CanisterId, project: CanisterId) {
@@ -13,22 +12,7 @@ pub(super) async fn exercise(root: &Client<'_>, accounts: CanisterId, project: C
     let receiver = Client {
         pic,
         id: accounts,
-        operator: root.operator,
-    };
-    let change = async |generation: u64, allow: bool| {
-        root.update::<_, Result<Status, String>>(
-            "change_peer",
-            ic_wire::method_id("change_peer"),
-            &(
-                "project_hub",
-                "accounts_hub",
-                "project_sync",
-                generation,
-                allow,
-            ),
-            canic::method::LIMITS,
-        )
-        .await
+        operator: root.id,
     };
     let sync = async || {
         sender
@@ -40,76 +24,51 @@ pub(super) async fn exercise(root: &Client<'_>, accounts: CanisterId, project: C
             )
             .await
     };
-    assert_eq!(sync().await, Err("peer denied".into()));
-    assert_eq!(change(1, true).await, Ok(Status::Applied));
+    // Project is ready, but the accounts hub missed its directory publication.
+    assert_eq!(sync().await, Err("sync unconfirmed".into()));
+    assert_eq!(publish(root, "accounts_hub", 2).await, Ok(2));
     assert_eq!(sync().await, Ok(1));
-    assert_eq!(
-        receiver
-            .update::<_, Result<u64, String>>(
-                "project_sync",
-                ic_wire::method_id("project_sync"),
-                &None::<CanisterId>,
-                canic::method::LIMITS
-            )
-            .await,
-        Err("peer denied".into())
+
+    let request = |name, input: &()| {
+        ic_wire::encode(
+            input,
+            ic_wire::Encoding::Frame {
+                method: ic_wire::method_id(name),
+                direction: ic_wire::Direction::Request,
+            },
+            canic::method::LIMITS,
+        )
+        .unwrap()
+    };
+    for caller in [root.id, accounts, root.operator] {
+        // Even malformed input is refused by the guard before Wire decoding.
+        let reject = pic
+            .update_call(accounts, caller, "project_sync", vec![])
+            .await
+            .unwrap_err();
+        assert!(
+            reject.reject_message.contains("unexpected topology sender"),
+            "{reject:?}"
+        );
+    }
+    for caller in [project, root.id] {
+        assert!(
+            pic.query_call(accounts, caller, "sync_count", request("sync_count", &()))
+                .await
+                .is_ok()
+        );
+    }
+    assert!(
+        pic.query_call(
+            accounts,
+            root.operator,
+            "sync_count",
+            request("sync_count", &())
+        )
+        .await
+        .is_err()
     );
 
-    pic.stop_canister(accounts, Some(root.id)).await.unwrap();
-    assert_eq!(change(2, false).await, Ok(Status::Pending));
-    canic_qualification::upgrade_stopped(
-        pic,
-        root.id,
-        std::fs::read(artifacts().join("peer-root.wasm")).unwrap(),
-        vec![],
-        Some(root.operator),
-    )
-    .await
-    .unwrap();
-    let name = "observe_peer";
-    let frame = |direction| ic_wire::Encoding::Frame {
-        method: ic_wire::method_id(name),
-        direction,
-    };
-    let bytes = pic
-        .query_call(
-            root.id,
-            root.operator,
-            name,
-            ic_wire::encode(
-                &("project_hub", "accounts_hub", "project_sync"),
-                frame(ic_wire::Direction::Request),
-                canic::method::LIMITS,
-            )
-            .unwrap(),
-        )
-        .await
-        .unwrap();
-    let (pending, status) = ic_wire::decode::<Result<Option<(Decision, Status)>, String>>(
-        &bytes,
-        frame(ic_wire::Direction::Response),
-        canic::method::LIMITS,
-    )
-    .unwrap()
-    .unwrap()
-    .unwrap();
-    assert_eq!(
-        (pending.generation, pending.allow, status),
-        (2, false, Status::Pending)
-    );
-    assert!(change(3, true).await.is_err());
-    pic.start_canister(accounts, Some(root.id)).await.unwrap();
-    let refused = pic
-        .update_call(
-            accounts,
-            project,
-            ApplyPeer::NAME,
-            ApplyPeer::encode_request(&pending).unwrap(),
-        )
-        .await
-        .unwrap();
-    assert!(ApplyPeer::decode_reply(&refused).unwrap().is_err());
-    assert_eq!(change(2, false).await, Ok(Status::Applied));
     canic_qualification::upgrade_stopped(
         pic,
         accounts,
@@ -119,9 +78,17 @@ pub(super) async fn exercise(root: &Client<'_>, accounts: CanisterId, project: C
     )
     .await
     .unwrap();
-    assert_eq!(sync().await, Err("peer denied".into()));
-    assert_eq!(change(3, true).await, Ok(Status::Applied));
-
+    assert_eq!(sync().await, Ok(1));
+    let pause = async |value: bool| {
+        receiver
+            .update::<_, ()>(
+                "pause_writes",
+                ic_wire::method_id("pause_writes"),
+                &value,
+                canic::method::LIMITS,
+            )
+            .await;
+    };
     let gate = pic.create_canister().await;
     let catalog = Catalog::new(
         &[Reply {
@@ -174,8 +141,9 @@ pub(super) async fn exercise(root: &Client<'_>, accounts: CanisterId, project: C
         }
     }
     let token = token.expect("admitted call reached barrier");
-    assert_eq!(change(4, false).await, Ok(Status::Applied));
-    assert_eq!(change(5, true).await, Ok(Status::Applied));
+    pause(true).await;
+    assert_eq!(sync().await, Err("writes paused".into()));
+    pause(false).await;
     held.release(pic, &token).await.unwrap();
     let reply = pic.await_call(msg).await.unwrap();
     assert_eq!(
@@ -185,7 +153,7 @@ pub(super) async fn exercise(root: &Client<'_>, accounts: CanisterId, project: C
             canic::method::LIMITS
         )
         .unwrap(),
-        Err("peer permission changed".into())
+        Err("write permission changed".into())
     );
-    assert_eq!(sync().await, Ok(1));
+    assert_eq!(sync().await, Ok(2));
 }

@@ -92,7 +92,7 @@ enum Scenario {
 }
 
 #[tokio::test]
-async fn receiver_acknowledges_revocation_and_fences_held_call() {
+async fn receiver_guards_named_service_and_rechecks_writes_after_await() {
     installed_publication(Scenario::Peer).await;
 }
 
@@ -142,8 +142,6 @@ async fn installed_publication(scenario: Scenario) {
         Scenario::Capacity(_) | Scenario::StoppedChild | Scenario::StoppedHub
     ) {
         "pool-root.wasm"
-    } else if matches!(scenario, Scenario::Peer) {
-        "peer-root.wasm"
     } else {
         "root.wasm"
     };
@@ -390,7 +388,10 @@ async fn installed_publication(scenario: Scenario) {
     } else {
         None
     };
-    let miss_delivery = matches!(scenario, Scenario::StoppedHub | Scenario::OperatorReplay);
+    let miss_delivery = matches!(
+        scenario,
+        Scenario::StoppedHub | Scenario::OperatorReplay | Scenario::Peer
+    );
     if miss_delivery {
         pic.stop_canister(user, Some(root.id)).await.unwrap();
     }
@@ -416,9 +417,7 @@ async fn installed_publication(scenario: Scenario) {
         );
         assert_eq!(pic.get_stable_memory(user).await, before);
     }
-    if matches!(scenario, Scenario::Peer) {
-        peer::exercise(&root, user, project).await;
-    }
+
     let latest = Some((2, vec![user, project]));
     assert_eq!(resolve(pic, project).await, latest);
     assert_eq!(
@@ -438,6 +437,9 @@ async fn installed_publication(scenario: Scenario) {
         assert_eq!(resolve(pic, user).await, Some((1, vec![user])));
     } else {
         assert_eq!(resolve(pic, user).await, latest);
+    }
+    if matches!(scenario, Scenario::Peer) {
+        peer::exercise(&root, user, project).await;
     }
     if matches!(scenario, Scenario::StoppedHub) {
         capacity::approve(&root, 3).await;

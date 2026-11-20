@@ -100,8 +100,6 @@ const MANAGEMENT_LIMITS: Limits = Limits {
 };
 
 pub(crate) struct State {
-    #[cfg(feature = "peers")]
-    peers: canic::topology::peer::Permissions<DefaultMemoryImpl>,
     journal: Journals,
     artifact: Artifacts,
     journal_cell: StableCell<Vec<u8>>,
@@ -191,8 +189,6 @@ pub fn open(fresh: bool, readiness: Readiness) {
         fresh.then(|| sharding::Pools::default().encode()),
     );
     let mut state = State {
-        #[cfg(feature = "peers")]
-        peers: canic::topology::peer::Permissions::attach(&runtime, "manager.peers.v1", fresh),
         journal: Journals::from_bytes(journal_cell.get()).expect("journal custody"),
         artifact: Artifacts::from_bytes(artifact_cell.get().as_slice().into())
             .expect("artifact custody"),

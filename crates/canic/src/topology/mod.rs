@@ -1,12 +1,11 @@
 //! Explicit topology for a newly created shard. The pool approval owns these bytes.
 pub mod directory;
-pub mod peer;
 
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "storage")]
-pub use actor::{attach_parent, parent, require_parent, role};
+pub use actor::{attach_parent, parent, require_canister, require_parent, role};
 
 /// Check the actual caller against a locally retained topology authority.
 /// # Errors
@@ -154,6 +153,16 @@ mod actor {
     #[must_use]
     pub fn role() -> Option<String> {
         IDENTITY.with(|cell| cell.get().map(|id| id.role.clone()))
+    }
+
+    /// Require the actual IC caller to be the named canister in this actor's directory.
+    /// # Errors
+    /// Refuses an unopened directory, an unpublished name, or a different caller.
+    pub fn require_canister(name: &str) -> Result<(), &'static str> {
+        let principal = super::directory::retained::DIRECTORY
+            .with_borrow(|slot| slot.as_ref()?.current()?.by_name(name))
+            .ok_or("service unpublished")?;
+        super::require_sender(principal)
     }
 
     /// Pre-decode guard for a parent-only endpoint.

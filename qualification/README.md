@@ -952,12 +952,12 @@ race their shard and dedicated-instance grants for one remaining slot, and repla
 after Root upgrade recovers the winning allocation. With one additional subnet
 slot, the full shard pool leaves room for a project. The installed child resolves
 both hubs after its parent forwards the directory. The Store in this fixture is
-supplied by the simulator. The peer-enabled Root case grants project sync to the project hub alone. It stops
-the receiving accounts hub during revocation, upgrades Root, observes the pending
-decision, retries it and reopens the receiver. Testkit holds a real call across a
-later revoke and regrant: the stale continuation cannot increment the witness
-counter, and the fresh call can. These tests use Root endpoints directly;
-fleet TOML/Host approval and sender-side permission selection remain open for #53.
+supplied by the simulator. The accounts hub's endpoint checks the actual caller against the locally published
+`project_hub`. The installed test withholds the publication, replays it, upgrades
+the receiver, and checks calls from the project hub, a different hub and controllers.
+The update requires both the named caller and open writes. A read-only query
+accepts either the named caller or the controller. Pausing and reopening writes
+while a call is suspended fences the original continuation.
 
 A published hub retains its principal across upgrades. A fleet-wide delivery report remains open.
 

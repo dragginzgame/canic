@@ -26,7 +26,7 @@ pub fn update(options: TokenStream, item: TokenStream) -> TokenStream {
 
 fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut contract: Option<Path> = None;
-    let mut guard: Option<Path> = None;
+    let mut guard: Option<Expr> = None;
     let mut scope: Option<Expr> = None;
     let mut name: Option<LitStr> = None;
     let mut limits: Option<Expr> = None;
@@ -147,7 +147,14 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             quote!(),
         )
     };
-    let guard = guard.map(|g| quote!(#g().map_err(|error| format!("{error:?}"))?;));
+    let guard = guard.map(|g| {
+        let check = if matches!(g, Expr::Path(_)) {
+            quote!(#g())
+        } else {
+            quote!(#g)
+        };
+        quote! { let () = (#check).map_err(|error| format!("{error:?}"))?; }
+    });
     // A predecessor read with just SessionView must fail to compile, even through a type alias.
     // Otherwise the old server-supplied identity would silently become client-controlled input.
     let checked_request = scoped.then(|| {

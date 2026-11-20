@@ -1,28 +1,31 @@
-//! A named project hub calls a single permitted method on its accounts hub.
-use super::{DefaultMemoryImpl, INDEX, Principal, RefCell};
+//! Endpoint-owned project sync policy on a directory-backed accounts hub.
+use super::{DIRECTORY, Principal};
 use canic::method::{Contract, wire};
-use canic::topology::peer::{ApplyPeer, Decision, Permissions};
+use canic::topology::require_canister;
 use ic_platform_runtime::{call, system};
 use std::cell::Cell;
 
-pub(super) const KEY: &str = "hub.peers.v1";
 thread_local! {
-    static PEERS: RefCell<Option<Permissions<DefaultMemoryImpl>>> = const { RefCell::new(None) };
     static WRITES: Cell<u64> = const { Cell::new(0) };
+    static PAUSED: Cell<bool> = const { Cell::new(false) };
+    static EPOCH: Cell<u64> = const { Cell::new(0) };
 }
 
-pub(super) fn open(runtime: &ic_storage::MemoryRuntime<DefaultMemoryImpl>, fresh: bool) {
-    PEERS.set(Some(Permissions::attach(runtime, KEY, fresh)));
+fn writable() -> Result<(), &'static str> {
+    (!PAUSED.get()).then_some(()).ok_or("writes paused")
 }
 
-#[canic::update(contract = ApplyPeer)]
-fn apply_peer(request: Decision) -> Result<Decision, String> {
-    PEERS.with_borrow_mut(|s| {
-        s.as_mut()
-            .expect("open permissions")
-            .receive(request)
-            .map_err(String::from)
-    })
+fn controller() -> Result<(), &'static str> {
+    system::is_controller(&system::caller())
+        .then_some(())
+        .ok_or("controller required")
+}
+
+#[canic::update(guard = controller)]
+fn pause_writes(paused: bool) {
+    if PAUSED.replace(paused) != paused {
+        EPOCH.update(|n| n.checked_add(1).expect("write epoch"));
+    }
 }
 
 struct ProjectSync;
@@ -33,10 +36,10 @@ impl Contract for ProjectSync {
     type Output = Result<u64, String>;
 }
 
-#[canic::update(contract = ProjectSync)]
+#[canic::update(contract = ProjectSync, guard = require_canister("project_hub"))]
 async fn project_sync(barrier: Option<Principal>) -> Result<u64, String> {
-    let ticket =
-        PEERS.with_borrow(|s| s.as_ref().expect("open permissions").admit::<ProjectSync>())?;
+    writable()?;
+    let epoch = EPOCH.get();
     if let Some(barrier) = barrier {
         let reply = call::Call::new(barrier, "hold", call::Wait::Bounded { seconds: 300 })
             .args(&[])
@@ -46,19 +49,28 @@ async fn project_sync(barrier: Option<Principal>) -> Result<u64, String> {
         if !matches!(reply.into_parts().0, call::Outcome::Reply(bytes) if bytes.is_empty()) {
             return Err("barrier refused".into());
         }
+        // The directory binding is immutable. The application's write policy can change.
+        if EPOCH.get() != epoch {
+            return Err("write permission changed".into());
+        }
     }
-    PEERS.with_borrow(|s| s.as_ref().expect("open permissions").revalidate(&ticket))?;
     WRITES.update(|n| n + 1);
     Ok(WRITES.get())
 }
 
-#[canic::update]
+// Both the service and its controller may inspect this witness counter.
+fn may_read_count() -> Result<(), &'static str> {
+    require_canister("project_hub").or_else(|_| controller())
+}
+
+#[canic::query(guard = may_read_count)]
+fn sync_count() -> u64 {
+    WRITES.get()
+}
+
+#[canic::update(guard = controller)]
 async fn send_sync(barrier: Option<Principal>) -> Result<u64, String> {
-    // Qualification ingress represents the application's authorized operation.
-    if !system::is_controller(&system::caller()) {
-        return Err("controller required".into());
-    }
-    let target = INDEX
+    let target = DIRECTORY
         .with_borrow(|s| s.as_ref()?.current()?.by_name("accounts_hub"))
         .ok_or("accounts hub unavailable")?;
     canic::method::call::<ProjectSync>(target, 300, &barrier)

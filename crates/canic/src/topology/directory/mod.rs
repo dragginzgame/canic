@@ -407,6 +407,12 @@ pub mod retained {
         }
     }
 
+    thread_local! {
+        /// This actor's service index. Install or reopen it during application lifecycle.
+        pub static DIRECTORY: std::cell::RefCell<Option<Index<ic_storage::DefaultMemoryImpl>>> =
+            const { std::cell::RefCell::new(None) };
+    }
+
     /// Apply the directory locally and forward only the remaining admitted branch.
     /// # Errors
     /// Refuses a foreign publisher, mismatched receiver, invalid branch or unconfirmed hop.

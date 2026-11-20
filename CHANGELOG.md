@@ -1,5 +1,28 @@
 # Changelog
 
+## Unreleased
+
+Application endpoints can guard a method with a fixed fleet service name. The
+guard runs before request decoding and composes with ordinary Rust
+`Result::and_then` and `Result::or_else`. Existing zero-argument guard paths
+keep their syntax. The experimental Root `peers` feature, operator-managed peer
+grants and their storage layout are retired. Use fresh installations for fleets
+that tried that feature.
+
+```rust
+use canic::topology::require_canister;
+
+#[canic::update(guard = require_canister("project_hub"))]
+fn project_sync(request: ProjectSync) { /* application operation */ }
+```
+
+```sh
+# With the local test server prepared, exercise named callers and composed guards.
+bash scripts/dev/test-store.sh directory
+# Inspect the witness endpoints produced by that run.
+canic artifact endpoints target/store/directory.wasm
+```
+
 ## [0.243.0] - 2026-11-20
 
 ### ✨ Features

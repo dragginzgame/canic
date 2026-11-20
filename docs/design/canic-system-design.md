@@ -1554,34 +1554,22 @@ A stale count cannot authorize a different change. An unresolved creation still
 occupies capacity. The 0.239.0 two-slot whole-fleet approval and custody APIs
 retain their original scope.
 
-For #53, start with the predecessor's named, directional permissions. The
-receiver admits the actual IC caller locally. Outbound selection checks the
-permitted target. A handler revalidates its ticket after an await before a new
-protected effect. Reuse the regression where denial reaches the receiver while
-an effect is suspended and the original ticket stays fenced across Root
-restart. Toko still checks the account and its administrator rights. Its two
-independently declared hubs need an explicit fleet binding across components;
-the legacy fixture's same-component permission alone cannot authorize them.
-The operator approves binding changes through Root. Each hub accepts updates
-only from its retained routing Root, even when independently controlled.
-Root's opt-in `peers` build retains up to 16 directional method bindings, including
-revoked entries. The controller submits the two published service names, exported
-method, next generation and grant or revoke decision to `change_peer`. Root
-resolves both principals from its own ready installation records and commits
-the decision before delivery. Only an exact durable receiver acknowledgement
-marks it applied. A stopped or unreachable receiver leaves revocation pending;
-the prior grant can still be used there until revocation arrives. Read
-`observe_peer` for the retained decision and status. Retrying the exact
-`change_peer` delivers it again. A newer grant is refused while revocation
-is pending. Recipient upgrades strictly reopen the method permissions and the
-installer from the same storage key. A peer-enabled Root's application custody
-report refuses to omit nonempty peer evidence from a managed maintenance plan.
-Revoking project-sync permission fences any suspended handler before its next
-protected effect. The installed witness must show that a fresh call succeeds
-after permission is granted again to the same project hub, while a continuation
-holding the revoked permission still fails.
-[Legacy admission API](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/access/caller_authority/mod.rs)
-and [installed denial regression](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/qualification/canic-tests/src/pic/fleet_registry/baseline/tests/caller_authority/mod.rs).
+For #53 the receiver declares the permitted service with
+`guard = require_canister("project_hub")` on its endpoint. The application opens
+the retained `DIRECTORY` during install or upgrade. The guard
+checks the actual IC caller against the exact service name in the local directory
+admitted from the retained publisher. Missing names deny access. Fixed published
+bindings survive upgrades and directory growth. The sender resolves its destination
+by name. The receiver owns policy changes through its executable. Mutable
+application conditions must be rechecked after an await before another protected
+effect, using the original caller. Guards compose with Rust's short-circuiting
+`Result::and_then` and `Result::or_else`.
+
+Legacy at `377fbce` checked the transport caller locally and revalidated at
+effect boundaries. Keep those properties. The fixed-hub flow needs no independent
+operator grant, generation or per-method delivery ledger. This is a hard cut for
+the experimental peer-enabled installation layout; use a fresh installation.
+[Legacy admission API](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/access/caller_authority/mod.rs).
 
 ### Stateful hub and shard setup
 

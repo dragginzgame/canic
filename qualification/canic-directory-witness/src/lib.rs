@@ -2,16 +2,14 @@
 use canic::topology::Install;
 use canic::topology::directory::{
     Delivery, Directory, Hop, ReceiveDirectory, ServiceInstall,
-    retained::{self, Index},
+    retained::{self, DIRECTORY, Index},
 };
 use ic_platform_types::Principal;
 use ic_storage::DefaultMemoryImpl;
-use std::cell::RefCell;
 
 mod peer;
 
 const KEY: &str = "hub.services.v1";
-thread_local! { static INDEX: RefCell<Option<Index<DefaultMemoryImpl>>> = const { RefCell::new(None) }; }
 
 enum Installation {
     Service(String),
@@ -23,11 +21,10 @@ fn open(installation: Option<Installation>) {
         DefaultMemoryImpl::default(),
         installation.is_some(),
         "hub",
-        &[KEY, peer::KEY],
+        &[KEY],
         16,
     );
-    peer::open(&runtime, installation.is_some());
-    INDEX.set(Some(match installation {
+    DIRECTORY.set(Some(match installation {
         Some(Installation::Service(role)) => Index::install(&runtime, KEY, &role),
         Some(Installation::Child(child)) => Index::install_child(&runtime, KEY, &child),
         None => Index::open(&runtime, KEY),
@@ -68,7 +65,7 @@ canic::mount_lifecycle!(
 );
 
 fn readiness() -> canic::readiness::State {
-    if INDEX.with_borrow(|index| index.is_some()) {
+    if DIRECTORY.with_borrow(|index| index.is_some()) {
         canic::readiness::State::Ready
     } else {
         canic::readiness::State::Unavailable
@@ -79,7 +76,7 @@ canic::mount_readiness_endpoint!(crate::readiness);
 // Read the retained installer and last applied revision.
 #[canic::query]
 fn directory_status() -> (Principal, Option<u64>) {
-    INDEX.with_borrow(|index| {
+    DIRECTORY.with_borrow(|index| {
         let index = index.as_ref().expect("open service index");
         (index.publisher(), index.current().map(|d| d.revision))
     })
@@ -88,7 +85,7 @@ fn directory_status() -> (Principal, Option<u64>) {
 // Read this canister's local service directory without contacting Root.
 #[canic::query]
 fn resolve_service(role: String) -> Option<(u64, Vec<Principal>)> {
-    INDEX.with_borrow(|index| {
+    DIRECTORY.with_borrow(|index| {
         let directory = index.as_ref()?.current()?;
         Some((directory.revision, directory.by_role(&role).collect()))
     })
@@ -97,7 +94,7 @@ fn resolve_service(role: String) -> Option<(u64, Vec<Principal>)> {
 // Select one target only when the local revision identifies a unique service.
 #[canic::query]
 fn unique_service(role: String) -> Option<(u64, Result<Principal, String>)> {
-    INDEX.with_borrow(|index| {
+    DIRECTORY.with_borrow(|index| {
         let directory = index.as_ref()?.current()?;
         Some((
             directory.revision,
@@ -109,13 +106,13 @@ fn unique_service(role: String) -> Option<(u64, Result<Principal, String>)> {
 // Accept a directory update under the retained installer authority.
 #[canic::update(contract = ReceiveDirectory)]
 async fn receive_directory(update: Delivery) -> Result<(), String> {
-    retained::receive(&INDEX, update).await
+    retained::receive(&DIRECTORY, update).await
 }
 
 // Inspect the role and direct-child acknowledgement held by this actor.
 #[canic::query]
 fn topology_status(child: Principal) -> (String, Option<Option<u64>>) {
-    INDEX.with_borrow(|index| {
+    DIRECTORY.with_borrow(|index| {
         let index = index.as_ref().expect("open service index");
         (
             index.role().to_owned(),
@@ -127,7 +124,7 @@ fn topology_status(child: Principal) -> (String, Option<Option<u64>>) {
 // Have a real installed sibling try to publish while impersonation is impossible.
 #[canic::update]
 async fn attempt_delivery() -> Principal {
-    let target = INDEX
+    let target = DIRECTORY
         .with_borrow(|index| index.as_ref()?.current()?.by_name("accounts_hub"))
         .expect("accounts_hub must be published");
     let result = canic::method::call::<ReceiveDirectory>(
@@ -156,7 +153,7 @@ async fn attempt_delivery() -> Principal {
 #[cfg(feature = "placement")]
 #[canic::update(reply_limits = canic::sharding::LIMITS)]
 async fn place(request: (bool, u8)) -> canic::sharding::Placement {
-    let root = INDEX.with_borrow(|index| index.as_ref().expect("open hub").publisher());
+    let root = DIRECTORY.with_borrow(|index| index.as_ref().expect("open hub").publisher());
     let (project, key) = request;
     if project {
         canic::sharding::assign_instance(root, [key; 32]).await
