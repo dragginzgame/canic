@@ -2,7 +2,7 @@
 
 use canic::{
     method::Contract,
-    metrics::performance::{ChildMetrics, EndpointMetrics},
+    metrics::{ChildMetrics, ReadMetrics, Report, Request},
 };
 use canic_host::application::codec;
 use ic_testkit::{
@@ -55,6 +55,19 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
     )
     .await;
     let root_codec = artifacts.join("root.client");
+    for source in ["timers", "endpoints", "blob"] {
+        let args = ["child-metrics", "0", source].map(str::to_owned);
+        let frame = codec::encode(&root_codec, &args).unwrap();
+        assert_eq!(frame.method, ChildMetrics::NAME);
+        let (slot, selected) = ChildMetrics::decode_request(&frame.arguments).unwrap();
+        assert_eq!(slot, 0);
+        assert!(matches!(
+            (source, selected),
+            ("timers", Request::Timers)
+                | ("endpoints", Request::Endpoints(None))
+                | ("blob", Request::Blob)
+        ));
+    }
     let frame = codec::encode(&root_codec, &["logs".to_owned()]).unwrap();
     let reply = pic
         .update_call(root, installer, &frame.method, frame.arguments)
@@ -71,7 +84,7 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
                 root,
                 caller,
                 ChildMetrics::NAME,
-                ChildMetrics::encode_request(&(0, None)).unwrap(),
+                ChildMetrics::encode_request(&(0, Request::Timers)).unwrap(),
             )
             .await
             .unwrap_err();
@@ -94,12 +107,33 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
         pic.query_call(
             id,
             caller,
-            EndpointMetrics::NAME,
-            EndpointMetrics::encode_request(&after).unwrap(),
+            ReadMetrics::NAME,
+            ReadMetrics::encode_request(&Request::Endpoints(after)).unwrap(),
         )
         .await
-        .map(|bytes| EndpointMetrics::decode_reply(&bytes).unwrap())
+        .map(|bytes| match ReadMetrics::decode_reply(&bytes).unwrap() {
+            Report::Endpoints(page) => page,
+            other => panic!("expected endpoints, got {other:?}"),
+        })
     };
+    for source in [Request::Timers, Request::Blob] {
+        let bytes = ReadMetrics::encode_request(&source).unwrap();
+        assert!(
+            pic.query_call(
+                id,
+                CanisterId::anonymous(),
+                ReadMetrics::NAME,
+                bytes.clone()
+            )
+            .await
+            .is_err()
+        );
+        assert!(
+            pic.query_call(id, installer, ReadMetrics::NAME, bytes)
+                .await
+                .is_ok()
+        );
+    }
     let empty = read(installer, None).await.unwrap();
     assert!(empty.measurements.is_empty());
     assert_eq!(call(&["ping", "é"]).await, 2);

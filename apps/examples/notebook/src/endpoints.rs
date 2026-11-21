@@ -29,7 +29,7 @@ fn edit(text: String) {
 }
 
 // recovery
-// Acknowledge the exact command after committing its fence transition.
+// Apply the recorded owner's recovery command and acknowledge its fence transition.
 // limits : canic::recovery::LIMITS
 #[canic::update(contract = Command)]
 fn recovery(command: Command) -> Command {

@@ -369,10 +369,10 @@ fn logout(caller: Principal, input: Logout, now: u64) -> Result<Revoked, Refusal
 }
 
 canic::mount_auth_issuer_endpoints! {
-    issue = super::issue,
-    renew = super::renew,
-    reconcile = super::reconcile,
-    logout = super::logout,
+    issue = issue,
+    renew = renew,
+    reconcile = reconcile,
+    logout = logout,
 }
 
 /// Read the issuer witness's retained observations.

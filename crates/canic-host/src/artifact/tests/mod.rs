@@ -120,6 +120,11 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
             "src/endpoints",
         ),
         (
+            "endpoints",
+            "canic::mount_service_directory!();",
+            "src/endpoints",
+        ),
+        (
             "schema",
             "#[entity(name = \"Row\")] struct Row {}",
             "src/schema",
@@ -162,7 +167,13 @@ fn generated_role_enforces_endpoint_schema_and_lifecycle_locations_per_crate() {
         "metadata": starter_policy
     }))
     .unwrap();
-    let mount = r#"canic::mount_db_role! { hub, database = schema::Accounts, config = "app.config", authority = "app", pages = 8, auth_read = "read" }"#;
+    write(
+        package.join("src/endpoints/database.rs"),
+        "canic::mount_db!(schema = schema::Hub);",
+    )
+    .unwrap();
+    validate(default.clone()).unwrap();
+    let mount = r#"canic::mount_receiver_lifecycle! { config_key = "app.config", authority = "app", prefix = "app.", pages = 8, auth_read = "read" }"#;
     write(package.join("src/endpoints/role.rs"), mount).unwrap();
     assert!(
         validate(default.clone())
@@ -260,7 +271,7 @@ fn endpoint_metrics_requires_the_selected_module_and_query() {
     wasm.push(1);
     assert!(compiled_modules(&wasm, false).is_err());
     assert!(compiled_modules(&wasm, true).is_err());
-    let name = b"canister_query endpoint_metrics";
+    let name = b"canister_query metrics";
     let len = u8::try_from(name.len()).unwrap();
     wasm.extend([7, len + 4, 1, len]);
     wasm.extend(name);

@@ -297,6 +297,41 @@ async fn captured_users_share_one_object_without_application_authority_leaking()
     let pic = owner.client();
     let client = install(pic).await;
     let first = first(&client).await;
+    use canic::{
+        method::Contract,
+        metrics::{ReadMetrics, Report, Request},
+    };
+    let request = ReadMetrics::encode_request(&Request::Blob).unwrap();
+    assert!(
+        pic.query_call(
+            client.canister,
+            actor(1),
+            ReadMetrics::NAME,
+            request.clone()
+        )
+        .await
+        .is_err()
+    );
+    let bytes = pic
+        .query_call(client.canister, actor(9), ReadMetrics::NAME, request)
+        .await
+        .unwrap();
+    let Report::Blob {
+        commands: rows,
+        sizes,
+    } = ReadMetrics::decode_reply(&bytes).unwrap()
+    else {
+        panic!("expected Blob metrics")
+    };
+    assert_eq!(sizes.buckets[0].total, 1);
+    assert_eq!(
+        rows.iter()
+            .find(|r| r.command == "register")
+            .unwrap()
+            .succeeded
+            .total,
+        1
+    );
     let second = client.draft(2).await;
     let before = pic.get_stable_memory(client.canister).await;
     // Controller and manager are neither of the two application users.

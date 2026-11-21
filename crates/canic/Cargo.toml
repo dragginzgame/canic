@@ -32,8 +32,8 @@ blob = [
 ]
 db = ["dep:ic-platform-runtime"]
 db-schema = ["db", "dep:ic-db"]
-db-store = ["dep:ic-db", "storage"]
-endpoint-metrics = ["method", "dep:ic-metrics"]
+db-store = ["dep:ic-db", "dep:sha2", "storage"]
+endpoint-metrics = ["metrics", "dep:ic-metrics"]
 entropy = ["dep:ic-entropy", "raw-rand"]
 inspection = [
     "dep:inventory",
@@ -59,6 +59,7 @@ method = [
     "dep:ic-platform-types",
 ]
 metrics = [
+    "method",
     "lifecycle",
     "ic-blob-storage?/metrics",
     "ic-db?/metrics",

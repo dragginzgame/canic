@@ -3,7 +3,10 @@ use canic_management::backup;
 use canic_management_protocol::backup::{Binding, Error, LIMITS, Record, Request};
 use ic_platform_runtime as runtime;
 
-/// Execute the controller's bound snapshot operation and retain its outcome.
+// execute
+// Execute the controller's bound snapshot operation and retain its outcome.
+// guard  : Root controller
+// limits : backup::LIMITS (1,081,344 bytes each way)
 #[runtime::update(
     runtime = runtime,
     name = "snapshot_execute",
@@ -17,7 +20,10 @@ async fn execute(request: Request) -> Result<Record, Error> {
     backup::execute(request).await
 }
 
-/// Observe the original snapshot operation by its exact binding.
+// lookup
+// Observe the original snapshot operation by its exact binding.
+// guard  : Root controller
+// limits : 4,096-byte request, backup::LIMITS reply
 #[runtime::update(
     runtime = runtime,
     name = "snapshot_lookup",
@@ -32,8 +38,11 @@ fn lookup(binding: Binding) -> Result<Record, Error> {
     backup::lookup(&binding)
 }
 
+// inject
+// Select the controller's interruption point for the installed snapshot fixture.
+// guard  : Root controller
+// limits : 128-byte request, backup::LIMITS reply
 #[cfg(feature = "fault-injection")]
-/// Select the controller's interruption point for the installed snapshot fixture.
 #[runtime::update(
     runtime = runtime,
     name = "snapshot_fault",

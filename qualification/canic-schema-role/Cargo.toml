@@ -1,0 +1,27 @@
+[package]
+name = "canic-schema-role"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish.workspace = true
+description = "Installed multi-store role qualification"
+
+[package.metadata.toko-tooling.loc]
+category = "tests"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+canic = { workspace = true, features = ["db-store", "lifecycle", "method"] }
+ic-db.workspace = true
+
+[build-dependencies]
+ic-db = { workspace = true, features = ["build"] }
+
+[dev-dependencies]
+toko-tooling.workspace = true
+
+[lints]
+workspace = true

@@ -923,13 +923,13 @@ durable operation evidence, then derives demand from that evidence.
 The profile and publication witnesses share isolated signer preparation; generated
 credentials stay in their fixture directories and never use the operator wallet.
 
-`bash scripts/dev/test-root.sh metrics:: profile_store` qualifies public timer
-metrics on installed Root and profile manager executables. Anonymous/non-controller
-queries and malformed requests preserve counters and durable state. Root upgrades
+`bash scripts/dev/test-root.sh metrics:: profile_store` qualifies guarded timer
+metrics on installed Root and profile manager executables. Controller queries return timer observations. Unauthorized reads and malformed
+requests preserve counters and durable state. Root upgrades
 reset the volatile counters with a new initialization window while preserving
 operation evidence. The profile witness observes an abandoned callback and an
-expected readiness failure, and consumes the aggregate report through the real
-CLI fleet JSON. This proves local aggregate diagnostics, not historical metrics,
+expected readiness failure, and reads the aggregate report as the controller. The anonymous CLI fleet
+JSON reports a protected observation as unavailable. This proves local aggregate diagnostics, not historical metrics,
 fleet-wide rates, persistence or mainnet deployment. Passive codec tests preserve
 maximum counter totals/overflow quality; CLI tests retain unknown/clipped states
 and keep metrics out of the compact terminal view.
@@ -1129,37 +1129,41 @@ the application. Mounting adds no initialization or lifecycle hooks.
 
 ### Retained application store
 
-For an Auth-enrolled hub or shard, place a single declaration in `src/setup.rs`.
-The schema owner's build script calls `ic_db::build_schema!(model);` and its library
-calls `ic_db::include_schema!();` at the crate root. Its model declares a canister,
-a named store with its original allocation key, and entities assigned to that store.
-Both User Directory actors import that one schema crate.
-Select `canic/stateful-role` on all targets to check the entire actor natively.
-Store-only native consumers may select `canic/db-store`. A role can expose its schema and declared settings with
-`pub use setup::database;` in `lib.rs`. On both targets, `database::AUTH_READ`
-is the selected session scope. Hubs expose `database::CONFIG_KEY` and shards
-expose `database::PARENT_STORAGE_KEY`.
+The database declaration selects the IC DB canister schema:
 
 ```rust
-canic::mount_db_role! {
-    shard, database = toko_schema::model::Accounts,
-    authority = "user_shard", prefix = "toko.user.shard.", auth_read = "read",
+canic::mount_db!(schema = toko_schema::canister::user_shard::UserShard);
+```
+
+Select `canic/db-store` to use this mount. Include `database::keys()` in the
+application's Storage bootstrap. Call `database::attach(&host, Some((nonce,
+principal)))` on install and `database::attach(&host, None)` on reopen.
+`db!().get::<User>(id)` routes to the store declared for `User`.
+The [two-store witness](canic-schema-role/src/lib.rs) uses ordinary lifecycle
+hooks. Its installed upgrade and rollback test runs with
+`bash scripts/dev/test-store.sh db-roles`.
+
+The User Directory adds a receiver lifecycle beside its database declaration.
+For a shard with an existing parent cell, keep its original storage policy:
+
+```rust
+canic::mount_receiver_lifecycle! {
+    parent_storage_key = "toko.user.shard.hub.v1",
+    authority = "user_shard",
+    prefix = "toko.user.shard.",
+    auth_read = "read",
 }
 ```
 
-The hub selects `hub, database = toko_schema::model::Routes, config = "...", authority = "toko",
-pages = 65536, auth_read = "read"` and obtains its retained routing Root from
-`canic::role::root()`. The shard uses `canic::topology::require_parent` to
-authorize a parent-only method. Declare `parent = "user_hub"` once in the
-shard's app definition in `canic.toml`. With `install_topology = true`, Host
-binds the parent principal and the app's explicit child role into the v2 install
-envelope. The shard retains both under the declared prefix plus `hub.v1`.
-Fresh installations use the new payload format. If an older app used a different key,
-supply `parent_storage_key = "…"` immediately after `database`. Use the original
-key on upgrade. Both mounts own their install/upgrade hooks,
-the standard Auth endpoints and a read-only readiness report. Readiness means
-the declared stores opened. Auth admission is independent and stays closed
-after volatile loss. Role selection grants no management authority.
+This lifecycle attaches the database and retains the parent principal from
+the approved topology envelope. Declare the parent once in `canic.toml`.
+The storage key identifies the cell where that binding survives upgrade. When
+the prefix is the authority followed by a dot, omit `prefix`. This example
+keeps a custom prefix because its existing keys use that namespace.
+The hub's receiver lifecycle selects its retained `config_key` and page
+budget, and restores its routing Root. Both layouts keep their Auth policy,
+readiness check and strict reopen behavior. Adding a store to an installed
+directory requires migration.
 
 For a generated schema with an application-owned lifecycle,
 `canic::declare_db_store!(pub mod database, store = app_schema::model::Items);` exposes

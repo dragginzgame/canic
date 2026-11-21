@@ -30,23 +30,33 @@ instrumentation or a reader. All fleets using this artifact share the selection.
 Canic supplies the controller query and recorder. Write ordinary handlers:
 
 ```rust
+// double
+// Double the value, saturating at the largest u32.
+// limits : default
 #[canic::update]
 fn double(value: u32) -> u32 {
     value.saturating_mul(2)
 }
 ```
 
-`canic app build` verifies the metrics module and controller query export in the built
+`canic app build` verifies the endpoint instrumentation marker and shared query export in the built
 Wasm before replacing the previous output. Its modules column shows
 `Endpoint Metrics` on enabled builds.
 
-After the first successful call, `double` appears in `endpoint_metrics`.
+After the first successful call, `double` appears in the shared `metrics`
+query when requested with `canic::metrics::Request::Endpoints(None)`.
+The same query accepts `Request::Timers` and `Request::Blob`. A missing
+recorder supplies no readings. One guard applies to every source. To override
+the controller default, call `canic::metrics::set_guard(check)` during install
+and reopen. Supply a synchronous `fn() -> Result<(), &'static str>` that
+checks the actual caller.
+
 The recorder and endpoint need no initialization, stable memory, timer, or
 per-handler labels. The child checks its actual IC controller. For a managed
 child, enable `child-metrics` and the `canic-root-client` codec in Root's build
 recipe, as in [canic.toml](canic.toml). The operator can call
-`canic fleet call --canister root --identity IDENTITY child-metrics 0` for
-ordinary managed child slot zero, passing the returned cursor to read another page.
+`canic fleet call --canister root --identity IDENTITY child-metrics 0 endpoints` for
+ordinary managed child slot zero. Pass the returned cursor after `endpoints` for another page, or select `timers` or `blob`.
 
 Run `make metrics-test` with a prepared simulator to qualify the installed actor.
 

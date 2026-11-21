@@ -50,9 +50,7 @@ pub enum State {
 #[macro_export]
 macro_rules! mount_readiness_endpoint {
     ($snapshot:path) => {
-        const _: fn() -> $crate::readiness::State = $snapshot;
-
-        mod canic_readiness {
+        const _: () = {
             use endpoint::runtime;
             use $crate::readiness::{State, endpoint};
 
@@ -65,10 +63,10 @@ macro_rules! mount_readiness_endpoint {
                     on_error = endpoint::fail,
                     encode = endpoint::encode,
                 ),
-                [] fn readiness((): ()) -> State {
+                [] fn __canic_readiness((): ()) -> State {
                     $snapshot()
                 }
             }
-        }
+        };
     };
 }

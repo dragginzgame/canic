@@ -11,9 +11,9 @@ checkout is needed. Existing generated configurations must change only their Sto
 pointing at the Canic workspace. Existing artifacts, approvals and deployed canisters
 are unchanged. Rebuilding does not authorize installing the changed executable.
 
-Fresh builds select Store 0.5.0 and its matching IC Wire 0.26 protocol.
-A local Root-managed upgrade from 0.4.6 preserved the populated Store’s stable
-memory. [Qualification record](../qualification/history.md#wasm-store-046-to-050--2026-11-19)
+Fresh builds select Store 0.6.0 and its matching IC Wire 0.27 protocol.
+A local Root-managed upgrade from 0.5.2 preserved the populated Store’s stable
+memory. [Qualification record](../qualification/history.md#wasm-store-052-to-060--2026-11-21)
 
 Store uses Storage 0.78 for its four named allocations. A fleet with the 0.3.3
 Store on Storage 0.74.1 must retain its qualified executable. Installing 0.4.0 over that directory traps during upgrade.

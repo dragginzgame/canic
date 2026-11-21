@@ -349,7 +349,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     }
     assert_eq!(upgrade_status(pic, root).await, interrupted);
     assert!(
-        super::metrics::read(pic, root)
+        super::metrics::read(pic, root, CanisterId::from_text(&controller).unwrap())
             .await
             .timers
             .unwrap()
@@ -627,16 +627,14 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     assert_eq!(pic.get_stable_memory(archive).await, archive_state);
     assert_eq!(pic.get_stable_memory(child).await, updated_state);
     let before_maintenance = cli(&config, &["fleet", "show"]);
-    let timers = &before_maintenance["metrics"][0]["reported"]["timers"];
-    assert!(
-        timers["accepted"]["total"]
-            .as_str()
-            .unwrap()
-            .parse::<u128>()
-            .unwrap()
-            > 0
-    );
-    assert_eq!(timers["accepted"]["overflowed"], false);
+    assert!(before_maintenance["metrics"][0]["reported"].is_null());
+    let operator = CanisterId::from_text(&controller).unwrap();
+    let timers = super::metrics::read(pic, root, operator)
+        .await
+        .timers
+        .unwrap();
+    assert!(timers.accepted.total > 0);
+    assert!(!timers.accepted.overflowed);
 
     // Root replacement must include the later child's custody as well as the
     // original worker, without changing either application's records or Store.
@@ -678,14 +676,14 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     assert_eq!(view["stores"][0]["reported"]["phase"], "Ready");
     assert_eq!(view["metrics"].as_array().unwrap().len(), 1);
     assert_eq!(view["metrics"][0]["canister"], root.to_text());
-    let timer_report = &view["metrics"][0]["reported"]["timers"];
-    // Volatile diagnostics start a new epoch; durable effect custody above survives.
-    assert_eq!(timer_report["accepted"]["total"], "0");
-    assert_ne!(
-        timer_report["started_at_version"],
-        timers["started_at_version"]
-    );
-    assert_eq!(timer_report["accepted"]["overflowed"], false);
+    assert!(view["metrics"][0]["reported"].is_null());
+    let reset = super::metrics::read(pic, root, operator)
+        .await
+        .timers
+        .unwrap();
+    assert_eq!(reset.accepted.total, 0);
+    assert_ne!(reset.started_at_version, timers.started_at_version);
+    assert!(!reset.accepted.overflowed);
 
     // A valid, installed greeting is not profile readiness. Keep the same
     // management owner and prove the incompatible application remains blocked.
@@ -748,7 +746,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     assert!(!journal.join("child/receipt.json").exists());
     assert_eq!(status(pic, refused_root).await.attempts, [1, 1, 1]);
     assert!(
-        super::metrics::read(pic, refused_root)
+        super::metrics::read(pic, refused_root, operator)
             .await
             .timers
             .unwrap()

@@ -7,11 +7,10 @@ use canic::{
 use ic_db::{Principal, Ulid};
 use user_directory_schema::{ProvisionRefusal, Users, model::user_hub::Route};
 
-// Open the hub database and mount its Auth session and readiness endpoints.
-canic::mount_db_role! {
-    hub,
-    database = user_directory_schema::model::user_hub::Routes,
-    config = "directory.hub.config.v1",
+canic::mount_db!(schema = user_directory_schema::model::user_hub::Hub);
+
+canic::mount_receiver_lifecycle! {
+    config_key = "directory.hub.config.v1",
     authority = "directory",
     pages = 65536,
     auth_read = "read",
@@ -90,7 +89,10 @@ fn binding(row: &Route) -> Binding<[u8; 16]> {
     }
 }
 
-/// Return the original reservation to a verified shard.
+// reserve_project
+// Create a reservation or return its ID only to the shard that owns it.
+// guard  : attested user_shard (ReserveProject::ROLE)
+// limits : default
 #[cfg(feature = "role-service")]
 #[canic::update(role_contract = user_directory_schema::ReserveProject)]
 fn reserve_project(account: AuthSubject) -> [u8; 16] {

@@ -37,7 +37,7 @@ under the current Storage contract.
 The first integration registers timer counters and endpoint instruction
 summaries as separate typed sources in Canic's per-canister heap store. The
 composition root supplies the timer source to IC Timers at initialization.
-Both readers project their existing reports from the shared store.
+One guarded `metrics` query projects each selected source from the shared store.
 
 A disposable installed witness using the published IC Timers 0.46.13 recorded two
 endpoint calls and one completed timer callback in the same canister. Repeated

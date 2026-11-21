@@ -35,7 +35,9 @@ pub fn initialize_timers() -> Result<(), ic_timers::Error> {
     {
         use ic_timers::{MetricsStorage, initialize_with_metrics};
 
-        initialize_with_metrics(crate::metrics::store::open::<MetricsStorage>())
+        initialize_with_metrics(crate::metrics::store::open::<MetricsStorage>())?;
+        crate::metrics::start_timer_window();
+        Ok(())
     }
     #[cfg(not(feature = "metrics"))]
     {
@@ -104,35 +106,35 @@ macro_rules! mount_lifecycle {
         const _: () = {
             use $crate::lifecycle::runtime as platform;
 
-            fn admit() -> Result<(), std::convert::Infallible> {
+            fn __canic_admit() -> Result<(), std::convert::Infallible> {
                 Ok(())
             }
 
-            fn fail(error: impl std::fmt::Debug) -> ! {
+            fn __canic_fail(error: impl std::fmt::Debug) -> ! {
                 platform::system::trap(&format!("lifecycle refused: {error:?}"))
             }
 
             #[platform::init(
                 runtime = platform,
-                guard = admit,
+                guard = __canic_admit,
                 decode = $decode,
                 max_bytes = $max,
-                on_error = fail,
+                on_error = __canic_fail,
             )]
             #[allow(clippy::needless_pass_by_value)]
-            fn init($binding: $input) {
+            fn __canic_init($binding: $input) {
                 $crate::lifecycle::initialize_diagnostics();
                 $call;
             }
 
             #[platform::post_upgrade(
                 runtime = platform,
-                guard = admit,
+                guard = __canic_admit,
                 decode = $crate::lifecycle::empty_arguments,
                 max_bytes = 0,
-                on_error = fail,
+                on_error = __canic_fail,
             )]
-            fn post_upgrade((): ()) {
+            fn __canic_post_upgrade((): ()) {
                 $crate::lifecycle::initialize_diagnostics();
                 $reopen();
             }

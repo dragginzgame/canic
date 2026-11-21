@@ -376,14 +376,14 @@ fn compiled_modules(bytes: &[u8], endpoint_metrics: bool) -> Result<Vec<&'static
                 for export in exports {
                     let export = export.map_err(supplier)?;
                     query |= export.kind == ExternalKind::Func
-                        && export.name == "canister_query endpoint_metrics";
+                        && export.name == "canister_query metrics";
                 }
             }
             _ => {}
         }
     }
     if endpoint_metrics && !(mount && query) {
-        return Err(Error::Invalid("canic/endpoint-metrics was selected but the built Wasm is missing the Canic controller query".into()));
+        return Err(Error::Invalid("canic/endpoint-metrics was selected but the built Wasm is missing the Canic metrics marker or shared metrics query".into()));
     }
     if !endpoint_metrics && mount {
         return Err(Error::Invalid("endpoint metrics compiled without an explicit selection; select canic/endpoint-metrics in the build recipe or remove the dependency feature".into()));

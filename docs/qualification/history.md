@@ -7,6 +7,32 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Wasm Store 0.5.2 to 0.6.0 — 2026-11-21
+
+The Root preservation fixture installed the published 0.5.2 Store selected by Canic
+v0.245.0, then upgraded to the ordinary 0.6.0 registry artifact. The original Wasm
+digest was `82ef8bf110529c9b32ce04b0ef1320f8e1303964bb5f3b3f81a4a79729ca8f6e`
+and the replacement was `71b1d4c3f939634b5259325a9ca2f632ccc448d6bd2deecdd1a2fb07b0806547`.
+All three preservation cases passed. Root retained its scan position across its
+own upgrade, verified the Store's stable bytes across replacement, and reached
+Ready through explicit activation. The same suite passed with the ordinary
+0.6.0 Store as original and its maintenance candidate as replacement.
+
+## Schema-selected DB roles — 2026-11-21
+
+With IC DB 0.26.2, the installed two-store hub wrote primary key 1 with values
+7 and 19 to different entities, then read both through the same `db!()`
+after a heap-replacing upgrade. An upgrade to a hub with a different directory
+trapped. The original stable bytes and both reads survived. Run
+`bash scripts/dev/test-store.sh db-roles` on the prepared simulator.
+
+The User Directory predecessor run used hub and shard Wasms built from Canic
+`v0.245.0` (`6ff659c`) and the existing explicit Storage policies.
+With `CANIC_PREDECESSOR_DIRECTORY_ROLES` pointing at those binaries,
+`bash scripts/dev/test-store.sh user-directory` passed both installed tests.
+This covers reopening the populated single-store layout through the new schema
+mount. Changing a deployed roster still requires a directory migration.
+
 ## IC DB 0.24.0 schema-owner upgrade — 2026-11-20
 
 The User Directory journey installed the previous IC DB 0.23.22 role Wasms,

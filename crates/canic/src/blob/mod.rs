@@ -94,7 +94,7 @@ pub const MANAGEMENT: u64 = ic_wire::method_id("blob_management");
 #[macro_export]
 macro_rules! mount_blob_endpoints {
     (execute = $execute:path, inspect = $inspect:path, management = $management:path $(,)?) => {
-        mod blob_update {
+        const _: () = {
             use endpoint::{api, runtime};
             use $crate::blob::{
                 UPDATE, endpoint,
@@ -104,20 +104,21 @@ macro_rules! mount_blob_endpoints {
                 },
             };
 
-            #[runtime::update(
-                runtime = runtime,
-                guard = endpoint::admit::<UPDATE>,
-                decode = endpoint::decode::<Command, UPDATE>,
-                max_bytes = 65536,
-                on_error = endpoint::fail,
-                name = "blob_update",
-                encode = endpoint::encode::<Result<Outcome, Error>, UPDATE>,
-            )]
-            fn blob_update(input: Command) -> Result<Outcome, Error> {
-                $execute(api::caller(), input, api::time())
+            $crate::__canic_builtin! {
+                wire, UPDATE, runtime::update, "blob_update", (
+                    runtime = runtime,
+                    guard = endpoint::admit::<UPDATE>,
+                    decode = endpoint::decode::<Command, UPDATE>,
+                    max_bytes = 65536,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<Result<Outcome, Error>, UPDATE>,
+                ),
+                [] fn __canic_blob_update(input: Command) -> Result<Outcome, Error> {
+                    $execute(api::caller(), input, api::time())
+                }
             }
-        }
-        mod blob_query {
+        };
+        const _: () = {
             use endpoint::{api, runtime};
             use $crate::blob::{
                 QUERY, endpoint,
@@ -127,38 +128,40 @@ macro_rules! mount_blob_endpoints {
                 },
             };
 
-            #[runtime::query(
-                runtime = runtime,
-                guard = endpoint::admit::<QUERY>,
-                decode = endpoint::decode::<Inspection, QUERY>,
-                max_bytes = 65536,
-                on_error = endpoint::fail,
-                name = "blob_query",
-                encode = endpoint::encode::<Result<Observation, Error>, QUERY>,
-            )]
-            fn blob_query(input: Inspection) -> Result<Observation, Error> {
-                $inspect(api::caller(), input)
+            $crate::__canic_builtin! {
+                wire, QUERY, runtime::query, "blob_query", (
+                    runtime = runtime,
+                    guard = endpoint::admit::<QUERY>,
+                    decode = endpoint::decode::<Inspection, QUERY>,
+                    max_bytes = 65536,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<Result<Observation, Error>, QUERY>,
+                ),
+                [] fn __canic_blob_query(input: Inspection) -> Result<Observation, Error> {
+                    $inspect(api::caller(), input)
+                }
             }
-        }
-        mod blob_management {
+        };
+        const _: () = {
             use endpoint::{api, runtime};
             use $crate::blob::{
                 MANAGEMENT, endpoint,
                 supplier::{local::Error, protocol::ManagementView},
             };
 
-            #[runtime::update(
-                runtime = runtime,
-                guard = endpoint::admit::<MANAGEMENT>,
-                decode = endpoint::decode::<(), MANAGEMENT>,
-                max_bytes = 65536,
-                on_error = endpoint::fail,
-                name = "blob_management",
-                encode = endpoint::encode::<Result<ManagementView, Error>, MANAGEMENT>,
-            )]
-            fn blob_management((): ()) -> Result<ManagementView, Error> {
-                $management(api::caller())
+            $crate::__canic_builtin! {
+                wire, MANAGEMENT, runtime::update, "blob_management", (
+                    runtime = runtime,
+                    guard = endpoint::admit::<MANAGEMENT>,
+                    decode = endpoint::decode::<(), MANAGEMENT>,
+                    max_bytes = 65536,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<Result<ManagementView, Error>, MANAGEMENT>,
+                ),
+                [] fn __canic_blob_management((): ()) -> Result<ManagementView, Error> {
+                    $management(api::caller())
+                }
             }
-        }
+        };
     };
 }

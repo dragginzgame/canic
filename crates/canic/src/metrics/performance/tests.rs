@@ -17,15 +17,16 @@ fn full_page_with_maximum_names_fits_both_wire_contracts() {
             .collect(),
         next: Some(name),
     };
-    fn roundtrip<C: Contract<Output = Page>>(page: &Page) {
-        assert_eq!(
-            &C::decode_reply(&C::encode_reply(page).unwrap()).unwrap(),
-            page
-        );
-    }
-    EndpointMetrics::decode_request(&EndpointMetrics::encode_request(&page.next).unwrap()).unwrap();
-    ChildMetrics::decode_request(&ChildMetrics::encode_request(&(0, page.next.clone())).unwrap())
-        .unwrap();
-    roundtrip::<EndpointMetrics>(&page);
-    roundtrip::<ChildMetrics>(&page);
+    use crate::{
+        method::Contract,
+        metrics::{ChildMetrics, ReadMetrics, Report, Request},
+    };
+    let request =
+        ChildMetrics::encode_request(&(0, Request::Endpoints(page.next.clone()))).unwrap();
+    ChildMetrics::decode_request(&request).unwrap();
+    let report = Report::Endpoints(page);
+    let bytes = ReadMetrics::encode_reply(&report).unwrap();
+    ReadMetrics::decode_reply(&bytes).unwrap();
+    let bytes = ChildMetrics::encode_reply(&report).unwrap();
+    ChildMetrics::decode_reply(&bytes).unwrap();
 }

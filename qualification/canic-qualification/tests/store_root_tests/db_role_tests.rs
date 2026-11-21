@@ -276,3 +276,49 @@ async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
     );
     assert!(server.stop().unwrap().process.cleanup.is_empty());
 }
+
+#[tokio::test]
+async fn schema_mount_reopens_two_stores_by_entity() {
+    let wasm = std::fs::read(artifacts().join("db-role-schema.wasm")).unwrap();
+    let (mut server, instance) = support::instance(&canic_qualification::server_directory()).await;
+    let pic = instance.client();
+    let id = pic.create_canister().await;
+    pic.add_cycles(id, 3_000_000_000_000).await;
+    pic.install_canister(id, wasm.clone(), vec![], None).await;
+    let client = Client {
+        pic,
+        id,
+        operator: CanisterId::anonymous(),
+    };
+    client
+        .update::<_, ()>(
+            "seed",
+            ic_wire::method_id("seed"),
+            &(),
+            canic::method::LIMITS,
+        )
+        .await;
+    let values = || user_directory_tests::query::<(u64, u64)>(&client, "values");
+    assert_eq!(values().await.unwrap(), (7, 19));
+    canic_qualification::upgrade_stopped(pic, id, wasm, vec![], None)
+        .await
+        .unwrap();
+    assert_eq!(values().await.unwrap(), (7, 19));
+    // A different roster must fail reopen before either retained store is lost.
+    let before = pic.get_stable_memory(id).await;
+    let other = std::fs::read(artifacts().join("db-role-hub.wasm")).unwrap();
+    let refusal = canic_qualification::upgrade_stopped(pic, id, other, vec![], None)
+        .await
+        .unwrap_err();
+    assert_eq!(
+        refusal.reject_code,
+        ic_testkit::pocket_ic::RejectCode::CanisterError
+    );
+    assert_eq!(pic.get_stable_memory(id).await, before);
+    assert_eq!(values().await.unwrap(), (7, 19));
+    assert_eq!(
+        instance.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert!(server.stop().unwrap().process.cleanup.is_empty());
+}

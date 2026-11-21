@@ -179,7 +179,7 @@ fn control(command: u8) -> bool {
     })
 }
 
-canic::mount_auth_refresh_endpoint!(super::refresh);
+canic::mount_auth_refresh_endpoint!(refresh);
 
 async fn refresh() -> Result<(), enrollment::Error> {
     let start = STATE.with_borrow_mut(|state| {
@@ -413,9 +413,9 @@ fn logout(caller: Principal, now: u64) -> LogoutResult {
 }
 
 canic::mount_auth_endpoints! {
-    admit = super::admit,
-    read = super::read,
-    logout = super::logout,
+    admit = admit,
+    read = read,
+    logout = logout,
 }
 
 /// Read the receiver's current enrollment evidence.

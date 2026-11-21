@@ -2,8 +2,11 @@
 
 The shared `schema` crate builds both databases. Its model binds `Route` to the
 hub's `Routes` store and `User` to the shard's `Accounts` store. Each actor passes
-its store type to `mount_db_role!`. Keep the declared store key when upgrading a
-populated role.
+its canister schema type to `mount_db!`. Keep the declared store key when upgrading a
+populated role. IC DB routes each typed query to its declared store.
+The separate receiver lifecycle retains the installed topology. For a shard,
+`parent_storage_key` names the stable cell holding the parent principal selected
+by the fleet’s approved install.
 
 A user signs in to the hub and calls `register`. The hub asks Root to place
 the account, records its route, and asks that shard to insert the private

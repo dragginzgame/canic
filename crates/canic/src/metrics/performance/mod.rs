@@ -5,7 +5,6 @@ mod recorder;
 #[cfg(all(test, feature = "endpoint-metrics"))]
 mod tests;
 
-use crate::method::{Contract, wire};
 use serde::{Deserialize, Serialize};
 
 ///
@@ -42,49 +41,11 @@ pub struct Page {
     pub next: Option<String>,
 }
 
-///
-/// EndpointMetrics
-/// Controller-only child query.
-///
-
-pub struct EndpointMetrics;
-
-impl Contract for EndpointMetrics {
-    const NAME: &'static str = "endpoint_metrics";
-    const ID: u64 = wire::method_id(Self::NAME);
-    const REQUEST: wire::Limits = wire::Limits {
-        nodes: 256,
-        ..crate::method::LIMITS
-    };
-    const REPLY: wire::Limits = wire::Limits {
-        bytes: 4096,
-        allocation: 65_536,
-        nodes: 4096,
-        depth: 8,
-    };
-    type Input = Option<String>;
-    type Output = Page;
-}
-
-///
-/// ChildMetrics
-/// Root controller reads one page from a ready managed child slot.
-///
-
-pub struct ChildMetrics;
-
-impl Contract for ChildMetrics {
-    const NAME: &'static str = "child_metrics";
-    const ID: u64 = wire::method_id(Self::NAME);
-    const REQUEST: wire::Limits = EndpointMetrics::REQUEST;
-    const REPLY: wire::Limits = EndpointMetrics::REPLY;
-    type Input = (u8, Option<String>);
-    type Output = Page;
-}
-
 #[cfg(feature = "endpoint-metrics")]
 #[doc(hidden)]
 pub use recorder::measure;
+#[cfg(feature = "endpoint-metrics")]
+pub(super) use recorder::page;
 
 /// Expand directly to the handler when measurement is disabled.
 #[cfg(not(feature = "endpoint-metrics"))]

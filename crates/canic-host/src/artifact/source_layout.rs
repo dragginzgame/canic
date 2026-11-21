@@ -142,14 +142,18 @@ impl<'ast> Visit<'ast> for Declarations {
     fn visit_item_macro(&mut self, item: &'ast syn::ItemMacro) {
         if let Some(segment) = item.mac.path.segments.last() {
             let name = segment.ident.to_string();
-            if name == "mount_db_role" {
+            if name == "mount_receiver_lifecycle" {
                 self.0[3] = true;
             }
             if matches!(name.as_str(), "mount_auth_lifecycle" | "mount_lifecycle") {
                 self.0[2] = true;
             }
             if name.starts_with("mount_")
-                && (name.contains("endpoint") || name == "mount_auth_session")
+                && (name.contains("endpoint")
+                    || matches!(
+                        name.as_str(),
+                        "mount_auth_session" | "mount_service_directory"
+                    ))
             {
                 self.0[0] = true;
             }

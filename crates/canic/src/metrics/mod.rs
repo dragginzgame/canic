@@ -1,35 +1,25 @@
-//! Bounded public diagnostics, independent of recording engines and durable authority.
+//! Bounded canister diagnostics, independent of recording engines and durable authority.
 
-#[cfg(test)]
+#[cfg(all(test, feature = "method"))]
 mod tests;
 
 #[cfg(feature = "metrics")]
-pub mod endpoint;
+mod endpoint;
+#[cfg(feature = "metrics")]
+pub use endpoint::set_guard;
+#[cfg(all(feature = "metrics", feature = "timers"))]
+pub(crate) use endpoint::start_timer_window;
 
 #[cfg(feature = "method")]
 pub mod performance;
+#[cfg(feature = "method")]
+mod protocol;
+#[cfg(feature = "method")]
+pub use protocol::{BlobCommand, BlobSizes, ChildMetrics, ReadMetrics, Report, Request};
 
 pub mod store;
 
 use serde::{Deserialize, Serialize};
-
-/// Shared read-only metrics query. This version reports aggregate timer counters only.
-pub const METHOD: u64 = 2;
-/// Empty request, bounded before allocation.
-pub const REQUEST_LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: 32,
-    allocation: 256,
-    nodes: 4,
-    depth: 4,
-};
-/// Six fixed counters and reset metadata; no arbitrary labels or declaration inventory.
-pub const RESPONSE_LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: 1024,
-    // Wire charges each visited native record (including nested records) conservatively.
-    allocation: 32_768,
-    nodes: 128,
-    depth: 8,
-};
 
 /// Supplier total with its original overflow quality. No arithmetic or recording lives here.
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
@@ -91,34 +81,4 @@ pub struct Snapshot {
     pub observed_at_ns: u64,
     /// Selected supplier's aggregate report; no operation IDs, callers or private topology.
     pub timers: Option<Timers>,
-}
-
-/// Mount a public, bounded query using an explicitly supplied local snapshot function.
-/// Mounting initializes no provider, storage, timer, sampler or persistent history.
-#[cfg(feature = "metrics")]
-// Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
-#[rustfmt::skip]
-#[macro_export]
-macro_rules! mount_metrics_endpoint {
-    ($snapshot:path) => {
-        const _: fn() -> $crate::metrics::Snapshot = $snapshot;
-
-        mod canic_metrics {
-            use endpoint::runtime;
-            use $crate::metrics::{Snapshot, endpoint};
-
-            #[runtime::query(
-                runtime = runtime,
-                guard = endpoint::admit,
-                decode = endpoint::decode,
-                max_bytes = 32,
-                on_error = endpoint::fail,
-                name = "metrics",
-                encode = endpoint::encode,
-            )]
-            fn metrics((): ()) -> Snapshot {
-                $snapshot()
-            }
-        }
-    };
 }

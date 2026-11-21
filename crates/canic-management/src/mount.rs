@@ -280,45 +280,43 @@ macro_rules! mount_endpoints {
         [$($asynchronous:ident)?] ($($input:ident: $request:ty)?) -> $reply:ty,
         $body:expr) => {
         mod $name {
+            use $crate::endpoint::{runtime, protocol, wire};
+            type Reply = $reply;
+            $crate::endpoint::inspect!(wire, $export, $kind, protocol::$($id)::+, ($($request)?), Reply);
 
-            mod installed {
-                use $crate::endpoint::{runtime, protocol, wire};
-                type Reply = $reply;
+            fn admit() -> Result<(), String> {
+                $crate::endpoint::admit(protocol::$($limits)::+.bytes, $private, protocol::$($id)::+)
+            }
 
-                fn admit() -> Result<(), String> {
-                    $crate::endpoint::admit(protocol::$($limits)::+.bytes, $private, protocol::$($id)::+)
-                }
+            fn decode(bytes: &[u8]) -> Result<($($request)?), wire::Error> {
+                wire::decode(bytes, wire::Encoding::Frame {
+                    method: protocol::$($id)::+, direction: wire::Direction::Request
+                }, protocol::$($limits)::+)
+            }
 
-                fn decode(bytes: &[u8]) -> Result<($($request)?), wire::Error> {
-                    wire::decode(bytes, wire::Encoding::Frame {
-                        method: protocol::$($id)::+, direction: wire::Direction::Request
-                    }, protocol::$($limits)::+)
-                }
+            #[allow(clippy::needless_pass_by_value)]
+            fn encode(value: Reply) -> Result<Vec<u8>, wire::Error> {
+                wire::encode(&value, wire::Encoding::Frame {
+                    method: protocol::$($id)::+, direction: wire::Direction::Response
+                }, $crate::endpoint::response_limits(protocol::$($id)::+))
+            }
+            // Platform requires a literal physical ceiling; the guard owns the
+            // tighter protocol-specific limit and runs before argument copying.
+            const _: () = assert!(protocol::$($limits)::+.bytes <= 2_097_152);
 
-                #[allow(clippy::needless_pass_by_value)]
-                fn encode(value: Reply) -> Result<Vec<u8>, wire::Error> {
-                    wire::encode(&value, wire::Encoding::Frame {
-                        method: protocol::$($id)::+, direction: wire::Direction::Response
-                    }, $crate::endpoint::response_limits(protocol::$($id)::+))
-                }
-                // Platform requires a literal physical ceiling; the guard owns the
-                // tighter protocol-specific limit and runs before argument copying.
-                const _: () = assert!(protocol::$($limits)::+.bytes <= 2_097_152);
+            #[runtime::$kind(
+                name = $export,
+                runtime = runtime,
+                guard = admit,
+                decode = decode,
+                encode = encode,
+                max_bytes = 2097152,
+                on_error = $crate::endpoint::fail,
+            )]
+            $($asynchronous)? fn $name(_input: ($($request)?)) -> Reply {
+                $(let $input: $request = _input;)?
 
-                #[runtime::$kind(
-                    runtime = runtime,
-                    name = $export,
-                    guard = admit,
-                    decode = decode,
-                    encode = encode,
-                    max_bytes = 2097152,
-                    on_error = $crate::endpoint::fail,
-                )]
-                $($asynchronous)? fn $name(_input: ($($request)?)) -> Reply {
-                    $(let $input: $request = _input;)?
-
-                    $body
-                }
+                $body
             }
         }
     };

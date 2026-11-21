@@ -23,7 +23,10 @@ fn controller<const ID: u64>() -> Result<(), String> {
     transport::admit::<ID>()
 }
 
-/// Approve one receiver grant or confirm an exact retry.
+// configure_auth
+// Approve one receiver grant or confirm an exact retry.
+// guard  : Root controller
+// limits : enrollment::LIMITS (8,192 bytes each way)
 #[runtime::update(
     runtime = runtime,
     guard = controller::<{enrollment::CONFIGURE}>,
@@ -47,7 +50,10 @@ fn configure_auth(grant: Grant) -> Result<(), Error> {
     })
 }
 
-/// Close the matching receiver grant while preserving grants for other receivers.
+// revoke_auth
+// Close the matching receiver grant while preserving grants for other receivers.
+// guard  : Root controller
+// limits : enrollment::LIMITS (8,192 bytes each way)
 #[runtime::update(
     runtime = runtime,
     guard = controller::<{enrollment::REVOKE}>,
@@ -69,7 +75,10 @@ fn revoke_auth(grant: Grant) -> Result<(), Error> {
     })
 }
 
-/// Return the snapshot for the calling receiver and its requested binding.
+// auth_enrollment
+// Return the snapshot for the calling receiver and its requested binding.
+// guard  : transport::admit (enrollment frame)
+// limits : enrollment::LIMITS (8,192 bytes each way)
 #[runtime::update(
     runtime = runtime,
     guard = transport::admit::<{enrollment::SNAPSHOT}>,
@@ -93,7 +102,10 @@ fn auth_enrollment(request: Request) -> Result<Snapshot, Error> {
     })
 }
 
-/// Ask a receiver controlled by this Root to pull its current grant.
+// refresh_auth_receiver
+// Ask a receiver controlled by this Root to pull its current grant.
+// guard  : Root controller
+// limits : enrollment::LIMITS (8,192 bytes each way)
 #[runtime::update(
     runtime = runtime,
     guard = controller::<{enrollment::TRIGGER_REFRESH}>,

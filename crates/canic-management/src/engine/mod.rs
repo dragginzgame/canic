@@ -3,7 +3,6 @@ pub(crate) mod application;
 pub(crate) mod blob;
 mod delivery;
 pub(crate) mod directory;
-pub(super) mod metrics;
 #[cfg(feature = "role-issuer")]
 pub mod role_issuer;
 #[cfg(feature = "sharding")]
@@ -115,7 +114,6 @@ pub(crate) struct State {
     #[cfg(feature = "role-issuer")]
     role_key: StableCell<Vec<u8>>,
     readiness: Readiness,
-    timer_window: (u64, u64),
     #[cfg(feature = "backup")]
     pub(crate) backup: crate::backup::Ledger,
 }
@@ -209,7 +207,6 @@ pub fn open(fresh: bool, readiness: Readiness) {
         #[cfg(feature = "backup")]
         backup_cell,
         readiness,
-        timer_window: (api::canister_version(), api::time()),
     };
     assert!(
         state.journal.0.keys().eq(state.artifact.0.keys()),

@@ -1,6 +1,8 @@
 //! Explicit management endpoint mounting. Platform owns execution; Wire owns codecs.
 
 #[doc(hidden)]
+pub use canic::__canic_inspect as inspect;
+#[doc(hidden)]
 pub use canic_management_protocol as protocol;
 #[doc(hidden)]
 pub use ic_platform_runtime as runtime;

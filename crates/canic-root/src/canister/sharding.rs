@@ -9,7 +9,10 @@ use canic_management_protocol::{
 };
 use ic_platform_runtime as runtime;
 
-/// Approve the hub and limits for this Root's shard pool.
+// configure
+// Approve the hub and limits for this Root's shard pool.
+// guard  : Root controller
+// limits : stored::LIMITS request (65,536 bytes), sharding::LIMITS reply (1,024 bytes)
 #[runtime::update(
     runtime = runtime,
     name = "configure_shards",
@@ -23,7 +26,10 @@ fn configure(input: ShardPool) -> Result<(), Refusal> {
     sharding::configure(input)
 }
 
-/// Retain the project hub's independent dedicated-instance approval.
+// configure_instances
+// Retain the project hub's independent dedicated-instance approval.
+// guard  : Root controller
+// limits : stored::LIMITS request (65,536 bytes), sharding::LIMITS reply (1,024 bytes)
 #[runtime::update(
     runtime = runtime,
     name = "configure_instances",
@@ -37,7 +43,10 @@ fn configure_instances(input: stored::InstancePool) -> Result<(), Refusal> {
     sharding::configure_instances(input)
 }
 
-/// Set this subnet owner's shared placement ceiling.
+// configure_capacity
+// Set this subnet owner's shared placement ceiling.
+// guard  : Root controller
+// limits : stored::LIMITS request (65,536 bytes), sharding::LIMITS reply (1,024 bytes)
 #[runtime::update(
     runtime = runtime,
     name = "configure_capacity",
@@ -51,7 +60,10 @@ fn configure_capacity(input: stored::SubnetCapacity) -> Result<(), Refusal> {
     sharding::configure_capacity(input)
 }
 
-/// Raise one pool count under its existing funding and deadline.
+// increase_pool
+// Raise one pool count under its existing funding and deadline.
+// guard  : Root controller
+// limits : stored::LIMITS request (65,536 bytes), sharding::LIMITS reply (1,024 bytes)
 #[runtime::update(
     runtime = runtime,
     name = "increase_pool",
@@ -65,7 +77,10 @@ fn increase_pool(input: stored::IncreasePool) -> Result<(), Refusal> {
     sharding::increase_pool(input)
 }
 
-/// Return the hub's retained placement for a key or assign it within the approved limits.
+// assign
+// Return the hub's retained placement for a key or assign it within the approved limits.
+// guard  : approved shard hub
+// limits : canic::sharding::LIMITS (1,024 bytes each way)
 #[runtime::update(
     runtime = runtime,
     name = "assign_shard",
@@ -79,7 +94,10 @@ fn assign(key: Key) -> Placement {
     sharding::assign(key)
 }
 
-/// Read a placement for the admitted hub without allocating a shard.
+// lookup
+// Read a placement for the admitted hub without allocating a shard.
+// guard  : approved shard hub
+// limits : canic::sharding::LIMITS (1,024 bytes each way)
 #[runtime::update(
     runtime = runtime,
     name = "lookup_shard",
@@ -93,7 +111,10 @@ fn lookup(key: Key) -> Placement {
     sharding::lookup(&key)
 }
 
-/// Return the hub's retained placement for a key or assign it within the approved limits.
+// assign_instance
+// Return the hub's retained placement for a key or assign it within the approved limits.
+// guard  : approved project hub
+// limits : canic::sharding::LIMITS (1,024 bytes each way)
 #[runtime::update(
     runtime = runtime,
     name = "assign_instance",
@@ -107,7 +128,10 @@ fn assign_instance(key: Key) -> Placement {
     sharding::assign_instance(key)
 }
 
-/// Read a placement for the admitted hub without allocating a dedicated child.
+// lookup_instance
+// Read a placement for the admitted hub without allocating a dedicated child.
+// guard  : approved project hub
+// limits : canic::sharding::LIMITS (1,024 bytes each way)
 #[runtime::update(
     runtime = runtime,
     name = "lookup_instance",
@@ -157,14 +181,19 @@ fn fail(error: impl std::fmt::Debug) -> ! {
     runtime::system::trap(&format!("shard placement: {error:?}"))
 }
 
-/// Create or recover the same Root verifying key for receiver setup.
+// prepare_role_key
+// Create or recover the same Root verifying key for receiver setup.
+// guard  : Root controller
+// limits : default
 #[cfg(feature = "role-issuer")]
 #[canic::update(contract = canic::topology::attestation::PrepareRoleKey, guard = controller)]
 async fn prepare_role_key() -> Result<ic_wire::Bytes<32>, String> {
     canic_management::role_issuer::prepare().await
 }
 
-/// Issue a two-hour credential only for a ready shared-shard caller.
+// issue_role
+// Issue a two-hour credential only for a ready shared-shard caller.
+// limits : default
 #[cfg(feature = "role-issuer")]
 #[canic::update(contract = canic::topology::attestation::Issue)]
 fn issue_role(
@@ -173,7 +202,10 @@ fn issue_role(
     canic_management::role_issuer::issue(receiver)
 }
 
-/// Observe placement custody using the signed operator call path.
+// inspect_shard
+// Observe placement custody using the signed operator call path.
+// guard  : Root controller
+// limits : canic::sharding::LIMITS (1,024 bytes each way)
 #[canic::update(contract = canic::sharding::InspectShard, guard = controller)]
 fn inspect_shard(
     shard: ic_platform_types::Principal,
@@ -181,13 +213,19 @@ fn inspect_shard(
     sharding::inspect_shard(shard)
 }
 
-/// Stop accepting new keys while continuing to serve existing routes.
+// begin_shard_drain
+// Stop accepting new keys while continuing to serve existing routes.
+// guard  : Root controller
+// limits : canic::sharding::LIMITS (1,024 bytes each way)
 #[canic::update(contract = canic::sharding::BeginShardDrain, guard = controller)]
 fn begin_shard_drain(target: canic::sharding::ShardTarget) -> Result<u16, String> {
     sharding::begin_shard_drain(&target)
 }
 
-/// Release an exact placement after its hub has committed its application change.
+// release_shard
+// Release an exact placement after its hub has committed its application change.
+// guard  : approved shard hub
+// limits : canic::sharding::LIMITS (1,024 bytes each way)
 #[canic::update(contract = canic::sharding::ReleaseShard, guard = hub)]
 fn release_shard((key, target): (Key, canic::sharding::ShardTarget)) -> Result<(), String> {
     sharding::release_shard(&key, &target)

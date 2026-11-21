@@ -7,9 +7,10 @@ use canic_management::{self as management, Readiness};
 use canic_management_protocol::Failure;
 use ic_platform_runtime as runtime;
 
-canic::mount_metrics_endpoint!(canic_management::metrics);
-
-/// Create the Root management journal and initialize selected enrollment state.
+// init
+// Create the Root management journal and initialize selected enrollment state.
+// guard  : lifecycle_guard (IC lifecycle)
+// limits : empty request and no reply
 #[runtime::init(
     runtime = runtime,
     guard = lifecycle_guard,
@@ -24,7 +25,10 @@ fn init((): ()) {
     crate::auth::fresh();
 }
 
-/// Reopen the root state from the preceding executable.
+// post_upgrade
+// Reopen the root state from the preceding executable.
+// guard  : lifecycle_guard (IC lifecycle)
+// limits : empty request and no reply
 #[runtime::post_upgrade(
     runtime = runtime,
     guard = lifecycle_guard,
@@ -62,13 +66,19 @@ management::mount_endpoints! {
     stage_application_upgrade, reconcile_application_upgrade, activate_application_upgrade,
 }
 
-/// Read one page of Root diagnostics using the operator’s signed call.
+// logs
+// Read one page of Root diagnostics using the operator’s signed call.
+// guard  : Root controller
+// limits : default request, Logs::REPLY (4,096 bytes)
 #[canic::update(contract = canic::logging::Logs, guard = controller)]
 fn logs(before: Option<u64>) -> canic::logging::Page {
     canic::logging::page(before)
 }
 
-/// Deliver one exact revision to a ready named service under the operator's approval.
+// publish_directory
+// Deliver one exact revision to a ready named service under the operator's approval.
+// guard  : Root controller
+// limits : default
 #[canic::update(guard = controller)]
 async fn publish_directory(request: (String, u64)) -> Result<u64, String> {
     let (name, revision) = request;
@@ -77,13 +87,16 @@ async fn publish_directory(request: (String, u64)) -> Result<u64, String> {
         .map_err(String::from)
 }
 
-/// Read bounded performance observations from an installed, ready child of this Root.
+// child_metrics
+// Read bounded performance observations from an installed, ready child of this Root.
+// guard  : Root controller
+// limits : ChildMetrics::REQUEST and ChildMetrics::REPLY (4,096-byte reply)
 #[cfg(feature = "child-metrics")]
-#[canic::update(contract = canic::metrics::performance::ChildMetrics, guard = controller)]
-async fn child_metrics(request: (u8, Option<String>)) -> canic::metrics::performance::Page {
-    use canic::metrics::performance::EndpointMetrics;
+#[canic::update(contract = canic::metrics::ChildMetrics, guard = controller)]
+async fn child_metrics(request: (u8, canic::metrics::Request)) -> canic::metrics::Report {
+    use canic::metrics::ReadMetrics;
     use canic_management_protocol::{Phase, children::ChildId};
-    let (slot, after) = request;
+    let (slot, source) = request;
     let slot = ChildId::new(usize::from(slot))
         .unwrap_or_else(|| runtime::system::trap("unknown child slot"));
     let status = management::children::status(slot);
@@ -96,14 +109,14 @@ async fn child_metrics(request: (u8, Option<String>)) -> canic::metrics::perform
         .parse()
         .expect("retained child principal");
     let caller = runtime::system::caller();
-    let page = canic::method::call::<EndpointMetrics>(target, 5, &after)
+    let report = canic::method::call::<ReadMetrics>(target, 5, &source)
         .await
         .unwrap_or_else(|error| canic::method::fail(error));
     assert!(
         runtime::system::is_controller(&caller),
         "controller required"
     );
-    page
+    report
 }
 
 /// Require a current controller of this Root.

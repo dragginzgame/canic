@@ -23,7 +23,7 @@ Generated crates opt into source layout checks with `[package.metadata.canic.lay
 in their Cargo manifest. Canic checks selected packages during `canic app build`
 and `canic artifact build`. The template selects `src/lib.rs` for callable mounts, IC DB
 entities under `src/schema/`, and install/upgrade hooks in `src/lifecycle.rs`.
-A stateful role using `canic::mount_db_role!` declares its generated lifecycle in
+A stateful receiver using `canic::mount_receiver_lifecycle!` declares its generated lifecycle in
 `src/setup.rs`. The `lifecycle` override also applies to this declaration. To change a location for one crate,
 set `endpoints`, `schema` or `lifecycle` to its source path in that table.
 Existing crates can adopt the check by adding the table.
@@ -35,6 +35,9 @@ The function name is the public export and the Wire method ID defaults to the
 hash of that name. The default frame budget is 512 bytes in each direction.
 
 ```rust
+// version
+// Return the application version.
+// limits : default
 #[canic::query]
 fn version() -> u32 {
     1

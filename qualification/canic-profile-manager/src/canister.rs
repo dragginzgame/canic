@@ -2,8 +2,6 @@ use canic_management::{self as management, Readiness};
 use canic_management_protocol::Failure;
 use ic_platform_runtime as runtime;
 
-canic::mount_metrics_endpoint!(canic_management::metrics);
-
 /// Initialize the profile manager state for this installation.
 #[runtime::init(
     runtime = runtime,

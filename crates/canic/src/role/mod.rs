@@ -1,9 +1,7 @@
 //! Compose application roles from their explicitly selected actor adapters.
 mod mount;
 
-#[cfg(feature = "stateful-role")]
 mod actor;
-#[cfg(feature = "stateful-role")]
 pub use actor::{
     HubConfig, ShardConfig, decode_hub, decode_shard, hub_readiness, open_hub, open_shard, root,
     shard_readiness,

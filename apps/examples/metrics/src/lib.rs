@@ -3,18 +3,22 @@
 use canic::{method::Contract, readiness::State};
 
 // A freshly installed or upgraded metrics canister can accept traffic immediately.
-canic::mount_readiness_endpoint!(crate::readiness);
+canic::mount_readiness_endpoint!(readiness);
 
 /// UTF-8 payload accepted by a measured ping.
 pub type Payload = canic::method::wire::Text<256>;
 
-/// Return the size of a bounded payload.
+// ping
+// Return the length in bytes of up to 256 UTF-8 bytes.
+// limits : default
 #[canic::update(contract = Ping)]
 fn ping(payload: Payload) -> u32 {
     payload.as_str().len() as u32
 }
 
-/// Compute a checksum over the same payload.
+// checksum
+// Compute a rolling checksum over up to 256 UTF-8 bytes.
+// limits : default
 #[canic::update(contract = Checksum)]
 fn checksum(payload: Payload) -> u32 {
     payload.as_str().bytes().fold(0u32, |sum, byte| {

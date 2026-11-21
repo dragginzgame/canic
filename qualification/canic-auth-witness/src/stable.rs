@@ -2,7 +2,8 @@
 use canic::auth::{install::Install, session::stable};
 use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
 
-canic::mount_auth_session!(read = "read");
+const READ_SCOPE: &str = "read";
+canic::mount_auth_session!(read = READ_SCOPE);
 canic::mount_auth_lifecycle!(stable = open, seal = crate::issuer::seal);
 
 fn open(input: Option<&Install>) -> MemoryRuntime<DefaultMemoryImpl> {

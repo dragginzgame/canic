@@ -1,4 +1,5 @@
 use super::*;
+use crate::method::Contract;
 
 #[test]
 fn maximal_report_preserves_quality_and_refuses_wrong_frames() {
@@ -20,26 +21,26 @@ fn maximal_report_preserves_quality_and_refuses_wrong_frames() {
         }),
     };
     let encoding = ic_wire::Encoding::Frame {
-        method: METHOD,
+        method: ReadMetrics::ID,
         direction: ic_wire::Direction::Response,
     };
-    let bytes = ic_wire::encode(&value, encoding, RESPONSE_LIMITS).unwrap();
+    let bytes = ic_wire::encode(&value, encoding, ReadMetrics::REPLY).unwrap();
     assert_eq!(
-        ic_wire::decode::<Snapshot>(&bytes, encoding, RESPONSE_LIMITS).unwrap(),
+        ic_wire::decode::<Snapshot>(&bytes, encoding, ReadMetrics::REPLY).unwrap(),
         value
     );
     let wrong = ic_wire::Encoding::Frame {
-        method: METHOD + 1,
+        method: ReadMetrics::ID + 1,
         direction: ic_wire::Direction::Response,
     };
-    assert!(ic_wire::decode::<Snapshot>(&bytes, wrong, RESPONSE_LIMITS).is_err());
+    assert!(ic_wire::decode::<Snapshot>(&bytes, wrong, ReadMetrics::REPLY).is_err());
     assert!(
         ic_wire::decode::<Snapshot>(
             &bytes,
             encoding,
             ic_wire::Limits {
                 bytes: bytes.len() - 1,
-                ..RESPONSE_LIMITS
+                ..ReadMetrics::REPLY
             }
         )
         .is_err()
@@ -54,4 +55,39 @@ fn maximal_report_preserves_quality_and_refuses_wrong_frames() {
         },
         counter
     );
+}
+
+#[test]
+fn complete_blob_report_fits_the_shared_reply_budget() {
+    let value = Counter {
+        total: u128::MAX,
+        overflowed: true,
+    };
+    let report = Report::Blob {
+        commands: [
+            "authorize",
+            "register",
+            "retain",
+            "release",
+            "expire",
+            "drain",
+            "activate",
+        ]
+        .map(|name| BlobCommand {
+            command: name.into(),
+            succeeded: value,
+            denied: value,
+            capacity: value,
+            expired: value,
+            other_refusals: value,
+        })
+        .into(),
+        sizes: BlobSizes {
+            upper_bounds: [u64::MAX; 4],
+            buckets: [value; 4],
+            above: value,
+        },
+    };
+    let bytes = ReadMetrics::encode_reply(&report).unwrap();
+    ReadMetrics::decode_reply(&bytes).unwrap();
 }

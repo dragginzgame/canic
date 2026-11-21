@@ -5,8 +5,11 @@ use serde::{Deserialize, Serialize};
 // Report readiness for the installed CLI fixture.
 canic::mount_readiness_endpoint!(crate::readiness);
 
-// Sample the installed canister clock.
-canic::mount_metrics_endpoint!(crate::snapshot);
+// This disposable fixture allows anonymous observation of every metrics source.
+canic::mount_lifecycle!(install = open, reopen = open);
+fn open() {
+    canic::metrics::set_guard(|| Ok(()));
+}
 
 // greet
 // Greet a visitor with a name of up to 128 UTF-8 bytes.
@@ -64,13 +67,6 @@ pub fn greeting(name: &str) -> Greeting {
 fn readiness() -> canic::readiness::State {
     // This actor has no persistent state or lifecycle to open.
     canic::readiness::State::Ready
-}
-
-fn snapshot() -> canic::metrics::Snapshot {
-    canic::metrics::Snapshot {
-        observed_at_ns: ic_platform_runtime::system::time(),
-        timers: None,
-    }
 }
 
 /// Wire contract for the `greet` endpoint.

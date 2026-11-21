@@ -1,43 +1,25 @@
-//! Installed public metrics do not grant authority, mutate custody or survive owner upgrades.
+//! Installed guarded metrics do not grant authority, mutate custody or survive owner upgrades.
 use super::*;
-use canic::metrics::{METHOD, REQUEST_LIMITS, RESPONSE_LIMITS, Snapshot};
+use canic::metrics::{ReadMetrics, Report, Request, Snapshot};
 use canic::{logging::Logs, method::Contract};
 
 fn request() -> Vec<u8> {
-    ic_wire::encode(
-        &(),
-        ic_wire::Encoding::Frame {
-            method: METHOD,
-            direction: ic_wire::Direction::Request,
-        },
-        REQUEST_LIMITS,
-    )
-    .unwrap()
+    ReadMetrics::encode_request(&Request::Timers).unwrap()
 }
 
-pub(super) async fn read(pic: &PocketIc, owner: CanisterId) -> Snapshot {
+pub(super) async fn read(pic: &PocketIc, owner: CanisterId, caller: CanisterId) -> Snapshot {
     let bytes = pic
-        .query_call(
-            owner,
-            CanisterId::self_authenticating(b"public metrics reader"),
-            "metrics",
-            request(),
-        )
+        .query_call(owner, caller, ReadMetrics::NAME, request())
         .await
         .unwrap();
-    ic_wire::decode(
-        &bytes,
-        ic_wire::Encoding::Frame {
-            method: METHOD,
-            direction: ic_wire::Direction::Response,
-        },
-        RESPONSE_LIMITS,
-    )
-    .unwrap()
+    let Report::Timers(snapshot) = ReadMetrics::decode_reply(&bytes).unwrap() else {
+        panic!("timer report expected")
+    };
+    snapshot
 }
 
 #[tokio::test]
-async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
+async fn controller_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
     let mut server = Server::start(
         PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
         Limits {
@@ -85,7 +67,10 @@ async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
     assert_eq!(first.entries.len(), 1);
     assert_eq!(first.entries[0].source, "root");
     assert_eq!(first.entries[0].message, "installed");
-    let empty = read(pic, root).await.timers.unwrap();
+    let empty = read(pic, root, CanisterId::anonymous())
+        .await
+        .timers
+        .unwrap();
     assert_eq!(empty.accepted.total, 0);
     let input = children::input(
         root,
@@ -102,7 +87,7 @@ async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
     assert_eq!(ready.entries[0].message, "child 0: Ready");
     assert_eq!(logs(Some(ready.entries[0].sequence)).await, first);
     assert_eq!(logs(None).await, ready);
-    let before = read(pic, root).await;
+    let before = read(pic, root, CanisterId::anonymous()).await;
     let timers = before.timers.unwrap();
     assert!(timers.accepted.total > 0);
     assert_eq!(timers.completed.total, timers.accepted.total);
@@ -117,7 +102,7 @@ async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
     trailing.push(1);
     for bytes in [
         vec![],
-        vec![0; REQUEST_LIMITS.bytes + 1],
+        vec![0; ReadMetrics::REQUEST.bytes + 1],
         wrong_method,
         wrong_direction,
         trailing,
@@ -129,7 +114,10 @@ async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
         );
     }
     for _ in 0..3 {
-        assert_eq!(read(pic, root).await.timers, before.timers);
+        assert_eq!(
+            read(pic, root, CanisterId::anonymous()).await.timers,
+            before.timers
+        );
     }
     assert_eq!(pic.get_stable_memory(root).await, stable);
     assert_eq!(status(pic, root).await, complete);
@@ -142,7 +130,10 @@ async fn public_queries_preserve_state_and_upgrade_resets_only_diagnostics() {
     )
     .await
     .unwrap();
-    let reset = read(pic, root).await.timers.unwrap();
+    let reset = read(pic, root, CanisterId::anonymous())
+        .await
+        .timers
+        .unwrap();
     assert!(reset.started_at_version > timers.started_at_version);
     assert!(reset.started_at_ns >= timers.started_at_ns);
     assert_eq!(reset.accepted.total, 0);

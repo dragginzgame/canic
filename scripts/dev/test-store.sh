@@ -33,6 +33,7 @@ build() {
     cp -- "$(jq -r .wasm "target/store/$name.json")" "target/store/$name.wasm"
 }
 if [[ "$scope" == all || "$scope" == db-roles ]]; then
+    "$cli" artifact build --manifest qualification/Cargo.toml --package canic-schema-role --output target/store/db-role-schema.wasm --json > target/store/db-role-schema.json
     build db-role-root canic-root --features auth,role-issuer
     build db-role-hub ex-user-directory-hub --features role-service
     build db-role-shard ex-user-directory-shard --features role-service

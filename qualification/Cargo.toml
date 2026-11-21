@@ -13,6 +13,7 @@ members = [
     "canic-profile-protocol",
     "canic-profile-worker",
     "canic-qualification",
+    "canic-schema-role",
     "canic-shard-hub",
 ]
 resolver = "3"
@@ -57,7 +58,7 @@ ic-platform-types = { version = "0.21.2", default-features = false }
 ic-storage = "0.78.0"
 ic-testkit = { version = "0.110.0", default-features = false, features = ["managed-server"] }
 ic-timers = "0.46.13"
-ic-wasm-store-protocol = "0.5.0"
+ic-wasm-store-protocol = "0.6.0"
 ic-wire = { version = "0.27.0", default-features = false }
 rustyline-async = "0.4.9"
 serde = { version = "1.0.229", features = ["derive"] }

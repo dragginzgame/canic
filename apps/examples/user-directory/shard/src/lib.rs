@@ -7,12 +7,11 @@ use canic::{
 use ic_db::Ulid;
 use user_directory_schema::{ProvisionRefusal, Users, model::user_shard::User};
 
-// Open the shard database and mount its Auth session and readiness endpoints.
-canic::mount_db_role! {
-    shard,
-    database = user_directory_schema::model::user_shard::Accounts,
+canic::mount_db!(schema = user_directory_schema::model::user_shard::Shard);
+
+canic::mount_receiver_lifecycle! {
+    parent_storage_key = "directory.hub.v1",
     authority = "directory",
-    prefix = "directory.",
     auth_read = "read",
 }
 
@@ -61,7 +60,10 @@ fn my_id() -> Option<[u8; 16]> {
     provisioning::session_row::<User>(&db!(), &auth).map(|row| row.id.to_bytes())
 }
 
-/// Reserve at the published project hub for the signed-in account on this shard.
+// request_project
+// Ask the project hub to reserve for a signed-in account registered on this shard.
+// scope  : write
+// limits : default
 #[cfg(feature = "role-service")]
 #[canic::update(scope = "write")]
 async fn request_project() -> Result<[u8; 16], String> {

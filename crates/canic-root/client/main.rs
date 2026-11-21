@@ -1,7 +1,7 @@
 //! Native codec for controller operations on a sharding Root.
 
 use canic::method::Contract;
-use canic::metrics::performance::ChildMetrics;
+use canic::metrics::{ChildMetrics, Request};
 #[cfg(feature = "sharding")]
 use canic::sharding::{Allocation, BeginShardDrain, InspectShard, ShardTarget};
 #[cfg(feature = "role-issuer")]
@@ -33,8 +33,12 @@ enum Action {
 enum Command {
     /// Read Root diagnostics, newest first, optionally before a sequence in this incarnation.
     Logs { before: Option<u64> },
-    /// Inspect the next page of a ready child’s endpoint metrics.
-    ChildMetrics { slot: u8, after: Option<String> },
+    /// Read one metrics source from a ready child.
+    ChildMetrics {
+        slot: u8,
+        #[command(subcommand)]
+        source: Source,
+    },
     /// Retain this Root’s role-verification key for approving DB receivers.
     #[cfg(feature = "role-issuer")]
     PrepareRoleKey,
@@ -56,6 +60,13 @@ enum Command {
     /// Report the allocation, drain state and live placement count.
     #[cfg(feature = "sharding")]
     InspectShard { shard: Principal },
+}
+
+#[derive(Subcommand)]
+enum Source {
+    Timers,
+    Blob,
+    Endpoints { after: Option<String> },
 }
 
 #[cfg(feature = "sharding")]
@@ -95,8 +106,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             ic_wire::Bytes::new(generation.to_vec()).expect("32-byte generation"),
         ))?,
         Action::Encode {
-            command: Command::ChildMetrics { slot, after },
-        } => request::<ChildMetrics>(&(slot, after))?,
+            command: Command::ChildMetrics { slot, source },
+        } => request::<ChildMetrics>(&(
+            slot,
+            match source {
+                Source::Timers => Request::Timers,
+                Source::Blob => Request::Blob,
+                Source::Endpoints { after } => Request::Endpoints(after),
+            },
+        ))?,
         #[cfg(feature = "sharding")]
         Action::Encode {
             command: Command::InspectShard { shard },

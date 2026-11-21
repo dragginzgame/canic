@@ -49,7 +49,7 @@ macro_rules! mount_auth_endpoints {
     (admit = $admit:path, read = $read:path, logout = $logout:path $(,)?) => {
         $crate::__canic_report_mount!("canic:module:auth");
 
-        mod establish_portable_session {
+        const _: () = {
             use endpoint::{api, runtime};
             use $crate::auth::{
                 endpoint,
@@ -66,14 +66,14 @@ macro_rules! mount_auth_endpoints {
                     on_error = endpoint::fail,
                     encode = endpoint::encode::<Result<SessionView, AdmissionRefusal>, ID>,
                 ),
-                [] fn establish_portable_session(
+                [] fn __canic_establish_portable_session(
                     input: SessionInput,
                 ) -> Result<SessionView, AdmissionRefusal> {
                     $admit(api::caller(), input, api::time())
                 }
             }
-        }
-        mod portable_session_read {
+        };
+        const _: () = {
             use endpoint::{api, runtime};
             use $crate::auth::{
                 endpoint,
@@ -90,12 +90,12 @@ macro_rules! mount_auth_endpoints {
                     on_error = endpoint::fail,
                     encode = endpoint::encode::<Result<SessionView, SessionReadRefusal>, ID>,
                 ),
-                [] fn portable_session_read((): ()) -> Result<SessionView, SessionReadRefusal> {
+                [] fn __canic_portable_session_read((): ()) -> Result<SessionView, SessionReadRefusal> {
                     $read(api::caller(), api::time())
                 }
             }
-        }
-        mod logout_portable_session {
+        };
+        const _: () = {
             use endpoint::{api, runtime};
             use $crate::auth::{
                 endpoint,
@@ -112,10 +112,10 @@ macro_rules! mount_auth_endpoints {
                     on_error = endpoint::fail,
                     encode = endpoint::encode::<LogoutResult, ID>,
                 ),
-                [] fn logout_portable_session((): ()) -> LogoutResult {
+                [] fn __canic_logout_portable_session((): ()) -> LogoutResult {
                     $logout(api::caller(), api::time())
                 }
             }
-        }
+        };
     };
 }

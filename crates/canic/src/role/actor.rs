@@ -4,10 +4,7 @@ use ic_platform_runtime::system as api;
 use ic_platform_types::Principal;
 use ic_storage::{DefaultMemoryImpl, MemoryRuntime, StorageConfig};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::cell::Cell;
-
-type Attach = fn(&MemoryRuntime<DefaultMemoryImpl>, Option<[u8; 16]>);
 
 // Field order is the existing hub configuration payload.
 #[doc(hidden)]
@@ -84,44 +81,31 @@ pub fn decode_hub(input: &Install) -> Result<HubConfig, &'static str> {
     Ok(config)
 }
 
-fn incarnation(key: &str, nonce: [u8; 16]) -> [u8; 16] {
-    let digest = Sha256::new()
-        .chain_update(key)
-        .chain_update(nonce)
-        .chain_update(api::canister_self().as_slice())
-        .finalize();
-    let mut id = [0; 16];
-    id.copy_from_slice(&digest[..16]);
-    id
-}
-
 #[doc(hidden)]
 /// Reopen or initialize the hub database and its selected service bindings.
 /// # Panics
 /// Traps on invalid backing, mismatched membership or failed store admission.
+#[must_use]
 pub fn open_hub(
     initial: Option<HubConfig>,
     authority: &str,
     prefix: &str,
-    key: &str,
+    keys: &[&str],
     config_key: &str,
     pages: u64,
-    attach: Attach,
-) {
+) -> (MemoryRuntime<DefaultMemoryImpl>, Option<[u8; 16]>) {
     #[cfg(feature = "role-attestation")]
     let directory = format!("{prefix}services.v1");
-    let keys = &[
-        config_key,
-        key,
-        #[cfg(feature = "role-attestation")]
-        &directory,
-    ];
+    let mut keys = keys.to_vec();
+    keys.push(config_key);
+    #[cfg(feature = "role-attestation")]
+    keys.push(&directory);
     let host = storage::bootstrap_with_prefix(
         DefaultMemoryImpl::default(),
         initial.is_some(),
         authority,
         prefix,
-        keys,
+        &keys,
         StorageConfig {
             allocations: keys.len(),
             pages,
@@ -148,8 +132,8 @@ pub fn open_hub(
             .and_then(topology::attestation::RoleVerifier::attach)
             .expect("retained service trust");
     }
-    attach(&host, initial.map(|c| incarnation(key, c.nonce)));
     ROOT.set(Some(config.root));
+    (host, initial.map(|c| c.nonce))
 }
 
 #[doc(hidden)]
@@ -160,11 +144,10 @@ pub fn open_shard(
     initial: Option<ShardConfig>,
     authority: &str,
     prefix: &str,
-    key: &str,
+    keys: &[&str],
     parent_key: &str,
     pages: Option<u64>,
-    attach: Attach,
-) {
+) -> (MemoryRuntime<DefaultMemoryImpl>, Option<[u8; 16]>) {
     let mut config = StorageConfig::default();
     if let Some(pages) = pages {
         config.pages = pages;
@@ -173,19 +156,16 @@ pub fn open_shard(
     let directory = format!("{prefix}services.v1");
     #[cfg(feature = "role-attestation")]
     let root_key = format!("{prefix}routing_root.v1");
+    let mut keys = keys.to_vec();
+    keys.push(parent_key);
+    #[cfg(feature = "role-attestation")]
+    keys.extend([directory.as_str(), root_key.as_str()]);
     let host = storage::bootstrap_with_prefix(
         DefaultMemoryImpl::default(),
         initial.is_some(),
         authority,
         prefix,
-        &[
-            key,
-            parent_key,
-            #[cfg(feature = "role-attestation")]
-            &directory,
-            #[cfg(feature = "role-attestation")]
-            &root_key,
-        ],
+        &keys,
         config,
     );
     let parts = initial.map(ShardConfig::into_parts);
@@ -212,7 +192,7 @@ pub fn open_shard(
             None => Index::open(&host, &directory),
         }));
     }
-    attach(&host, parts.map(|(_, nonce)| incarnation(key, nonce)));
+    (host, parts.map(|(_, nonce)| nonce))
 }
 
 #[doc(hidden)]

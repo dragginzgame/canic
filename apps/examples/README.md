@@ -30,7 +30,8 @@ installed local exercises.
 
 Extend the shared interactive prompt used by Counter and Metrics to every
 example fleet as its walkthrough is added or updated. Use `metrics` for the
-selected application canister’s endpoint measurements and `logs [before]` for
+selected application canister’s endpoint measurements, `metrics timers` or
+`metrics blob` for another source, and `logs [before]` for
 Root’s controller-only operational log.
 
 When adding an optional Canic endpoint, implement its demo command once in the

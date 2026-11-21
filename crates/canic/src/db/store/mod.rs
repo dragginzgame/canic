@@ -1,5 +1,9 @@
 //! Install or reopen one typed database after the actor admits its complete Storage directory.
 
+mod schema;
+#[doc(hidden)]
+pub use schema::attach_schema;
+
 #[cfg(test)]
 mod tests;
 
@@ -101,9 +105,6 @@ impl Store {
 #[macro_export]
 macro_rules! declare_db_store {
     ($vis:vis mod $name:ident, store = $store:path $(,)?) => {
-        $crate::declare_db_store!(@typed $vis mod $name, $store, {});
-    };
-    (@typed $vis:vis mod $name:ident, $store:path, { $($item:item)* }) => {
         /// Database allocation selected from the application schema.
         $vis mod $name {
             use $store as Definition;
@@ -111,8 +112,6 @@ macro_rules! declare_db_store {
             pub const DATABASE_KEY: &str = <Definition as ::ic_db::Store>::KEY;
             /// Compiled schema for this allocation.
             pub const SCHEMA: fn() -> ::ic_db::Schema = Definition::compiled;
-
-            $($item)*
 
             $crate::declare_db_store!(pub(crate) mod store, key = super::DATABASE_KEY, schema = super::SCHEMA);
         }
@@ -148,8 +147,8 @@ macro_rules! declare_db_store {
     };
 }
 
-/// Obtain a session from the declared database. Import the mounted `database`
-/// module alongside this macro in an application operations module.
+/// Obtain the attached session. In a schema-mounted role, IC DB selects the
+/// store by entity type. Import the mounted `database` module beside this macro.
 #[macro_export]
 macro_rules! db {
     () => {

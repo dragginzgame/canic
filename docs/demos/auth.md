@@ -351,11 +351,11 @@ arguments passes `None`. A failed reopen traps in that hook.
 canic::mount_auth_session!(read = "read");
 
 // src/lifecycle.rs
-canic::mount_auth_lifecycle!(decode = super::decode_install, open = super::open);
+canic::mount_auth_lifecycle!(decode = decode_install, open = open);
 ```
 
-A hub that retains its routing Root can select `decode_context = super::decode_install`.
-Its decoder takes `&canic::auth::install::Install` and validates the app nonce
+The decoder receives `&canic::auth::install::Install`. An app that needs only its
+own bytes reads `input.application`. A hub can validate the app nonce
 alongside the approved Root, issuer and audience before the mount initializes
 the receiver. With a topology-enabled shard pool, decode the inner
 `canic::topology::Install`, call `check_root(input.root)` and use its application

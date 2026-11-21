@@ -256,7 +256,7 @@ pub enum Error {
 #[macro_export]
 macro_rules! mount_auth_refresh_endpoint {
     ($pull:path) => {
-        mod refresh_auth {
+        const _: () = {
             use $crate::auth::{
                 endpoint::{fail, runtime},
                 enrollment::{Error, REFRESH, transport},
@@ -271,11 +271,11 @@ macro_rules! mount_auth_refresh_endpoint {
                     on_error = fail,
                     encode = transport::encode::<Result<(), Error>, REFRESH>,
                 ),
-                [async] fn refresh_auth((): ()) -> Result<(), Error> {
+                [async] fn __canic_refresh_auth((): ()) -> Result<(), Error> {
                     transport::authorize_refresh()?;
                     $pull().await
                 }
             }
-        }
+        };
     };
 }

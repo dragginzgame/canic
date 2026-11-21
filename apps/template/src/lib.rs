@@ -18,7 +18,7 @@ fn probe(name: String) -> Greeting {
     greeting(&name)
 }
 
-canic::mount_readiness_endpoint!(crate::readiness);
+canic::mount_readiness_endpoint!(readiness);
 
 /// Identity of the greeting RPC, including its Wire request/response envelope.
 pub const GREET: u64 = 1;

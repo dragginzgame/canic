@@ -38,7 +38,7 @@ pub mod logging;
 #[cfg(feature = "method")]
 pub mod method;
 
-/// Passive operational reports; the optional `metrics` feature enables endpoint mounting.
+/// Passive operational reports. The optional `metrics` feature exports one guarded reader.
 pub mod metrics;
 
 /// Application-owned readiness; the optional feature enables an explicit replicated mount.
@@ -48,7 +48,7 @@ pub mod readiness;
 pub mod recovery;
 
 /// Actor composition for Auth-enrolled stateful hubs and shards.
-#[cfg(feature = "db-store")]
+#[cfg(feature = "stateful-role")]
 pub mod role;
 
 #[cfg(feature = "storage")]

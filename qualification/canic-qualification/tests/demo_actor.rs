@@ -1,5 +1,9 @@
 //! Installed fixed greeting and optional metrics composition, with no persistent owner.
-use canic::{metrics, readiness};
+use canic::{
+    method::Contract,
+    metrics::{ReadMetrics, Report, Request},
+    readiness,
+};
 use canic_greeting_witness::{GREET, Greeting, LIMITS};
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
 use ic_wire::{Direction, Encoding};
@@ -45,35 +49,36 @@ pub async fn check(pic: &PocketIc, canister: CanisterId, greeting: &str) {
             assert!(result.is_err(), "{method} accepted invalid input");
         }
     }
-    let request = ic_wire::encode(
-        &(),
-        Encoding::Frame {
-            method: metrics::METHOD,
-            direction: Direction::Request,
-        },
-        metrics::REQUEST_LIMITS,
-    )
-    .unwrap();
+    let request = ReadMetrics::encode_request(&Request::Timers).unwrap();
     for caller in [caller, CanisterId::anonymous()] {
         let reply = pic
             .query_call(canister, caller, "metrics", request.clone())
             .await
             .unwrap();
-        let snapshot: metrics::Snapshot = ic_wire::decode(
-            &reply,
-            Encoding::Frame {
-                method: metrics::METHOD,
-                direction: Direction::Response,
-            },
-            metrics::RESPONSE_LIMITS,
-        )
-        .unwrap();
+        let Report::Timers(snapshot) = ReadMetrics::decode_reply(&reply).unwrap() else {
+            panic!("expected timer report")
+        };
         assert!(snapshot.observed_at_ns > 0);
         assert_eq!(snapshot.timers, None, "no provider is not zero counters");
     }
+    for source in [Request::Endpoints(None), Request::Blob] {
+        let bytes = pic
+            .query_call(
+                canister,
+                CanisterId::anonymous(),
+                ReadMetrics::NAME,
+                ReadMetrics::encode_request(&source).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert!(matches!(
+            ReadMetrics::decode_reply(&bytes).unwrap(),
+            Report::Unavailable
+        ));
+    }
     for invalid in [
         vec![],
-        vec![0; metrics::REQUEST_LIMITS.bytes + 1],
+        vec![0; ReadMetrics::REQUEST.bytes + 1],
         greeting_request(GREET, Direction::Request, "visitor"),
     ] {
         assert!(

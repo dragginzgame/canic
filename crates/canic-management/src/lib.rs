@@ -21,7 +21,7 @@ mod storage;
 #[cfg(feature = "sharding")]
 mod placement;
 
-pub use engine::{custody, metrics::snapshot as metrics, open};
+pub use engine::{custody, open};
 #[cfg(feature = "fault-injection")]
 pub use single::inject_fault;
 

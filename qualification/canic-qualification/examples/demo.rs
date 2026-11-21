@@ -2,7 +2,7 @@
 use canic::{
     logging::Logs,
     method::Contract,
-    metrics::performance::{ChildMetrics, EndpointMetrics, Page},
+    metrics::{ChildMetrics, ReadMetrics, Report},
 };
 use clap::{Parser, ValueEnum};
 use ic_host_process::{Input, Ownership, Policy, Stderr, run};
@@ -190,7 +190,7 @@ async fn session(
     let metrics = root_command(ChildMetrics::NAME)
         && exports(slot)?
             .iter()
-            .any(|e| e.name == EndpointMetrics::NAME && e.mode == "query");
+            .any(|e| e.name == ReadMetrics::NAME && e.mode == "query");
     let plan = cli(&directory, &["fleet", "plan", "--identity", "anonymous"])?;
     let operation = plan["operation"].as_str().ok_or("plan missing operation")?;
     let fleet: canic_host::FleetPlan = serde_json::from_value(plan["fleet_plan"].clone())?;
@@ -237,7 +237,7 @@ async fn session(
         commands.push("logs [before]");
     }
     if metrics {
-        commands.push("metrics");
+        commands.push("metrics [timers|blob]");
     }
     commands.push("exit");
     let hint = commands.join(", ");
@@ -251,13 +251,23 @@ async fn session(
                 &directory, "root", &args,
             )?)?);
         }
+        if metrics && verb == "metrics" && matches!(rest.trim(), "timers" | "blob") {
+            return Ok(serde_json::to_string_pretty(&fleet_call(
+                &directory,
+                "root",
+                &["child-metrics", child_slot.as_str(), rest.trim()],
+            )?)?);
+        }
         if metrics && line == "metrics" {
             let mut rows = Vec::new();
             let mut after = None::<String>;
             loop {
-                let mut args = vec!["child-metrics", child_slot.as_str()];
+                let mut args = vec!["child-metrics", child_slot.as_str(), "endpoints"];
                 args.extend(after.as_deref());
-                let page: Page = serde_json::from_value(fleet_call(&directory, "root", &args)?)?;
+                let report = serde_json::from_value(fleet_call(&directory, "root", &args)?)?;
+                let Report::Endpoints(page) = report else {
+                    return Ok("Endpoint measurements unavailable".into());
+                };
                 rows.extend(page.measurements);
                 let Some(next) = page.next else {
                     break;

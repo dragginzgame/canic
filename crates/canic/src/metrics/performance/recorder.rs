@@ -1,6 +1,6 @@
 //! Only compile-time export names can allocate a recorder entry.
 
-use super::{EndpointMetrics, Measurement, Page};
+use super::{Measurement, Page};
 use crate::metrics::store;
 use ic_metrics::MeasurementSummary;
 use std::{
@@ -47,25 +47,7 @@ pub fn measure<T>(name: &'static str, handler: impl FnOnce() -> T) -> T {
     result
 }
 
-/// Admit only actual IC controllers.
-/// # Errors
-/// Refuses every other caller.
-fn controller() -> Result<(), &'static str> {
-    use ic_platform_runtime::system;
-    system::is_controller(&system::caller())
-        .then_some(())
-        .ok_or("controller required")
-}
-
-/// Project one page from observed static export names in lexical order.
-/// # Panics
-/// A retained entry must contain at least one completed sample.
-#[must_use]
-#[crate::query(
-    contract = EndpointMetrics,
-    guard = controller,
-)]
-fn endpoint_metrics(after: Option<String>) -> Page {
+pub(crate) fn page(after: Option<&str>) -> Page {
     let Some(storage) = store::get::<UpdateInstructions>() else {
         return Page {
             measurements: Vec::new(),
@@ -73,8 +55,7 @@ fn endpoint_metrics(after: Option<String>) -> Page {
         };
     };
     let entries = storage.borrow();
-    let mut rows =
-        entries.range::<str, _>((after.as_deref().map_or(Unbounded, Excluded), Unbounded));
+    let mut rows = entries.range::<str, _>((after.map_or(Unbounded, Excluded), Unbounded));
     let measurements: Vec<_> = rows
         .by_ref()
         .take(16)

@@ -1,5 +1,53 @@
 # Changelog
 
+## [0.246.0] - 2026-11-21
+
+### 💥 Breaking changes
+
+Canisters with `canic/metrics` expose one `metrics` query. Its typed request
+selects timers, Blob command outcomes or a page of endpoint measurements.
+`canic/endpoint-metrics` enables the handler recorder. The default guard admits
+actual canister controllers. An app can set one guard for the entire query
+with `canic::metrics::set_guard(check)` on install and reopen. This changes the
+Wire request and reply and retires the separate `endpoint_metrics` query.
+Anonymous fleet inspection reports protected Root metrics as unavailable.
+
+```sh
+make demo DEMO_APP=metrics
+# At the prompt, run ping hello, then metrics.
+```
+
+Mount callbacks resolve in the declaring module. Pass local functions directly, for
+example `mount_readiness_endpoint!(readiness)`. Volatile Auth lifecycle decoders
+now receive the full install envelope through `decode =`; use its `application`
+field for app bytes. A receiver storage prefix defaults to its authority followed
+by a dot. Keep an explicit prefix if your retained keys use another namespace.
+
+```sh
+# Exercise the installed receiver and timer query on the prepared local simulator.
+make auth-test metrics-test
+```
+
+Both workspaces select the registry Wasm Store runtime and protocol 0.6.0.
+Store and Canic now share the IC Wire 0.27 budget types.
+
+```sh
+canic artifact build --package ic-wasm-store
+```
+
+`mount_db!` replaces `mount_db_role!` and takes `schema =` with the canister type. Its compiled
+roster selects every store and `db!()` routes by entity. For an existing
+single-store role, keep the original schema key. Move its retained cell keys,
+storage policy and Auth read scope into `mount_receiver_lifecycle!`. Database-only
+apps use `mount_db!(schema = …)` with their own lifecycle.
+
+```sh
+# Build the example hub and shard with their schema-defined stores.
+canic app build --config apps/examples/user-directory/canic.toml
+# On the prepared local simulator, exercise the two-store upgrade.
+bash scripts/dev/test-store.sh db-roles
+```
+
 ## [0.245.0] - 2026-11-20
 
 Packages selecting `canic/entropy` can use the consolidated ic-entropy 0.6.0 crate with the shared

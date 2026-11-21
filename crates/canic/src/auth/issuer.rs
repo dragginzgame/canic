@@ -176,7 +176,7 @@ macro_rules! mount_auth_issuer_endpoints {
      logout = $logout:path $(,)?) => {
         $crate::__canic_report_mount!("canic:module:auth");
 
-        mod issue_portable_credential {
+        const _: () = {
             use endpoint::{api, runtime};
             use $crate::auth::{
                 endpoint,
@@ -192,12 +192,12 @@ macro_rules! mount_auth_issuer_endpoints {
                     on_error = endpoint::fail,
                     encode = endpoint::encode::<Result<Status, Refusal>, ISSUE>,
                 ),
-                [async] fn issue_portable_credential(input: Issue) -> Result<Status, Refusal> {
+                [async] fn __canic_issue_portable_credential(input: Issue) -> Result<Status, Refusal> {
                     $issue(api::caller(), input, api::time()).await
                 }
             }
-        }
-        mod renew_portable_credential {
+        };
+        const _: () = {
             use endpoint::{api, runtime};
             use $crate::auth::{
                 endpoint,
@@ -213,12 +213,12 @@ macro_rules! mount_auth_issuer_endpoints {
                     on_error = endpoint::fail,
                     encode = endpoint::encode::<Result<Status, Refusal>, RENEW>,
                 ),
-                [async] fn renew_portable_credential(input: Renew) -> Result<Status, Refusal> {
+                [async] fn __canic_renew_portable_credential(input: Renew) -> Result<Status, Refusal> {
                     $renew(api::caller(), input, api::time()).await
                 }
             }
-        }
-        mod reconcile_portable_credential {
+        };
+        const _: () = {
             use endpoint::{api, runtime};
             use $crate::auth::{
                 endpoint,
@@ -234,12 +234,12 @@ macro_rules! mount_auth_issuer_endpoints {
                     on_error = endpoint::fail,
                     encode = endpoint::encode::<Result<Status, Refusal>, RECONCILE>,
                 ),
-                [] fn reconcile_portable_credential(input: Lookup) -> Result<Status, Refusal> {
+                [] fn __canic_reconcile_portable_credential(input: Lookup) -> Result<Status, Refusal> {
                     $reconcile(api::caller(), input, api::time())
                 }
             }
-        }
-        mod revoke_portable_login {
+        };
+        const _: () = {
             use endpoint::{api, runtime};
             use $crate::auth::{
                 endpoint,
@@ -255,10 +255,10 @@ macro_rules! mount_auth_issuer_endpoints {
                     on_error = endpoint::fail,
                     encode = endpoint::encode::<Result<Revoked, Refusal>, LOGOUT>,
                 ),
-                [] fn revoke_portable_login(input: Logout) -> Result<Revoked, Refusal> {
+                [] fn __canic_revoke_portable_login(input: Logout) -> Result<Revoked, Refusal> {
                     $logout(api::caller(), input, api::time())
                 }
             }
-        }
+        };
     };
 }

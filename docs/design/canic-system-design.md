@@ -1651,7 +1651,7 @@ current signer before admitting the effect. The database incarnation depends on
 the nonce. Role attestation belongs to topology. A worker can select
 `role-attestation`, attach its trusted Root during install or reopen, mount
 directory delivery, and call `canic::topology::call_service` without IC DB.
-For a DB-backed hub or shard, the actor composition in `mount_db_role!` supplies
+For a DB-backed hub or shard, the separately selected `mount_receiver_lifecycle!` supplies
 that wiring and includes the directory in the actor's one Storage bootstrap.
 A standalone `db-store` consumer declares its schema, attaches its store and
 uses `db!()` without enabling topology or Auth. Existing DB layouts
@@ -2247,19 +2247,15 @@ namespace grants and exclusive leases. The application owns its record format,
 validation and decision to reopen writes. Wasm Store continues to own versioned
 artifacts and pins.
 
-A stateful role may declare a retained IC DB store by allocation key and compiled
-schema. Its install hook supplies the application incarnation and its upgrade
-hook strictly opens the original allocation. Both use the application's existing
-Storage bootstrap, authority, prefix and complete directory membership. An
-adjacent principal cell and all endpoint permissions remain application-owned.
-The adapter holds the open database for synchronous operations. In an operations
-module import `canic::db` and the role’s `database` module. Each `db!()`
-returns an IC DB session for the same lease. Nested helpers can acquire sessions
-and return owned rows. Drop query guards before committing and reacquire a session
-after an await. Existing `database::store::with` callbacks take exclusive ownership
-for their duration. Drop all sessions before entering one. Session acquisition traps
-before attachment or inside a legacy callback. Lifecycle remains the sole owner
-of creation and strict reopening.
+An actor selects its IC DB canister schema with `mount_db!(schema = …)`.
+Its lifecycle supplies the admitted directory and calls `database::attach`. IC DB supplies the compiled store roster,
+stable keys, schemas and entity routing. Canic admits all store leases and role cells
+in one Storage bootstrap. Install derives a distinct incarnation per key from the
+approved nonce and installed principal. Upgrade strictly reopens every allocation.
+Only the complete `CanisterSession` becomes available through `db!()`. Batches
+are scoped to one store. Changing the retained store roster requires an explicit
+layout migration. Existing roles keep their original authority, namespace, cell
+keys and budgets through the receiver lifecycle’s explicit policy arguments.
 
 Storage 0.77 restores named allocations over upstream stable collections and
 retires the retained-heap build path. The `Keep` and Wasm transformation proposal
@@ -2438,21 +2434,18 @@ Physical deletion is separate, explicit and irreversible. It requires a disposit
 
 Keep Observatory, rendering, comparisons and aggregation on the host. Canisters expose bounded facts, counters, operation summaries and paged inventory. Separate public metrics from protected authority, topology, logs and treasury details. Certificate or authenticated-update requirements depend on whether a result is merely displayed or used to authorize an effect.
 
-Reusable suppliers keep instrumentation feature-gated. Root and the profile
-manager enable the selected timer metrics in their normal builds; applications
-select instrumentation and endpoint mounting explicitly. Canic owns the shared
-store, reporting adapter and passive transport types.
-The initial public report exposes only fixed aggregate timer counters, preserves
-supplier overflow quality and names the volatile initialization window. Host
-observes it once per selected management owner, after operational observations
-and within the existing snapshot budget. Missing reports remain unknown. Metrics
-do not establish readiness, authorize recovery or replace durable effect evidence.
-Metrics retention is a separate choice from which sources an application enables.
-Canic coordinates one heap store per canister. Each producer has a typed source
-with its own recording and reporting semantics. Timer events share the host's
-timer counters directly, and endpoint instrumentation records instruction
-summaries in its own source. Both reset on upgrade. Public timer totals and
-controller-only endpoint performance retain their existing access rules. Applications
+Each canister selecting metrics exports one bounded query named `metrics`.
+A typed request selects timers, Blob command outcomes or a page of synchronous
+endpoint performance. One application-selected guard covers all sources and
+runs before decoding. The default checks the actual IC controller. The app
+may install a different guard during install and reopen. A source selector
+confers no additional permission. Root's child observation forwards a request
+as the child's actual controller and rechecks its operator after the await.
+
+Canic coordinates one heap store per canister. Producers own their counters,
+units and overflow semantics. Timer totals include the initialization window.
+Host requests them once per selected management owner within its observation
+budget. A refused query leaves the report unknown. Applications
 should eventually be able to opt into retaining metric aggregates across upgrades.
 The candidate layout is one stable B-tree per canister, shared by its enabled
 sources and keyed by source and metric identity. Each source defines what its

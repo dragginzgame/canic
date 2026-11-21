@@ -326,85 +326,79 @@ pub fn logout(caller: Principal, now: u64) -> LogoutResult {
     })
 }
 
-/// Mount the standard volatile receiver and its controller-only refresh.
+/// Mount the standard receiver and its controller-only refresh.
 /// The application selects the read endpoint's scope and explicitly initializes on install.
 #[macro_export]
 macro_rules! mount_auth_session {
     (read = $scope:expr $(,)?) => {
-        mod canic_session {
+        const _: () = {
             use $crate::auth::{
                 enrollment::types::Principal,
                 protocol::{SessionView, model::SessionReadRefusal},
                 session,
             };
 
-            fn read(caller: Principal, now: u64) -> Result<SessionView, SessionReadRefusal> {
+            fn __canic_session_read(
+                caller: Principal,
+                now: u64,
+            ) -> Result<SessionView, SessionReadRefusal> {
                 session::read_scope(caller, now, $scope)
             }
 
             $crate::mount_auth_endpoints! {
                 admit = $crate::auth::session::admit,
-                read = super::read,
+                read = __canic_session_read,
                 logout = $crate::auth::session::logout,
             }
 
             $crate::mount_auth_refresh_endpoint!($crate::auth::session::refresh);
-        }
+        };
     };
 }
 
-/// Install a configured receiver and its app in one hook. An upgrade reopens only
-/// the application's retained state. Both hooks trap on decoding or app failure.
-/// Use `decode_context` for a decoder taking the complete `&Install` before receiver
-/// initialization, or `decode` for the inner application bytes. The app opens its store with
-/// `Some(decoded)` on install and `None` on upgrade.
+/// Mount install and upgrade hooks for the selected receiver storage.
+/// Volatile receivers decode the full `&Install` and call the app with
+/// `Some(decoded)` on install or `None` on upgrade. Stable receivers obtain
+/// their lease from the app, seal before upgrade, and reopen that lease afterward.
 #[macro_export]
 macro_rules! mount_auth_lifecycle {
     (stable = $open:path $(, seal = $seal:path)? $(,)?) => {
         const _: () = {
             use $crate::auth::{endpoint::{runtime, fail}, install::Install, session::stable};
             #[allow(clippy::needless_pass_by_value)]
-            fn install(input: Install) {
+            fn __canic_install(input: Install) {
                 stable::open(&$open(Some(&input)), Some(&input));
             }
-            fn reopen() { stable::open(&$open(None), None); }
+            fn __canic_reopen() { stable::open(&$open(None), None); }
             $crate::mount_lifecycle!(input = Install, max_bytes = 4096, decode = Install::decode,
-                install = install, reopen = reopen);
+                install = __canic_install, reopen = __canic_reopen);
             fn admit() -> Result<(), std::convert::Infallible> { Ok(()) }
             use $crate::lifecycle::empty_arguments;
             #[runtime::pre_upgrade(runtime = runtime, guard = admit,
                 decode = empty_arguments, max_bytes = 0, on_error = fail)]
-            fn pre_upgrade((): ()) { stable::seal(); $( $seal(); )? }
+            fn __canic_pre_upgrade((): ()) { stable::seal(); $( $seal(); )? }
         };
     };
     (decode = $decode:path, open = $open:path $(,)?) => {
-        $crate::mount_auth_lifecycle!(@mount $decode, $open, application);
-    };
-    (decode_context = $decode:path, open = $open:path $(,)?) => {
-        $crate::mount_auth_lifecycle!(@mount $decode, $open, context);
-    };
-    (@mount $decode:path, $open:path, $mode:ident) => {
-        mod canic_auth_lifecycle {
+        const _: () = {
             use $crate::auth::{endpoint::fail, install::Install, session};
 
             $crate::mount_lifecycle!(
                 input = Install,
                 max_bytes = 4096,
                 decode = Install::decode,
-                install = install_receiver,
-                reopen = reopen_application,
+                install = __canic_install_receiver,
+                reopen = __canic_reopen_application,
             );
 
             #[allow(clippy::needless_pass_by_value)]
-            fn install_receiver(input: Install) {
-                let application = $crate::mount_auth_lifecycle!(@decode $mode, $decode, input).unwrap_or_else(|error| fail(error));
+            fn __canic_install_receiver(input: Install) {
+                let application = $decode(&input).unwrap_or_else(|error| fail(error));
                 session::install(&input);
                 $open(Some(application));
             }
 
-            fn reopen_application() { $open(None); }
-        }
+            fn __canic_reopen_application() { $open(None); }
+        };
     };
-    (@decode application, $decode:path, $input:ident) => { $decode(&$input.application) };
-    (@decode context, $decode:path, $input:ident) => { $decode(&$input) };
 }

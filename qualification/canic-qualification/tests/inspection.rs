@@ -1,5 +1,6 @@
 //! Compare host ABI declarations with each actual User Directory executable.
 use canic::inspection::{Schemas, methods};
+use canic_asset_catalog as _;
 use ex_user_directory_hub as _;
 use ex_user_directory_shard as _;
 use std::path::Path;
@@ -44,6 +45,45 @@ fn inventory_matches_built_hub_and_shard() {
                     .contains("binding")
             );
         }
+    }
+}
+
+#[test]
+fn supplier_mounts_register_their_public_wire_contracts() {
+    use canic::inspection::{Declaration, inventory};
+
+    for (actor, name, mode, id) in [
+        (
+            "canic_asset_catalog",
+            "blob_update",
+            "update",
+            canic::blob::UPDATE,
+        ),
+        (
+            "canic_asset_catalog",
+            "blob_query",
+            "query",
+            canic::blob::QUERY,
+        ),
+        (
+            "canic_asset_catalog",
+            "blob_management",
+            "update",
+            canic::blob::MANAGEMENT,
+        ),
+        (
+            "canic",
+            "metrics",
+            "query",
+            <canic::metrics::ReadMetrics as canic::method::Contract>::ID,
+        ),
+    ] {
+        let mut declarations = inventory::iter::<Declaration>
+            .into_iter()
+            .filter(|d| d.module.split("::").next() == Some(actor) && d.name == name);
+        let declaration = declarations.next().expect(name);
+        assert_eq!((declaration.mode, declaration.id), (mode, id), "{name}");
+        assert!(declarations.next().is_none(), "duplicate {name}");
     }
 }
 

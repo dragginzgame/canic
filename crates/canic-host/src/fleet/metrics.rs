@@ -1,6 +1,9 @@
 //! Bounded queries after operational observations; missing endpoints remain unknown.
 use crate::{Error, Network, Result, supplier};
-use canic::metrics::{self, Snapshot};
+use canic::{
+    method::Contract,
+    metrics::{ReadMetrics, Report, Request, Snapshot},
+};
 use serde::Serialize;
 use std::{collections::BTreeMap, time::Duration};
 
@@ -51,29 +54,16 @@ pub(super) async fn collect(
 }
 
 async fn observe(network: &Network, canister: &str) -> Result<Snapshot> {
-    let bytes = ic_wire::encode(
-        &(),
-        ic_wire::Encoding::Frame {
-            method: metrics::METHOD,
-            direction: ic_wire::Direction::Request,
-        },
-        metrics::REQUEST_LIMITS,
-    )
-    .map_err(supplier)?;
+    let bytes = ReadMetrics::encode_request(&Request::Timers).map_err(supplier)?;
     let response = crate::network::query(
         &network.client()?,
         crate::network::principal(canister)?,
-        "metrics",
+        ReadMetrics::NAME,
         &bytes,
     )
     .await?;
-    ic_wire::decode(
-        &response,
-        ic_wire::Encoding::Frame {
-            method: metrics::METHOD,
-            direction: ic_wire::Direction::Response,
-        },
-        metrics::RESPONSE_LIMITS,
-    )
-    .map_err(supplier)
+    match ReadMetrics::decode_reply(&response).map_err(supplier)? {
+        Report::Timers(snapshot) => Ok(snapshot),
+        _ => Err(Error::Invalid("timer report unavailable".into())),
+    }
 }

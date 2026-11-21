@@ -64,80 +64,39 @@ pub enum Operation {
 macro_rules! mount_db_endpoints {
     (protocol = $protocol:path, authorize = $authorize:path,
      inspect = $inspect:path, query = $query:path, write = $write:path $(,)?) => {
-        mod db_inspect {
-            use endpoint::{api, runtime};
-            use protocol::{INSPECT, InspectReply, InspectRequest};
+        $crate::mount_db_endpoints!(@method $protocol, $authorize, $inspect, Inspect,
+            query, "db_inspect", INSPECT, InspectRequest, InspectReply);
+        $crate::mount_db_endpoints!(@method $protocol, $authorize, $query, Query,
+            query, "db_query", QUERY, QueryRequest, QueryReply);
+        $crate::mount_db_endpoints!(@method $protocol, $authorize, $write, Write,
+            update, "db_write", WRITE, WriteRequest, WriteReply, time);
+    };
+    (@method $protocol:path, $authorize:path, $handle:path, $operation:ident,
+     $mode:ident, $name:literal, $id:ident, $request:ident, $reply:ident $(, $time:ident)?) => {
+        const _: () = {
+            use $protocol as __canic_protocol;
+            use __canic_protocol::{$id, $request, $reply};
             use $crate::db::{Operation, endpoint};
-            use $protocol as protocol;
-
-            /// Check application permission for this operation before copying its request.
-            fn admit() -> Result<(), String> {
-                $authorize(api::caller(), Operation::Inspect)?;
-                endpoint::admit::<INSPECT>()
-            }
-
-            #[runtime::query(
-                runtime = runtime,
-                guard = admit,
-                decode = endpoint::decode::<InspectRequest, INSPECT>,
-                max_bytes = 65536,
-                on_error = endpoint::fail,
-                name = "db_inspect",
-                encode = endpoint::encode::<InspectReply, INSPECT>,
-            )]
-            fn db_inspect(request: InspectRequest) -> InspectReply {
-                $inspect(api::caller(), request)
-            }
-        }
-        mod db_query {
             use endpoint::{api, runtime};
-            use protocol::{QUERY, QueryReply, QueryRequest};
-            use $crate::db::{Operation, endpoint};
-            use $protocol as protocol;
 
-            /// Check application permission for this operation before copying its request.
-            fn admit() -> Result<(), String> {
-                $authorize(api::caller(), Operation::Query)?;
-                endpoint::admit::<QUERY>()
+            fn __canic_admit() -> Result<(), String> {
+                $authorize(api::caller(), Operation::$operation)?;
+                endpoint::admit::<$id>()
             }
 
-            #[runtime::query(
-                runtime = runtime,
-                guard = admit,
-                decode = endpoint::decode::<QueryRequest, QUERY>,
-                max_bytes = 65536,
-                on_error = endpoint::fail,
-                name = "db_query",
-                encode = endpoint::encode::<QueryReply, QUERY>,
-            )]
-            fn db_query(request: QueryRequest) -> QueryReply {
-                $query(api::caller(), request)
+            $crate::__canic_builtin! {
+                wire, $id, runtime::$mode, $name, (
+                    runtime = runtime,
+                    guard = __canic_admit,
+                    decode = endpoint::decode::<$request, $id>,
+                    max_bytes = 65536,
+                    on_error = endpoint::fail,
+                    encode = endpoint::encode::<$reply, $id>,
+                ),
+                [] fn __canic_handle(request: $request) -> $reply {
+                    $handle(api::caller(), request $(, api::$time())?)
+                }
             }
-        }
-        mod db_write {
-            use endpoint::{api, runtime};
-            use protocol::{WRITE, WriteReply, WriteRequest};
-            use $crate::db::{Operation, endpoint};
-            use $protocol as protocol;
-
-            /// Check application permission for this operation before copying its request.
-            fn admit() -> Result<(), String> {
-                $authorize(api::caller(), Operation::Write)?;
-                endpoint::admit::<WRITE>()
-            }
-
-            #[runtime::update(
-                runtime = runtime,
-                guard = admit,
-                decode = endpoint::decode::<WriteRequest, WRITE>,
-                max_bytes = 65536,
-                on_error = endpoint::fail,
-                name = "db_write",
-                encode = endpoint::encode::<WriteReply, WRITE>,
-            )]
-            fn db_write(request: WriteRequest) -> WriteReply {
-                $write(api::caller(), request, api::time())
-            }
-        }
+        };
     };
 }
