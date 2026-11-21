@@ -161,6 +161,53 @@ pub(super) async fn exercise(
         assert_eq!(renewed.generation.as_slice(), generation);
         assert_eq!(renewed.role, role);
     }
+    let exports = canic_host::endpoints(&artifacts().join("directory.wasm")).unwrap();
+    assert_eq!(
+        exports
+            .iter()
+            .filter(|e| e.name == "visit")
+            .map(|e| e.mode)
+            .collect::<Vec<_>>(),
+        ["update"]
+    );
+    let visit = async |sender: &Client<'_>| {
+        sender
+            .update::<_, Result<u64, String>>("visit_hub", id("visit_hub"), &(), limits)
+            .await
+    };
+    assert_eq!(visit(&registry).await, Ok(1));
+    // Project has a valid receiver-bound proof, but the typed client refuses dispatch.
+    assert_eq!(
+        visit(&instance).await.unwrap_err(),
+        r#"Proof("issuer returned a different or expired claim")"#
+    );
+    let project_proof = retained(instance.id).await;
+    let direct = async |method: &str, sender, proof: Proof| {
+        pic.update_call(
+            receiver.id,
+            sender,
+            method,
+            ic_wire::encode(
+                &(proof, ()),
+                ic_wire::Encoding::Frame {
+                    method: id(method),
+                    direction: ic_wire::Direction::Request,
+                },
+                limits,
+            )
+            .unwrap(),
+        )
+        .await
+    };
+    let refusal = direct("visit", instance.id, project_proof)
+        .await
+        .unwrap_err();
+    assert!(refusal.to_string().contains("role refused"), "{refusal}");
+    let hub_proof = retained(registry.id).await;
+    let refusal = direct("closed_visit", registry.id, hub_proof)
+        .await
+        .unwrap_err();
+    assert!(refusal.to_string().contains("role refused"), "{refusal}");
     let unrelated = pic.create_canister().await;
     let denied: Result<Proof, String> = Client {
         pic,
@@ -180,11 +227,6 @@ pub(super) async fn exercise(
         .await
         .unwrap();
     assert_eq!(present().await, Err("role refused".into()));
-    let visit = async || {
-        child
-            .update::<_, Result<u64, String>>("visit_hub", id("visit_hub"), &(), limits)
-            .await
-    };
     let read_visits = async || {
         child
             .update::<_, Result<u64, String>>(
@@ -196,7 +238,7 @@ pub(super) async fn exercise(
             .await
     };
     assert!(read_visits().await.is_err());
-    assert_eq!(visit().await, Ok(1));
+    assert_eq!(visit(&child).await, Ok(2));
     let expiry = renew(&child).await.unwrap();
     canic_qualification::upgrade_stopped(
         pic,
@@ -208,27 +250,12 @@ pub(super) async fn exercise(
     .await
     .unwrap();
     pic.stop_canister(issuer.id, Some(owner)).await.unwrap();
-    assert_eq!(visit().await, Ok(1)); // receiver upgrade cleared its volatile visit count
+    assert_eq!(visit(&child).await, Ok(1)); // receiver upgrade cleared its volatile visit count
     assert_eq!(present().await, Ok(()));
     assert_eq!(read_visits().await, Ok(1));
     let proof: Proof = retained(child.id).await;
-    let wrong_sender = pic
-        .update_call(
-            receiver.id,
-            project,
-            "visit",
-            ic_wire::encode(
-                &(proof.clone(), ()),
-                ic_wire::Encoding::Frame {
-                    method: id("visit"),
-                    direction: ic_wire::Direction::Request,
-                },
-                limits,
-            )
-            .unwrap(),
-        )
-        .await;
-    assert!(wrong_sender.is_err());
+    let refusal = direct("visit", project, proof.clone()).await.unwrap_err();
+    assert!(refusal.to_string().contains("role refused"), "{refusal}");
     assert_eq!(read_visits().await, Ok(1));
     assert_eq!(proof.0.expiry().unwrap(), expiry);
     assert_eq!(proof.0.generation.as_slice(), allocation.generation);
@@ -249,9 +276,9 @@ pub(super) async fn exercise(
     pic.tick().await;
     assert_eq!(present().await, Err("role refused".into()));
     assert!(read_visits().await.is_err());
-    assert!(visit().await.is_err());
+    assert!(visit(&child).await.is_err());
     pic.start_canister(issuer.id, Some(owner)).await.unwrap();
-    assert_eq!(visit().await, Ok(2));
+    assert_eq!(visit(&child).await, Ok(2));
     assert_eq!(read_visits().await, Ok(2));
     assert!(renew(&child).await.unwrap() > expiry);
     assert_eq!(present().await, Ok(()));

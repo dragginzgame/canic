@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.249.0] - 2026-11-21
+
+Typed application calls can select an unbounded wait with
+`canic::method::call_unbounded::<M>(target, &input).await`. Existing bounded
+calls keep their timeout. Both submit once. [Canic #67](https://github.com/dragginzgame/canic/issues/67)
+
+For Toko’s `apps/toko/user_hub/src/ops/outbound.rs`, define shard contracts in
+the shared protocol for wallet lookup, authority lookup, membership add and
+membership remove. Keep each deployed shard name and numeric ID. Use
+`USER_LOOKUP_REQUEST` for lookups, `PROJECT_MEMBERSHIP_REQUEST` for writes and
+`USER_HUB_REPLY` for replies. For a wallet contract named `WalletByUser`, the
+replacement is `call_unbounded::<WalletByUser>(route.shard, &route.user_id).await`.
+Map request/reply codec errors to Toko’s `ServiceUnavailable` and transport
+errors to `IcCallFailed`, then remove the generic encode/dispatch/decode helper.
+Toko still selects the shard and the membership operation.
+
+A role-protected Wire method can accept several caller roles under one export and
+method ID. Change `const ROLE: &'static str = PROJECT;` to
+`const ROLES: &'static [&'static str] = &[PROJECT];` and add another role only
+when it has the same authority over the request. An empty slice denies every
+caller. Existing proof and method frames keep their encoding. [Canic #66](https://github.com/dragginzgame/canic/issues/66)
+
+```sh
+# With the local simulator prepared, exercise the installed sender and receiver.
+bash scripts/dev/test-store.sh directory
+```
+
 ## [0.248.0] - 2026-11-21
 
 Canic endpoint attributes and built-in mounts now resolve Platform through one

@@ -118,13 +118,17 @@ impl RoleVerifier {
     /// The receiver checks the IC caller, its own identity and IC time locally.
     /// # Errors
     /// Refuses a mismatch, malformed signature or proof outside its validity window.
-    pub fn require_role(&self, role: &str, (claim, signature): &Proof) -> Result<(), &'static str> {
+    pub fn require_role(
+        &self,
+        roles: &[&str],
+        (claim, signature): &Proof,
+    ) -> Result<(), &'static str> {
         use ic_platform_runtime::system;
         let now = system::time();
         if claim.root != self.root
             || claim.subject != system::caller()
             || claim.receiver != system::canister_self()
-            || claim.role != role
+            || !roles.contains(&claim.role.as_str())
             || now < claim.issued_at_ns
             || now >= claim.expiry()?
         {
@@ -164,6 +168,6 @@ pub fn admit_role<M: RoleMethod>(proof: &Proof) -> Result<(), &'static str> {
     TRUST.with(|slot| {
         slot.get()
             .ok_or("missing role verifier")?
-            .require_role(M::ROLE, proof)
+            .require_role(M::ROLES, proof)
     })
 }

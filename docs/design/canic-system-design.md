@@ -1686,7 +1686,10 @@ uses its retained Root and a locally resolved service name for a role-bound call
 A role receiver decodes its `ServiceInstall` and uses
 `RoleVerifier::new(installing_root, &install.application)?.attach()?` during
 install or strict reopen. A shared method implements `RoleMethod` with its
-required role. Both `#[canic::query(role_contract = M)]` and
+static list of accepted caller roles. A single role uses a one-element slice;
+an empty slice denies everyone. The sender presents one proof of its actual
+installed role. The receiver tests the signed role against the same list.
+Roles sharing a method must have the same authority over its input. Both `#[canic::query(role_contract = M)]` and
 `#[canic::update(role_contract = M)]` verify the proof before invoking the
 ordinary application handler. Its effective Wire request is `(Proof, M::Input)`
 under the contract's existing method ID and byte budget. The sender uses
@@ -1813,7 +1816,10 @@ and [typed declaration regression](https://github.com/dragginzgame/canic-legacy/
 For a direct call the application protocol can implement `canic::method::Contract`.
 It supplies the export, Wire ID, both shapes and both budgets. The receiving
 function uses `#[canic::update(contract = ProtocolType)]`; the sender selects an admitted
-principal and calls `method::call::<ProtocolType>(target, wait_seconds, &input)`.
+principal and calls `method::call::<ProtocolType>(target, wait_seconds, &input)`
+or explicitly selects `method::call_unbounded::<ProtocolType>(target, &input)`.
+Both use the same request frame, directional limits and result handling. With
+an unbounded wait, the caller can remain suspended until the callee responds.
 One attempt returns a typed reply, dispatch refusal, rejection, unknown outcome
 or codec failure. The application owns its original ticket and reconciliation.
 Platform captures the transport reply before Wire enforces the declared budget.

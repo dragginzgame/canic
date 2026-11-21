@@ -90,7 +90,7 @@ impl Contract for Visit {
     type Output = Result<u64, String>;
 }
 impl RoleMethod for Visit {
-    const ROLE: &'static str = "user_shard";
+    const ROLES: &'static [&'static str] = &["user_shard", "hub"];
 }
 
 #[canic::update(role_contract = Visit)]
@@ -119,7 +119,7 @@ impl Contract for Visits {
     type Output = u64;
 }
 impl RoleMethod for Visits {
-    const ROLE: &'static str = "user_shard";
+    const ROLES: &'static [&'static str] = &["user_shard"];
 }
 
 #[canic::query(role_contract = Visits)]
@@ -135,3 +135,17 @@ async fn read_visits(receiver: Principal) -> Result<u64, String> {
         .await
         .map_err(|e| format!("{e:?}"))
 }
+
+struct ClosedVisit;
+impl Contract for ClosedVisit {
+    const NAME: &'static str = "closed_visit";
+    const ID: u64 = wire::method_id(Self::NAME);
+    type Input = ();
+    type Output = ();
+}
+impl RoleMethod for ClosedVisit {
+    const ROLES: &'static [&'static str] = &[];
+}
+
+#[canic::update(role_contract = ClosedVisit)]
+fn closed_visit() {}

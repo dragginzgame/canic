@@ -81,7 +81,7 @@ fn named_frames_follow_each_direction_and_budget() {
 
 #[test]
 fn outbound_call_refuses_oversized_request_before_dispatch() {
-    use canic::method::{CallError, call};
+    use canic::method::{CallError, call, call_unbounded};
     use ic_platform_runtime as runtime;
     use ic_platform_types::Principal;
     use std::{
@@ -91,9 +91,16 @@ fn outbound_call_refuses_oversized_request_before_dispatch() {
     };
 
     let input = "a".repeat(96);
-    let handler = async { call::<Example>(Principal::management_canister(), 1, &input).await };
+    let target = Principal::management_canister();
+    let handler = call::<Example>(target, 1, &input);
     assert!(matches!(
         pin!(handler).poll(&mut Context::from_waker(Waker::noop())),
+        Poll::Ready(Err(CallError::Request(_)))
+    ));
+
+    assert!(matches!(
+        pin!(call_unbounded::<Example>(target, &input))
+            .poll(&mut Context::from_waker(Waker::noop())),
         Poll::Ready(Err(CallError::Request(_)))
     ));
 

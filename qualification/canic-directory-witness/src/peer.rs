@@ -105,3 +105,21 @@ async fn probe_certificate() -> bool {
         .await
         .expect("replicated query call")
 }
+
+// The installed receiver reports whether it observed an IC message deadline.
+struct HasDeadline;
+impl Contract for HasDeadline {
+    const NAME: &'static str = "has_deadline";
+    const ID: u64 = 0x4341_4e49_4300_0067;
+    type Input = ();
+    type Output = bool;
+}
+
+#[canic::update(guard = controller)]
+async fn probe_wait((target, seconds): (Principal, Option<u32>)) -> bool {
+    match seconds {
+        Some(seconds) => canic::method::call::<HasDeadline>(target, seconds, &()).await,
+        None => canic::method::call_unbounded::<HasDeadline>(target, &()).await,
+    }
+    .expect("typed wait probe")
+}

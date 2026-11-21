@@ -4,10 +4,10 @@ use crate::method::{CallError, call};
 use ic_platform_runtime::system;
 use std::{cell::RefCell, marker::PhantomData};
 
-/// Role required by both ends of this application method.
+/// Caller roles admitted by both ends of this application method.
 pub trait RoleMethod: Contract {
-    /// Role declared in the caller's approved installation.
-    const ROLE: &'static str;
+    /// Accept a proof of any listed role. An empty slice admits no caller.
+    const ROLES: &'static [&'static str];
 }
 
 /// Wire frame shared by the mounted receiver and its caller.
@@ -57,7 +57,7 @@ impl RoleCalls {
         claim.root == self.root
             && claim.subject == system::canister_self()
             && claim.receiver == receiver
-            && claim.role == M::ROLE
+            && M::ROLES.contains(&claim.role.as_str())
             && now >= claim.issued_at_ns
             && claim.expiry().is_ok_and(|expiry| now < expiry)
     }

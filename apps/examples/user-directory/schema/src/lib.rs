@@ -47,5 +47,5 @@ impl canic::method::Contract for ReserveProject {
 }
 #[cfg(feature = "role-service")]
 impl canic::topology::attestation::RoleMethod for ReserveProject {
-    const ROLE: &'static str = "user_shard";
+    const ROLES: &'static [&'static str] = &["user_shard"];
 }

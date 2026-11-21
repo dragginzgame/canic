@@ -9,6 +9,7 @@ pub(super) async fn exercise(root: &Client<'_>, accounts: CanisterId, project: C
         id: project,
         operator: root.id,
     };
+    verify_wait_modes(&sender).await;
     let receiver = Client {
         pic,
         id: accounts,
@@ -167,4 +168,56 @@ pub(super) async fn exercise(root: &Client<'_>, accounts: CanisterId, project: C
         Err("write permission changed".into())
     );
     assert_eq!(sync().await, Ok(2));
+}
+
+// Observe the replica-provided deadline on the receiving side of an actual call.
+// Platform Runtime 0.23.23 has no msg_deadline accessor. This test fixture imports
+// the IC primitive and returns one of two ordinary Wire responses.
+async fn verify_wait_modes(sender: &Client<'_>) {
+    let pic = sender.pic;
+    let target = pic.create_canister().await;
+    pic.add_cycles(target, 1_000_000_000_000).await;
+    let frame = ic_wire::Encoding::Frame {
+        method: 0x4341_4e49_4300_0067,
+        direction: ic_wire::Direction::Response,
+    };
+    let reply = |value| ic_wire::encode(&value, frame, canic::method::LIMITS).unwrap();
+    let bounded = reply(true);
+    let unbounded = reply(false);
+    let bytes = |frame: &[u8]| {
+        frame
+            .iter()
+            .map(|byte| format!(r"\{byte:02x}"))
+            .collect::<String>()
+    };
+    let wasm = wat::parse_str(format!(
+        r#"(module
+        (import "ic0" "msg_deadline" (func $deadline (result i64)))
+        (import "ic0" "msg_reply_data_append" (func $append (param i32 i32)))
+        (import "ic0" "msg_reply" (func $reply))
+        (memory (export "memory") 1)
+        (data (i32.const 0) "{bounded_frame}{unbounded_frame}")
+        (func (export "canister_update has_deadline")
+            (if (i64.eqz (call $deadline))
+                (then (call $append (i32.const {offset}) (i32.const {unbounded_len})))
+                (else (call $append (i32.const 0) (i32.const {offset}))))
+            (call $reply)))"#,
+        bounded_frame = bytes(&bounded),
+        unbounded_frame = bytes(&unbounded),
+        offset = bounded.len(),
+        unbounded_len = unbounded.len(),
+    ))
+    .unwrap();
+    pic.install_canister(target, wasm, vec![], None).await;
+    for seconds in [Some(5u32), None] {
+        let has_deadline: bool = sender
+            .update(
+                "probe_wait",
+                ic_wire::method_id("probe_wait"),
+                &(target, seconds),
+                canic::method::LIMITS,
+            )
+            .await;
+        assert_eq!(has_deadline, seconds.is_some());
+    }
 }

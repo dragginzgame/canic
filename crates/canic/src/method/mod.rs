@@ -1,7 +1,9 @@
 //! Named application Wire endpoints with Platform execution.
 mod actor;
+#[cfg(test)]
+mod tests;
 
-pub use actor::{CallError, admit_request, call};
+pub use actor::{CallError, admit_request, call, call_unbounded};
 
 #[doc(hidden)]
 pub use ic_wire as wire;

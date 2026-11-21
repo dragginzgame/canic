@@ -1,6 +1,10 @@
 //! Outgoing calls and ingress admission on the installed actor.
 use super::{Contract, wire};
-use ic_platform_runtime as runtime;
+use ic_platform_runtime::{
+    self as runtime,
+    call::{Call, Completion, Outcome, SubmitError, Wait},
+};
+use ic_platform_types::Principal;
 
 /// Observed failure of one outbound application call.
 #[derive(Debug)]
@@ -22,18 +26,40 @@ pub enum CallError {
 /// # Errors
 /// Returns the observed stage. The application owns reconciliation.
 pub async fn call<M: Contract>(
-    target: ic_platform_types::Principal,
+    target: Principal,
     seconds: u32,
     input: &M::Input,
 ) -> Result<M::Output, CallError> {
-    use runtime::call::{Call, Outcome, Wait};
+    submit::<M>(target, Wait::Bounded { seconds }, input).await
+}
+
+/// Submit once and wait without a caller-selected timeout.
+/// # Errors
+/// Returns the same stage-specific errors as [`call`]. The application owns reconciliation.
+pub async fn call_unbounded<M: Contract>(
+    target: Principal,
+    input: &M::Input,
+) -> Result<M::Output, CallError> {
+    submit::<M>(target, Wait::Unbounded, input).await
+}
+
+async fn submit<M: Contract>(
+    target: Principal,
+    wait: Wait,
+    input: &M::Input,
+) -> Result<M::Output, CallError> {
     let request = M::encode_request(input).map_err(CallError::Request)?;
-    let result = Call::new(target, M::NAME, Wait::Bounded { seconds })
+    let result = Call::new(target, M::NAME, wait)
         .owned_args(request)
         .execute()
-        .await
-        .map_err(CallError::Dispatch)?;
-    match result.into_parts().0 {
+        .await;
+    decode_result::<M>(result)
+}
+
+pub(super) fn decode_result<M: Contract>(
+    result: Result<Completion, SubmitError>,
+) -> Result<M::Output, CallError> {
+    match result.map_err(CallError::Dispatch)?.into_parts().0 {
         Outcome::Reply(bytes) => M::decode_reply(&bytes).map_err(CallError::Reply),
         Outcome::Rejected(reason) => Err(CallError::Rejected(reason)),
         Outcome::OutcomeUnknown(reason) => Err(CallError::Unknown(reason)),

@@ -91,7 +91,7 @@ fn binding(row: &Route) -> Binding<[u8; 16]> {
 
 // reserve_project
 // Create a reservation or return its ID only to the shard that owns it.
-// guard  : attested user_shard (ReserveProject::ROLE)
+// guard  : attested user_shard (ReserveProject::ROLES)
 // limits : default
 #[cfg(feature = "role-service")]
 #[canic::update(role_contract = user_directory_schema::ReserveProject)]
