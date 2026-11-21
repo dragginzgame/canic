@@ -75,7 +75,7 @@ fn publication_payload(dir: &Path, operation: &str) -> (usize, usize) {
 
 fn padded(mut bytes: Vec<u8>) -> Vec<u8> {
     // Valid custom section: more than one transfer, without changing executable behavior.
-    let payload = 2_000_000_u32;
+    let payload = u32::try_from(3 * ic_wasm_store_protocol::CHUNK_BYTES).unwrap();
     bytes.push(0);
     let mut length = payload;
     loop {

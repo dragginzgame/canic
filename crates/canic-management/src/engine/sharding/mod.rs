@@ -1,6 +1,7 @@
 //! Independent hub grants and shared-shard placement over Store-backed child effects.
 mod capacity;
 mod drain;
+pub mod standby;
 mod workers;
 pub use capacity::{configure_capacity, increase_pool};
 pub use drain::{begin_shard_drain, inspect_shard, release_shard};
@@ -51,6 +52,11 @@ pub(super) struct Pools {
     projects: Vec<ProjectClaim>,
     #[serde(skip)]
     workers: Option<workers::Workers>,
+    #[serde(skip)]
+    standby: Vec<(
+        canic::sharding::standby::Refill,
+        canic::sharding::standby::Asset,
+    )>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -97,13 +103,59 @@ impl Pools {
                 .map_or(0, |l| l.generations.iter().flatten().count())
     }
 
+    fn held(&self) -> usize {
+        self.standby
+            .iter()
+            .filter(|(_, asset)| {
+                matches!(
+                    asset,
+                    canic::sharding::standby::Asset::Empty(_)
+                        | canic::sharding::standby::Asset::Issued
+                )
+            })
+            .count()
+    }
+
+    pub(super) fn standby_claim(&self, slot: ChildId) -> Option<Principal> {
+        self.standby.iter().find_map(|(_, asset)| match asset {
+            canic::sharding::standby::Asset::Claimed(id, a)
+            | canic::sharding::standby::Asset::Released(id, a)
+                if a.slot == slot.index() as u32 =>
+            {
+                Some(*id)
+            }
+            _ => None,
+        })
+    }
+
+    fn empty_spare(&self) -> bool {
+        self.standby
+            .iter()
+            .any(|(_, asset)| matches!(asset, canic::sharding::standby::Asset::Empty(_)))
+    }
+
     fn full(&self) -> bool {
         self.capacity
             .as_ref()
-            .is_some_and(|c| self.used() >= usize::from(c.max_children))
+            .is_some_and(|c| self.used() + self.held() >= usize::from(c.max_children))
     }
 
     pub(super) fn encode(&self) -> Vec<u8> {
+        if !self.standby.is_empty() {
+            let mut bytes = b"SBY1".to_vec();
+            bytes.extend(
+                ic_wire::encode(
+                    &(self, &self.workers, &self.standby),
+                    ic_wire::Encoding::Payload,
+                    ic_wire::Limits {
+                        bytes: BYTES - 4,
+                        ..LIMITS
+                    },
+                )
+                .expect("bounded standby ledger"),
+            );
+            return bytes;
+        }
         if let Some(workers) = &self.workers {
             let mut bytes = b"WKR1".to_vec();
             bytes.extend(
@@ -125,7 +177,65 @@ impl Pools {
 }
 
 pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
-    let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"WKR1") {
+    let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"SBY1") {
+        let (mut pools, workers, standby): (
+            Pools,
+            Option<workers::Workers>,
+            Vec<(
+                canic::sharding::standby::Refill,
+                canic::sharding::standby::Asset,
+            )>,
+        ) = ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("standby metadata");
+        assert!(
+            pools.capacity.is_some()
+                && !standby.is_empty()
+                && standby.len() <= usize::from(stored::MAX_SUBNET_CHILDREN)
+        );
+        let mut principals = std::collections::BTreeSet::new();
+        let mut slots = std::collections::BTreeSet::new();
+        for (index, (approval, asset)) in standby.iter().enumerate() {
+            use canic::sharding::standby::Asset;
+            let principal = match asset {
+                Asset::Issued => None,
+                Asset::Empty(id) => Some(id),
+                Asset::Claimed(id, allocation) | Asset::Released(id, allocation) => {
+                    let slot = ChildId::placement(allocation.slot as usize).expect("standby slot");
+                    let claim = workers
+                        .as_ref()
+                        .and_then(|w| w.claim_at(slot))
+                        .expect("standby worker claim");
+                    assert!(slots.insert(slot) && claim.generation == allocation.generation);
+                    assert!(claim.principal.as_ref().is_none_or(|p| p == &id.to_text()));
+                    if matches!(asset, Asset::Released(..)) {
+                        assert!(
+                            claim.principal.is_some(),
+                            "release requires installed worker"
+                        );
+                    }
+                    Some(id)
+                }
+            };
+            if let Some(id) = principal {
+                assert!(
+                    principals.insert(*id)
+                        && *id != api::canister_self()
+                        && *id != Principal::anonymous()
+                        && *id != Principal::management_canister()
+                );
+            }
+            assert!(
+                approval.root == api::canister_self()
+                    && usize::from(approval.sequence) == index
+                    && approval.cycles == CREATION_CYCLES
+            );
+        }
+        pools.standby = standby;
+        if let Some(workers) = &workers {
+            workers.validate(&pools);
+        }
+        pools.workers = workers;
+        pools
+    } else if let Some(payload) = bytes.strip_prefix(b"WKR1") {
         let (mut pools, workers): (Pools, workers::Workers) =
             ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("worker metadata");
         workers.validate(&pools);
@@ -161,7 +271,7 @@ pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
     if let Some(capacity) = &pools.capacity {
         assert!(
             capacity::valid_capacity(capacity)
-                && pools.used() <= usize::from(capacity.max_children)
+                && pools.used() + pools.held() <= usize::from(capacity.max_children)
         );
     }
     for (initial, increases) in [
@@ -269,6 +379,17 @@ pub(super) fn retain_permanent(slot: ChildId) {
             state.pool.set(state.pools.encode());
         }
     });
+}
+
+pub(super) fn worker_generation(slot: ChildId) -> Option<[u8; 32]> {
+    STATE.with_borrow(|s| {
+        s.as_ref()?
+            .pools
+            .workers
+            .as_ref()?
+            .claim_at(slot)
+            .map(|claim| claim.generation)
+    })
 }
 
 pub(super) fn at_capacity() -> bool {
@@ -596,6 +717,7 @@ pub fn assign(key: Key) -> Placement {
             return Placement::GrowthRefused;
         }
         let Some(generation) = create(
+            super::Origin::Placement,
             slot,
             approval.reference,
             approval.arguments,
@@ -623,6 +745,7 @@ pub fn assign(key: Key) -> Placement {
 }
 
 fn create(
+    origin: super::Origin,
     slot: ChildId,
     reference: stored::Reference,
     arguments: canic_management_protocol::application::Arguments,
@@ -650,7 +773,7 @@ fn create(
     let admitted = if arguments.as_slice().is_empty() {
         let creation = delivery::retained(slot, stored::STAGE, &input);
         super::admit(
-            super::Origin::Placement,
+            origin,
             slot,
             input.approval,
             Artifact::Stored(stored::Sources {
@@ -660,7 +783,7 @@ fn create(
         )
     } else {
         super::application::admit_creation(
-            super::Origin::Placement,
+            origin,
             slot,
             canic_management_protocol::application::Stage {
                 source: input,
@@ -884,6 +1007,7 @@ pub fn assign_instance(key: Key) -> Placement {
         return Placement::GrowthRefused;
     }
     let Some(generation) = create(
+        super::Origin::Placement,
         slot,
         grant.reference,
         grant.arguments,

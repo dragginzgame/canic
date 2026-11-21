@@ -4,6 +4,7 @@
 mod tests;
 
 mod client;
+pub mod standby;
 
 /// Optional hub and shard composition for an issuer-qualified account.
 #[cfg(feature = "method")]

@@ -1,6 +1,6 @@
 //! Explicit operator ticks drive a bounded pool. Root retains the worker allowance.
 mod endpoints;
-pub use endpoints::{PoolReport, Report, Tick, WorkerReport};
+pub use endpoints::{PoolReport, Release, Report, Tick, WorkerReport};
 
 use canic::sharding::{Allocation, ShardTarget};
 use ic_platform_runtime::system;
@@ -9,7 +9,7 @@ use ic_storage::{DefaultMemoryImpl, adapter::StableCell};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-const KEY: &str = "pool.round.v1";
+const KEY: &str = "pool.round.v3";
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 4096,
     nodes: 1024,
@@ -23,6 +23,7 @@ thread_local! {
 #[derive(Deserialize, Serialize)]
 struct Worker {
     target: ShardTarget,
+    attempts: u64,
     blocks: u64,
     last_batch: Option<(u64, u8)>,
 }
@@ -44,8 +45,9 @@ struct Pool {
     operator: Principal,
     round: u64,
     goal: u8,
-    produced: u8,
+    completed: u8,
     workers: Vec<Worker>,
+    released: Vec<ShardTarget>,
     pending: Option<Pending>,
 }
 
@@ -73,24 +75,27 @@ impl Pool {
         if round > self.round {
             self.round = round;
             self.goal = goal;
-            self.produced = 0;
+            self.completed = 0;
         } else {
             assert_eq!(self.goal, goal, "round already bound to another goal");
         }
-        if self.pending.is_some() || self.produced >= goal.min(MAX_WORKERS * 2) {
+        if self.pending.is_some() || self.completed >= goal.min(MAX_WORKERS * 2) {
             return;
         }
-        let index = self.produced / 2;
+        let index = self.completed / 2;
         self.pending = Some(match self.workers.get(usize::from(index)) {
-            None => Pending::Grow(index, None),
+            None => Pending::Grow(
+                index + u8::try_from(self.released.len()).expect("bounded releases"),
+                None,
+            ),
             Some(worker) => Pending::Mine {
                 index,
                 round,
-                ordinal: self.produced % 2 + 1,
+                ordinal: self.completed % 2 + 1,
                 expected: worker
-                    .blocks
+                    .attempts
                     .checked_add(1)
-                    .expect("worker total exhausted"),
+                    .expect("worker attempt count exhausted"),
             },
         });
     }
@@ -116,9 +121,10 @@ fn install(operator: Principal) {
         operator,
         round: 0,
         goal: 0,
-        produced: 0,
+        completed: 0,
         workers: Vec::new(),
         pending: None,
+        released: Vec::new(),
     }));
 }
 fn reopen() {
@@ -136,7 +142,7 @@ fn open(initial: Option<Pool>) {
     CELL.with_borrow_mut(|c| *c = Some(cell));
     let state = Pool::read();
     assert!(
-        state.workers.len() <= usize::from(MAX_WORKERS)
-            && state.produced <= state.goal.min(MAX_WORKERS * 2)
+        state.workers.len() + state.released.len() <= usize::from(MAX_WORKERS)
+            && state.completed <= state.goal.min(MAX_WORKERS * 2)
     );
 }

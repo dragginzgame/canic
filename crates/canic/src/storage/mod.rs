@@ -49,16 +49,25 @@ pub fn bootstrap_with_prefix<M: MemoryBacking>(
     keys: &[&str],
     config: StorageConfig,
 ) -> MemoryRuntime<M> {
+    bootstrap_groups(memory, fresh, &[(authority, prefix, keys)], config)
+}
+
+pub(crate) fn bootstrap_groups<M: MemoryBacking>(
+    memory: M,
+    fresh: bool,
+    groups: &[(&str, &str, &[&str])],
+    config: StorageConfig,
+) -> MemoryRuntime<M> {
     assert_eq!(memory.size() == 0, fresh, "storage lifecycle mismatch");
     let mut runtime =
         MemoryRuntime::new_with_config(memory, config).expect("open storage directory");
     if !fresh {
         assert_eq!(
             runtime.memory_allocations().expect("directory").len(),
-            keys.len(),
+            groups.iter().map(|(_, _, keys)| keys.len()).sum::<usize>(),
             "storage membership"
         );
-        for key in keys {
+        for key in groups.iter().flat_map(|(_, _, keys)| *keys) {
             assert!(
                 runtime
                     .allocation_id(&StableKey::parse(key).expect("stable key"))
@@ -67,17 +76,21 @@ pub fn bootstrap_with_prefix<M: MemoryBacking>(
             );
         }
     }
-    let requests = keys
+    let requests = groups
         .iter()
-        .map(|key| MemoryRequest::new(authority, key).expect("request"))
+        .flat_map(|(owner, _, keys)| {
+            keys.iter()
+                .map(|key| MemoryRequest::new(*owner, key).expect("request"))
+        })
+        .collect();
+    let grants = groups
+        .iter()
+        .map(|(owner, prefix, _)| MemoryAuthority::new(*owner, *prefix).expect("authority"))
         .collect();
     runtime
         .bootstrap(
             &SealedDeclarationSnapshot::new(requests).expect("declarations"),
-            &AllocationGrants::new(vec![
-                MemoryAuthority::new(authority, prefix).expect("authority"),
-            ])
-            .expect("grants"),
+            &AllocationGrants::new(grants).expect("grants"),
             &GenericAllocationPolicy,
         )
         .expect("storage admission");

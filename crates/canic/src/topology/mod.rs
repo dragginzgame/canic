@@ -26,6 +26,9 @@ pub fn require_sender(expected: Principal) -> Result<(), &'static str> {
     }
 }
 
+/// In a worker grant, request the exact allocation generation as the inner install payload.
+pub const WORKER_GENERATION: &[u8] = b"canic.worker_generation.v1";
+
 const INSTALL_ID: u64 = ic_wire::method_id("canic.shard_install.v2");
 const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
     method: INSTALL_ID,

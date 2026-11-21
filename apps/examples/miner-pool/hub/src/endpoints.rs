@@ -106,7 +106,10 @@ async fn tick(input: (u64, u8)) -> String {
                         generation.as_ref().is_none_or(|old| old == allocation),
                         "allocation changed"
                     );
-                    assert_eq!(latest.workers.len(), usize::from(index));
+                    assert_eq!(
+                        latest.workers.len() + latest.released.len(),
+                        usize::from(index)
+                    );
                     assert!(
                         !latest
                             .workers
@@ -118,6 +121,7 @@ async fn tick(input: (u64, u8)) -> String {
                             allocation: allocation.clone(),
                             shard,
                         },
+                        attempts: 0,
                         blocks: 0,
                         last_batch: None,
                     });
@@ -151,16 +155,26 @@ async fn tick(input: (u64, u8)) -> String {
             expected,
         } => {
             let target = &state.workers[usize::from(index)].target;
-            let reply = call::<miner::mine>(target.shard, 10, &(round, ordinal)).await;
+            let reply = call::<miner::mine>(
+                target.shard,
+                10,
+                &(
+                    ic_wire::Bytes::new(target.allocation.generation.to_vec())
+                        .expect("allocation generation"),
+                    round,
+                    ordinal,
+                ),
+            )
+            .await;
             let mut latest = Pool::read();
             if latest.pending.as_ref() != Some(&pending) {
                 return "advanced".into();
             }
-            match reply {
-                Ok(value) if value == expected => {}
-                Ok(value) => {
+            let found = match reply {
+                Ok((value, found)) if value == expected => found,
+                Ok((value, _)) => {
                     return format!(
-                        "worker {index}, batch {round}/{ordinal}: expected block {expected}, received {value}"
+                        "worker {index}, batch {round}/{ordinal}: expected attempt {expected}, received {value}"
                     );
                 }
                 Err(error) => {
@@ -169,13 +183,14 @@ async fn tick(input: (u64, u8)) -> String {
                         call_failure(&error)
                     );
                 }
-            }
+            };
             let worker = &mut latest.workers[usize::from(index)];
             assert_eq!(&worker.target, target, "worker allocation changed");
-            worker.blocks = expected;
+            worker.attempts = expected;
+            worker.blocks += u64::from(found);
             worker.last_batch = Some((round, ordinal));
             if latest.round == round {
-                latest.produced += 1;
+                latest.completed += 1;
             }
             latest.pending = None;
             latest.save();
@@ -211,8 +226,10 @@ fn report() -> Report {
             "parked"
         };
         WorkerReport {
+            allocation: worker.target.allocation.clone(),
             principal: worker.target.shard,
             status: status.into(),
+            attempts: worker.attempts,
             blocks: worker.blocks,
             last_batch: worker.last_batch,
         }
@@ -220,7 +237,7 @@ fn report() -> Report {
     Report {
         round: state.round,
         goal: state.goal,
-        produced: state.produced,
+        completed: state.completed,
         workers,
     }
 }
@@ -229,22 +246,74 @@ fn report() -> Report {
 pub struct Report {
     /// Operator-selected round number.
     pub round: u64,
-    /// Requested toy blocks for this round.
+    /// Requested attempts for this round.
     pub goal: u8,
-    /// Acknowledged blocks in the current round.
-    pub produced: u8,
+    /// Acknowledged attempts in the current round.
+    pub completed: u8,
     /// All allocated workers in ordinal order.
     pub workers: Vec<WorkerReport>,
 }
 #[derive(serde::Deserialize, serde::Serialize)]
 /// A single worker’s retained identity and production.
 pub struct WorkerReport {
+    /// Exact installation to name when relinquishing this worker.
+    pub allocation: canic::sharding::Allocation,
     /// Canister to which the hub dispatches this ordinal.
     pub principal: ic_platform_types::Principal,
     /// Current dispatch state: active, draining or parked.
     pub status: String,
-    /// Total acknowledged blocks over all rounds.
+    /// Total acknowledged attempts over all rounds.
+    pub attempts: u64,
+    /// Total acknowledged finds over all rounds.
     pub blocks: u64,
     /// Last acknowledged round and ordinal.
     pub last_batch: Option<(u64, u8)>,
+}
+
+/// Relinquish a parked trailing worker under its exact original assignment.
+pub struct Release;
+impl Contract for Release {
+    const NAME: &'static str = "release_worker";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REQUEST: ic_wire::Limits = canic::sharding::LIMITS;
+    type Input = ShardTarget;
+    type Output = Result<(), String>;
+}
+
+// release_worker
+// Remove this assignment from dispatch and retain its exact release receipt.
+// guard  : pool operator
+// limits : default
+#[canic::update(contract = Release, guard = operator)]
+fn release_worker(target: ShardTarget) -> Result<(), String> {
+    let mut state = Pool::read();
+    if state.released.contains(&target) {
+        return Ok(());
+    }
+    let active = usize::from(state.goal.div_ceil(2));
+    if state.pending.is_some() || state.workers.len() <= active {
+        return Err("worker must be parked and dispatch settled".into());
+    }
+    if state.workers.last().is_none_or(|w| w.target != target) {
+        return Err("exact trailing worker allocation required".into());
+    }
+    state.workers.pop();
+    state.released.push(target);
+    state.save();
+    Ok(())
+}
+
+// worker_released
+// Let Root check the hub's durable release receipt for this exact installation.
+// guard  : retained Root
+// limits : default
+#[canic::query(contract = canic::sharding::standby::WorkerReleased, guard = routing_root)]
+fn worker_released(target: ShardTarget) -> bool {
+    Pool::read().released.contains(&target)
+}
+
+fn routing_root() -> Result<(), &'static str> {
+    (system::caller() == Pool::read().root)
+        .then_some(())
+        .ok_or("routing Root required")
 }

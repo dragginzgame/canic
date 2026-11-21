@@ -1,4 +1,4 @@
-//! A miner retains its last round and its block count across code upgrades.
+//! A miner retains its last round and its attempt receipts across code upgrades.
 mod endpoints;
 
 use canic::{method::LIMITS, topology::Install};
@@ -7,17 +7,19 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 const PARENT: &str = "miner.parent.v1";
-const WORK: &str = "miner.work.v1";
+const WORK: &str = "miner.work.v3";
 
 thread_local! {
     static WORK_CELL: RefCell<Option<StableCell<Vec<u8>>>> = const { RefCell::new(None) };
 }
 
-#[derive(Default, Deserialize, Serialize)]
+#[derive(Deserialize, Serialize)]
 struct Work {
+    generation: ic_wire::Bytes<32>,
     round: u64,
     batches: u8,
-    blocks: u64,
+    attempts: u64,
+    finds: u8,
 }
 
 impl Work {
@@ -32,7 +34,7 @@ impl Work {
 
 fn install(binding: Install) {
     assert!(
-        binding.role == "miner" && binding.application.is_empty(),
+        binding.role == "miner" && binding.application.len() == 32,
         "invalid miner install"
     );
     open(Some(binding));
@@ -55,13 +57,23 @@ fn open(binding: Option<Install>) {
         &runtime,
         WORK,
         LIMITS.bytes,
-        binding.map(|_| Work::default().encode()),
+        binding.map(|v| {
+            Work {
+                generation: ic_wire::Bytes::new(v.application).expect("worker generation"),
+                round: 0,
+                batches: 0,
+                attempts: 0,
+                finds: 0,
+            }
+            .encode()
+        }),
     );
     let work = Work::decode(&cell);
     assert!(
         work.batches <= 2
             && (work.round == 0) == (work.batches == 0)
-            && work.blocks >= u64::from(work.batches),
+            && work.attempts >= u64::from(work.batches)
+            && work.finds < (1 << work.batches),
         "invalid miner record"
     );
     WORK_CELL.with_borrow_mut(|slot| *slot = Some(cell));

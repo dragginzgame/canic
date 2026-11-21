@@ -32,11 +32,15 @@ pub(super) async fn enroll(
     )
     .await
     .unwrap();
+    refresh(root, target, managed).await;
+}
+
+async fn refresh(root: &Client<'_>, target: CanisterId, managed: bool) {
     if managed {
         root.update::<_, Result<(), enrollment::Error>>(
             "refresh_auth_receiver",
             enrollment::TRIGGER_REFRESH,
-            &grant.receiver,
+            &Principal::from_slice(target.as_slice()),
             enrollment::LIMITS,
         )
         .await
@@ -86,22 +90,34 @@ pub(super) async fn query<T: serde::de::DeserializeOwned>(
 
 #[tokio::test]
 async fn accounts_register_on_distinct_shards_with_independent_auth() {
-    directory(false).await;
+    directory(false, false).await;
 }
 
 #[tokio::test]
 async fn enrollment_revocation_during_delivery_fences_registration() {
-    directory(true).await;
+    directory(true, false).await;
 }
 
-async fn directory(revoke: bool) {
+#[tokio::test]
+async fn stable_sessions_reopen_database_roles_after_root_refresh() {
+    directory(false, true).await;
+}
+
+async fn directory(revoke: bool, stable: bool) {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/examples/user-directory");
     let wasm = |name: &str| std::fs::read(dir.join(format!("artifacts/{name}.wasm"))).unwrap();
     let initial_roles = std::env::var_os("CANIC_PREDECESSOR_DIRECTORY_ROLES")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| dir.join("artifacts"));
-    let initial_role =
-        |name: &str| std::fs::read(initial_roles.join(format!("{name}.wasm"))).unwrap();
+    let initial_role = |name: &str| {
+        let path = if stable {
+            dir.join("../../../target/store")
+                .join(format!("stable-{name}.wasm"))
+        } else {
+            initial_roles.join(format!("{name}.wasm"))
+        };
+        std::fs::read(path).unwrap()
+    };
     let (mut server, mut instance) = support::instance_with(
         &canic_qualification::server_directory(),
         PocketIcBuilder::new()
@@ -150,6 +166,9 @@ async fn directory(revoke: bool) {
                 profile_manager: false,
             },
         );
+    }
+    if stable {
+        local.receiver_policy.as_mut().unwrap().storage = canic::auth::install::Storage::Stable;
     }
     let policy = local.shard_pool.as_mut().unwrap();
     policy.expires_at_ns = Some(now + 600_000_000_000);
@@ -253,7 +272,9 @@ async fn directory(revoke: bool) {
         }
         assert_eq!(register().await, Ok(Progress::PlacementPending));
         super::settle(pic).await;
-        if device == 9 {
+        if stable {
+            assert_eq!(register().await, Ok(Progress::Ready));
+        } else if device == 9 {
             // Observe through the actual hub's Root lookup. Derive the public key independently.
             use sha2::{Digest, Sha256};
             let mut digest = Sha256::new().chain_update(b"example.user-directory.account.v1");
@@ -420,6 +441,52 @@ async fn directory(revoke: bool) {
             .await
             .unwrap()
             .unwrap();
+        if stable {
+            for (target, role, controller) in [
+                (hub, "user_hub", root.operator),
+                (shard, "user_shard", root.id),
+            ] {
+                canic_qualification::upgrade_stopped(
+                    pic,
+                    target,
+                    initial_role(role),
+                    vec![],
+                    Some(controller),
+                )
+                .await
+                .unwrap();
+            }
+            assert!(
+                query::<Option<Principal>>(&client, "my_shard")
+                    .await
+                    .unwrap_err()
+                    .contains("Unavailable")
+            );
+            assert!(
+                query::<Option<[u8; 16]>>(&child, "my_id")
+                    .await
+                    .unwrap_err()
+                    .contains("Unavailable")
+            );
+            refresh(&root, hub, false).await;
+            refresh(&root, shard, true).await;
+            assert_eq!(
+                query::<Option<Principal>>(&client, "my_shard")
+                    .await
+                    .unwrap(),
+                Some(Principal::from_slice(shard.as_slice()))
+            );
+            assert_eq!(
+                query::<Option<[u8; 16]>>(&child, "my_id").await.unwrap(),
+                Some(id)
+            );
+            assert_eq!(
+                instance.close(Duration::from_secs(10)).await,
+                ic_testkit::server::Deletion::Attempted
+            );
+            assert!(server.stop().unwrap().process.cleanup.is_empty());
+            return;
+        }
         if let Some(&(other, other_id)) = assigned.first() {
             assert_ne!(shard, other);
             assert_ne!(id, other_id);

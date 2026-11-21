@@ -15,9 +15,11 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 canic = { workspace = true, features = ["lifecycle", "method", "readiness", "storage", "topology"] }
+ic-platform-runtime.workspace = true
 ic-storage.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
 toko-tooling.workspace = true

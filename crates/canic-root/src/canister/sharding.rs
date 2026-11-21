@@ -247,3 +247,35 @@ fn retirement_status(
 ) -> Result<(u64, u32), String> {
     canic_management::role_issuer::retirement_status(subject, &generation)
 }
+
+// refill_standby
+// Create one empty canister under the exact expiring refill approval.
+// guard  : Root controller
+// limits : default Wire
+#[canic::update(contract = canic::sharding::standby::RefillStandby, guard = controller)]
+async fn refill_standby(
+    input: canic::sharding::standby::Refill,
+) -> Result<canic::sharding::standby::Asset, String> {
+    sharding::standby::refill(input).await
+}
+
+// inspect_standby
+// Read original refill and allocation custody.
+// guard  : Root controller
+// limits : default request, 4096-byte reply
+#[canic::update(contract = canic::sharding::standby::InspectStandby, guard = controller)]
+fn inspect_standby() -> Vec<(
+    canic::sharding::standby::Refill,
+    canic::sharding::standby::Asset,
+)> {
+    sharding::standby::inspect()
+}
+
+// confirm_worker_release
+// Withdraw an exact standby allocation once its hub confirms durable release.
+// guard  : Root controller
+// limits : sharding request, default reply
+#[canic::update(contract = canic::sharding::standby::ConfirmRelease, guard = controller)]
+async fn confirm_worker_release(target: canic::sharding::ShardTarget) -> Result<(), String> {
+    sharding::standby::confirm_release(target).await
+}

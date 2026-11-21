@@ -43,7 +43,7 @@ fn publication_envelope_carries_a_maximum_chunk_and_bounded_status() {
         expires_at_ns: u64::MAX,
         command: Command::Put(store::Put {
             release: release.clone(),
-            index: 31,
+            index: (store::MAX_CHUNKS - 1) as u32,
             bytes: vec![42; store::CHUNK_BYTES],
         }),
     };

@@ -3,53 +3,17 @@ mod credential;
 mod store_root_tests;
 mod support;
 
-use canic_management_protocol::stored::{STORE_CHUNK_LIMITS, STORE_LIMITS};
-use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
+use canic_management_protocol::stored::STORE_LIMITS;
+use ic_testkit::pocket_ic::CanisterId;
 use ic_wasm_store_protocol as store;
-use serde::{Serialize, de::DeserializeOwned};
 
-struct Client<'a> {
-    pic: &'a PocketIc,
-    id: CanisterId,
-    operator: CanisterId,
-}
+#[path = "../fixtures/local_store.rs"]
+mod local_store;
+#[path = "../fixtures/miner_pool.rs"]
+mod miner_pool_fixture;
+use local_store::Client;
+
 impl Client<'_> {
-    async fn update<T: Serialize, R: DeserializeOwned>(
-        &self,
-        method: &str,
-        id: u64,
-        input: &T,
-        limits: ic_wire::Limits,
-    ) -> R {
-        let reply = self
-            .pic
-            .update_call(
-                self.id,
-                self.operator,
-                method,
-                ic_wire::encode(
-                    input,
-                    ic_wire::Encoding::Frame {
-                        method: id,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    limits,
-                )
-                .unwrap(),
-            )
-            .await
-            .unwrap();
-        ic_wire::decode(
-            &reply,
-            ic_wire::Encoding::Frame {
-                method: id,
-                direction: ic_wire::Direction::Response,
-            },
-            limits,
-        )
-        .unwrap()
-    }
-
     async fn info(&self) -> store::Info {
         let reply = self
             .pic
@@ -93,52 +57,6 @@ impl Client<'_> {
 
     async fn publish_bytes(&self, version: &str, bytes: &[u8]) -> store::Manifest {
         self.publish_named("greeting", version, bytes).await
-    }
-
-    async fn publish_named(&self, name: &str, version: &str, bytes: &[u8]) -> store::Manifest {
-        let manifest = store::Manifest {
-            release: store::Release {
-                name: name.into(),
-                version: version.into(),
-            },
-            hash: store::digest(bytes),
-            bytes: bytes.len() as u64,
-            chunks: bytes
-                .chunks(store::CHUNK_BYTES)
-                .map(store::digest)
-                .collect(),
-        };
-        self.update::<_, Result<store::Status, store::Error>>(
-            "prepare",
-            store::PREPARE,
-            &manifest,
-            STORE_LIMITS,
-        )
-        .await
-        .unwrap();
-        for (index, bytes) in bytes.chunks(store::CHUNK_BYTES).enumerate() {
-            self.update::<_, Result<store::Status, store::Error>>(
-                "put",
-                store::PUT,
-                &store::Put {
-                    release: manifest.release.clone(),
-                    index: index as u32,
-                    bytes: bytes.to_vec(),
-                },
-                STORE_CHUNK_LIMITS,
-            )
-            .await
-            .unwrap();
-        }
-        self.update::<_, Result<store::Status, store::Error>>(
-            "publish",
-            store::PUBLISH,
-            &manifest.release,
-            STORE_LIMITS,
-        )
-        .await
-        .unwrap();
-        manifest
     }
 
     async fn pin(&self, pin: &store::Pin) -> store::PinReceipt {

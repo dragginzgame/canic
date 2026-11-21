@@ -13,6 +13,7 @@ category = "examples"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+stable-auth = ["canic/auth-receiver-stable"]
 inspection = ["canic/inspection", "ex-user-directory-schema/inspection"]
 role-service = ["canic/role-attestation", "ex-user-directory-schema/role-service"]
 

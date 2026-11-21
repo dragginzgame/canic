@@ -126,10 +126,14 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
     let Some(&slot) = ChildId::INSTANCES.iter().rev().nth(index) else {
         return Placement::Full;
     };
-    let grant = match STATE.with_borrow(|s| {
+    let (grant, source) = match STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
         let workers = state.pools.workers.as_ref().unwrap();
         if let Some(claim) = workers.claims.get(index) {
+            if state.pools.standby.iter().any(|(_, asset)| matches!(asset,
+                canic::sharding::standby::Asset::Released(_, allocation) if allocation.slot == slot.index() as u32)) {
+                return Err(Placement::Unavailable(Allocation { slot: slot.index() as u32, generation: claim.generation }, claim.principal.clone()));
+            }
             return Err(placement::resolve(
                 Allocation {
                     slot: slot.index() as u32,
@@ -145,13 +149,22 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
         if !reserve {
             return Err(Placement::Unknown);
         }
-        if ordinal >= workers.grant.max_instances || state.pools.full() {
+        if ordinal >= workers.grant.max_instances
+            || (state.pools.full() && !state.pools.empty_spare())
+        {
             return Err(Placement::Full);
         }
         if index != workers.claims.len() {
             return Err(Placement::Busy);
         }
-        Ok(workers.grant.clone())
+        Ok((
+            workers.grant.clone(),
+            if state.pools.empty_spare() {
+                super::super::Origin::StandbyWorker
+            } else {
+                super::super::Origin::Placement
+            },
+        ))
     }) {
         Ok(grant) => grant,
         Err(outcome) => return outcome,
@@ -163,6 +176,7 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
         return Placement::GrowthRefused;
     }
     let Some(generation) = create(
+        source,
         slot,
         grant.reference,
         grant.arguments,
@@ -183,6 +197,7 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
                 generation,
                 principal: None,
             });
+        super::standby::reserve(&mut state.pools, slot, generation);
         state.pool.set(state.pools.encode());
     });
     Placement::Pending(Allocation {

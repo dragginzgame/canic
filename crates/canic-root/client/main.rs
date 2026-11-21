@@ -57,6 +57,20 @@ enum Command {
         #[arg(value_parser = generation)]
         generation: [u8; 32],
     },
+    /// Observe the standby inventory and the exact worker allocation holding each spare.
+    #[cfg(feature = "sharding")]
+    InspectStandby,
+    /// Confirm the hub release of this exact worker target (JSON).
+    #[cfg(feature = "sharding")]
+    ConfirmWorkerRelease { target: String },
+    /// Authorize one new empty canister. Repeat the exact request to inspect its result.
+    #[cfg(feature = "sharding")]
+    RefillStandby {
+        root: Principal,
+        sequence: u8,
+        cycles: u64,
+        expires_at_ns: u64,
+    },
     /// Report the allocation, drain state and live placement count.
     #[cfg(feature = "sharding")]
     InspectShard { shard: Principal },
@@ -137,6 +151,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             shard,
             allocation: Allocation { slot, generation },
         })?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
+            command: Command::ConfirmWorkerRelease { target },
+        } => request::<canic::sharding::standby::ConfirmRelease>(&serde_json::from_str(&target)?)?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
+            command: Command::InspectStandby,
+        } => request::<canic::sharding::standby::InspectStandby>(&())?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
+            command:
+                Command::RefillStandby {
+                    root,
+                    sequence,
+                    cycles,
+                    expires_at_ns,
+                },
+        } => {
+            request::<canic::sharding::standby::RefillStandby>(&canic::sharding::standby::Refill {
+                root,
+                sequence,
+                cycles,
+                expires_at_ns,
+            })?
+        }
         Action::Decode => {
             let mut bytes = Vec::new();
             std::io::stdin()
@@ -156,7 +195,10 @@ fn reply_limit() -> usize {
         .bytes
         .max(canic::logging::Logs::REPLY.bytes);
     #[cfg(feature = "sharding")]
-    let limit = canic::sharding::LIMITS.bytes.max(limit);
+    let limit = canic::sharding::standby::InspectStandby::REPLY
+        .bytes
+        .max(canic::sharding::LIMITS.bytes)
+        .max(limit);
     limit
 }
 
@@ -194,6 +236,19 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     #[cfg(feature = "sharding")]
     if let Ok(reply) = BeginShardDrain::decode_reply(bytes) {
         return Ok(json!({"draining": true, "live_placements": reply?}));
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic::sharding::standby::InspectStandby::decode_reply(bytes) {
+        return Ok(serde_json::to_value(reply)?);
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic::sharding::standby::RefillStandby::decode_reply(bytes) {
+        return Ok(serde_json::to_value(reply?)?);
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic::sharding::standby::ConfirmRelease::decode_reply(bytes) {
+        reply?;
+        return Ok(json!({"released": true}));
     }
     Err("unknown Root reply".into())
 }

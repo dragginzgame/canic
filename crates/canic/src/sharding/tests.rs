@@ -75,3 +75,32 @@ fn keyed_methods_preserve_the_published_placement_frames() {
         ic_wire::method_id("canic.lookup_instance.v1"),
     );
 }
+
+#[test]
+fn standby_inspection_can_return_eight_distinct_claimed_assets() {
+    use super::standby::{Asset, InspectStandby, Refill};
+    use crate::method::Contract;
+    use ic_platform_types::Principal;
+    let root = Principal::from_slice(&[255; 29]);
+    let history = (0..8u8)
+        .map(|sequence| {
+            (
+                Refill {
+                    root,
+                    sequence,
+                    cycles: 1_000_000_000_000,
+                    expires_at_ns: u64::MAX,
+                },
+                Asset::Claimed(
+                    Principal::from_slice(&[sequence; 29]),
+                    super::Allocation {
+                        slot: u32::from(sequence),
+                        generation: [255; 32],
+                    },
+                ),
+            )
+        })
+        .collect::<Vec<_>>();
+    let reply = InspectStandby::encode_reply(&history).unwrap();
+    assert_eq!(InspectStandby::decode_reply(&reply).unwrap(), history);
+}

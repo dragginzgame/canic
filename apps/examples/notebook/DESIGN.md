@@ -8,10 +8,12 @@ Prepare the local simulator once, then run the walkthrough:
 
 ```sh
 make qualification-setup
-make notebook-test
+make demo DEMO_APP=notebook
 ```
 
-The test installs Notebook with a named local identity and synthetic cycles. It writes “draft”, fences writes, upgrades the canister and snapshots it while stopped. It then reopens writes, changes the text to “published” and restores the snapshot. “Draft” is readable immediately. Accepting generation 2 keeps edits fenced. Opening generation 1 fails, and only the installer can open generation 2 and allow the next edit.
+At the prompt, enter `edit draft`, `checkpoint`, `edit published`, `restore` and `read`. Try an edit before and after `accept`: both attempts are refused. Use `reopen` and edit again. Each session has one checkpoint and one restore, with a simulated installer for recovery and a separate visitor for reads and edits.
+
+The regression (`make notebook-test`) installs Notebook with a named local identity and synthetic cycles. It writes “draft”, fences writes, upgrades the canister and snapshots it while stopped. It then reopens writes, changes the text to “published” and restores the snapshot. “Draft” is readable immediately. Accepting generation 2 keeps edits fenced. Opening generation 1 fails, and only the installer can open generation 2 and allow the next edit.
 
 The note, installer and fence share the stable record `notebook.record.v1`. This layout requires a fresh install for anyone running the earlier text-only experiment. Reopening its `notebook.note.v1` layout fails before writes are admitted.
 

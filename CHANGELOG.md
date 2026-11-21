@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.251.0] - 2026-11-21
+
+Auth Wire 0.47.0, Blob Storage 0.109.0 and Wasm Store 0.7.0 now use IC Wire 0.28.0 in both workspaces. Store 0.7.0 requires a fresh Store and rebuilt manifests for its 1 MiB chunks. Keep existing 256 KiB fleets on their qualified release.
+
+Fresh DB-backed hubs and shards can preserve browser sessions across upgrades.
+Build each receiver with `canic/auth-receiver-stable` and set its fleet receiver
+policy to `storage = "stable"`. Refresh each receiver after upgrading.
+[Auth setup](docs/demos/auth.md) · [Canic #70](https://github.com/dragginzgame/canic/issues/70)
+
+```sh
+# Build the example roles locally and exercise both storage modes on a prepared simulator.
+canic app build --config apps/examples/user-directory/canic.toml
+bash scripts/dev/test-store.sh user-directory
+```
+
+### ▶️ Try it
+
+After `make qualification-setup`, run either disposable fleet in one terminal.
+In Miner Pool, enter `miners 3` to see live attempts with a 25% find rate.
+Enter `miners 1` to park workers, or `miners 0` to drain and idle the pool.
+
+```sh
+make demo DEMO_APP=miner-pool   # Set the active count and watch miners find blocks.
+make demo DEMO_APP=notebook     # Checkpoint a note, restore, accept and reopen.
+```
+
+A sharding Root can retain an operator-funded empty canister and supply it to
+the next approved worker. Each miner checks its allocation generation on every
+batch. A parked miner can resume work. Explicit release permanently withdraws
+the hub's route. Root retains the released allocation pending cleanup.
+
+```sh
+# From a configured miner fleet with the corresponding controller/operator identities
+canic fleet call --canister root inspect-standby
+canic fleet call --canister pool report
+```
+
 ## [0.250.0] - 2026-11-21
 
 ### ✨ Features

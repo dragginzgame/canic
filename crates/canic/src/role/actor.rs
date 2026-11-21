@@ -32,6 +32,32 @@ thread_local! {
     static ROOT: Cell<Option<Principal>> = const { Cell::new(None) };
 }
 
+fn bootstrap(
+    fresh: bool,
+    authority: &str,
+    prefix: &str,
+    keys: &[&str],
+    config: StorageConfig,
+) -> MemoryRuntime<DefaultMemoryImpl> {
+    let application = (authority, prefix, keys);
+    #[cfg(feature = "auth-receiver-stable")]
+    {
+        use crate::auth::session::stable::{ENGINE_KEY, HOST_KEY};
+        let auth_keys = [ENGINE_KEY, HOST_KEY];
+        let groups = [
+            application,
+            ("auth", "auth.receiver.", auth_keys.as_slice()),
+        ];
+        let config = StorageConfig {
+            allocations: config.allocations.max(keys.len() + auth_keys.len()),
+            ..config
+        };
+        storage::bootstrap_groups(DefaultMemoryImpl::default(), fresh, &groups, config)
+    }
+    #[cfg(not(feature = "auth-receiver-stable"))]
+    storage::bootstrap_groups(DefaultMemoryImpl::default(), fresh, &[application], config)
+}
+
 /// Routing Root recovered from this hub's own configuration.
 #[must_use]
 pub fn root() -> Option<Principal> {
@@ -100,8 +126,7 @@ pub fn open_hub(
     keys.push(config_key);
     #[cfg(feature = "role-attestation")]
     keys.push(&directory);
-    let host = storage::bootstrap_with_prefix(
-        DefaultMemoryImpl::default(),
+    let host = bootstrap(
         initial.is_some(),
         authority,
         prefix,
@@ -160,14 +185,7 @@ pub fn open_shard(
     keys.push(parent_key);
     #[cfg(feature = "role-attestation")]
     keys.extend([directory.as_str(), root_key.as_str()]);
-    let host = storage::bootstrap_with_prefix(
-        DefaultMemoryImpl::default(),
-        initial.is_some(),
-        authority,
-        prefix,
-        &keys,
-        config,
-    );
+    let host = bootstrap(initial.is_some(), authority, prefix, &keys, config);
     let parts = initial.map(ShardConfig::into_parts);
     topology::attach_parent(
         &host,

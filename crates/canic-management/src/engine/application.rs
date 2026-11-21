@@ -26,7 +26,16 @@ pub(super) fn arguments(slot: ChildId, upgrade: bool) -> Vec<u8> {
                 .as_slice()
                 .to_vec()
         } else {
-            value.creation.into_vec()
+            let bytes = value.creation.into_vec();
+            #[cfg(feature = "sharding")]
+            if let Some(generation) = super::sharding::worker_generation(slot)
+                && let Ok(mut install) = canic::topology::Install::decode(&bytes)
+                && install.application == canic::topology::WORKER_GENERATION
+            {
+                install.application = generation.to_vec();
+                return install.encode().expect("approved worker generation");
+            }
+            bytes
         }
     })
 }

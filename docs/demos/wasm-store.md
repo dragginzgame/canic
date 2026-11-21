@@ -11,7 +11,7 @@ checkout is needed. Existing generated configurations must change only their Sto
 pointing at the Canic workspace. Existing artifacts, approvals and deployed canisters
 are unchanged. Rebuilding does not authorize installing the changed executable.
 
-Fresh builds select Store 0.6.0 and its matching IC Wire 0.27 protocol.
+Fresh builds select Store 0.7.0 and its matching IC Wire 0.28 protocol. Install a fresh Store and rebuild artifact manifests for 1 MiB chunks. The supplier refuses upgrades from the 256 KiB format. The following evidence applies to Store 0.6.0.
 A local Root-managed upgrade from 0.5.2 preserved the populated Store’s stable
 memory. [Qualification record](../qualification/history.md#wasm-store-052-to-060--2026-11-21)
 
@@ -583,7 +583,7 @@ The effect table distinguishes `prepare cache` from inline `upload`. Neither a
 retained pin nor a past preparation establishes current cache contents. Status
 does not call Root or Store, sign requests or grant a new repair allowance.
 
-The initial bounded contract accepts raw artifacts up to 8 MiB in 256 KiB chunks.
+The current bounded contract accepts raw artifacts up to 8 MiB in 1 MiB chunks.
 The default quota reserves 128 MiB of distinct artifact payloads and 1,024 release
 labels, including incomplete uploads. Controller changes may raise those quotas
 to 256 MiB and 4,096 labels. Chunk sharing does not reduce the conservative

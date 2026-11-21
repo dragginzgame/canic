@@ -330,6 +330,14 @@ pub(crate) fn preview(
         if selected.config.receiver_selected(&pool.component) {
             return Err(Error::Invalid("dedicated children require a topology install frame; receiver installation is unsupported".into()));
         }
+        let args = if method == stored::CONFIGURE_WORKERS {
+            canic_management_protocol::application::Arguments::new(
+                canic::topology::WORKER_GENERATION.to_vec(),
+            )
+            .map_err(supplier)?
+        } else {
+            args
+        };
         let arguments = topology(
             &selected.config.canisters,
             &pool.component,

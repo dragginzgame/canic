@@ -1734,10 +1734,14 @@ partition key and decreasing its count. The rewrite retains the creation generat
 and validates counts against actual claims on reopen. A closed issuer by itself
 cannot release a single application key.
 
-After drain, the proposed dormancy transition keeps the principal under Root
-control through the proof wait. The dormant child has no renewal timer or outgoing work.
-Root checks the deadline and confirmed dormancy before releasing a principal;
-a new fleet receives clean application storage.
+After drain, use dormancy only while outstanding role proofs require a wait.
+Root retains the original generation, closure deadline and retirement evidence
+outside the child. The dormant child has no renewal timer or outgoing work.
+When Root can establish that no old proof remains usable and the release
+conditions below hold, it uninstalls the code and verifies the result before
+admitting the principal to the [standby pool](#release-to-reusable-capacity).
+A retired child with no outstanding exposure can go directly through uninstall
+and verification. A missing proof record leaves eligibility unresolved.
 
 The supplied `canic-dormant` Wasm is built independently like Root. It accepts
 one installation binding with the original generation and deadline, checks its own
@@ -2458,6 +2462,75 @@ Backup owns certificate replay and finite host observations. Its normal capture 
 Adopt the paused FR1 outcome as a first-class managed operation. Retain complete inventory and custody outside retiring canisters before clearing any authority owner. Stop new producers, settle uncertain effects, obtain application data-discard approval, transfer controller custody before wiping a sole controller, then reset and verify empty assets. Preserve observed cycles and controlled ledger accounts.
 
 A surviving same-subnet executor may receive ready capacity. Otherwise assets remain explicitly held by the operator until fresh bootstrap. An executor cannot place itself in its own pool. Recommissioning is fresh admission; old receipts or missing historical state are not automatic prerequisites. Bypass only irrelevant historical metadata, never unresolved spending or custody.
+
+The standby pool is a retained inventory of **uninstalled canisters** on the
+managed subnet. It can contain freshly created empty canisters as well as
+verified returns. Parked application workers keep their code and allocation.
+Dormant canisters awaiting proof expiry remain in retirement custody. Neither
+is available for a pool claim.
+
+Before marking a return available, the surviving owner retains the release
+decision and original generation, resolves outstanding effects and proof
+exposure, and verifies the target's absent module hash and expected controllers
+through management status. A lost uninstall reply leaves the return pending
+until observation establishes the result. An inventory entry still counts
+toward physical subnet capacity. Claiming one reserves that exact principal
+for a single approved destination and fresh generation, including across a
+retry or owner upgrade. A destination-bound early handover cannot make the
+principal generally available while old proofs are usable.
+
+Legacy at `377fbce` retained pool asset records and handoff receipts by
+principal in [stable pool storage](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/storage/stable/canister_pool/mod.rs).
+Its [release regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/ops/canister_pool/tests/release/mod.rs)
+preserve pending handoffs and uncertain creation. Carry those cases into M6A:
+interrupt uninstall, reopen the owner, verify one available entry, and race two
+claims for it. Only the winning destination may install.
+
+#### Fleet standby pool implementation review
+
+Legacy reset (revision `377fbce`, history `ccca2a1b3`) exposed a gap in the
+return check above: uninstall can leave management snapshots behind. Its
+[reset workflow](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/workflow/canister_pool/mod.rs#L720-L789)
+stops the target, checks the recycling claim across awaits, removes observed
+snapshots and verifies the final module, controllers, snapshot usage and cycles.
+For the rewrite, keep a return pending while any Backup obligation or unresolved
+management effect remains. Record which snapshots can be discarded before
+cleanup. A missing module alone cannot make a return claimable.
+The selected `ic-platform-protocol` 0.3.7 exposes lifecycle, version,
+controllers and module hash through `management::decode_canister_status` and
+snapshot inventory through `management_snapshots::decode_list_snapshots`.
+Its status projection skips the child's cycle balance. The return verifier
+needs that observation to apply the approved minimum balance. Root's own
+liquid balance and the historical creation debit cannot establish it.
+
+The legacy [claim regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/ops/canister_pool/tests/mod.rs#L304-L414)
+exercise exact retry and the smallest sufficiently funded ready asset, with a
+stable tie-break. Retain both outcomes. A claim binds an approved placement to
+one physical principal and its new allocation generation before install dispatch.
+Root's current child engine pins the release, creates the target, then uploads,
+installs and checks readiness. Extend acquisition there: record whether the
+target came from creation or inventory and use the same subsequent installation.
+Keep the archived source allocation and debit evidence distinct from the new
+one. Reserve physical capacity on creation; reusing a held principal still
+requires a role grant but consumes no second physical slot or creation debit.
+
+The Miner Pool hub may release its trailing, parked worker by exact allocation
+after outstanding work settles. It keeps the release receipt through upgrades.
+Root checks the receipt against its original grant and observes it directly
+from that hub. Mining requests carry the generation delivered at install. Even
+a delayed request from the same parent to the same principal must fail on a new
+generation. Release alone leaves the asset charged to the subnet in quarantine.
+
+Proposed first installed journey: one fleet, one Root, one Store and one spare.
+Claim it for a worker, install the approved release, drain and release it, then
+install another approved release on the same principal with a fresh generation.
+After Root upgrade, inspect the principal, custody, cycle balance and both
+allocation receipts. Race two claims for the final spare; interrupt uninstall
+with a snapshot still present; verify no second install, double count or early
+return. Qualify cross-fleet custody transfer separately. Any automatic refill
+must wake on retained demand and quiesce at target. The
+[legacy maintenance study](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/docs/design/ideas/demand-driven-canister-pool-maintenance/design.md)
+documents the cost of polling a healthy pool.
 
 For assets with outstanding role proofs, the default wait and optional
 destination-bound early approval follow the [role admission contract](#role-admission-for-dynamic-children).

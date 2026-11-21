@@ -382,7 +382,7 @@ intent/result/renewal engine.
 `auth_logout_tests` adds browser-bound revocation, two independent devices,
 in-flight initial/renewal fencing, retained results/deadlines, real pruning,
 malformed input, reply rollback and closed state after upgrade. Registry Auth
-0.48.8 / Auth Wire 0.46.0 and Types 0.43.2 supply the sole retained binding engine; the private
+0.48.9 / Auth Wire 0.47.0 and Types 0.43.3 supply the sole retained binding engine; the private
 browser package remains the separately pinned 0.47.1 source.
 `make auth-browser-prepare` explicitly prepares the immutable browser supplier;
 `make auth-browser-test` checks generated codecs, native frame parity and the
@@ -655,7 +655,7 @@ not invoke signing or continue maintenance.
 Native fleet tests admit both full 8 MiB manifests and
 preserve existing inline fleets with or without Store and their retained digests.
 `make blob-test` builds Blob-only and profile-composed executable pairs using the optional
-Canic adapter. The registry Blob 0.108.0 fixtures check command counts in the
+Canic adapter. The registry Blob 0.109.0 fixtures check command counts in the
 shared Canic recorder and drain/activation events in the same canister’s log,
 including after reopen. They also cover user
 isolation, shared references, catalog/Blob rollback, malformed frames, capacity,
@@ -1179,6 +1179,13 @@ principal)))` on install and `database::attach(&host, None)` on reopen.
 The [two-store witness](canic-schema-role/src/lib.rs) uses ordinary lifecycle
 hooks. Its installed upgrade and rollback test runs with
 `bash scripts/dev/test-store.sh db-roles`.
+
+The installed User Directory suite exercises both receiver layouts. With
+stable Auth it upgrades the populated hub and shard, checks both refuse reads
+before refresh, and reads the same route and ID with their original sessions
+after refreshing each receiver. The volatile case still checks lost sessions
+remain closed. Run `bash scripts/dev/test-store.sh user-directory` after testkit
+setup. [Auth lifecycle](../docs/demos/auth.md)
 
 The User Directory adds a receiver lifecycle beside its database declaration.
 For a shard with an existing parent cell, keep its original storage policy:

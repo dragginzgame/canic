@@ -83,3 +83,22 @@ fn fresh_explicit_grant_admits_only_its_prefix() {
             .is_some()
     );
 }
+
+#[test]
+fn composed_bootstrap_reopens_both_owners_and_refuses_changed_membership_and_grants() {
+    let memory = VectorMemory::default();
+    let app = ("directory", "directory.", &["directory.rows.v1"][..]);
+    let auth = (
+        "auth",
+        "auth.receiver.",
+        &["auth.receiver.engine.v1", "auth.receiver.host.v1"][..],
+    );
+    let open = |fresh, groups: &[(&str, &str, &[&str])]| {
+        bootstrap_groups(memory.clone(), fresh, groups, StorageConfig::default())
+    };
+    drop(open(true, &[app, auth]));
+    assert!(catch_unwind(AssertUnwindSafe(|| open(false, &[app]))).is_err());
+    let swapped = ("directory", "directory.", auth.2);
+    assert!(catch_unwind(AssertUnwindSafe(|| open(false, &[app, swapped]))).is_err());
+    drop(open(false, &[app, auth]));
+}

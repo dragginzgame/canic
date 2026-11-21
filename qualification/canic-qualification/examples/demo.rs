@@ -1,4 +1,13 @@
 //! Disposable actor rehearsal. Testkit owns the server; normal Canic commands own deployments.
+#[path = "../fixtures/local_store.rs"]
+mod local_store;
+#[path = "interactive/miner.rs"]
+mod miner;
+#[path = "../fixtures/miner_pool.rs"]
+mod miner_pool_fixture;
+#[path = "interactive/notebook.rs"]
+mod notebook;
+
 use canic::{
     logging::Logs,
     method::Contract,
@@ -30,6 +39,8 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 enum App {
     Counter,
     Metrics,
+    MinerPool,
+    Notebook,
 }
 
 #[derive(Parser)]
@@ -104,6 +115,39 @@ async fn session(
     seconds: u64,
     app_name: App,
 ) -> Result<()> {
+    let build_example = |name: &str| -> Result<PathBuf> {
+        let example = repo.join("apps/examples").join(name);
+        println!("Building local {name} fleet (synthetic cycles)…");
+        cli(&example, &["app", "build"])?;
+        Ok(example.join("artifacts"))
+    };
+    let (name, slot, first, second, app_commands) = match app_name {
+        App::MinerPool => {
+            return miner::session(owner, &build_example("miner-pool")?, seconds).await;
+        }
+        App::Notebook => {
+            return notebook::session(
+                owner.client(),
+                &build_example("notebook")?.join("notebook.wasm"),
+                seconds,
+            )
+            .await;
+        }
+        App::Counter => (
+            "counter",
+            "ex-counter",
+            "increment",
+            "read",
+            "increment, read",
+        ),
+        App::Metrics => (
+            "metrics",
+            "ex-metrics",
+            "ping",
+            "checksum",
+            "ping [text], checksum TEXT",
+        ),
+    };
     let url = owner.client_mut().make_live(None).await.to_string();
     let key = owner
         .client()
@@ -127,10 +171,6 @@ async fn session(
         std::process::id()
     ));
     std::fs::create_dir(&directory)?;
-    let (name, slot, first, second) = match app_name {
-        App::Counter => ("counter", "ex-counter", "increment", "read"),
-        App::Metrics => ("metrics", "ex-metrics", "ping", "checksum"),
-    };
     let example = repo.join("apps/examples").join(name);
     let mut config = canic_host::load_config(&example.join("canic.toml"))?;
     let app = config
@@ -229,10 +269,7 @@ async fn session(
         }
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
-    let mut commands = vec![match app_name {
-        App::Counter => "increment, read",
-        App::Metrics => "ping [text], checksum TEXT",
-    }];
+    let mut commands = vec![app_commands];
     if logs {
         commands.push("logs [before]");
     }
@@ -295,33 +332,57 @@ async fn session(
             &directory, slot, &args,
         )?)?)
     };
+    run_prompt(name, seconds, async |line: &str| command(line)).await
+}
+
+async fn run_prompt(
+    name: &str,
+    seconds: u64,
+    mut command: impl AsyncFnMut(&str) -> Result<String>,
+) -> Result<()> {
+    run_live_prompt(name, seconds, None, async |line: Option<&str>| {
+        command(line.expect("ordinary prompt has no timer")).await
+    })
+    .await
+}
+
+async fn run_live_prompt(
+    name: &str,
+    seconds: u64,
+    cadence: Option<Duration>,
+    command: impl AsyncFnMut(Option<&str>) -> Result<String>,
+) -> Result<()> {
     tokio::select! {
-        input = prompt(name, command) => input?,
+        input = prompt(name, cadence, command) => input?,
         signal = tokio::signal::ctrl_c() => { signal?; }
         () = tokio::time::sleep(Duration::from_secs(seconds)) => { println!("Session lifetime reached."); }
     }
-
     Ok(())
 }
 
-async fn prompt(name: &str, command: impl Fn(&str) -> Result<String>) -> Result<()> {
-    if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
-        let (mut editor, mut output) = Readline::new(format!("{name}> "))?;
-        while let ReadlineEvent::Line(line) = editor.readline().await? {
-            match line.trim() {
-                "" => {}
-                "exit" => break,
-                _ => {
-                    let reply = command(line.trim()).unwrap_or_else(|error| error.to_string());
-                    editor.add_history_entry(line);
-                    writeln!(output, "{reply}")?;
-                }
-            }
+async fn prompt(
+    name: &str,
+    cadence: Option<Duration>,
+    mut command: impl AsyncFnMut(Option<&str>) -> Result<String>,
+) -> Result<()> {
+    let mut timer = cadence.map(tokio::time::interval);
+    if let Some(timer) = &mut timer {
+        timer.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+    }
+    let mut pulse = async || {
+        if let Some(timer) = &mut timer {
+            timer.tick().await;
+        } else {
+            std::future::pending::<()>().await;
         }
-    } else {
-        // A pipe cannot enter terminal editing mode. A blocked pipe reader must
-        // not hold Tokio shutdown open when the session reaches its deadline.
-        let (send, mut receive) = tokio::sync::mpsc::channel(1);
+    };
+    let terminal = std::io::stdin().is_terminal() && std::io::stdout().is_terminal();
+    let mut terminal = terminal
+        .then(|| Readline::new(format!("{name}> ")))
+        .transpose()?;
+    let (send, mut receive) = tokio::sync::mpsc::channel(1);
+    if terminal.is_none() {
+        // A blocked pipe reader must not hold Tokio shutdown open on expiry.
         std::thread::spawn(move || {
             for line in std::io::stdin().lock().lines() {
                 if send.blocking_send(line).is_err() {
@@ -329,18 +390,42 @@ async fn prompt(name: &str, command: impl Fn(&str) -> Result<String>) -> Result<
                 }
             }
         });
-        while let Some(line) = receive.recv().await {
-            match line?.trim() {
-                "" => {}
-                "exit" => break,
-                line => println!(
-                    "{}",
-                    command(line).unwrap_or_else(|error| error.to_string())
-                ),
+    }
+    loop {
+        let next_line = async {
+            if let Some((editor, _)) = &mut terminal {
+                return Ok(match editor.readline().await? {
+                    ReadlineEvent::Line(line) => Some(line),
+                    _ => None,
+                });
+            }
+            Ok::<_, Box<dyn std::error::Error>>(receive.recv().await.transpose()?)
+        };
+        let line = tokio::select! {
+            biased;
+            line = next_line => {
+                let Some(line) = line? else { break };
+                match line.trim() {
+                    "" => continue,
+                    "exit" => break,
+                    _ => {}
+                }
+                if let Some((editor,_)) = &mut terminal { editor.add_history_entry(line.clone()); }
+                Some(line)
+            }
+            () = pulse() => None,
+        };
+        let reply = command(line.as_deref().map(str::trim))
+            .await
+            .unwrap_or_else(|e| e.to_string());
+        if !reply.is_empty() {
+            if let Some((_, output)) = &mut terminal {
+                writeln!(output, "{reply}")?;
+            } else {
+                println!("{reply}");
             }
         }
     }
-
     Ok(())
 }
 
@@ -389,6 +474,6 @@ async fn main() -> Result<()> {
         return Err(format!("simulator cleanup incomplete: {deletion:?}; {stopped:?}").into());
     }
     outcome??;
-    println!("Simulator stopped; instance deletion attempted. Session files retained.");
+    println!("Simulator stopped; instance deletion attempted.");
     Ok(())
 }

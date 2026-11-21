@@ -39,7 +39,7 @@ async fn pool_recovers_exact_blocks_across_lost_reply_and_upgrade() {
         root: root.as_slice().try_into().unwrap(),
         parent: pool.as_slice().try_into().unwrap(),
         role: "miner".into(),
-        application: vec![],
+        application: vec![3; 32],
     }
     .encode()
     .unwrap();
@@ -65,15 +65,40 @@ async fn pool_recovers_exact_blocks_across_lost_reply_and_upgrade() {
         direction,
     };
     let encode = |round: u64, ordinal: u8| {
-        ic_wire::encode(&(round, ordinal), frame(Direction::Request), LIMITS).unwrap()
+        ic_wire::encode(
+            &(
+                ic_wire::Bytes::<32>::new(vec![3; 32]).unwrap(),
+                round,
+                ordinal,
+            ),
+            frame(Direction::Request),
+            LIMITS,
+        )
+        .unwrap()
     };
     let mine = async |caller, round, ordinal| {
         pic.update_call(miner, caller, "mine", encode(round, ordinal))
             .await
             .map(|bytes| {
-                ic_wire::decode::<u64>(&bytes, frame(Direction::Response), LIMITS).unwrap()
+                ic_wire::decode::<(u64, bool)>(&bytes, frame(Direction::Response), LIMITS).unwrap()
             })
     };
+    let receipt = |attempt, round: u64, ordinal: u8| {
+        use sha2::{Digest, Sha256};
+        let hash = Sha256::new()
+            .chain_update(miner.as_slice())
+            .chain_update(round.to_be_bytes())
+            .chain_update([ordinal])
+            .finalize();
+        (attempt, hash[0] < 64)
+    };
+    let stale = ic_wire::encode(
+        &(ic_wire::Bytes::<32>::new(vec![2; 32]).unwrap(), 1u64, 1u8),
+        frame(Direction::Request),
+        LIMITS,
+    )
+    .unwrap();
+    assert!(pic.update_call(miner, pool, "mine", stale).await.is_err());
     assert!(mine(root, 1, 1).await.is_err());
     assert!(mine(CanisterId::anonymous(), 1, 1).await.is_err());
     assert!(mine(pool, 1, 2).await.is_err());
@@ -83,18 +108,41 @@ async fn pool_recovers_exact_blocks_across_lost_reply_and_upgrade() {
         .await
         .unwrap();
     pic.tick().await;
-    assert_eq!(mine(pool, 1, 2).await.unwrap(), 2);
+    assert_eq!(mine(pool, 1, 2).await.unwrap(), receipt(2, 1, 2));
     assert!(mine(pool, 1, 3).await.is_err());
-    canic_qualification::upgrade_stopped(pic, miner, wasm, vec![], Some(root))
+    canic_qualification::upgrade_stopped(pic, miner, wasm.clone(), vec![], Some(root))
         .await
         .unwrap();
     assert!(mine(root, 1, 1).await.is_err());
     assert_eq!(ready().await, canic::readiness::State::Ready);
-    assert_eq!(mine(pool, 1, 1).await.unwrap(), 1);
-    assert_eq!(mine(pool, 1, 2).await.unwrap(), 2);
-    assert_eq!(mine(pool, 4, 1).await.unwrap(), 3);
+    assert_eq!(mine(pool, 1, 1).await.unwrap(), receipt(1, 1, 1));
+    assert_eq!(mine(pool, 1, 2).await.unwrap(), receipt(2, 1, 2));
+    assert_eq!(mine(pool, 4, 1).await.unwrap(), receipt(3, 4, 1));
     assert!(mine(pool, 1, 1).await.is_err());
-    assert_eq!(mine(pool, 4, 2).await.unwrap(), 4);
+    assert_eq!(mine(pool, 4, 2).await.unwrap(), receipt(4, 4, 2));
+    // Reinstall on the same principal under the same parent. A batch already on the
+    // wire for the original allocation must fail before it touches the new state.
+    pic.uninstall_canister(miner, Some(root)).await.unwrap();
+    let next = Install {
+        root: root.as_slice().try_into().unwrap(),
+        parent: pool.as_slice().try_into().unwrap(),
+        role: "miner".into(),
+        application: vec![4; 32],
+    };
+    pic.install_canister(miner, wasm, next.encode().unwrap(), Some(root))
+        .await;
+    assert!(mine(pool, 1, 1).await.is_err());
+    let fresh = ic_wire::encode(
+        &(ic_wire::Bytes::<32>::new(vec![4; 32]).unwrap(), 1u64, 1u8),
+        frame(Direction::Request),
+        LIMITS,
+    )
+    .unwrap();
+    let bytes = pic.update_call(miner, pool, "mine", fresh).await.unwrap();
+    assert_eq!(
+        ic_wire::decode::<(u64, bool)>(&bytes, frame(Direction::Response), LIMITS).unwrap(),
+        receipt(1, 1, 1)
+    );
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         Deletion::Attempted

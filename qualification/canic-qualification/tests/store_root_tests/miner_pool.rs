@@ -17,111 +17,13 @@ async fn growth_park_reuse_and_capacity() {
         Duration::from_secs(180),
     )
     .await;
-    let gateway = owner.client_mut().make_live(None).await;
-    owner.client_mut().stop_live().await;
-    let pic = owner.client();
-    let (root, store) =
-        super::readiness_tests::fixture_with_code(pic, read("root.wasm"), read("store.wasm")).await;
-    let hub_manifest = store.publish_named("pool", "1", &read("pool.wasm")).await;
-    let worker_manifest = store.publish_named("miner", "1", &read("miner.wasm")).await;
-    pic.set_controllers(store.id, Some(root.operator), vec![root.id])
-        .await
-        .unwrap();
-    let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    let deadline = now + 1_800_000_000_000;
-    let staged: Result<management::Status, management::Refusal> = root
-        .update(
-            "stage_application_child",
-            management::application::STAGE,
-            &Request {
-                slot: ChildId::FIRST,
-                value: management::application::Stage {
-                    source: stored::Stage {
-                        approval: management::Approval {
-                            manager: root.id.to_text(),
-                            module_hash: hub_manifest.hash,
-                            creation_cycles: management::CREATION_CYCLES,
-                            execute_at_ns: now,
-                            expires_at_ns: now + 300_000_000_000,
-                        },
-                        reference: stored::Reference {
-                            store: store.id.to_text(),
-                            manifest: hub_manifest,
-                        },
-                    },
-                    arguments: management::application::Arguments::new(
-                        root.operator.as_slice().to_vec(),
-                    )
-                    .unwrap(),
-                },
-            },
-            stored::LIMITS,
-        )
-        .await;
-    staged.unwrap();
-    settle(pic).await;
-    let status: management::Status = root
-        .update(
-            "observe_child",
-            children::STATUS,
-            &ChildId::FIRST,
-            management::LIMITS,
-        )
-        .await;
-    assert_eq!(status.phase, management::Phase::Ready, "{status:?}");
-    let pool = CanisterId::from_text(status.worker.unwrap()).unwrap();
-    let config_path = base.with_file_name("canic.toml");
-    let mut config = canic_host::load_config(&config_path).unwrap();
-    let fleet = config
-        .apps
-        .get_mut("ex-miner-pool")
-        .unwrap()
-        .fleets
-        .get_mut("local")
-        .unwrap();
-    fleet.network = canic_host::FleetNetwork::Bound(canic_host::Network::Local {
-        url: gateway.to_string(),
-        root_key: pic
-            .root_key()
-            .await
-            .unwrap()
-            .iter()
-            .map(|b| format!("{b:02x}"))
-            .collect(),
-        root_subnet: Some(pic.topology().await.get_nns().unwrap().to_text()),
-        routing_canister: root.id.to_text(),
-    });
-    for (name, id) in [("root", root.id), ("store", store.id), ("pool", pool)] {
-        fleet.canisters.insert(
-            name.into(),
-            canic_host::CanisterBinding {
-                id: id.to_text(),
-                profile_manager: false,
-            },
-        );
-    }
-    fleet.worker_pool.as_mut().unwrap().expires_at_ns = Some(deadline);
-    let selected = config.select(None, None).unwrap();
-    let plan = canic_host::plan_fleet(
-        &base,
-        &config_path,
-        &selected,
-        &root.operator.to_text(),
-        None,
-        None,
-    )
-    .unwrap();
-    let canic_host::FleetPlanning::PlacementPools {
-        capacity: Some(capacity),
-        workers: Some(workers),
-        instances: None,
-        shards: None,
-        ..
-    } = plan
-    else {
-        panic!("expected independent worker grant");
-    };
-    assert_eq!(workers.approval.reference.manifest, worker_manifest);
+    let crate::miner_pool_fixture::Fleet {
+        root,
+        pool,
+        capacity,
+        workers,
+    } = crate::miner_pool_fixture::install(&mut owner, &base).await;
+    let pic = root.pic;
     let tick = |round, goal| Tick::encode_request(&(round, goal)).unwrap();
     // The hub is installed but Root has not approved its grant yet.
     let refused = pic
@@ -196,6 +98,79 @@ async fn growth_park_reuse_and_capacity() {
         .await
         .is_err()
     );
+    use canic::sharding::standby::{Asset, InspectStandby, Refill, RefillStandby};
+    let refill = Refill {
+        root: root.id.as_slice().try_into().unwrap(),
+        sequence: 0,
+        cycles: management::CREATION_CYCLES,
+        expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 300_000_000_000,
+    };
+    let request = RefillStandby::encode_request(&refill).unwrap();
+    assert!(
+        pic.update_call(root.id, outsider, RefillStandby::NAME, request.clone())
+            .await
+            .is_err()
+    );
+    let refill_once = async || {
+        RefillStandby::decode_reply(
+            &pic.update_call(root.id, root.operator, RefillStandby::NAME, request.clone())
+                .await
+                .unwrap(),
+        )
+        .unwrap()
+        .unwrap()
+    };
+    let Asset::Empty(spare) = refill_once().await else {
+        panic!("expected a new empty canister")
+    };
+    assert_eq!(refill_once().await, Asset::Empty(spare));
+    let mut changed = refill.clone();
+    changed.expires_at_ns -= 1;
+    let reply = pic
+        .update_call(
+            root.id,
+            root.operator,
+            RefillStandby::NAME,
+            RefillStandby::encode_request(&changed).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        RefillStandby::decode_reply(&reply).unwrap().unwrap_err(),
+        "refill approval differs"
+    );
+    let status = pic
+        .canister_status(CanisterId::from_slice(spare.as_slice()), Some(root.id))
+        .await
+        .unwrap();
+    assert!(status.module_hash.is_none());
+    assert_eq!(status.settings.controllers, [root.id]);
+    canic_qualification::upgrade_stopped(
+        pic,
+        root.id,
+        read("root.wasm"),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
+    let inventory = async || {
+        InspectStandby::decode_reply(
+            &pic.update_call(
+                root.id,
+                root.operator,
+                InspectStandby::NAME,
+                InspectStandby::encode_request(&()).unwrap(),
+            )
+            .await
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        inventory().await,
+        vec![(refill.clone(), Asset::Empty(spare))]
+    );
     let client = codec::output(&base.join("pool.wasm"));
     assert!(codec::encode(&client, &["tick".into(), "0".into(), "5".into()]).is_err());
     let mut originals = Vec::new();
@@ -254,7 +229,7 @@ async fn growth_park_reuse_and_capacity() {
             .unwrap();
         let report = PoolReport::decode_reply(&bytes).unwrap();
         assert_eq!(
-            (report.round, report.goal, report.produced),
+            (report.round, report.goal, report.completed),
             (round, goal, goal.min(8))
         );
         assert_eq!(
@@ -266,11 +241,13 @@ async fn growth_park_reuse_and_capacity() {
             usize::from(goal.min(8).div_ceil(2))
         );
         let ids: Vec<_> = report.workers.iter().map(|w| w.principal).collect();
+        assert_eq!(ids[0], spare);
+        assert!(matches!(inventory().await.as_slice(), [(_, Asset::Claimed(id,_))] if *id==spare));
         assert!(ids.starts_with(&originals));
         originals = ids;
         println!(
-            "Round {round}, goal {goal}, produced {}, miners {}",
-            report.produced,
+            "Round {round}, goal {goal}, attempts {}, miners {}",
+            report.completed,
             report.workers.len()
         );
         for worker in &report.workers {
@@ -300,7 +277,9 @@ async fn growth_park_reuse_and_capacity() {
             .unwrap();
         }
         if round == 6 {
-            assert_eq!(report.workers.iter().map(|w| w.blocks).sum::<u64>(), 21);
+            let finds = report.workers.iter().map(|w| w.blocks).sum::<u64>();
+            assert!((1..21).contains(&finds), "expected both finds and misses");
+            assert_eq!(report.workers.iter().map(|w| w.attempts).sum::<u64>(), 21);
         }
     }
     // Exercise Root’s own backstop even though the example tick already caps demand.
@@ -350,11 +329,11 @@ async fn growth_park_reuse_and_capacity() {
         .unwrap();
     let draining = PoolReport::decode_reply(&draining).unwrap();
     assert_eq!(
-        (draining.round, draining.goal, draining.produced),
+        (draining.round, draining.goal, draining.completed),
         (8, 0, 0)
     );
     assert_eq!(draining.workers[0].status, "draining");
-    assert_eq!(draining.workers.iter().map(|w| w.blocks).sum::<u64>(), 21);
+    assert_eq!(draining.workers.iter().map(|w| w.attempts).sum::<u64>(), 21);
     pic.start_canister(worker, Some(root.id)).await.unwrap();
     pic.submit_call(pool, root.operator, Tick::NAME, tick(8, 0))
         .await
@@ -375,9 +354,125 @@ async fn growth_park_reuse_and_capacity() {
         .await
         .unwrap();
     let parked = PoolReport::decode_reply(&reply).unwrap();
-    assert_eq!((parked.round, parked.goal, parked.produced), (8, 0, 0));
+    assert_eq!((parked.round, parked.goal, parked.completed), (8, 0, 0));
     assert!(parked.workers.iter().all(|w| w.status == "parked"));
-    assert_eq!(parked.workers.iter().map(|w| w.blocks).sum::<u64>(), 22);
+    assert_eq!(parked.workers.iter().map(|w| w.attempts).sum::<u64>(), 22);
+    use canic::sharding::{ShardTarget, standby::WorkerReleased};
+    use ex_miner_pool_hub::Release;
+    let last = parked.workers.last().unwrap();
+    let target = ShardTarget {
+        shard: last.principal,
+        allocation: last.allocation.clone(),
+    };
+    let request = Release::encode_request(&target).unwrap();
+    assert!(
+        pic.update_call(pool, outsider, Release::NAME, request.clone())
+            .await
+            .is_err()
+    );
+    for _ in 0..2 {
+        let bytes = pic
+            .update_call(pool, root.operator, Release::NAME, request.clone())
+            .await
+            .unwrap();
+        Release::decode_reply(&bytes).unwrap().unwrap();
+    }
+    canic_qualification::upgrade_stopped(pic, pool, read("pool.wasm"), vec![], Some(root.id))
+        .await
+        .unwrap();
+    let released = |target: &ShardTarget| WorkerReleased::encode_request(target).unwrap();
+    let bytes = pic
+        .query_call(pool, root.id, WorkerReleased::NAME, released(&target))
+        .await
+        .unwrap();
+    assert!(WorkerReleased::decode_reply(&bytes).unwrap());
+    let mut stale = target;
+    stale.allocation.generation[0] ^= 1;
+    let bytes = pic
+        .query_call(pool, root.id, WorkerReleased::NAME, released(&stale))
+        .await
+        .unwrap();
+    assert!(!WorkerReleased::decode_reply(&bytes).unwrap());
+    use canic::sharding::standby::ConfirmRelease;
+    let spare_target = ShardTarget {
+        shard: spare,
+        allocation: parked.workers[0].allocation.clone(),
+    };
+    let confirm = async || {
+        ConfirmRelease::decode_reply(
+            &pic.update_call(
+                root.id,
+                root.operator,
+                ConfirmRelease::NAME,
+                ConfirmRelease::encode_request(&spare_target).unwrap(),
+            )
+            .await
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    assert!(confirm().await.is_err());
+    for w in parked.workers.iter().rev() {
+        let target = ShardTarget {
+            shard: w.principal,
+            allocation: w.allocation.clone(),
+        };
+        let reply = pic
+            .update_call(
+                pool,
+                root.operator,
+                Release::NAME,
+                Release::encode_request(&target).unwrap(),
+            )
+            .await
+            .unwrap();
+        Release::decode_reply(&reply).unwrap().unwrap();
+    }
+    confirm().await.unwrap();
+    confirm().await.unwrap();
+    canic_qualification::upgrade_stopped(
+        pic,
+        root.id,
+        read("root.wasm"),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        inventory().await,
+        vec![(refill, Asset::Released(spare, spare_target.allocation))]
+    );
+    let response = pic
+        .update_call(
+            root.id,
+            pool,
+            canic::sharding::LookupWorker::NAME,
+            canic::sharding::LookupWorker::encode_request(&0).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        canic::sharding::LookupWorker::decode_reply(&response).unwrap(),
+        canic::sharding::Placement::Unavailable(..)
+    ));
+    let more = Refill {
+        sequence: 1,
+        ..changed
+    };
+    let response = pic
+        .update_call(
+            root.id,
+            root.operator,
+            RefillStandby::NAME,
+            RefillStandby::encode_request(&more).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        RefillStandby::decode_reply(&response).unwrap().unwrap_err(),
+        "no approved subnet capacity"
+    );
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

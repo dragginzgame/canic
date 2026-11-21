@@ -310,8 +310,12 @@ fn validate(state: &State, slot: ChildId) {
                 && worker != Principal::management_canister()
                 && worker != api::canister_self()
         );
-        assert_eq!(s.attempts[0], 1);
-        assert!(s.creation_refund.is_some());
+        #[cfg(not(feature = "sharding"))]
+        let created = true;
+        #[cfg(feature = "sharding")]
+        let created = state.pools.standby_claim(slot) != Some(worker);
+        assert_eq!(s.attempts[0], u8::from(created));
+        assert_eq!(s.creation_refund.is_some(), created);
     }
     if matches!(
         s.phase,
@@ -495,6 +499,8 @@ enum Origin {
     Permanent,
     #[cfg(feature = "sharding")]
     Placement,
+    #[cfg(feature = "sharding")]
+    StandbyWorker,
 }
 
 fn admit(
@@ -507,12 +513,17 @@ fn admit(
         return Err(Refusal::Binding);
     }
     #[cfg(feature = "sharding")]
-    if sharding::at_capacity() {
+    if sharding::at_capacity() && origin != Origin::StandbyWorker {
         return Err(Refusal::Occupied);
     }
-    if ic_platform_runtime::raw::liquid_cycle_balance()
-        < reserved_cycles() + u128::from(CREATION_CYCLES)
-    {
+    let attachment = u128::from(CREATION_CYCLES);
+    #[cfg(feature = "sharding")]
+    let attachment = if origin == Origin::StandbyWorker {
+        0
+    } else {
+        attachment
+    };
+    if ic_platform_runtime::raw::liquid_cycle_balance() < reserved_cycles() + attachment {
         return Err(Refusal::Reserve);
     }
     let mut artifacts =
@@ -642,6 +653,18 @@ fn worker(s: &Status) -> Principal {
     Principal::from_text(s.worker.as_ref().expect("retained principal")).expect("valid principal")
 }
 
+fn create_args() -> Vec<u8> {
+    CreateCanisterArgs {
+        settings: Some(CanisterSettings {
+            controllers: Some(vec![api::canister_self()]),
+            ..Default::default()
+        }),
+        sender_canister_version: Some(api::canister_version()),
+    }
+    .encode(4096)
+    .expect("create args")
+}
+
 async fn step(slot: ChildId) {
     let s = snapshot(slot);
     if matches!(s.phase, Phase::Scheduled | Phase::Created | Phase::Uploaded) {
@@ -667,15 +690,15 @@ async fn step(slot: ChildId) {
                 fault(slot, 11); // Lost pin callback is recovered from Store custody.
                 return; // Commit retention evidence before any creation dispatch.
             }
-            let bytes = CreateCanisterArgs {
-                settings: Some(CanisterSettings {
-                    controllers: Some(vec![api::canister_self()]),
-                    ..Default::default()
-                }),
-                sender_canister_version: Some(api::canister_version()),
+            #[cfg(feature = "sharding")]
+            if let Some(id) = sharding::standby::claimed(slot) {
+                mutate(slot, |s| {
+                    s.worker = Some(id.to_text());
+                    s.phase = Phase::Created;
+                });
+                return;
             }
-            .encode(4096)
-            .expect("create args");
+            let bytes = create_args();
             issue(slot, 0, Phase::CreateIssued, &bytes);
             fault(slot, 1); // Trap rolls back intent and prevents dispatch; original demand survives.
             let completion =
@@ -863,8 +886,20 @@ pub(crate) fn reserved_cycles() -> u128 {
                 .expect("open engine")
                 .journal
                 .0
-                .values()
-                .filter(|journal| journal.0.phase == Phase::Scheduled)
+                .iter()
+                .filter(|(_slot, journal)| {
+                    #[cfg(feature = "sharding")]
+                    if state
+                        .as_ref()
+                        .unwrap()
+                        .pools
+                        .standby_claim(**_slot)
+                        .is_some()
+                    {
+                        return false;
+                    }
+                    journal.0.phase == Phase::Scheduled
+                })
                 .map(|_| u128::from(CREATION_CYCLES))
                 .sum::<u128>()
     })

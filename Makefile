@@ -11,7 +11,7 @@ include vendor/toko-tooling/make/cargo-dependencies.mk
 help:
 	@printf '%s\n' \
 	  'make canic                   Build and install canic on PATH' \
-	  'make demo                    Start a local counter fleet session (Enter to stop)' \
+	  'make demo                    Start an interactive local example (DEMO_APP selects it; exit to stop)' \
 	  'make counter-test            Qualify counter persistence, fences and upgrade rollback' \
 	  'make profile-test            Run retained profile ownership/upgrade regressions' \
 	  'make growth-test             Qualify one autonomous worker and interrupted effects' \

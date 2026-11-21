@@ -599,9 +599,9 @@ not another shipped adapter package or default Canic dependency.
 
 ## Inputs and limits
 
-Both lockfiles select registry engine `ic-auth` 0.48.8 from
-`fd9ba379e1edb84d8732be86180642da5ca4ebf4` and passive
-`ic-auth-wire` 0.46.0 and `ic-auth-protocol-types` 0.43.2. The browser package remains
+Both lockfiles select registry engine `ic-auth` 0.48.9 from
+`83270509720b4e16d39dc445f7667f2f57249a42` and passive
+`ic-auth-wire` 0.47.0 and `ic-auth-protocol-types` 0.43.3. The browser package remains
 pinned to `a05b5ddd4099a3f64b95deb173a0c16746d98ac5` (0.47.1); the installed
 journey qualifies that actual combination. The basic `auth` feature selects
 only passive contracts; `auth-enrollment` selects `receiver-memory` and
@@ -672,6 +672,19 @@ Use its optional `seal` callback when the application has additional owners.
 The volatile mount rejects a stable install. A stable-only layout rejects a
 volatile install. The new receiver frame ends in `4807`. Rebuild the actor and
 generate a new approval for a fresh installation with this Host.
+
+For a database-backed hub or shard, keep the existing
+`mount_receiver_lifecycle!` declaration. Build the actor with
+`canic/auth-receiver-stable` and set the fleet receiver policy's
+`storage = "stable"` for its fresh installation. In the User Directory example
+the package feature `stable-auth` enables that build. The mount adds the
+receiver engine and host keys under a separate `auth.receiver.` grant to the
+same bootstrap as the role and database keys. The application prefix must be
+disjoint from that namespace. On same-layout upgrade, refresh the independently
+controlled hub through its controller and the Root-controlled shard through
+Root's `refresh_auth_receiver`. The original browser can then read its rows
+without signing in again. A populated volatile installation requires a separate
+migration before changing layouts. [Canic #70](https://github.com/dragginzgame/canic/issues/70)
 
 Select `canic/auth-issuer-stable` independently for an issuer. The app binds its
 own storage choice in the app payload, passes its separate lease to

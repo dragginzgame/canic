@@ -1,71 +1,34 @@
 # Miner pool
 
-**Runnable on the local simulator with `make miner-test`.** A pool canister accepts a target number of toy blocks per round. An explicit tick drives the demonstration. Each miner is a real worker canister running at most two bounded batches per round, with one toy block per completed batch. Use synthetic cycles. The app defines the work, goal and scaling decision. Canic enforces the approved ceiling of four workers and the creation budget, and retains worker identities and management results.
+Run `make demo DEMO_APP=miner-pool` after `make qualification-setup`.
+Set the active count with `miners 3`. Each second the terminal drives one
+operator tick. Root allocates genuine worker canisters up to the configured
+four-worker grant. Watch their principals appear and see individual attempts
+miss or find a block. `report` reads the installed hub. Type `miners 1` to
+park two, `miners 3` to reuse them, and `miners 0` to drain and park all.
+Parked miners keep their principals and continue to consume allocated slots.
+Exit stops the disposable simulator.
 
-| Goal per round | Expected observation after scaling settles |
-| ---: | --- |
-| 2 | One miner produces two blocks. |
-| 5 | Three miners produce two, two and one. |
-| 1 | Two miners drain their issued work and park. One remains active. |
-| 5 | The same two parked IDs return to work. |
-| 10 | Four miners produce eight blocks and the report identifies the capacity limit. |
-| 0 | All miners finish issued work and park. The accumulated total stays visible. |
+## Mining and retries
 
-Show each worker's ID, active/draining/parked state, last batch and production count. Lose a batch reply and recover its original result. The batch counts exactly once. Parking retains the worker's ID and stops new dispatches to it.
+The miner hashes its principal, the round (big-endian u64) and batch ordinal
+with SHA-256. A first digest byte below 64 finds a toy block. The 25% rate is
+reproducible; a short session can have any number of misses. This local example
+does not perform a proof-of-work search or require an entropy service.
 
-Keep this exercise within one fleet. Cross-fleet reuse needs separate evidence that the old fleet relinquished authority and the new fleet receives clean state.
+The hub gives each active miner up to two attempts per round. A miner returns its
+lifetime attempt number and hit/miss. It retains the outcomes of both ordinals
+for its latest round. An exact retry after a lost reply or upgrade recovers the
+original receipt. The hub confirms the expected attempt number before counting
+a find. A changed target starts another round, draining any retained batch first.
+The terminal starts new rounds while the target is positive. If the terminal
+stops, it issues no further ticks.
 
-## Run the fleet
-
-From the Canic checkout, prepare the local simulator once and run the installed worker and fleet tests:
-
-```sh
-make qualification-setup
-make miner-test
-```
-
-The test builds the miner through the app config. Testkit supplies separate
-Root and pool caller identities. The miner admits work from its retained pool.
-Each request names a round and an ordinal (1 or 2). Repeating either completed
-batch in the current round returns its original block number. An older round,
-a skipped ordinal or a third batch is refused. The pool must settle its pending
-round before starting another on that worker. Miner upgrades reopen both the
-parent binding and the last round. This test exercises the worker independently
-of Root allocation.
-
-The fleet test installs Root and Store, publishes both application Wasms,
-and has Root install the pool. It binds the local fleet declaration to those
-identities and gives the grant an explicit expiry. It submits the exact capacity
-and worker approval bytes produced by the Host planner. The hub then requests
-workers and executes the table above. Both hub and Root upgrade after round
-two. Worker IDs, grants and production survive. Parked workers still consume
-their original slots. The application uses an explicit operator tick for each
-step; this example has no background scaling timer.
-
-## Drive an installed pool
-
-In a bound local fleet with the hub installed and its worker grant approved,
-use the identity supplied as operator at hub install. From the fleet directory:
-
-```sh
-canic fleet call --canister pool --identity operator tick 1 5
-```
-
-Each confirmed call advances one step. Repeat the same round and goal after
-a confirmed reply until the hub reports `settled` or `capacity limit`. A new
-goal takes a higher round number. If Canic reports an uncertain ingress result,
-observe the original operation before submitting another tick. The public
-`report` query exposes each worker’s ID, dispatch state and cumulative blocks.
-The simulator test prints those values after each round.
-
-Tick replies identify the pending work. For example, `worker 0: Root allocation pending`
-means Root accepted the first ordinal and the hub is waiting for readiness.
-`worker 0: Root call rejected` identifies a rejected placement call; check the
-hub's grant. `worker 0, batch 7/1: call rejected` identifies the issued batch
-that still needs a receipt. The hub can reopen after upgrade, report that miner
-as draining when the goal falls, and finish the original batch when the miner returns.
-Its block counts toward the worker's lifetime total and its original round only
-if that round is still current.
+The low-level `tick ROUND ATTEMPTS` call takes an attempt budget for one round.
+The live prompt selects two attempts per requested worker. Installed tests use
+odd budgets as well, and verify grant refusal, replay, upgrade, drain and reuse.
+Run `make miner-test` to exercise these cases. This version uses fresh miner and
+hub layouts and a changed toy batch reply. Start a fresh local demo.
 
 ## Pool ownership
 
@@ -75,20 +38,26 @@ issued batches before the pool parks workers; parking preserves the allocation
 and principal for reuse in this fleet. A parked worker still consumes Root
 capacity. No tick deletes a worker or transfers it elsewhere.
 
-For example, when the operator sets the goal to five blocks per round, the
-pool hub needs three active miners. If it already has one active miner and two
-parked miners, it resumes those two without a creation request. If it has only
-one miner, it requests two additional allocations under its fleet-approved
-allowance. Root authenticates the calling hub, checks the approved worker
-release, deadline, creation budget and remaining subnet capacity, and retains
-each creation result. The hub issues batches only to confirmed ready allocations.
-A lost creation reply must resolve to the original allocation before the hub
-can count another worker. Lowering the goal changes dispatch at the hub; it
-does not refund the original creation allowance.
-
 Legacy at `377fbce` ran the scaling policy before calling the common allocation
 workflow. Its regression invalidated a registered worker when the same principal
 received another allocation identity. Preserve that check when binding workers
 to the pool. The application owns its production goal and block receipts.
 [Creation workflow](https://github.com/dragginzgame/canic-legacy/blob/377fbce/crates/canic-core/src/workflow/placement/scaling/mod.rs)
 and [allocation reuse regression](https://github.com/dragginzgame/canic-legacy/blob/377fbce/crates/canic-core/src/ops/storage/placement/scaling/tests/mod.rs).
+
+### Worker release and standby
+
+The pool operator can park a worker and later resume its existing batches.
+Explicit release is permanent for that allocation. Release parked workers
+from the end of the list, after all pending dispatch has settled. The pool
+retains the exact principal, slot and generation. Its four approved lifetime
+ordinals include released workers.
+
+On a sharding Root, an exact controller refill approval creates one empty
+canister and consumes one physical subnet slot. The next admitted worker
+can claim it and install its approved Store release. Each mining request
+includes the generation Root delivered at install. Root can confirm a release
+by reading the original hub's receipt. A confirmed release stays quarantined
+and consumes capacity. Automatic cleaning and admission of returned assets
+are pending. The same-principal generation test drives uninstall and install
+directly through the simulator.

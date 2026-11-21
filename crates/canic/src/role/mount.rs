@@ -1,6 +1,6 @@
 //! Compose a receiver lifecycle around the installed topology and retained storage layout.
 
-/// Compose volatile Auth, topology and readiness with the application's database.
+/// Compose the selected Auth receiver, topology and readiness with the application's database.
 /// The parent cell stores the principal from the approved topology envelope.
 /// The hub config cell instead retains the routing Root and install context.
 #[macro_export]
@@ -21,10 +21,11 @@ macro_rules! mount_receiver_lifecycle {
             use super::database;
             use $crate::role;
             $crate::role::mount_directory!();
-            $crate::mount_auth_lifecycle!(decode = $crate::role::$decode, open = open);
-            fn open(initial: Option<role::$config>) {
+            $crate::role::mount_receiver_auth!($crate::role::$decode, open);
+            fn open(initial: Option<role::$config>) -> $crate::role::RoleStorage {
                 let (host, nonce) = role::$open(initial, $owner, $prefix, &database::keys(), $key, $pages);
                 database::attach(&host, nonce.map(|nonce| (nonce, $crate::__private::runtime::system::canister_self())));
+                host
             }
             $crate::mount_auth_session!(read = $scope);
             $crate::mount_readiness_endpoint!($crate::role::$ready);
@@ -34,4 +35,27 @@ macro_rules! mount_receiver_lifecycle {
     (@prefix $owner:literal, $prefix:literal) => { $prefix };
     (@pages) => { None };
     (@pages $pages:literal) => { Some($pages) };
+}
+
+#[doc(hidden)]
+#[cfg(feature = "auth-receiver-stable")]
+#[macro_export]
+macro_rules! __canic_role_auth {
+    ($decode:path, $open:path) => {
+        $crate::mount_auth_lifecycle!(stable = open_receiver);
+        fn open_receiver(
+            input: Option<&$crate::auth::install::Install>,
+        ) -> $crate::role::RoleStorage {
+            $open(input.map(|value| $decode(value).expect("approved role installation")))
+        }
+    };
+}
+
+#[doc(hidden)]
+#[cfg(not(feature = "auth-receiver-stable"))]
+#[macro_export]
+macro_rules! __canic_role_auth {
+    ($decode:path, $open:path) => {
+        $crate::mount_auth_lifecycle!(decode = $decode, open = $open);
+    };
 }
