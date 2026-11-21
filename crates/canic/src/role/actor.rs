@@ -1,4 +1,4 @@
-use crate::auth::install::Install;
+use crate::auth::install::{Install, Storage};
 use crate::{readiness::State, storage, topology};
 use ic_platform_runtime::system as api;
 use ic_platform_types::Principal;
@@ -33,29 +33,29 @@ thread_local! {
 }
 
 fn bootstrap(
-    fresh: bool,
+    mode: Option<Storage>,
     authority: &str,
     prefix: &str,
     keys: &[&str],
     config: StorageConfig,
 ) -> MemoryRuntime<DefaultMemoryImpl> {
     let application = (authority, prefix, keys);
-    #[cfg(feature = "auth-receiver-stable")]
-    {
-        use crate::auth::session::stable::{ENGINE_KEY, HOST_KEY};
-        let auth_keys = [ENGINE_KEY, HOST_KEY];
-        let groups = [
-            application,
-            ("auth", "auth.receiver.", auth_keys.as_slice()),
-        ];
-        let config = StorageConfig {
-            allocations: config.allocations.max(keys.len() + auth_keys.len()),
-            ..config
-        };
-        storage::bootstrap_groups(DefaultMemoryImpl::default(), fresh, &groups, config)
+    use crate::auth::session::stable;
+    let auth_keys = [stable::ENGINE_KEY, stable::HOST_KEY];
+    let config = StorageConfig {
+        allocations: config.allocations.max(keys.len() + auth_keys.len()),
+        ..config
+    };
+    let fresh = mode.is_some();
+    let runtime = storage::open_directory(DefaultMemoryImpl::default(), fresh, config);
+    match mode.unwrap_or_else(|| stable::layout(&runtime)) {
+        Storage::Stable => storage::admit_groups(
+            runtime,
+            fresh,
+            &[application, ("auth", "auth.receiver.", &auth_keys)],
+        ),
+        Storage::Volatile => storage::admit_groups(runtime, fresh, &[application]),
     }
-    #[cfg(not(feature = "auth-receiver-stable"))]
-    storage::bootstrap_groups(DefaultMemoryImpl::default(), fresh, &[application], config)
 }
 
 /// Routing Root recovered from this hub's own configuration.
@@ -113,13 +113,17 @@ pub fn decode_hub(input: &Install) -> Result<HubConfig, &'static str> {
 /// Traps on invalid backing, mismatched membership or failed store admission.
 #[must_use]
 pub fn open_hub(
-    initial: Option<HubConfig>,
+    install: Option<&Install>,
     authority: &str,
     prefix: &str,
     keys: &[&str],
     config_key: &str,
     pages: u64,
 ) -> (MemoryRuntime<DefaultMemoryImpl>, Option<[u8; 16]>) {
+    let initial = install
+        .map(decode_hub)
+        .transpose()
+        .expect("approved role installation");
     #[cfg(feature = "role-attestation")]
     let directory = format!("{prefix}services.v1");
     let mut keys = keys.to_vec();
@@ -127,7 +131,7 @@ pub fn open_hub(
     #[cfg(feature = "role-attestation")]
     keys.push(&directory);
     let host = bootstrap(
-        initial.is_some(),
+        install.map(|input| input.storage),
         authority,
         prefix,
         &keys,
@@ -166,13 +170,17 @@ pub fn open_hub(
 /// # Panics
 /// Traps on invalid storage, parent or database. Never creates on failed reopen.
 pub fn open_shard(
-    initial: Option<ShardConfig>,
+    install: Option<&Install>,
     authority: &str,
     prefix: &str,
     keys: &[&str],
     parent_key: &str,
     pages: Option<u64>,
 ) -> (MemoryRuntime<DefaultMemoryImpl>, Option<[u8; 16]>) {
+    let initial = install
+        .map(decode_shard)
+        .transpose()
+        .expect("approved role installation");
     let mut config = StorageConfig::default();
     if let Some(pages) = pages {
         config.pages = pages;
@@ -185,7 +193,13 @@ pub fn open_shard(
     keys.push(parent_key);
     #[cfg(feature = "role-attestation")]
     keys.extend([directory.as_str(), root_key.as_str()]);
-    let host = bootstrap(initial.is_some(), authority, prefix, &keys, config);
+    let host = bootstrap(
+        install.map(|input| input.storage),
+        authority,
+        prefix,
+        &keys,
+        config,
+    );
     let parts = initial.map(ShardConfig::into_parts);
     topology::attach_parent(
         &host,

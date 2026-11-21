@@ -30,7 +30,9 @@ pub(super) fn arguments(slot: ChildId, upgrade: bool) -> Vec<u8> {
             #[cfg(feature = "sharding")]
             if let Some(generation) = super::sharding::worker_generation(slot)
                 && let Ok(mut install) = canic::topology::Install::decode(&bytes)
-                && install.application == canic::topology::WORKER_GENERATION
+                && (install.application == canic::topology::WORKER_GENERATION
+                    || canic::topology::worker::minimum_reuse_cycles(&install.application)
+                        .is_some())
             {
                 install.application = generation.to_vec();
                 return install.encode().expect("approved worker generation");

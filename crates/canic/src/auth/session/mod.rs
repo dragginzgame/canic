@@ -1,4 +1,4 @@
-//! One volatile Ed25519 receiver for a canister accepting a single issuer and role.
+//! One Ed25519 receiver for a canister accepting a single issuer and role.
 //!
 //! Every verified subject in the configured grant can request a session. Applications
 //! select required scopes and authorize resources in their own handlers. Use the
@@ -6,8 +6,8 @@
 //!
 //! Mount the existing Auth endpoints with `admit`, an application-selected scope
 //! reader and `logout`. Mount `refresh` through the controller-guarded refresh
-//! endpoint. Call `init` only from the IC install hook. Recreating the receiver
-//! after an upgrade would discard its replay and logout history.
+//! endpoint. A volatile receiver stays closed after upgrade. A stable receiver
+//! reopens its checkpoint and requires a fresh Root refresh.
 
 #[cfg(test)]
 mod tests;
@@ -33,7 +33,9 @@ impl Engine {
     }
 }
 
-pub use actor::{Authorization, authorize, init, install, refresh, with_authorization};
+pub use actor::{
+    Authorization, authorize, init, install, install_with_login_limit, refresh, with_authorization,
+};
 
 use super::{
     enrollment::{
@@ -357,20 +359,23 @@ macro_rules! mount_auth_session {
 }
 
 /// Mount install and upgrade hooks for the selected receiver storage.
-/// Volatile receivers decode the full `&Install` and call the app with
-/// `Some(decoded)` on install or `None` on upgrade. Stable receivers obtain
-/// their lease from the app, seal before upgrade, and reopen that lease afterward.
+/// With `storage = open`, the application returns its admitted storage directory.
+/// Stable installs require both receiver leases and seal their state before upgrade.
+/// Volatile installs omit both leases and stay closed after upgrade.
+/// The `decode` and `open` form supports volatile-only receivers.
+/// Optional `max_login_secs` sets the absolute login ceiling. Omitting it uses
+/// the IC Auth starting profile. Proof and receiver-session TTLs are independent.
 #[macro_export]
 macro_rules! mount_auth_lifecycle {
-    (stable = $open:path $(, seal = $seal:path)? $(,)?) => {
+    (storage = $open:path $(, seal = $seal:path)? $(, max_login_secs = $seconds:expr)? $(,)?) => {
         const _: () = {
             use $crate::__private::runtime;
             use $crate::auth::{endpoint::fail, install::Install, session::stable};
             #[allow(clippy::needless_pass_by_value)]
             fn __canic_install(input: Install) {
-                stable::open(&$open(Some(&input)), Some(&input));
+                stable::open_with_login_limit(&$open(Some(&input)), Some(&input), $crate::mount_auth_lifecycle!(@limit $($seconds)?));
             }
-            fn __canic_reopen() { stable::open(&$open(None), None); }
+            fn __canic_reopen() { stable::open_with_login_limit(&$open(None), None, $crate::mount_auth_lifecycle!(@limit $($seconds)?)); }
             $crate::mount_lifecycle!(input = Install, max_bytes = 4096, decode = Install::decode,
                 install = __canic_install, reopen = __canic_reopen);
             fn admit() -> Result<(), std::convert::Infallible> { Ok(()) }
@@ -380,7 +385,7 @@ macro_rules! mount_auth_lifecycle {
             fn __canic_pre_upgrade((): ()) { stable::seal(); $( $seal(); )? }
         };
     };
-    (decode = $decode:path, open = $open:path $(,)?) => {
+    (decode = $decode:path, open = $open:path $(, max_login_secs = $seconds:expr)? $(,)?) => {
         const _: () = {
             use $crate::auth::{endpoint::fail, install::Install, session};
 
@@ -395,11 +400,13 @@ macro_rules! mount_auth_lifecycle {
             #[allow(clippy::needless_pass_by_value)]
             fn __canic_install_receiver(input: Install) {
                 let application = $decode(&input).unwrap_or_else(|error| fail(error));
-                session::install(&input);
+                session::install_with_login_limit(&input, $crate::mount_auth_lifecycle!(@limit $($seconds)?));
                 $open(Some(application));
             }
 
             fn __canic_reopen_application() { $open(None); }
         };
     };
+    (@limit) => { None };
+    (@limit $seconds:expr) => { Some($seconds) };
 }

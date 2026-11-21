@@ -42,6 +42,8 @@ struct Ledger {
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Pools {
+    #[serde(skip)]
+    returns: Vec<standby::Returned>,
     permanent: [bool; 2],
     draining: BTreeMap<ChildId, [u8; 32]>,
     shards: Option<Ledger>,
@@ -53,10 +55,7 @@ pub(super) struct Pools {
     #[serde(skip)]
     workers: Option<workers::Workers>,
     #[serde(skip)]
-    standby: Vec<(
-        canic::sharding::standby::Refill,
-        canic::sharding::standby::Asset,
-    )>,
+    standby: standby::Inventory,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -110,6 +109,7 @@ impl Pools {
                 matches!(
                     asset,
                     canic::sharding::standby::Asset::Empty(_)
+                        | canic::sharding::standby::Asset::Available(..)
                         | canic::sharding::standby::Asset::Issued
                 )
             })
@@ -117,31 +117,68 @@ impl Pools {
     }
 
     pub(super) fn standby_claim(&self, slot: ChildId) -> Option<Principal> {
-        self.standby.iter().find_map(|(_, asset)| match asset {
-            canic::sharding::standby::Asset::Claimed(id, a)
-            | canic::sharding::standby::Asset::Released(id, a)
-                if a.slot == slot.index() as u32 =>
-            {
-                Some(*id)
-            }
-            _ => None,
-        })
+        self.standby
+            .iter()
+            .find_map(|(_, asset)| match asset {
+                canic::sharding::standby::Asset::Claimed(id, a)
+                | canic::sharding::standby::Asset::Released(id, a)
+                | canic::sharding::standby::Asset::Reset(id, a, ..)
+                    if a.slot == slot.index() as u32 =>
+                {
+                    Some(*id)
+                }
+                _ => None,
+            })
+            .or_else(|| {
+                self.returns
+                    .iter()
+                    .find(|r| r.target.allocation.slot == slot.index() as u32)
+                    .map(|r| r.target.shard)
+            })
+    }
+
+    pub(super) fn archived(&self, slot: ChildId) -> bool {
+        self.returns
+            .iter()
+            .any(|r| r.target.allocation.slot == slot.index() as u32)
+    }
+
+    pub(super) fn withdrawn(&self, slot: ChildId) -> bool {
+        self.archived(slot)
+            || self.standby.iter().any(|(_, asset)| {
+                standby::released_binding(asset).is_some_and(|(_, a)| a.slot == slot.index() as u32)
+            })
     }
 
     fn empty_spare(&self) -> bool {
         self.standby
             .iter()
-            .any(|(_, asset)| matches!(asset, canic::sharding::standby::Asset::Empty(_)))
+            .any(|(_, asset)| standby::available(asset).is_some())
     }
 
     fn full(&self) -> bool {
-        self.capacity
-            .as_ref()
-            .is_some_and(|c| self.used() + self.held() >= usize::from(c.max_children))
+        self.capacity.as_ref().is_some_and(|c| {
+            self.used() + self.held() - self.returns.len() >= usize::from(c.max_children)
+        })
     }
 
     pub(super) fn encode(&self) -> Vec<u8> {
         if !self.standby.is_empty() {
+            if !self.returns.is_empty() {
+                let mut bytes = b"SBY2".to_vec();
+                bytes.extend(
+                    ic_wire::encode(
+                        &(self, &self.workers, &self.standby, &self.returns),
+                        ic_wire::Encoding::Payload,
+                        ic_wire::Limits {
+                            bytes: BYTES - 4,
+                            ..LIMITS
+                        },
+                    )
+                    .expect("bounded return ledger"),
+                );
+                return bytes;
+            }
             let mut bytes = b"SBY1".to_vec();
             bytes.extend(
                 ic_wire::encode(
@@ -177,15 +214,19 @@ impl Pools {
 }
 
 pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
-    let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"SBY1") {
-        let (mut pools, workers, standby): (
+    let pools: Pools = if bytes.starts_with(b"SBY1") || bytes.starts_with(b"SBY2") {
+        let (mut pools, workers, standby, returns): (
             Pools,
             Option<workers::Workers>,
-            Vec<(
-                canic::sharding::standby::Refill,
-                canic::sharding::standby::Asset,
-            )>,
-        ) = ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("standby metadata");
+            standby::Inventory,
+            Vec<standby::Returned>,
+        ) = if bytes.starts_with(b"SBY2") {
+            ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS).expect("return ledger")
+        } else {
+            let (p, w, s) = ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS)
+                .expect("standby ledger");
+            (p, w, s, Vec::new())
+        };
         assert!(
             pools.capacity.is_some()
                 && !standby.is_empty()
@@ -198,7 +239,18 @@ pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
             let principal = match asset {
                 Asset::Issued => None,
                 Asset::Empty(id) => Some(id),
-                Asset::Claimed(id, allocation) | Asset::Released(id, allocation) => {
+                Asset::Available(id, balance) => {
+                    let last = returns
+                        .iter()
+                        .rev()
+                        .find(|r| r.target.shard == *id)
+                        .expect("returned asset");
+                    assert_eq!(*balance, last.balance);
+                    Some(id)
+                }
+                Asset::Claimed(id, allocation)
+                | Asset::Released(id, allocation)
+                | Asset::Reset(id, allocation, ..) => {
                     let slot = ChildId::placement(allocation.slot as usize).expect("standby slot");
                     let claim = workers
                         .as_ref()
@@ -206,7 +258,7 @@ pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
                         .expect("standby worker claim");
                     assert!(slots.insert(slot) && claim.generation == allocation.generation);
                     assert!(claim.principal.as_ref().is_none_or(|p| p == &id.to_text()));
-                    if matches!(asset, Asset::Released(..)) {
+                    if matches!(asset, Asset::Released(..) | Asset::Reset(..)) {
                         assert!(
                             claim.principal.is_some(),
                             "release requires installed worker"
@@ -229,6 +281,23 @@ pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
                     && approval.cycles == CREATION_CYCLES
             );
         }
+        for receipt in &returns {
+            let target = &receipt.target;
+            let slot = ChildId::placement(target.allocation.slot as usize).expect("returned slot");
+            let workers = workers.as_ref().expect("return without worker grant");
+            let claim = workers.claim_at(slot).expect("returned worker claim");
+            assert!(principals.contains(&target.shard) && slots.insert(slot));
+            assert_eq!(claim.generation, target.allocation.generation);
+            assert_eq!(
+                claim.principal.as_deref(),
+                Some(target.shard.to_text().as_str())
+            );
+            assert!(
+                receipt.balance
+                    >= u128::from(workers.minimum_reuse_cycles().expect("return grant").get())
+            );
+        }
+        pools.returns = returns;
         pools.standby = standby;
         if let Some(workers) = &workers {
             workers.validate(&pools);
@@ -271,7 +340,8 @@ pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
     if let Some(capacity) = &pools.capacity {
         assert!(
             capacity::valid_capacity(capacity)
-                && pools.used() + pools.held() <= usize::from(capacity.max_children)
+                && pools.used() + pools.held() - pools.returns.len()
+                    <= usize::from(capacity.max_children)
         );
     }
     for (initial, increases) in [
@@ -1045,7 +1115,10 @@ pub(super) fn assigned_role(subject: Principal) -> Result<AssignedRole, &'static
             .journal
             .0
             .iter()
-            .find(|(_, journal)| journal.0.worker.as_deref() == Some(caller.as_str()))
+            .find(|(slot, journal)| {
+                !state.pools.withdrawn(**slot)
+                    && journal.0.worker.as_deref() == Some(caller.as_str())
+            })
             .ok_or("unassigned caller")?;
         if !journal.ready_for_role() {
             return Err("assignment unavailable");

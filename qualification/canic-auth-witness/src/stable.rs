@@ -4,7 +4,15 @@ use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
 
 const READ_SCOPE: &str = "read";
 canic::mount_auth_session!(read = READ_SCOPE);
-canic::mount_auth_lifecycle!(stable = open, seal = crate::issuer::seal);
+#[cfg(not(feature = "changed-login-limit"))]
+canic::mount_auth_lifecycle!(storage = open, seal = crate::issuer::seal);
+
+#[cfg(feature = "changed-login-limit")]
+canic::mount_auth_lifecycle!(
+    storage = open,
+    seal = crate::issuer::seal,
+    max_login_secs = 600
+);
 
 fn open(input: Option<&Install>) -> MemoryRuntime<DefaultMemoryImpl> {
     let runtime = canic::storage::bootstrap(

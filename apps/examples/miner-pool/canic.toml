@@ -33,3 +33,4 @@ store = "store"
 release = { name = "miner", version = "1" }
 max_workers = 4
 creation_budget = 4_000_000_000_000
+minimum_reuse_cycles = 500_000_000_000

@@ -62,8 +62,6 @@ if [[ "$scope" == directory ]]; then
     exit
 fi
 if [[ "$scope" == all || "$scope" == user-directory ]]; then
-    build stable-user_hub ex-user-directory-hub --features stable-auth
-    build stable-user_shard ex-user-directory-shard --features stable-auth
     "$cli" app build --config apps/examples/user-directory/canic.toml
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features inspection --test inspection
 fi

@@ -6,7 +6,14 @@
 installed pool’s growth, parking and reuse under one Root. The Host planner
 binds the simulator identities to the example’s `worker_pool` grant.
 The witness checks production across hub and Root upgrades, outsider refusal
-and the four-worker ceiling. [Fleet and expected rounds](../apps/examples/miner-pool/DESIGN.md)
+and the four-worker ceiling. A second installed fleet has two physical slots,
+one hub and a separately funded spare. Its zero creation budget refuses growth
+until the spare exists. The worker returns through stop, uninstall, an observed
+balance refusal, manual top-up and restart. Concurrent hub calls recover the same
+principal at a fresh generation. Root reopens before and after reassignment,
+the miner rejects an old batch, and the new generation completes work.
+Shared-shard recycling and cross-fleet transfers remain outside this fixture.
+[Fleet and expected rounds](../apps/examples/miner-pool/DESIGN.md)
 
 ## Named service and dedicated instance role issuance
 

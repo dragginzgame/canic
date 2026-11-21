@@ -41,7 +41,7 @@ fn display(report: &Report, limit: u8) -> String {
 }
 
 pub(super) async fn session(owner: &mut Instance, artifacts: &Path, seconds: u64) -> Result<()> {
-    let fleet = miner_pool_fixture::install(owner, artifacts).await;
+    let fleet = miner_pool_fixture::install(owner, artifacts, |_| {}).await;
     let limit = fleet.workers.approval.max_instances;
     for (name, id, request) in [
         (

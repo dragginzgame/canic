@@ -263,6 +263,10 @@ pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, 
             Err(Refusal::Artifact)
         };
     }
+    #[cfg(feature = "sharding")]
+    if STATE.with_borrow(|s| s.as_ref().unwrap().pools.withdrawn(slot)) {
+        return Err(Refusal::Occupied);
+    }
     let current = status(slot);
     if OBSERVING.with_borrow(|active| active.contains(&slot))
         || (current.approval.is_some()

@@ -58,9 +58,23 @@ pub(crate) fn bootstrap_groups<M: MemoryBacking>(
     groups: &[(&str, &str, &[&str])],
     config: StorageConfig,
 ) -> MemoryRuntime<M> {
+    admit_groups(open_directory(memory, fresh, config), fresh, groups)
+}
+
+pub(crate) fn open_directory<M: MemoryBacking>(
+    memory: M,
+    fresh: bool,
+    config: StorageConfig,
+) -> MemoryRuntime<M> {
     assert_eq!(memory.size() == 0, fresh, "storage lifecycle mismatch");
-    let mut runtime =
-        MemoryRuntime::new_with_config(memory, config).expect("open storage directory");
+    MemoryRuntime::new_with_config(memory, config).expect("open storage directory")
+}
+
+pub(crate) fn admit_groups<M: MemoryBacking>(
+    mut runtime: MemoryRuntime<M>,
+    fresh: bool,
+    groups: &[(&str, &str, &[&str])],
+) -> MemoryRuntime<M> {
     if !fresh {
         assert_eq!(
             runtime.memory_allocations().expect("directory").len(),

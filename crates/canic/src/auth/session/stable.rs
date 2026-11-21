@@ -21,6 +21,19 @@ thread_local! {
     static HOST: RefCell<Option<StableCell<Vec<u8>>>> = const { RefCell::new(None) };
 }
 
+pub(crate) fn layout(runtime: &MemoryRuntime<DefaultMemoryImpl>) -> Storage {
+    let exists = |name| {
+        runtime
+            .allocation_id(&StableKey::parse(name).expect("Auth key"))
+            .is_some()
+    };
+    match (exists(ENGINE_KEY), exists(HOST_KEY)) {
+        (true, true) => Storage::Stable,
+        (false, false) => Storage::Volatile,
+        _ => panic!("incomplete Auth receiver storage"),
+    }
+}
+
 /// Open the receiver using leases from the application's one bootstrap.
 /// Supply its approved envelope only on fresh install. Upgrade consumes the
 /// checkpoint with the original configuration and requires a new Root refresh.
@@ -28,6 +41,29 @@ thread_local! {
 /// # Panics
 /// Traps on missing grants, incompatible storage or a refused checkpoint.
 pub fn open(runtime: &MemoryRuntime<DefaultMemoryImpl>, install: Option<&Install>) {
+    open_with_login_limit(runtime, install, None);
+}
+
+/// Open or reopen using the receiver mount’s absolute login ceiling.
+///
+/// # Panics
+/// Traps if the configured policy or retained checkpoint is refused.
+#[doc(hidden)]
+pub fn open_with_login_limit(
+    runtime: &MemoryRuntime<DefaultMemoryImpl>,
+    install: Option<&Install>,
+    max_login_secs: Option<u64>,
+) {
+    let mode = layout(runtime);
+    if let Some(input) = install {
+        assert_eq!(mode, input.storage, "approved Auth receiver storage");
+    }
+    if mode == Storage::Volatile {
+        if let Some(input) = install {
+            super::install_with_login_limit(input, max_login_secs);
+        }
+        return;
+    }
     let initial = install.map(|input| {
         ic_wire::encode(
             &(input, None::<&crate::auth::enrollment::Receiver>),
@@ -53,7 +89,7 @@ pub fn open(runtime: &MemoryRuntime<DefaultMemoryImpl>, install: Option<&Install
     let lease = runtime
         .open_memory(&StableKey::parse(ENGINE_KEY).expect("engine key"))
         .expect("Auth receiver lease");
-    let (config, policy) = configuration(&input);
+    let (config, policy) = configuration(&input, max_login_secs);
     let now = api::time();
     initialize_with(config, policy, api::canister_self(), now, |config| {
         let engine = if install.is_some() {
@@ -81,6 +117,9 @@ pub fn open(runtime: &MemoryRuntime<DefaultMemoryImpl>, install: Option<&Install
 /// # Panics
 /// A failed seal must trap so the IC rolls back the upgrade.
 pub fn seal() {
+    if HOST.with_borrow(Option::is_none) {
+        return;
+    }
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().expect("open Auth receiver");
         let Engine::Stable(engine) = &mut state.receiver else {

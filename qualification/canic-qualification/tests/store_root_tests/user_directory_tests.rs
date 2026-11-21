@@ -111,8 +111,7 @@ async fn directory(revoke: bool, stable: bool) {
         .unwrap_or_else(|| dir.join("artifacts"));
     let initial_role = |name: &str| {
         let path = if stable {
-            dir.join("../../../target/store")
-                .join(format!("stable-{name}.wasm"))
+            dir.join("artifacts").join(format!("{name}.wasm"))
         } else {
             initial_roles.join(format!("{name}.wasm"))
         };

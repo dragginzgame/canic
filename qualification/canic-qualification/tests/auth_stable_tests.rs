@@ -99,21 +99,25 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
         canic_qualification::upgrade_stopped(pic, target, wasm.clone(), args, Some(f.installer))
             .await
     };
-    let damaged = std::fs::read(
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/auth/damaged.wasm"),
-    )
-    .unwrap();
-    let refused =
-        canic_qualification::upgrade_stopped(pic, target, damaged, vec![], Some(f.installer))
-            .await
-            .unwrap_err();
-    assert!(
-        refused
-            .reject_message
-            .contains("open Auth receiver checkpoint"),
-        "{refused:?}"
-    );
-    assert_eq!(read(pic, target, browser).await.unwrap(), session);
+    for (artifact, reason) in [
+        ("damaged", "open Auth receiver checkpoint"),
+        (
+            "changed-login-limit",
+            "open Auth receiver checkpoint: Configuration",
+        ),
+    ] {
+        let successor = std::fs::read(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join(format!("../../target/auth/{artifact}.wasm")),
+        )
+        .unwrap();
+        let refused =
+            canic_qualification::upgrade_stopped(pic, target, successor, vec![], Some(f.installer))
+                .await
+                .unwrap_err();
+        assert!(refused.reject_message.contains(reason), "{refused:?}");
+        assert_eq!(read(pic, target, browser).await.unwrap(), session);
+    }
     upgrade(vec![]).await.unwrap();
     assert_eq!(
         issuer_test::call(

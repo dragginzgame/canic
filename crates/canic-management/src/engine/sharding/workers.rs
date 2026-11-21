@@ -17,15 +17,33 @@ pub(super) struct WorkerClaim {
 }
 
 impl Workers {
+    pub fn minimum_reuse_cycles(&self) -> Result<std::num::NonZeroU64, &'static str> {
+        let install = canic::topology::Install::decode(self.grant.arguments.as_slice())?;
+        canic::topology::worker::minimum_reuse_cycles(&install.application)
+            .ok_or("grant excludes recycling")
+    }
+
     pub fn claim_at(&self, slot: ChildId) -> Option<&WorkerClaim> {
         self.claims.get(worker_index(slot)?)
+    }
+
+    // Every reserved creation keeps its full debit, including uncertain attempts.
+    // A claim backed by an exact standby receipt already has a paid principal.
+    fn creation_debit(&self, pools: &Pools) -> u64 {
+        ChildId::INSTANCES
+            .iter()
+            .rev()
+            .take(self.claims.len())
+            .filter(|slot| pools.standby_claim(**slot).is_none())
+            .count() as u64
+            * CREATION_CYCLES
     }
 
     pub fn validate(&self, pools: &Pools) {
         validate_instance(&self.grant).expect("retained worker grant");
         assert!(compatible(pools, &self.grant));
         assert!(self.claims.len() <= usize::from(self.grant.max_instances));
-        assert!(self.claims.len() as u64 * CREATION_CYCLES <= self.grant.creation_budget);
+        assert!(self.creation_debit(pools) <= self.grant.creation_budget);
         assert!(self.claims.len() + pools.projects.len() <= ChildId::INSTANCES.len());
     }
 }
@@ -130,15 +148,15 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
         let state = s.as_ref().unwrap();
         let workers = state.pools.workers.as_ref().unwrap();
         if let Some(claim) = workers.claims.get(index) {
-            if state.pools.standby.iter().any(|(_, asset)| matches!(asset,
-                canic::sharding::standby::Asset::Released(_, allocation) if allocation.slot == slot.index() as u32)) {
-                return Err(Placement::Unavailable(Allocation { slot: slot.index() as u32, generation: claim.generation }, claim.principal.clone()));
+            let allocation = Allocation {
+                slot: slot.index() as u32,
+                generation: claim.generation,
+            };
+            if state.pools.withdrawn(slot) {
+                return Err(Placement::Unavailable(allocation, claim.principal.clone()));
             }
             return Err(placement::resolve(
-                Allocation {
-                    slot: slot.index() as u32,
-                    generation: claim.generation,
-                },
+                allocation,
                 claim.principal.as_deref(),
                 state.artifact.0[&slot]
                     .sources()
@@ -157,22 +175,23 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
         if index != workers.claims.len() {
             return Err(Placement::Busy);
         }
-        Ok((
-            workers.grant.clone(),
-            if state.pools.empty_spare() {
-                super::super::Origin::StandbyWorker
-            } else {
-                super::super::Origin::Placement
-            },
-        ))
+        let source = if state.pools.empty_spare() {
+            super::super::Origin::StandbyWorker
+        } else {
+            if workers.creation_debit(&state.pools) + CREATION_CYCLES
+                > workers.grant.creation_budget
+            {
+                return Err(Placement::GrowthRefused);
+            }
+            super::super::Origin::Placement
+        };
+        Ok((workers.grant.clone(), source))
     }) {
         Ok(grant) => grant,
         Err(outcome) => return outcome,
     };
     let now = api::time();
-    if now >= grant.expires_at_ns
-        || (u64::from(ordinal) + 1) * CREATION_CYCLES > grant.creation_budget
-    {
+    if now >= grant.expires_at_ns {
         return Placement::GrowthRefused;
     }
     let Some(generation) = create(

@@ -4,6 +4,7 @@ pub mod attestation;
 pub mod directory;
 #[cfg(feature = "role-attestation")]
 mod service;
+pub mod worker;
 #[cfg(feature = "role-attestation")]
 pub use service::{attach_role_calls, call_service};
 #[cfg(feature = "method")]

@@ -63,6 +63,9 @@ enum Command {
     /// Confirm the hub release of this exact worker target (JSON).
     #[cfg(feature = "sharding")]
     ConfirmWorkerRelease { target: String },
+    /// Stop and uninstall an exact released worker. Resume with the original deadline.
+    #[cfg(feature = "sharding")]
+    ResetWorker { target: String, expires_at_ns: u64 },
     /// Authorize one new empty canister. Repeat the exact request to inspect its result.
     #[cfg(feature = "sharding")]
     RefillStandby {
@@ -157,6 +160,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => request::<canic::sharding::standby::ConfirmRelease>(&serde_json::from_str(&target)?)?,
         #[cfg(feature = "sharding")]
         Action::Encode {
+            command:
+                Command::ResetWorker {
+                    target,
+                    expires_at_ns,
+                },
+        } => request::<canic::sharding::standby::ResetWorker>(&(
+            serde_json::from_str(&target)?,
+            expires_at_ns,
+        ))?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
             command: Command::InspectStandby,
         } => request::<canic::sharding::standby::InspectStandby>(&())?,
         #[cfg(feature = "sharding")]
@@ -249,6 +263,10 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     if let Ok(reply) = canic::sharding::standby::ConfirmRelease::decode_reply(bytes) {
         reply?;
         return Ok(json!({"released": true}));
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic::sharding::standby::ResetWorker::decode_reply(bytes) {
+        return Ok(json!({"reset": reply?}));
     }
     Err("unknown Root reply".into())
 }

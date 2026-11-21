@@ -22,7 +22,10 @@ async fn growth_park_reuse_and_capacity() {
         pool,
         capacity,
         workers,
-    } = crate::miner_pool_fixture::install(&mut owner, &base).await;
+    } = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
+        fleet.worker_pool.as_mut().unwrap().creation_budget = 3 * management::CREATION_CYCLES
+    })
+    .await;
     let pic = root.pic;
     let tick = |round, goal| Tick::encode_request(&(round, goal)).unwrap();
     // The hub is installed but Root has not approved its grant yet.
@@ -34,49 +37,28 @@ async fn growth_park_reuse_and_capacity() {
         Tick::decode_reply(&refused).unwrap(),
         "worker 0: Root call rejected"
     );
-    for (method, id, request) in [
-        (
-            "configure_capacity",
-            stored::CONFIGURE_CAPACITY,
-            &capacity.request,
-        ),
-        (
-            "configure_workers",
-            stored::CONFIGURE_WORKERS,
-            &workers.request,
-        ),
-        (
-            "configure_workers",
-            stored::CONFIGURE_WORKERS,
-            &workers.request,
-        ),
-    ] {
-        let reply = pic
-            .update_call(root.id, root.operator, method, request.clone())
-            .await
-            .unwrap();
-        let configured: Result<(), management::Refusal> = ic_wire::decode(
-            &reply,
-            ic_wire::Encoding::Frame {
-                method: id,
-                direction: ic_wire::Direction::Response,
-            },
-            stored::LIMITS,
-        )
-        .unwrap();
-        configured.unwrap();
-    }
+    configure(&root, &capacity, &workers).await;
     let mut changed = workers.approval.clone();
-    changed.max_instances -= 1;
-    let conflict: Result<(), management::Refusal> = root
-        .update(
-            "configure_workers",
-            stored::CONFIGURE_WORKERS,
-            &changed,
-            stored::LIMITS,
-        )
-        .await;
-    assert_eq!(conflict, Err(management::Refusal::Occupied));
+    let mut topology = canic::topology::Install::decode(changed.arguments.as_slice()).unwrap();
+    let floor = canic::topology::worker::minimum_reuse_cycles(&topology.application).unwrap();
+    assert_eq!(floor.get(), 500_000_000_000);
+    topology.application =
+        canic::topology::worker::reuse_policy(floor.checked_add(1).unwrap()).unwrap();
+    changed.arguments =
+        management::application::Arguments::new(topology.encode().unwrap()).unwrap();
+    let mut fewer_workers = workers.approval.clone();
+    fewer_workers.max_instances -= 1;
+    for changed in [changed, fewer_workers] {
+        let conflict: Result<(), management::Refusal> = root
+            .update(
+                "configure_workers",
+                stored::CONFIGURE_WORKERS,
+                &changed,
+                stored::LIMITS,
+            )
+            .await;
+        assert_eq!(conflict, Err(management::Refusal::Occupied));
+    }
     let outsider = CanisterId::self_authenticating(b"other hub");
     assert!(
         pic.update_call(
@@ -441,7 +423,10 @@ async fn growth_park_reuse_and_capacity() {
     .unwrap();
     assert_eq!(
         inventory().await,
-        vec![(refill, Asset::Released(spare, spare_target.allocation))]
+        vec![(
+            refill.clone(),
+            Asset::Released(spare, spare_target.allocation.clone())
+        )]
     );
     let response = pic
         .update_call(
@@ -456,6 +441,100 @@ async fn growth_park_reuse_and_capacity() {
         canic::sharding::LookupWorker::decode_reply(&response).unwrap(),
         canic::sharding::Placement::Unavailable(..)
     ));
+    use canic::sharding::standby::{ResetPhase, ResetWorker};
+    let deadline = pic.get_time().await.as_nanos_since_unix_epoch() + 300_000_000_000;
+    let reset = async |target: &ShardTarget, deadline| {
+        ResetWorker::decode_reply(
+            &pic.update_call(
+                root.id,
+                root.operator,
+                ResetWorker::NAME,
+                ResetWorker::encode_request(&(target.clone(), deadline)).unwrap(),
+            )
+            .await
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    let mut wrong = spare_target.clone();
+    wrong.allocation.generation[0] ^= 1;
+    assert!(reset(&wrong, deadline).await.is_err());
+    assert!(
+        pic.update_call(
+            root.id,
+            outsider,
+            ResetWorker::NAME,
+            ResetWorker::encode_request(&(spare_target.clone(), deadline)).unwrap()
+        )
+        .await
+        .is_err()
+    );
+    let id = CanisterId::from_slice(spare.as_slice());
+    assert!(reset(&spare_target, 0).await.is_err());
+    pic.set_controllers(id, Some(root.id), vec![root.id, outsider])
+        .await
+        .unwrap();
+    assert_eq!(
+        reset(&spare_target, deadline).await.unwrap_err(),
+        "Root must be sole controller"
+    );
+    pic.set_controllers(id, Some(root.id), vec![root.id])
+        .await
+        .unwrap();
+    pic.stop_canister(id, Some(root.id)).await.unwrap();
+    let snapshot = pic
+        .take_canister_snapshot(id, Some(root.id), None)
+        .await
+        .unwrap();
+    pic.start_canister(id, Some(root.id)).await.unwrap();
+    assert_eq!(
+        reset(&spare_target, deadline).await.unwrap_err(),
+        "worker has retained snapshots"
+    );
+    assert!(
+        pic.canister_status(id, Some(root.id))
+            .await
+            .unwrap()
+            .module_hash
+            .is_some()
+    );
+    pic.delete_canister_snapshot(id, Some(root.id), snapshot.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        reset(&spare_target, deadline).await.unwrap(),
+        ResetPhase::StopIssued
+    );
+    assert!(reset(&spare_target, deadline + 1).await.is_err());
+    // Long-running fleet exercise spends part of the creation balance.
+    pic.add_cycles(id, u128::from(floor.get())).await;
+    canic_qualification::upgrade_stopped(
+        pic,
+        root.id,
+        read("root.wasm"),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        reset(&spare_target, deadline).await.unwrap(),
+        ResetPhase::UninstallIssued
+    );
+    for phase in [
+        ResetPhase::Uninstalled,
+        ResetPhase::StartIssued,
+        ResetPhase::Returned,
+        ResetPhase::Returned,
+    ] {
+        assert_eq!(reset(&spare_target, deadline).await.unwrap(), phase);
+    }
+    let status = pic.canister_status(id, Some(root.id)).await.unwrap();
+    assert!(status.module_hash.is_none());
+    assert_eq!(status.settings.controllers, [root.id]);
+    assert!(
+        matches!(inventory().await.as_slice(), [(_, Asset::Available(id, balance))] if *id == spare && *balance >= u128::from(floor.get()))
+    );
     let more = Refill {
         sequence: 1,
         ..changed
@@ -473,6 +552,256 @@ async fn growth_park_reuse_and_capacity() {
         RefillStandby::decode_reply(&response).unwrap().unwrap_err(),
         "no approved subnet capacity"
     );
+    assert_eq!(
+        owner.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert_eq!(server.stop().unwrap().abandoned, 0);
+}
+
+async fn configure(
+    root: &crate::local_store::Client<'_>,
+    capacity: &canic_host::PoolGrant<stored::SubnetCapacity>,
+    workers: &canic_host::PoolGrant<stored::InstancePool>,
+) {
+    let pic = root.pic;
+    for (method, id, request) in [
+        (
+            "configure_capacity",
+            stored::CONFIGURE_CAPACITY,
+            &capacity.request,
+        ),
+        (
+            "configure_workers",
+            stored::CONFIGURE_WORKERS,
+            &workers.request,
+        ),
+        (
+            "configure_workers",
+            stored::CONFIGURE_WORKERS,
+            &workers.request,
+        ),
+    ] {
+        let reply = pic
+            .update_call(root.id, root.operator, method, request.clone())
+            .await
+            .unwrap();
+        let configured: Result<(), management::Refusal> = ic_wire::decode(
+            &reply,
+            ic_wire::Encoding::Frame {
+                method: id,
+                direction: ic_wire::Direction::Response,
+            },
+            stored::LIMITS,
+        )
+        .unwrap();
+        configured.unwrap();
+    }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget() {
+    use canic::sharding::{
+        LookupWorker, Placement, ShardTarget,
+        standby::{Asset, ConfirmRelease, Refill, RefillStandby, ResetPhase, ResetWorker},
+    };
+    use ex_miner_pool_hub::Release;
+    let base =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/examples/miner-pool/artifacts");
+    let (mut server, mut owner) = support::instance_with_lifetime(
+        &canic_qualification::server_directory(),
+        ic_testkit::pocket_ic::PocketIcBuilder::new()
+            .with_nns_subnet()
+            .with_application_subnet(),
+        Duration::from_secs(180),
+    )
+    .await;
+    let fleet = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
+        fleet.subnet_child_limit = Some(2);
+        let w = fleet.worker_pool.as_mut().unwrap();
+        w.max_workers = 2;
+        w.creation_budget = 0;
+        w.minimum_reuse_cycles = std::num::NonZeroU64::new(2 * management::CREATION_CYCLES);
+    })
+    .await;
+    let root = &fleet.root;
+    let pic = root.pic;
+    let hub = fleet.pool;
+    configure(root, &fleet.capacity, &fleet.workers).await;
+    let tick = async |round, goal| {
+        let bytes = pic
+            .update_call(
+                hub,
+                root.operator,
+                Tick::NAME,
+                Tick::encode_request(&(round, goal)).unwrap(),
+            )
+            .await
+            .unwrap();
+        Tick::decode_reply(&bytes).unwrap()
+    };
+    let settle = async |round, goal| {
+        for _ in 0..60 {
+            let message = tick(round, goal).await;
+            if message == "settled" {
+                return;
+            }
+            assert_ne!(message, "growth refused");
+            pic.advance_time(Duration::from_secs(1)).await;
+            pic.tick().await;
+        }
+        panic!("round {round} did not settle")
+    };
+    assert_eq!(tick(1, 1).await, "growth refused");
+    let deadline = pic.get_time().await.as_nanos_since_unix_epoch() + 500_000_000_000;
+    let bytes = pic
+        .update_call(
+            root.id,
+            root.operator,
+            RefillStandby::NAME,
+            RefillStandby::encode_request(&Refill {
+                root: root.id.as_slice().try_into().unwrap(),
+                sequence: 0,
+                cycles: management::CREATION_CYCLES,
+                expires_at_ns: deadline,
+            })
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let Asset::Empty(spare) = RefillStandby::decode_reply(&bytes).unwrap().unwrap() else {
+        panic!("expected one prepaid spare")
+    };
+    settle(1, 1).await;
+    let lookup = async |ordinal| {
+        LookupWorker::decode_reply(
+            &pic.update_call(
+                root.id,
+                hub,
+                LookupWorker::NAME,
+                LookupWorker::encode_request(&ordinal).unwrap(),
+            )
+            .await
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    let target = |p: Placement| {
+        let (allocation, shard) = p.assigned_target().unwrap().unwrap();
+        assert_eq!(shard, spare);
+        ShardTarget {
+            shard,
+            allocation: allocation.clone(),
+        }
+    };
+    let original = target(lookup(0).await);
+    settle(2, 0).await;
+    Release::decode_reply(
+        &pic.update_call(
+            hub,
+            root.operator,
+            Release::NAME,
+            Release::encode_request(&original).unwrap(),
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap()
+    .unwrap();
+    ConfirmRelease::decode_reply(
+        &pic.update_call(
+            root.id,
+            root.operator,
+            ConfirmRelease::NAME,
+            ConfirmRelease::encode_request(&original).unwrap(),
+        )
+        .await
+        .unwrap(),
+    )
+    .unwrap()
+    .unwrap();
+    let reset = async || {
+        ResetWorker::decode_reply(
+            &pic.update_call(
+                root.id,
+                root.operator,
+                ResetWorker::NAME,
+                ResetWorker::encode_request(&(original.clone(), deadline)).unwrap(),
+            )
+            .await
+            .unwrap(),
+        )
+        .unwrap()
+    };
+    for phase in [
+        ResetPhase::StopIssued,
+        ResetPhase::UninstallIssued,
+        ResetPhase::Uninstalled,
+    ] {
+        assert_eq!(reset().await.unwrap(), phase);
+    }
+    assert!(
+        reset()
+            .await
+            .unwrap_err()
+            .contains("return requires at least")
+    );
+    pic.add_cycles(
+        CanisterId::from_slice(spare.as_slice()),
+        u128::from(2 * management::CREATION_CYCLES),
+    )
+    .await;
+    assert_eq!(reset().await.unwrap(), ResetPhase::StartIssued);
+    assert_eq!(reset().await.unwrap(), ResetPhase::Returned);
+    let reopen = async || {
+        canic_qualification::upgrade_stopped(
+            pic,
+            root.id,
+            std::fs::read(base.join("root.wasm")).unwrap(),
+            vec![],
+            Some(root.operator),
+        )
+        .await
+        .unwrap()
+    };
+    reopen().await;
+    // Two ingress calls race the same growth request while the subnet is full.
+    for _ in 0..2 {
+        pic.submit_call(
+            hub,
+            root.operator,
+            Tick::NAME,
+            Tick::encode_request(&(3, 1)).unwrap(),
+        )
+        .await
+        .unwrap();
+    }
+    settle(3, 1).await;
+    let next = target(lookup(1).await);
+    assert_ne!(next.allocation.generation, original.allocation.generation);
+    reopen().await;
+    assert_eq!(target(lookup(1).await), next);
+    assert!(matches!(lookup(0).await, Placement::Unavailable(..)));
+    assert_eq!(reset().await.unwrap(), ResetPhase::Returned);
+    let stale = ic_wire::encode(
+        &(
+            ic_wire::Bytes::<32>::new(original.allocation.generation.to_vec()).unwrap(),
+            4u64,
+            1u8,
+        ),
+        ic_wire::Encoding::Frame {
+            method: ic_wire::method_id("mine"),
+            direction: ic_wire::Direction::Request,
+        },
+        canic::method::LIMITS,
+    )
+    .unwrap();
+    assert!(
+        pic.update_call(CanisterId::from_slice(spare.as_slice()), hub, "mine", stale)
+            .await
+            .is_err()
+    );
+    settle(4, 1).await;
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

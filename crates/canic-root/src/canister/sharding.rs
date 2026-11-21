@@ -279,3 +279,18 @@ fn inspect_standby() -> Vec<(
 async fn confirm_worker_release(target: canic::sharding::ShardTarget) -> Result<(), String> {
     sharding::standby::confirm_release(target).await
 }
+
+// reset_worker
+// Advance an exact released worker through stop and uninstall.
+// guard  : Root controller
+// limits : sharding request, default reply
+#[canic::update(contract = canic::sharding::standby::ResetWorker, guard = controller)]
+async fn reset_worker(
+    (target, deadline): (canic::sharding::ShardTarget, u64),
+) -> Result<canic::sharding::standby::ResetPhase, String> {
+    #[cfg(feature = "auth")]
+    let admit_receiver = crate::auth::require_no_worker_grant;
+    #[cfg(not(feature = "auth"))]
+    let admit_receiver = |_| Ok(());
+    sharding::standby::reset(target, deadline, admit_receiver).await
+}

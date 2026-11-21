@@ -9,6 +9,36 @@ use canic_management_protocol::{CREATION_CYCLES, children::ChildId, stored::MAX_
 use ic_platform_protocol::management as mgmt;
 use ic_platform_types::Principal;
 
+pub(super) type Inventory = Vec<(Refill, Asset)>;
+
+#[derive(serde::Serialize, serde::Deserialize)]
+pub(super) struct Returned {
+    pub target: canic::sharding::ShardTarget,
+    pub deadline: u64,
+    pub balance: u128,
+}
+
+/// Can a new receiver grant be bound to this principal at this stage of its lifecycle?
+/// # Panics
+/// Requires opened Root custody.
+#[must_use]
+pub fn permits_enrollment(receiver: Principal) -> bool {
+    STATE.with_borrow(|s| {
+        !s.as_ref()
+            .unwrap()
+            .pools
+            .standby
+            .iter()
+            .any(|(_, asset)| match asset {
+                Asset::Empty(id)
+                | Asset::Available(id, _)
+                | Asset::Released(id, _)
+                | Asset::Reset(id, ..) => *id == receiver,
+                _ => false,
+            })
+    })
+}
+
 /// Observe retained approvals without changing the pool.
 /// # Panics
 /// Requires the Root controller and an opened ledger.
@@ -79,12 +109,20 @@ pub(in crate::engine) fn claimed(slot: ChildId) -> Option<Principal> {
     STATE.with_borrow(|s| s.as_ref().unwrap().pools.standby_claim(slot))
 }
 
+pub(super) fn available(asset: &Asset) -> Option<(bool, u128, Principal)> {
+    match asset {
+        Asset::Empty(id) => Some((true, 0, *id)),
+        Asset::Available(id, balance) => Some((false, *balance, *id)),
+        _ => None,
+    }
+}
+
 pub(super) fn reserve(pools: &mut super::Pools, slot: ChildId, generation: [u8; 32]) {
-    if let Some((_, asset)) = pools
+    if let Some(((_, _, id), asset)) = pools
         .standby
         .iter_mut()
-        .find(|(_, asset)| matches!(asset, Asset::Empty(_)))
-        && let Asset::Empty(id) = *asset
+        .filter_map(|(_, asset)| Some((available(asset)?, asset)))
+        .min_by_key(|(key, _)| *key)
     {
         *asset = Asset::Claimed(
             id,
@@ -93,6 +131,15 @@ pub(super) fn reserve(pools: &mut super::Pools, slot: ChildId, generation: [u8; 
                 generation,
             },
         );
+    }
+}
+
+pub(super) fn released_binding(asset: &Asset) -> Option<(Principal, &Allocation)> {
+    match asset {
+        Asset::Released(id, allocation) | Asset::Reset(id, allocation, ..) => {
+            Some((*id, allocation))
+        }
+        _ => None,
     }
 }
 
@@ -108,7 +155,13 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
     let slot = ChildId::placement(target.allocation.slot as usize).ok_or("unknown worker slot")?;
     let (index, hub) = match STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
-        if state.pools.standby.iter().any(|(_, a)| a == &released) {
+        if state.pools.returns.iter().any(|r| r.target == target)
+            || state
+                .pools
+                .standby
+                .iter()
+                .any(|(_, a)| released_binding(a) == Some((target.shard, &target.allocation)))
+        {
             return Ok(None);
         }
         let index = state
@@ -145,7 +198,7 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
         let asset = &mut state.pools.standby[index].1;
-        if *asset == released {
+        if released_binding(asset) == Some((target.shard, &target.allocation)) {
             return Ok(());
         }
         if *asset != claimed {
@@ -156,3 +209,6 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
         Ok(())
     })
 }
+
+mod reset;
+pub use reset::reset;

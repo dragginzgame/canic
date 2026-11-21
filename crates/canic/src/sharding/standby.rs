@@ -27,6 +27,10 @@ pub enum Asset {
     Claimed(Principal, super::Allocation),
     /// The original hub has permanently relinquished dispatch. Cleanup is pending.
     Released(Principal, super::Allocation),
+    /// Reset intent is retained with its original deadline.
+    Reset(Principal, super::Allocation, u64, ResetPhase),
+    /// Empty and running with this observed balance. Original assignments remain retired.
+    Available(Principal, u128),
 }
 
 /// Approve one refill or recover the original result.
@@ -72,4 +76,29 @@ impl Contract for ConfirmRelease {
     const REQUEST: ic_wire::Limits = super::LIMITS;
     type Input = super::ShardTarget;
     type Output = Result<(), String>;
+}
+
+/// Durable reset progress. Issued calls are reconciled by management observation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum ResetPhase {
+    /// Stop was issued; the target must be observed stopped.
+    StopIssued,
+    /// Uninstall was issued; the target must be observed empty.
+    UninstallIssued,
+    /// Empty code and snapshot inventory observed. Balance verification precedes restart.
+    Uninstalled,
+    /// Start issued for the uninstalled principal. Reconciliation checks live status.
+    StartIssued,
+    /// The original generation has been permanently returned.
+    Returned,
+}
+
+/// Discard the released generation's code under an exact expiring approval.
+pub struct ResetWorker;
+impl Contract for ResetWorker {
+    const NAME: &'static str = "reset_worker";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REQUEST: ic_wire::Limits = super::LIMITS;
+    type Input = (super::ShardTarget, u64);
+    type Output = Result<ResetPhase, String>;
 }

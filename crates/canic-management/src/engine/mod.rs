@@ -250,8 +250,17 @@ pub fn open(fresh: bool, readiness: Readiness) {
     assert!(state.artifact.fits(), "aggregate artifact budget");
     store_maintenance::validate(&state);
     let mut children = BTreeSet::new();
-    for child in state.journal.0.values().filter_map(|j| j.0.worker.as_ref()) {
-        assert!(children.insert(child), "distinct child identities");
+    for (slot, journal) in &state.journal.0 {
+        #[cfg(feature = "sharding")]
+        if state.pools.archived(*slot) {
+            continue;
+        }
+        if let Some(child) = &journal.0.worker {
+            assert!(
+                children.insert(child),
+                "distinct live child identities at {slot:?}"
+            );
+        }
     }
     // Commit identified collections only after strict validation of both old/new stores.
     // A post-upgrade trap rolls back both writes with the executable change.

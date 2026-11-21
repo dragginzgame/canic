@@ -14,16 +14,25 @@ pub fn init(memory: MemoryConfig, policy: Policy) {
 /// Open Auth's bounded starting profile from the approved fresh-install envelope.
 #[doc(hidden)]
 pub fn install(input: &Install) {
+    install_with_login_limit(input, None);
+}
+
+/// Install the receiver with an optional application-selected absolute login ceiling.
+#[doc(hidden)]
+pub fn install_with_login_limit(input: &Install, max_login_secs: Option<u64>) {
     assert_eq!(
         input.storage,
         crate::auth::install::Storage::Volatile,
         "stable receiver needs governed leases"
     );
-    let (memory, policy) = configuration(input);
+    let (memory, policy) = configuration(input, max_login_secs);
     init(memory, policy);
 }
 
-pub(super) fn configuration(input: &Install) -> (MemoryConfig, Policy) {
+pub(super) fn configuration(
+    input: &Install,
+    max_login_secs: Option<u64>,
+) -> (MemoryConfig, Policy) {
     use enrollment::types::{AudienceId, CanonicalId};
     use ic_auth::receiver_memory::EnrollmentBinding;
     let binding = EnrollmentBinding {
@@ -35,6 +44,11 @@ pub(super) fn configuration(input: &Install) -> (MemoryConfig, Policy) {
         fleet_id: CanonicalId::from_bytes(input.audience),
     };
     let mut memory = MemoryConfig::starting_profile(audience, binding);
+    if let Some(seconds) = max_login_secs {
+        memory.login.max_login_ttl_ns = seconds
+            .checked_mul(1_000_000_000)
+            .expect("login lifetime overflow");
+    }
     if let Some(max) = input.limits.max_sessions {
         memory.capacity.max_sessions = max as usize;
     }

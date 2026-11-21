@@ -22,6 +22,4 @@ macro_rules! __canic_no_role_directory {
 pub use crate::__canic_no_role_directory as mount_directory;
 
 #[doc(hidden)]
-pub use crate::__canic_role_auth as mount_receiver_auth;
-#[doc(hidden)]
 pub type RoleStorage = ic_storage::MemoryRuntime<ic_storage::DefaultMemoryImpl>;

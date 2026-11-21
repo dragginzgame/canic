@@ -663,28 +663,27 @@ Root owns grant entries and terminal revocation. Issuers own pending external
 effects and certification contributions. Receiver checkpoint support alone
 does not authorize a Root preservation upgrade or issuer recovery.
 
-Set `storage = "stable"` in the fleet’s existing `receiver_policy` table and
-select `canic/auth-receiver-stable` in the receiver build. Contribute
-`session::stable::{ENGINE_KEY, HOST_KEY}` to the application bootstrap.
-`mount_auth_lifecycle!(stable = open)` calls the application’s `open` with the
-approved install or with `None` on upgrade and uses the returned Storage runtime.
-Use its optional `seal` callback when the application has additional owners.
-The volatile mount rejects a stable install. A stable-only layout rejects a
-volatile install. The new receiver frame ends in `4807`. Rebuild the actor and
-generate a new approval for a fresh installation with this Host.
+Choose receiver storage in the fleet’s existing `receiver_policy` table on
+fresh install. A DB-backed hub or shard using `mount_receiver_lifecycle!`
+supports both choices in the same Wasm.
 
-For a database-backed hub or shard, keep the existing
-`mount_receiver_lifecycle!` declaration. Build the actor with
-`canic/auth-receiver-stable` and set the fleet receiver policy's
-`storage = "stable"` for its fresh installation. In the User Directory example
-the package feature `stable-auth` enables that build. The mount adds the
-receiver engine and host keys under a separate `auth.receiver.` grant to the
-same bootstrap as the role and database keys. The application prefix must be
-disjoint from that namespace. On same-layout upgrade, refresh the independently
-controlled hub through its controller and the Root-controlled shard through
-Root's `refresh_auth_receiver`. The original browser can then read its rows
-without signing in again. A populated volatile installation requires a separate
-migration before changing layouts. [Canic #70](https://github.com/dragginzgame/canic/issues/70)
+| Fleet setting | On application upgrade |
+| --- | --- |
+| `storage = "volatile"` (default) | Session, replay and logout state are lost. Admission stays closed. |
+| `storage = "stable"` | The receiver reopens its checkpoint. Refresh the hub through its controller and the Root-controlled shard through Root’s `refresh_auth_receiver` before using retained sessions. |
+
+The stable layout adds two leases under the exclusive `auth.receiver.` prefix
+to the application's single Storage bootstrap. Upgrade reopens the original
+layout. Changing storage mode needs a migration. The stable checkpoint also
+binds the receiver configuration, including `max_login_secs`. An upgrade
+changing that ceiling traps and the previous installation remains usable.
+
+For a custom receiver, rename the former `stable = open` mount argument to
+`storage = open`. Receivers using `canic/auth-receiver-stable` can mount
+`mount_auth_lifecycle!(storage = open)`. Their application bootstrap declares
+`session::stable::{ENGINE_KEY, HOST_KEY}` together for stable storage and omits
+both for volatile storage. The optional `seal` callback handles additional
+application owners. [Canic #70](https://github.com/dragginzgame/canic/issues/70)
 
 Select `canic/auth-issuer-stable` independently for an issuer. The app binds its
 own storage choice in the app payload, passes its separate lease to

@@ -42,6 +42,10 @@ fn configure_auth(grant: Grant) -> Result<(), Error> {
         if let Some(authority) = grants.get(&grant.receiver) {
             return authority.matches(&grant);
         }
+        #[cfg(feature = "sharding")]
+        if !canic_management::sharding::standby::permits_enrollment(grant.receiver) {
+            return Err(Error::Binding);
+        }
         if grants.len() >= enrollment::MAX_RECEIVERS {
             return Err(Error::Capacity);
         }
@@ -128,4 +132,13 @@ async fn refresh_auth_receiver(receiver: Principal) -> Result<(), Error> {
 
 fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
+}
+
+/// Check that this worker has no retained receiver authority before recycling it.
+#[cfg(feature = "sharding")]
+pub(crate) fn require_no_worker_grant(worker: Principal) -> Result<(), String> {
+    STATE.with_borrow(|s| match s {
+        Some(grants) if !grants.contains_key(&worker) => Ok(()),
+        _ => Err("worker Auth grant history is occupied or unavailable".into()),
+    })
 }

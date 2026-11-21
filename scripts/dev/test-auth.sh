@@ -22,4 +22,5 @@ cargo test --locked -p canic --features auth-enrollment auth::
 "$cli" artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --output target/auth/receiver.wasm --json > target/auth/receiver.json
 "$cli" artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --features stable --output target/auth/stable.wasm --json > target/auth/stable.json
 "$cli" artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --features damaged-checkpoint --output target/auth/damaged.wasm --json > target/auth/damaged.json
+"$cli" artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --features changed-login-limit --output target/auth/changed-login-limit.wasm --json > target/auth/changed-login-limit.json
 CANIC_CLI="$cli" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test auth "$@" -- --nocapture

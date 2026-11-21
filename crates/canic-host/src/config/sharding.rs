@@ -76,6 +76,9 @@ pub struct WorkerPoolConfig {
     pub store: String,
     /// Approved Wasm release.
     pub release: ic_wasm_store_protocol::Release,
+    /// Minimum observed child balance for return to standby. Omission grants no reuse.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub minimum_reuse_cycles: Option<std::num::NonZeroU64>,
     /// Worker ceiling, including parked allocations.
     pub max_workers: u8,
     /// Lifetime creation debit ceiling.
@@ -313,7 +316,8 @@ pub(crate) fn preview(
     let controller = controller.to_owned();
     let allocation = |pool: &InstancePoolConfig,
                       label: &str,
-                      method|
+                      method,
+                      worker_args: Option<Vec<u8>>|
      -> Result<PoolGrant<stored::InstancePool>> {
         let expires_at_ns = check_deadline(label, pool.expires_at_ns, now)?;
         let (manifest, args) = inputs(
@@ -330,11 +334,8 @@ pub(crate) fn preview(
         if selected.config.receiver_selected(&pool.component) {
             return Err(Error::Invalid("dedicated children require a topology install frame; receiver installation is unsupported".into()));
         }
-        let args = if method == stored::CONFIGURE_WORKERS {
-            canic_management_protocol::application::Arguments::new(
-                canic::topology::WORKER_GENERATION.to_vec(),
-            )
-            .map_err(supplier)?
+        let args = if let Some(worker_args) = worker_args {
+            canic_management_protocol::application::Arguments::new(worker_args).map_err(supplier)?
         } else {
             args
         };
@@ -363,13 +364,26 @@ pub(crate) fn preview(
         .config
         .instance_pool
         .as_ref()
-        .map(|p| allocation(p, "instance_pool", stored::CONFIGURE_INSTANCES))
+        .map(|p| allocation(p, "instance_pool", stored::CONFIGURE_INSTANCES, None))
         .transpose()?;
     let workers = selected
         .config
         .worker_pool
         .as_ref()
-        .map(|p| allocation(&p.recipe(), "worker_pool", stored::CONFIGURE_WORKERS))
+        .map(|p| {
+            let args = match p.minimum_reuse_cycles {
+                Some(minimum) => {
+                    canic::topology::worker::reuse_policy(minimum).map_err(supplier)?
+                }
+                None => canic::topology::WORKER_GENERATION.to_vec(),
+            };
+            allocation(
+                &p.recipe(),
+                "worker_pool",
+                stored::CONFIGURE_WORKERS,
+                Some(args),
+            )
+        })
         .transpose()?;
     if let Some(first) = instances.as_ref().or(workers.as_ref()) {
         if let Some((instance, old)) = instances.as_ref().zip(

@@ -64,6 +64,10 @@ fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
         let mut children = Vec::new();
         let mut service = None;
         for (slot, journal) in &state.journal.0 {
+            #[cfg(feature = "sharding")]
+            if state.pools.withdrawn(*slot) {
+                continue;
+            }
             if journal.0.phase != canic_management_protocol::Phase::Ready {
                 continue;
             }

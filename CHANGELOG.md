@@ -1,8 +1,37 @@
 # Changelog
 
+## [0.252.0] - 2026-11-21
+
+DB-backed Auth receivers now use one Wasm for both fleet storage policies.
+Choose `storage = "volatile"` (default) or `"stable"` in `receiver_policy`
+before installation. Stable sessions require a Root refresh after upgrade.
+Custom receiver mounts now use `storage = open` in place of `stable = open`.
+
+```sh
+# Build the same hub and shard for either policy.
+canic app build --config apps/examples/user-directory/canic.toml
+# Exercise both on the prepared local simulator.
+bash scripts/dev/test-store.sh user-directory
+```
+
+Root can return a released Miner Pool worker to standby and install it again
+under a fresh allocation generation. It checks the actual controllers, module,
+snapshot inventory, snapshot memory usage and cycle balance. A returned worker
+retains one physical subnet slot. A hub with zero creation budget can claim it.
+Root rejects changes to the minimum return balance on a retained grant.
+
+```sh
+canic app build --config apps/examples/miner-pool/canic.toml
+make miner-test   # Exercise release, underfunding, return and same-principal reuse on the local simulator.
+# In an installed fleet, repeat with the same target and deadline through Returned:
+canic fleet call --canister root reset-worker "$TARGET" "$DEADLINE_NS"
+```
+
 ## [0.251.0] - 2026-11-21
 
 Auth Wire 0.47.0, Blob Storage 0.109.0 and Wasm Store 0.7.0 now use IC Wire 0.28.0 in both workspaces. Store 0.7.0 requires a fresh Store and rebuilt manifests for its 1 MiB chunks. Keep existing 256 KiB fleets on their qualified release.
+
+Receiver mounts accept an optional `max_login_secs` ceiling for portable logins. The default follows IC Auth’s starting profile.
 
 Fresh DB-backed hubs and shards can preserve browser sessions across upgrades.
 Build each receiver with `canic/auth-receiver-stable` and set its fleet receiver

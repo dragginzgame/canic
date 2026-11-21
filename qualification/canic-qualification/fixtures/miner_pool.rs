@@ -15,7 +15,11 @@ pub(crate) struct Fleet<'a> {
     pub workers: Box<canic_host::PoolGrant<stored::InstancePool>>,
 }
 
-pub(crate) async fn install<'a>(owner: &'a mut Instance, base: &Path) -> Fleet<'a> {
+pub(crate) async fn install<'a>(
+    owner: &'a mut Instance,
+    base: &Path,
+    configure: impl FnOnce(&mut canic_host::FleetDeclaration),
+) -> Fleet<'a> {
     let read = |name: &str| std::fs::read(base.join(name)).expect("built Miner Pool Wasm");
     let gateway = owner.client_mut().make_live(None).await;
     owner.client_mut().stop_live().await;
@@ -103,7 +107,9 @@ pub(crate) async fn install<'a>(owner: &'a mut Instance, base: &Path) -> Fleet<'
             },
         );
     }
-    fleet.worker_pool.as_mut().unwrap().expires_at_ns = Some(deadline);
+    let worker_pool = fleet.worker_pool.as_mut().unwrap();
+    worker_pool.expires_at_ns = Some(deadline);
+    configure(fleet);
     let selected = config.select(None, None).unwrap();
     let plan = canic_host::plan_fleet(
         base,

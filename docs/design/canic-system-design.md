@@ -2496,12 +2496,23 @@ snapshots and verifies the final module, controllers, snapshot usage and cycles.
 For the rewrite, keep a return pending while any Backup obligation or unresolved
 management effect remains. Record which snapshots can be discarded before
 cleanup. A missing module alone cannot make a return claimable.
-The selected `ic-platform-protocol` 0.3.7 exposes lifecycle, version,
-controllers and module hash through `management::decode_canister_status` and
-snapshot inventory through `management_snapshots::decode_list_snapshots`.
-Its status projection skips the child's cycle balance. The return verifier
-needs that observation to apply the approved minimum balance. Root's own
-liquid balance and the historical creation debit cannot establish it.
+Protocol 0.3.8 projects the cycle balance and snapshot memory usage from the
+same bounded status response as the lifecycle, module hash and controllers.
+Root requires an empty snapshot inventory and zero snapshot bytes. The exact
+worker grant binds a positive `minimum_reuse_cycles`. A grant without a floor
+has no recycling authority. The miner receives only its allocation generation.
+
+Root retains stop, uninstall and start dispatch under one controller approval.
+The original deadline limits new effects, and an issued effect is reconciled
+by observation. An underfunded empty worker stays quarantined. After observing
+the running empty principal at or above the approved floor, Root records the return
+balance and retires the old allocation. The next claim uses the original
+principal and a new generation. The floor applies at return observation.
+Among measured returns Root chooses the smallest balance with a principal
+tie-break before using fresh refills whose current balance has not been measured.
+Archive slots continue to identify their original receipts across upgrades.
+Live topology and capacity exclude the retired generation. Exact worker grants
+remain bounded by their lifetime ordinal ceiling.
 
 The legacy [claim regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/ops/canister_pool/tests/mod.rs#L304-L414)
 exercise exact retry and the smallest sufficiently funded ready asset, with a
@@ -2521,13 +2532,13 @@ from that hub. Mining requests carry the generation delivered at install. Even
 a delayed request from the same parent to the same principal must fail on a new
 generation. Release alone leaves the asset charged to the subnet in quarantine.
 
-Proposed first installed journey: one fleet, one Root, one Store and one spare.
+The installed Miner Pool journey uses one fleet, one Root, one Store and one spare.
 Claim it for a worker, install the approved release, drain and release it, then
 install another approved release on the same principal with a fresh generation.
-After Root upgrade, inspect the principal, custody, cycle balance and both
-allocation receipts. Race two claims for the final spare; interrupt uninstall
-with a snapshot still present; verify no second install, double count or early
-return. Qualify cross-fleet custody transfer separately. Any automatic refill
+Root reopens before and after reuse. Two concurrent calls for the same
+growth request resolve the fresh generation under a zero creation budget.
+A protected snapshot blocks reset. A further fixture should interrupt the
+uninstall callback and race two different destination claims for the last spare. Qualify cross-fleet custody transfer separately. Any automatic refill
 must wake on retained demand and quiesce at target. The
 [legacy maintenance study](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/docs/design/ideas/demand-driven-canister-pool-maintenance/design.md)
 documents the cost of polling a healthy pool.
