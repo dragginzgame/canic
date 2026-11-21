@@ -17,7 +17,7 @@ thread_local! {
 /// Traps on a duplicate attachment or an invalid routing Root.
 #[allow(
     clippy::must_use_candidate,
-    reason = "Lifecycle callers can use the attached named service client without retaining another handle"
+    reason = "Lifecycle callers can use the attached service client without retaining another handle"
 )]
 pub fn attach_role_calls(root: Principal) -> Rc<RoleCalls> {
     assert_eq!(root.as_slice().last(), Some(&1), "invalid routing Root");
@@ -39,6 +39,37 @@ pub async fn call_service<M: RoleMethod>(
     let target = DIRECTORY
         .with_borrow(|index| index.as_ref()?.current()?.by_name(name))
         .ok_or_else(|| RoleCallError::Proof("service unpublished".into()))?;
+    dispatch::<M>(target, seconds, request, authorize).await
+}
+
+/// Submit a role-bound request to the unique published service with this role.
+/// # Errors
+/// Refuses an absent or ambiguous role before renewal or application dispatch.
+/// Returns the same authorization, proof and delivery errors as [`call_service`].
+pub async fn call_service_by_role<M: RoleMethod>(
+    role: &str,
+    seconds: u32,
+    request: M::Input,
+    authorize: impl Fn() -> Result<(), String>,
+) -> Result<M::Output, RoleCallError> {
+    let target = DIRECTORY
+        .with_borrow(|index| {
+            index
+                .as_ref()
+                .and_then(|index| index.current())
+                .ok_or("service directory unpublished")?
+                .unique_by_role(role)
+        })
+        .map_err(|error| RoleCallError::Proof(error.into()))?;
+    dispatch::<M>(target, seconds, request, authorize).await
+}
+
+async fn dispatch<M: RoleMethod>(
+    target: Principal,
+    seconds: u32,
+    request: M::Input,
+    authorize: impl Fn() -> Result<(), String>,
+) -> Result<M::Output, RoleCallError> {
     let calls = CALLS
         .with(|slot| slot.get().cloned())
         .ok_or_else(|| RoleCallError::Proof("missing installing Root".into()))?;

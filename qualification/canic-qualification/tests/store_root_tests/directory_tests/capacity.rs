@@ -223,7 +223,7 @@ pub(super) async fn exercise(
             .iter()
             .filter(|(_, p)| matches!(p, Placement::Pending(_)))
             .count(),
-        usize::from(limit - 2)
+        usize::from(limit - 2).min(2)
     );
     settle(root.pic).await;
     canic_qualification::upgrade_stopped(
@@ -248,6 +248,9 @@ pub(super) async fn exercise(
                 let status: (String, Option<Option<u64>>) =
                     query_service(root.pic, parent, "topology_status", child).await;
                 assert_eq!(status.1, Some(Some(2)));
+                let destination: Option<CanisterId> =
+                    query_service(root.pic, parent, "route_shard", ("users", root.operator)).await;
+                assert_eq!(destination, (!dedicated).then_some(child));
                 assert_eq!(
                     resolve(root.pic, child).await,
                     Some((2, vec![hub, project]))
@@ -257,5 +260,126 @@ pub(super) async fn exercise(
             other => panic!("unexpected placement {other:?}"),
         }
     }
+    if limit == 5 {
+        let second = stored::ShardPool {
+            pool: "profiles".into(),
+            ..shard
+        };
+        root.update::<_, Result<(), management::Refusal>>(
+            "configure_shards",
+            stored::CONFIGURE_SHARDS,
+            &second,
+            stored::LIMITS,
+        )
+        .await
+        .unwrap();
+        use canic::sharding::{AssignShard, LookupShard};
+        let request = ("profiles".to_string(), [1u8; 32]);
+        let assign = AssignShard::encode_request(&request).unwrap();
+        assert!(
+            root.pic
+                .update_call(root.id, project, AssignShard::NAME, assign.clone())
+                .await
+                .is_err()
+        );
+        let bytes = root
+            .pic
+            .update_call(root.id, hub, AssignShard::NAME, assign)
+            .await
+            .unwrap();
+        let Placement::Pending(new) = AssignShard::decode_reply(&bytes).unwrap() else {
+            panic!("second pool should reserve its own shard")
+        };
+        settle(root.pic).await;
+        canic_qualification::upgrade_stopped(
+            root.pic,
+            root.id,
+            std::fs::read(artifacts().join(module)).unwrap(),
+            vec![],
+            Some(root.operator),
+        )
+        .await
+        .unwrap();
+        let bytes = root
+            .pic
+            .update_call(
+                root.id,
+                hub,
+                LookupShard::NAME,
+                LookupShard::encode_request(&request).unwrap(),
+            )
+            .await
+            .unwrap();
+        let Placement::Assigned(reopened, id) = LookupShard::decode_reply(&bytes).unwrap() else {
+            panic!("missing second pool assignment")
+        };
+        assert_eq!(new, reopened);
+        let Placement::Assigned(first, other) = place(false, 1).await else {
+            panic!("missing first pool assignment")
+        };
+        assert_ne!(first, reopened);
+        assert_ne!(id, other);
+    }
     assert_eq!(place(true, 2).await, Placement::Full);
+}
+
+pub(super) async fn separate_hub_pools(
+    root: &Client<'_>,
+    source: &stored::Stage<management::Approval>,
+    users: CanisterId,
+    discovery: CanisterId,
+) {
+    use canic::sharding::AssignShard;
+    let mut children = std::collections::BTreeSet::new();
+    for (pool, parent, other) in [
+        ("user_shard", users, discovery),
+        ("discovery_shard", discovery, users),
+    ] {
+        let install = canic::topology::Install {
+            root: root.id.to_text().parse().unwrap(),
+            parent: parent.to_text().parse().unwrap(),
+            role: pool.into(),
+            application: vec![],
+        };
+        let grant = stored::ShardPool {
+            root: root.id.to_text(),
+            hub: parent.to_text(),
+            pool: pool.into(),
+            arguments: management::application::Arguments::new(install.encode().unwrap()).unwrap(),
+            keys_per_shard: 1,
+            max_shards: 1,
+            creation_budget: management::CREATION_CYCLES,
+            expires_at_ns: source.approval.expires_at_ns,
+            reference: source.reference.clone(),
+        };
+        root.update::<_, Result<(), management::Refusal>>(
+            "configure_shards",
+            stored::CONFIGURE_SHARDS,
+            &grant,
+            stored::LIMITS,
+        )
+        .await
+        .unwrap();
+        let input = AssignShard::encode_request(&(pool.to_owned(), [42u8; 32])).unwrap();
+        let assign = async || {
+            let reply = root
+                .pic
+                .update_call(root.id, parent, AssignShard::NAME, input.clone())
+                .await
+                .unwrap();
+            AssignShard::decode_reply(&reply).unwrap()
+        };
+        assert!(matches!(assign().await, Placement::Pending(_)));
+        settle(root.pic).await;
+        let Placement::Assigned(_, id) = assign().await else {
+            panic!("ready named shard")
+        };
+        let id = CanisterId::from_text(id).unwrap();
+        assert!(children.insert(id));
+        let route = async |hub| -> Option<CanisterId> {
+            query_service(root.pic, hub, "route_shard", (pool, root.operator)).await
+        };
+        assert_eq!(route(parent).await, Some(id));
+        assert_eq!(route(other).await, None);
+    }
 }

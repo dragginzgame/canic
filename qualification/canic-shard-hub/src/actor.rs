@@ -49,7 +49,7 @@ fn reopen() {
     on_error = fail,
 )]
 async fn signup((): ()) -> Placement {
-    sharding::assign(ROOT.get().unwrap(), key())
+    sharding::assign(ROOT.get().unwrap(), "user_shard", key())
         .await
         .unwrap_or_else(|reason| fail(reason))
 }
@@ -65,7 +65,7 @@ async fn signup((): ()) -> Placement {
     on_error = fail,
 )]
 async fn lookup((): ()) -> Placement {
-    sharding::lookup(ROOT.get().unwrap(), key())
+    sharding::lookup(ROOT.get().unwrap(), "user_shard", key())
         .await
         .unwrap_or_else(|reason| fail(reason))
 }

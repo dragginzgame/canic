@@ -64,7 +64,7 @@ async fn directory_recipients_retain_the_installing_root() {
         .unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
-    let [first, _] = read(pic, root).await;
+    let [first, ..] = read(pic, root).await;
     assert_eq!(first.creation.phase, Phase::Ready);
     let hub = CanisterId::from_text(first.creation.worker.unwrap()).unwrap();
     assert_eq!(view(pic, hub).await, (root, None));
@@ -80,6 +80,7 @@ async fn directory_recipients_retain_the_installing_root() {
                     services: vec![],
                 },
                 path: vec![Hop {
+                    shard_pool: None,
                     canister: hub.to_text().parse().unwrap(),
                     role: "hub".into(),
                     generation: [0; 32],

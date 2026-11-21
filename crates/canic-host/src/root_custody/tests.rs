@@ -29,14 +29,28 @@ fn stored() -> stored::Custody {
         cache_deadline: Some(123),
     };
     stored::Custody {
-        children: [empty, pending],
-        sources: [
-            None,
-            Some(stored::Sources {
-                creation: delivery,
-                upgrades: vec![],
-            }),
-        ],
+        children: {
+            let mut slots = [empty, pending].into_iter();
+            std::array::from_fn(|_| {
+                slots
+                    .next()
+                    .unwrap_or_else(|| canic_management_protocol::custody::Custody {
+                        creation: Default::default(),
+                        upgrades: vec![],
+                    })
+            })
+        },
+        sources: {
+            let mut slots = [
+                None,
+                Some(stored::Sources {
+                    creation: delivery,
+                    upgrades: vec![],
+                }),
+            ]
+            .into_iter();
+            std::array::from_fn(|_| slots.next().flatten())
+        },
     }
 }
 
@@ -105,7 +119,7 @@ fn historical_contracts_keep_empty_and_uncertain_children_bound_to_identity() {
         ),
     ] {
         let snapshot = decode(method, &bytes).unwrap();
-        assert_eq!(snapshot.children.len(), 2);
+        assert_eq!(snapshot.children.len(), ChildId::ALL.len());
         for (index, id) in ChildId::ALL.into_iter().enumerate() {
             let child = snapshot.child(id).unwrap();
             assert_eq!(child.journal, stored.children[index]);

@@ -48,8 +48,8 @@ pub enum FleetPlanning {
         /// Proposed controller.
         controller: String,
         /// Shared-shard grant when configured.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        shards: Option<Box<crate::PoolGrant<canic_management_protocol::stored::ShardPool>>>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        shards: Vec<crate::PoolGrant<canic_management_protocol::stored::ShardPool>>,
         /// Dedicated-instance grant.
         #[serde(skip_serializing_if = "Option::is_none")]
         instances: Option<Box<crate::PoolGrant<canic_management_protocol::stored::InstancePool>>>,
@@ -57,8 +57,8 @@ pub enum FleetPlanning {
         #[serde(skip_serializing_if = "Option::is_none")]
         standby: Option<crate::PoolGrant<canic_management_protocol::stored::StandbyPolicy>>,
         /// Independently approved worker allowance.
-        #[serde(skip_serializing_if = "Option::is_none")]
-        workers: Option<Box<crate::PoolGrant<canic_management_protocol::stored::InstancePool>>>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        workers: Vec<crate::PoolGrant<canic_management_protocol::stored::InstancePool>>,
     },
     /// Create or resume the original Root-plus-child approval.
     Create {

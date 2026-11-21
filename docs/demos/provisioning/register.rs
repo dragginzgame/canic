@@ -28,11 +28,16 @@ async fn register(name: String) -> Result<Progress, AccountError> {
     {
         return Ok(Progress::Ready);
     }
-    let assignment =
-        match provisioning::place::<Users>(&auth, existing.as_ref().map(|row| row.shard)).await {
-            Ok(assignment) => assignment,
-            Err(progress) => return ops::registration_progress(account, progress),
-        };
+    let assignment = match provisioning::place::<Users>(
+        &auth,
+        canic::shard_pool!("user_shard"),
+        existing.as_ref().map(|row| row.shard),
+    )
+    .await
+    {
+        Ok(assignment) => assignment,
+        Err(progress) => return ops::registration_progress(account, progress),
+    };
     // Another registration may have won during placement. Only the winner allocates an ID.
     let row = if let Some(row) = ops::reservation(account)? {
         if row.status == Status::Ready {

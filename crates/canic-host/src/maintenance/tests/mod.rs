@@ -79,7 +79,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
             canister: stage.reference.store.clone(),
             module: "22".repeat(32),
         },
-        sources: [
+        sources: vec![
             Some(wire::Sources {
                 creation: wire::Delivery {
                     operation: stage
@@ -103,14 +103,32 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         plan
     );
     let observed = wire::Custody {
-        children: [
-            plan.maintenance().unwrap()[0].clone(),
-            Custody {
-                creation: Status::default(),
-                upgrades: vec![],
-            },
-        ],
-        sources: plan.maintenance_store().unwrap().sources.clone(),
+        children: {
+            let mut slots = [
+                plan.maintenance().unwrap()[0].clone(),
+                Custody {
+                    creation: Status::default(),
+                    upgrades: vec![],
+                },
+            ]
+            .into_iter();
+            std::array::from_fn(|_| {
+                slots
+                    .next()
+                    .unwrap_or_else(|| canic_management_protocol::custody::Custody {
+                        creation: Default::default(),
+                        upgrades: vec![],
+                    })
+            })
+        },
+        sources: std::array::from_fn(|i| {
+            plan.maintenance_store()
+                .unwrap()
+                .sources
+                .get(i)
+                .cloned()
+                .flatten()
+        }),
     };
     let frame = |v: &wire::Custody| {
         ic_wire::encode(

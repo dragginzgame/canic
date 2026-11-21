@@ -24,7 +24,7 @@ async fn growth_park_reuse_and_capacity() {
         workers,
         ..
     } = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
-        fleet.worker_pool.as_mut().unwrap().creation_budget = 3 * management::CREATION_CYCLES
+        fleet.worker_pools.first_mut().unwrap().creation_budget = 3 * management::CREATION_CYCLES
     })
     .await;
     let pic = root.pic;
@@ -66,7 +66,7 @@ async fn growth_park_reuse_and_capacity() {
             root.id,
             outsider,
             "assign_worker",
-            canic::sharding::AssignWorker::encode_request(&0).unwrap()
+            canic::sharding::AssignWorker::encode_request(&("miner".into(), 0)).unwrap()
         )
         .await
         .is_err()
@@ -274,7 +274,7 @@ async fn growth_park_reuse_and_capacity() {
             root.id,
             pool,
             canic::sharding::AssignWorker::NAME,
-            canic::sharding::AssignWorker::encode_request(&4).unwrap(),
+            canic::sharding::AssignWorker::encode_request(&("miner".into(), 4)).unwrap(),
         )
         .await
         .unwrap();
@@ -414,6 +414,8 @@ async fn growth_park_reuse_and_capacity() {
             .unwrap();
         Release::decode_reply(&reply).unwrap().unwrap();
     }
+    reserve::check_controller_handoff(&root, pool, &spare_target, &read("pool.wasm")).await;
+    assert!(matches!(&inventory().await[..], [(_, Asset::Claimed(..))]));
     confirm().await.unwrap();
     confirm().await.unwrap();
     canic_qualification::upgrade_stopped(
@@ -437,7 +439,7 @@ async fn growth_park_reuse_and_capacity() {
             root.id,
             pool,
             canic::sharding::LookupWorker::NAME,
-            canic::sharding::LookupWorker::encode_request(&0).unwrap(),
+            canic::sharding::LookupWorker::encode_request(&("miner".into(), 0)).unwrap(),
         )
         .await
         .unwrap();
@@ -643,6 +645,15 @@ async fn configure(
 
 #[tokio::test(flavor = "current_thread")]
 async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget() {
+    return_and_reuse(true).await;
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn directly_created_worker_returns_without_refunding_creation() {
+    return_and_reuse(false).await;
+}
+
+async fn return_and_reuse(prepaid: bool) {
     use canic::sharding::{
         LookupWorker, Placement, ShardTarget,
         standby::{Asset, ConfirmRelease, Refill, RefillStandby, ResetPhase, ResetWorker},
@@ -659,10 +670,14 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
     )
     .await;
     let fleet = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
-        fleet.subnet_child_limit = Some(2);
-        let w = fleet.worker_pool.as_mut().unwrap();
-        w.max_workers = 2;
-        w.creation_budget = 0;
+        fleet.subnet_child_limit = Some(if prepaid { 2 } else { 3 });
+        let w = fleet.worker_pools.first_mut().unwrap();
+        w.max_workers = if prepaid { 1 } else { 3 };
+        w.creation_budget = if prepaid {
+            0
+        } else {
+            management::CREATION_CYCLES
+        };
         w.minimum_reuse_cycles = std::num::NonZeroU64::new(2 * management::CREATION_CYCLES);
     })
     .await;
@@ -694,25 +709,68 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
         }
         panic!("round {round} did not settle")
     };
-    assert_eq!(tick(1, 1).await, "growth refused");
     let deadline = pic.get_time().await.as_nanos_since_unix_epoch() + 500_000_000_000;
-    let bytes = pic
-        .update_call(
-            root.id,
-            root.operator,
-            RefillStandby::NAME,
-            RefillStandby::encode_request(&Refill {
-                root: root.id.as_slice().try_into().unwrap(),
-                sequence: 0,
-                cycles: management::CREATION_CYCLES,
+    // A zero refill target lets the direct case exercise a miss and then a surplus return.
+    if !prepaid {
+        use canic_management_protocol::stored;
+        root.update::<_, Result<(), String>>(
+            "configure_standby",
+            stored::CONFIGURE_STANDBY,
+            &stored::StandbyPolicy {
+                root: root.id.to_text(),
+                minimum_available: 0,
+                maximum_creations: 0,
                 expires_at_ns: deadline,
-            })
-            .unwrap(),
+                minimum_import_cycles: 1u64.try_into().unwrap(),
+                imports: vec![],
+            },
+            stored::LIMITS,
         )
         .await
         .unwrap();
-    let Asset::Empty(spare) = RefillStandby::decode_reply(&bytes).unwrap().unwrap() else {
-        panic!("expected one prepaid spare")
+    }
+    let reserve_logs = async || {
+        use canic::logging::Logs;
+        let bytes = pic
+            .update_call(
+                root.id,
+                root.operator,
+                Logs::NAME,
+                Logs::encode_request(&None).unwrap(),
+            )
+            .await
+            .unwrap();
+        Logs::decode_reply(&bytes)
+            .unwrap()
+            .entries
+            .into_iter()
+            .filter(|row| row.source == "reserve")
+            .map(|row| row.message)
+            .collect::<Vec<_>>()
+    };
+    let prepaid_id = if prepaid {
+        assert_eq!(tick(1, 1).await, "growth refused");
+        let bytes = pic
+            .update_call(
+                root.id,
+                root.operator,
+                RefillStandby::NAME,
+                RefillStandby::encode_request(&Refill {
+                    root: root.id.as_slice().try_into().unwrap(),
+                    sequence: 0,
+                    cycles: management::CREATION_CYCLES,
+                    expires_at_ns: deadline,
+                })
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        let Asset::Empty(spare) = RefillStandby::decode_reply(&bytes).unwrap().unwrap() else {
+            panic!("expected one prepaid spare")
+        };
+        Some(spare)
+    } else {
+        None
     };
     let lookup = async |ordinal| {
         LookupWorker::decode_reply(
@@ -720,7 +778,7 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
                 root.id,
                 hub,
                 LookupWorker::NAME,
-                LookupWorker::encode_request(&ordinal).unwrap(),
+                LookupWorker::encode_request(&("miner".into(), ordinal)).unwrap(),
             )
             .await
             .unwrap(),
@@ -734,7 +792,7 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
             root.id,
             hub,
             canic::sharding::AssignWorker::NAME,
-            canic::sharding::AssignWorker::encode_request(&ordinal).unwrap(),
+            canic::sharding::AssignWorker::encode_request(&("miner".into(), ordinal)).unwrap(),
         )
         .await
         .unwrap()
@@ -748,22 +806,36 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
     let Placement::Pending(winner) = result(first).await else {
         panic!("next ordinal must reserve the spare")
     };
-    assert!(matches!(
-        result(second).await,
-        Placement::Busy | Placement::Full
-    ));
+    if !prepaid {
+        assert!(
+            reserve_logs()
+                .await
+                .iter()
+                .any(|msg| msg.contains("pool empty"))
+        );
+    }
+    let refused = if prepaid {
+        Placement::Full
+    } else {
+        Placement::GrowthRefused
+    };
+    let second = result(second).await;
+    assert!(second == Placement::Busy || second == refused, "{second:?}");
     assert_eq!(lookup(1).await, Placement::Unknown);
-    assert_eq!(result(submit(1).await).await, Placement::Full);
+    assert_eq!(result(submit(1).await).await, refused);
     settle(1, 1).await;
     let target = |p: Placement| {
         let (allocation, shard) = p.assigned_target().unwrap().unwrap();
-        assert_eq!(shard, spare);
         ShardTarget {
             shard,
             allocation: allocation.clone(),
         }
     };
     let original = target(lookup(0).await);
+    let spare = original.shard;
+    if let Some(id) = prepaid_id {
+        assert_eq!(id, spare);
+    }
     assert_eq!(original.allocation, winner);
     settle(2, 0).await;
     Release::decode_reply(
@@ -790,6 +862,18 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
     )
     .unwrap()
     .unwrap();
+    let reopen = async || {
+        canic_qualification::upgrade_stopped(
+            pic,
+            root.id,
+            std::fs::read(base.join("root.wasm")).unwrap(),
+            vec![],
+            Some(root.operator),
+        )
+        .await
+        .unwrap()
+    };
+    reopen().await;
     let reset = async || {
         ResetWorker::decode_reply(
             &pic.update_call(
@@ -823,17 +907,17 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
     .await;
     assert_eq!(reset().await.unwrap(), ResetPhase::StartIssued);
     assert_eq!(reset().await.unwrap(), ResetPhase::Returned);
-    let reopen = async || {
-        canic_qualification::upgrade_stopped(
-            pic,
-            root.id,
-            std::fs::read(base.join("root.wasm")).unwrap(),
-            vec![],
-            Some(root.operator),
-        )
-        .await
-        .unwrap()
-    };
+    if !prepaid {
+        assert_eq!(reset().await.unwrap(), ResetPhase::Returned);
+        assert_eq!(
+            reserve_logs()
+                .await
+                .iter()
+                .filter(|msg| msg.contains("surplus retained"))
+                .count(),
+            1
+        );
+    }
     reopen().await;
     // Duplicate growth requests must converge on the retained winner.
     for _ in 0..2 {
@@ -848,9 +932,14 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
     }
     settle(3, 1).await;
     let next = target(lookup(1).await);
+    assert_eq!(next.shard, spare);
+    assert_eq!(next.allocation.slot, original.allocation.slot);
     assert_ne!(next.allocation.generation, original.allocation.generation);
     reopen().await;
     assert_eq!(target(lookup(1).await), next);
+    if !prepaid {
+        assert_eq!(result(submit(2).await).await, Placement::GrowthRefused);
+    }
     assert!(matches!(lookup(0).await, Placement::Unavailable(..)));
     assert_eq!(reset().await.unwrap(), ResetPhase::Returned);
     let stale = ic_wire::encode(
@@ -880,3 +969,101 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
 }
 
 mod reserve;
+
+#[tokio::test(flavor = "current_thread")]
+async fn one_hub_recovers_ordinal_zero_independently_in_two_worker_pools() {
+    use canic::sharding::{AssignWorker, LookupWorker, Placement};
+
+    let base =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/examples/miner-pool/artifacts");
+    let (mut server, mut owner) = support::instance_with_lifetime(
+        &canic_qualification::server_directory(),
+        ic_testkit::pocket_ic::PocketIcBuilder::new()
+            .with_nns_subnet()
+            .with_application_subnet(),
+        Duration::from_secs(180),
+    )
+    .await;
+    let fleet = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
+        fleet.worker_pools[0].max_workers = 1;
+    })
+    .await;
+    let root = fleet.root;
+    configure(&root, &fleet.capacity, &fleet.workers).await;
+    let mut other = fleet.workers.approval.clone();
+    other.component = "auxiliary".into();
+    other.creation_budget = management::CREATION_CYCLES;
+    root.update::<_, Result<(), management::Refusal>>(
+        "configure_workers",
+        stored::CONFIGURE_WORKERS,
+        &other,
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
+    let request = async |name: &str, ordinal, assign| {
+        let input = (name.to_owned(), ordinal);
+        let bytes = if assign {
+            root.pic
+                .update_call(
+                    root.id,
+                    fleet.pool,
+                    AssignWorker::NAME,
+                    AssignWorker::encode_request(&input).unwrap(),
+                )
+                .await
+                .unwrap()
+        } else {
+            root.pic
+                .update_call(
+                    root.id,
+                    fleet.pool,
+                    LookupWorker::NAME,
+                    LookupWorker::encode_request(&input).unwrap(),
+                )
+                .await
+                .unwrap()
+        };
+        if assign {
+            AssignWorker::decode_reply(&bytes).unwrap()
+        } else {
+            LookupWorker::decode_reply(&bytes).unwrap()
+        }
+    };
+    let mut allocations = Vec::new();
+    for pool in ["miner", "auxiliary"] {
+        assert_eq!(request(pool, 0, false).await, Placement::Unknown);
+        let Placement::Pending(id) = request(pool, 0, true).await else {
+            panic!("expected newly reserved worker")
+        };
+        allocations.push(id);
+        assert_eq!(request(pool, 1, true).await, Placement::Full);
+    }
+    assert_ne!(allocations[0].slot, allocations[1].slot);
+    for _ in 0..120 {
+        root.pic.advance_time(Duration::from_millis(100)).await;
+        root.pic.tick().await;
+    }
+    canic_qualification::upgrade_stopped(
+        root.pic,
+        root.id,
+        std::fs::read(base.join("root.wasm")).unwrap(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
+    for (name, id) in ["miner", "auxiliary"].into_iter().zip(allocations) {
+        let result = request(name, 0, false).await;
+        assert!(
+            matches!(&result, Placement::Assigned(original, _) if original == &id),
+            "{result:?}"
+        );
+        assert_eq!(request(name, 0, true).await, result);
+    }
+    assert_eq!(
+        owner.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert_eq!(server.stop().unwrap().abandoned, 0);
+}

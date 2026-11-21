@@ -143,7 +143,7 @@ macro_rules! mount_endpoints {
     };
     (@select reconcile_application_child) => {
         $crate::mount_endpoints!(@method reconcile_application_child, "reconcile_application_child", update, true, application::RECONCILE, application::LIMITS,
-            [async] (input: $crate::endpoint::protocol::children::Request<$crate::endpoint::protocol::application::Stage<$crate::endpoint::protocol::Approval>>) -> $crate::endpoint::protocol::Status,
+            [async] (input: $crate::endpoint::protocol::children::AllocationRequest<$crate::endpoint::protocol::application::Stage<$crate::endpoint::protocol::Approval>>) -> $crate::endpoint::protocol::Status,
             $crate::application::reconcile(input.slot, input.value).await);
     };
     (@select observe_stored_children) => {
@@ -158,7 +158,7 @@ macro_rules! mount_endpoints {
     };
     (@select reconcile_stored_child) => {
         $crate::mount_endpoints!(@method reconcile_stored_child, "reconcile_stored_child", update, true, stored::RECONCILE, STORED_LIMITS,
-            [async] (input: $crate::endpoint::protocol::children::Request<$crate::endpoint::protocol::stored::Stage<$crate::endpoint::protocol::Approval>>) -> $crate::endpoint::protocol::Status,
+            [async] (input: $crate::endpoint::protocol::children::AllocationRequest<$crate::endpoint::protocol::stored::Stage<$crate::endpoint::protocol::Approval>>) -> $crate::endpoint::protocol::Status,
             $crate::stored::reconcile(input.slot, input.value).await);
     };
     (@select stage_stored_upgrade) => {
@@ -218,7 +218,7 @@ macro_rules! mount_endpoints {
     };
     (@select inject_child_fault) => {
         $crate::mount_endpoints!(@method inject_child_fault, "inject_child_fault", update, true, children::INJECT, LIMITS,
-            [] (input: $crate::endpoint::protocol::children::Request<u8>) -> (),
+            [] (input: $crate::endpoint::protocol::children::AllocationRequest<u8>) -> (),
             $crate::children::inject_fault(input.slot, input.value));
     };
     (@select observe_custody) => {

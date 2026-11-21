@@ -77,7 +77,9 @@ pub mod sharding;
 pub mod topology;
 
 #[cfg(feature = "method")]
-pub use canic_macros::{method_descriptor, query, role_descriptor, update};
+pub use canic_macros::{attested_method, method_descriptor, query, update};
+#[cfg(any(feature = "method", feature = "topology"))]
+pub use canic_macros::{shard_pool, worker_pool};
 
 /// Emit a local build-report marker without adding an IC export.
 #[doc(hidden)]
@@ -111,10 +113,21 @@ macro_rules! __canic_inspect {
     (@root auth, $ty:ty) => {
         $crate::inspection::auth_root::<$ty>
     };
-    ($source:ident, $name:expr, $mode:ident, $id:expr, $input:ty, $output:ty) => {
+    (@limits $value:expr) => {{
+        let limits = $value;
+        $crate::inspection::FrameLimits {
+            bytes: limits.bytes,
+            allocation: limits.allocation,
+            nodes: limits.nodes,
+            depth: limits.depth,
+        }
+    }};
+    ($source:ident, $name:expr, $mode:ident, $id:expr, $input:ty, $output:ty, $request:expr, $reply:expr) => {
         $crate::inspection::inventory::submit! {
             $crate::inspection::Declaration {
                 module: module_path!(), name: $name, mode: stringify!($mode), id: $id,
+                request_limits: $crate::__canic_inspect!(@limits $request),
+                reply_limits: $crate::__canic_inspect!(@limits $reply),
                 request: $crate::__canic_inspect!(@root $source, $input),
                 reply: $crate::__canic_inspect!(@root $source, $output),
             }
@@ -133,9 +146,9 @@ macro_rules! __canic_inspect {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_builtin {
-    ($source:ident, $id:expr, $platform:ident :: $mode:ident, $name:literal, ($($options:tt)*),
+    ($source:ident, $id:expr, ($request:expr, $reply:expr), $platform:ident :: $mode:ident, $name:literal, ($($options:tt)*),
      [$($async:ident)?] fn $handler:ident($arg:tt : $input:ty $(,)?) -> $output:ty $body:block) => {
-        $crate::__canic_inspect!($source, $name, $mode, $id, $input, $output);
+        $crate::__canic_inspect!($source, $name, $mode, $id, $input, $output, $request, $reply);
         #[$platform::$mode(name = $name, $($options)*)]
         $($async)? fn $handler($arg: $input) -> $output $body
     };

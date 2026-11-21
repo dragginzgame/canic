@@ -49,3 +49,11 @@ impl canic::method::Contract for ReserveProject {
 impl canic::topology::attestation::RoleMethod for ReserveProject {
     const ROLES: &'static [&'static str] = &["user_shard"];
 }
+
+/// The project registry can resolve the account's confirmed shard at the user hub.
+#[cfg(feature = "role-service")]
+#[canic::attested_method(roles = &["project_registry"])]
+pub fn confirmed_shard(
+    account: canic::sharding::provisioning::AuthSubject,
+) -> Option<ic_db::Principal> {
+}

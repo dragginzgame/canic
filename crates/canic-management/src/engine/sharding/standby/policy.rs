@@ -84,7 +84,7 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), String> {
         } else {
             policy.imports.as_slice()
         };
-        if pools.used() + pools.held() - pools.returns.len() + added.len() > usize::from(cap) {
+        if pools.occupied_slots() + added.len() > usize::from(cap) {
             return Err("imports exceed remaining physical capacity".into());
         }
         if !added.is_empty()
@@ -408,6 +408,9 @@ pub async fn import(id: Principal) -> Result<Asset, String> {
                 Asset::Available(id, balance)
             };
             let result = entry.clone();
+            if available(&result).is_some() {
+                super::log_surplus(&s.pools);
+            }
             s.pool.set(s.pools.encode());
             Ok(result)
         } else {

@@ -14,9 +14,10 @@ pub async fn reset(
     deadline: u64,
     admit_receiver: impl FnOnce(ic_platform_types::Principal) -> Result<(), String>,
 ) -> Result<ResetPhase, String> {
-    assert!(api::is_controller(&api::caller()));
+    let controller = api::caller();
+    assert!(api::is_controller(&controller));
     let slot = ChildId::placement(target.allocation.slot as usize).ok_or("invalid worker slot")?;
-    if super::super::workers::worker_index(slot).is_none() {
+    if !ChildId::INSTANCES.contains(&slot) {
         return Err("released worker allocation required".into());
     }
     let _lock = super::super::super::observing(slot).ok_or("worker observation in progress")?;
@@ -49,7 +50,7 @@ pub async fn reset(
         if matches!(asset, Asset::Reset(_, _, original, _) if *original != deadline) {
             return Err("reset requires the original deadline");
         }
-        let workers = state.pools.workers.as_ref().ok_or("missing worker grant")?;
+        let (workers, _) = state.pools.worker_at(slot).ok_or("missing worker grant")?;
         let minimum = workers.minimum_reuse_cycles()?;
         let journal = &state.journal.0[&slot];
         if journal.1.approval.is_some() {
@@ -80,7 +81,7 @@ pub async fn reset(
     };
     let (phase, method, balance) = observe_reset(&args, prior_phase, &hash, minimum).await?;
     admit_receiver(target.shard)?;
-    super::super::admit_pool_change(false).map_err(|e| format!("outstanding custody: {e:?}"))?;
+    super::authorize_change(controller)?;
     let now = api::time();
     if method.is_some() && (deadline <= now || deadline - now > 600_000_000_000) {
         return Err("reset dispatch requires its original deadline within ten minutes".into());
@@ -94,11 +95,13 @@ pub async fn reset(
         if phase == ResetPhase::Returned {
             let balance = balance.expect("verified return balance");
             *asset = Asset::Available(target.shard, balance);
+            super::super::workers::archive(state, slot, target.allocation.generation);
             state.pools.returns.push(super::Returned {
                 target,
                 deadline,
                 balance,
             });
+            super::log_surplus(&state.pools);
         } else {
             *asset = Asset::Reset(target.shard, target.allocation, deadline, phase);
         }

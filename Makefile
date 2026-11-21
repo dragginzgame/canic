@@ -111,7 +111,7 @@ metrics-test:
 	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/metrics/canic.toml --canister ex-metrics
 	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test metrics_example
 
-CI_TEST_TARGETS := metrics-test notebook-test test effect-test artifact-custody-test journey-test counter-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
+CI_TEST_TARGETS := check-wire-endpoints metrics-test notebook-test test effect-test artifact-custody-test journey-test counter-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
 ci: lint
 	$(MAKE) -j1 $(CI_TEST_TARGETS)
 

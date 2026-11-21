@@ -70,7 +70,6 @@ if [[ "$scope" == directory ]]; then
 fi
 if [[ "$scope" == all || "$scope" == user-directory ]]; then
     "$cli" app build --config apps/examples/user-directory/canic.toml
-    cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features inspection --test inspection
 fi
 if [[ "$scope" == user-directory ]]; then
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture

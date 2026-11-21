@@ -382,25 +382,6 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
         .config
         .canisters
         .insert("sibling".into(), selected.config.canisters["app"].clone());
-    // Creating among multiple declarations still needs an allocation policy;
-    // an upgrade instead has an exact retained child identity.
-    let unallocated = dir.join("unallocated");
-    assert!(
-        create_managed_plan(
-            &unallocated,
-            &wasm,
-            input(),
-            &selected,
-            "app",
-            &root_hash,
-            None,
-            None,
-            None,
-            None,
-        )
-        .is_err()
-    );
-    assert!(!unallocated.exists());
     let child = "ryjl3-tyaaa-aaaaa-aaaba-cai";
     let upgrade_input = || PlanInput {
         target: Some(child.into()),
@@ -803,23 +784,38 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         cache_deadline: None,
     };
     let mut custody = wire::Custody {
-        children: [
-            canic_management_protocol::custody::Custody {
-                creation: status.clone(),
-                upgrades: vec![],
-            },
-            canic_management_protocol::custody::Custody {
-                creation: Status::default(),
-                upgrades: vec![],
-            },
-        ],
-        sources: [
-            Some(wire::Sources {
-                creation: delivery.clone(),
-                upgrades: vec![],
-            }),
-            None,
-        ],
+        children: {
+            let mut slots = [
+                canic_management_protocol::custody::Custody {
+                    creation: status.clone(),
+                    upgrades: vec![],
+                },
+                canic_management_protocol::custody::Custody {
+                    creation: Status::default(),
+                    upgrades: vec![],
+                },
+            ]
+            .into_iter();
+            std::array::from_fn(|_| {
+                slots
+                    .next()
+                    .unwrap_or_else(|| canic_management_protocol::custody::Custody {
+                        creation: Default::default(),
+                        upgrades: vec![],
+                    })
+            })
+        },
+        sources: {
+            let mut slots = [
+                Some(wire::Sources {
+                    creation: delivery.clone(),
+                    upgrades: vec![],
+                }),
+                None,
+            ]
+            .into_iter();
+            std::array::from_fn(|_| slots.next().flatten())
+        },
     };
     let encode = |value: &wire::Custody| {
         ic_wire::encode(
@@ -1116,13 +1112,17 @@ fn assert_application_arguments(
             },
             store_history: vec![],
         },
-        applications: [
-            Some(application::Lifecycle {
-                creation: request.value.arguments.clone(),
-                upgrades: vec![],
-            }),
-            None,
-        ],
+        applications: {
+            let mut slots = [
+                Some(application::Lifecycle {
+                    creation: request.value.arguments.clone(),
+                    upgrades: vec![],
+                }),
+                None,
+            ]
+            .into_iter();
+            std::array::from_fn(|_| slots.next().flatten())
+        },
     };
     value.root.current.stored.sources[0]
         .as_mut()
@@ -1300,4 +1300,41 @@ fn assert_delivery_history(plan: &Plan, mut custody: canic_management_protocol::
     write(5, &custody);
     assert!(matches!(read(), Err(Error::Invalid(_))));
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn adding_discovery_preserves_two_earlier_named_creation_approvals() {
+    let journal = directory();
+    let wasm = journal.join("app.wasm");
+    std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
+    let mut fleet = selection();
+    let service = fleet.config.canisters.remove("app").unwrap();
+    for name in ["user_hub", "project_registry"] {
+        fleet.config.canisters.insert(name.into(), service.clone());
+    }
+    let plan = |fleet: &SelectedFleet, name: &str| {
+        create_managed_plan(
+            &journal,
+            &wasm,
+            input(),
+            fleet,
+            name,
+            &"ab".repeat(32),
+            None,
+            None,
+            None,
+            None,
+        )
+        .unwrap()
+    };
+    let (user, _) = plan(&fleet, "user_hub");
+    let (registry, _) = plan(&fleet, "project_registry");
+    fleet
+        .config
+        .canisters
+        .insert("discovery_hub".into(), service);
+    let (_, discovery) = plan(&fleet, "discovery_hub");
+    assert_eq!(discovery.management().unwrap().slot, Some(ChildId::ALL[2]));
+    assert_eq!(plan(&fleet, "user_hub").0, user);
+    assert_eq!(plan(&fleet, "project_registry").0, registry);
 }

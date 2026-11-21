@@ -130,7 +130,7 @@ mod reader {
 }
 
 mod protocol {
-    use canic::role_descriptor as query;
+    use canic::attested_method as query;
     include!("visit_count.rs");
 }
 

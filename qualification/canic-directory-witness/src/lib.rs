@@ -124,6 +124,14 @@ fn unique_service(role: String) -> Option<(u64, Result<Principal, String>)> {
     })
 }
 
+// route_shard
+// Read the local route for an unseen principal in the named pool.
+// limits : default
+#[canic::query]
+fn route_shard(input: (String, Principal)) -> Option<Principal> {
+    canic::topology::get_shard(&input.0, input.1).ok()
+}
+
 // Accept a directory update under the retained installer authority.
 canic::mount_service_directory!();
 
@@ -154,6 +162,7 @@ async fn attempt_delivery() -> Principal {
                 services: Vec::new(),
             },
             path: vec![Hop {
+                shard_pool: None,
                 canister: target,
                 role: "hub".into(),
                 generation: [0; 32],
@@ -176,7 +185,7 @@ async fn place(request: (bool, u8)) -> canic::sharding::Placement {
     if project {
         canic::sharding::assign_instance(root, [key; 32]).await
     } else {
-        canic::sharding::assign(root, [key; 32]).await
+        canic::sharding::assign(root, "users", [key; 32]).await
     }
     .expect("placement call")
 }

@@ -206,13 +206,15 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     let operations = std::fs::read_dir(&journal).unwrap().count();
     let mut expanded: serde_json::Value =
         toml::from_str(std::str::from_utf8(&config_bytes).unwrap()).unwrap();
-    expanded["apps"]["starter"]["canisters"]["aaa"] = serde_json::json!({
-        "parent": "root", "role": "worker", "wasm": "missing-third.wasm"
-    });
+    for i in 0..7 {
+        expanded["apps"]["starter"]["canisters"][format!("extra-{i}")] = serde_json::json!({
+            "parent": "root", "role": "worker", "wasm": "missing-child.wasm"
+        });
+    }
     std::fs::write(&config, toml::to_string(&expanded).unwrap()).unwrap();
     let error = rejected(&config, &["fleet", "plan", "--identity", "anonymous"]);
     assert!(error["message"].as_str().unwrap().contains(
-        "fleet declares 3 direct application children under root; this Root path supports 1 to 2"
+        "fleet declares 9 direct application children under root; this Root path supports 1 to 8"
     ), "{error}");
     assert_eq!(std::fs::read_dir(&journal).unwrap().count(), operations);
     assert_eq!(

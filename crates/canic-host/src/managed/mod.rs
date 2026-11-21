@@ -19,6 +19,7 @@ use crate::{
     store, supplier,
 };
 pub use application::activate;
+use canic_management_protocol::children::ChildId;
 use canic_management_protocol::{Approval, LIMITS, Phase, Refusal, STAGE_LIMITS, Stage, Status};
 use ic_platform::native::ReadClient;
 use std::path::Path;
@@ -103,7 +104,6 @@ pub fn create_managed_plan(
         || (input.target.is_none() && (child.id.is_some() || input.previous_module.is_some()))
         || owner.role.as_deref() != Some("root")
         || owner.parent.is_some()
-        || (input.target.is_none() && !role_service && children.len() != 1)
     {
         return Err(Error::Invalid(
             "select one child of a top-level Root on this fleet's network; creation requires an unbound slot".into(),
@@ -120,7 +120,7 @@ pub fn create_managed_plan(
     if let Some(id) = &owner.id {
         roots.insert(id.clone());
     }
-    for (record, network) in inventory.records {
+    for (record, network) in &inventory.records {
         if input.target.is_some()
             && record.management.is_some()
             && record.deployment.as_ref().is_some_and(|name| {
@@ -129,7 +129,7 @@ pub fn create_managed_plan(
                     && name.canister == canister
             })
         {
-            if network != input.network
+            if network != &input.network
                 || !record.receipt_retained
                 || record.canister != input.target
                 || child
@@ -152,7 +152,7 @@ pub fn create_managed_plan(
         if record.deployment.as_ref().is_some_and(|name| {
             name.app == selection.app && name.fleet == selection.fleet && name.canister == *parent
         }) {
-            if network != input.network || !record.receipt_retained {
+            if network != &input.network || !record.receipt_retained {
                 return Err(Error::Blocked(
                     "parent deployment is incomplete or on another network".into(),
                 ));
@@ -160,6 +160,7 @@ pub fn create_managed_plan(
             roots.insert(
                 record
                     .canister
+                    .clone()
                     .ok_or_else(|| Error::Invalid("parent receipt has no canister".into()))?,
             );
         }
@@ -178,6 +179,23 @@ pub fn create_managed_plan(
         .pop_first()
         .ok_or_else(|| Error::Invalid("missing Root identity".into()))?;
     let mut slot = creation.and_then(|(_, slot)| slot);
+    if input.target.is_none() {
+        let reservations = inventory
+            .records
+            .iter()
+            .filter(|(record, network)| {
+                record.management.is_some()
+                    && network == &input.network
+                    && record.approved_controller == root
+            })
+            .map(|(record, _)| (record.slot, record.deployment.as_ref()));
+        let deployment = DeploymentName {
+            app: selection.app.clone(),
+            fleet: selection.fleet.clone(),
+            canister: canister.into(),
+        };
+        slot = permanent_slot(&children, &deployment, role_service, reservations)?;
+    }
     let arguments = if input.target.is_none() && selection.config.receiver_selected(canister) {
         if selection
             .config
@@ -195,16 +213,6 @@ pub fn create_managed_plan(
             ));
         }
         if role_service {
-            if children.len() > canic_management_protocol::children::ChildId::ALL.len() {
-                return Err(Error::Invalid(
-                    "too many permanent children for this Root".into(),
-                ));
-            }
-            let index = children
-                .iter()
-                .position(|&name| name == canister)
-                .ok_or_else(|| Error::Invalid("child missing from permanent slots".into()))?;
-            slot = canic_management_protocol::children::ChildId::new(index);
             let pin = crate::application::issuer_pin(
                 journal,
                 selection,
@@ -253,6 +261,55 @@ pub fn create_managed_plan(
         }),
         now,
     )
+}
+
+// A newly declared service may sort before an already approved one. Only unclaimed
+// slots and names participate in config ordering, including before receipts arrive.
+fn permanent_slot<'a>(
+    children: &[&str],
+    deployment: &DeploymentName,
+    explicit: bool,
+    reservations: impl Iterator<Item = (Option<ChildId>, Option<&'a DeploymentName>)>,
+) -> Result<Option<ChildId>> {
+    let mut occupied = std::collections::BTreeSet::new();
+    let mut retained = std::collections::BTreeSet::new();
+    let mut selected = None;
+    for (slot, name) in reservations {
+        let name = name
+            .filter(|name| name.app == deployment.app && name.fleet == deployment.fleet)
+            .ok_or_else(|| {
+                Error::Blocked(
+                    "Root child custody belongs to another fleet or an unnamed approval".into(),
+                )
+            })?;
+        if name == deployment {
+            selected = Some(slot);
+        }
+        if !occupied.insert(slot.unwrap_or(ChildId::FIRST)) {
+            return Err(Error::Blocked(
+                "multiple creation approvals claim one Root slot".into(),
+            ));
+        }
+        if !retained.insert(name.canister.as_str()) {
+            return Err(Error::Blocked(
+                "multiple Root slots claim the same service".into(),
+            ));
+        }
+    }
+    let mut available = ChildId::ALL.into_iter().filter(|s| !occupied.contains(s));
+    for &name in children.iter().filter(|name| !retained.contains(**name)) {
+        let slot = available.next().ok_or_else(|| {
+            Error::Invalid(format!(
+                "no permanent slot available for {name}: Root supports {} permanent services",
+                ChildId::ALL.len()
+            ))
+        })?;
+        if name == deployment.canister {
+            selected =
+                Some((explicit || children.len() > 1 || slot != ChildId::FIRST).then_some(slot));
+        }
+    }
+    selected.ok_or_else(|| Error::Invalid("child missing from permanent slots".into()))
 }
 
 pub(crate) fn approval(plan: &Plan) -> Result<Approval> {

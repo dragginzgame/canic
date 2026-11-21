@@ -24,7 +24,7 @@ fn hex(bytes: &[u8]) -> String {
 pub(crate) fn pool_preview<'a>(
     selected: &canic_host::SelectedFleet,
     controller: &str,
-    shards: Option<&canic_management_protocol::stored::ShardPool>,
+    shards: impl IntoIterator<Item = &'a canic_management_protocol::stored::ShardPool>,
     allocations: impl IntoIterator<
         Item = (&'a str, &'a canic_management_protocol::stored::InstancePool),
     >,
@@ -76,14 +76,14 @@ pub(crate) fn pool_preview<'a>(
         };
         writeln!(text, "Increase {}: {old} → {new} children", escape(pool)).unwrap();
     }
-    if let Some(a) = shards {
+    for a in shards {
         writeln!(text, "\nShared shards · {}\nRoot: {}\nHub: {}\nCapacity: {} shards × {} live keys per shard\nInit bytes (hex): {}", escape(&a.pool), a.root, a.hub, a.max_shards, a.keys_per_shard, hex(a.arguments.as_slice())).unwrap();
         pool_release(&mut text, &a.reference, a.creation_budget, a.expires_at_ns);
     }
     for (label, a) in allocations {
         writeln!(
             text,
-            "\n{label} · {}\nRoot: {}\nParent hub: {}\nCapacity: {} lifetime children",
+            "\n{label} · {}\nRoot: {}\nParent hub: {}\nChild limit: {}",
             escape(&a.component),
             a.root,
             a.hub,

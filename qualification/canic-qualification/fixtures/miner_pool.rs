@@ -13,7 +13,7 @@ pub(crate) struct Fleet<'a> {
     pub pool: CanisterId,
     pub capacity: canic_host::PoolGrant<stored::SubnetCapacity>,
     pub standby: Option<canic_host::PoolGrant<stored::StandbyPolicy>>,
-    pub workers: Box<canic_host::PoolGrant<stored::InstancePool>>,
+    pub workers: canic_host::PoolGrant<stored::InstancePool>,
 }
 
 pub(crate) async fn install<'a>(
@@ -108,7 +108,7 @@ pub(crate) async fn install<'a>(
             },
         );
     }
-    let worker_pool = fleet.worker_pool.as_mut().unwrap();
+    let worker_pool = fleet.worker_pools.first_mut().unwrap();
     worker_pool.expires_at_ns = Some(deadline);
     configure(fleet);
     let selected = config.select(None, None).unwrap();
@@ -124,14 +124,17 @@ pub(crate) async fn install<'a>(
     let canic_host::FleetPlanning::PlacementPools {
         capacity: Some(capacity),
         standby,
-        workers: Some(workers),
+        mut workers,
         instances: None,
-        shards: None,
+        shards,
         ..
     } = plan
     else {
         panic!("expected independent worker grant");
     };
+    assert!(shards.is_empty());
+    assert_eq!(workers.len(), 1);
+    let workers = workers.pop().unwrap();
     assert_eq!(workers.approval.reference.manifest, worker_manifest);
     Fleet {
         root,

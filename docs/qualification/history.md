@@ -7,6 +7,24 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Qualification guide and original provisioning role fixture — 2026-11-21
+
+The original role-name experiment installed two hub roles and a shard using Toko's
+application crates and test harness. Its config and metadata endpoints belong with
+the experiment. The installed check references the external harness.
+[Original configuration](provisioning-roles/canic.toml) · [Hub endpoint](provisioning-roles/hub.rs) · [Shard endpoint](provisioning-roles/shard.rs) · [Installed check](provisioning-roles/roles.rs)
+
+The pre-cleanup guide records the supplier versions used for the Platform, Testkit,
+Auth, Storage, Store and Blob adoption runs, the original greeting journey, and
+the sequence of Root maintenance and publication rehearsals. Its detailed run
+descriptions remain available at the revision where they were recorded.
+[Historical baseline](https://github.com/dragginzgame/canic/blob/d6de92cfcbd4e4d72550f3690641d7cef4d025b0/qualification/README.md#qualified-baseline) · [Root and Store evidence](https://github.com/dragginzgame/canic/blob/d6de92cfcbd4e4d72550f3690641d7cef4d025b0/qualification/README.md#checks-and-evidence)
+
+At Storage adoption the fresh counter and Root checks recorded Storage 0.78.3 and
+Testkit 0.110.1. The DB 0.24.4 and Blob 0.107.1 suites recorded direct use of
+Storage 0.78.7. The populated Blob 0.100.6 predecessor refused upgrade and
+preserved its stable bytes, management report and asset.
+
 ## Root journal hard cut — 2026-11-21
 
 The storage codec tests reopened CUJC at two slots, four slots and sparse

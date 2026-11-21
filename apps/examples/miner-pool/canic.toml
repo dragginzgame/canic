@@ -26,7 +26,7 @@ network = { kind = "Local" }
 
 subnet_child_limit = 5
 
-[apps.ex-miner-pool.fleets.local.worker_pool]
+[[apps.ex-miner-pool.fleets.local.worker_pools]]
 component = "miner"
 root = "root"
 store = "store"

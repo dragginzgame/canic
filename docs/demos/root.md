@@ -1,5 +1,23 @@
 # Root and its children
 
+## Build the published Root and its operator client
+
+Use the workspace manifest whose Cargo.lock selects `canic-root` from crates.io.
+Paths are relative to `canic.toml`. For example:
+
+```toml
+[apps.toko.canisters.root]
+role = "root"
+wasm = "artifacts/root.wasm"
+build = { manifest = "../../qualification/Cargo.toml", package = "canic-root", client = "canic-root-client", features = ["auth", "role-issuer"] }
+```
+
+`canic app build --canister root` builds both targets from the same selected
+registry archive with its packaged Cargo.lock and the recipe's features. This
+pins Root's source to the consumer selection. To qualify identical artifact bytes,
+use the Wasm produced by the recipe. Inside Canic's own workspace the recipe
+builds the workspace member with the workspace lockfile.
+
 The native Root build type-checks the same management mounts and engine as the
 installed canister. For example, `stage_child` checks the actual controller,
 decodes its request and stages the child in the engine. Scheduled creation
@@ -16,7 +34,7 @@ See the [executor contract](../design/canic-system-design.md#backup-signing-and-
 The installed local witness is `bash scripts/dev/test-root.sh snapshot::` after simulator
 preparation. This is not yet a Backup CLI workflow or an upgrade for existing fleets.
 
-Ordinary fleet plans can deploy up to two application children. A Root built with
+Ordinary fleet plans can deploy up to eight permanent services per fresh Root. A Root built with
 `sharding` can approve a backstop of up to eight children across direct creation,
 shard pools and project pools. The fleet owner sets `subnet_child_limit` and approves the shared ceiling
 on Root before raising either pool above two. Existing fleets keep their grants
@@ -45,10 +63,9 @@ Root; the new executable refuses those images. A failed Host maintenance install
 retains its signed attempt and leaves the target stopped for explicit recovery.
 Do not rebuild and upgrade the historical mainnet demo below with this executable.
 
-The generated `wasm-store` child is separate from both application slots.
-Whole-fleet planning currently admits one or two direct application children.
-It reports an unsupported child count before reading artifacts or opening the
-journal. This is the qualified implementation bound, not an operator capacity
+The generated `wasm-store` child is separate from the permanent application slots.
+Whole-fleet planning currently admits one to eight direct application children.
+The initial Root creation debit remains capped at 5T cycles. Bootstrap a smaller fleet and add services under separate funded approvals when the complete set exceeds that budget. An unsupported slot count is reported before reading artifacts or opening the journal. This is the qualified implementation bound, not an operator capacity
 setting. Adding a declaration cannot extend a retained approval; changing or
 removing a declaration does not release an existing allocation.
 Once initial creation completes, adding a second declaration selects a separate
@@ -88,8 +105,7 @@ Finish outstanding work before adding children. Change existing artifacts and
 add a child in separate reviewed windows. Replanning an unfinished addition
 returns its original schedule and digest, including after expiry; it cannot
 authorize a replacement. Later whole-fleet planning includes the added child in
-serial upgrades and complete Root maintenance. This is bounded growth to two
-children, not general allocation or spare-canister reuse.
+serial upgrades and complete Root maintenance. Each addition consumes one slot under the approved subnet ceiling.
 
 The named `fleet plan --canister` path can also select the added child's next
 upgrade. It verifies the explicit target and predecessor module against retained
@@ -323,13 +339,13 @@ child to its declared slot or create a completion receipt. These reads consume
 none of the 32 retained signed observation attempts. Root reports and reported
 child identity remain labelled separately from authenticated deployment evidence.
 
-Each selected Root is queried for both supported child slots, including children
+Each selected Root is queried for its original two slots and additional slots in the journal. The original two can include children
 created through another operator's journal. A configured Root can be selected
 explicitly with `canic fleet show --manager ROOT_PRINCIPAL`; its identity must
 already have an exact configured network binding. Confirmed empty additional
 slots are omitted, while unavailable endpoints produce an inventory issue.
 Discovery neither names an undeclared child nor grants custody, and currently
-stops at these two slots rather than recursively traversing descendants.
+uses the selected Root’s child journals.
 Terminal and browser reports label each physical slot (`slot 1` or `slot 2`),
 alongside an unambiguous local child name or its reported principal. The slot
 label is diagnostic context, not a new app definition or an inferred tree edge.

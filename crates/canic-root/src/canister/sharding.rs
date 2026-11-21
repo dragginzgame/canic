@@ -61,8 +61,8 @@ fn configure_workers(input: stored::InstancePool) -> Result<(), Refusal> {
 // guard  : approved worker hub
 // limits : default request, 1,024-byte placement reply
 #[canic::update(contract = canic::sharding::AssignWorker, guard = sharding::worker_hub)]
-fn assign_worker(ordinal: u8) -> Placement {
-    sharding::worker(ordinal, true)
+fn assign_worker(request: (String, u8)) -> Placement {
+    sharding::worker(&request.0, request.1, true)
 }
 
 // lookup_worker
@@ -70,8 +70,8 @@ fn assign_worker(ordinal: u8) -> Placement {
 // guard  : approved worker hub
 // limits : default request, 1,024-byte placement reply
 #[canic::update(contract = canic::sharding::LookupWorker, guard = sharding::worker_hub)]
-fn lookup_worker(ordinal: u8) -> Placement {
-    sharding::worker(ordinal, false)
+fn lookup_worker(request: (String, u8)) -> Placement {
+    sharding::worker(&request.0, request.1, false)
 }
 
 // configure_capacity
@@ -113,8 +113,8 @@ fn increase_pool(input: stored::IncreasePool) -> Result<(), Refusal> {
 // guard  : approved shard hub
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
 #[canic::update(contract = AssignShard, guard = hub)]
-fn assign_shard(key: Key) -> Placement {
-    sharding::assign(key)
+fn assign_shard(input: (String, Key)) -> Placement {
+    sharding::assign(&input.0, input.1)
 }
 
 // lookup_shard
@@ -122,8 +122,8 @@ fn assign_shard(key: Key) -> Placement {
 // guard  : approved shard hub
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
 #[canic::update(contract = LookupShard, guard = hub)]
-fn lookup_shard(key: Key) -> Placement {
-    sharding::lookup(&key)
+fn lookup_shard(input: (String, Key)) -> Placement {
+    sharding::lookup(&input.0, &input.1)
 }
 
 // assign_instance
@@ -272,7 +272,7 @@ fn inspect_standby() -> Vec<(
 }
 
 // confirm_worker_release
-// Withdraw an exact standby allocation once its hub confirms durable release.
+// Withdraw an exact worker allocation once its hub confirms durable release.
 // guard  : Root controller
 // limits : sharding request, default reply
 #[canic::update(contract = canic::sharding::standby::ConfirmRelease, guard = controller)]

@@ -108,7 +108,7 @@ network={{kind="Local",url="{gateway}",root_key="{}",root_subnet="{}",routing_ca
 root={{id="{}"}}
 store={{id="{}"}}
 user_hub={{id="{}"}}
-[apps.toko.fleets.demo.shard_pool]
+[[apps.toko.fleets.demo.shard_pools]]
 component="user_shard"
 release={{name="user_shard",version="shard-v1"}}
 install_args="shard-init.bin"
@@ -191,7 +191,7 @@ expires_at_ns={}
             root.operator,
             "assign_shard",
             ic_wire::encode(
-                &[0_u8; 32],
+                &("user_shard", [0_u8; 32]),
                 ic_wire::Encoding::Frame {
                     method: sharding::ASSIGN,
                     direction: ic_wire::Direction::Request
@@ -259,7 +259,7 @@ expires_at_ns={}
     }
     assert!(pic.get_stable_memory(root.id).await == retained);
     assert_eq!(user(pic, hub, alice, "lookup").await, original);
-    let slot = ChildId::ALL[a.slot as usize];
+    let slot = ChildId::placement(a.slot as usize).unwrap();
     let journal: management::Status = root
         .update("observe_child", children::STATUS, &slot, management::LIMITS)
         .await;
@@ -278,13 +278,14 @@ expires_at_ns={}
         .update(
             "reconcile_application_child",
             management::application::RECONCILE,
-            &children::Request { slot, value: exact },
+            &children::AllocationRequest { slot, value: exact },
             stored::LIMITS,
         )
         .await;
     assert_eq!(recovered, journal);
     assert_eq!(
-        a.slot, 1,
+        slot,
+        ChildId::SHARDS[1],
         "legacy HRW vector for alice and the user_shard pool"
     );
     let _discarded = pic.submit_call(hub, alice, "signup", vec![]).await.unwrap();
@@ -373,7 +374,7 @@ expires_at_ns = {}
     assert!(text.contains("2 shards × 1 live keys"));
     let both: serde_json::Value = serde_json::from_slice(&plan(true)).unwrap();
     assert_eq!(both["action"], "placement_pools");
-    assert_eq!(both["shards"]["request"], result["request"]);
+    assert_eq!(both["shards"][0]["request"], result["request"]);
     assert_eq!(
         both["instances"]["approval"],
         serde_json::to_value(&projects).unwrap()
@@ -383,7 +384,7 @@ expires_at_ns = {}
     instance_only["apps"]["toko"]["fleets"]["demo"]
         .as_table_mut()
         .unwrap()
-        .remove("shard_pool")
+        .remove("shard_pools")
         .unwrap();
     std::fs::write(&config, toml::to_string(&instance_only).unwrap()).unwrap();
     let single: serde_json::Value = serde_json::from_slice(&plan(true)).unwrap();
@@ -711,7 +712,7 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
         arguments: management::application::Arguments::new(vec![]).unwrap(),
         root: root.id.to_text(),
         hub: hub.to_text(),
-        pool: "users".into(),
+        pool: "user_shard".into(),
         max_shards: 2,
         keys_per_shard: 100_000,
         creation_budget: 0,
@@ -889,11 +890,11 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
     pic.set_controllers(supplier.id, Some(root.operator), vec![root.id])
         .await
         .unwrap();
-    for slot in ChildId::ALL {
+    for slot in ChildId::SHARDS {
         root.update::<_, ()>(
             "inject_child_fault",
             children::INJECT,
-            &children::Request { slot, value: 2_u8 },
+            &children::AllocationRequest { slot, value: 2_u8 },
             management::LIMITS,
         )
         .await;
@@ -914,7 +915,7 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
         arguments: management::application::Arguments::new(vec![]).unwrap(),
         root: root.id.to_text(),
         hub: hub.to_text(),
-        pool: "users".into(),
+        pool: "user_shard".into(),
         max_shards: 2,
         keys_per_shard: 1,
         creation_budget: 2 * management::CREATION_CYCLES,
@@ -939,30 +940,28 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
         Placement::Pending(original.clone())
     );
     assert_eq!(user(pic, hub, bob, "signup").await, Placement::Busy);
-    for slot in ChildId::ALL {
+    {
+        let slot = ChildId::placement(original.slot as usize).unwrap();
         let journal: management::Status = root
             .update("observe_child", children::STATUS, &slot, management::LIMITS)
             .await;
-        if slot.index() == original.slot as usize {
-            assert_eq!(journal.phase, management::Phase::CreateIssued);
-            assert_eq!(journal.attempts, [1, 0, 0]);
-            assert!(journal.worker.is_none());
-            let input = stored::Stage {
-                approval: journal.approval.clone().unwrap(),
-                reference: grant.reference.clone(),
-            };
-            let observed: management::Status = root
-                .update(
-                    "reconcile_stored_child",
-                    stored::RECONCILE,
-                    &children::Request { slot, value: input },
-                    stored::LIMITS,
-                )
-                .await;
-            assert_eq!(observed, journal);
-        } else {
-            assert_eq!(journal.phase, management::Phase::Empty);
-        }
+
+        assert_eq!(journal.phase, management::Phase::CreateIssued);
+        assert_eq!(journal.attempts, [1, 0, 0]);
+        assert!(journal.worker.is_none());
+        let input = stored::Stage {
+            approval: journal.approval.clone().unwrap(),
+            reference: grant.reference.clone(),
+        };
+        let observed: management::Status = root
+            .update(
+                "reconcile_stored_child",
+                stored::RECONCILE,
+                &children::AllocationRequest { slot, value: input },
+                stored::LIMITS,
+            )
+            .await;
+        assert_eq!(observed, journal);
     }
     assert_eq!(user(pic, hub, bob, "lookup").await, Placement::Unknown);
     // The unknown shard creation still consumes one of this subnet's two slots.
@@ -996,18 +995,11 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
     assert!(server.stop().unwrap().process.cleanup.is_empty());
 }
 
-#[tokio::test(flavor = "current_thread")]
-async fn ten_thousand_keys_per_shard_survive_rollover_and_root_reopen() {
-    let (_, binary) = support::inputs();
-    let (mut server, owner) = support::instance_with_lifetime(
-        &binary,
-        ic_testkit::pocket_ic::PocketIcBuilder::new().with_application_subnet(),
-        Duration::from_secs(900),
-    )
-    .await;
-    let pic = owner.client();
-    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
-    let (root, store) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
+async fn fresh_user_shard_grant(
+    root: &Client<'_>,
+    store: &Client<'_>,
+) -> (CanisterId, stored::ShardPool) {
+    let pic = root.pic;
     let hub = pic.create_canister().await;
     pic.add_cycles(hub, 50_000_000_000_000).await;
     pic.add_cycles(root.id, 50_000_000_000_000).await;
@@ -1023,13 +1015,13 @@ async fn ten_thousand_keys_per_shard_survive_rollover_and_root_reopen() {
     pic.set_controllers(store.id, Some(root.operator), vec![root.id])
         .await
         .unwrap();
-    let mut approval = stored::ShardPool {
+    let approval = stored::ShardPool {
         arguments: management::application::Arguments::new(hub.as_slice().to_vec()).unwrap(),
         root: root.id.to_text(),
         hub: hub.to_text(),
         pool: "user_shard".into(),
         max_shards: 2,
-        keys_per_shard: 100_001,
+        keys_per_shard: 10_000,
         creation_budget: 2 * management::CREATION_CYCLES,
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
         reference: stored::Reference {
@@ -1037,6 +1029,78 @@ async fn ten_thousand_keys_per_shard_survive_rollover_and_root_reopen() {
             manifest,
         },
     };
+    (hub, approval)
+}
+
+// Call Root directly as the approved hub, before any application provisioning.
+#[tokio::test(flavor = "current_thread")]
+async fn approved_hub_retries_first_key_in_fresh_named_pool() {
+    use canic::{
+        method::Contract,
+        sharding::{AssignShard, LookupShard},
+    };
+
+    let (_, binary) = support::inputs();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
+    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let (root, store) = readiness_tests::fixture_with_root(pic, wasm).await;
+    let (hub, mut grant) = fresh_user_shard_grant(&root, &store).await;
+    grant.max_shards = 1;
+    configure(&root, &grant).await.unwrap();
+
+    let input = ("user_shard".to_owned(), [0xa5; 32]);
+    let request = AssignShard::encode_request(&input).unwrap();
+    let assign = async || {
+        let reply = pic
+            .update_call(root.id, hub, AssignShard::NAME, request.clone())
+            .await
+            .expect("approved hub assignment");
+        AssignShard::decode_reply(&reply).unwrap()
+    };
+    let lookup = async || {
+        let reply = pic
+            .update_call(
+                root.id,
+                hub,
+                LookupShard::NAME,
+                LookupShard::encode_request(&input).unwrap(),
+            )
+            .await
+            .unwrap();
+        LookupShard::decode_reply(&reply).unwrap()
+    };
+    assert_eq!(lookup().await, Placement::Unknown);
+    let Placement::Pending(original) = assign().await else {
+        panic!("first key must reserve a shard")
+    };
+    settle(pic).await;
+    let assigned = assign().await;
+    let (allocation, _) = assigned.assigned_target().unwrap().expect("ready shard");
+    assert_eq!(allocation, &original);
+    assert_eq!(lookup().await, assigned);
+    assert_eq!(assign().await, assigned);
+    assert_eq!(
+        owner.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn ten_thousand_keys_per_shard_survive_rollover_and_root_reopen() {
+    let (_, binary) = support::inputs();
+    let (mut server, owner) = support::instance_with_lifetime(
+        &binary,
+        ic_testkit::pocket_ic::PocketIcBuilder::new().with_application_subnet(),
+        Duration::from_secs(900),
+    )
+    .await;
+    let pic = owner.client();
+    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let (root, store) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
+    let (hub, mut approval) = fresh_user_shard_grant(&root, &store).await;
+    approval.keys_per_shard = 100_001;
     assert_eq!(
         configure(&root, &approval).await,
         Err(management::Refusal::Binding)

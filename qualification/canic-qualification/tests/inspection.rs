@@ -180,7 +180,7 @@ mod role_layout {
 
     // This package does not depend on the receiver crate or its VISITS state.
     mod protocol {
-        use canic::role_descriptor as query;
+        use canic::attested_method as query;
         include!("../../canic-directory-witness/src/visit_count.rs");
     }
 
@@ -192,17 +192,32 @@ mod role_layout {
         assert_eq!(Query::ROLES, &["user_shard"]);
         assert_eq!(Query::REQUEST.bytes, canic::method::LIMITS.bytes);
         assert_eq!(Query::REPLY.bytes, Query::REQUEST.bytes);
-        Query::encode_request(&()).unwrap();
+        let frame = |direction| wire::Encoding::Frame {
+            method: wire::method_id("visits"),
+            direction,
+        };
         assert_eq!(
-            Query::decode_reply(&Query::encode_reply(&7u64).unwrap()).unwrap(),
-            7
+            Query::encode_request(&()).unwrap(),
+            wire::encode(&(), frame(wire::Direction::Request), canic::method::LIMITS).unwrap()
         );
+        let reply = wire::encode(
+            &7u64,
+            frame(wire::Direction::Response),
+            canic::method::LIMITS,
+        )
+        .unwrap();
+        assert_eq!(Query::encode_reply(&7u64).unwrap(), reply);
+        assert_eq!(Query::decode_reply(&reply).unwrap(), 7);
     }
 
     struct Explicit;
     impl Contract for Explicit {
         const NAME: &'static str = "explicit_lookup";
         const ID: u64 = wire::method_id("inline_lookup");
+        const REPLY: wire::Limits = wire::Limits {
+            bytes: 2048,
+            ..Self::REQUEST
+        };
         type Input = u64;
         type Output = Option<String>;
     }
@@ -210,12 +225,12 @@ mod role_layout {
         const ROLES: &'static [&'static str] = &["project"];
     }
 
-    #[canic::query(role_contract = Explicit)]
+    #[canic::query(attested_method = Explicit)]
     fn explicit_lookup(_: u64) -> Option<String> {
         None
     }
 
-    #[canic::query(roles = Explicit::ROLES)]
+    #[canic::query(roles = Explicit::ROLES, reply_limits = Explicit::REPLY)]
     fn inline_lookup(_: u64) -> Option<String> {
         None
     }
@@ -233,6 +248,8 @@ mod role_layout {
                 declaration.mode,
                 serde_json::to_value((declaration.request)(&schemas).unwrap()).unwrap(),
                 serde_json::to_value((declaration.reply)(&schemas).unwrap()).unwrap(),
+                declaration.request_limits,
+                declaration.reply_limits,
             )
         };
         let inline = declared("inline_lookup");
@@ -244,6 +261,8 @@ mod role_layout {
                 .unwrap()
                 .contains("attestation::Claim")
         );
+        assert_eq!(inline.4.bytes, Explicit::REQUEST.bytes);
+        assert_eq!(inline.5.bytes, 2048);
         assert_eq!(inline, declared("explicit_lookup"));
     }
 }

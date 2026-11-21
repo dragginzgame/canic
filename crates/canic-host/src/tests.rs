@@ -36,8 +36,8 @@ pub(crate) fn selected_fleet(
             subnet_child_limit: None,
             instance_pool: None,
             standby_pool: None,
-            worker_pool: None,
-            shard_pool: None,
+            worker_pools: Vec::new(),
+            shard_pools: Vec::new(),
             auth: Vec::new(),
         },
     }

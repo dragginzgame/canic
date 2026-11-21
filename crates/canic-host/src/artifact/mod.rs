@@ -1,5 +1,6 @@
 mod source_layout;
-mod store_source;
+mod supplier_source;
+pub(crate) use supplier_source::manifest as build_manifest;
 #[cfg(test)]
 mod tests;
 
@@ -90,15 +91,20 @@ pub(crate) fn admit(bytes: &[u8]) -> Result<Artifact> {
 }
 
 pub(crate) fn admit_bounded(bytes: &[u8], limit: usize) -> Result<Artifact> {
+    check_wasm_header_and_size(bytes, limit)?;
+    Ok(Artifact {
+        sha256: digest(bytes),
+        bytes: bytes.len(),
+    })
+}
+
+pub(crate) fn check_wasm_header_and_size(bytes: &[u8], limit: usize) -> Result<()> {
     if bytes.len() > limit || !bytes.starts_with(b"\0asm\x01\0\0\0") {
         return Err(Error::Invalid(format!(
             "expected uncompressed Wasm v1, at most {limit} bytes"
         )));
     }
-    Ok(Artifact {
-        sha256: digest(bytes),
-        bytes: bytes.len(),
-    })
+    Ok(())
 }
 
 /// Inspect bounded Wasm bytes without executing or installing them.
@@ -164,7 +170,7 @@ pub(crate) fn exported_methods(bytes: &[u8]) -> Result<Vec<WasmEndpoint>> {
 }
 
 /// Build one explicit Cargo package and select its Wasm from artifact records.
-/// `ic-wasm-store` uses the workspace's locked registry artifact input and its packaged lockfile.
+/// The published Root and Store use the selected registry archives and their packaged lockfiles.
 /// An output path atomically receives a copy, replacing a prior build input.
 ///
 /// # Errors
@@ -198,25 +204,32 @@ pub fn build_report(
     features: &[String],
     destination: Option<&Path>,
 ) -> Result<BuildReport> {
-    build_for_role(manifest, package, features, destination, None)
+    let source = build_manifest(manifest, package)?;
+    build_for_role(
+        manifest,
+        &source,
+        package,
+        features,
+        destination,
+        None,
+        None,
+    )
 }
 
 pub(crate) fn build_for_role(
+    workspace_manifest: &Path,
     manifest: &Path,
     package: &str,
     features: &[String],
     destination: Option<&Path>,
     role: Option<&str>,
+    children: Option<&str>,
 ) -> Result<BuildReport> {
-    let workspace_manifest = manifest.canonicalize().map_err(supplier)?;
+    let workspace_manifest = workspace_manifest.canonicalize().map_err(supplier)?;
     let workspace = workspace_manifest
         .parent()
         .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?;
-    let manifest = if package == "ic-wasm-store" {
-        store_source::manifest(&workspace_manifest)?
-    } else {
-        workspace_manifest.clone()
-    };
+    let manifest = manifest.canonicalize().map_err(supplier)?;
     // Dependencies can also emit cdylib artifacts. Resolve Cargo's exact selected
     // package identity instead of treating every Wasm in the build as ours.
     let mut identity = Command::new("cargo");
@@ -308,7 +321,17 @@ pub(crate) fn build_for_role(
         command.args([
             "--config",
             "profile.release.package.canic-root.strip='symbols'",
+            "--config",
+            "profile.release.package.canic-root.opt-level='s'",
+            "--config",
+            "profile.release.package.canic-management.opt-level='s'",
         ]);
+    }
+    let child_input = format!("CANIC_APP_CHILDREN_{package}");
+    if let Some(names) = children {
+        command.env(child_input, names);
+    } else {
+        command.env_remove(child_input);
     }
     let role_input = format!("CANIC_APP_ROLE_{package}");
     if let Some(name) = role {

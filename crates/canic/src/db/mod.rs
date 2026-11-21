@@ -86,7 +86,7 @@ macro_rules! mount_db_endpoints {
             }
 
             $crate::__canic_builtin! {
-                wire, $id, runtime::$mode, $name, (
+                wire, $id, ($crate::db::RPC_LIMITS, $crate::db::RPC_LIMITS), runtime::$mode, $name, (
                     runtime = runtime,
                     guard = __canic_admit,
                     decode = endpoint::decode::<$request, $id>,

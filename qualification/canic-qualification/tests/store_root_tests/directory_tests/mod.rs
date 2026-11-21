@@ -61,6 +61,7 @@ async fn refused_delivery(
     let update = Delivery {
         directory,
         path: vec![Hop {
+            shard_pool: None,
             canister: target.to_text().parse().unwrap(),
             role: role.into(),
             generation: [0; 32],
@@ -85,6 +86,7 @@ mod role_proof;
 
 enum Scenario {
     Capacity(u8),
+    ThreeServices,
     RoleProof,
     Retirement { from_spare: bool },
     BothHubs,
@@ -136,6 +138,16 @@ async fn one_full_pool_leaves_capacity_for_the_other_hub() {
 }
 
 #[tokio::test]
+async fn one_hub_assigns_the_same_key_in_independent_named_pools() {
+    installed_publication(Scenario::Capacity(5)).await;
+}
+
+#[tokio::test]
+async fn third_permanent_service_and_two_named_hub_pools_keep_their_custody() {
+    installed_publication(Scenario::ThreeServices).await;
+}
+
+#[tokio::test]
 async fn scheduled_permanent_child_blocks_a_second_direct_creation() {
     installed_publication(Scenario::Capacity(1)).await;
 }
@@ -159,6 +171,7 @@ async fn installed_publication(scenario: Scenario) {
     let capacity = match scenario {
         Scenario::Capacity(limit) => Some(limit),
         Scenario::RoleProof => Some(4),
+        Scenario::ThreeServices => Some(5),
         Scenario::Retirement { .. } => Some(3),
         _ => None,
     };
@@ -166,7 +179,10 @@ async fn installed_publication(scenario: Scenario) {
         "role-root.wasm"
     } else if matches!(
         scenario,
-        Scenario::Capacity(_) | Scenario::StoppedChild | Scenario::StoppedHub
+        Scenario::ThreeServices
+            | Scenario::Capacity(_)
+            | Scenario::StoppedChild
+            | Scenario::StoppedHub
     ) {
         "pool-root.wasm"
     } else {
@@ -469,6 +485,32 @@ async fn installed_publication(scenario: Scenario) {
     }
     stage(ChildId::SECOND, named("project_hub")).await.unwrap();
     let project = ready(ChildId::SECOND).await;
+    if matches!(scenario, Scenario::ThreeServices) {
+        let third = ChildId::ALL[2];
+        stage(third, named("discovery_hub")).await.unwrap();
+        let discovery = ready(third).await;
+        for (slot, name, original) in [
+            (ChildId::FIRST, "accounts_hub", user),
+            (ChildId::SECOND, "project_hub", project),
+            (third, "discovery_hub", discovery),
+        ] {
+            assert_eq!(
+                stage(slot, named(name)).await.unwrap().worker,
+                Some(original.to_text())
+            );
+            assert_eq!(
+                resolve(pic, original).await,
+                Some((3, vec![user, discovery, project]))
+            );
+        }
+        capacity::separate_hub_pools(&root, &source, user, discovery).await;
+        assert_eq!(
+            instance.close(Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        assert!(server.stop().unwrap().process.cleanup.is_empty());
+        return;
+    }
     if let Some((dormant, miner)) = retirement_releases {
         retirement::exercise(
             &root,

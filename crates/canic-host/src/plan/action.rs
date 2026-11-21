@@ -19,7 +19,7 @@ pub struct StoreMaintenance {
     /// Exact fleet Store identity and reviewed executable.
     pub store: UpgradeTarget,
     /// Original creation and every upgrade delivery, in permanent child-slot order.
-    pub sources: [Option<canic_management_protocol::stored::Sources>; 2],
+    pub sources: Vec<Option<canic_management_protocol::stored::Sources>>,
     /// Exact surviving Store operation; selects complete Root custody when present.
     /// Absence preserves the original child-only observation contract and plan digest.
     #[serde(default, skip_serializing_if = "Option::is_none")]

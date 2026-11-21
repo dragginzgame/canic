@@ -1,4 +1,4 @@
-//! Resolve the registry Store artifact input without linking its runtime into Host.
+//! Resolve locked supplier sources for artifact builds.
 
 #[cfg(test)]
 mod tests;
@@ -17,18 +17,26 @@ const REGISTRY: &str = "registry+https://github.com/rust-lang/crates.io-index";
 #[derive(Deserialize)]
 struct Metadata {
     packages: Vec<Package>,
+    workspace_members: Vec<String>,
 }
 
 #[derive(Deserialize)]
 struct Package {
+    id: String,
     name: String,
     version: String,
     source: Option<String>,
     manifest_path: PathBuf,
 }
 
-pub(super) fn manifest(workspace: &Path) -> Result<PathBuf> {
-    let workspace = metadata(workspace)?;
+pub(crate) fn manifest(workspace_manifest: &Path, name: &str) -> Result<PathBuf> {
+    if !matches!(name, "canic-root" | "ic-wasm-store") {
+        return Ok(workspace_manifest.into());
+    }
+    let workspace = metadata(workspace_manifest)?;
+    if name == "canic-root" {
+        return root_manifest(workspace_manifest, &workspace);
+    }
     let runtime = selected(&workspace)?;
     if !runtime.manifest_path.with_file_name("Cargo.lock").is_file() {
         return Err(Error::Invalid(
@@ -45,6 +53,19 @@ pub(super) fn manifest(workspace: &Path) -> Result<PathBuf> {
         ));
     }
     Ok(runtime.manifest_path.clone())
+}
+
+fn root_manifest(workspace_manifest: &Path, workspace: &Metadata) -> Result<PathBuf> {
+    let root = package(workspace, "canic-root")?;
+    if workspace.workspace_members.contains(&root.id) {
+        return Ok(workspace_manifest.into());
+    }
+    if root.source.as_deref() != Some(REGISTRY)
+        || !root.manifest_path.with_file_name("Cargo.lock").is_file()
+    {
+        return Err(Error::Invalid("Root build requires a workspace member or a locked crates.io Root with its packaged Cargo.lock".into()));
+    }
+    Ok(root.manifest_path.clone())
 }
 
 fn metadata(manifest: &Path) -> Result<Metadata> {

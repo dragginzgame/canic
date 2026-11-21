@@ -124,7 +124,7 @@ pub struct FleetDeclaration {
     /// Named permanent services whose installation pins the fleet Root's role key.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub role_receivers: Vec<String>,
-    /// Combined lifetime capacity of all placement pools on this Root's managed subnet.
+    /// Fleet-wide limit on occupied child and reserve slots on this managed subnet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subnet_child_limit: Option<u8>,
     /// Dedicated children owned by one keyed-instance hub.
@@ -133,12 +133,12 @@ pub struct FleetDeclaration {
     /// Subnet reserve maintenance and unassigned external candidates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standby_pool: Option<StandbyPoolConfig>,
-    /// Allowance owned by the worker hub.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub worker_pool: Option<WorkerPoolConfig>,
-    /// Optional fleet-owned bounds for the declared shard component.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub shard_pool: Option<ShardPoolConfig>,
+    /// Named worker allowances, each bound to its component and parent hub.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub worker_pools: Vec<WorkerPoolConfig>,
+    /// Independent grants for named shared-shard components.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shard_pools: Vec<ShardPoolConfig>,
     /// Exact receiver enrollments. A historical single table is also accepted.
     #[serde(
         default,
@@ -166,7 +166,7 @@ pub struct FleetConfig {
     /// Named permanent services whose installation pins the fleet Root's role key.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub role_receivers: Vec<String>,
-    /// Combined lifetime capacity of all placement pools on this Root's managed subnet.
+    /// Fleet-wide limit on occupied child and reserve slots on this managed subnet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subnet_child_limit: Option<u8>,
     /// Dedicated children owned by one keyed-instance hub.
@@ -175,12 +175,12 @@ pub struct FleetConfig {
     /// Subnet reserve maintenance and unassigned external candidates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standby_pool: Option<canic_management_protocol::stored::StandbyPolicy>,
-    /// Allowance owned by the worker hub.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub worker_pool: Option<WorkerPoolConfig>,
-    /// Optional fleet-owned bounds for the declared shard component.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub shard_pool: Option<ShardPoolConfig>,
+    /// Named worker allowances, each bound to its component and parent hub.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub worker_pools: Vec<WorkerPoolConfig>,
+    /// Independent grants for named shared-shard components.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub shard_pools: Vec<ShardPoolConfig>,
     /// Exact receiver enrollments. A historical single table is also accepted.
     #[serde(
         default,
@@ -351,30 +351,15 @@ impl Config {
                     if let Some(policy) = &config.receiver_policy {
                         policy.validate(&slots).map_err(context)?;
                     }
-                    sharding::validate_capacity(
+                    sharding::validate_pools(
+                        &slots,
                         config.subnet_child_limit,
-                        config.shard_pool.as_ref(),
+                        &config.shard_pools,
                         config.instance_pool.as_ref(),
-                        config.worker_pool.as_ref(),
+                        &config.worker_pools,
                         config.standby_policy().map_err(context)?.as_ref(),
                     )
                     .map_err(context)?;
-                    if let Some(pool) = &config.shard_pool {
-                        pool.validate(&slots).map_err(context)?;
-                    }
-                    if let Some(pool) = &config.instance_pool {
-                        pool.validate(&slots, config.shard_pool.as_ref())
-                            .map_err(context)?;
-                    }
-                    if let Some(pool) = &config.worker_pool {
-                        pool.validate(
-                            &slots,
-                            config.subnet_child_limit,
-                            config.shard_pool.as_ref(),
-                            config.instance_pool.as_ref(),
-                        )
-                        .map_err(context)?;
-                    }
                     total += slots.len();
                     continue;
                 }
@@ -475,8 +460,8 @@ impl AppConfig {
             subnet_child_limit: fleet.subnet_child_limit,
             instance_pool: fleet.instance_pool.clone(),
             standby_pool: fleet.standby_policy()?,
-            worker_pool: fleet.worker_pool.clone(),
-            shard_pool: fleet.shard_pool.clone(),
+            worker_pools: fleet.worker_pools.clone(),
+            shard_pools: fleet.shard_pools.clone(),
             auth: fleet.auth.clone(),
             network: network.clone(),
             journal: fleet.journal.clone(),
@@ -489,10 +474,10 @@ impl AppConfig {
     fn resolve_slots(&self, fleet: &FleetDeclaration) -> Result<BTreeMap<String, CanisterConfig>> {
         let mut canisters = self.resolve_canisters(&fleet.canisters);
         for (root, store) in fleet
-            .shard_pool
+            .shard_pools
             .iter()
             .map(|p| (&p.root, &p.store))
-            .chain(fleet.worker_pool.iter().map(|p| (&p.root, &p.store)))
+            .chain(fleet.worker_pools.iter().map(|p| (&p.root, &p.store)))
             .chain(fleet.instance_pool.iter().map(|p| (&p.root, &p.store)))
         {
             for (slot, role) in [(root, "root"), (store, "wasm-store")] {
@@ -602,27 +587,14 @@ impl FleetConfig {
         if let Some(policy) = &self.receiver_policy {
             policy.validate(&self.canisters)?;
         }
-        sharding::validate_capacity(
+        sharding::validate_pools(
+            &self.canisters,
             self.subnet_child_limit,
-            self.shard_pool.as_ref(),
+            &self.shard_pools,
             self.instance_pool.as_ref(),
-            self.worker_pool.as_ref(),
+            &self.worker_pools,
             self.standby_pool.as_ref(),
         )?;
-        if let Some(pool) = &self.worker_pool {
-            pool.validate(
-                &self.canisters,
-                self.subnet_child_limit,
-                self.shard_pool.as_ref(),
-                self.instance_pool.as_ref(),
-            )?;
-        }
-        if let Some(pool) = &self.shard_pool {
-            pool.validate(&self.canisters)?;
-        }
-        if let Some(pool) = &self.instance_pool {
-            pool.validate(&self.canisters, self.shard_pool.as_ref())?;
-        }
         if self.auth.len() > canic::auth::enrollment::MAX_RECEIVERS {
             return Err(Error::Invalid(format!(
                 "auth has {} receiver declarations; maximum is {}",
@@ -1001,8 +973,8 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
                 subnet_child_limit: None,
                 instance_pool: None,
                 standby_pool: None,
-                worker_pool: None,
-                shard_pool: None,
+                worker_pools: Vec::new(),
+                shard_pools: Vec::new(),
                 auth: Vec::new(),
                 network: FleetNetwork::Bound(network),
                 journal: None,

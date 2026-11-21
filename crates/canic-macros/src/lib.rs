@@ -1,5 +1,6 @@
 //! Application endpoint attributes, re-exported by Canic.
 
+mod components;
 #[cfg(test)]
 mod tests;
 
@@ -7,6 +8,22 @@ use proc_macro::TokenStream;
 use proc_macro2::TokenStream as Tokens;
 use quote::quote;
 use syn::{Expr, FnArg, ItemFn, LitStr, Path, ReturnType, parse::Parser, spanned::Spanned};
+
+/// Name a direct shard component and record its pool requirement for fleet planning.
+#[proc_macro]
+pub fn shard_pool(input: TokenStream) -> TokenStream {
+    components::expand("shard", input.into())
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
+/// Name a direct worker component and record its pool requirement for fleet planning.
+#[proc_macro]
+pub fn worker_pool(input: TokenStream) -> TokenStream {
+    components::expand("worker", input.into())
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
 
 /// Export a synchronous query using Canic's bounded Wire contract.
 #[proc_macro_attribute]
@@ -26,8 +43,8 @@ pub fn update(options: TokenStream, item: TokenStream) -> TokenStream {
 
 /// Derive the passive typed caller contract from the same inline role endpoint source.
 #[proc_macro_attribute]
-pub fn role_descriptor(options: TokenStream, item: TokenStream) -> TokenStream {
-    expand(Mode::RoleDescriptor, options.into(), item.into())
+pub fn attested_method(options: TokenStream, item: TokenStream) -> TokenStream {
+    expand(Mode::AttestedMethod, options.into(), item.into())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
@@ -45,12 +62,12 @@ enum Mode {
     Query,
     Update,
     Descriptor,
-    RoleDescriptor,
+    AttestedMethod,
 }
 
 fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut contract: Option<Path> = None;
-    let mut role_contract = false;
+    let mut attested_method = false;
     let mut roles: Option<Expr> = None;
     let mut guard: Option<Expr> = None;
     let mut scope: Option<Expr> = None;
@@ -58,10 +75,10 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut limits: Option<Expr> = None;
     let mut reply_limits: Option<Expr> = None;
     syn::meta::parser(|option| {
-        if (option.path.is_ident("contract") || option.path.is_ident("role_contract"))
+        if (option.path.is_ident("contract") || option.path.is_ident("attested_method"))
             && contract.is_none()
         {
-            role_contract = option.path.is_ident("role_contract");
+            attested_method = option.path.is_ident("attested_method");
             contract = Some(option.value()?.parse()?);
         } else if option.path.is_ident("roles") && roles.is_none() {
             roles = Some(option.value()?.parse()?);
@@ -155,7 +172,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     {
         return Err(syn::Error::new(
             roles.span(),
-            "roles cannot be combined with contract or role_contract",
+            "roles cannot be combined with contract or attested_method",
         ));
     }
     let (request, reply, id, request_budget, reply_budget, check) = if let Some(contract) =
@@ -168,6 +185,11 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             ));
         }
         let c = quote!(<#contract as ::canic::method::Contract>);
+        let plain_mount = (!attested_method).then(|| {
+            quote! {
+                const _: () = <#contract as ::canic::method::PlainMount<_>>::CHECK;
+            }
+        });
         (
             quote!(#c::Input),
             quote!(#c::Output),
@@ -175,6 +197,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             quote!(#c::REQUEST),
             quote!(#c::REPLY),
             quote!(
+                #plain_mount
                 const _: () = assert!(::canic::method::same_name(#export, #c::NAME), "endpoint name differs from contract");
             ),
         )
@@ -188,23 +211,23 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             quote!(),
         )
     };
-    if matches!(mode, Mode::Descriptor | Mode::RoleDescriptor) {
+    if matches!(mode, Mode::Descriptor | Mode::AttestedMethod) {
         if let Some(contract) = contract {
             return Err(syn::Error::new(
                 contract.span(),
                 "use the explicit contract directly",
             ));
         }
-        if mode == Mode::RoleDescriptor && roles.is_none() {
+        if mode == Mode::AttestedMethod && roles.is_none() {
             return Err(syn::Error::new(
                 handler.span(),
-                "role_descriptor requires inline roles",
+                "attested_method requires inline roles",
             ));
         }
         if mode == Mode::Descriptor && roles.is_some() {
             return Err(syn::Error::new(
                 handler.span(),
-                "use role_descriptor for an attested endpoint",
+                "use attested_method for an attested endpoint",
             ));
         }
         let role_method = roles.map(|roles| {
@@ -238,7 +261,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         });
     }
     let roles = roles.map(|roles| quote!(#roles)).or_else(|| {
-        role_contract
+        attested_method
             .then(|| quote!(<#contract as ::canic::topology::attestation::RoleMethod>::ROLES))
     });
     let guard = guard.map(|g| {
@@ -298,7 +321,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             const __CANIC_ID: u64 = #id;
             const __CANIC_REQUEST: wire::Limits = #request_budget;
             const __CANIC_REPLY: wire::Limits = #reply_budget;
-            ::canic::__canic_inspect!(wire, #export, #kind, __CANIC_ID, #admitted_type, #reply);
+            ::canic::__canic_inspect!(wire, #export, #kind, __CANIC_ID, #admitted_type, #reply, __CANIC_REQUEST, __CANIC_REPLY);
 
             fn __canic_decode(bytes: &[u8]) -> Result<#admitted_type, wire::Error> {
                 wire::decode(bytes, wire::Encoding::Frame { method: __CANIC_ID, direction: wire::Direction::Request }, __CANIC_REQUEST)

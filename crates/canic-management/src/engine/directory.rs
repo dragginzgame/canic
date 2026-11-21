@@ -8,8 +8,7 @@ use ic_platform_types::Principal;
 use ic_timers::{Lifetime, Observation, OnceDemand, OnceNext, OnceResult};
 
 pub(super) fn named_service(slot: ChildId) -> Option<ServiceInstall> {
-    #[cfg(feature = "sharding")]
-    if !super::sharding::ordinary_slot(slot) {
+    if !ChildId::ALL.contains(&slot) {
         return None;
     }
     STATE.with_borrow(
@@ -78,6 +77,7 @@ fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
             let generation = source.creation.operation;
             if canister == recipient.canister {
                 service = Some(Hop {
+                    shard_pool: None,
                     canister,
                     generation,
                     role: recipient.role.clone(),
@@ -89,6 +89,10 @@ fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
                 children.push((
                     binding.parent,
                     Hop {
+                        #[cfg(feature = "sharding")]
+                        shard_pool: state.pools.shard_pool_name(*slot).map(str::to_owned),
+                        #[cfg(not(feature = "sharding"))]
+                        shard_pool: None,
                         canister,
                         generation,
                         role: binding.role,

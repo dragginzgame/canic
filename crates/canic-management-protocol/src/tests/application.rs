@@ -26,13 +26,13 @@ fn maximum_application_history_fits_and_incomplete_effect_custody_refuses() {
                         creation: Default::default(),
                         upgrades: vec![],
                     }),
-                    sources: [None, None],
+                    sources: Default::default(),
                 },
                 store_operation: None,
             },
             store_history: vec![],
         },
-        applications: [Some(lifecycle.clone()), Some(lifecycle)],
+        applications: std::array::from_fn(|_| Some(lifecycle.clone())),
     };
     let encoding = ic_wire::Encoding::Frame {
         method: CUSTODY,

@@ -45,6 +45,14 @@ pub fn permits_enrollment(receiver: Principal) -> bool {
     })
 }
 
+// Check the original operator again when a custody observation resumes.
+fn authorize_change(controller: Principal) -> Result<(), String> {
+    if !api::is_controller(&controller) {
+        return Err("Root controller required".into());
+    }
+    super::admit_pool_change(false).map_err(|e| format!("{e:?}"))
+}
+
 /// Observe retained approvals without changing the pool.
 /// # Panics
 /// Requires the Root controller and an opened ledger.
@@ -139,6 +147,7 @@ async fn create_issued(index: usize, source: Source) -> Result<Asset, String> {
         let entry = &mut state.pools.standby[index];
         assert_eq!(entry, &(source, Asset::Issued));
         entry.1 = Asset::Empty(id);
+        log_surplus(&state.pools);
         state.pool.set(state.pools.encode());
     });
     Ok(Asset::Empty(id))
@@ -174,6 +183,37 @@ pub(in crate::engine::sharding) fn reserve(
                 generation,
             },
         );
+    } else if pools.reserve_policy.is_some() {
+        canic::logging::record(
+            canic::logging::Level::Warn,
+            "reserve",
+            &format!(
+                "pool empty; child {} scheduled for approved creation",
+                slot.index()
+            ),
+        );
+    }
+}
+
+// Called on admission to the ready inventory, never by an observation or retry.
+fn log_surplus(pools: &super::Pools) {
+    let Some(policy) = &pools.reserve_policy else {
+        return;
+    };
+    let ready = pools
+        .standby
+        .iter()
+        .filter(|(_, asset)| available(asset).is_some())
+        .count();
+    if ready > usize::from(policy.minimum_available) {
+        canic::logging::record(
+            canic::logging::Level::Info,
+            "reserve",
+            &format!(
+                "{ready} ready canisters exceed target {}; surplus retained for operator action",
+                policy.minimum_available
+            ),
+        );
     }
 }
 
@@ -186,51 +226,45 @@ pub(super) fn released_binding(asset: &Asset) -> Option<(Principal, &Allocation)
     }
 }
 
-/// Observe the original hub's receipt and withdraw a released spare from worker lookup.
+/// Observe the original hub's receipt and withdraw the released allocation from worker lookup.
 /// # Errors
 /// Requires an exact live claim and an affirmative reply from the recorded worker hub.
 /// # Panics
 /// Requires Root's controller and opened custody.
 pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(), String> {
-    assert!(api::is_controller(&api::caller()));
+    let controller = api::caller();
+    assert!(api::is_controller(&controller));
     let claimed = Asset::Claimed(target.shard, target.allocation.clone());
     let released = Asset::Released(target.shard, target.allocation.clone());
     let slot = ChildId::placement(target.allocation.slot as usize).ok_or("unknown worker slot")?;
-    if super::workers::worker_index(slot).is_none() {
+    if !ChildId::INSTANCES.contains(&slot) {
         return Err("released worker allocation required".into());
     }
-    let (index, hub) = match STATE.with_borrow(|s| {
-        let state = s.as_ref().unwrap();
-        if state.pools.returns.iter().any(|r| r.target == target)
-            || state
-                .pools
+    let already_released = |pools: &super::Pools| {
+        pools.returns.iter().any(|r| r.target == target)
+            || pools
                 .standby
                 .iter()
                 .any(|(_, a)| released_binding(a) == Some((target.shard, &target.allocation)))
-        {
+    };
+    let hub = match STATE.with_borrow(|s| {
+        let state = s.as_ref().unwrap();
+        if already_released(&state.pools) {
             return Ok(None);
         }
-        let index = state
+        let (workers, actual) = state
             .pools
-            .standby
-            .iter()
-            .position(|(_, a)| a == &claimed)
-            .ok_or("unknown standby assignment")?;
-        let workers = state
-            .pools
-            .workers
-            .as_ref()
+            .worker_at(slot)
             .ok_or("missing worker allowance")?;
-        let actual = workers.claim_at(slot).ok_or("unknown worker")?;
+        workers.minimum_reuse_cycles()?;
         if actual.generation != target.allocation.generation
             || actual.principal.as_deref() != Some(&target.shard.to_text())
         {
             return Err("worker binding changed");
         }
-        Ok(Some((
-            index,
+        Ok(Some(
             Principal::from_text(&workers.grant.hub).expect("approved worker hub"),
-        )))
+        ))
     })? {
         Some(binding) => binding,
         None => return Ok(()),
@@ -241,16 +275,32 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
     {
         return Err("hub still owns worker".into());
     }
+    authorize_change(controller)?;
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
-        let asset = &mut state.pools.standby[index].1;
-        if released_binding(asset) == Some((target.shard, &target.allocation)) {
+        if already_released(&state.pools) {
             return Ok(());
         }
-        if *asset != claimed {
-            return Err("standby assignment changed".into());
+        if let Some((_, asset)) = state.pools.standby.iter_mut().find(|(_, a)| a == &claimed) {
+            *asset = released;
+        } else {
+            let status = &state
+                .journal
+                .0
+                .get(&slot)
+                .ok_or("missing worker journal")?
+                .0;
+            if status.phase != canic_management_protocol::Phase::Ready
+                || status.attempts[0] != 1
+                || status.worker.as_deref() != Some(target.shard.to_text().as_str())
+            {
+                return Err("missing original paid worker creation".into());
+            }
+            state
+                .pools
+                .standby
+                .push((Source::Worker(target.clone()), released));
         }
-        *asset = released;
         state.pool.set(state.pools.encode());
         Ok(())
     })

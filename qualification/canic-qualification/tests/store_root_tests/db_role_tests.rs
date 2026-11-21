@@ -40,7 +40,8 @@ async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
     let app = config.apps.get_mut("ex-user-directory").unwrap();
     let hub = app.canisters.get_mut(HUB).unwrap();
     hub.parent = Some("root".into());
-    let project = hub.clone();
+    let mut project = hub.clone();
+    project.role = Some("project_registry".into());
     app.canisters.insert("project_hub".into(), project);
     let local = app.fleets.get_mut("local").unwrap();
     // Only compile install policy here. All effects run against this local instance.
@@ -56,6 +57,9 @@ async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
             .map(|b| format!("{b:02x}"))
             .collect(),
     });
+    let receivers = local.receiver_policy.as_mut().unwrap();
+    receivers.roles.push("project_registry".into());
+    receivers.storage = canic::auth::install::Storage::Stable;
     local.role_receivers = vec![HUB.into(), "project_hub".into()];
     for (name, pid) in [("root", root.id), ("store", store.id)] {
         local.canisters.insert(
@@ -68,7 +72,7 @@ async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
     }
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
     let deadline = now + 600_000_000_000;
-    local.shard_pool.as_mut().unwrap().expires_at_ns = Some(deadline);
+    local.shard_pools.first_mut().unwrap().expires_at_ns = Some(deadline);
     let mut fleet = config.select(None, None).unwrap().config;
     let pin: Result<ic_wire::Bytes<32>, String> = root
         .update(
@@ -152,6 +156,7 @@ async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
     fleet.canisters.get_mut(HUB).unwrap().id = Some(hub.to_text());
     let pool = fleet
         .shard_pool_approval(
+            "ex-user-directory-shard",
             shards,
             management::application::Arguments::new(vec![7; 16]).unwrap(),
         )
@@ -265,11 +270,151 @@ async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
             .is_err()
     );
     assert_eq!(pic.get_stable_memory(project).await, before);
+    user_directory_tests::enroll(&root, project, &grant, true).await;
+    login(project).await;
+    let sender = Client {
+        id: project,
+        ..user
+    };
+    let lookup = async || {
+        sender
+            .update::<_, Result<Option<ic_auth_protocol_types::Principal>, String>>(
+                "find_my_shard",
+                ic_wire::method_id("find_my_shard"),
+                &(),
+                canic::method::LIMITS,
+            )
+            .await
+    };
+    let expected = Ok(Some(ic_auth_protocol_types::Principal::from_slice(
+        shard.id.as_slice(),
+    )));
+    assert_eq!(lookup().await, expected);
+    let issuer_version = async || {
+        pic.canister_status(root.id, Some(root.operator))
+            .await
+            .unwrap()
+            .version
+    };
+    let warm = issuer_version().await;
+    assert_eq!(lookup().await, expected);
+    assert_eq!(issuer_version().await, warm, "a warm call must skip Root");
     let id = reserve().await;
     canic_qualification::upgrade_stopped(pic, project, hub_wasm, vec![], Some(root.id))
         .await
         .unwrap();
     assert_eq!(reserve().await, id);
+    user_directory_tests::enroll(&root, project, &grant, true).await;
+    assert_eq!(lookup().await, expected);
+
+    // Reopen the sender once more to force a renewal, then log out
+    // after ingress authorization and before the issuer callback can dispatch.
+    canic_qualification::upgrade_stopped(pic, project, wasm("db-role-hub"), vec![], Some(root.id))
+        .await
+        .unwrap();
+    user_directory_tests::enroll(&root, project, &grant, true).await;
+    use canic::auth::protocol::Logout;
+    use canic::topology::attestation::Issue;
+    use ic_testkit::held::{Catalog, Fixture, Limits, Reply};
+    // Hold the genuine Root reply at its original principal in this disposable fleet.
+    let proof = pic
+        .update_call(
+            root.id,
+            project,
+            Issue::NAME,
+            Issue::encode_request(&ic_auth_protocol_types::Principal::from_slice(
+                hub.as_slice(),
+            ))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    Issue::decode_reply(&proof).unwrap().unwrap();
+    let catalog = Catalog::new(
+        &[Reply {
+            method: Issue::NAME,
+            bytes: &proof,
+        }],
+        Limits {
+            slots: 1,
+            name_bytes: 32,
+            reply_bytes: 1024,
+        },
+    )
+    .unwrap();
+    let mut held = Fixture::new(
+        pic,
+        root.id.to_text().parse().unwrap(),
+        &catalog,
+        100_000_000_000,
+        8192,
+    )
+    .await
+    .unwrap();
+    pic.reinstall_canister(root.id, held.wasm().to_vec(), vec![], Some(root.operator))
+        .await
+        .unwrap();
+    let before = pic
+        .canister_status(hub, Some(root.id))
+        .await
+        .unwrap()
+        .version;
+    let frame = |direction| ic_wire::Encoding::Frame {
+        method: ic_wire::method_id("find_my_shard"),
+        direction,
+    };
+    let ingress = pic
+        .submit_call(
+            project,
+            browser,
+            "find_my_shard",
+            ic_wire::encode(
+                &(),
+                frame(ic_wire::Direction::Request),
+                canic::method::LIMITS,
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let mut pending = vec![];
+    for _ in 0..40 {
+        pic.tick().await;
+        pending = held.pending(pic).await.unwrap();
+        if !pending.is_empty() {
+            break;
+        }
+    }
+    let token = pending.pop().expect("renewal reached Root");
+    let reply = pic
+        .update_call(
+            project,
+            browser,
+            "logout_portable_session",
+            Logout::encode_request(&()).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        Logout::decode_response(&reply).unwrap(),
+        model::LogoutResult::Revoked(_)
+    ));
+    held.release(pic, &token).await.unwrap();
+    let bytes = pic.await_call(ingress).await.unwrap();
+    let refusal: Result<Option<ic_auth_protocol_types::Principal>, String> = ic_wire::decode(
+        &bytes,
+        frame(ic_wire::Direction::Response),
+        canic::method::LIMITS,
+    )
+    .unwrap();
+    assert!(refusal.unwrap_err().starts_with("Authorization("));
+    assert_eq!(
+        before,
+        pic.canister_status(hub, Some(root.id))
+            .await
+            .unwrap()
+            .version
+    );
     assert_eq!(
         instance.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

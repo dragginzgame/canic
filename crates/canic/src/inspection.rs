@@ -99,12 +99,27 @@ pub fn auth_root<T: crate::auth::protocol::wire::typescript::Wire>(
     })
 }
 
+/// Directional Wire limits used by the mounted codec, including its frame header.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+pub struct FrameLimits {
+    /// Maximum encoded bytes.
+    pub bytes: usize,
+    /// Allocation allowance.
+    pub allocation: usize,
+    /// Maximum traversal visits.
+    pub nodes: usize,
+    /// Maximum traversal depth.
+    pub depth: usize,
+}
+
 #[doc(hidden)]
 pub struct Declaration {
     pub module: &'static str,
     pub name: &'static str,
     pub mode: &'static str,
     pub id: u64,
+    pub request_limits: FrameLimits,
+    pub reply_limits: FrameLimits,
     pub request: fn(&Schemas) -> Result<Root, String>,
     pub reply: fn(&Schemas) -> Result<Root, String>,
 }
@@ -118,6 +133,10 @@ pub struct Method {
     /// Routing ID in the Wire frame, serialized as hexadecimal to preserve all 64 bits.
     #[serde(serialize_with = "serialize_id")]
     pub id: u64,
+    /// Limits applied when decoding the request frame.
+    pub request_limits: FrameLimits,
+    /// Limits applied when encoding the response frame.
+    pub reply_limits: FrameLimits,
     /// Decoded request.
     pub request: Root,
     /// Encoded response.
@@ -171,6 +190,8 @@ fn collect(
         let method = Method {
             mode: d.mode,
             id: d.id,
+            request_limits: d.request_limits,
+            reply_limits: d.reply_limits,
             request: root(d.request, "request")?,
             reply: root(d.reply, "reply")?,
         };

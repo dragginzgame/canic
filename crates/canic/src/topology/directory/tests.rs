@@ -12,11 +12,12 @@ fn service(name: &str, id: u8) -> Service {
 fn service_names_and_principals_are_unique_and_roles_can_repeat() {
     let mut view = Directory {
         revision: 1,
-        services: vec![service("one", 1), service("two", 2)],
+        services: vec![service("hub", 1), service("two", 2)],
     };
     view.validate().unwrap();
     assert_eq!(view.by_name("two"), Some(view.services[1].canister));
-    assert_eq!(view.by_name("hub"), None);
+    assert_eq!(view.by_name("hub"), Some(view.services[0].canister));
+    assert_eq!(view.unique_by_role("two"), Err("service role missing"));
     assert_eq!(
         view.by_role("hub").collect::<Vec<_>>(),
         [view.services[0].canister, view.services[1].canister]
@@ -118,6 +119,7 @@ fn full_directory_fits_and_bad_publications_are_refused() {
                 let mut bytes = [1; 29];
                 bytes[0] = id;
                 Hop {
+                    shard_pool: Some("p".repeat(64)),
                     canister: Principal::from_slice(&bytes),
                     role: "w".repeat(64),
                     generation: [u8::MAX; 32],
@@ -203,27 +205,70 @@ fn approved_shard_topology_checks_both_install_envelopes() {
     assert!(Install::approved(&truncated).is_err());
 }
 
+#[cfg(feature = "storage")]
+#[test]
+fn an_unversioned_directory_cannot_reopen_as_a_pool_aware_index() {
+    let key = "app.services.v1";
+    let runtime =
+        crate::storage::bootstrap(ic_storage::VectorMemory::default(), true, "app", &[key], 16);
+    // Exact v1 field order. Empty children make this the ambiguous predecessor case.
+    let old = ic_wire::encode(
+        &(
+            Principal::from_slice(&[8, 1]),
+            "hub",
+            None::<[u8; 32]>,
+            Vec::<()>::new(),
+            None::<Directory>,
+        ),
+        ic_wire::Encoding::Payload,
+        DIRECTORY_LIMITS,
+    )
+    .unwrap();
+    let cell = crate::storage::cell(&runtime, key, 8192, Some(old.clone()));
+    assert!(
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            retained::Index::open(&runtime, key)
+        }))
+        .is_err()
+    );
+    assert_eq!(cell.get(), &old);
+}
+
 #[cfg(all(feature = "storage", feature = "method"))]
 #[test]
 fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_after_reopen() {
-    let memory = ic_storage::VectorMemory::default();
+    let route = || retained::get_shard("wallets", Principal::from_slice(&[3, 2]));
+    assert_eq!(
+        route(),
+        Err(retained::ShardLookupError::DirectoryUnavailable)
+    );
+    let memory = ic_storage::DefaultMemoryImpl::default();
     let key = "app.services.v1";
     let open = |fresh| crate::storage::bootstrap(memory.clone(), fresh, "app", &[key], 16);
     let directory = Directory {
         revision: 1,
         services: vec![service("unrelated", 9)],
     };
-    let children = ["shard", "shard", "shard", "worker"].map(|role| role.to_owned());
+    let children = ["shard", "shard", "shard", "worker", "shard"].map(|role| role.to_owned());
     let children: Vec<_> = children
         .into_iter()
         .zip(1u8..)
         .map(|(role, id)| Hop {
+            shard_pool: match id {
+                4 => None,
+                5 => Some("projects".into()),
+                _ => Some("wallets".into()),
+            },
             canister: Principal::from_slice(&[id, 1]),
             role,
             generation: [id; 32],
         })
         .collect();
-    let expected = [children[0].canister, children[1].canister];
+    let expected = [
+        children[0].canister,
+        children[1].canister,
+        children[4].canister,
+    ];
     {
         let runtime = open(true);
         let mut index =
@@ -231,7 +276,7 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
         for child in &children {
             index.apply(&directory, [7; 32], Some(child)).unwrap();
         }
-        for child in [&children[0], &children[1], &children[3]] {
+        for child in [&children[0], &children[1], &children[3], &children[4]] {
             index.acknowledge(&directory, child).unwrap();
         }
         assert_eq!(
@@ -243,6 +288,9 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
             ..directory
         };
         index.apply(&newer, [7; 32], None).unwrap();
+        retained::DIRECTORY.with_borrow_mut(|slot| *slot = Some(index));
+        assert_eq!(route(), Ok(expected[1]));
+        retained::DIRECTORY.with_borrow_mut(Option::take);
     }
     let index = retained::Index::open(&open(false), key);
     assert_eq!(
@@ -254,4 +302,74 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
         [children[3].canister]
     );
     assert_eq!(index.acknowledged_children("hub").count(), 0);
+    retained::DIRECTORY.with_borrow_mut(|slot| *slot = Some(index));
+    assert_eq!(route(), Ok(expected[1]));
+    assert_eq!(
+        retained::get_shard("projects", expected[0]),
+        Ok(expected[2])
+    );
+    assert_eq!(
+        retained::get_shard("shard", expected[0]),
+        Err(retained::ShardLookupError::NoReadyShard)
+    );
+    retained::DIRECTORY.with_borrow_mut(Option::take);
+}
+
+#[cfg(all(feature = "storage", feature = "method"))]
+#[test]
+fn withdrawn_generation_refuses_delayed_delivery_and_ack_after_reopen() {
+    let memory = ic_storage::VectorMemory::default();
+    let key = "app.services.v1";
+    let open = |fresh| crate::storage::bootstrap(memory.clone(), fresh, "app", &[key], 16);
+    let directory = Directory {
+        revision: 1,
+        services: vec![],
+    };
+    let child = Hop {
+        shard_pool: Some("users".into()),
+        canister: Principal::from_slice(&[2, 1]),
+        role: "shard".into(),
+        generation: [1; 32],
+    };
+    let mut index =
+        retained::Index::create(&open(true), key, Principal::from_slice(&[8, 1]), "hub");
+    index.apply(&directory, [9; 32], Some(&child)).unwrap();
+    index.withdraw((child.canister, child.generation)).unwrap();
+    drop(index);
+    let mut index = retained::Index::open(&open(false), key);
+    let replacement = Hop {
+        generation: [2; 32],
+        ..child.clone()
+    };
+    index
+        .apply(&directory, [9; 32], Some(&replacement))
+        .unwrap();
+    index.acknowledge(&directory, &replacement).unwrap();
+    index.withdraw((child.canister, child.generation)).unwrap();
+    assert!(index.apply(&directory, [9; 32], Some(&child)).is_err());
+    assert!(index.acknowledge(&directory, &child).is_err());
+    assert_eq!(
+        index.child_delivery(child.canister),
+        Some((&replacement, Some(1)))
+    );
+}
+
+#[cfg(feature = "storage")]
+#[test]
+fn rendezvous_preserves_toko_wallet_routes_and_only_moves_keys_to_added_children() {
+    let [a, b, c] = [1, 2, 3].map(|n| Principal::from_slice(&[n, 1]));
+    let select = |children: &[Principal], key: &[u8]| {
+        retained::select_child(children.iter().copied(), Principal::from_slice(key))
+    };
+    for (n, expected) in [(1, c), (2, b), (5, a), (29, a), (100, b)] {
+        assert_eq!(select(&[a, b, c], &[n, 2]), Some(expected));
+    }
+    assert_eq!(select(&[a, b, c], &(0..29).collect::<Vec<_>>()), Some(c));
+    for n in 0..=255 {
+        let key = [n, 2];
+        let old = select(&[a, b], &key);
+        let new = select(&[b, c, a], &key);
+        assert_eq!(new, select(&[c, a, b], &key));
+        assert!(new == Some(c) || new == old);
+    }
 }

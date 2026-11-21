@@ -12,35 +12,79 @@ pub(super) struct Workers {
 
 #[derive(Serialize, Deserialize)]
 pub(super) struct WorkerClaim {
+    pub returned: bool,
+    pub paid: bool,
+    pub slot: ChildId,
     pub generation: [u8; 32],
     pub principal: Option<String>,
 }
 
+impl Pools {
+    pub(super) fn worker_at(&self, slot: ChildId) -> Option<(&Workers, &WorkerClaim)> {
+        self.workers.values().find_map(|pool| {
+            let claim = pool
+                .claims
+                .iter()
+                .find(|claim| claim.slot == slot && !claim.returned)?;
+            Some((pool, claim))
+        })
+    }
+}
+
+// Keep the original evidence before making this management slot available again.
+pub(super) fn archive(state: &mut super::super::State, slot: ChildId, generation: [u8; 32]) {
+    let claim = state
+        .pools
+        .workers
+        .values_mut()
+        .flat_map(|w| &mut w.claims)
+        .find(|claim| claim.slot == slot && claim.generation == generation && !claim.returned)
+        .expect("live worker allocation");
+    claim.returned = true;
+    let mut journals = state.journal.clone();
+    let mut artifacts = state.artifact.clone();
+    let journal = std::mem::take(journals.0.get_mut(&slot).expect("original journal"));
+    let artifact = std::mem::take(artifacts.0.get_mut(&slot).expect("original artifact"));
+    assert_eq!(journal.0.attempts[0], u8::from(claim.paid));
+    let bytes = ic_wire::encode(
+        &(journal, artifact),
+        ic_wire::Encoding::Payload,
+        canic_management_protocol::stored::LIMITS,
+    )
+    .expect("worker custody");
+    assert!(
+        state
+            .worker_history
+            .insert(claim.generation, bytes)
+            .is_none()
+    );
+    state.set_journal(journals);
+    state.set_artifact(artifacts);
+}
+
 impl Workers {
+    fn live(&self) -> usize {
+        self.claims.iter().filter(|claim| !claim.returned).count()
+    }
+
+    fn debit(&self) -> u64 {
+        self.claims.iter().filter(|claim| claim.paid).count() as u64
+            * canic_management_protocol::CREATION_CYCLES
+    }
+
     pub fn minimum_reuse_cycles(&self) -> Result<std::num::NonZeroU64, &'static str> {
         let install = canic::topology::Install::decode(self.grant.arguments.as_slice())?;
         canic::topology::worker::minimum_reuse_cycles(&install.application)
             .ok_or("grant excludes recycling")
     }
 
-    pub fn claim_at(&self, slot: ChildId) -> Option<&WorkerClaim> {
-        self.claims.get(worker_index(slot)?)
-    }
-
     pub fn validate(&self, pools: &Pools) {
         validate_instance(&self.grant).expect("retained worker grant");
         assert!(compatible(pools, &self.grant));
-        assert!(self.claims.len() <= usize::from(self.grant.max_instances));
-        assert!(
-            pools.creation_debit(ChildId::INSTANCES.into_iter().rev().take(self.claims.len()))
-                <= self.grant.creation_budget
-        );
-        assert!(self.claims.len() + pools.projects.len() <= ChildId::INSTANCES.len());
+        assert!(self.live() <= usize::from(self.grant.max_instances));
+        assert!(self.debit() <= self.grant.creation_budget);
+        assert!(self.live() + pools.projects.len() <= ChildId::INSTANCES.len());
     }
-}
-
-pub(super) fn worker_index(slot: ChildId) -> Option<usize> {
-    ChildId::INSTANCES.iter().rev().position(|id| *id == slot)
 }
 
 pub(super) fn separate(first: &stored::InstancePool, other: &stored::InstancePool) -> bool {
@@ -56,19 +100,23 @@ fn compatible(pools: &Pools, grant: &stored::InstancePool) -> bool {
         .as_ref()
         .is_some_and(|c| grant.max_instances <= c.max_children)
         && pools
+            .workers
+            .values()
+            .all(|other| other.grant.reference.store == grant.reference.store)
+        && pools
             .instances
             .as_ref()
             .is_none_or(|other| separate(grant, other))
         && pools
             .shards
-            .as_ref()
-            .is_none_or(|other| super::compatible(&other.approval, grant))
+            .values()
+            .all(|other| super::compatible(&other.approval, grant))
 }
 
 fn installed_hub(state: &super::super::State, hub: &str) -> bool {
     ChildId::ALL.into_iter().any(|slot| {
         let child = &state.journal.0[&slot].0;
-        state.pools.permanent[slot.index()]
+        state.pools.permanent[slot.service_index().expect("permanent slot")]
             && child.phase == canic_management_protocol::Phase::Ready
             && child.worker.as_deref() == Some(hub)
     })
@@ -84,12 +132,15 @@ pub fn configure_workers(grant: stored::InstancePool) -> Result<(), Refusal> {
     if let Some(result) = STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
         let pools = &state.pools;
-        if let Some(workers) = &pools.workers {
+        if let Some(workers) = pools.workers.get(&grant.component) {
             return Some(if workers.grant == grant {
                 Ok(())
             } else {
                 Err(Refusal::Occupied)
             });
+        }
+        if pools.workers.len() >= usize::from(pools.pool_limit()) {
+            return Some(Err(Refusal::Binding));
         }
         (!installed_hub(state, &grant.hub) || !compatible(pools, &grant))
             .then_some(Err(Refusal::Binding))
@@ -103,10 +154,13 @@ pub fn configure_workers(grant: stored::InstancePool) -> Result<(), Refusal> {
     }
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
-        state.pools.workers = Some(Workers {
-            grant,
-            claims: Vec::new(),
-        });
+        state.pools.workers.insert(
+            grant.component.clone(),
+            Workers {
+                grant,
+                claims: Vec::new(),
+            },
+        );
         state.pool.set(state.pools.encode());
     });
     Ok(())
@@ -116,10 +170,10 @@ pub fn configure_workers(grant: stored::InstancePool) -> Result<(), Refusal> {
 /// # Errors
 /// Refuses any other caller.
 pub fn worker_hub() -> Result<(), &'static str> {
+    let caller = api::caller().to_text();
     STATE.with_borrow(|s| {
         s.as_ref()
-            .and_then(|s| s.pools.workers.as_ref())
-            .filter(|w| w.grant.hub == api::caller().to_text())
+            .filter(|s| s.pools.workers.values().any(|w| w.grant.hub == caller))
             .map(|_| ())
             .ok_or("configured worker hub required")
     })
@@ -129,21 +183,23 @@ pub fn worker_hub() -> Result<(), &'static str> {
 /// # Panics
 /// Requires the approved hub and intact allocation custody.
 #[must_use]
-pub fn worker(ordinal: u8, reserve: bool) -> Placement {
-    worker_hub().expect("worker hub");
+pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
     let index = usize::from(ordinal);
-    let Some(&slot) = ChildId::INSTANCES.iter().rev().nth(index) else {
-        return Placement::Full;
-    };
-    let grant = match STATE.with_borrow(|s| {
+    let (grant, slot, paid) = match STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
-        let workers = state.pools.workers.as_ref().unwrap();
+        let workers = state
+            .pools
+            .workers
+            .get(component)
+            .filter(|w| w.grant.hub == api::caller().to_text())
+            .expect("calling hub must own requested worker pool");
         if let Some(claim) = workers.claims.get(index) {
+            let slot = claim.slot;
             let allocation = Allocation {
                 slot: slot.index() as u32,
                 generation: claim.generation,
             };
-            if state.pools.withdrawn(slot) {
+            if claim.returned || state.pools.withdrawn(slot) {
                 return Err(Placement::Unavailable(allocation, claim.principal.clone()));
             }
             return Err(placement::resolve(
@@ -158,7 +214,7 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
         if !reserve {
             return Err(Placement::Unknown);
         }
-        if ordinal >= workers.grant.max_instances
+        if workers.live() >= usize::from(workers.grant.max_instances)
             || (state.pools.full() && !state.pools.empty_spare())
         {
             return Err(Placement::Full);
@@ -166,11 +222,21 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
         if index != workers.claims.len() {
             return Err(Placement::Busy);
         }
-        state.pools.admit_growth(
-            ChildId::INSTANCES.into_iter().rev().take(index),
-            workers.grant.creation_budget,
-        )?;
-        Ok(workers.grant.clone())
+        let paid = !state.pools.empty_spare();
+        if paid
+            && workers.debit() + canic_management_protocol::CREATION_CYCLES
+                > workers.grant.creation_budget
+        {
+            return Err(Placement::GrowthRefused);
+        }
+        let slot = ChildId::INSTANCES
+            .iter()
+            .skip(state.pools.projects.len())
+            .rev()
+            .find(|slot| state.pools.worker_at(**slot).is_none())
+            .copied()
+            .ok_or(Placement::Full)?;
+        Ok((workers.grant.clone(), slot, paid))
     }) {
         Ok(grant) => grant,
         Err(outcome) => return outcome,
@@ -194,10 +260,13 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
         state
             .pools
             .workers
-            .as_mut()
+            .get_mut(component)
             .unwrap()
             .claims
             .push(WorkerClaim {
+                paid,
+                returned: false,
+                slot,
                 generation,
                 principal: None,
             });

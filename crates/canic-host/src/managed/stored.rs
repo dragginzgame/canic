@@ -248,7 +248,7 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
             application::LIMITS,
         )
         .map_err(supplier)?;
-        let lifecycle = &value.applications[slot(plan).index()];
+        let lifecycle = &value.applications[slot(plan).service_index().ok_or_else(invalid)?];
         if let Some(lifecycle) = lifecycle {
             if plan.target().is_none() {
                 if Some(lifecycle.creation.as_slice())
@@ -256,10 +256,11 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
                 {
                     return Err(invalid());
                 }
-            } else if let Some(index) = value.root.current.stored.children[slot(plan).index()]
-                .upgrades
-                .iter()
-                .position(|s| s.approval.as_ref() == super::upgrade::approval(plan).ok().as_ref())
+            } else if let Some(index) = value.root.current.stored.children
+                [slot(plan).service_index().ok_or_else(invalid)?]
+            .upgrades
+            .iter()
+            .position(|s| s.approval.as_ref() == super::upgrade::approval(plan).ok().as_ref())
             {
                 let maintenance = lifecycle.upgrades.get(index).ok_or_else(invalid)?;
                 if Some(maintenance.arguments.as_slice())
@@ -271,7 +272,9 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
                 }
             }
         } else if plan.management().is_some_and(|m| m.arguments.is_some())
-            && value.root.current.stored.children[slot(plan).index()].creation != Status::default()
+            && value.root.current.stored.children[slot(plan).service_index().ok_or_else(invalid)?]
+                .creation
+                != Status::default()
         {
             return Err(invalid());
         }
@@ -350,13 +353,14 @@ pub(super) fn maintenance(plan: &Plan, bytes: &[u8]) -> Result<Option<applicatio
     )
     .map_err(supplier)?;
     let expected = super::upgrade::approval(plan)?;
-    let index = value.root.current.stored.children[slot(plan).index()]
-        .upgrades
-        .iter()
-        .position(|s| s.approval.as_ref() == Some(&expected));
+    let index = value.root.current.stored.children
+        [slot(plan).service_index().ok_or_else(invalid)?]
+    .upgrades
+    .iter()
+    .position(|s| s.approval.as_ref() == Some(&expected));
     index
         .map(|i| {
-            value.applications[slot(plan).index()]
+            value.applications[slot(plan).service_index().ok_or_else(invalid)?]
                 .as_ref()
                 .and_then(|l| l.upgrades.get(i))
                 .cloned()

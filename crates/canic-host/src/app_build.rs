@@ -143,26 +143,38 @@ pub fn build_app(
             )
             .map_err(crate::artifact::cargo_failure)?;
         }
+        let children = app
+            .canisters
+            .iter()
+            .filter(|(_, child)| child.parent.as_ref() == Some(name))
+            .map(|(name, _)| name.as_str())
+            .collect::<Vec<_>>()
+            .join(" ");
+        let source = crate::artifact::build_manifest(&manifest, &recipe.package)?;
         let crate::artifact::BuildReport {
             wasm,
             artifact,
             modules,
         } = crate::artifact::build_for_role(
             &manifest,
+            &source,
             &recipe.package,
             &recipe.features,
             Some(&output),
             definition.role.as_deref(),
+            Some(&children),
         )?;
         let client = recipe
             .client
             .as_ref()
             .map(|client| {
                 build_client(
-                    &manifest,
+                    workspace,
+                    &source,
                     &recipe.package,
                     client,
                     &recipe.features,
+                    &children,
                     &crate::application::codec::output(&wasm),
                 )
             })
@@ -181,19 +193,18 @@ pub fn build_app(
 }
 
 fn build_client(
+    workspace: &Path,
     manifest: &Path,
     package: &str,
     client: &str,
     features: &[String],
+    children: &str,
     destination: &Path,
 ) -> Result<PathBuf> {
     let mut command = Command::new("cargo");
     command
-        .current_dir(
-            manifest
-                .parent()
-                .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?,
-        )
+        .env(format!("CANIC_APP_CHILDREN_{package}"), children)
+        .current_dir(workspace)
         .args([
             "build",
             "--locked",
@@ -203,6 +214,11 @@ fn build_client(
         ])
         .arg(manifest)
         .args(["--package", package, "--bin", client]);
+    if package == "canic-root" && !manifest.starts_with(workspace) {
+        command
+            .arg("--target-dir")
+            .arg(workspace.join("target/root-client"));
+    }
     if !features.is_empty() {
         command.arg("--features").arg(features.join(","));
     }

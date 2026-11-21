@@ -26,7 +26,7 @@ exact signed attempts under the existing journal lock. New Root attempts use Sto
 `observe_preservation_v2`: explicit active/removed entries ordered by name, active
 before removed, then version. The retained cursor includes that flag, and a
 separate digest domain commits to the entry kind. Pre-cut Roots retain their original scan contracts, digests and refusals.
-Fresh Roots use CUJC for the entire fleet. Old executables refuse the new journal format.
+Fresh Roots use CUJD for the entire fleet. Old executables refuse the new journal format.
 
 The historical 0.2.3 rollout upgraded Store under the old Root before
 upgrading Root. New attempts require the versioned supplier endpoint; no probing
@@ -284,7 +284,7 @@ control. Root retains each immutable approval and stop-request commitment outsid
 Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CUJC journal preserves current and completed attempts across supported Root
+The CUJD journal preserves current and completed attempts across supported Root
 upgrades, within the existing 16 KiB ceiling. A pre-cut Root keeps its original
 executable and evidence. Existing complete child-custody
 observations refuse any retained Store maintenance, including completion,

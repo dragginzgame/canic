@@ -92,7 +92,7 @@ pub fn lookup(account: AuthSubject) -> Option<UserId> {
 
 In the receiver module, import `canic::update`, the protocol types and constants,
 and the application's `ops` module. In the passive protocol module, import
-`canic::role_descriptor as update` and the same protocol types and constants.
+`canic::attested_method as update` and the same protocol types and constants.
 Each module uses `include!("path/to/lookup.rs");` with its path to that file.
 The protocol crate needs Canic's `method` and `topology` features. The receiver
 also needs `role-verification` and its installed Root pin.
@@ -101,7 +101,11 @@ The descriptor expansion emits the type `lookup` with the function's visibility,
 name, method ID, types, roles and budgets. It omits the body and the IC export.
 A sender enables Canic’s `role-attestation` feature and calls the named service with
 `call_service::<protocol::lookup>("user_hub", 5, account, authorize).await`.
-Keep an explicit shared `RoleMethod` and `role_contract = M` when an existing
+Use `call_service_by_role::<protocol::lookup>("user_hub", 5, account, authorize).await`
+when exactly one published service should have that role. Missing and ambiguous roles
+refuse before proof renewal. Conventional hubs and shards attach the client at install
+and reopen; it renews on demand and rechecks application permission after renewal.
+Keep an explicit shared `RoleMethod` and `attested_method = M` when an existing
 protocol uses a custom numeric ID.
 
 ## Share a guarded endpoint with a Rust caller
@@ -117,3 +121,5 @@ Use `call::<protocol::mine>(target, seconds, &batch).await` for a bounded wait o
 Both use the exported name (including a `name` override) to derive the Wire ID.
 Request and reply limits follow the mounted declaration. The installed receiver
 checks its guard against the actual caller on every request.
+
+Host inspection reports each method’s effective `request_limits` and `reply_limits`, including the frame header and allocation allowance. Read them from the mounted inventory when generating client manifests. Plain `contract = M` mounts require a plain method. For a shared role method use `attested_method = M` so the receiver verifies the proof.

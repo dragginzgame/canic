@@ -160,6 +160,7 @@ pub fn open_hub(
         topology::attestation::RoleVerifier::new(config.root, &config.issuer_key)
             .and_then(topology::attestation::RoleVerifier::attach)
             .expect("retained service trust");
+        topology::attach_role_calls(config.root);
     }
     ROOT.set(Some(config.root));
     (host, initial.map(|c| c.nonce))

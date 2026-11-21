@@ -134,14 +134,10 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
         .unwrap();
     assert_eq!(pic.get_stable_memory(fresh).await, stable);
     assert_eq!(status(pic, fresh).await.phase, Phase::Empty);
-    // Frozen empty two-slot CUJ9 record from d5f2906, in the current named cell.
-    let mut frozen = [0; 57];
-    frozen[..5].copy_from_slice(b"CUJ9\x02");
-    frozen[30] = 1; // Second child identity.
+    // The prior two-service layout is refused before its payload can be opened.
     let mut old = stable.clone();
-    let offset = old.windows(4).position(|tag| tag == b"CUJC").unwrap();
-    assert_eq!(&old[offset + 4..offset + frozen.len()], &frozen[4..]);
-    old[offset..offset + frozen.len()].copy_from_slice(&frozen);
+    let offset = old.windows(4).position(|tag| tag == b"CUJD").unwrap();
+    old[offset..offset + 4].copy_from_slice(b"CUJC");
     pic.set_stable_memory(fresh, old.clone(), BlobCompression::NoCompression)
         .await;
     let refusal = canic_qualification::upgrade_stopped(

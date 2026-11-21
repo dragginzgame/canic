@@ -45,9 +45,9 @@ pub async fn retire(
     let _lock = engine::observing(slot).ok_or("retirement observation in progress")?;
     let deadline = engine::role_issuer::deadline(subject, &approval.generation)
         .ok_or("role issuance remains open")?;
-    let (before, old_hash) = STATE.with_borrow(|s| {
+    let (before, hub, old_hash) = STATE.with_borrow(|s| {
         let s = s.as_ref().unwrap();
-        let ledger = s.pools.shards.as_ref().ok_or("missing shard pool")?;
+        let ledger = s.pools.shard_at(slot).ok_or("missing shard pool")?;
         if approval.root != api::canister_self().to_text()
             || approval.shard != subject.to_text()
             || s.pools.capacity.is_none()
@@ -70,6 +70,7 @@ pub async fn retire(
         }
         Ok((
             before,
+            ledger.approval.hub.parse().expect("approved hub"),
             journal
                 .0
                 .observed_module
@@ -181,6 +182,16 @@ pub async fn retire(
             P::Cached
         }
         Some(P::Cached | P::InstallIssued) => {
+            if before == Some(P::Cached) {
+                authorize()?;
+                canic::method::call::<canic::topology::directory::WithdrawChild>(
+                    hub,
+                    5,
+                    &(subject, approval.generation),
+                )
+                .await
+                .map_err(|error| format!("hub withdrawal unconfirmed: {error:?}"))??;
+            }
             let (status, _) = standby::reset::observe_target(&args).await?;
             if before == Some(P::Cached) {
                 if status.module_hash != Some(old_hash) {
@@ -275,6 +286,7 @@ pub async fn retire(
                         deadline: approval.expires_at_ns,
                         balance,
                     });
+                    standby::log_surplus(&s.pools);
                     s.pool.set(s.pools.encode());
                 });
                 return Ok(next);

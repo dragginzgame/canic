@@ -493,6 +493,10 @@ pub(super) fn store_custody(
         operation: operation.cloned(),
         history: history.to_vec(),
         store: binding.ok_or_else(invalid)?.clone(),
-        sources: std::array::from_fn(|i| children.get(i).and_then(|c| c.sources.clone())),
+        sources: ChildId::ALL
+            .iter()
+            .enumerate()
+            .map(|(i, _)| children.get(i).and_then(|c| c.sources.clone()))
+            .collect(),
     }))
 }

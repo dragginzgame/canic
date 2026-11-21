@@ -25,6 +25,8 @@ pub(super) struct PlanRecord {
     maintenance: Option<canic_management_protocol::custody::Custody>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     maintenance_sibling: Option<canic_management_protocol::custody::Custody>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    maintenance_additional: Vec<canic_management_protocol::custody::Custody>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     publication: Option<crate::Publication>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -65,6 +67,7 @@ impl TryFrom<PlanRecord> for Plan {
             management,
             maintenance,
             maintenance_sibling,
+            maintenance_additional,
             publication,
             store_root,
             maintenance_store,
@@ -75,6 +78,14 @@ impl TryFrom<PlanRecord> for Plan {
             call,
         } = record;
         if store_upgrade_sequence.is_some() && store_upgrade_root.is_none() {
+            return Err(invalid());
+        }
+        if !maintenance_additional.is_empty()
+            && (maintenance.is_none()
+                || maintenance_sibling.is_none()
+                || maintenance_additional.len()
+                    > canic_management_protocol::children::ChildId::ALL.len() - 2)
+        {
             return Err(invalid());
         }
         if maintenance_store.is_some() && maintenance.is_none() {
@@ -181,7 +192,10 @@ impl TryFrom<PlanRecord> for Plan {
                 {
                     PlanAction::MaintainRoot {
                         target: UpgradeTarget { canister, module },
-                        children: std::iter::once(first).chain(sibling).collect(),
+                        children: std::iter::once(first)
+                            .chain(sibling)
+                            .chain(maintenance_additional)
+                            .collect(),
                         store: maintenance_store.map(Box::new),
                     }
                 }
@@ -216,12 +230,10 @@ impl TryFrom<Plan> for PlanRecord {
         let store_upgrade_root = plan.store_upgrade_root().cloned();
         let store_upgrade_sequence = plan.store_upgrade_sequence();
         let maintenance_store = plan.maintenance_store().cloned();
-        let (maintenance, maintenance_sibling) = match plan.maintenance() {
-            None => (None, None),
-            Some([first]) => (Some(first.clone()), None),
-            Some([first, second]) => (Some(first.clone()), Some(second.clone())),
-            _ => return Err(invalid()),
-        };
+        let mut children = plan.maintenance().unwrap_or_default().iter().cloned();
+        let maintenance = children.next();
+        let maintenance_sibling = children.next();
+        let maintenance_additional = children.collect();
         Ok(Self {
             version: plan.version,
             network: plan.network,
@@ -236,6 +248,7 @@ impl TryFrom<Plan> for PlanRecord {
             management,
             maintenance,
             maintenance_sibling,
+            maintenance_additional,
             publication,
             store_root,
             maintenance_store,

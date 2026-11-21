@@ -264,7 +264,7 @@ macro_rules! mount_auth_refresh_endpoint {
             };
 
             $crate::__canic_builtin! {
-                wire, REFRESH, runtime::update, "refresh_auth", (
+                wire, REFRESH, ($crate::auth::enrollment::LIMITS, $crate::auth::enrollment::LIMITS), runtime::update, "refresh_auth", (
                     runtime = runtime,
                     guard = transport::admit::<REFRESH>,
                     decode = transport::decode::<(), REFRESH>,

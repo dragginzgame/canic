@@ -57,7 +57,7 @@ On a sharding Root, an exact controller refill approval creates one empty
 canister and consumes one physical subnet slot. The next admitted worker
 can claim it and install its approved Store release. Each mining request
 includes the generation Root delivered at install. Root can confirm a release
-by reading the original hub's receipt. A confirmed release stays quarantined
+by reading the original hub's receipt for either a directly created worker or one originally claimed from the reserve. A confirmed release stays quarantined
 and consumes capacity. A controller can issue `reset-worker` with that exact target and a deadline
 within ten minutes. Repeat the same call to observe stop, issue uninstall and
 verify the empty module. Retained snapshots block reset. Reset progress survives
@@ -65,8 +65,12 @@ Root upgrade. After observing the empty canister, Root checks the configured
 balance floor and zero snapshot memory, starts it and checks again before
 returning it to inventory. Repeating the original reset returns its receipt
 even after a new installation. A new worker can claim the same principal
-with a fresh generation. The installed test gives the hub a zero creation
-budget and exercises both generations through the real Root and Store.
+with a fresh generation. The installed tests exercise both origins with Root and Store. A directly created worker still consumes its original creation budget after release, reset and reuse.
+
+The hub uses `canic::worker_pool!("miner")` for assignment and lookup. Each additional worker component
+gets its own `[[apps.ex-miner-pool.fleets.local.worker_pools]]` table. A second
+pool under the same parent starts at ordinal zero with its own grant. Root
+charges both pools against the same subnet limit.
 
 The local worker grant binds a reuse floor of 500 billion cycles. A change
 of even one cycle conflicts with the existing approval. Omitting

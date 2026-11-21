@@ -69,19 +69,20 @@ async fn tick(input: (u64, u8)) -> String {
     };
     match pending.clone() {
         Pending::Grow(index, generation) => {
+            let request = (canic::worker_pool!("miner").to_owned(), index);
             let placement = if retry {
-                match call::<LookupWorker>(state.root, 10, &index).await {
+                match call::<LookupWorker>(state.root, 10, &request).await {
                     Ok(Placement::Unknown) if generation.is_none() => {
                         // Another continuation may have admitted or superseded this claim.
                         if Pool::read().pending != Some(pending.clone()) {
                             return "advanced".into();
                         }
-                        call::<AssignWorker>(state.root, 10, &index).await
+                        call::<AssignWorker>(state.root, 10, &request).await
                     }
                     reply => reply,
                 }
             } else {
-                call::<AssignWorker>(state.root, 10, &index).await
+                call::<AssignWorker>(state.root, 10, &request).await
             };
             let mut latest = Pool::read();
             if latest.pending.as_ref() != Some(&pending) {

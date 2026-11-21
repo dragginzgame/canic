@@ -484,7 +484,7 @@ fn child_label(snapshot: &Fleet, manager: &canic_host::FleetManager) -> String {
         .map(|name| name.canister.clone())
         .or_else(|| reported.and_then(|id| roles::name(snapshot, &manager.network_id, id)))
         .or_else(|| reported.map(str::to_owned));
-    let label = format!("slot {}", slot.index() + 1);
+    let label = format!("slot {}", slot.service_index().unwrap_or(slot.index()) + 1);
     match identity {
         Some(identity) => format!("{label} · {identity}"),
         None => label,

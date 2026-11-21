@@ -32,6 +32,7 @@ fn admit(auth: &Authorization) {
 pub struct Assignment<'a, R> {
     auth: &'a Authorization,
     root: Principal,
+    pool: &'a str,
     key: sharding::Key,
     allocation: Allocation,
     shard: Principal,
@@ -45,6 +46,7 @@ pub struct Assignment<'a, R> {
 /// Traps on a foreign caller, invalid account or expired scope.
 pub async fn place<'a, R: Resource>(
     auth: &'a Authorization,
+    pool: &'a str,
     retained: Option<Principal>,
 ) -> Result<Assignment<'a, R>, Progress> {
     admit(auth);
@@ -54,9 +56,9 @@ pub async fn place<'a, R: Resource>(
     let key = super::placement_key::<R>(account);
     // Root's assign first looks up the original key in the same execution.
     let result = if retained.is_some() {
-        sharding::lookup(root, key).await
+        sharding::lookup(root, pool, key).await
     } else {
-        sharding::assign(root, key).await
+        sharding::assign(root, pool, key).await
     };
     admit(auth);
     let (allocation, shard) = target(&result.map_err(|_| Progress::PlacementUnavailable)?, root)?;
@@ -67,6 +69,7 @@ pub async fn place<'a, R: Resource>(
     Ok(Assignment {
         auth,
         root,
+        pool,
         key,
         allocation,
         shard,
@@ -113,7 +116,7 @@ impl<R: Resource> Assignment<'_, R> {
     }
 
     async fn verify(&self) -> Result<(), Progress> {
-        let observation = sharding::lookup(self.root, self.key).await;
+        let observation = sharding::lookup(self.root, self.pool, self.key).await;
         admit(self.auth);
         if !observation.is_ok_and(|p| super::matches_target(&p, &self.allocation, self.shard)) {
             return Err(Progress::PlacementUnavailable);

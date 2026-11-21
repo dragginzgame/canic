@@ -47,6 +47,8 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
                 "routing_canister":routing.to_text()},"journal":"journal","canisters":{}}}
         }}});
         if stored {
+            config["apps"]["demo"]["canisters"]["registry"] =
+                json!({"parent":"root","role":"registry","wasm":dir.join("app.wasm")});
             config["apps"]["demo"]["canisters"]["store"] =
                 json!({"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")});
         }
@@ -151,7 +153,12 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         let addition = plan(&dispatch);
         assert_eq!(addition["action"], "add_child", "{addition}");
         assert_eq!(
-            addition["plan"]["management"]["slot"], "Second",
+            addition["plan"]["management"]["slot"],
+            if stored {
+                serde_json::to_value(canic_management_protocol::children::ChildId::ALL[2]).unwrap()
+            } else {
+                json!("Second")
+            },
             "{addition}"
         );
         assert_eq!(addition["plan"]["deployment"]["canister"], "aaa");
@@ -408,17 +415,17 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
             maintenance["plan"]["maintenance"]["creation"]["worker"],
             first
         );
-        assert_eq!(
-            maintenance["plan"]["maintenance_sibling"]["creation"]["worker"],
-            second
-        );
-        assert_eq!(
-            maintenance["plan"]["maintenance_sibling"]["upgrades"]
-                .as_array()
-                .unwrap()
-                .len(),
-            4
-        );
+        let added_custody = if stored {
+            assert_eq!(
+                maintenance["plan"]["maintenance_sibling"]["creation"]["worker"],
+                original["children"][1]["outcome"]["canister"]
+            );
+            &maintenance["plan"]["maintenance_additional"][0]
+        } else {
+            &maintenance["plan"]["maintenance_sibling"]
+        };
+        assert_eq!(added_custody["creation"]["worker"], second);
+        assert_eq!(added_custody["upgrades"].as_array().unwrap().len(), 4);
         let stable = owner.client().get_stable_memory(root).await;
         apply(maintenance["operation"].as_str().unwrap());
         assert_eq!(owner.client().get_stable_memory(root).await, stable);
@@ -429,7 +436,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         let view = cli(&dir, &["fleet", "show"]);
         assert_eq!(
             view["canisters"].as_array().unwrap().len(),
-            if stored { 4 } else { 3 }
+            if stored { 5 } else { 3 }
         );
         assert!(view["issues"].as_array().unwrap().is_empty(), "{view}");
         assert_eq!(
@@ -439,7 +446,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
                 .await
                 .unwrap()
                 .num_canisters,
-            if stored { 5 } else { 4 }
+            if stored { 6 } else { 4 }
         );
         owner.client_mut().stop_live().await;
         assert_eq!(

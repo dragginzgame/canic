@@ -185,7 +185,7 @@ macro_rules! mount_auth_issuer_endpoints {
             };
 
             $crate::__canic_builtin! {
-                auth, ISSUE, runtime::update, "issue_portable_credential", (
+                auth, ISSUE, ($crate::auth::issuer::REQUEST_LIMITS, $crate::auth::issuer::RESPONSE_LIMITS), runtime::update, "issue_portable_credential", (
                     runtime = runtime,
                     guard = endpoint::admit::<ISSUE>,
                     decode = endpoint::decode::<Issue, ISSUE>,
@@ -207,7 +207,7 @@ macro_rules! mount_auth_issuer_endpoints {
             };
 
             $crate::__canic_builtin! {
-                auth, RENEW, runtime::update, "renew_portable_credential", (
+                auth, RENEW, ($crate::auth::issuer::REQUEST_LIMITS, $crate::auth::issuer::RESPONSE_LIMITS), runtime::update, "renew_portable_credential", (
                     runtime = runtime,
                     guard = endpoint::admit::<RENEW>,
                     decode = endpoint::decode::<Renew, RENEW>,
@@ -229,7 +229,7 @@ macro_rules! mount_auth_issuer_endpoints {
             };
 
             $crate::__canic_builtin! {
-                auth, RECONCILE, runtime::update, "reconcile_portable_credential", (
+                auth, RECONCILE, ($crate::auth::issuer::REQUEST_LIMITS, $crate::auth::issuer::RESPONSE_LIMITS), runtime::update, "reconcile_portable_credential", (
                     runtime = runtime,
                     guard = endpoint::admit::<RECONCILE>,
                     decode = endpoint::decode::<Lookup, RECONCILE>,
@@ -251,7 +251,7 @@ macro_rules! mount_auth_issuer_endpoints {
             };
 
             $crate::__canic_builtin! {
-                auth, LOGOUT, runtime::update, "revoke_portable_login", (
+                auth, LOGOUT, ($crate::auth::issuer::REQUEST_LIMITS, $crate::auth::issuer::RESPONSE_LIMITS), runtime::update, "revoke_portable_login", (
                     runtime = runtime,
                     guard = endpoint::admit::<LOGOUT>,
                     decode = endpoint::decode::<Logout, LOGOUT>,

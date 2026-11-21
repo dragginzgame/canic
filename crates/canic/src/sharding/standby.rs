@@ -27,6 +27,8 @@ pub enum Source {
     Imported(Principal),
     /// Root created this entry against the fleet reserve allowance.
     Automatic(Refill),
+    /// Worker created against its hub’s allowance, then released to the fleet.
+    Worker(super::ShardTarget),
 }
 
 /// Original outcome of one refill. Issued entries continue to consume capacity.

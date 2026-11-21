@@ -79,7 +79,12 @@ sharding = ["dep:ic-platform-runtime", "dep:ic-platform-types"]
 stateful-role = ["auth-receiver-stable", "db-store", "readiness", "topology"]
 storage = ["dep:ic-storage"]
 timers = ["dep:ic-timers", "lifecycle"]
-topology = ["dep:ic-platform-types", "dep:ic-platform-runtime"]
+topology = [
+    "dep:canic-macros",
+    "dep:ic-platform-types",
+    "dep:ic-platform-runtime",
+    "dep:sha2",
+]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 inventory = { workspace = true, optional = true }

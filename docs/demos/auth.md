@@ -383,7 +383,7 @@ fn get_me() -> Option<MyProfile> {
 For Toko, change `get_my_route(session: SessionView)` to `get_my_route()`
 and use `Identity::from_authenticated_subject(auth.issuer(), auth.subject())?`.
 Change `register(session: SessionView, name: String)` to `register(name: String)`
-and call `provisioning::place::<Users>(&auth, retained_shard)`. Account validation,
+and call `provisioning::place::<Users>(&auth, canic::shard_pool!("user_shard"), retained_shard)`. Account validation,
 row updates and post-await application ownership checks still belong to Toko.
 For other async workflows, pass the local binding by reference and call
 `auth.reauthorize()?` before another privileged effect, mapping the refusal

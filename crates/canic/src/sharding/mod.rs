@@ -30,16 +30,16 @@ pub struct AssignWorker;
 pub struct LookupWorker;
 impl crate::method::Contract for AssignWorker {
     const NAME: &'static str = "assign_worker";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const ID: u64 = ic_wire::method_id("canic.assign_worker.v2");
     const REPLY: ic_wire::Limits = LIMITS;
-    type Input = u8;
+    type Input = (String, u8);
     type Output = Placement;
 }
 impl crate::method::Contract for LookupWorker {
     const NAME: &'static str = "lookup_worker";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const ID: u64 = ic_wire::method_id("canic.lookup_worker.v2");
     const REPLY: ic_wire::Limits = LIMITS;
-    type Input = u8;
+    type Input = (String, u8);
     type Output = Placement;
 }
 /// An application-owned stable key, independent of the current login session.

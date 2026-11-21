@@ -59,7 +59,7 @@ macro_rules! mount_auth_endpoints {
             const ID: u64 = EstablishSession::ID;
 
             $crate::__canic_builtin! {
-                auth, ID, runtime::update, "establish_portable_session", (
+                auth, ID, (EstablishSession::REQUEST_LIMITS, EstablishSession::RESPONSE_LIMITS), runtime::update, "establish_portable_session", (
                     runtime = runtime,
                     guard = endpoint::admit::<ID>,
                     decode = endpoint::decode::<SessionInput, ID>,
@@ -84,7 +84,7 @@ macro_rules! mount_auth_endpoints {
             const ID: u64 = ReadSession::ID;
 
             $crate::__canic_builtin! {
-                auth, ID, runtime::query, "portable_session_read", (
+                auth, ID, (ReadSession::REQUEST_LIMITS, ReadSession::RESPONSE_LIMITS), runtime::query, "portable_session_read", (
                     runtime = runtime,
                     guard = endpoint::admit::<ID>,
                     decode = endpoint::decode::<(), ID>,
@@ -107,7 +107,7 @@ macro_rules! mount_auth_endpoints {
             const ID: u64 = Logout::ID;
 
             $crate::__canic_builtin! {
-                auth, ID, runtime::update, "logout_portable_session", (
+                auth, ID, (Logout::REQUEST_LIMITS, Logout::RESPONSE_LIMITS), runtime::update, "logout_portable_session", (
                     runtime = runtime,
                     guard = endpoint::admit::<ID>,
                     decode = endpoint::decode::<(), ID>,

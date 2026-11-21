@@ -151,6 +151,8 @@ impl Directory {
 /// One addressed installation on the remaining path, in parent-to-child order.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Hop {
+    /// Approved shared-shard pool, absent for other placement kinds.
+    pub shard_pool: Option<String>,
     /// Installed canister.
     pub canister: Principal,
     /// Approved role, including for unnamed children.
@@ -175,10 +177,23 @@ pub struct ReceiveDirectory;
 #[cfg(feature = "method")]
 impl crate::method::Contract for ReceiveDirectory {
     const NAME: &'static str = "receive_directory";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const ID: u64 = ic_wire::method_id("canic.receive_directory.v2");
     const REQUEST: ic_wire::Limits = DIRECTORY_LIMITS;
     const REPLY: ic_wire::Limits = crate::method::LIMITS;
     type Input = Delivery;
+    type Output = Result<(), String>;
+}
+
+/// Withdraw one exact child installation before its principal can be recycled.
+#[cfg(feature = "method")]
+pub struct WithdrawChild;
+
+#[cfg(feature = "method")]
+impl crate::method::Contract for WithdrawChild {
+    const NAME: &'static str = "withdraw_child";
+    const ID: u64 = ic_wire::method_id("canic.withdraw_child.v1");
+    const REQUEST: ic_wire::Limits = DIRECTORY_LIMITS;
+    type Input = (Principal, [u8; 32]);
     type Output = Result<(), String>;
 }
 
@@ -195,12 +210,19 @@ macro_rules! mount_service_directory {
             use $crate::topology::directory::retained::{self, DIRECTORY};
             retained::receive(&DIRECTORY, update).await
         }
+
+        #[$crate::update(contract = $crate::topology::directory::WithdrawChild)]
+        fn withdraw_child(
+            child: <$crate::topology::directory::WithdrawChild as $crate::method::Contract>::Input,
+        ) -> Result<(), String> {
+            $crate::topology::directory::retained::withdraw(child)
+        }
     };
 }
 
 /// Bounded directory frames and retained records.
 pub const DIRECTORY_LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: 8192,
+    bytes: 10 * 1024,
     allocation: 262_144,
     nodes: 4096,
     depth: 8,
@@ -225,6 +247,7 @@ pub mod retained {
         generation: Option<[u8; 32]>,
         children: Vec<Child>,
         current: Option<Directory>,
+        withdrawn: Vec<(Principal, [u8; 32])>,
     }
 
     /// A recipient's retained publisher and service directory.
@@ -232,6 +255,12 @@ pub mod retained {
         cell: StableCell<Vec<u8>, M>,
         record: Record,
     }
+
+    // Keep old index bytes distinguishable even when neither layout contains children.
+    const INDEX_FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
+        method: ic_wire::method_id("canic.directory_index.v3"),
+        direction: ic_wire::Direction::Response,
+    };
 
     impl<M: MemoryBacking> Index<M> {
         /// Create a direct recipient during installation by its fleet Root.
@@ -273,8 +302,9 @@ pub mod retained {
                 generation: None,
                 children: Vec::new(),
                 current: None,
+                withdrawn: Vec::new(),
             };
-            let bytes = ic_wire::encode(&record, ic_wire::Encoding::Payload, DIRECTORY_LIMITS)
+            let bytes = ic_wire::encode(&record, INDEX_FRAME, DIRECTORY_LIMITS)
                 .expect("encode initial directory");
             let cell = crate::storage::cell(runtime, key, DIRECTORY_LIMITS.bytes, Some(bytes));
             Self { cell, record }
@@ -286,9 +316,8 @@ pub mod retained {
         #[must_use]
         pub fn open(runtime: &MemoryRuntime<M>, key: &str) -> Self {
             let cell = crate::storage::cell(runtime, key, DIRECTORY_LIMITS.bytes, None);
-            let record: Record =
-                ic_wire::decode(cell.get(), ic_wire::Encoding::Payload, DIRECTORY_LIMITS)
-                    .expect("retained service directory");
+            let record: Record = ic_wire::decode(cell.get(), INDEX_FRAME, DIRECTORY_LIMITS)
+                .expect("retained service directory");
             assert_eq!(
                 record.publisher.as_slice().last(),
                 Some(&1),
@@ -305,7 +334,12 @@ pub mod retained {
             for child in &record.children {
                 check_name(&child.hop.role).expect("invalid retained child role");
                 assert!(
-                    child.hop.canister.as_slice().last() == Some(&1)
+                    child
+                        .hop
+                        .shard_pool
+                        .as_ref()
+                        .is_none_or(|pool| !pool.is_empty() && pool.len() <= 64)
+                        && child.hop.canister.as_slice().last() == Some(&1)
                         && child.hop.canister != record.publisher
                         && seen.insert(child.hop.canister)
                         && record.current.as_ref().is_some_and(|d| child
@@ -375,12 +409,17 @@ pub mod retained {
             let mut seen = std::collections::BTreeSet::from([self.publisher()]);
             for hop in &update.path {
                 check_name(&hop.role)?;
-                if update
-                    .directory
-                    .services
-                    .iter()
-                    .any(|row| row.canister == hop.canister && row.role != hop.role)
+                if hop
+                    .shard_pool
+                    .as_ref()
+                    .is_some_and(|pool| pool.is_empty() || pool.len() > 64)
                 {
+                    return Err("invalid shard pool name");
+                }
+                if update.directory.services.iter().any(|row| {
+                    row.canister == hop.canister
+                        && (row.role != hop.role || hop.shard_pool.is_some())
+                }) {
                     return Err("conflicting published role");
                 }
                 if hop.canister.as_slice().last() != Some(&1) || !seen.insert(hop.canister) {
@@ -413,8 +452,23 @@ pub mod retained {
             Ok(())
         }
 
+        pub(super) fn withdraw(
+            &mut self,
+            target: (Principal, [u8; 32]),
+        ) -> Result<(), &'static str> {
+            if self.record.withdrawn.contains(&target) {
+                return Ok(());
+            }
+            let mut record = self.record.clone();
+            record
+                .children
+                .retain(|entry| (entry.hop.canister, entry.hop.generation) != target);
+            record.withdrawn.push(target);
+            self.save(record)
+        }
+
         fn save(&mut self, record: Record) -> Result<(), &'static str> {
-            let bytes = ic_wire::encode(&record, ic_wire::Encoding::Payload, DIRECTORY_LIMITS)
+            let bytes = ic_wire::encode(&record, INDEX_FRAME, DIRECTORY_LIMITS)
                 .map_err(|_| "service directory exceeds its storage budget")?;
             self.cell.set(bytes);
             self.record = record;
@@ -453,6 +507,12 @@ pub mod retained {
             let mut record = self.record.clone();
             record.generation = Some(generation);
             if let Some(child) = child {
+                if record
+                    .withdrawn
+                    .contains(&(child.canister, child.generation))
+                {
+                    return Err("child installation withdrawn");
+                }
                 if let Some((stored, _)) = self.child_delivery(child.canister) {
                     if stored != child {
                         return Err("conflicting child installation");
@@ -479,6 +539,73 @@ pub mod retained {
         /// This actor's service index. Install or reopen it during application lifecycle.
         pub static DIRECTORY: std::cell::RefCell<Option<Index<ic_storage::DefaultMemoryImpl>>> =
             const { std::cell::RefCell::new(None) };
+    }
+
+    /// Durably refuse future deliveries for the exact installation.
+    /// # Errors
+    /// Requires the retained publisher and sufficient index space.
+    pub fn withdraw(target: (Principal, [u8; 32])) -> Result<(), String> {
+        DIRECTORY.with_borrow_mut(|cell| {
+            let index = cell.as_mut().ok_or("directory unavailable")?;
+            crate::topology::require_sender(index.publisher())?;
+            Ok(index.withdraw(target)?)
+        })
+    }
+
+    /// Local shard routing failures.
+    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+    pub enum ShardLookupError {
+        /// The hub has not attached its directory.
+        DirectoryUnavailable,
+        /// No acknowledged direct shard belongs to the requested pool.
+        NoReadyShard,
+    }
+
+    impl std::fmt::Display for ShardLookupError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(match self {
+                Self::DirectoryUnavailable => "shard directory unavailable",
+                Self::NoReadyShard => "no acknowledged shard in the requested pool",
+            })
+        }
+    }
+
+    impl std::error::Error for ShardLookupError {}
+
+    /// Route a principal to an acknowledged shard of this hub's named pool.
+    /// Use the shard component name from the fleet declaration. Requires no registration.
+    /// # Errors
+    /// Returns a local lookup error if the directory or a matching shard is unavailable.
+    pub fn get_shard(pool_name: &str, principal: Principal) -> Result<Principal, ShardLookupError> {
+        DIRECTORY.with_borrow(|index| {
+            let index = index
+                .as_ref()
+                .ok_or(ShardLookupError::DirectoryUnavailable)?;
+            let children = index.record.children.iter().filter(|child| {
+                child.acknowledged.is_some() && child.hop.shard_pool.as_deref() == Some(pool_name)
+            });
+            select_child(children.map(|child| child.hop.canister), principal)
+                .ok_or(ShardLookupError::NoReadyShard)
+        })
+    }
+
+    pub(super) fn select_child(
+        children: impl Iterator<Item = Principal>,
+        principal: Principal,
+    ) -> Option<Principal> {
+        use sha2::{Digest, Sha256};
+        let key = principal.as_slice();
+        // Fixed for compatibility with existing discovery wallet routes.
+        let prefix = Sha256::new()
+            .chain_update(b"toko.discovery.hrw.v1\0")
+            .chain_update([key.len() as u8])
+            .chain_update(key);
+        children.max_by_key(|child| {
+            (
+                prefix.clone().chain_update(child.as_slice()).finalize(),
+                *child,
+            )
+        })
     }
 
     /// Apply the directory locally and forward only the remaining admitted branch.

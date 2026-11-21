@@ -169,7 +169,7 @@ async fn directory(revoke: bool, stable: bool) {
     if stable {
         local.receiver_policy.as_mut().unwrap().storage = canic::auth::install::Storage::Stable;
     }
-    let policy = local.shard_pool.as_mut().unwrap();
+    let policy = local.shard_pools.first_mut().unwrap();
     policy.expires_at_ns = Some(now + 600_000_000_000);
     let manifest = store
         .publish_named(
@@ -182,6 +182,7 @@ async fn directory(revoke: bool, stable: bool) {
     let fleet = config.select(None, None).unwrap().config;
     let pool = fleet
         .shard_pool_approval(
+            "ex-user-directory-shard",
             manifest,
             management::application::Arguments::new(nonce).unwrap(),
         )
@@ -288,7 +289,10 @@ async fn directory(revoke: bool, stable: bool) {
             .update(
                 "lookup_shard",
                 canic::sharding::LOOKUP,
-                &canic::sharding::Key::from(digest.finalize()),
+                &(
+                    "ex-user-directory-shard",
+                    canic::sharding::Key::from(digest.finalize()),
+                ),
                 canic::sharding::LIMITS,
             )
             .await;

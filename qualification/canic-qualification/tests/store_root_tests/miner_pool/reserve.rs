@@ -41,7 +41,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     .await;
     let fleet = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
         fleet.subnet_child_limit = Some(7);
-        let w = fleet.worker_pool.as_mut().unwrap();
+        let w = fleet.worker_pools.first_mut().unwrap();
         w.creation_budget = 0;
         let spending_deadline = w.expires_at_ns.unwrap();
         w.expires_at_ns = Some(spending_deadline + 7_200_000_000_000);
@@ -166,7 +166,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
                 root.id,
                 fleet.pool,
                 AssignWorker::NAME,
-                AssignWorker::encode_request(&ordinal).unwrap(),
+                AssignWorker::encode_request(&("miner".into(), ordinal)).unwrap(),
             )
             .await
             .unwrap();
@@ -506,4 +506,84 @@ minimum_import_cycles = 1000000
         ic_testkit::server::Deletion::Attempted
     );
     assert_eq!(server.stop().unwrap().abandoned, 0);
+}
+
+// Hold the hub's actual release receipt while Root changes controllers.
+pub(super) async fn check_controller_handoff(
+    root: &Client<'_>,
+    hub: CanisterId,
+    target: &canic::sharding::ShardTarget,
+    hub_wasm: &[u8],
+) {
+    use canic::sharding::standby::{ConfirmRelease, WorkerReleased};
+    use ic_testkit::held::{Catalog, Fixture, Limits, Reply};
+    let pic = root.pic;
+    let receipt = pic
+        .query_call(
+            hub,
+            root.id,
+            WorkerReleased::NAME,
+            WorkerReleased::encode_request(target).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert!(WorkerReleased::decode_reply(&receipt).unwrap());
+    let catalog = Catalog::new(
+        &[Reply {
+            method: WorkerReleased::NAME,
+            bytes: &receipt,
+        }],
+        Limits {
+            slots: 1,
+            name_bytes: 32,
+            reply_bytes: 512,
+        },
+    )
+    .unwrap();
+    let mut held = Fixture::new(
+        pic,
+        hub.to_text().parse().unwrap(),
+        &catalog,
+        100_000_000_000,
+        8192,
+    )
+    .await
+    .unwrap();
+    canic_qualification::upgrade_stopped(pic, hub, held.wasm().to_vec(), vec![], Some(root.id))
+        .await
+        .unwrap();
+    let call = pic
+        .submit_call(
+            root.id,
+            root.operator,
+            ConfirmRelease::NAME,
+            ConfirmRelease::encode_request(target).unwrap(),
+        )
+        .await
+        .unwrap();
+    let mut pending = vec![];
+    for _ in 0..40 {
+        pic.tick().await;
+        pending = held.pending(pic).await.unwrap();
+        if !pending.is_empty() {
+            break;
+        }
+    }
+    let token = pending.pop().expect("release receipt requested");
+    let successor = CanisterId::self_authenticating(b"successor");
+    pic.set_controllers(root.id, Some(root.operator), vec![successor])
+        .await
+        .unwrap();
+    held.release(pic, &token).await.unwrap();
+    let reply = pic.await_call(call).await.unwrap();
+    assert_eq!(
+        ConfirmRelease::decode_reply(&reply).unwrap(),
+        Err("Root controller required".into())
+    );
+    pic.set_controllers(root.id, Some(successor), vec![root.operator])
+        .await
+        .unwrap();
+    canic_qualification::upgrade_stopped(pic, hub, hub_wasm.to_vec(), vec![], Some(root.id))
+        .await
+        .unwrap();
 }

@@ -28,20 +28,15 @@ pub fn configure_capacity(capacity: stored::SubnetCapacity) -> Result<(), Refusa
             };
         }
         let permanent = canic_management_protocol::children::ChildId::ALL.map(|slot| {
-            state.journal.0[&slot].0.approval.is_some()
-                && state
-                    .pools
-                    .shards
-                    .as_ref()
-                    .is_none_or(|l| l.generations[slot.index()].is_none())
+            state.journal.0[&slot].0.approval.is_some() && state.pools.shard_at(slot).is_none()
         });
         if state.pools.used() + permanent.iter().filter(|&&used| used).count()
             > usize::from(capacity.max_children)
             || state
                 .pools
                 .shards
-                .as_ref()
-                .is_some_and(|l| l.approval.max_shards > capacity.max_children)
+                .values()
+                .any(|l| l.approval.max_shards > capacity.max_children)
             || state
                 .pools
                 .instances
@@ -74,12 +69,12 @@ pub fn increase_pool(change: stored::IncreasePool) -> Result<(), Refusal> {
             .max_children;
         let (initial, previous, next, history, deadline) = match change {
             stored::IncreasePool::Shards(mut old, next) => {
-                let initial = &state
+                let ledger = state
                     .pools
                     .shards
-                    .as_ref()
-                    .ok_or(Refusal::Binding)?
-                    .approval;
+                    .get_mut(&old.pool)
+                    .ok_or(Refusal::Binding)?;
+                let initial = &ledger.approval;
                 let previous = std::mem::replace(&mut old.max_shards, initial.max_shards);
                 if &old != initial {
                     return Err(Refusal::Binding);
@@ -88,7 +83,7 @@ pub fn increase_pool(change: stored::IncreasePool) -> Result<(), Refusal> {
                     initial.max_shards,
                     previous,
                     next,
-                    &mut state.pools.shard_increases,
+                    &mut ledger.increases,
                     initial.expires_at_ns,
                 )
             }

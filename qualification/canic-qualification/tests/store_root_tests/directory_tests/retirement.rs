@@ -104,6 +104,21 @@ pub(super) async fn exercise(
         id: CanisterId::from_text(&id).unwrap(),
         operator: root.id,
     };
+    let route = async || -> Option<CanisterId> {
+        query_service(pic, user, "route_shard", ("users", root.operator)).await
+    };
+    assert_eq!(route().await, Some(child.id));
+    use canic::topology::directory::WithdrawChild;
+    let withdrawal = WithdrawChild::encode_request(&(target.shard, allocation.generation)).unwrap();
+    let reply = pic
+        .update_call(user, root.operator, WithdrawChild::NAME, withdrawal)
+        .await
+        .unwrap();
+    assert_eq!(
+        WithdrawChild::decode_reply(&reply).unwrap(),
+        Err("unexpected topology sender".into())
+    );
+    assert_eq!(route().await, Some(child.id));
     let expiry = child
         .update::<_, Result<u64, String>>(
             "renew_role",
@@ -244,7 +259,19 @@ pub(super) async fn exercise(
         advance(&changed).await.unwrap_err(),
         "retirement approval differs"
     );
-    for phase in [P::CacheIssued, P::Cached, P::InstallIssued, P::Dormant] {
+    for phase in [P::CacheIssued, P::Cached] {
+        assert_eq!(advance(&input).await, Ok(phase));
+    }
+    pic.stop_canister(user, Some(root.id)).await.unwrap();
+    assert!(
+        advance(&input)
+            .await
+            .unwrap_err()
+            .contains("hub withdrawal unconfirmed")
+    );
+    pic.start_canister(user, Some(root.id)).await.unwrap();
+    assert_eq!(route().await, Some(child.id));
+    for phase in [P::InstallIssued, P::Dormant] {
         assert_eq!(advance(&input).await, Ok(phase));
     }
     reopen("dormant").await;
@@ -262,6 +289,8 @@ pub(super) async fn exercise(
         advance(&input).await.unwrap_err(),
         "original role proof window remains open"
     );
+    // Exercise both independent hubs and co-owned worker and shard grants.
+    let pool = if from_spare { user } else { pool };
     let worker_pool = stored::InstancePool {
         root: root.id.to_text(),
         hub: pool.to_text(),
@@ -289,7 +318,7 @@ pub(super) async fn exercise(
         .update::<_, Placement>(
             AssignWorker::NAME,
             AssignWorker::ID,
-            &0u8,
+            &("miner".to_string(), 0u8),
             canic::sharding::LIMITS,
         )
         .await
@@ -310,12 +339,14 @@ pub(super) async fn exercise(
         matches!(inventory().await.as_slice(), [(original,Asset::Available(id,_))] if original==&origin && *id==target.shard)
     );
     reopen("available").await;
+    assert_eq!(route().await, None, "returned shard remains discoverable");
     assert!(matches!(worker().await, Placement::Pending(_)));
     settle(pic).await;
     let Placement::Assigned(Allocation { generation, .. }, worker_id) = worker().await else {
         panic!("installed worker")
     };
     assert_eq!(worker_id, child.id.to_text());
+    assert_eq!(route().await, None, "former shard now runs worker code");
     assert_ne!(generation, allocation.generation);
     let parent = Client {
         pic,

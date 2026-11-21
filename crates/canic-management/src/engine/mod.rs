@@ -48,9 +48,10 @@ use std::{
 /// Traps when lifecycle has not opened the engine.
 #[must_use]
 pub fn custody() -> canic_management_protocol::custody::Custody {
-    let [first, second] = owner_custody();
+    let mut slots = owner_custody().into_iter();
+    let first = slots.next().expect("first custody slot");
     assert!(
-        second.creation.approval.is_none(),
+        slots.all(|s| s.creation.approval.is_none()),
         "two-child custody required"
     );
     first
@@ -112,7 +113,9 @@ pub(crate) struct State {
     #[cfg(feature = "sharding")]
     pools: sharding::Pools,
     #[cfg(feature = "sharding")]
-    claims: ic_storage::adapter::StableBTreeMap<canic::sharding::Key, u8>,
+    worker_history: ic_storage::adapter::StableBTreeMap<[u8; 32], Vec<u8>>,
+    #[cfg(feature = "sharding")]
+    claims: ic_storage::adapter::StableBTreeMap<(u8, canic::sharding::Key), u8>,
     #[cfg(feature = "role-issuer")]
     role_key: StableCell<Vec<u8>>,
     readiness: Readiness,
@@ -210,6 +213,17 @@ pub fn open(fresh: bool, readiness: Readiness) {
             ic_storage::adapter::StableBTreeMap::load(lease)
         }
     };
+    #[cfg(feature = "sharding")]
+    let worker_history = {
+        let lease = runtime
+            .open_memory(&ic_storage::StableKey::parse(crate::storage::WORKER_HISTORY_KEY).unwrap())
+            .expect("placement index lease");
+        if fresh {
+            ic_storage::adapter::StableBTreeMap::create(lease)
+        } else {
+            ic_storage::adapter::StableBTreeMap::load(lease)
+        }
+    };
     let mut state = State {
         journal,
         artifact: Artifacts::from_bytes(artifact_cell.get().as_slice().into())
@@ -221,6 +235,8 @@ pub fn open(fresh: bool, readiness: Readiness) {
         pools: sharding::open(pool.get(), claims.len()),
         #[cfg(feature = "sharding")]
         claims,
+        #[cfg(feature = "sharding")]
+        worker_history,
         #[cfg(feature = "sharding")]
         pool,
         artifact_cell,

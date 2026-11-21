@@ -721,7 +721,13 @@ pub async fn fleet_with_config(
         let first = retained_slots
             .contains(&Some(ChildId::FIRST))
             .then_some(ChildId::FIRST);
-        for slot in [first, Some(ChildId::SECOND)] {
+        for slot in [first, Some(ChildId::SECOND)].into_iter().chain(
+            ChildId::ALL[2..]
+                .iter()
+                .copied()
+                .map(Some)
+                .filter(|slot| retained_slots.contains(slot)),
+        ) {
             let budget = owner_deadline
                 .saturating_duration_since(tokio::time::Instant::now())
                 .min(Duration::from_secs(5));

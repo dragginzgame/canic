@@ -1,8 +1,9 @@
 //! Resolve an operator's shard-pool declaration against the chosen app and fleet.
 use super::{CanisterConfig, FleetConfig, name};
-use crate::{
-    DeploymentName, Error, FleetPlanning, Result, SelectedFleet, artifact, store, supplier,
-};
+mod plan;
+pub(crate) use plan::{check_pool_requirements, preview};
+
+use crate::{Error, Result, supplier};
 use canic_management_protocol::stored;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -173,11 +174,11 @@ impl WorkerPoolConfig {
             increase_from: None,
         }
     }
-    pub(super) fn validate(
+    fn validate(
         &self,
         slots: &BTreeMap<String, CanisterConfig>,
         cap: Option<u8>,
-        shards: Option<&ShardPoolConfig>,
+        shards: &[ShardPoolConfig],
         instances: Option<&InstancePoolConfig>,
     ) -> Result<()> {
         let cap = cap.ok_or_else(|| {
@@ -194,17 +195,18 @@ impl WorkerPoolConfig {
             None,
         )?;
         for (component, root, store) in shards
+            .iter()
             .map(|p| (&p.component, &p.root, &p.store))
-            .into_iter()
             .chain(instances.map(|p| (&p.component, &p.root, &p.store)))
         {
             if root != &self.root
                 || store != &self.store
                 || component == &self.component
-                || parent(slots, component)? == hub
+                || (instances.is_some_and(|p| p.component == *component)
+                    && parent(slots, component)? == hub)
             {
                 return Err(Error::Invalid(format!(
-                    "worker_pool {} and {component} require distinct children and hubs on the same Root and Store",
+                    "worker_pool {} and {component} require distinct children on the same Root and Store, and a separate dedicated-instance hub",
                     self.component
                 )));
             }
@@ -222,26 +224,77 @@ pub struct PoolGrant<T> {
     pub request: Vec<u8>,
 }
 
-fn grant<T: Serialize>(approval: T, method: u64) -> Result<PoolGrant<T>> {
-    let request = ic_wire::encode(
-        &approval,
-        ic_wire::Encoding::Frame {
-            method,
-            direction: ic_wire::Direction::Request,
-        },
-        stored::LIMITS,
-    )
-    .map_err(supplier)?;
-    Ok(PoolGrant { approval, request })
-}
-
-pub(super) fn validate_capacity(
+pub(super) fn validate_pools(
+    slots: &BTreeMap<String, CanisterConfig>,
     limit: Option<u8>,
-    shards: Option<&ShardPoolConfig>,
+    shards: &[ShardPoolConfig],
     instances: Option<&InstancePoolConfig>,
-    workers: Option<&WorkerPoolConfig>,
+    workers: &[WorkerPoolConfig],
     standby: Option<&stored::StandbyPolicy>,
 ) -> Result<()> {
+    validate_capacity(limit, shards, instances, workers, standby)?;
+    for pool in shards {
+        pool.validate(slots)?;
+    }
+    if let Some(pool) = instances {
+        pool.validate(slots, shards)?;
+    }
+    for pool in workers {
+        pool.validate(slots, limit, shards, instances)?;
+    }
+    Ok(())
+}
+
+fn validate_capacity(
+    limit: Option<u8>,
+    shards: &[ShardPoolConfig],
+    instances: Option<&InstancePoolConfig>,
+    workers: &[WorkerPoolConfig],
+    standby: Option<&stored::StandbyPolicy>,
+) -> Result<()> {
+    let mut components = std::collections::BTreeSet::new();
+    for pool in shards {
+        if !components.insert(&pool.component)
+            || pool.root != shards[0].root
+            || pool.store != shards[0].store
+        {
+            return Err(Error::Invalid(format!(
+                "shard_pools repeats {:?} or differs in Root or Store",
+                pool.component
+            )));
+        }
+    }
+    if shards.len() > 1 && limit.is_none() {
+        return Err(Error::Invalid(
+            "multiple shard pools require subnet_child_limit".into(),
+        ));
+    }
+    if shards.len() > usize::from(limit.unwrap_or(2)) {
+        return Err(Error::Invalid(
+            "too many shard pools for the subnet child limit".into(),
+        ));
+    }
+    for pool in workers {
+        if !components.insert(&pool.component) {
+            return Err(Error::Invalid(format!(
+                "worker_pools repeats component {:?}",
+                pool.component
+            )));
+        }
+        if pool.root != workers[0].root || pool.store != workers[0].store {
+            return Err(Error::Invalid(format!(
+                "worker pool {:?} must share the fleet Root and Store",
+                pool.component
+            )));
+        }
+    }
+    if workers.len() > usize::from(limit.unwrap_or_default()) {
+        return Err(Error::Invalid(format!(
+            "{} worker pools exceed subnet_child_limit = {:?}",
+            workers.len(),
+            limit
+        )));
+    }
     if let Some(p) = standby {
         let cap = limit
             .ok_or_else(|| Error::Invalid("standby_pool requires subnet_child_limit".into()))?;
@@ -292,25 +345,23 @@ pub(super) fn validate_capacity(
     }
     if let Some(n) = limit {
         super::positive_count("subnet_child_limit", n, stored::MAX_SUBNET_CHILDREN)?;
-        if shards.is_none() && instances.is_none() && workers.is_none() && standby.is_none() {
+        if shards.is_empty() && instances.is_none() && workers.is_empty() && standby.is_none() {
             return Err(Error::Invalid(format!(
                 "subnet_child_limit = {n} requires a shard_pool, instance_pool, worker_pool or standby_pool"
             )));
         }
     }
-    for (pool, field, count, previous) in [
-        shards.map(|p| ("shard_pool", "max_shards", p.max_shards, p.increase_from)),
-        instances.map(|p| {
+    for (pool, field, count, previous) in shards
+        .iter()
+        .map(|p| ("shard_pool", "max_shards", p.max_shards, p.increase_from))
+        .chain(instances.map(|p| {
             (
                 "instance_pool",
                 "max_instances",
                 p.max_instances,
                 p.increase_from,
             )
-        }),
-    ]
-    .into_iter()
-    .flatten()
+        }))
     {
         let ceiling = limit.unwrap_or(2);
         if count > ceiling {
@@ -339,256 +390,6 @@ pub(super) fn validate_capacity(
     Ok(())
 }
 
-fn inputs(
-    selected: &SelectedFleet,
-    config: &Path,
-    component: &str,
-    release: &ic_wasm_store_protocol::Release,
-    args: Option<&Path>,
-) -> Result<(
-    ic_wasm_store_protocol::Manifest,
-    canic_management_protocol::application::Arguments,
-)> {
-    let wasm = store::read(
-        &selected.wasm_path(config, component, None)?,
-        artifact::MAX_ARTIFACT_BYTES,
-    )?;
-    artifact::admit_bounded(&wasm, artifact::MAX_ARTIFACT_BYTES)?;
-    let input = args
-        .map(|path| {
-            store::read(
-                &config.with_file_name(path),
-                canic_management_protocol::application::MAX_ARGUMENT_BYTES,
-            )
-        })
-        .transpose()?
-        .unwrap_or_default();
-    Ok((
-        crate::publication::release_manifest(release.clone(), &wasm),
-        canic_management_protocol::application::Arguments::new(input).map_err(supplier)?,
-    ))
-}
-
-pub(crate) fn preview(
-    config_path: &Path,
-    selected: &SelectedFleet,
-    controller: &str,
-) -> Result<FleetPlanning> {
-    let principal = crate::network::principal(controller)?;
-    if principal.to_text() != controller
-        || principal == ic_platform_types::Principal::anonymous()
-        || principal.as_slice().is_empty()
-    {
-        return Err(Error::Invalid(
-            "expected a canonical controller principal".into(),
-        ));
-    }
-    let now = crate::now()?;
-    let shards = selected
-        .config
-        .shard_pool
-        .as_ref()
-        .map(|pool| {
-            check_deadline("shard_pool", pool.expires_at_ns, now)?;
-            let (manifest, args) = inputs(
-                selected,
-                config_path,
-                &pool.component,
-                &pool.release,
-                pool.install_args.as_deref(),
-            )?;
-            grant(
-                selected.config.shard_pool_approval(manifest, args)?,
-                stored::CONFIGURE_SHARDS,
-            )
-        })
-        .transpose()?;
-    let capacity = |root: &str| {
-        selected
-            .config
-            .subnet_child_limit
-            .map(|max_children| {
-                grant(
-                    stored::SubnetCapacity {
-                        root: root.to_owned(),
-                        max_children,
-                    },
-                    stored::CONFIGURE_CAPACITY,
-                )
-            })
-            .transpose()
-    };
-    let mut increases = Vec::new();
-    if let Some((shard, old)) = shards.as_ref().zip(
-        selected
-            .config
-            .shard_pool
-            .as_ref()
-            .and_then(|pool| pool.increase_from),
-    ) {
-        let mut prior = shard.approval.clone();
-        let next = std::mem::replace(&mut prior.max_shards, old);
-        increases.push(grant(
-            stored::IncreasePool::Shards(prior, next),
-            stored::INCREASE_POOL,
-        )?);
-    }
-    let network = selected.config.network.clone();
-    let controller = controller.to_owned();
-    let allocation = |pool: &InstancePoolConfig,
-                      label: &str,
-                      method,
-                      worker_args: Option<Vec<u8>>|
-     -> Result<PoolGrant<stored::InstancePool>> {
-        let expires_at_ns = check_deadline(label, pool.expires_at_ns, now)?;
-        let (manifest, args) = inputs(
-            selected,
-            config_path,
-            &pool.component,
-            &pool.release,
-            pool.install_args.as_deref(),
-        )?;
-        let (root, hub, store) =
-            selected
-                .config
-                .pool_bindings(&pool.component, &pool.root, &pool.store)?;
-        if selected.config.receiver_selected(&pool.component) {
-            return Err(Error::Invalid("dedicated children require a topology install frame; receiver installation is unsupported".into()));
-        }
-        let args = if let Some(worker_args) = worker_args {
-            canic_management_protocol::application::Arguments::new(worker_args).map_err(supplier)?
-        } else {
-            args
-        };
-        let arguments = topology(
-            &selected.config.canisters,
-            &pool.component,
-            &root,
-            &hub,
-            &args,
-        )?;
-        grant(
-            stored::InstancePool {
-                root,
-                hub,
-                component: pool.component.clone(),
-                reference: stored::Reference { store, manifest },
-                arguments,
-                max_instances: pool.max_instances,
-                creation_budget: pool.creation_budget,
-                expires_at_ns,
-            },
-            method,
-        )
-    };
-    let instances = selected
-        .config
-        .instance_pool
-        .as_ref()
-        .map(|p| allocation(p, "instance_pool", stored::CONFIGURE_INSTANCES, None))
-        .transpose()?;
-    let workers = selected
-        .config
-        .worker_pool
-        .as_ref()
-        .map(|p| {
-            let args = match p.minimum_reuse_cycles {
-                Some(minimum) => {
-                    canic::topology::worker::reuse_policy(minimum).map_err(supplier)?
-                }
-                None => canic::topology::WORKER_GENERATION.to_vec(),
-            };
-            allocation(
-                &p.recipe(),
-                "worker_pool",
-                stored::CONFIGURE_WORKERS,
-                Some(args),
-            )
-        })
-        .transpose()?;
-    let standby = selected
-        .config
-        .standby_pool
-        .as_ref()
-        .map(|p| {
-            let mut policy = p.clone();
-            let binding = selected
-                .config
-                .canisters
-                .get(&p.root)
-                .filter(|c| c.role.as_deref() == Some("root"))
-                .and_then(|c| c.id.clone())
-                .ok_or_else(|| {
-                    Error::Invalid(format!(
-                        "standby_pool.root = {:?} requires a bound Root",
-                        p.root
-                    ))
-                })?;
-            if p.imports.iter().any(|id| {
-                selected
-                    .config
-                    .canisters
-                    .values()
-                    .any(|c| c.id.as_ref() == Some(&id.principal))
-            }) {
-                return Err(Error::Invalid(
-                    "standby_pool.imports conflicts with a bound fleet canister".into(),
-                ));
-            }
-            policy.root = binding;
-            grant(policy, stored::CONFIGURE_STANDBY)
-        })
-        .transpose()?;
-    if let Some(root) = instances
-        .as_ref()
-        .or(workers.as_ref())
-        .map(|g| &g.approval.root)
-        .or_else(|| standby.as_ref().map(|g| &g.approval.root))
-    {
-        if let Some((instance, old)) = instances.as_ref().zip(
-            selected
-                .config
-                .instance_pool
-                .as_ref()
-                .and_then(|p| p.increase_from),
-        ) {
-            let mut prior = instance.approval.clone();
-            let next = std::mem::replace(&mut prior.max_instances, old);
-            increases.push(grant(
-                stored::IncreasePool::Instances(prior, next),
-                stored::INCREASE_POOL,
-            )?);
-        }
-        return Ok(FleetPlanning::PlacementPools {
-            capacity: capacity(root)?,
-            standby,
-            increases,
-            app: selected.app.clone(),
-            fleet: selected.fleet.clone(),
-            network,
-            controller,
-            shards: shards.map(Box::new),
-            instances: instances.map(Box::new),
-            workers: workers.map(Box::new),
-        });
-    }
-    let PoolGrant { approval, request } =
-        shards.ok_or_else(|| Error::Invalid("no placement pools".into()))?;
-    Ok(FleetPlanning::ShardPool {
-        capacity: capacity(&approval.root)?,
-        increases,
-        request,
-        deployment: DeploymentName {
-            app: selected.app.clone(),
-            fleet: selected.fleet.clone(),
-            canister: approval.pool.clone(),
-        },
-        network,
-        controller,
-        approval: Box::new(approval),
-    })
-}
-
 fn validate_deadline(pool: &str, value: Option<u64>) -> Result<()> {
     if value == Some(0) {
         return Err(Error::Invalid(format!(
@@ -598,20 +399,6 @@ fn validate_deadline(pool: &str, value: Option<u64>) -> Result<()> {
     Ok(())
 }
 
-fn check_deadline(pool: &str, deadline: Option<u64>, now: u64) -> Result<u64> {
-    let deadline = deadline.ok_or_else(|| {
-        Error::Invalid(format!(
-            "{pool}.expires_at_ns is missing; a growth approval requires an explicit deadline"
-        ))
-    })?;
-    if deadline <= now {
-        return Err(Error::Invalid(format!(
-            "{pool}.expires_at_ns = {deadline} has expired; expected a deadline later than {now} (Unix nanoseconds)"
-        )));
-    }
-    Ok(deadline)
-}
-
 impl ShardPoolConfig {
     fn deadline(&self) -> Result<u64> {
         self.expires_at_ns.ok_or_else(|| {
@@ -619,7 +406,7 @@ impl ShardPoolConfig {
         })
     }
 
-    pub(super) fn validate(&self, slots: &BTreeMap<String, CanisterConfig>) -> Result<()> {
+    fn validate(&self, slots: &BTreeMap<String, CanisterConfig>) -> Result<()> {
         validate_pool(
             slots,
             &self.component,
@@ -649,13 +436,19 @@ impl FleetConfig {
     /// Refuses incomplete declarations, unbound principals or invalid release metadata.
     pub fn shard_pool_approval(
         &self,
+        component: &str,
         manifest: ic_wasm_store_protocol::Manifest,
         arguments: canic_management_protocol::application::Arguments,
     ) -> Result<stored::ShardPool> {
         let policy = self
-            .shard_pool
-            .as_ref()
-            .ok_or_else(|| Error::Invalid("no shard pool configured".into()))?;
+            .shard_pools
+            .iter()
+            .find(|pool| pool.component == component)
+            .ok_or_else(|| {
+                Error::Invalid(format!(
+                    "no shard pool configured for component {component:?}"
+                ))
+            })?;
         policy.validate(&self.canisters)?;
         if !manifest.valid() || manifest.release != policy.release {
             return Err(Error::Invalid("invalid shard release manifest".into()));
@@ -774,10 +567,10 @@ fn parent<'a>(slots: &'a BTreeMap<String, CanisterConfig>, component: &str) -> R
 }
 
 impl InstancePoolConfig {
-    pub(super) fn validate(
+    fn validate(
         &self,
         slots: &BTreeMap<String, CanisterConfig>,
-        shared: Option<&ShardPoolConfig>,
+        shared: &[ShardPoolConfig],
     ) -> Result<()> {
         let hub = validate_pool(
             slots,
@@ -793,22 +586,23 @@ impl InstancePoolConfig {
             stored::MAX_INSTANCES,
         )?;
         validate_deadline("instance_pool", self.expires_at_ns)?;
-        if let Some(other) = shared
-            && (self.root != other.root
+        for other in shared {
+            if self.root != other.root
                 || self.store != other.store
                 || self.component == other.component
-                || hub == parent(slots, &other.component)?)
-        {
-            return Err(Error::Invalid(format!(
-                "instance_pool (root {:?}, store {:?}, component {:?}, hub {hub:?}) and shard_pool (root {:?}, store {:?}, component {:?}, hub {:?}) require the same root and store and distinct children and hubs",
-                self.root,
-                self.store,
-                self.component,
-                other.root,
-                other.store,
-                other.component,
-                parent(slots, &other.component)?
-            )));
+                || hub == parent(slots, &other.component)?
+            {
+                return Err(Error::Invalid(format!(
+                    "instance_pool (root {:?}, store {:?}, component {:?}, hub {hub:?}) and shard_pool (root {:?}, store {:?}, component {:?}, hub {:?}) require the same root and store and distinct children and hubs",
+                    self.root,
+                    self.store,
+                    self.component,
+                    other.root,
+                    other.store,
+                    other.component,
+                    parent(slots, &other.component)?
+                )));
+            }
         }
         Ok(())
     }

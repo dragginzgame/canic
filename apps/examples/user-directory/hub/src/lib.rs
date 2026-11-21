@@ -28,11 +28,16 @@ async fn register() -> Result<Progress, ProvisionRefusal> {
     if existing.as_ref().is_some_and(|row| row.ready) {
         return Ok(Progress::Ready);
     }
-    let assignment =
-        match provisioning::place::<Users>(&auth, existing.as_ref().map(|row| row.shard)).await {
-            Ok(assignment) => assignment,
-            Err(progress) => return Ok(progress),
-        };
+    let assignment = match provisioning::place::<Users>(
+        &auth,
+        canic::shard_pool!("ex-user-directory-shard"),
+        existing.as_ref().map(|row| row.shard),
+    )
+    .await
+    {
+        Ok(assignment) => assignment,
+        Err(progress) => return Ok(progress),
+    };
     // Another registration may have won during placement. Only the winner allocates an ID.
     let row = existing.or_else(lookup).unwrap_or_else(|| {
         let row = Route {
@@ -94,7 +99,7 @@ fn binding(row: &Route) -> Binding<[u8; 16]> {
 // guard  : attested user_shard (ReserveProject::ROLES)
 // limits : default
 #[cfg(feature = "role-service")]
-#[canic::update(role_contract = user_directory_schema::ReserveProject)]
+#[canic::update(attested_method = user_directory_schema::ReserveProject)]
 fn reserve_project(account: AuthSubject) -> [u8; 16] {
     let shard = ic_platform_runtime::system::caller();
     if let Some(row) = provisioning::account_row::<Route>(&db!(), account) {
@@ -112,4 +117,33 @@ fn reserve_project(account: AuthSubject) -> [u8; 16] {
         })
         .expect("reserve project");
     id.to_bytes()
+}
+
+// confirmed_shard
+// Return the confirmed shard for the registry's account lookup.
+// guard  : attested project_registry
+// limits : default
+#[cfg(feature = "role-service")]
+#[canic::update(attested_method = user_directory_schema::confirmed_shard)]
+fn confirmed_shard(account: AuthSubject) -> Option<Principal> {
+    provisioning::account_row::<Route>(&db!(), account)
+        .filter(|row| row.ready)
+        .map(|row| row.shard)
+}
+
+// find_my_shard
+// Resolve the signed-in account through the fleet's unique user hub.
+// scope  : read
+// limits : default
+#[cfg(feature = "role-service")]
+#[canic::update(scope = "read")]
+async fn find_my_shard() -> Result<Option<Principal>, String> {
+    canic::topology::call_service_by_role::<user_directory_schema::confirmed_shard>(
+        "user_hub",
+        5,
+        AuthSubject::from(&auth),
+        || auth.reauthorize().map_err(|e| format!("{e:?}")),
+    )
+    .await
+    .map_err(|e| format!("{e:?}"))
 }

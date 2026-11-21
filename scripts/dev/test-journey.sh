@@ -8,6 +8,7 @@ cargo test --locked -p canic-cli --bin canic
 records=$(mktemp target/journey/build.XXXXXX.jsonl)
 cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$records"
 cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected one CLI") end' "$records")
+bash scripts/dev/test-locked-root.sh "$cli"
 "$cli" artifact build --json --package canic-greeting-witness --manifest qualification/Cargo.toml > target/journey/v1.json
 v1=$(jq -r '.wasm' target/journey/v1.json)
 cp "$v1" target/journey/hello-v1.wasm

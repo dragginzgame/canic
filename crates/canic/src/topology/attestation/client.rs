@@ -5,6 +5,16 @@ use ic_platform_runtime::system;
 use std::{cell::RefCell, marker::PhantomData};
 
 /// Caller roles admitted by both ends of this application method.
+///
+/// A shared role method requires proof admission on its receiver.
+///
+/// ```compile_fail,E0283
+/// #[canic::attested_method(roles = &["project"])]
+/// fn announce() {}
+/// type Shared = announce;
+/// #[canic::update(contract = Shared, name = "announce")]
+/// fn receive() {}
+/// ```
 pub trait RoleMethod: Contract {
     /// Accept a proof of any listed role. An empty slice admits no caller.
     const ROLES: &'static [&'static str];
@@ -12,6 +22,9 @@ pub trait RoleMethod: Contract {
 
 /// Wire frame shared by the mounted receiver and its caller.
 pub struct Attested<M>(PhantomData<M>);
+// The preframed caller envelope also requires a verifying receiver.
+impl<M: RoleMethod> crate::method::PlainMount<crate::method::AttestedMount> for Attested<M> {}
+
 impl<M: RoleMethod> Contract for Attested<M> {
     const NAME: &'static str = M::NAME;
     const ID: u64 = M::ID;

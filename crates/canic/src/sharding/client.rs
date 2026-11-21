@@ -9,7 +9,7 @@ impl Contract for AssignShard {
     const NAME: &'static str = "assign_shard";
     const ID: u64 = super::ASSIGN;
     const REQUEST: ic_wire::Limits = super::LIMITS;
-    type Input = Key;
+    type Input = (String, Key);
     type Output = Placement;
 }
 
@@ -20,7 +20,7 @@ impl Contract for LookupShard {
     const NAME: &'static str = "lookup_shard";
     const ID: u64 = super::LOOKUP;
     const REQUEST: ic_wire::Limits = super::LIMITS;
-    type Input = Key;
+    type Input = (String, Key);
     type Output = Placement;
 }
 
@@ -49,15 +49,15 @@ impl Contract for LookupInstance {
 /// Request the original assignment. After transport uncertainty, look up the same key.
 /// # Errors
 /// An unverified or missing reply cannot establish an assignment.
-pub async fn assign(root: Principal, key: Key) -> Result<Placement, &'static str> {
-    call::<AssignShard>(root, key).await
+pub async fn assign(root: Principal, pool: &str, key: Key) -> Result<Placement, &'static str> {
+    call::<AssignShard>(root, (pool.to_owned(), key)).await
 }
 
 /// Observe the retained claim without starting any creation.
 /// # Errors
 /// Reports transport or framing failures separately from an absent key.
-pub async fn lookup(root: Principal, key: Key) -> Result<Placement, &'static str> {
-    call::<LookupShard>(root, key).await
+pub async fn lookup(root: Principal, pool: &str, key: Key) -> Result<Placement, &'static str> {
+    call::<LookupShard>(root, (pool.to_owned(), key)).await
 }
 
 /// Request the original dedicated child for a stable application key.
@@ -74,9 +74,9 @@ pub async fn lookup_instance(root: Principal, key: Key) -> Result<Placement, &'s
     call::<LookupInstance>(root, key).await
 }
 
-async fn call<M: Contract<Input = Key, Output = Placement>>(
+async fn call<M: Contract<Output = Placement>>(
     root: Principal,
-    key: Key,
+    key: M::Input,
 ) -> Result<Placement, &'static str> {
     method::call::<M>(root, 10, &key)
         .await

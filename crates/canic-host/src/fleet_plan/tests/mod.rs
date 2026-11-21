@@ -497,7 +497,7 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
 #[test]
 fn fleet_child_bound_is_explicit_before_artifact_reads_or_journal_creation() {
     for with_store in [false, true] {
-        for count in [0, 3] {
+        for count in [0, ChildId::ALL.len() + 1] {
             let (dir, mut selected) = fixture();
             let child = selected.config.canisters.remove("app").unwrap();
             for index in 0..count {
@@ -525,7 +525,8 @@ fn fleet_child_bound_is_explicit_before_artifact_reads_or_journal_creation() {
             assert_eq!(
                 message,
                 format!(
-                    "fleet declares {count} direct application children under root; this Root path supports 1 to 2 (Wasm Store is separate)"
+                    "fleet declares {count} direct application children under root; this Root path supports 1 to {} (Wasm Store is separate)",
+                    ChildId::ALL.len()
                 )
             );
             assert!(!dir.join("journal").exists());
@@ -743,4 +744,53 @@ fn retained_two_child_approval_preserves_digest_and_rejects_slot_reassignment() 
     let mut changed = fleet;
     changed.children.clear();
     assert!(changed.digest().is_err());
+}
+
+#[test]
+fn whole_fleet_keeps_three_service_approvals_and_journal_paths() {
+    let (dir, mut selected) = fixture();
+    let service = selected.config.canisters.remove("app").unwrap();
+    for name in ["user_hub", "project_registry", "discovery_hub"] {
+        selected
+            .config
+            .canisters
+            .insert(name.into(), service.clone());
+    }
+    let journal = dir.join("journal");
+    let plan = || {
+        plan_fleet(
+            &journal,
+            &dir.join("canic.toml"),
+            &selected,
+            &input().controller,
+            None,
+            None,
+        )
+        .unwrap()
+    };
+    let FleetPlanning::Create {
+        operation,
+        fleet_plan,
+    } = plan()
+    else {
+        panic!("fresh fleet")
+    };
+    let retained = journal.join(&operation);
+    assert_eq!(load(&retained, &operation).unwrap(), fleet_plan);
+    assert_eq!(fleet_plan.children.len(), 3);
+    for (index, child) in fleet_plan.children.iter().enumerate() {
+        assert_eq!(child.slot, ChildId::ALL[index]);
+        assert!(
+            retained
+                .join(record::child_leaf(child.slot))
+                .join("module.wasm")
+                .is_file()
+        );
+    }
+    assert!(matches!(plan(), FleetPlanning::Create { operation: id, .. } if id == operation));
+    std::fs::create_dir(retained.join("child-3/stage")).unwrap();
+    assert!(matches!(
+        cancel_fleet_plan(&journal, &operation),
+        Err(Error::Blocked(_))
+    ));
 }

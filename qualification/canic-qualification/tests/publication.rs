@@ -106,11 +106,15 @@ async fn maintain_root(
     let sources = planned["plan"]["maintenance_store"]["sources"]
         .as_array()
         .unwrap();
-    assert_eq!(sources.len(), 2);
+    assert_eq!(
+        sources.len(),
+        canic_management_protocol::children::ChildId::ALL.len()
+    );
     assert!(
-        sources
+        sources[..2]
             .iter()
             .all(|s| s["upgrades"].as_array().unwrap().len() == 1)
+            && sources[2..].iter().all(Value::is_null)
     );
     // Drift in supplier authority blocks maintenance before any installation signature.
     pic.update_canister_settings(

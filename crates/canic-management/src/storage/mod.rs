@@ -14,7 +14,7 @@ use std::{borrow::Cow, collections::BTreeMap};
 
 // Persist identities explicitly. The protocol remains the admission ceiling;
 // accepting a new record shape never creates capacity or drops unknown entries.
-type Records<T> = List<(u8, T), { ChildId::SHARDS.len() + ChildId::INSTANCES.len() }>;
+type Records<T> = List<(u8, T), { ChildId::SLOT_COUNT }>;
 
 // Older formats require every historical slot. Expanded records retain sorted
 // identities explicitly and need no placeholder for an unallocated child.
@@ -28,7 +28,7 @@ fn identified<T>(entries: Records<T>) -> Result<BTreeMap<ChildId, T>, &'static s
         }
         map.insert(slot, value);
     }
-    if !complete(&map) {
+    if !historical_or_complete(&map) {
         return Err("child identities");
     }
     Ok(map)
@@ -45,16 +45,26 @@ fn complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
         && entries.contains_key(&ChildId::PROJECT[0]) == entries.contains_key(&ChildId::PROJECT[1])
 }
 
-const JOURNAL_TAG: &[u8; 4] = b"CUJC";
+fn historical_or_complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
+    complete(entries)
+        || entries
+            .keys()
+            .copied()
+            .eq([ChildId::FIRST, ChildId::SECOND])
+}
+
+const JOURNAL_TAG: &[u8; 4] = b"CUJD";
 const ARTIFACT_TAG: &[u8] = b"CUA2";
-pub(super) const JOURNAL_BYTES: usize = 16_384;
+pub(super) const JOURNAL_BYTES: usize = 65_536;
 pub(super) const ARTIFACT_BYTES: usize = 2 * MAX_WASM + 24;
 pub(super) const JOURNAL_KEY: &str = "manager.journal.v2";
 pub(super) const ARTIFACT_KEY: &str = "manager.artifacts.v1";
 #[cfg(feature = "sharding")]
 pub(super) const SHARDS_KEY: &str = "manager.shards.v2";
 #[cfg(feature = "sharding")]
-pub(super) const CLAIMS_KEY: &str = "manager.shard_claims.v1";
+pub(super) const CLAIMS_KEY: &str = "manager.shard_claims.v2";
+#[cfg(feature = "sharding")]
+pub(super) const WORKER_HISTORY_KEY: &str = "manager.worker_history.v1";
 pub(super) const KEYS: &[&str] = &[
     #[cfg(feature = "role-issuer")]
     super::role_issuer::KEY,
@@ -64,14 +74,16 @@ pub(super) const KEYS: &[&str] = &[
     SHARDS_KEY,
     #[cfg(feature = "sharding")]
     CLAIMS_KEY,
+    #[cfg(feature = "sharding")]
+    WORKER_HISTORY_KEY,
     #[cfg(feature = "backup")]
     "manager.snapshot.v1",
 ];
 const JOURNAL_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: JOURNAL_BYTES - 4,
-    allocation: 2 * (1 + upgrade::MAX_UPGRADES) * LIMITS.allocation
+    allocation: ChildId::ALL.len() * (1 + upgrade::MAX_UPGRADES) * LIMITS.allocation
         + store_maintenance::MAX_UPGRADES * store_maintenance::LIMITS.allocation,
-    nodes: 2 * (1 + upgrade::MAX_UPGRADES) * LIMITS.nodes
+    nodes: ChildId::ALL.len() * (1 + upgrade::MAX_UPGRADES) * LIMITS.nodes
         + store_maintenance::MAX_UPGRADES * store_maintenance::LIMITS.nodes,
     depth: LIMITS.depth + 5,
 };
@@ -306,7 +318,7 @@ impl Artifacts {
                 Artifact::Stored(_) | Artifact::Application(..) => 0,
             })
             .sum();
-        if !complete(&self.0)
+        if !historical_or_complete(&self.0)
             || inline_bytes > canic_management_protocol::children::MAX_ARTIFACT_BYTES
             || self
                 .0

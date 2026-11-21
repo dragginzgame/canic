@@ -17,11 +17,11 @@ pub const STAGE_UPGRADE: u64 = 43;
 pub const RECONCILE_UPGRADE: u64 = 44;
 /// Complete journals and artifact retention evidence.
 pub const CUSTODY: u64 = 45;
-/// Bounded metadata for two children and their eight retained upgrades each.
+/// Bounded metadata for permanent services and their eight retained upgrades each.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: 65_536,
-    allocation: 4_194_304,
-    nodes: 262_144,
+    bytes: 262_144,
+    allocation: 16_777_216,
+    nodes: 1_048_576,
     depth: 24,
 };
 
@@ -104,7 +104,7 @@ pub struct Custody {
     /// Complete creation and upgrade journals.
     pub children: children::Custody,
     /// None denotes an inline child; no raw bytes are exported.
-    pub sources: [Option<Sources>; 2],
+    pub sources: [Option<Sources>; crate::children::ChildId::ALL.len()],
 }
 
 /// Controller-only approval for Root-managed shard growth from one immutable release.

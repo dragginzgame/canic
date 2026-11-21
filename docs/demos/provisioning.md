@@ -12,10 +12,10 @@ serialization and deserialization on Toko’s existing refusal enum. Include
 Wire schema evidence when building endpoint inspection or browser codecs.
 Keep the existing ULID, name validation, method name, limits and placement domain.
 
-- In the [shard handler](../../qualification/fixtures/provisioning-roles/provision_user.rs),
+- In the [shard handler](provisioning/provision_user.rs),
   keep the parent guard, map a failed target check to `BindingConflict` and use
   `user::provision(&binding, &request.data)?`. Return `Ok(binding)` only on success.
-- In the [hub handler](../../qualification/fixtures/provisioning-roles/register.rs),
+- In the [hub handler](provisioning/register.rs),
   pass `SendError::Progress` to the existing progress handler. Map
   `SendError::Refused` into Toko’s existing `AccountError` before the ready transition.
   This preserves Toko’s public registration reply.
@@ -29,6 +29,7 @@ and `Progress` keep their data shapes. The provisioning reply changes as describ
 ```rust
 pub async fn place<'a, R: Resource>(
     auth: &'a Authorization,
+    pool: &'a str,
     retained: Option<Principal>,
 ) -> Result<Assignment<'a, R>, Progress>;
 

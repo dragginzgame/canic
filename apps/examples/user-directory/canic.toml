@@ -24,7 +24,7 @@ build = { manifest = "../../../Cargo.toml", package = "ex-user-directory-shard" 
 # Bind the simulator and installed principals before approving placement.
 network = { kind = "Local" }
 
-[apps.ex-user-directory.fleets.local.shard_pool]
+[[apps.ex-user-directory.fleets.local.shard_pools]]
 component = "ex-user-directory-shard"
 root = "root"
 store = "store"

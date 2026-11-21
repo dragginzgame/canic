@@ -3,13 +3,6 @@ use super::{Asset, STATE, api, available, management, mgmt, policy, reset};
 use canic::sharding::standby::{HandoffStatus, ImportStandby, TransferPhase};
 use ic_platform_types::Principal;
 
-fn authorize(caller: Principal) -> Result<(), String> {
-    if !api::is_controller(&caller) {
-        return Err("source controller required".into());
-    }
-    super::super::admit_pool_change(false).map_err(|e| format!("{e:?}"))
-}
-
 // No await separates replacement from persistence. A competing continuation can only observe.
 fn replace(index: usize, expected: &Asset, next: Asset) -> Result<(), String> {
     STATE.with_borrow_mut(|s| {
@@ -35,7 +28,7 @@ pub async fn export(
 ) -> Result<TransferPhase, String> {
     use TransferPhase::{Confirmed, ControllersIssued, Reserved};
     let caller = api::caller();
-    authorize(caller)?;
+    super::authorize_change(caller)?;
     if destination.as_slice().last() != Some(&1)
         || destination == id
         || destination == api::canister_self()
@@ -69,7 +62,7 @@ pub async fn export(
     let reported = canic::method::call::<HandoffStatus>(destination, 10, &id)
         .await
         .map_err(|e| format!("destination reservation unconfirmed: {e:?}"))??;
-    authorize(caller)?;
+    super::authorize_change(caller)?;
     if before == entry(ControllersIssued) {
         if matches!(reported, Asset::AwaitingHandoff(subject) if subject == id) {
             return Ok(ControllersIssued);
@@ -103,7 +96,7 @@ pub async fn export(
         if policy::subnet(api::canister_self()).await? != policy::subnet(destination).await? {
             return Err("destination Root is on another subnet".into());
         }
-        authorize(caller)?;
+        super::authorize_change(caller)?;
         check_deadline()?;
         replace(index, &before, entry(Reserved))?;
         policy::wake();
@@ -123,7 +116,7 @@ pub async fn export(
     {
         return Err("transfer requires a running, uninstalled spare".into());
     }
-    authorize(caller)?;
+    super::authorize_change(caller)?;
     check_deadline()?;
     let args = mgmt::UpdateSettingsArgs {
         canister_id: id,

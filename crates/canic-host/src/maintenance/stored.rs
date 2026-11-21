@@ -17,6 +17,8 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         || crate::unhex(&store.store.module)?.len() != 32
         || store.store.module != store.store.module.to_ascii_lowercase()
         || (store.operation.is_none() && store.sources.iter().all(Option::is_none))
+        || store.sources.len() < children.len()
+        || store.sources.len() > ChildId::ALL.len()
         || store.sources[children.len()..].iter().any(Option::is_some)
         || store.history.len() >= canic_management_protocol::store_maintenance::MAX_UPGRADES
         || (!store.history.is_empty() && store.operation.is_none())
@@ -159,11 +161,10 @@ fn expected(plan: &Plan) -> Result<wire::Custody> {
                 }
             })
         }),
-        sources: plan
-            .maintenance_store()
-            .ok_or_else(invalid)?
-            .sources
-            .clone(),
+        sources: {
+            let sources = &plan.maintenance_store().ok_or_else(invalid)?.sources;
+            std::array::from_fn(|i| sources.get(i).cloned().flatten())
+        },
     })
 }
 

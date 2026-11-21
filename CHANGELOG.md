@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.254.0] - 2026-11-22
+
+### 🌳 Fleet growth and named pools
+
+Fresh Roots can host up to eight permanent services. Adding a service preserves
+the slots and upgrade targets already approved for its siblings. Permanent
+services and placement pools share the subnet ceiling. Roots with the old
+two-service journal require their original executable. [Canic #75](https://github.com/dragginzgame/canic/issues/75)
+
+### ▶️ Try it
+
+```sh
+# From the configured fleet, inspect the declared children and retained deployments.
+canic fleet canister list
+canic fleet show
+```
+
+`canic::topology::get_shard(pool_name, principal)` routes unseen principals among a hub’s acknowledged shards in that exact pool. The pool name is the approved shard component. Root publishes it in directory delivery v2. The v3 index records retired generations, requires a fresh install and retains the existing wallet scoring. [Canic #71](https://github.com/dragginzgame/canic/issues/71)
+
+Declare shared placement grants with repeatable `[[apps.<app>.fleets.<fleet>.shard_pools]]` tables. Assignment and lookup carry the component name and key. Root’s new placement layout requires a fresh install. Confirmed worker returns free live capacity while retaining the original ordinal and creation debit. Root waits for the former hub to confirm withdrawal before reinstalling a retired shard.
+
+A hub names the child directly at the call site with `canic::shard_pool!("discovery_shard")` or `canic::worker_pool!("miner")`. Canic supplies the selected hub’s children from its app definition. Unknown names fail compilation. Whole-fleet planning reads the resulting Wasm requirements and checks pool kind and parent. Declare worker allowances in repeatable `[[apps.<app>.fleets.<fleet>.worker_pools]]` tables. Each component has independent ordinals, count and spending bounds. Worker calls now carry the component and ordinal. Roots with the old single-worker-pool ledger require their original executable.
+
+```sh
+# From the Miner Pool example, build its checked hub. The local walkthrough uses synthetic cycles.
+canic app build
+# From the repository root, qualify named worker pools against installed canisters.
+make miner-test
+```
+
+Plain endpoint mounts now check that the shared method does not require role attestation. Host inspection exposes the request and reply codec limits for application and built-in mounts.
+
+Root logs when an approved install finds the configured reserve pool empty and schedules a paid creation. When returns or imports take the pool above target, Root logs the surplus and keeps the canisters available.
+
+```sh
+# In a configured fleet, inspect the ready count and refill status.
+canic fleet show
+```
+
+Directly created workers can now enter the subnet reserve pool after their hub releases them and Root verifies the reset. The original creation still counts against the worker grant.
+
+Root rechecks the original operator after observing a worker release or reset. If control changes while an observation is pending, the successor can resume from the last committed phase.
+
+Root build recipes can select the crates.io package locked by the consumer workspace. The Wasm and native operator client use the same source and recipe features. Large Root builds retain stripping and use size optimization for Root and Management. [Canic #72](https://github.com/dragginzgame/canic/issues/72)
+
+Conventional hubs with role attestation now attach their outgoing proof cache on install and reopen. Use `call_service_by_role` for a unique published role. The passive declaration is now `#[canic::attested_method(roles = …)]`; the receiver references it with `#[canic::update(attested_method = …)]`. [Canic #73](https://github.com/dragginzgame/canic/issues/73) · [Canic #74](https://github.com/dragginzgame/canic/issues/74)
+
+```sh
+# From a consumer with a locked Root recipe, build both artifacts and inspect the Wasm.
+canic app build --canister root
+canic artifact endpoints artifacts/root.wasm
+```
+
+Updated IC DB and its schema macros to 0.26.11 in the product and qualification workspaces. The optional Canic DB adapter keeps its existing API.
+
 ## [0.253.0] - 2026-11-21
 
 A hub can call `Index::acknowledged_children(role)` to enumerate its direct children locally, including unnamed shards that confirmed directory delivery. The lookup survives reopening the index. [Canic #71](https://github.com/dragginzgame/canic/issues/71)

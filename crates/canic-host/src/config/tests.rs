@@ -251,8 +251,8 @@ fn declaration(selected: &SelectedFleet) -> Config {
                         subnet_child_limit: None,
                         instance_pool: None,
                         standby_pool: None,
-                        worker_pool: None,
-                        shard_pool: None,
+                        worker_pools: Vec::new(),
+                        shard_pools: Vec::new(),
                         auth: Vec::new(),
                         network: FleetNetwork::Bound(selected.config.network.clone()),
                         journal: selected.config.journal.clone(),
@@ -1173,7 +1173,7 @@ network = { kind = "Mainnet" }
 root = { id = "rrkah-fqaaa-aaaaa-aaaaq-cai" }
 store = { id = "ryjl3-tyaaa-aaaaa-aaaba-cai" }
 hub = { id = "r7inp-6aaaa-aaaaa-aaabq-cai" }
-[apps.toko.fleets.local.shard_pool]
+[[apps.toko.fleets.local.shard_pools]]
 component = "shard"
 root = "root"
 store = "store"
@@ -1191,25 +1191,27 @@ expires_at_ns = 1800000000000000000
         Some("wasm-store")
     );
     let mut fleet = selected.config;
-    let release = fleet.shard_pool.as_ref().unwrap().release.clone();
+    let release = fleet.shard_pools.first().unwrap().release.clone();
     let manifest = crate::publication::release_manifest(release, b"\0asm\x01\0\0\0");
     let nonce = canic_management_protocol::application::Arguments::new(vec![7; 16]).unwrap();
     let old = fleet
-        .shard_pool_approval(manifest.clone(), nonce.clone())
+        .shard_pool_approval("shard", manifest.clone(), nonce.clone())
         .unwrap();
     assert_eq!(old.arguments, nonce);
-    fleet.shard_pool.as_mut().unwrap().install_topology = true;
+    fleet.shard_pools.first_mut().unwrap().install_topology = true;
     let mut missing_role = fleet.clone();
     missing_role.canisters.get_mut("shard").unwrap().role = None;
     let refusal = missing_role
-        .shard_pool_approval(manifest.clone(), nonce.clone())
+        .shard_pool_approval("shard", manifest.clone(), nonce.clone())
         .unwrap_err();
     assert!(
         refusal
             .to_string()
             .contains("topology install requires a role for shard")
     );
-    let approved = fleet.shard_pool_approval(manifest, nonce.clone()).unwrap();
+    let approved = fleet
+        .shard_pool_approval("shard", manifest, nonce.clone())
+        .unwrap();
     let install = canic::topology::Install::decode(approved.arguments.as_slice()).unwrap();
     assert_eq!(install.root.to_text(), approved.root);
     assert_eq!(install.parent.to_text(), approved.hub);
@@ -1239,7 +1241,7 @@ fn unbound_local_pool_has_capacity_but_no_deployment_target() {
 parent = "hub"
 [apps.toko.fleets.local]
 network = { kind = "Local" }
-[apps.toko.fleets.local.shard_pool]
+[[apps.toko.fleets.local.shard_pools]]
 component = "shard"
 root = "root"
 store = "store"
@@ -1313,7 +1315,7 @@ creation_budget = 2000000000000
         source.replace("keys_per_shard = 1", "keys_per_shard = 100001"),
         source.replace("max_shards = 2", "max_shards = 3"),
         source.replace("kind = \"Local\"", "kind = \"Local\", url = \"http://localhost:8000\""),
-        source.replace("[apps.toko.fleets.local.shard_pool]", "[apps.toko.fleets.local.canisters]\nhub = { id = \"aaaaa-aa\" }\n[apps.toko.fleets.local.shard_pool]"),
+        source.replace("[[apps.toko.fleets.local.shard_pools]]", "[apps.toko.fleets.local.canisters]\nhub = { id = \"aaaaa-aa\" }\n[[apps.toko.fleets.local.shard_pools]]"),
     ] {
         assert!(toml::from_str::<Config>(&invalid).map_or(true, |c| c.validate().is_err()));
     }
@@ -1450,4 +1452,106 @@ principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai", "r7inp-6aaaa-aaaaa-aaabq-cai"]
             .to_string()
             .contains("standby_pool.min_available_spares = 5 exceeds subnet_child_limit = 4")
     );
+}
+
+#[test]
+fn worker_pools_plan_separately_and_require_the_declared_hub() {
+    let source = include_str!("../../../../apps/examples/miner-pool/canic.toml").replace(
+        "network = { kind = \"Local\" }",
+        "network = { kind = \"Mainnet\" }",
+    );
+    let dir = directory();
+    let mut config: Config = toml::from_str(&source).unwrap();
+    let app = config.apps.get_mut("ex-miner-pool").unwrap();
+    app.canisters
+        .insert("auxiliary".into(), app.canisters["miner"].clone());
+    let fleet = app.fleets.get_mut("local").unwrap();
+    for (name, id) in [
+        ("root", "rrkah-fqaaa-aaaaa-aaaaq-cai"),
+        ("store", "ryjl3-tyaaa-aaaaa-aaaba-cai"),
+        ("pool", "r7inp-6aaaa-aaaaa-aaabq-cai"),
+    ] {
+        fleet.canisters.insert(
+            name.into(),
+            CanisterBinding {
+                id: id.into(),
+                profile_manager: false,
+            },
+        );
+    }
+    fleet.worker_pools[0].expires_at_ns = Some(u64::MAX);
+    let mut other = fleet.worker_pools[0].clone();
+    other.component = "auxiliary".into();
+    fleet.worker_pools.push(other);
+    // The same hub may own both kinds of grant and more than one of each.
+    for name in ["profiles", "accounts"] {
+        let mut child = app.canisters["miner"].clone();
+        child.wasm = Some("artifacts/shard.wasm".into());
+        app.canisters.insert(name.into(), child);
+        fleet.shard_pools.push(ShardPoolConfig {
+            component: name.into(),
+            root: "root".into(),
+            store: "store".into(),
+            release: fleet.worker_pools[0].release.clone(),
+            max_shards: 1,
+            keys_per_shard: 3,
+            creation_budget: 0,
+            expires_at_ns: Some(u64::MAX),
+            install_args: None,
+            install_topology: true,
+            increase_from: None,
+        });
+    }
+    let mut selected = config.select(None, None).unwrap();
+    let header = b"\0asm\x01\0\0\0";
+    let mut hub = header.to_vec();
+    let section = b"canic:pool:worker:auxiliary";
+    hub.extend([
+        0,
+        u8::try_from(section.len() + 1).unwrap(),
+        u8::try_from(section.len()).unwrap(),
+    ]);
+    hub.extend(section);
+    std::fs::create_dir(dir.join("artifacts")).unwrap();
+    std::fs::write(dir.join("artifacts/pool.wasm"), &hub).unwrap();
+    std::fs::write(dir.join("artifacts/shard.wasm"), header).unwrap();
+    std::fs::write(dir.join("artifacts/miner.wasm"), header).unwrap();
+    let plan = |fleet: &SelectedFleet| {
+        crate::plan_fleet(
+            &dir,
+            &dir.join("canic.toml"),
+            fleet,
+            &input().controller,
+            None,
+            None,
+        )
+    };
+    let crate::FleetPlanning::PlacementPools {
+        workers, shards, ..
+    } = plan(&selected).unwrap()
+    else {
+        panic!("worker approvals")
+    };
+    assert_eq!(shards.len(), 2);
+    assert_ne!(shards[0].approval.pool, shards[1].approval.pool);
+    assert_eq!(shards[0].approval.hub, workers[0].approval.hub);
+    assert_eq!(workers.len(), 2);
+    assert_ne!(workers[0].request, workers[1].request);
+    assert_eq!(workers[0].approval.hub, workers[1].approval.hub);
+    std::fs::write(dir.join("artifacts/miner.wasm"), &hub).unwrap();
+    let wrong_hub = plan(&selected).unwrap_err();
+    std::fs::write(dir.join("artifacts/miner.wasm"), header).unwrap();
+    assert!(
+        wrong_hub
+            .to_string()
+            .contains("hub \"miner\" requires worker pool \"auxiliary\"")
+    );
+    selected.config.worker_pools.pop();
+    assert!(
+        plan(&selected)
+            .unwrap_err()
+            .to_string()
+            .contains("hub \"pool\" requires worker pool \"auxiliary\"")
+    );
+    std::fs::remove_dir_all(dir).unwrap();
 }

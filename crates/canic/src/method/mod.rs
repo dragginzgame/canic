@@ -96,6 +96,19 @@ pub trait Contract {
     }
 }
 
+// Inference has one candidate for a plain contract. A role method has a second
+// candidate, so a plain mount fails to type-check even through a type alias.
+#[doc(hidden)]
+pub trait PlainMount<Marker> {
+    const CHECK: () = ();
+}
+impl<M: Contract> PlainMount<()> for M {}
+#[cfg(feature = "topology")]
+impl<M: crate::topology::attestation::RoleMethod> PlainMount<AttestedMount> for M {}
+#[cfg(feature = "topology")]
+#[doc(hidden)]
+pub enum AttestedMount {}
+
 #[doc(hidden)]
 #[must_use]
 pub const fn same_name(left: &str, right: &str) -> bool {

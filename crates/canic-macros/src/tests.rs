@@ -9,7 +9,7 @@ fn refuses_ambiguous_contracts_and_invalid_signatures() {
         }
     );
     for (options, message) in [
-        (quote!(roles = &[], role_contract = Read), "roles cannot"),
+        (quote!(roles = &[], attested_method = Read), "roles cannot"),
         (quote!(contract = Read, roles = &[]), "roles cannot"),
         (quote!(roles = &[], roles = ANY), "repeated"),
         (quote!(method = 42), "unknown"),
@@ -57,16 +57,46 @@ fn caller_descriptors_preserve_the_attestation_boundary() {
         (
             Mode::Descriptor,
             quote!(roles = &[SHARD]),
-            "use role_descriptor",
+            "use attested_method",
         ),
-        (Mode::RoleDescriptor, quote!(), "requires inline roles"),
+        (Mode::AttestedMethod, quote!(), "requires inline roles"),
         (
             Mode::Descriptor,
-            quote!(role_contract = M),
+            quote!(attested_method = M),
             "use the explicit contract",
         ),
     ] {
         let error = expand(mode, options, handler.clone()).unwrap_err();
         assert!(error.to_string().contains(message), "{error}");
     }
+}
+
+#[test]
+fn native_pool_selection_checks_package_parent_and_exact_child_spelling() {
+    let mut config: toml::Table = toml::from_str(
+        r#"
+[apps.directory.canisters.hub.build]
+package = "actor"
+[apps.directory.canisters.user-shard]
+parent = "hub"
+[apps.directory.canisters.other]
+parent = "sibling"
+"#,
+    )
+    .unwrap();
+    let child = super::components::check_child;
+    assert!(child(&config, "actor", "user-shard").is_ok());
+    assert!(child(&config, "actor", "user_shard").is_err());
+    assert!(child(&config, "actor", "other").is_err());
+    assert!(child(&config, "another", "user-shard").is_err());
+    let app = config["apps"]["directory"].clone();
+    config["apps"]
+        .as_table_mut()
+        .unwrap()
+        .insert("duplicate".into(), app);
+    assert!(
+        child(&config, "actor", "user-shard")
+            .unwrap_err()
+            .contains("multiple components")
+    );
 }

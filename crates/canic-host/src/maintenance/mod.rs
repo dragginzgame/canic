@@ -316,7 +316,10 @@ fn matches_plan(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
             canic_management_protocol::children::LIMITS,
         )
         .map_err(supplier)?;
-        Ok(observed.as_slice() == expected)
+        Ok(observed.starts_with(expected)
+            && observed[expected.len()..]
+                .iter()
+                .all(|c| c.creation == Status::default() && c.upgrades.is_empty()))
     } else {
         let [child] = expected else {
             return Err(invalid());

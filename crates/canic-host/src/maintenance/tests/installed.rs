@@ -62,7 +62,7 @@ async fn root_maintenance_preserves_store_operation() {
                     canister: input.store,
                     module: crate::hex(&operation.approval.previous_module),
                 },
-                sources: input.expected.stored.sources.clone(),
+                sources: input.expected.stored.sources.to_vec(),
                 operation: Some(operation.clone()),
             })),
         },

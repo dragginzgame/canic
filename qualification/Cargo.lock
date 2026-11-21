@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.253.0"
+version = "0.254.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -426,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.253.0"
+version = "0.254.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -459,16 +459,17 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.253.0"
+version = "0.254.0"
 dependencies = [
  "proc-macro2",
  "quote",
  "syn 3.0.10",
+ "toml",
 ]
 
 [[package]]
 name = "canic-management"
-version = "0.253.0"
+version = "0.254.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -484,7 +485,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.253.0"
+version = "0.254.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -1170,7 +1171,7 @@ dependencies = [
 
 [[package]]
 name = "ex-counter"
-version = "0.253.0"
+version = "0.254.0"
 dependencies = [
  "canic",
  "clap",
@@ -1184,7 +1185,7 @@ dependencies = [
 
 [[package]]
 name = "ex-miner-pool-hub"
-version = "0.253.0"
+version = "0.254.0"
 dependencies = [
  "canic",
  "clap",
@@ -1198,7 +1199,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-hub"
-version = "0.253.0"
+version = "0.254.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1207,7 +1208,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-schema"
-version = "0.253.0"
+version = "0.254.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -1217,7 +1218,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-shard"
-version = "0.253.0"
+version = "0.254.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1669,9 +1670,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.26.9"
+version = "0.26.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aac0d33bd2ad2b5f876ca5b7d59ce584e8c9c9d98c17b14c9dd09a9e9fbc4d74"
+checksum = "f7665024990a001e5a7450b03cd177672c1d74174462f06ec60f361ad2d81e4f"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1691,9 +1692,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.26.9"
+version = "0.26.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b27d9e5ac1217087d235212820c45682f687504cdd768e534bf98011c452383c"
+checksum = "e5fce95143bc5300e74535431e9bf2807e44e8e7904c66907443e2c386d7af81"
 dependencies = [
  "proc-macro2",
  "quote",
