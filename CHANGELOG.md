@@ -2,6 +2,14 @@
 
 ## [0.249.0] - 2026-11-21
 
+Attested queries and updates can declare `roles = &[PROJECT, PROJECT_REGISTRY]`
+directly on the handler. Existing typed clients keep the same proof frame.
+A sender can derive its contract from the same endpoint source in a passive
+protocol crate. [Sharing inline endpoints](docs/wire-ci.md#share-an-inline-attested-endpoint-with-a-rust-sender) · [Canic #68](https://github.com/dragginzgame/canic/issues/68)
+
+Host strips symbols from every supplied Root build before hashing the Wasm for approval.
+This keeps the Blob qualification Root within the direct-install size limit.
+
 Typed application calls can select an unbounded wait with
 `canic::method::call_unbounded::<M>(target, &input).await`. Existing bounded
 calls keep their timeout. Both submit once. [Canic #67](https://github.com/dragginzgame/canic/issues/67)

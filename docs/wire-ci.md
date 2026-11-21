@@ -70,3 +70,36 @@ command. For first adoption, create the baseline's parent directory first.
 CI never accepts a candidate automatically. This is a contract drift check.
 Authorization behavior and compatibility with deployed clients require their
 own tests.
+
+
+## Share an inline attested endpoint with a Rust sender
+
+For a receiver-only declaration, write `#[canic::query(roles = &[PROJECT])]`
+or `#[canic::update(roles = &[PROJECT, PROJECT_REGISTRY])]` on the handler.
+The ordinary Wire limits apply to the framed request including its proof.
+Use `limits` and `reply_limits` when the protocol specifies directional budgets.
+
+When two workspace packages need the same declaration, keep the handler in
+one shared Rust source file and import the attribute where the file is included.
+For example, a shared `lookup.rs` can contain:
+
+```rust
+#[update(roles = &[PROJECT, PROJECT_REGISTRY])]
+pub fn lookup(account: AuthSubject) -> Option<UserId> {
+    ops::lookup(account)
+}
+```
+
+In the receiver module, import `canic::update`, the protocol types and constants,
+and the application's `ops` module. In the passive protocol module, import
+`canic::role_descriptor as update` and the same protocol types and constants.
+Each module uses `include!("path/to/lookup.rs");` with its path to that file.
+The protocol crate needs Canic's `method` and `topology` features. The receiver
+also needs `role-verification` and its installed Root pin.
+
+The descriptor expansion emits the type `lookup` with the function's visibility,
+name, method ID, types, roles and budgets. It omits the body and the IC export.
+A sender enables Canic’s `role-attestation` feature and calls the named service with
+`call_service::<protocol::lookup>("user_hub", 5, account, authorize).await`.
+Keep an explicit shared `RoleMethod` and `role_contract = M` when an existing
+protocol uses a custom numeric ID.

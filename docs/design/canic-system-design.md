@@ -1685,13 +1685,16 @@ uses its retained Root and a locally resolved service name for a role-bound call
 
 A role receiver decodes its `ServiceInstall` and uses
 `RoleVerifier::new(installing_root, &install.application)?.attach()?` during
-install or strict reopen. A shared method implements `RoleMethod` with its
-static list of accepted caller roles. A single role uses a one-element slice;
-an empty slice denies everyone. The sender presents one proof of its actual
-installed role. The receiver tests the signed role against the same list.
-Roles sharing a method must have the same authority over its input. Both `#[canic::query(role_contract = M)]` and
-`#[canic::update(role_contract = M)]` verify the proof before invoking the
-ordinary application handler. Its effective Wire request is `(Proof, M::Input)`
+install or strict reopen. A query or update may declare its role list on the
+handler, for example `#[canic::update(roles = &[PROJECT, PROJECT_REGISTRY])]`.
+The ordinary endpoint rules derive its name, Wire ID, request and reply types
+and budgets. Use `limits` and `reply_limits` for an application’s directional
+budgets. An empty list denies everyone. Each caller presents one proof of its
+installed role. Roles sharing a method must have the same authority over its input.
+
+An explicit shared `RoleMethod` can still own a fixed Wire ID and both budgets
+through `role_contract = M`. Both declarations decode the effective request as
+`(Proof, M::Input)` and verify the proof before invoking the application handler
 under the contract's existing method ID and byte budget. The sender uses
 `RoleCalls::new(retained_root)` once at attach time. Its update call checks
 application authority, renews on a cache miss, rechecks authority after the

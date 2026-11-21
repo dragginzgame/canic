@@ -1479,9 +1479,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.26.4"
+version = "0.26.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6c8244718ab3f4e35a36ed7364e36d7da39f9396e0d8c67b089540088ce8cabb"
+checksum = "32f59df6d020533c47beba962e620bcab5662117e5fe1e7f1ec3b23580bb1ff1"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1500,9 +1500,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.26.4"
+version = "0.26.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e0ced934bbfc8ea29af8b8efca4dd97c27c5a1b3adeec629bcf8fdfa378e46d"
+checksum = "fbe015909e4031ad602c22c34a7249c05e0a50a4e2b9f3ba3aaaa094215fca74"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1648,9 +1648,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-macros"
-version = "0.23.23"
+version = "0.23.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cdb5bb90ce8e9bfb8896cca41bda386799bfd5b189f0373027728f5a0e31b810"
+checksum = "6d56705faf76bf52f293449e2d31306f55b5be8f88fad3468e388fef52c64a80"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1672,9 +1672,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-runtime"
-version = "0.23.23"
+version = "0.23.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "882feebba07b8aa72b36e16b097e7cf974237848c93716516c8927c85e601b7e"
+checksum = "b8538fe1bdaff5b5ae6196118a29bb42859aa16858485a7cf4b66b7c958561e6"
 dependencies = [
  "ic-platform-macros",
  "ic-platform-protocol",
@@ -1684,9 +1684,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-runtime-guard"
-version = "0.23.23"
+version = "0.23.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "618ab93ebd31bc39ead315250d0983925898f96b0525c7f895722e43d6c576dd"
+checksum = "e3c30cb68abdd77889c2273094f3c5e9b1c343fd3fbfed97fad2e2d9aa8568f0"
 
 [[package]]
 name = "ic-platform-types"

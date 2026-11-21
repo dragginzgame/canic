@@ -299,12 +299,8 @@ pub(crate) fn build_for_role(
         .arg("--target-dir")
         .arg(private.path())
         .env("CARGO_BUILD_BUILD_DIR", cache);
-    // Sharding Roots with Auth or role issuance exceed direct-install limits with symbol names.
-    // Strip symbols at link time, before computing the reviewed module hash.
-    if package == "canic-root"
-        && (features.iter().any(|f| f == "role-issuer")
-            || (features.iter().any(|f| f == "auth") && features.iter().any(|f| f == "sharding")))
-    {
+    // Root is bootstrapped by direct install. Strip symbols before hashing its deployable bytes.
+    if package == "canic-root" {
         command.args([
             "--config",
             "profile.release.package.canic-root.strip='symbols'",

@@ -173,3 +173,77 @@ fn nested_reply_changes_the_manifest_and_missing_evidence_names_the_method() {
         Revised::Last,
     );
 }
+
+mod role_layout {
+    use canic::method::{Contract, wire};
+    use canic::topology::attestation::RoleMethod;
+
+    // This package does not depend on the receiver crate or its VISITS state.
+    mod protocol {
+        use canic::role_descriptor as query;
+        include!("../../canic-directory-witness/src/visit_count.rs");
+    }
+
+    #[test]
+    fn reads_the_shared_query_descriptor_without_linking_the_receiver() {
+        type Query = protocol::visits;
+        assert_eq!(Query::NAME, "visits");
+        assert_eq!(Query::ID, wire::method_id("visits"));
+        assert_eq!(Query::ROLES, &["user_shard"]);
+        assert_eq!(Query::REQUEST.bytes, canic::method::LIMITS.bytes);
+        assert_eq!(Query::REPLY.bytes, Query::REQUEST.bytes);
+        Query::encode_request(&()).unwrap();
+        assert_eq!(
+            Query::decode_reply(&Query::encode_reply(&7u64).unwrap()).unwrap(),
+            7
+        );
+    }
+
+    struct Explicit;
+    impl Contract for Explicit {
+        const NAME: &'static str = "explicit_lookup";
+        const ID: u64 = wire::method_id("inline_lookup");
+        type Input = u64;
+        type Output = Option<String>;
+    }
+    impl RoleMethod for Explicit {
+        const ROLES: &'static [&'static str] = &["project"];
+    }
+
+    #[canic::query(role_contract = Explicit)]
+    fn explicit_lookup(_: u64) -> Option<String> {
+        None
+    }
+
+    #[canic::query(roles = Explicit::ROLES)]
+    fn inline_lookup(_: u64) -> Option<String> {
+        None
+    }
+
+    #[test]
+    fn equivalent_attested_queries_report_the_same_effective_abi() {
+        let schemas = super::Schemas::default();
+        let declared = |name| {
+            let declaration = canic::inspection::inventory::iter::<canic::inspection::Declaration>
+                .into_iter()
+                .find(|d| d.module == module_path!() && d.name == name)
+                .unwrap();
+            (
+                declaration.id,
+                declaration.mode,
+                serde_json::to_value((declaration.request)(&schemas).unwrap()).unwrap(),
+                serde_json::to_value((declaration.reply)(&schemas).unwrap()).unwrap(),
+            )
+        };
+        let inline = declared("inline_lookup");
+        assert_eq!(inline.0, Explicit::ID);
+        assert_eq!(inline.1, "query");
+        assert!(
+            inline.2["rust"]
+                .as_str()
+                .unwrap()
+                .contains("attestation::Claim")
+        );
+        assert_eq!(inline, declared("explicit_lookup"));
+    }
+}

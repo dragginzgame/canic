@@ -175,6 +175,20 @@ pub(super) async fn exercise(
             .update::<_, Result<u64, String>>("visit_hub", id("visit_hub"), &(), limits)
             .await
     };
+    let bare = ic_wire::encode(
+        &(),
+        ic_wire::Encoding::Frame {
+            method: id("visit"),
+            direction: ic_wire::Direction::Request,
+        },
+        limits,
+    )
+    .unwrap();
+    assert!(
+        pic.update_call(receiver.id, registry.id, "visit", bare)
+            .await
+            .is_err()
+    );
     assert_eq!(visit(&registry).await, Ok(1));
     // Project has a valid receiver-bound proof, but the typed client refuses dispatch.
     assert_eq!(

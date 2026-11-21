@@ -11,7 +11,7 @@ use syn::{Expr, FnArg, ItemFn, LitStr, Path, ReturnType, parse::Parser, spanned:
 /// Export a synchronous query using Canic's bounded Wire contract.
 #[proc_macro_attribute]
 pub fn query(options: TokenStream, item: TokenStream) -> TokenStream {
-    expand(false, options.into(), item.into())
+    expand(Mode::Query, options.into(), item.into())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
@@ -19,14 +19,30 @@ pub fn query(options: TokenStream, item: TokenStream) -> TokenStream {
 /// Export a synchronous or asynchronous update using Canic's bounded Wire contract.
 #[proc_macro_attribute]
 pub fn update(options: TokenStream, item: TokenStream) -> TokenStream {
-    expand(true, options.into(), item.into())
+    expand(Mode::Update, options.into(), item.into())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
 }
 
-fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
+/// Derive the passive typed caller contract from the same inline role endpoint source.
+#[proc_macro_attribute]
+pub fn role_descriptor(options: TokenStream, item: TokenStream) -> TokenStream {
+    expand(Mode::Descriptor, options.into(), item.into())
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Mode {
+    Query,
+    Update,
+    Descriptor,
+}
+
+fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut contract: Option<Path> = None;
     let mut role_contract = false;
+    let mut roles: Option<Expr> = None;
     let mut guard: Option<Expr> = None;
     let mut scope: Option<Expr> = None;
     let mut name: Option<LitStr> = None;
@@ -38,6 +54,8 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         {
             role_contract = option.path.is_ident("role_contract");
             contract = Some(option.value()?.parse()?);
+        } else if option.path.is_ident("roles") && roles.is_none() {
+            roles = Some(option.value()?.parse()?);
         } else if option.path.is_ident("scope") && scope.is_none() {
             scope = Some(option.value()?.parse()?);
         } else if option.path.is_ident("guard") && guard.is_none() {
@@ -64,13 +82,14 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let export = name.unwrap_or_else(|| {
         LitStr::new(handler.to_string().trim_start_matches("r#"), handler.span())
     });
+    let update = mode == Mode::Update;
     let kind = if update {
         quote!(update)
     } else {
         quote!(query)
     };
     let asynchronous = signature.asyncness;
-    if asynchronous.is_some() && !update {
+    if asynchronous.is_some() && mode == Mode::Query {
         return Err(syn::Error::new(
             signature.span(),
             "async endpoints require #[canic::update]",
@@ -122,6 +141,14 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         ReturnType::Type(_, ty) => quote!(#ty),
     };
     let argument = parameter.map(|_| quote!(__canic_input));
+    if let Some(roles) = &roles
+        && contract.is_some()
+    {
+        return Err(syn::Error::new(
+            roles.span(),
+            "roles cannot be combined with contract or role_contract",
+        ));
+    }
     let (request, reply, id, request_budget, reply_budget, check) = if let Some(contract) =
         &contract
     {
@@ -152,6 +179,39 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             quote!(),
         )
     };
+    if mode == Mode::Descriptor {
+        let roles = roles.ok_or_else(|| {
+            syn::Error::new(handler.span(), "role_descriptor requires inline roles")
+        })?;
+        let vis = &function.vis;
+        let conditions: Vec<_> = cfg.collect();
+        return Ok(quote! {
+            #(#conditions)*
+            #[allow(non_camel_case_types)]
+            #[doc = concat!("Typed caller contract for `", #export, "`.")]
+            #vis enum #handler {}
+            #(#conditions)*
+            const _: () = {
+                use ::canic::method::wire;
+                const __CANIC_REQUEST: wire::Limits = #request_budget;
+                impl ::canic::method::Contract for #handler {
+                    const NAME: &'static str = #export;
+                    const ID: u64 = #id;
+                    const REQUEST: wire::Limits = __CANIC_REQUEST;
+                    const REPLY: wire::Limits = #reply_budget;
+                    type Input = #request;
+                    type Output = #reply;
+                }
+                impl ::canic::topology::attestation::RoleMethod for #handler {
+                    const ROLES: &'static [&'static str] = #roles;
+                }
+            };
+        });
+    }
+    let roles = roles.map(|roles| quote!(#roles)).or_else(|| {
+        role_contract
+            .then(|| quote!(<#contract as ::canic::topology::attestation::RoleMethod>::ROLES))
+    });
     let guard = guard.map(|g| {
         let check = if matches!(g, Expr::Path(_)) {
             quote!(#g())
@@ -170,7 +230,7 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         }
     });
     let input_type = parameter.map(|_| &request);
-    let admitted_type = if role_contract {
+    let admitted_type = if roles.is_some() {
         quote!((::canic::topology::attestation::Proof,#request))
     } else {
         request.clone()
@@ -181,10 +241,11 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         reply.clone()
     };
     let unit = parameter.is_none().then(|| quote!(let () = __canic_input;));
-    let admit_proof = role_contract.then(|| {
+    let admit_proof = roles.map(|roles| {
         quote! {
             let (__canic_proof,__canic_input) = __canic_input;
-            ::canic::topology::attestation::admit_role::<#contract>(&__canic_proof)
+            const __CANIC_ROLES: &[&str] = #roles;
+            ::canic::topology::attestation::admit_roles(__CANIC_ROLES, &__canic_proof)
                 .unwrap_or_else(|e| ::canic::method::fail(e));
         }
     });

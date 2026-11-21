@@ -8,6 +8,7 @@ pub const LIFETIME_NS: u64 = 7_200_000_000_000;
 
 /// Signed allocation identity under its issuing Root.
 #[derive(Clone, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 pub struct Claim {
     /// Root responsible for this allocation.
     pub root: Principal,
@@ -165,9 +166,15 @@ impl RoleVerifier {
 /// Refuses missing trust or a proof that fails this method's role check.
 #[cfg(feature = "role-verification")]
 pub fn admit_role<M: RoleMethod>(proof: &Proof) -> Result<(), &'static str> {
+    admit_roles(M::ROLES, proof)
+}
+
+#[cfg(feature = "role-verification")]
+#[doc(hidden)]
+pub fn admit_roles(roles: &[&str], proof: &Proof) -> Result<(), &'static str> {
     TRUST.with(|slot| {
         slot.get()
             .ok_or("missing role verifier")?
-            .require_role(M::ROLES, proof)
+            .require_role(roles, proof)
     })
 }

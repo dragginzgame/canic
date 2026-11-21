@@ -15,6 +15,7 @@ category = "tests"
 [features]
 inspection = [
     "canic/inspection",
+    "canic/role-verification",
     "ex-user-directory-schema/inspection",
     "dep:ex-user-directory-hub",
     "dep:ex-user-directory-shard",

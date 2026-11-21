@@ -82,10 +82,20 @@ fn retained_role() -> Option<Proof> {
     PROOF.with_borrow(Clone::clone)
 }
 
+const VISIT_REQUEST: wire::Limits = wire::Limits {
+    bytes: 384,
+    ..canic::method::LIMITS
+};
+const VISIT_REPLY: wire::Limits = wire::Limits {
+    bytes: 64,
+    ..canic::method::LIMITS
+};
 struct Visit;
 impl Contract for Visit {
     const NAME: &'static str = "visit";
     const ID: u64 = wire::method_id(Self::NAME);
+    const REQUEST: wire::Limits = VISIT_REQUEST;
+    const REPLY: wire::Limits = VISIT_REPLY;
     type Input = ();
     type Output = Result<u64, String>;
 }
@@ -93,7 +103,9 @@ impl RoleMethod for Visit {
     const ROLES: &'static [&'static str] = &["user_shard", "hub"];
 }
 
-#[canic::update(role_contract = Visit)]
+const HUB: &str = "hub";
+
+#[canic::update(roles = &["user_shard", HUB], limits = VISIT_REQUEST, reply_limits = VISIT_REPLY)]
 fn visit() -> Result<u64, String> {
     VISITS.update(|n| n + 1);
     Ok(VISITS.get())
@@ -111,41 +123,25 @@ async fn visit_hub() -> Result<u64, String> {
     .map_err(|e| format!("{e:?}"))?
 }
 
-struct Visits;
-impl Contract for Visits {
-    const NAME: &'static str = "visits";
-    const ID: u64 = wire::method_id(Self::NAME);
-    type Input = ();
-    type Output = u64;
-}
-impl RoleMethod for Visits {
-    const ROLES: &'static [&'static str] = &["user_shard"];
+mod reader {
+    use super::VISITS;
+    use canic::query;
+    include!("visit_count.rs");
 }
 
-#[canic::query(role_contract = Visits)]
-fn visits() -> u64 {
-    VISITS.get()
+mod protocol {
+    use canic::role_descriptor as query;
+    include!("visit_count.rs");
 }
 
 #[canic::update(guard = controller)]
 async fn read_visits(receiver: Principal) -> Result<u64, String> {
     let calls = CALLS.with(|s| s.get().expect("installed issuer").clone());
     calls
-        .call_cached::<Visits>(receiver, 5, ())
+        .call_cached::<protocol::visits>(receiver, 5, ())
         .await
         .map_err(|e| format!("{e:?}"))
 }
 
-struct ClosedVisit;
-impl Contract for ClosedVisit {
-    const NAME: &'static str = "closed_visit";
-    const ID: u64 = wire::method_id(Self::NAME);
-    type Input = ();
-    type Output = ();
-}
-impl RoleMethod for ClosedVisit {
-    const ROLES: &'static [&'static str] = &[];
-}
-
-#[canic::update(role_contract = ClosedVisit)]
+#[canic::update(roles = &[])]
 fn closed_visit() {}
