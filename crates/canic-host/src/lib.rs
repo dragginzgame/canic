@@ -6,6 +6,8 @@
 mod tests;
 
 mod app_build;
+mod app_wire;
+pub use app_wire::{check_wire, wire_manifest};
 pub mod application;
 mod artifact;
 mod auth;

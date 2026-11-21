@@ -56,7 +56,7 @@ pub struct ShardStatus {
     /// Whether the allocation has stopped accepting new placements.
     pub draining: bool,
     /// Current count of placement keys in Root's ledger.
-    pub live_placements: u16,
+    pub live_placements: u32,
 }
 
 /// Observe a shard by principal under the selected Root.
@@ -82,7 +82,7 @@ impl crate::method::Contract for BeginShardDrain {
     const ID: u64 = ic_wire::method_id(Self::NAME);
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = ShardTarget;
-    type Output = Result<u16, String>;
+    type Output = Result<u32, String>;
 }
 
 /// Release one route after the hub has durably retired its application binding.

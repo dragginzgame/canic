@@ -11,12 +11,20 @@ endpoints = "src/lib.rs"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[features]
+inspection = ["canic/inspection"]
+
 [dependencies]
 canic = { workspace = true, features = ["method", "readiness"] }
 serde.workspace = true
 
 [dev-dependencies]
 toko-tooling.workspace = true
+
+[[example]]
+name = "starter-app-wire"
+path = "examples/wire.rs"
+required-features = ["inspection"]
 
 [lints]
 workspace = true

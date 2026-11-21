@@ -128,5 +128,9 @@ name = "store"
 name = "inspection"
 required-features = ["inspection"]
 
+[[example]]
+name = "user_directory_manifests"
+required-features = ["inspection"]
+
 [lints]
 workspace = true

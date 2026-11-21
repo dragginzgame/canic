@@ -111,6 +111,8 @@ pub(crate) struct State {
     pool: StableCell<Vec<u8>>,
     #[cfg(feature = "sharding")]
     pools: sharding::Pools,
+    #[cfg(feature = "sharding")]
+    claims: ic_storage::adapter::StableBTreeMap<canic::sharding::Key, u8>,
     #[cfg(feature = "role-issuer")]
     role_key: StableCell<Vec<u8>>,
     readiness: Readiness,
@@ -152,8 +154,14 @@ thread_local! {
 /// # Panics
 /// Traps if storage is missing/corrupt on upgrade, admission fails, or timers cannot open.
 pub fn open(fresh: bool, readiness: Readiness) {
+    // Sharding Roots admit up to eight shards of 100,000 keys across the shard slots.
+    let pages = if cfg!(feature = "sharding") {
+        4096
+    } else {
+        512
+    };
     let runtime =
-        canic::storage::bootstrap(DefaultMemoryImpl::default(), fresh, "manager", KEYS, 512);
+        canic::storage::bootstrap(DefaultMemoryImpl::default(), fresh, "manager", KEYS, pages);
     let journal_cell = canic::storage::cell(
         &runtime,
         JOURNAL_KEY,
@@ -190,6 +198,17 @@ pub fn open(fresh: bool, readiness: Readiness) {
         sharding::BYTES,
         fresh.then(|| sharding::Pools::default().encode()),
     );
+    #[cfg(feature = "sharding")]
+    let claims = {
+        let lease = runtime
+            .open_memory(&ic_storage::StableKey::parse(crate::storage::CLAIMS_KEY).unwrap())
+            .expect("placement index lease");
+        if fresh {
+            ic_storage::adapter::StableBTreeMap::create(lease)
+        } else {
+            ic_storage::adapter::StableBTreeMap::load(lease)
+        }
+    };
     let mut state = State {
         journal: Journals::from_bytes(journal_cell.get()).expect("journal custody"),
         artifact: Artifacts::from_bytes(artifact_cell.get().as_slice().into())
@@ -198,7 +217,9 @@ pub fn open(fresh: bool, readiness: Readiness) {
         role_key: role_issuer::open(&runtime, fresh),
         journal_cell,
         #[cfg(feature = "sharding")]
-        pools: sharding::open(pool.get()),
+        pools: sharding::open(pool.get(), claims.len()),
+        #[cfg(feature = "sharding")]
+        claims,
         #[cfg(feature = "sharding")]
         pool,
         artifact_cell,

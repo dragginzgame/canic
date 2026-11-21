@@ -601,7 +601,7 @@ deployment; a selector may be omitted only when its choice is unique. See the
 
 | Journey | Commands |
 | --- | --- |
-| Initialize and build | `canic app init APP`, `canic app build [--canister SLOT]` from declared recipes, `canic artifact build --package PACKAGE`, `canic artifact inspect WASM_FILE` |
+| Initialize and build | `canic app init APP`, `canic app build [--canister SLOT]` from declared recipes, [`canic app check-wire`](../wire-ci.md) against the app-owned baseline, `canic artifact build --package PACKAGE`, `canic artifact inspect WASM_FILE` |
 | List local declarations | `canic app list`, `canic fleet list`, optionally `--app APP` for fleets |
 | Add a deployment declaration | `canic fleet init FLEET --app APP --network NETWORK` resolves the app definitions with no existing-ID bindings, without creating canisters or journals |
 | Define reusable canisters | `canic app canister add SLOT --app APP [--role ROLE] [--parent SLOT] [--wasm PATH]`, `canic app canister list --app APP`; app-owned topology and artifact inputs, shared by all fleets |
@@ -891,6 +891,14 @@ keeps its slot and funding reserved. An account key keeps its first binding for
 the lifetime of the pool, including abandoned signups. Lookup of a replaced
 allocation returns unavailable with the original identity and generation.
 
+The hard backstop is 100,000 live placement keys per shard. Toko's intended
+fleet policy is 10,000 keys per shard with two shards. Rollover at 10,001
+and refusal at 20,001 must preserve lookup and retry for existing assignments.
+Fresh sharding Roots keep 32-byte keys in a named stable B-tree. Each insert
+or release commits with its slot count in the same message. Reopen checks index
+cardinality against retained counts without scanning every key. The old
+inline-ledger storage layout refuses this upgrade. No route is reset or migrated.
+
 Use the frozen legacy highest-random-weight (HRW) selector for **new** keys.
 Its two rankings serve different purposes. Among ready shards with spare
 capacity, score the partition-key bytes followed by the raw shard principal
@@ -969,7 +977,7 @@ trusted hub principal. Root retains them in its existing application creation
 journal and binds them to the generation and Store pin. An empty argument
 uses the existing Store-only path. Replaying the exact grant is idempotent.
 One Root can authorize a shared-shard pool and a dedicated-instance pool. Each
-shard admits 1–64 lifetime keys. Without an explicit subnet ceiling each pool
+shard admits 1–100,000 live keys. Without an explicit subnet ceiling each pool
 is limited to two children. A controller-approved subnet ceiling allows up to eight
 children in total, including permanent children created by that Root. Each creation reserves the engine's fixed creation attachment.
 The deadline restricts new child effects. Existing capacity and lookup persist.

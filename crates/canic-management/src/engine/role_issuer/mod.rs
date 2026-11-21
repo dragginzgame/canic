@@ -222,7 +222,7 @@ pub(super) fn deadline(subject: Principal, generation: &[u8; 32]) -> Option<u64>
 /// Neither observation authorizes a wipe or a handover.
 /// # Errors
 /// Refuses an open issuer or a stale generation.
-pub fn retirement_status(subject: Principal, generation: &Bytes<32>) -> Result<(u64, u16), String> {
+pub fn retirement_status(subject: Principal, generation: &Bytes<32>) -> Result<(u64, u32), String> {
     let (_, actual, live, _) = sharding::assigned_role(subject)?;
     if generation.as_slice() != actual {
         return Err("assignment changed".into());

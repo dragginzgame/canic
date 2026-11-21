@@ -27,44 +27,21 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: 24,
 };
 
-#[derive(Clone, Serialize, Deserialize)]
-#[serde(bound(
-    serialize = "[u16; N]: Serialize, [Option<[u8; 32]>; N]: Serialize, [Option<String>; N]: Serialize",
-    deserialize = "[u16; N]: Deserialize<'de>, [Option<[u8; 32]>; N]: Deserialize<'de>, [Option<String>; N]: Deserialize<'de>"
-))]
-struct Ledger<const N: usize> {
-    approval: ShardPool,
-    claims: BTreeMap<Key, ChildId>,
-    counts: [u16; N],
-    generations: [Option<[u8; 32]>; N],
-    principals: [Option<String>; N],
-}
-
 const SLOT_COUNT: usize = ChildId::SHARDS.len() + ChildId::INSTANCES.len();
 
-impl<const N: usize> Ledger<N> {
-    fn resize<const M: usize>(self) -> Ledger<M> {
-        Ledger {
-            approval: self.approval,
-            claims: self.claims,
-            counts: std::array::from_fn(|i| self.counts.get(i).copied().unwrap_or_default()),
-            generations: std::array::from_fn(|i| self.generations.get(i).copied().flatten()),
-            principals: std::array::from_fn(|i| self.principals.get(i).cloned().flatten()),
-        }
-    }
+#[derive(Serialize, Deserialize)]
+struct Ledger {
+    approval: ShardPool,
+    counts: [u32; SLOT_COUNT],
+    generations: [Option<[u8; 32]>; SLOT_COUNT],
+    principals: [Option<String>; SLOT_COUNT],
 }
-
-// The historical untagged Option starts with 0 or 1. Once an instance grant
-// exists, older Roots must refuse the entire record on reopen.
-const INSTANCE_LAYOUT: &[u8] = b"CPL1";
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Pools {
-    #[serde(skip)]
     permanent: [bool; 2],
-    #[serde(skip)]
     draining: BTreeMap<ChildId, [u8; 32]>,
-    shards: Option<Ledger<SLOT_COUNT>>,
+    shards: Option<Ledger>,
     capacity: Option<stored::SubnetCapacity>,
     shard_increases: Vec<u8>,
     instance_increases: Vec<u8>,
@@ -122,123 +99,38 @@ impl Pools {
     }
 
     pub(super) fn encode(&self) -> Vec<u8> {
-        let (tag, payload) = if !self.draining.is_empty() {
-            (
-                b"CPL5".as_slice(),
-                ic_wire::encode(
-                    &(self.permanent, &self.draining, self),
-                    ic_wire::Encoding::Payload,
-                    LIMITS,
-                ),
-            )
-        } else if self.permanent.contains(&true) {
-            (
-                b"CPL4".as_slice(),
-                ic_wire::encode(&(self.permanent, self), ic_wire::Encoding::Payload, LIMITS),
-            )
-        } else if self.capacity.is_some() {
-            (
-                b"CPL3".as_slice(),
-                ic_wire::encode(self, ic_wire::Encoding::Payload, LIMITS),
-            )
-        } else {
-            let historical = self.shards.clone().map(Ledger::resize::<2>);
-            if self.instances.is_none() {
-                return ic_wire::encode(&historical, ic_wire::Encoding::Payload, LIMITS)
-                    .expect("bounded shard ledger");
-            }
-            if self.projects.is_empty() {
-                (
-                    INSTANCE_LAYOUT,
-                    ic_wire::encode(
-                        &(historical, &self.instances),
-                        ic_wire::Encoding::Payload,
-                        LIMITS,
-                    ),
-                )
-            } else {
-                (
-                    b"CPL2".as_slice(),
-                    ic_wire::encode(
-                        &(historical, &self.instances, &self.projects),
-                        ic_wire::Encoding::Payload,
-                        LIMITS,
-                    ),
-                )
-            }
-        };
-        let mut bytes = tag.to_vec();
-        bytes.extend(payload.expect("bounded placement grants"));
-        assert!(bytes.len() <= BYTES);
-        bytes
+        ic_wire::encode(self, ic_wire::Encoding::Payload, LIMITS)
+            .expect("bounded placement metadata")
     }
 }
 
-pub(super) fn open(bytes: &[u8]) -> Pools {
-    type LegacyShards = Option<Ledger<2>>;
-    let pools = if let Some(payload) = bytes.strip_prefix(b"CPL5") {
-        let (permanent, draining, mut pools): (_, BTreeMap<ChildId, [u8; 32]>, Pools) =
-            ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
-                .expect("draining shard ledger");
-        assert!(!draining.is_empty());
+pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
+    let pools: Pools =
+        ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS).expect("placement metadata");
+    assert_eq!(
+        claim_count,
+        pools.shards.as_ref().map_or(0, |ledger| ledger
+            .counts
+            .iter()
+            .copied()
+            .map(u64::from)
+            .sum()),
+        "placement index count"
+    );
+    for (&slot, generation) in &pools.draining {
         let ledger = pools.shards.as_ref().expect("draining pool");
-        for (&slot, generation) in &draining {
-            assert!(
-                ChildId::SHARDS.contains(&slot)
-                    && ledger.generations[slot.index()].as_ref() == Some(generation)
-                    && ledger.principals[slot.index()].is_some()
-            );
-        }
-        pools.permanent = permanent;
-        pools.draining = draining;
+        assert!(
+            ChildId::SHARDS.contains(&slot)
+                && ledger.generations[slot.index()].as_ref() == Some(generation)
+                && ledger.principals[slot.index()].is_some()
+        );
+    }
+    if pools.permanent.contains(&true) {
         pools
-    } else if bytes.starts_with(b"CPL3") || bytes.starts_with(b"CPL4") {
-        let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"CPL4") {
-            let (permanent, mut pools): ([bool; 2], Pools) =
-                ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
-                    .expect("mixed child ledger");
-            assert!(permanent.contains(&true));
-            pools.permanent = permanent;
-            pools
-        } else {
-            ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS)
-                .expect("expanded placement ledger")
-        };
-        pools.capacity.as_ref().expect("subnet capacity");
-        pools
-    } else {
-        let (shards, instances, projects): (
-            LegacyShards,
-            Option<stored::InstancePool>,
-            Vec<ProjectClaim>,
-        ) = if let Some(payload) = bytes.strip_prefix(b"CPL2") {
-            let old: (
-                LegacyShards,
-                Option<stored::InstancePool>,
-                Vec<ProjectClaim>,
-            ) = ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
-                .expect("project claims");
-            assert!(old.1.is_some() && !old.2.is_empty());
-            old
-        } else if let Some(payload) = bytes.strip_prefix(INSTANCE_LAYOUT) {
-            let (shards, grant): (LegacyShards, Option<stored::InstancePool>) =
-                ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
-                    .expect("placement grants");
-            (shards, Some(grant.expect("instance grant")), vec![])
-        } else {
-            (
-                ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS).expect("shard ledger"),
-                None,
-                vec![],
-            )
-        };
-        Pools {
-            shards: shards.map(Ledger::resize),
-            instances,
-            projects,
-            ..Default::default()
-        }
-    };
+            .capacity
+            .as_ref()
+            .expect("permanent children require subnet capacity");
+    }
     if let Some(capacity) = &pools.capacity {
         assert!(
             capacity::valid_capacity(capacity)
@@ -284,19 +176,14 @@ pub(super) fn open(bytes: &[u8]) -> Pools {
     if let Some(l) = &pools.shards {
         assert!(valid_limits(&l.approval) && l.approval.max_shards <= pools.pool_limit());
         check_shard_topology(&l.approval).expect("retained shard topology");
-        let mut counts = [0_u16; SLOT_COUNT];
         let slots = pools.shard_slots(&l.approval);
-        for slot in l.claims.values() {
-            assert!(slots.contains(slot));
-            counts[slot.index()] += 1;
-            assert!(counts[slot.index()] <= l.approval.keys_per_shard);
-        }
-        assert_eq!(counts, l.counts);
         assert!(
             l.generations.iter().flatten().count() as u64 * CREATION_CYCLES
                 <= l.approval.creation_budget
         );
-        for (index, count) in counts.iter().copied().enumerate() {
+        for (index, count) in l.counts.iter().copied().enumerate() {
+            assert!(count <= l.approval.keys_per_shard);
+            assert!(count == 0 || slots.iter().any(|slot| slot.index() == index));
             let occupied = count > 0 || pools.draining.keys().any(|slot| slot.index() == index);
             assert!(l.principals[index].is_none() || occupied);
             assert_eq!(occupied, l.generations[index].is_some());
@@ -421,7 +308,6 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
         let state = s.as_mut().unwrap();
         state.pools.shards = Some(Ledger {
             approval: a,
-            claims: BTreeMap::new(),
             counts: [0; SLOT_COUNT],
             generations: [None; SLOT_COUNT],
             principals: Default::default(),
@@ -578,9 +464,14 @@ pub(super) fn bind_ready(slot: ChildId, pid: &str) {
 pub fn lookup(key: &Key) -> Placement {
     hub().expect("hub required");
     STATE.with_borrow(|s| {
-        let l = s.as_ref().unwrap().pools.shards.as_ref().unwrap();
-        l.claims.get(key).map_or(Placement::Unknown, |slot| {
-            resolve(*slot, l.generations[slot.index()].unwrap())
+        let state = s.as_ref().unwrap();
+        let l = state.pools.shards.as_ref().unwrap();
+        state.claims.get(key).map_or(Placement::Unknown, |id| {
+            let slot = ChildId::placement(usize::from(id)).expect("retained shard slot");
+            resolve(
+                slot,
+                l.generations[slot.index()].expect("retained shard generation"),
+            )
         })
     })
 }
@@ -676,7 +567,12 @@ pub fn assign(key: Key) -> Placement {
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
         let ledger = state.pools.shards.as_mut().unwrap();
-        assert!(ledger.claims.insert(key, slot).is_none());
+        assert!(
+            state
+                .claims
+                .insert(key, u8::try_from(slot.index()).unwrap())
+                .is_none()
+        );
         ledger.counts[slot.index()] += 1;
         ledger.generations[slot.index()] = Some(generation);
         state.pool.set(state.pools.encode());
@@ -949,7 +845,7 @@ pub fn assign_instance(key: Key) -> Placement {
 #[cfg(feature = "role-issuer")]
 pub(super) fn assigned_role(
     subject: Principal,
-) -> Result<(String, [u8; 32], u16, bool), &'static str> {
+) -> Result<(String, [u8; 32], u32, bool), &'static str> {
     let caller = subject.to_text();
     STATE.with_borrow(|s| {
         let state = s.as_ref().expect("open Root");

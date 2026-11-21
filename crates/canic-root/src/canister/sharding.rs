@@ -218,7 +218,7 @@ fn inspect_shard(
 // guard  : Root controller
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
 #[canic::update(contract = canic::sharding::BeginShardDrain, guard = controller)]
-fn begin_shard_drain(target: canic::sharding::ShardTarget) -> Result<u16, String> {
+fn begin_shard_drain(target: canic::sharding::ShardTarget) -> Result<u32, String> {
     sharding::begin_shard_drain(&target)
 }
 
@@ -254,6 +254,6 @@ fn close_role_issuance(
 #[canic::query(guard = controller)]
 fn retirement_status(
     (subject, generation): (ic_platform_types::Principal, ic_wire::Bytes<32>),
-) -> Result<(u64, u16), String> {
+) -> Result<(u64, u32), String> {
     canic_management::role_issuer::retirement_status(subject, &generation)
 }

@@ -173,6 +173,7 @@ have no aliases.
 | --- | --- |
 | `app init APP` | Declare an app in `--config PATH`, or add `--source DIRECTORY` (checkout override: `--canic-source CHECKOUT`) to generate a new standalone workspace and its own config. No deployment. |
 | `app build` | Build the selected app’s declared workspace/package recipes; `--canister NAME` builds only that canister. Prepare missing Cargo locks once and preserve existing locks. |
+| `app check-wire` | Check the selected app’s mounted Wire schemas and built Wasm exports against its reviewed baseline. [Set up downstream CI](docs/wire-ci.md). |
 | `app list` | List apps in the current/direct-child configs, or only `--config PATH`. Duplicate names require explicit config selection. |
 | `artifact build --package PACKAGE` | Build an explicit Cargo package, optionally with `--manifest PATH` and `--features LIST`. `ic-wasm-store` builds from the workspace's locked supplier protocol source. `--output WASM_FILE` atomically replaces a build input at a configured path. App names do not select packages. |
 | `artifact endpoints WASM_FILE` | List exported IC methods and their call modes from local Wasm. Use `--json` for structured output. |

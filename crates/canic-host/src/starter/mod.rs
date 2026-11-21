@@ -132,6 +132,16 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
     Ok(BTreeMap::from([
         ("canic.toml".into(), config_bytes),
         (
+            PathBuf::from("wire-baseline")
+                .join(app)
+                .join("contracts.json"),
+            include_bytes!("templates/contracts.json").to_vec(),
+        ),
+        (
+            "starter-app/examples/wire.rs".into(),
+            include_bytes!("templates/wire.rs").to_vec(),
+        ),
+        (
             "Cargo.toml".into(),
             toml::to_string_pretty(&generated)
                 .map_err(supplier)?

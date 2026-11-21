@@ -39,7 +39,7 @@ pub fn build_app(
     canister: Option<&str>,
 ) -> Result<Vec<BuiltCanister>> {
     let config = crate::load_config(path)?;
-    let (_, app) = config.select_app(app)?;
+    let (app_name, app) = config.select_app(app)?;
     if app.canisters.is_empty() {
         return Err(Error::Invalid("app has no canister build recipes".into()));
     }
@@ -56,6 +56,16 @@ pub fn build_app(
         std::collections::BTreeSet::from([
             crate::output_path::resolve(path, &working_directory).map_err(supplier)?
         ]);
+    inputs.insert(
+        crate::output_path::resolve(
+            &base
+                .join("wire-baseline")
+                .join(app_name)
+                .join("contracts.json"),
+            &working_directory,
+        )
+        .map_err(supplier)?,
+    );
     for (name, canister) in &app.canisters {
         let recipe = canister.build.as_ref().ok_or_else(|| Error::Invalid(format!("canister {name} has no build recipe; add build.manifest and build.package to its app definition")))?;
         let manifest = base
@@ -105,7 +115,7 @@ pub fn build_app(
     // Missing lockfiles are inputs too: Cargo may create them below.
     if outputs.iter().any(|output| inputs.contains(output)) {
         return Err(Error::Invalid(
-            "app build output would replace its config, workspace manifest or Cargo.lock".into(),
+            "app build output would replace its config, workspace manifest, Cargo.lock or reviewed Wire baseline".into(),
         ));
     }
     let mut built = Vec::new();

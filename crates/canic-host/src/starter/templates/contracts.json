@@ -1,0 +1,135 @@
+{
+  "app": {
+    "greet": {
+      "id": "0x0000000000000001",
+      "mode": "query",
+      "reply": {
+        "rust": "starter_app::Greeting",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Greeting_2b10626c7d38918b"
+          },
+          "Wire_Greeting_2b10626c7d38918b": {
+            "fields": [
+              {
+                "name": "message",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_String_76e26e9121e02e46"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          }
+        }
+      },
+      "request": {
+        "rust": "alloc::string::String",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_String_76e26e9121e02e46"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          }
+        }
+      }
+    },
+    "probe": {
+      "id": "0x0000000000000001",
+      "mode": "update",
+      "reply": {
+        "rust": "starter_app::Greeting",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Greeting_2b10626c7d38918b"
+          },
+          "Wire_Greeting_2b10626c7d38918b": {
+            "fields": [
+              {
+                "name": "message",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_String_76e26e9121e02e46"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          }
+        }
+      },
+      "request": {
+        "rust": "alloc::string::String",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_String_76e26e9121e02e46"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          }
+        }
+      }
+    },
+    "readiness": {
+      "id": "0x0000000000000003",
+      "mode": "update",
+      "reply": {
+        "rust": "canic::readiness::State",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_State_5225ede4bbc26fc0"
+          },
+          "Wire_State_5225ede4bbc26fc0": {
+            "k": "enum",
+            "variants": [
+              {
+                "id": 0,
+                "name": "Unavailable",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 1,
+                "name": "Fenced",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 2,
+                "name": "Ready",
+                "value": {
+                  "k": "unit"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "request": {
+        "rust": "()",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire____07e11f07b4a6665a"
+          },
+          "Wire____07e11f07b4a6665a": {
+            "k": "unit"
+          }
+        }
+      }
+    }
+  }
+}

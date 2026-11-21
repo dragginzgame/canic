@@ -20,7 +20,7 @@ exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.246.0"
+version = "0.247.0"
 edition = "2024"
 rust-version = "1.100.0"
 repository = "https://github.com/dragginzgame/canic"
@@ -30,10 +30,10 @@ publish = ["crates-io"]
 [workspace.dependencies]
 # Production
 base64 = "0.23.1"
-canic-host = { path = "crates/canic-host", version = "0.246.0" }
-canic-macros = { path = "crates/canic-macros", version = "0.246.0" }
-canic-management = { path = "crates/canic-management", version = "0.246.0" }
-canic-management-protocol = { path = "crates/canic-management-protocol", version = "0.246.0" }
+canic-host = { path = "crates/canic-host", version = "0.247.0" }
+canic-macros = { path = "crates/canic-macros", version = "0.247.0" }
+canic-management = { path = "crates/canic-management", version = "0.247.0" }
+canic-management-protocol = { path = "crates/canic-management-protocol", version = "0.247.0" }
 clap = { version = "4.6.7", features = ["derive"] }
 ex-user-directory-schema = { path = "apps/examples/user-directory/schema" }
 ic-auth = "0.48.8"
@@ -73,7 +73,7 @@ url = "2.5.8"
 wasmparser = { version = "0.263.0", default-features = false, features = ["std"] }
 
 # Production and tests
-canic = { path = "crates/canic", version = "0.246.0" }
+canic = { path = "crates/canic", version = "0.247.0" }
 ic-platform = { version = "0.34.13", default-features = false }
 ic-query-topology = "0.110.6"
 ic-storage = "0.78.0"

@@ -2,6 +2,19 @@
 
 ## Native endpoint inspection
 
+`make check-wire-endpoints` builds the default User Directory hub and shard
+from their app recipes. Linux PR CI checks each actor’s mounted names and call
+modes against the callable Wasm exports, then compares the generated per-method
+Wire manifests with the [reviewed hub and shard baselines](../apps/examples/user-directory/wire-baseline/ex-user-directory/contracts.json).
+These include the routing ID and both request and reply schema graphs. Optional
+role-service builds are outside this baseline.
+
+The downstream command and baseline adoption workflow are documented in the
+[Wire CI guide](../docs/wire-ci.md). On drift the CLI retains a separate candidate
+and reports both paths. For an intentional contract change, review the affected
+methods and client compatibility, update the tracked JSON in the same PR, and
+rerun the check. CI never updates the baseline.
+
 `bash scripts/dev/test-store.sh user-directory` builds the hub and shard, compares
 their IC query and update exports to the native descriptor maps, then runs the
 installed signup journey. The inspection suite checks a scoped request, a named
@@ -39,9 +52,11 @@ principals and generations, pool exhaustion and replay after hub and Root upgrad
 An independently installed copy of the hub calls the same Root for the same user.
 Root refuses both lookup and assignment, preserves its retained bytes, and
 continues returning the original assignment to the approved hub.
-To exercise an upgrade from a released sharding Root, set
-`CANIC_PREDECESSOR_SHARD_ROOT_WASM` to its built Wasm. The test installs it,
-fills both slots and upgrades to the candidate before checking replay and exhaustion.
+A fresh sharding Root owns its claims in a named stable B-tree. The large-pool
+case submits 20,000 distinct signups through the installed hub and retries boundary
+accounts after Root reopen. For the hard-cut check, supply an inline-ledger Root
+as `CANIC_PREDECESSOR_SHARD_ROOT_WASM`. An upgrade of that populated Root
+must refuse and leave its original assignment usable.
 The fixture adds a project hub and an `instance_pool` to the same fleet, reruns
 `canic fleet plan`, and checks that the original shard request is byte-identical.
 The controller submits the CLI-generated project request to `configure_instances`.
@@ -51,9 +66,7 @@ With both user slots full, one user submits two project keys through the project
 hub. The fixture discards the first reply, retries the key, and verifies two distinct
 ready children with the approved project hub as their database owner. The third
 key is refused. Reopening Root preserves both projects and the user's shard.
-Set `CANIC_PREDECESSOR_PLACEMENT_ROOT_WASM` to the released 0.239.0
-sharding Root to create both projects before installing the candidate. The
-controller then raises both pool counts from two to six under one eight-child
+The controller then raises both pool counts from two to six under one eight-child
 subnet ceiling using the planned Wire requests. The hubs race for the final
 slot and replay their keys after Root reopens. Forged funding, extended expiry
 and stale count changes refuse. Cross-hub placement requests are refused in both directions. A separate case

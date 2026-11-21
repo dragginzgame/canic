@@ -58,7 +58,7 @@ pub(crate) fn pool_preview(
         writeln!(text, "Increase {}: {old} → {new} children", escape(pool)).unwrap();
     }
     if let Some(a) = shards {
-        writeln!(text, "\nShared shards · {}\nRoot: {}\nHub: {}\nCapacity: {} shards × {} lifetime keys per shard\nInit bytes (hex): {}", escape(&a.pool), a.root, a.hub, a.max_shards, a.keys_per_shard, hex(a.arguments.as_slice())).unwrap();
+        writeln!(text, "\nShared shards · {}\nRoot: {}\nHub: {}\nCapacity: {} shards × {} live keys per shard\nInit bytes (hex): {}", escape(&a.pool), a.root, a.hub, a.max_shards, a.keys_per_shard, hex(a.arguments.as_slice())).unwrap();
         pool_release(&mut text, &a.reference, a.creation_budget, a.expires_at_ns);
     }
     if let Some(a) = instances {

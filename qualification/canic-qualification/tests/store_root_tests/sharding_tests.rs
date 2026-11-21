@@ -23,13 +23,16 @@ async fn project(
 
 #[tokio::test(flavor = "current_thread")]
 async fn signup_retains_the_first_shard_across_reply_loss_growth_and_hub_upgrade() {
-    exercise_pool(None).await;
+    exercise_pool(None, None).await;
+    if let Some(old) = std::env::var_os("CANIC_PREDECESSOR_SHARD_ROOT_WASM") {
+        exercise_pool(None, Some(PathBuf::from(old))).await;
+    }
     if let Some(wasm) = std::env::var_os("TOKO_USER_SHARD_WASM") {
-        exercise_pool(Some(PathBuf::from(wasm))).await;
+        exercise_pool(Some(PathBuf::from(wasm)), None).await;
     }
 }
 
-async fn exercise_pool(toko_wasm: Option<PathBuf>) {
+async fn exercise_pool(toko_wasm: Option<PathBuf>, inline: Option<PathBuf>) {
     let (_, binary) = support::inputs();
     let (mut server, mut owner) = support::instance_with(
         &binary,
@@ -43,24 +46,10 @@ async fn exercise_pool(toko_wasm: Option<PathBuf>) {
     owner.client_mut().stop_live().await;
     let pic = owner.client();
     let root_wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
-    let project_predecessor = std::env::var_os("CANIC_PREDECESSOR_PLACEMENT_ROOT_WASM")
-        .map(|path| {
-            let wasm = std::fs::read(path).unwrap();
-            assert_ne!(management::digest(&wasm), management::digest(&root_wasm));
-            wasm
-        })
-        .unwrap_or_else(|| root_wasm.clone());
-    let initial_root = if let Some(path) = std::env::var_os("CANIC_PREDECESSOR_SHARD_ROOT_WASM") {
-        let predecessor = std::fs::read(path).unwrap();
-        assert!(
-            predecessor != root_wasm,
-            "expected distinct predecessor and candidate Wasm"
-        );
-        predecessor
-    } else {
-        project_predecessor.clone()
-    };
-    let (root, supplier) = readiness_tests::fixture_with_root(pic, initial_root).await;
+    let initial = inline
+        .as_ref()
+        .map_or_else(|| root_wasm.clone(), |old| std::fs::read(old).unwrap());
+    let (root, supplier) = readiness_tests::fixture_with_root(pic, initial).await;
     let hub = pic
         .create_canister_with_settings(Some(root.operator), None)
         .await;
@@ -165,7 +154,7 @@ expires_at_ns={}
         result.stdout
     };
     let text = String::from_utf8(plan(false)).unwrap();
-    assert!(text.contains("2 shards × 1 lifetime keys"));
+    assert!(text.contains("2 shards × 1 live keys"));
     let result: serde_json::Value = serde_json::from_slice(&plan(true)).unwrap();
     assert_eq!(result["action"], "shard_pool");
     let bytes: Vec<u8> = serde_json::from_value(result["request"].clone()).unwrap();
@@ -232,6 +221,18 @@ expires_at_ns={}
         panic!("{original:?}")
     };
     assert_eq!(*a, allocation);
+    if inline.is_some() {
+        canic_qualification::upgrade_stopped(pic, root.id, root_wasm, vec![], Some(root.operator))
+            .await
+            .unwrap_err();
+        assert_eq!(user(pic, hub, alice, "signup").await, original);
+        assert_eq!(
+            owner.close(Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        assert!(server.stop().unwrap().process.cleanup.is_empty());
+        return;
+    }
     // The same hub code, Root address, operator and account key confer no pool authority.
     let unrelated = pic
         .create_canister_with_settings(Some(root.operator), None)
@@ -323,7 +324,7 @@ expires_at_ns={}
     }
     assert_eq!(user(pic, hub, eve, "signup").await, Placement::Full);
     assert_eq!(user(pic, hub, eve, "lookup").await, Placement::Unknown);
-    for (id, wasm) in [(hub, hub_wasm), (root.id, project_predecessor)] {
+    for (id, wasm) in [(hub, hub_wasm), (root.id, root_wasm.clone())] {
         canic_qualification::upgrade_stopped(pic, id, wasm, vec![], Some(root.operator))
             .await
             .unwrap();
@@ -369,7 +370,7 @@ expires_at_ns = {}
     .unwrap();
     let text = String::from_utf8(plan(false)).unwrap();
     assert!(text.contains("Dedicated instances · project"));
-    assert!(text.contains("2 shards × 1 lifetime keys"));
+    assert!(text.contains("2 shards × 1 live keys"));
     let both: serde_json::Value = serde_json::from_slice(&plan(true)).unwrap();
     assert_eq!(both["action"], "placement_pools");
     assert_eq!(both["shards"]["request"], result["request"]);
@@ -712,7 +713,7 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
         hub: hub.to_text(),
         pool: "users".into(),
         max_shards: 2,
-        keys_per_shard: 1,
+        keys_per_shard: 100_000,
         creation_budget: 0,
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
         reference: stored::Reference {
@@ -987,6 +988,108 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
     assert_eq!(
         project(pic, peer, bob, "lookup_project", 2).await,
         Placement::Unknown
+    );
+    assert_eq!(
+        owner.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn ten_thousand_keys_per_shard_survive_rollover_and_root_reopen() {
+    let (_, binary) = support::inputs();
+    let (mut server, owner) = support::instance_with_lifetime(
+        &binary,
+        ic_testkit::pocket_ic::PocketIcBuilder::new().with_application_subnet(),
+        Duration::from_secs(900),
+    )
+    .await;
+    let pic = owner.client();
+    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let (root, store) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
+    let hub = pic.create_canister().await;
+    pic.add_cycles(hub, 50_000_000_000_000).await;
+    pic.add_cycles(root.id, 50_000_000_000_000).await;
+    pic.install_canister(
+        hub,
+        std::fs::read(artifacts().join("hub.wasm")).unwrap(),
+        root.id.as_slice().to_vec(),
+        None,
+    )
+    .await;
+    let child = std::fs::read(artifacts().join("pool-db.wasm")).unwrap();
+    let manifest = store.publish_named("user_shard", "capacity", &child).await;
+    pic.set_controllers(store.id, Some(root.operator), vec![root.id])
+        .await
+        .unwrap();
+    let mut approval = stored::ShardPool {
+        arguments: management::application::Arguments::new(hub.as_slice().to_vec()).unwrap(),
+        root: root.id.to_text(),
+        hub: hub.to_text(),
+        pool: "user_shard".into(),
+        max_shards: 2,
+        keys_per_shard: 100_001,
+        creation_budget: 2 * management::CREATION_CYCLES,
+        expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
+        reference: stored::Reference {
+            store: store.id.to_text(),
+            manifest,
+        },
+    };
+    assert_eq!(
+        configure(&root, &approval).await,
+        Err(management::Refusal::Binding)
+    );
+    approval.keys_per_shard = 10_000;
+    configure(&root, &approval).await.unwrap();
+    let account = |n: u32| CanisterId::self_authenticating(n.to_le_bytes());
+    let mut assignments = Vec::new();
+    for first in [1, 10_001] {
+        assert!(matches!(
+            user(pic, hub, account(first), "signup").await,
+            Placement::Pending(_)
+        ));
+        settle(pic).await;
+        let assigned = user(pic, hub, account(first), "lookup").await;
+        assert!(matches!(assigned, Placement::Assigned(..)));
+        for start in (first + 1..first + 10_000).step_by(100) {
+            let mut requests = Vec::new();
+            for key in start..(start + 100).min(first + 10_000) {
+                requests.push(
+                    pic.submit_call(hub, account(key), "signup", vec![])
+                        .await
+                        .unwrap(),
+                );
+            }
+            for request in requests {
+                let bytes = pic.await_call(request).await.unwrap();
+                let result: Placement =
+                    ic_wire::decode(&bytes, ic_wire::Encoding::Payload, sharding::LIMITS).unwrap();
+                assert_eq!(result, assigned);
+            }
+        }
+        assignments.push(assigned);
+    }
+    assert_ne!(assignments[0], assignments[1]);
+    assert_eq!(
+        user(pic, hub, account(20_001), "signup").await,
+        Placement::Full
+    );
+    canic_qualification::upgrade_stopped(pic, root.id, wasm, vec![], Some(root.operator))
+        .await
+        .unwrap();
+    for (key, expected) in [(1, 0), (10_000, 0), (10_001, 1), (20_000, 1)] {
+        for method in ["lookup", "signup"] {
+            assert_eq!(
+                user(pic, hub, account(key), method).await,
+                assignments[expected]
+            );
+        }
+    }
+    assert_eq!(
+        user(pic, hub, account(20_001), "signup").await,
+        Placement::Full
     );
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,

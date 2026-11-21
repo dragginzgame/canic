@@ -29,8 +29,8 @@ pub struct ShardPoolConfig {
     pub install_topology: bool,
     /// Maximum lifetime shard count.
     pub max_shards: u8,
-    /// Maximum lifetime keys per shard.
-    pub keys_per_shard: u16,
+    /// Maximum live keys per shard.
+    pub keys_per_shard: u32,
     /// Previous approved pool count when planning an increase on an existing Root.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub increase_from: Option<u8>,
@@ -91,26 +91,50 @@ pub(super) fn validate_capacity(
     shards: Option<&ShardPoolConfig>,
     instances: Option<&InstancePoolConfig>,
 ) -> Result<()> {
-    if limit.is_some_and(|n| {
-        !(1..=stored::MAX_SUBNET_CHILDREN).contains(&n) || (shards.is_none() && instances.is_none())
-    }) {
-        return Err(Error::Invalid(
-            "subnet_child_limit requires placement pools and a supported positive count".into(),
-        ));
+    if let Some(n) = limit {
+        super::positive_count("subnet_child_limit", n, stored::MAX_SUBNET_CHILDREN)?;
+        if shards.is_none() && instances.is_none() {
+            return Err(Error::Invalid(format!(
+                "subnet_child_limit = {n} requires a shard_pool or instance_pool"
+            )));
+        }
     }
-    for (count, previous) in [
-        shards.map(|p| (p.max_shards, p.increase_from)),
-        instances.map(|p| (p.max_instances, p.increase_from)),
+    for (pool, field, count, previous) in [
+        shards.map(|p| ("shard_pool", "max_shards", p.max_shards, p.increase_from)),
+        instances.map(|p| {
+            (
+                "instance_pool",
+                "max_instances",
+                p.max_instances,
+                p.increase_from,
+            )
+        }),
     ]
     .into_iter()
     .flatten()
     {
-        if count > limit.unwrap_or(2)
-            || previous.is_some_and(|old| limit.is_none() || old == 0 || old >= count)
-        {
-            return Err(Error::Invalid(
-                "pool count exceeds subnet_child_limit or increase_from is invalid".into(),
-            ));
+        let ceiling = limit.unwrap_or(2);
+        if count > ceiling {
+            let source = if limit.is_some() {
+                "subnet_child_limit"
+            } else {
+                "the default subnet child limit"
+            };
+            return Err(Error::Invalid(format!(
+                "{pool}.{field} = {count} exceeds {source} of {ceiling}"
+            )));
+        }
+        if let Some(old) = previous {
+            if limit.is_none() {
+                return Err(Error::Invalid(format!(
+                    "{pool}.increase_from = {old} requires an explicit subnet_child_limit"
+                )));
+            }
+            if old == 0 || old >= count {
+                return Err(Error::Invalid(format!(
+                    "{pool}.increase_from = {old} must be positive and less than {field} = {count}"
+                )));
+            }
         }
     }
     Ok(())
@@ -166,7 +190,7 @@ pub(crate) fn preview(
         .shard_pool
         .as_ref()
         .map(|pool| {
-            check_deadline(pool.expires_at_ns, now)?;
+            check_deadline("shard_pool", pool.expires_at_ns, now)?;
             let (manifest, args) = inputs(
                 selected,
                 config_path,
@@ -213,7 +237,7 @@ pub(crate) fn preview(
     let network = selected.config.network.clone();
     let controller = controller.to_owned();
     if let Some(pool) = &selected.config.instance_pool {
-        let expires_at_ns = check_deadline(pool.expires_at_ns, now)?;
+        let expires_at_ns = check_deadline("instance_pool", pool.expires_at_ns, now)?;
         let (manifest, args) = inputs(
             selected,
             config_path,
@@ -284,12 +308,25 @@ pub(crate) fn preview(
     })
 }
 
-fn check_deadline(deadline: Option<u64>, now: u64) -> Result<u64> {
+fn validate_deadline(pool: &str, value: Option<u64>) -> Result<()> {
+    if value == Some(0) {
+        return Err(Error::Invalid(format!(
+            "{pool}.expires_at_ns = 0 must be a positive Unix timestamp in nanoseconds"
+        )));
+    }
+    Ok(())
+}
+
+fn check_deadline(pool: &str, deadline: Option<u64>, now: u64) -> Result<u64> {
     let deadline = deadline.ok_or_else(|| {
-        Error::Invalid("pool growth approval requires an explicit deadline".into())
+        Error::Invalid(format!(
+            "{pool}.expires_at_ns is missing; a growth approval requires an explicit deadline"
+        ))
     })?;
     if deadline <= now {
-        return Err(Error::Invalid("pool growth approval has expired".into()));
+        return Err(Error::Invalid(format!(
+            "{pool}.expires_at_ns = {deadline} has expired; expected a deadline later than {now} (Unix nanoseconds)"
+        )));
     }
     Ok(deadline)
 }
@@ -297,7 +334,7 @@ fn check_deadline(deadline: Option<u64>, now: u64) -> Result<u64> {
 impl ShardPoolConfig {
     fn deadline(&self) -> Result<u64> {
         self.expires_at_ns.ok_or_else(|| {
-            Error::Invalid("shard growth approval requires an explicit deadline".into())
+            Error::Invalid("shard_pool.expires_at_ns is missing; a growth approval requires an explicit deadline".into())
         })
     }
 
@@ -310,14 +347,17 @@ impl ShardPoolConfig {
             &self.release,
             self.install_args.as_deref(),
         )?;
-        if !(1..=usize::from(stored::MAX_SUBNET_CHILDREN)).contains(&usize::from(self.max_shards))
-            || !(1..=stored::MAX_KEYS_PER_SHARD).contains(&self.keys_per_shard)
-            || self.expires_at_ns == Some(0)
-        {
-            return Err(Error::Invalid(
-                "shard pool bounds or deadline outside the supported range".into(),
-            ));
-        }
+        super::positive_count(
+            "shard_pool.max_shards",
+            self.max_shards,
+            stored::MAX_SUBNET_CHILDREN,
+        )?;
+        super::positive_count(
+            "shard_pool.keys_per_shard",
+            self.keys_per_shard,
+            stored::MAX_KEYS_PER_SHARD,
+        )?;
+        validate_deadline("shard_pool", self.expires_at_ns)?;
         Ok(())
     }
 }
@@ -445,7 +485,11 @@ fn parent<'a>(slots: &'a BTreeMap<String, CanisterConfig>, component: &str) -> R
     slots
         .get(component)
         .and_then(|c| c.parent.as_deref())
-        .ok_or_else(|| Error::Invalid("pool component must have a declared parent hub".into()))
+        .ok_or_else(|| {
+            Error::Invalid(format!(
+                "pool component {component:?} must have a declared parent hub"
+            ))
+        })
 }
 
 impl InstancePoolConfig {
@@ -462,22 +506,28 @@ impl InstancePoolConfig {
             &self.release,
             self.install_args.as_deref(),
         )?;
-        if !(1..=stored::MAX_INSTANCES).contains(&self.max_instances)
-            || self.expires_at_ns == Some(0)
-        {
-            return Err(Error::Invalid(
-                "instance pool bounds or deadline outside the supported range".into(),
-            ));
-        }
+        super::positive_count(
+            "instance_pool.max_instances",
+            self.max_instances,
+            stored::MAX_INSTANCES,
+        )?;
+        validate_deadline("instance_pool", self.expires_at_ns)?;
         if let Some(other) = shared
             && (self.root != other.root
                 || self.store != other.store
                 || self.component == other.component
                 || hub == parent(slots, &other.component)?)
         {
-            return Err(Error::Invalid(
-                "placement pools require one Root and Store and distinct children and hubs".into(),
-            ));
+            return Err(Error::Invalid(format!(
+                "instance_pool (root {:?}, store {:?}, component {:?}, hub {hub:?}) and shard_pool (root {:?}, store {:?}, component {:?}, hub {:?}) require the same root and store and distinct children and hubs",
+                self.root,
+                self.store,
+                self.component,
+                other.root,
+                other.store,
+                other.component,
+                parent(slots, &other.component)?
+            )));
         }
         Ok(())
     }
@@ -491,19 +541,30 @@ fn validate_pool<'a>(
     release: &ic_wasm_store_protocol::Release,
     args: Option<&Path>,
 ) -> Result<&'a str> {
-    if !release.valid() || args.is_some_and(|p| p.as_os_str().is_empty()) {
+    if !release.valid() {
+        return Err(Error::Invalid(format!(
+            "pool release.name = {:?}, release.version = {:?}; each must contain 1–64 ASCII letters, digits, dots, hyphens or underscores",
+            release.name, release.version
+        )));
+    }
+    if args.is_some_and(|p| p.as_os_str().is_empty()) {
         return Err(Error::Invalid(
-            "invalid pool release label or install argument path".into(),
+            "pool install_args = \"\"; expected a nonempty file path".into(),
         ));
     }
     let hub = parent(slots, component)?;
     let mut names = std::collections::BTreeSet::new();
     for slot in [component, hub, root, store] {
         name(slot)?;
-        if !slots.contains_key(slot) || !names.insert(slot) {
-            return Err(Error::Invalid(
-                "child, hub, Root and Store must be distinct declared components".into(),
-            ));
+        if !slots.contains_key(slot) {
+            return Err(Error::Invalid(format!(
+                "pool slot {slot:?} is missing from the canister declarations"
+            )));
+        }
+        if !names.insert(slot) {
+            return Err(Error::Invalid(format!(
+                "pool slot {slot:?} is repeated; component {component:?}, hub {hub:?}, root {root:?} and store {store:?} must be distinct"
+            )));
         }
     }
     Ok(hub)

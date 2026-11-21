@@ -21,11 +21,19 @@ pub async fn instance(directory: &Path) -> (Server, Instance) {
 }
 
 pub async fn instance_with(directory: &Path, builder: PocketIcBuilder) -> (Server, Instance) {
+    instance_with_lifetime(directory, builder, Duration::from_secs(120)).await
+}
+
+pub async fn instance_with_lifetime(
+    directory: &Path,
+    builder: PocketIcBuilder,
+    lifetime: Duration,
+) -> (Server, Instance) {
     let server = Server::start(
         PreparedServer::check(directory).expect("run make qualification-setup first"),
         Limits {
             startup: Duration::from_secs(30),
-            lifetime: Duration::from_secs(120),
+            lifetime,
             stdout_bytes: 1024 * 1024,
             stderr_bytes: 1024 * 1024,
         },

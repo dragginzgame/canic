@@ -227,6 +227,19 @@ pub struct DeploymentName {
     pub canister: String,
 }
 
+pub(crate) fn positive_count<T: Copy + Ord + std::fmt::Display + From<u8>>(
+    field: &str,
+    value: T,
+    max: T,
+) -> Result<()> {
+    if value < T::from(1) || value > max {
+        return Err(Error::Invalid(format!(
+            "{field} = {value}; supported range is 1..={max}"
+        )));
+    }
+    Ok(())
+}
+
 fn name(value: &str) -> Result<()> {
     if value.is_empty()
         || value.len() > 64
@@ -234,9 +247,9 @@ fn name(value: &str) -> Result<()> {
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
     {
-        return Err(Error::Invalid(
-            "names must be 1–64 ASCII letters, digits, hyphens or underscores".into(),
-        ));
+        return Err(Error::Invalid(format!(
+            "{value:?} is invalid; names must be 1–64 ASCII letters, digits, hyphens or underscores"
+        )));
     }
     Ok(())
 }
@@ -255,14 +268,12 @@ impl Config {
     /// # Errors
     /// Refuses unsupported formats, invalid names, networks or oversized declarations.
     pub fn validate(&self) -> Result<()> {
-        if self.apps.is_empty() || self.apps.len() > 16 {
-            return Err(Error::Invalid("config needs 1–16 apps".into()));
-        }
+        positive_count("number of apps", self.apps.len(), 16)?;
         let mut total = 0;
         let mut membership = BTreeMap::new();
         for (app, definition) in &self.apps {
             name(app)?;
-            for canister in definition.canisters.values() {
+            for (slot, canister) in &definition.canisters {
                 if let Some(build) = &canister.build {
                     name(&build.package)?;
                     for feature in &build.features {
@@ -276,19 +287,33 @@ impl Config {
                     if let Some(client) = &build.client {
                         name(client)?;
                     }
-                    if build.manifest.as_os_str().is_empty() || canister.wasm.is_none() {
-                        return Err(Error::Invalid(
-                            "build recipe needs a manifest and Wasm output".into(),
-                        ));
+                    if build.manifest.as_os_str().is_empty() {
+                        return Err(Error::Invalid(format!(
+                            "apps.{app}.canisters.{slot}.build.manifest = \"\"; expected a workspace manifest path"
+                        )));
+                    }
+                    if canister.wasm.is_none() {
+                        return Err(Error::Invalid(format!(
+                            "apps.{app}.canisters.{slot}.wasm is missing; a build recipe requires a Wasm output path"
+                        )));
                     }
                 }
             }
             validate_canisters(&definition.resolve_canisters(&BTreeMap::new()))?;
             if definition.fleets.len() > 16 {
-                return Err(Error::Invalid("each app supports at most 16 fleets".into()));
+                return Err(Error::Invalid(format!(
+                    "apps.{app} has {} fleets; maximum is 16",
+                    definition.fleets.len()
+                )));
             }
             for (fleet, config) in &definition.fleets {
                 name(fleet)?;
+                let context = |error| match error {
+                    Error::Invalid(message) => {
+                        Error::Invalid(format!("apps.{app}.fleets.{fleet}: {message}"))
+                    }
+                    other => other,
+                };
                 if config.lifetime.is_some()
                     && (!matches!(config.network, FleetNetwork::Unbound(_))
                         || config.journal.is_some())
@@ -305,28 +330,30 @@ impl Config {
                                 .into(),
                         ));
                     }
-                    let slots = definition.resolve_slots(config)?;
-                    validate_canisters(&slots)?;
-                    validate_role_receivers(&slots, &config.role_receivers)?;
+                    let slots = definition.resolve_slots(config).map_err(context)?;
+                    validate_canisters(&slots).map_err(context)?;
+                    validate_role_receivers(&slots, &config.role_receivers).map_err(context)?;
                     if let Some(policy) = &config.receiver_policy {
-                        policy.validate(&slots)?;
+                        policy.validate(&slots).map_err(context)?;
                     }
                     sharding::validate_capacity(
                         config.subnet_child_limit,
                         config.shard_pool.as_ref(),
                         config.instance_pool.as_ref(),
-                    )?;
+                    )
+                    .map_err(context)?;
                     if let Some(pool) = &config.shard_pool {
-                        pool.validate(&slots)?;
+                        pool.validate(&slots).map_err(context)?;
                     }
                     if let Some(pool) = &config.instance_pool {
-                        pool.validate(&slots, config.shard_pool.as_ref())?;
+                        pool.validate(&slots, config.shard_pool.as_ref())
+                            .map_err(context)?;
                     }
                     total += slots.len();
                     continue;
                 }
-                let config = definition.resolve(config)?;
-                config.validate()?;
+                let config = definition.resolve(config).map_err(context)?;
+                config.validate().map_err(context)?;
                 total += config.canisters.len();
                 let network = serde_json::to_vec(&config.network).map_err(supplier)?;
                 for declaration in config.canisters.values() {
@@ -344,7 +371,9 @@ impl Config {
             }
         }
         if total > 128 {
-            return Err(Error::Invalid("config exceeds 128 canisters".into()));
+            return Err(Error::Invalid(format!(
+                "config declares {total} fleet canister slots; maximum is 128"
+            )));
         }
         Ok(())
     }
@@ -450,12 +479,14 @@ impl AppConfig {
                 );
             }
         }
-        if fleet
+        if let Some(slot) = fleet
             .canisters
             .keys()
-            .any(|slot| !canisters.contains_key(slot))
+            .find(|slot| !canisters.contains_key(*slot))
         {
-            return Err(Error::Invalid("fleet binding must name an app canister definition or supplied shard infrastructure".into()));
+            return Err(Error::Invalid(format!(
+                "fleet binding {slot:?} must name an app canister definition or supplied shard infrastructure"
+            )));
         }
         Ok(canisters)
     }
@@ -529,7 +560,11 @@ impl FleetConfig {
             pool.validate(&self.canisters, self.shard_pool.as_ref())?;
         }
         if self.auth.len() > canic::auth::enrollment::MAX_RECEIVERS {
-            return Err(Error::Invalid("too many Auth receiver declarations".into()));
+            return Err(Error::Invalid(format!(
+                "auth has {} receiver declarations; maximum is {}",
+                self.auth.len(),
+                canic::auth::enrollment::MAX_RECEIVERS
+            )));
         }
         let mut receivers = std::collections::BTreeSet::new();
         for auth in &self.auth {
@@ -559,14 +594,27 @@ fn validate_role_receivers(
             .get(receiver)
             .ok_or_else(|| Error::Invalid(format!("unknown role receiver {receiver}")))?;
         let parent = slot.parent.as_ref().and_then(|p| slots.get(p));
-        if !seen.insert(receiver)
-            || !parent.is_some_and(|p| p.parent.is_none() && p.role.as_deref() == Some("root"))
+        if !seen.insert(receiver) {
+            return Err(Error::Invalid(format!(
+                "role_receivers contains duplicate slot {receiver:?}"
+            )));
+        }
+        if !parent.is_some_and(|p| p.parent.is_none() && p.role.as_deref() == Some("root"))
             || slot.role.as_deref().is_none_or(|r| r == "wasm-store")
-            || !slots
-                .values()
-                .any(|s| s.role.as_deref() == Some("wasm-store") && s.parent == slot.parent)
         {
-            return Err(Error::Invalid("role receivers must name distinct direct services with declared roles and a fleet Store".into()));
+            return Err(Error::Invalid(format!(
+                "role_receivers entry {receiver:?} requires an application service role and a direct top-level Root parent; found role {:?}, parent {:?}",
+                slot.role, slot.parent
+            )));
+        }
+        if !slots
+            .values()
+            .any(|s| s.role.as_deref() == Some("wasm-store") && s.parent == slot.parent)
+        {
+            return Err(Error::Invalid(format!(
+                "role_receivers entry {receiver:?} requires a wasm-store under its parent {:?}",
+                slot.parent
+            )));
         }
     }
     Ok(())
@@ -574,20 +622,22 @@ fn validate_role_receivers(
 
 fn validate_canisters(canisters: &BTreeMap<String, CanisterConfig>) -> Result<()> {
     if canisters.len() > 32 {
-        return Err(Error::Invalid(
-            "each app supports at most 32 canisters".into(),
-        ));
+        return Err(Error::Invalid(format!(
+            "{} canister slots declared; maximum is 32",
+            canisters.len()
+        )));
     }
     let mut identities = std::collections::BTreeSet::new();
     let mut managers = 0;
     for (slot, declaration) in canisters {
         name(slot)?;
-        if declaration
-            .wasm
-            .as_ref()
-            .is_some_and(|path| path.as_os_str().is_empty() || path.as_os_str().len() > 4096)
+        if let Some(path) = &declaration.wasm
+            && (path.as_os_str().is_empty() || path.as_os_str().len() > 4096)
         {
-            return Err(Error::Invalid("Wasm path must contain 1–4096 bytes".into()));
+            return Err(Error::Invalid(format!(
+                "canisters.{slot}.wasm path has {} bytes; supported length is 1..=4096",
+                path.as_os_str().len()
+            )));
         }
         if let Some(role) = &declaration.role {
             name(role)?;
@@ -612,22 +662,24 @@ fn validate_canisters(canisters: &BTreeMap<String, CanisterConfig>) -> Result<()
         if let Some(id) = &declaration.id {
             crate::network::principal(id)?;
             if !identities.insert(id) {
-                return Err(Error::Invalid(
-                    "canister identity is declared in multiple slots of one fleet".into(),
-                ));
+                return Err(Error::Invalid(format!(
+                    "canisters.{slot}.id = {id:?} is declared in multiple slots of one fleet"
+                )));
             }
         }
         if declaration.profile_manager {
             if declaration.id.is_none() {
-                return Err(Error::Invalid(
-                    "profile manager observation requires an existing canister id".into(),
-                ));
+                return Err(Error::Invalid(format!(
+                    "canisters.{slot}.profile_manager = true requires an existing canister id"
+                )));
             }
             managers += 1;
         }
     }
     if managers > 16 {
-        return Err(Error::Invalid("fleet exceeds 16 profile managers".into()));
+        return Err(Error::Invalid(format!(
+            "fleet declares {managers} profile managers; maximum is 16"
+        )));
     }
     Ok(())
 }

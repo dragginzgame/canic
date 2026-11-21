@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.247.0] - 2026-11-21
+
+Config validation reports the fleet, field, supplied value and supported limit
+for rejected pool settings. Use the app listing to validate declarations before building.
+
+```sh
+canic app list --config apps/toko/canic.toml
+```
+
+Fresh sharding Roots support a configurable ceiling up to 100,000 live keys per
+shard. Toko can select `keys_per_shard = 10_000` and `max_shards = 2`.
+The indexed layout requires a fresh sharding Root. Upgrading an old inline
+ledger to this layout refuses. Placement counts in the drain and status APIs
+are now 32-bit.
+
+```sh
+# Inspect a configured fleet's shard policy
+canic fleet placements
+```
+
+Check an application's mounted Wire contracts against its built Wasms and reviewed
+schemas. The generated starter includes the inspector and its initial baseline.
+
+```sh
+# From a configured app with its inspection examples and baseline
+canic app check-wire
+```
+
+See the [Wire CI guide](docs/wire-ci.md) for existing apps and baseline review.
+
 ## [0.246.0] - 2026-11-21
 
 ### 💥 Breaking changes

@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -425,7 +425,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -458,7 +458,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -467,7 +467,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -483,7 +483,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -1166,7 +1166,7 @@ dependencies = [
 
 [[package]]
 name = "ex-counter"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "canic",
  "clap",
@@ -1180,7 +1180,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-hub"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1189,7 +1189,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-schema"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -1199,7 +1199,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-shard"
-version = "0.246.0"
+version = "0.247.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1876,9 +1876,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query-topology"
-version = "0.110.11"
+version = "0.110.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a50e03a3674d6ded12ca5e0ea0d16f4e8da005b40b8da4e9d5c1562e9fb00111"
+checksum = "919cd68213e129217b4bf0163144f0b14ce1ff97b481034a9b8e1b0efa086e7d"
 dependencies = [
  "ic-platform",
  "ic-platform-protocol",
@@ -3708,9 +3708,9 @@ checksum = "4601d2785aaa14e01fd8656d6b3a57653337b214e027810c953595f1d91d6a8d"
 
 [[package]]
 name = "toml"
-version = "1.2.1+spec-1.1.0"
+version = "1.2.2+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5755c51863cdac711f1956baf8eb9588e060755f7d3c4c979e70ea1e1f32cd7"
+checksum = "5426cb1b964690d913f6c5c1a1ae0b42f428ec506bb4d452876d7a209c9bca3b"
 dependencies = [
  "indexmap",
  "serde_core",
@@ -3732,9 +3732,9 @@ dependencies = [
 
 [[package]]
 name = "toml_edit"
-version = "0.25.19+spec-1.1.0"
+version = "0.25.20+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd43688c4858d7264ae1cf9a9f874a67c3feb74a883b1cd7bebd6a4ea8307218"
+checksum = "e76360e201d6dbd6583e17795ba71a88f47365a9139c8450a7979c32303b8e73"
 dependencies = [
  "indexmap",
  "toml_datetime",
@@ -3745,9 +3745,9 @@ dependencies = [
 
 [[package]]
 name = "toml_parser"
-version = "1.1.5+spec-1.1.0"
+version = "1.1.6+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "baa693a8032d7e1cada7d0041e96126df243179ff061456783ac7f12bda4744c"
+checksum = "e6769c452d71ba30696c6b37770c439a9cc9110f47f7d5cdbeda79840ef5ea31"
 dependencies = [
  "winnow",
 ]
@@ -3995,9 +3995,9 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "walkdir"
-version = "2.5.0"
+version = "2.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b"
+checksum = "b42e295b7452c4604982280d8586001fcad9b8b201cac67bca9771e7a7475403"
 dependencies = [
  "same-file",
  "winapi-util",
@@ -4329,18 +4329,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.63"
+version = "0.8.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5fe1f8f1b06191a00962174c61aa5005e0bb391a6d80d07e24d115c01a92ed8"
+checksum = "ed43f3060383c64b000f3c630550aebdfa9d3b76d48de32390483dd2cc7e0865"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.63"
+version = "0.8.64"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "863ad3ac83293fb4d740aedbfdc9240dd8d1a50c1099acd76ce80ce7c7230c7f"
+checksum = "a5cbd820fe3e35fb38c83b6dc7e6b1618bc46e0cd10073ae94e8d52dc468d8b9"
 dependencies = [
  "proc-macro2",
  "quote",

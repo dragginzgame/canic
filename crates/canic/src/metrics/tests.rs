@@ -91,3 +91,17 @@ fn complete_blob_report_fits_the_shared_reply_budget() {
     let bytes = ReadMetrics::encode_reply(&report).unwrap();
     ReadMetrics::decode_reply(&bytes).unwrap();
 }
+
+#[test]
+fn binary_counter_matches_its_two_inspected_fields() {
+    let encoding = ic_wire::Encoding::Frame {
+        method: ReadMetrics::ID,
+        direction: ic_wire::Direction::Response,
+    };
+    for (total, overflowed) in [(0, false), (u128::MAX, true)] {
+        let bytes =
+            ic_wire::encode(&Counter { total, overflowed }, encoding, ReadMetrics::REPLY).unwrap();
+        let fields = ic_wire::decode::<(u128, bool)>(&bytes, encoding, ReadMetrics::REPLY).unwrap();
+        assert_eq!(fields, (total, overflowed));
+    }
+}

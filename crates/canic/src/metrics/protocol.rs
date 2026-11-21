@@ -3,6 +3,7 @@ use super::{Counter, Snapshot};
 use serde::{Deserialize, Serialize};
 
 /// One bounded source selection, authorized by the same canister guard.
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Request {
     /// Aggregate timer counters for this incarnation.
@@ -14,6 +15,7 @@ pub enum Request {
 }
 
 /// Command outcomes observed by the local Blob recorder.
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlobCommand {
     /// Blob command kind.
@@ -31,6 +33,7 @@ pub struct BlobCommand {
 }
 
 /// Declared object sizes recorded on first successful registration.
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlobSizes {
     /// Inclusive byte limits of the four supplier buckets.
@@ -42,6 +45,7 @@ pub struct BlobSizes {
 }
 
 /// A single source report. Unavailable means the source supplied no report.
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Report {
     /// No reader or recorder for this source.

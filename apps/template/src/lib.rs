@@ -34,6 +34,8 @@ pub(crate) const MAX_NAME_BYTES: usize = 128;
 
 /// Read-only greeting result. Queries are not certified application state.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "inspection", derive(canic::method::wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(crate = "canic::method::wire"))]
 pub struct Greeting {
     /// Human-readable greeting from the installed executable.
     pub message: String,

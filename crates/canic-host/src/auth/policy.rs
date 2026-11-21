@@ -34,22 +34,26 @@ impl ReceiverPolicy {
             .get(&self.root)
             .is_some_and(|s| s.role.as_deref() == Some("root") && s.parent.is_none())
         {
-            return Err(invalid(
-                "receiver policy requires a declared top-level Root",
-            ));
+            return Err(invalid(&format!(
+                "receiver_policy.root = {:?} must name a declared top-level Root",
+                self.root
+            )));
         }
         let mut seen = BTreeSet::new();
-        if self.roles.is_empty()
-            || self.roles.len() > 32
-            || self.roles.iter().any(|role| {
-                matches!(role.as_str(), "root" | "wasm-store")
-                    || !seen.insert(role)
-                    || !slots.values().any(|slot| slot.role.as_ref() == Some(role))
-            })
-        {
-            return Err(invalid(
-                "receiver policy needs distinct declared application roles",
-            ));
+        crate::config::positive_count("receiver_policy.roles count", self.roles.len(), 32)?;
+        for role in &self.roles {
+            if matches!(role.as_str(), "root" | "wasm-store")
+                || !slots.values().any(|slot| slot.role.as_ref() == Some(role))
+            {
+                return Err(invalid(&format!(
+                    "receiver_policy.roles entry {role:?} must name a declared application role"
+                )));
+            }
+            if !seen.insert(role) {
+                return Err(invalid(&format!(
+                    "receiver_policy.roles contains duplicate role {role:?}"
+                )));
+            }
         }
         self.role
             .parse::<canic::auth::enrollment::types::AuthRole>()
@@ -57,13 +61,26 @@ impl ReceiverPolicy {
         principal(&self.issuer)?;
         hex32(&self.network_id)?;
         hex32(&self.application_id)?;
-        if self.limits.default_session_secs == 0
-            || self.limits.default_session_secs > self.limits.max_session_secs
-            || self.limits.max_session_secs > 1800
-            || self.limits.max_proof_ttl_ns == 0
-            || self.limits.max_sessions == Some(0)
-        {
-            return Err(invalid("invalid receiver policy limits"));
+        let limits = &self.limits;
+        crate::config::positive_count(
+            "receiver_policy.limits.max_session_secs",
+            limits.max_session_secs,
+            1800,
+        )?;
+        crate::config::positive_count(
+            "receiver_policy.limits.default_session_secs",
+            limits.default_session_secs,
+            limits.max_session_secs,
+        )?;
+        if limits.max_proof_ttl_ns == 0 {
+            return Err(invalid(
+                "receiver_policy.limits.max_proof_ttl_ns = 0; expected a positive duration in nanoseconds",
+            ));
+        }
+        if limits.max_sessions == Some(0) {
+            return Err(invalid(
+                "receiver_policy.limits.max_sessions = 0; expected at least one session",
+            ));
         }
         Ok(())
     }

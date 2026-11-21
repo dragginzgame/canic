@@ -132,11 +132,39 @@ fn serialize_id<S: serde::Serializer>(id: &u64, serializer: S) -> Result<S::Ok, 
 /// # Errors
 /// Reports missing actors, duplicate exports, or a failed method and schema direction.
 pub fn methods(actor: &str, schemas: &Schemas) -> Result<BTreeMap<&'static str, Method>, String> {
+    collect(
+        actor,
+        schemas,
+        inventory::iter::<Declaration>
+            .into_iter()
+            .filter(|d| d.module.split("::").next() == Some(actor)),
+    )
+}
+
+/// Emit every mounted declaration linked into a single-actor inspection executable.
+/// Link exactly one actor, including the same optional capabilities as its Wasm.
+/// # Errors
+/// Reports ambiguous exports or missing request/reply schemas.
+pub fn print_manifest(schemas: &Schemas) -> Result<(), String> {
+    let methods = collect(
+        "linked actor",
+        schemas,
+        inventory::iter::<Declaration>.into_iter(),
+    )?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&methods).map_err(|e| e.to_string())?
+    );
+    Ok(())
+}
+
+fn collect(
+    actor: &str,
+    schemas: &Schemas,
+    declarations: impl Iterator<Item = &'static Declaration>,
+) -> Result<BTreeMap<&'static str, Method>, String> {
     let mut methods = BTreeMap::new();
-    for d in inventory::iter::<Declaration> {
-        if d.module.split("::").next() != Some(actor) {
-            continue;
-        }
+    for d in declarations {
         let root = |f: fn(&Schemas) -> Result<Root, String>, side| {
             f(schemas).map_err(|e| format!("{actor}.{} {side}: {e}", d.name))
         };

@@ -13,6 +13,7 @@ category = "examples"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+inspection = ["canic/inspection", "ex-user-directory-schema/inspection"]
 role-service = ["canic/role-attestation", "ex-user-directory-schema/role-service"]
 
 [dependencies]
@@ -22,6 +23,11 @@ ic-db.workspace = true
 
 [dev-dependencies]
 toko-tooling.workspace = true
+
+[[example]]
+name = "ex-user-directory-hub-wire"
+path = "examples/wire.rs"
+required-features = ["inspection"]
 
 [lints]
 workspace = true

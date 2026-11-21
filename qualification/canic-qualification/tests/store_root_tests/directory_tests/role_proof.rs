@@ -307,7 +307,7 @@ pub(super) async fn exercise(
             )
             .await
             .unwrap();
-        ic_wire::decode::<Result<(u64, u16), String>>(
+        ic_wire::decode::<Result<(u64, u32), String>>(
             &bytes,
             ic_wire::Encoding::Frame {
                 method: id("retirement_status"),

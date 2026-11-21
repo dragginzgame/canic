@@ -105,6 +105,11 @@ pub(super) enum AppCommand {
     /// Define or list reusable app canisters; affects declarations for every fleet.
     #[command(subcommand)]
     Canister(AppCanisterCommand),
+    /// Check app Wire schemas against reviewed contracts and the built Wasm exports.
+    CheckWire {
+        #[command(flatten)]
+        selection: AppConfigArgs,
+    },
     /// Add a fleetless app, creating the config if missing; preserves existing source.
     Init {
         /// Logical application name.

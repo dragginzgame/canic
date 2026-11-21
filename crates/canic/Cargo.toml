@@ -81,7 +81,6 @@ topology = ["dep:ic-platform-types", "dep:ic-platform-runtime"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 inventory = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
 
 [dependencies]
 canic-macros = { workspace = true, optional = true }
@@ -101,6 +100,7 @@ ic-storage = { workspace = true, optional = true }
 ic-timers = { workspace = true, optional = true }
 ic-wire.workspace = true
 serde.workspace = true
+serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 
 [dev-dependencies]

@@ -1263,12 +1263,52 @@ creation_budget = 2000000000000
         .unwrap()
         .validate()
         .unwrap();
+    for (setting, value, expected) in [
+        (
+            "keys_per_shard = 1",
+            "keys_per_shard = 100001",
+            "shard_pool.keys_per_shard = 100001; supported range is 1..=100000",
+        ),
+        (
+            "keys_per_shard = 1",
+            "keys_per_shard = 1\nexpires_at_ns = 0",
+            "shard_pool.expires_at_ns = 0 must be a positive Unix timestamp",
+        ),
+        (
+            "max_shards = 2",
+            "max_shards = 3",
+            "shard_pool.max_shards = 3 exceeds the default subnet child limit of 2",
+        ),
+        (
+            "max_shards = 2",
+            "max_shards = 2\nincrease_from = 1",
+            "shard_pool.increase_from = 1 requires an explicit subnet_child_limit",
+        ),
+    ] {
+        let error = toml::from_str::<Config>(&source.replace(setting, value))
+            .unwrap()
+            .validate()
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains(&format!("apps.toko.fleets.local: {expected}")),
+            "{error}"
+        );
+    }
+    for keys in [10_000, 100_000] {
+        let declared = source.replace("keys_per_shard = 1", &format!("keys_per_shard = {keys}"));
+        toml::from_str::<Config>(&declared)
+            .unwrap()
+            .validate()
+            .unwrap();
+    }
     for invalid in [
         expanded.replace("increase_from = 2", "increase_from = 0"),
         expanded.replace("increase_from = 2", "increase_from = 3"),
         expanded.replace("subnet_child_limit = 8", "subnet_child_limit = 2"),
         expanded.replace("subnet_child_limit = 8", "subnet_child_limit = 9"),
         source.replace("keys_per_shard = 1", "keys_per_shard = 0"),
+        source.replace("keys_per_shard = 1", "keys_per_shard = 100001"),
         source.replace("max_shards = 2", "max_shards = 3"),
         source.replace("kind = \"Local\"", "kind = \"Local\", url = \"http://localhost:8000\""),
         source.replace("[apps.toko.fleets.local.shard_pool]", "[apps.toko.fleets.local.canisters]\nhub = { id = \"aaaaa-aa\" }\n[apps.toko.fleets.local.shard_pool]"),

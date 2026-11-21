@@ -1,8 +1,8 @@
 //! Placement-only drain and exact releases by the approved hub.
-use super::{ChildId, Ledger, SLOT_COUNT, STATE, api, hub};
+use super::{ChildId, Ledger, STATE, api, hub};
 use canic::sharding::{Key, ShardTarget};
 
-impl Ledger<SLOT_COUNT> {
+impl Ledger {
     fn target_slot(&self, target: &ShardTarget) -> Result<ChildId, String> {
         let slot = ChildId::SHARDS
             .into_iter()
@@ -57,7 +57,7 @@ pub fn inspect_shard(
 /// Requires the current controller and the exact installed allocation.
 /// # Panics
 /// Requires an opened Root.
-pub fn begin_shard_drain(target: &ShardTarget) -> Result<u16, String> {
+pub fn begin_shard_drain(target: &ShardTarget) -> Result<u32, String> {
     if !api::is_controller(&api::caller()) {
         return Err("controller required".into());
     }
@@ -89,11 +89,13 @@ pub fn release_shard(key: &Key, target: &ShardTarget) -> Result<(), String> {
         if state.pools.draining.get(&slot) != Some(&target.allocation.generation) {
             return Err("shard is not draining".into());
         }
-        match ledger.claims.get(key) {
+        match state.claims.get(key) {
             None => Ok(()),
-            Some(current) if *current != slot => Err("key assigned elsewhere".into()),
+            Some(current) if usize::from(current) != slot.index() => {
+                Err("key assigned elsewhere".into())
+            }
             Some(_) => {
-                ledger.claims.remove(key);
+                state.claims.remove(key);
                 ledger.counts[slot.index()] -= 1;
                 state.pool.set(state.pools.encode());
                 Ok(())

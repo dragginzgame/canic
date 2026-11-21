@@ -121,8 +121,8 @@ pub struct ShardPool {
     pub hub: String,
     /// Maximum admitted children, within Root's qualified child bound.
     pub max_shards: u8,
-    /// Maximum lifetime keys per child.
-    pub keys_per_shard: u16,
+    /// Maximum live keys per child.
+    pub keys_per_shard: u32,
     /// Lifetime ceiling on creation attachments; ordinary management fees are separate.
     pub creation_budget: u64,
     /// Last time a new child management effect may be dispatched.
@@ -183,8 +183,8 @@ pub enum IncreasePool {
 /// Increase one pool count without renewing funding or time.
 pub const INCREASE_POOL: u64 = ic_wire::method_id("canic.increase_pool.v1");
 
-/// Maximum retained account keys per shard in the initial bounded Root layout.
-pub const MAX_KEYS_PER_SHARD: u16 = 64;
+/// Absolute backstop for any single shared shard. Fleets approve their own lower limit.
+pub const MAX_KEYS_PER_SHARD: u32 = 100_000;
 
 /// Supplier-owned Store frame budgets.
 pub use ic_wasm_store_protocol::{CHUNK_LIMITS as STORE_CHUNK_LIMITS, LIMITS as STORE_LIMITS};

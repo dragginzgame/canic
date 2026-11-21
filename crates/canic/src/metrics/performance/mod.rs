@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 /// Instructions consumed inside a named handler since installation or upgrade.
 ///
 
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct Measurement {
     /// IC export name.
@@ -33,6 +34,7 @@ pub struct Measurement {
 /// Bounded observations ordered by exported name.
 ///
 
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct Page {
     /// Up to sixteen observed update handlers.

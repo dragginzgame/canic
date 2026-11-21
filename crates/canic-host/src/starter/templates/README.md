@@ -22,3 +22,5 @@ the matching local Canic checkout selected at initialization.
 When you're ready to deploy, follow the [managed fleet guide](https://github.com/dragginzgame/canic/blob/main/docs/demos/root.md).
 It covers fleet creation, funding, approvals and upgrades. Keep the fleet
 config and its journal together once you start planning deployments.
+
+Run `canic app check-wire` locally and in PR CI to compare the built app and its mounted contracts with the reviewed JSON in `wire-baseline/`. Review any candidate before updating that file.

@@ -215,6 +215,7 @@ current journeys and remaining gates; do not substitute sibling working trees.
 
 - `canic.toml` is the only app/fleet source format. Preserve comments when adding
   declarations; journals, signed attempts and `--json` output retain their codecs.
+- For config validation errors, identify the offending field and supplied value (or missing field), and state the supported range or conflicting setting. Include the app and fleet when available.
 - Group actions under `app`, `artifact` and `fleet`; alphabetize help. Only `--json`
   is global. Reject context options that the action does not consume. Infer only a
   sole app, then a sole fleet within it; never infer app identity from a child name.
