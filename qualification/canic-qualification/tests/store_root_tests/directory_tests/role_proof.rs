@@ -29,6 +29,7 @@ pub(super) async fn exercise(
     hub: CanisterId,
     project: CanisterId,
     pin: Vec<u8>,
+    service_generation: [u8; 32],
 ) {
     let pic = issuer.pic;
     let owner = issuer.operator;
@@ -76,16 +77,99 @@ pub(super) async fn exercise(
             )
             .await
     };
-    assert_eq!(renew(&receiver).await, Err("unassigned caller".into()));
-    assert_eq!(
-        renew(&Client {
+    let frame = |direction| ic_wire::Encoding::Frame {
+        method: id("retained_role"),
+        direction,
+    };
+    let retained = async |subject| {
+        let reply = pic
+            .query_call(
+                subject,
+                issuer.id,
+                "retained_role",
+                ic_wire::encode(&(), frame(ic_wire::Direction::Request), limits).unwrap(),
+            )
+            .await
+            .unwrap();
+
+        ic_wire::decode::<Option<Proof>>(&reply, frame(ic_wire::Direction::Response), limits)
+            .unwrap()
+            .unwrap()
+    };
+    let registry = Client {
+        pic,
+        id: project,
+        operator: issuer.id,
+    };
+    let dedicated: Placement = registry
+        .update("place", id("place"), &(true, 1u8), canic::sharding::LIMITS)
+        .await;
+    let Placement::Assigned(original, instance) = dedicated else {
+        panic!("ready dedicated project")
+    };
+    let instance = Client {
+        pic,
+        id: CanisterId::from_text(instance).unwrap(),
+        operator: issuer.id,
+    };
+    let public =
+        ic_platform_crypto::ed25519::VerifyingKey::from_bytes(pin.as_slice().try_into().unwrap())
+            .unwrap();
+    for (caller, role, generation) in [
+        (&registry, "hub", service_generation),
+        (&instance, "project", original.generation),
+    ] {
+        let expiry = renew(caller).await.unwrap();
+        let (claim, signature) = retained(caller.id).await;
+        assert_eq!(claim.subject.as_slice(), caller.id.as_slice());
+        assert_eq!(claim.root.as_slice(), issuer.id.as_slice());
+        assert_eq!(claim.receiver.as_slice(), receiver.id.as_slice());
+        assert_eq!(claim.role, role);
+        assert_eq!(claim.generation.as_slice(), generation);
+        assert_eq!(
+            expiry - claim.issued_at_ns,
+            canic::topology::attestation::LIFETIME_NS
+        );
+        public
+            .verify_strict(
+                &claim.signing_bytes().unwrap(),
+                &ic_platform_crypto::ed25519::Signature::from_slice(signature.as_slice()).unwrap(),
+            )
+            .unwrap();
+        let closed: Result<u64, String> = issuer
+            .update(
+                "close_role_issuance",
+                id("close_role_issuance"),
+                &(caller.id, claim.generation),
+                limits,
+            )
+            .await;
+        assert_eq!(closed, Err("shared shard required".into()));
+        // The sender reopens with an empty volatile cache and renews for the same generation.
+        canic_qualification::upgrade_stopped(
             pic,
-            id: project,
-            operator: issuer.id
-        })
-        .await,
-        Err("unassigned caller".into())
-    );
+            caller.id,
+            std::fs::read(artifacts().join("directory.wasm")).unwrap(),
+            vec![],
+            Some(issuer.id),
+        )
+        .await
+        .unwrap();
+        pic.advance_time(Duration::from_secs(1)).await;
+        assert!(renew(caller).await.unwrap() > expiry);
+        let renewed = retained(caller.id).await.0;
+        assert_eq!(renewed.generation.as_slice(), generation);
+        assert_eq!(renewed.role, role);
+    }
+    let unrelated = pic.create_canister().await;
+    let denied: Result<Proof, String> = Client {
+        pic,
+        id: issuer.id,
+        operator: unrelated,
+    }
+    .update("issue_role", id("issue_role"), &receiver.id, limits)
+    .await;
+    assert_eq!(denied.err().as_deref(), Some("unassigned caller"));
     child
         .update::<_, Result<u64, String>>(
             "renew_role",
@@ -127,26 +211,7 @@ pub(super) async fn exercise(
     assert_eq!(visit().await, Ok(1)); // receiver upgrade cleared its volatile visit count
     assert_eq!(present().await, Ok(()));
     assert_eq!(read_visits().await, Ok(1));
-    let frame = |direction| ic_wire::Encoding::Frame {
-        method: id("retained_role"),
-        direction,
-    };
-    let retained = async || {
-        let reply = pic
-            .query_call(
-                child.id,
-                issuer.id,
-                "retained_role",
-                ic_wire::encode(&(), frame(ic_wire::Direction::Request), limits).unwrap(),
-            )
-            .await
-            .unwrap();
-
-        ic_wire::decode::<Option<Proof>>(&reply, frame(ic_wire::Direction::Response), limits)
-            .unwrap()
-            .unwrap()
-    };
-    let proof: Proof = retained().await;
+    let proof: Proof = retained(child.id).await;
     let wrong_sender = pic
         .update_call(
             receiver.id,
@@ -191,7 +256,7 @@ pub(super) async fn exercise(
     assert!(renew(&child).await.unwrap() > expiry);
     assert_eq!(present().await, Ok(()));
     // Keep a signed copy to exercise out-of-band IC controller reuse below.
-    let copy = retained().await;
+    let copy = retained(child.id).await;
     let close = async |generation| {
         issuer
             .update::<_, Result<u64, String>>(
@@ -324,7 +389,7 @@ pub(super) async fn exercise(
     pic.advance_time(Duration::from_secs(7201)).await;
     pic.tick().await;
     assert!(renew(&child).await.is_ok());
-    let copy = retained().await;
+    let copy = retained(child.id).await;
     let mut stale = target.clone();
     stale.allocation.generation[0] ^= 1;
     assert!(release(1u8, stale).await.is_err());

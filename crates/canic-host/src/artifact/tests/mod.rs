@@ -245,6 +245,7 @@ fn build_modules_read_custom_sections_from_the_artifact() {
     assert!(compiled_modules(&wasm, false).unwrap().is_empty());
     for name in [
         "canic:module:auth",
+        "canic:module:blob",
         "canic:module:db",
         "canic:module:db",
         "other",
@@ -254,7 +255,10 @@ fn build_modules_read_custom_sections_from_the_artifact() {
         wasm.extend(name.bytes());
         wasm.push(1);
     }
-    assert_eq!(compiled_modules(&wasm, false).unwrap(), ["DB", "Auth"]);
+    assert_eq!(
+        compiled_modules(&wasm, false).unwrap(),
+        ["DB", "Auth", "Blob"]
+    );
     wasm.pop();
     assert!(compiled_modules(&wasm, false).is_err());
 }

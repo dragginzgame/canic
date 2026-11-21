@@ -21,11 +21,13 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-pub(crate) fn pool_preview(
+pub(crate) fn pool_preview<'a>(
     selected: &canic_host::SelectedFleet,
     controller: &str,
     shards: Option<&canic_management_protocol::stored::ShardPool>,
-    instances: Option<&canic_management_protocol::stored::InstancePool>,
+    allocations: impl IntoIterator<
+        Item = (&'a str, &'a canic_management_protocol::stored::InstancePool),
+    >,
     capacity: Option<&canic_host::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
     increases: &[canic_host::PoolGrant<canic_management_protocol::stored::IncreasePool>],
 ) -> Result<String> {
@@ -61,10 +63,10 @@ pub(crate) fn pool_preview(
         writeln!(text, "\nShared shards · {}\nRoot: {}\nHub: {}\nCapacity: {} shards × {} live keys per shard\nInit bytes (hex): {}", escape(&a.pool), a.root, a.hub, a.max_shards, a.keys_per_shard, hex(a.arguments.as_slice())).unwrap();
         pool_release(&mut text, &a.reference, a.creation_budget, a.expires_at_ns);
     }
-    if let Some(a) = instances {
+    for (label, a) in allocations {
         writeln!(
             text,
-            "\nDedicated instances · {}\nRoot: {}\nParent hub: {}\nCapacity: {} lifetime instances",
+            "\n{label} · {}\nRoot: {}\nParent hub: {}\nCapacity: {} lifetime children",
             escape(&a.component),
             a.root,
             a.hub,

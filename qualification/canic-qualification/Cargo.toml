@@ -47,6 +47,7 @@ canic-host.workspace = true
 canic-management-protocol = { workspace = true, features = ["backup"] }
 canic-profile-protocol.workspace = true
 clap.workspace = true
+ex-miner-pool-hub.workspace = true
 ex-user-directory-schema.workspace = true
 ic-auth.workspace = true
 ic-auth-protocol-types.workspace = true
@@ -87,6 +88,9 @@ name = "creation"
 
 [[test]]
 name = "metrics_example"
+
+[[test]]
+name = "miner"
 
 [[test]]
 name = "notebook"

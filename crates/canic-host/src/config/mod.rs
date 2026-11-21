@@ -9,7 +9,7 @@ pub(crate) mod sharding;
 use crate::{Error, Network, Plan, PlanInput, Result, plan, store, supplier};
 pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
 use serde::{Deserialize, Serialize};
-pub use sharding::{InstancePoolConfig, PoolGrant, ShardPoolConfig};
+pub use sharding::{InstancePoolConfig, PoolGrant, ShardPoolConfig, WorkerPoolConfig};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -127,6 +127,9 @@ pub struct FleetDeclaration {
     /// Dedicated children owned by one keyed-instance hub.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instance_pool: Option<InstancePoolConfig>,
+    /// Allowance owned by the worker hub.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker_pool: Option<WorkerPoolConfig>,
     /// Optional fleet-owned bounds for the declared shard component.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shard_pool: Option<ShardPoolConfig>,
@@ -163,6 +166,9 @@ pub struct FleetConfig {
     /// Dedicated children owned by one keyed-instance hub.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instance_pool: Option<InstancePoolConfig>,
+    /// Allowance owned by the worker hub.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub worker_pool: Option<WorkerPoolConfig>,
     /// Optional fleet-owned bounds for the declared shard component.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub shard_pool: Option<ShardPoolConfig>,
@@ -340,6 +346,7 @@ impl Config {
                         config.subnet_child_limit,
                         config.shard_pool.as_ref(),
                         config.instance_pool.as_ref(),
+                        config.worker_pool.as_ref(),
                     )
                     .map_err(context)?;
                     if let Some(pool) = &config.shard_pool {
@@ -348,6 +355,15 @@ impl Config {
                     if let Some(pool) = &config.instance_pool {
                         pool.validate(&slots, config.shard_pool.as_ref())
                             .map_err(context)?;
+                    }
+                    if let Some(pool) = &config.worker_pool {
+                        pool.validate(
+                            &slots,
+                            config.subnet_child_limit,
+                            config.shard_pool.as_ref(),
+                            config.instance_pool.as_ref(),
+                        )
+                        .map_err(context)?;
                     }
                     total += slots.len();
                     continue;
@@ -441,6 +457,7 @@ impl AppConfig {
             role_receivers: fleet.role_receivers.clone(),
             subnet_child_limit: fleet.subnet_child_limit,
             instance_pool: fleet.instance_pool.clone(),
+            worker_pool: fleet.worker_pool.clone(),
             shard_pool: fleet.shard_pool.clone(),
             auth: fleet.auth.clone(),
             network: network.clone(),
@@ -457,6 +474,7 @@ impl AppConfig {
             .shard_pool
             .iter()
             .map(|p| (&p.root, &p.store))
+            .chain(fleet.worker_pool.iter().map(|p| (&p.root, &p.store)))
             .chain(fleet.instance_pool.iter().map(|p| (&p.root, &p.store)))
         {
             for (slot, role) in [(root, "root"), (store, "wasm-store")] {
@@ -552,7 +570,16 @@ impl FleetConfig {
             self.subnet_child_limit,
             self.shard_pool.as_ref(),
             self.instance_pool.as_ref(),
+            self.worker_pool.as_ref(),
         )?;
+        if let Some(pool) = &self.worker_pool {
+            pool.validate(
+                &self.canisters,
+                self.subnet_child_limit,
+                self.shard_pool.as_ref(),
+                self.instance_pool.as_ref(),
+            )?;
+        }
         if let Some(pool) = &self.shard_pool {
             pool.validate(&self.canisters)?;
         }
@@ -936,6 +963,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
                 role_receivers: vec![],
                 subnet_child_limit: None,
                 instance_pool: None,
+                worker_pool: None,
                 shard_pool: None,
                 auth: Vec::new(),
                 network: FleetNetwork::Bound(network),

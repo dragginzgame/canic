@@ -1,0 +1,26 @@
+[package]
+name = "ex-miner-pool-miner"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish = false
+description = "A bounded toy worker for the local Miner Pool example"
+
+[package.metadata.toko-tooling.loc]
+category = "examples"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+canic = { workspace = true, features = ["lifecycle", "method", "readiness", "storage", "topology"] }
+ic-storage.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+toko-tooling.workspace = true
+
+[lints]
+workspace = true

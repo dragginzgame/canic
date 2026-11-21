@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.247.0"
+version = "0.248.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -307,6 +307,7 @@ dependencies = [
  "ic-entropy",
  "ic-jobs",
  "ic-logging",
+ "ic-metrics",
  "ic-platform",
  "ic-platform-runtime",
  "ic-platform-types",
@@ -425,7 +426,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.247.0"
+version = "0.248.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -458,7 +459,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.247.0"
+version = "0.248.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -467,7 +468,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.247.0"
+version = "0.248.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -483,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.247.0"
+version = "0.248.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -574,6 +575,7 @@ dependencies = [
  "canic-profile-worker",
  "clap",
  "ex-counter",
+ "ex-miner-pool-hub",
  "ex-user-directory-hub",
  "ex-user-directory-schema",
  "ex-user-directory-shard",
@@ -605,6 +607,7 @@ version = "0.0.0"
 dependencies = [
  "canic",
  "ic-db",
+ "ic-platform-runtime",
  "toko-tooling",
 ]
 
@@ -1166,7 +1169,21 @@ dependencies = [
 
 [[package]]
 name = "ex-counter"
-version = "0.247.0"
+version = "0.248.0"
+dependencies = [
+ "canic",
+ "clap",
+ "ic-platform-runtime",
+ "ic-platform-types",
+ "ic-storage",
+ "ic-wire",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "ex-miner-pool-hub"
+version = "0.248.0"
 dependencies = [
  "canic",
  "clap",
@@ -1180,7 +1197,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-hub"
-version = "0.247.0"
+version = "0.248.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1189,7 +1206,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-schema"
-version = "0.247.0"
+version = "0.248.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -1199,7 +1216,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-shard"
-version = "0.247.0"
+version = "0.248.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1651,9 +1668,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.26.3"
+version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0de087ee6022749c8aa8abf276578010c06ac07d2dda9a8dca0144b26f583049"
+checksum = "6c8244718ab3f4e35a36ed7364e36d7da39f9396e0d8c67b089540088ce8cabb"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1672,9 +1689,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.26.3"
+version = "0.26.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ef15dd0c0caffa827fa73528575c7c3f533d6520d85e048bc1c8083ee4933b04"
+checksum = "9e0ced934bbfc8ea29af8b8efca4dd97c27c5a1b3adeec629bcf8fdfa378e46d"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -14,7 +14,7 @@ fn install() {
     // Fixed nonce for this disposable fixture.
     open(Some((
         [3; 16],
-        canic::lifecycle::runtime::system::canister_self(),
+        ic_platform_runtime::system::canister_self(),
     )));
 }
 

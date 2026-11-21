@@ -1,0 +1,36 @@
+[package]
+name = "ex-miner-pool-hub"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license-file.workspace = true
+publish = false
+description = "A bounded worker hub for the local Miner Pool example"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+clap.workspace = true
+serde_json.workspace = true
+
+[package.metadata.toko-tooling.loc]
+category = "examples"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "ex-miner-pool-client"
+path = "client/main.rs"
+
+[dependencies]
+canic = { workspace = true, features = ["lifecycle", "method", "readiness", "storage", "sharding"] }
+ic-platform-runtime.workspace = true
+ic-platform-types.workspace = true
+ic-storage.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
+
+[dev-dependencies]
+toko-tooling.workspace = true
+
+[lints]
+workspace = true

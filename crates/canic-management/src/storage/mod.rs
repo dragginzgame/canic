@@ -93,6 +93,14 @@ const ARTIFACT_LIMITS: ic_wire::Limits = ic_wire::Limits {
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub(super) struct Journal(pub Status, pub upgrade::Status, pub Vec<upgrade::Status>);
 impl Journal {
+    #[cfg(feature = "role-issuer")]
+    pub(super) fn ready_for_role(&self) -> bool {
+        self.0.phase == canic_management_protocol::Phase::Ready
+            && self.0.failure.is_none()
+            && self.1.failure.is_none()
+            && matches!(self.1.phase, upgrade::Phase::Empty | upgrade::Phase::Ready)
+    }
+
     fn decode(bytes: &[u8]) -> Result<Self, &'static str> {
         if let Some(payload) = bytes.strip_prefix(JOURNAL_TAG) {
             let (creation, upgrade, history) =

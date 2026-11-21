@@ -40,6 +40,7 @@ canic-profile-worker = { path = "canic-profile-worker", default-features = false
 canic-qualification = { path = "canic-qualification" }
 clap = { version = "4.6.7", features = ["derive"] }
 ex-counter = { path = "../apps/examples/counter" }
+ex-miner-pool-hub = { path = "../apps/examples/miner-pool/hub" }
 ex-user-directory-hub = { path = "../apps/examples/user-directory/hub" }
 ex-user-directory-schema = { path = "../apps/examples/user-directory/schema" }
 ex-user-directory-shard = { path = "../apps/examples/user-directory/shard" }

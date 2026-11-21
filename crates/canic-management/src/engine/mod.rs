@@ -518,8 +518,10 @@ fn admit(
     let mut artifacts =
         STATE.with_borrow(|state| state.as_ref().expect("open engine").artifact.clone());
     // The released four-child format opens both original project slots together.
-    if slot == ChildId::PROJECT[0] {
-        artifacts.0.entry(ChildId::PROJECT[1]).or_default();
+    if ChildId::PROJECT.contains(&slot) {
+        for original in ChildId::PROJECT {
+            artifacts.0.entry(original).or_default();
+        }
     }
     artifacts.0.insert(slot, artifact);
     if !artifacts.fits() {
@@ -528,8 +530,10 @@ fn admit(
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
         state.journal.0.entry(slot).or_default();
-        if slot == ChildId::PROJECT[0] {
-            state.journal.0.entry(ChildId::PROJECT[1]).or_default();
+        if ChildId::PROJECT.contains(&slot) {
+            for original in ChildId::PROJECT {
+                state.journal.0.entry(original).or_default();
+            }
         }
         state.set_artifact(artifacts);
     });

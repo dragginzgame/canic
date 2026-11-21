@@ -45,7 +45,10 @@ Wasm before replacing the previous output. Its modules column shows
 
 After the first successful call, `double` appears in the shared `metrics`
 query when requested with `canic::metrics::Request::Endpoints(None)`.
-The same query accepts `Request::Timers` and `Request::Blob`. A missing
+The same query accepts `Timers`, `Blob`, `Db`, `Jobs` and `Entropy` requests.
+DB reports query and commit totals. Jobs reports scheduled callback outcomes.
+Entropy reports supplier-managed fresh request outcomes. Each counter includes
+its overflow flag. A canister upgrade starts a new recording period. A missing
 recorder supplies no readings. One guard applies to every source. To override
 the controller default, call `canic::metrics::set_guard(check)` during install
 and reopen. Supply a synchronous `fn() -> Result<(), &'static str>` that
@@ -56,7 +59,7 @@ per-handler labels. The child checks its actual IC controller. For a managed
 child, enable `child-metrics` and the `canic-root-client` codec in Root's build
 recipe, as in [canic.toml](canic.toml). The operator can call
 `canic fleet call --canister root --identity IDENTITY child-metrics 0 endpoints` for
-ordinary managed child slot zero. Pass the returned cursor after `endpoints` for another page, or select `timers` or `blob`.
+ordinary managed child slot zero. Pass the returned cursor after `endpoints` for another page, or select a supplier by name (`blob`, `db`, `entropy`, `jobs` or `timers`).
 
 Run `make metrics-test` with a prepared simulator to qualify the installed actor.
 

@@ -12,6 +12,12 @@ pub enum Request {
     Endpoints(Option<String>),
     /// Committed Blob command outcomes.
     Blob,
+    /// Database query and commit totals for this incarnation.
+    Db,
+    /// Scheduled job outcomes for this incarnation.
+    Jobs,
+    /// Supplier-managed fresh entropy requests for this incarnation.
+    Entropy,
 }
 
 /// Command outcomes observed by the local Blob recorder.
@@ -60,6 +66,59 @@ pub enum Report {
         commands: Vec<BlobCommand>,
         /// First-registration size distribution.
         sizes: BlobSizes,
+    },
+    /// Database query and commit totals for this incarnation.
+    Db {
+        /// Returned query terminals, including refusals.
+        queries: Counter,
+        /// Query terminals returning an error.
+        query_failures: Counter,
+        /// Candidates examined by successful queries.
+        examined: Counter,
+        /// Rows fetched by successful queries.
+        fetched: Counter,
+        /// Results delivered by successful queries.
+        returned: Counter,
+        /// Encoded result bytes delivered.
+        output_bytes: Counter,
+        /// Returned commit calls, including refusals.
+        commits: Counter,
+        /// Commit calls returning an error.
+        commit_failures: Counter,
+        /// Aggregate job start calls.
+        job_starts: Counter,
+        /// Aggregate job resume calls.
+        job_resumes: Counter,
+        /// Aggregate job calls returning an error.
+        job_failures: Counter,
+    },
+    /// Scheduled job outcomes for this incarnation.
+    Jobs {
+        /// Attempts admitted to a business callback.
+        started: Counter,
+        /// Started attempts numbered two or higher.
+        retry_attempts: Counter,
+        /// Dispatches suppressed by lateness policy.
+        skipped_late: Counter,
+        /// Normal returns with no business work.
+        no_work: Counter,
+        /// Normal returns reporting success.
+        succeeded: Counter,
+        /// Normal returns reporting a settled failure.
+        expected_failures: Counter,
+        /// Normal returns permitting a retry.
+        retryable_failures: Counter,
+    },
+    /// Supplier-managed fresh entropy requests for this incarnation.
+    Entropy {
+        /// Fresh requests polled in replicated execution.
+        attempts: Counter,
+        /// Fresh requests returning a seed.
+        succeeded: Counter,
+        /// Fresh requests returning an error.
+        failed: Counter,
+        /// Polled fresh requests dropped before return.
+        cancelled: Counter,
     },
 }
 

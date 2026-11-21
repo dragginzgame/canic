@@ -1,5 +1,22 @@
 # Canic qualification
 
+## Miner Pool
+
+`make miner-test` exercises the miner’s batch replay across an upgrade and the
+installed pool’s growth, parking and reuse under one Root. The Host planner
+binds the simulator identities to the example’s `worker_pool` grant.
+The witness checks production across hub and Root upgrades, outsider refusal
+and the four-worker ceiling. [Fleet and expected rounds](../apps/examples/miner-pool/DESIGN.md)
+
+## Named service and dedicated instance role issuance
+
+`bash scripts/dev/test-store.sh directory` exercises an installed Root, named hubs,
+a dedicated project and a shared shard. The named project hub and its project
+request proofs for the accounts hub. The witness checks their signatures against
+Root’s public key, the approved role, the original creation generation, and renewal
+after each sender reopens. Both refuse the shard-only retirement operation.
+The same suite covers shared-shard drain, expiry and copied proofs.
+
 ## Native endpoint inspection
 
 `make check-wire-endpoints` builds the default User Directory hub and shard
@@ -1075,6 +1092,13 @@ limits, fresh mainnet instructions and recovery limitations. The focused lint an
 documentation checks are `make profile-clippy` and `make profile-doc`.
 
 ## Typed database composition
+
+The installed DB witness also exercises the shared `metrics` query. It reads
+commit and failure counts before upgrade and observes the reset after reopen.
+In the supplier-enabled fixture it observes one completed one-shot job and two
+fresh entropy requests (one success and one refusal while suspended). Run
+`make db-test` for those populated sources and `make metrics-test` for the
+controller guard, Root client selections and absent recorders.
 
 `make db-test` selects only `canic-db-witness`. The application declares its own
 `Item` schema, stores the installation owner separately, initializes IC DB

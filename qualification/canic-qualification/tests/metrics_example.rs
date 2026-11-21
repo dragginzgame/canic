@@ -55,7 +55,7 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
     )
     .await;
     let root_codec = artifacts.join("root.client");
-    for source in ["timers", "endpoints", "blob"] {
+    for source in ["timers", "endpoints", "blob", "db", "jobs", "entropy"] {
         let args = ["child-metrics", "0", source].map(str::to_owned);
         let frame = codec::encode(&root_codec, &args).unwrap();
         assert_eq!(frame.method, ChildMetrics::NAME);
@@ -66,6 +66,9 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
             ("timers", Request::Timers)
                 | ("endpoints", Request::Endpoints(None))
                 | ("blob", Request::Blob)
+                | ("db", Request::Db)
+                | ("jobs", Request::Jobs)
+                | ("entropy", Request::Entropy)
         ));
     }
     let frame = codec::encode(&root_codec, &["logs".to_owned()]).unwrap();
@@ -116,7 +119,13 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
             other => panic!("expected endpoints, got {other:?}"),
         })
     };
-    for source in [Request::Timers, Request::Blob] {
+    for source in [
+        Request::Timers,
+        Request::Blob,
+        Request::Db,
+        Request::Jobs,
+        Request::Entropy,
+    ] {
         let bytes = ReadMetrics::encode_request(&source).unwrap();
         assert!(
             pic.query_call(
@@ -128,11 +137,16 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
             .await
             .is_err()
         );
-        assert!(
-            pic.query_call(id, installer, ReadMetrics::NAME, bytes)
-                .await
-                .is_ok()
-        );
+        let reply = pic
+            .query_call(id, installer, ReadMetrics::NAME, bytes)
+            .await
+            .unwrap();
+        let report = ReadMetrics::decode_reply(&reply).unwrap();
+        if matches!(source, Request::Timers) {
+            assert!(matches!(report, Report::Timers(_)));
+        } else {
+            assert!(matches!(report, Report::Unavailable));
+        }
     }
     let empty = read(installer, None).await.unwrap();
     assert!(empty.measurements.is_empty());

@@ -139,8 +139,8 @@ fn app_build_summary_shows_mounts_and_omits_unused_codec_column() {
         client: None,
     };
     let table = built(std::slice::from_ref(&build));
-    assert!(table.contains("PARENT"));
-    assert!(table.contains("user_hub"));
+    assert!(!table.contains("PARENT"));
+    assert!(table.contains("user_shard (parent: user_hub)"));
     assert!(table.contains("934.27 KiB"));
     assert!(table.contains("DB, Auth"));
     assert!(table.contains("2.34 s"));
@@ -151,7 +151,20 @@ fn app_build_summary_shows_mounts_and_omits_unused_codec_column() {
     assert_eq!(json["artifact"]["sha256"], "fixture digest");
 
     build.client = Some("artifacts/user_shard.codec".into());
-    let table = built(&[build]);
+    let mut hub = build;
+    hub.canister = "user_hub".into();
+    hub.parent = None;
+    let shard = BuiltCanister {
+        canister: "user_shard".into(),
+        parent: Some("user_hub".into()),
+        wasm: "shard.wasm".into(),
+        artifact: hub.artifact.clone(),
+        modules: vec![],
+        build_ms: 0,
+        client: None,
+    };
+    let table = built(&[shard, hub]);
+    assert!(table.find("user_hub").unwrap() < table.find("└─ user_shard").unwrap());
     assert!(table.contains("COMMAND CODEC"));
     assert!(table.contains("artifacts/user_shard.codec"));
 }

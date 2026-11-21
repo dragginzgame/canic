@@ -65,10 +65,9 @@ pub(crate) fn next(
     format!("\nNext:\n{}\n", escape(&parts.join(" ")))
 }
 
-fn build_row(item: &BuiltCanister) -> [String; 6] {
+fn build_row(label: String, item: &BuiltCanister) -> [String; 5] {
     [
-        item.canister.clone(),
-        item.parent.clone().unwrap_or_else(|| "—".into()),
+        label,
         item.wasm.display().to_string(),
         format!(
             "{:.2} KiB",
@@ -90,22 +89,24 @@ fn build_row(item: &BuiltCanister) -> [String; 6] {
 pub(crate) fn built(built: &[BuiltCanister]) -> String {
     use Alignment::{Left, Right};
 
+    let ordered = crate::topology::labeled(built, |item| {
+        (item.canister.as_str(), item.parent.as_deref())
+    });
     let table = if built.iter().any(|item| item.client.is_some()) {
-        let rows: Vec<_> = built
-            .iter()
-            .map(|item| {
-                let [canister, parent, wasm, size, modules, time] = build_row(item);
+        let rows: Vec<_> = ordered
+            .into_iter()
+            .map(|(label, item)| {
+                let [canister, wasm, size, modules, time] = build_row(label, item);
                 let codec = item
                     .client
                     .as_ref()
                     .map_or_else(|| "—".into(), |path| path.display().to_string());
-                [canister, parent, wasm, size, modules, time, codec]
+                [canister, wasm, size, modules, time, codec]
             })
             .collect();
         plain_table(
             &[
                 "CANISTER",
-                "PARENT",
                 "WASM",
                 "SIZE",
                 "MODULES",
@@ -113,21 +114,17 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
                 "COMMAND CODEC",
             ],
             &rows,
-            &[Left, Left, Left, Right, Left, Right, Left],
+            &[Left, Left, Right, Left, Right, Left],
         )
     } else {
-        let rows: Vec<_> = built.iter().map(build_row).collect();
+        let rows: Vec<_> = ordered
+            .into_iter()
+            .map(|(label, item)| build_row(label, item))
+            .collect();
         plain_table(
-            &[
-                "CANISTER",
-                "PARENT",
-                "WASM",
-                "SIZE",
-                "MODULES",
-                "BUILD TIME",
-            ],
+            &["CANISTER", "WASM", "SIZE", "MODULES", "BUILD TIME"],
             &rows,
-            &[Left, Left, Left, Right, Left, Right],
+            &[Left, Left, Right, Left, Right],
         )
     };
     format!("Built app canisters\n\n{table}\n\nNothing deployed.\n")

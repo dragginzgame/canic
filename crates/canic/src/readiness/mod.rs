@@ -51,7 +51,7 @@ pub enum State {
 macro_rules! mount_readiness_endpoint {
     ($snapshot:path) => {
         const _: () = {
-            use endpoint::runtime;
+            use $crate::__private::runtime;
             use $crate::readiness::{State, endpoint};
 
             $crate::__canic_builtin! {

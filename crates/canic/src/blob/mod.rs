@@ -94,8 +94,10 @@ pub const MANAGEMENT: u64 = ic_wire::method_id("blob_management");
 #[macro_export]
 macro_rules! mount_blob_endpoints {
     (execute = $execute:path, inspect = $inspect:path, management = $management:path $(,)?) => {
+        $crate::__canic_report_mount!("canic:module:blob");
         const _: () = {
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
             use $crate::blob::{
                 UPDATE, endpoint,
                 supplier::{
@@ -119,7 +121,8 @@ macro_rules! mount_blob_endpoints {
             }
         };
         const _: () = {
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
             use $crate::blob::{
                 QUERY, endpoint,
                 supplier::{
@@ -143,7 +146,8 @@ macro_rules! mount_blob_endpoints {
             }
         };
         const _: () = {
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
             use $crate::blob::{
                 MANAGEMENT, endpoint,
                 supplier::{local::Error, protocol::ManagementView},

@@ -552,8 +552,14 @@ async fn installed_publication(scenario: Scenario) {
     let bytes = pic.get_stable_memory(user).await;
     assert_eq!(publish(&root, "accounts_hub", 2).await, Ok(2));
     assert_eq!(pic.get_stable_memory(user).await, bytes);
-    if let Some(pin) = pin {
-        role_proof::exercise(&root, user, project, pin).await;
+    if let Some(ref pin) = pin {
+        let generation = management::application::Stage {
+            source,
+            arguments: management::application::Arguments::new(named("project_hub")).unwrap(),
+        }
+        .pin(management::application::STAGE, ChildId::SECOND)
+        .operation;
+        role_proof::exercise(&root, user, project, pin.clone(), generation).await;
     }
     assert_eq!(
         instance.close(Duration::from_secs(10)).await,

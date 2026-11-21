@@ -1,0 +1,35 @@
+[apps.ex-miner-pool.canisters.root]
+role = "root"
+wasm = "artifacts/root.wasm"
+build = { manifest = "../../../Cargo.toml", package = "canic-root", features = ["sharding"] }
+
+[apps.ex-miner-pool.canisters.store]
+role = "wasm-store"
+parent = "root"
+wasm = "artifacts/store.wasm"
+build = { manifest = "../../../Cargo.toml", package = "ic-wasm-store" }
+
+[apps.ex-miner-pool.canisters.pool]
+role = "pool"
+parent = "root"
+wasm = "artifacts/pool.wasm"
+build = { manifest = "../../../Cargo.toml", package = "ex-miner-pool-hub", client = "ex-miner-pool-client" }
+
+[apps.ex-miner-pool.canisters.miner]
+role = "miner"
+parent = "pool"
+wasm = "artifacts/miner.wasm"
+build = { manifest = "../../../Cargo.toml", package = "ex-miner-pool-miner" }
+
+[apps.ex-miner-pool.fleets.local]
+network = { kind = "Local" }
+
+subnet_child_limit = 5
+
+[apps.ex-miner-pool.fleets.local.worker_pool]
+component = "miner"
+root = "root"
+store = "store"
+release = { name = "miner", version = "1" }
+max_workers = 4
+creation_budget = 4_000_000_000_000

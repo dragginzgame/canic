@@ -50,7 +50,8 @@ macro_rules! mount_auth_endpoints {
         $crate::__canic_report_mount!("canic:module:auth");
 
         const _: () = {
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
             use $crate::auth::{
                 endpoint,
                 protocol::{EstablishSession, SessionInput, SessionView, model::AdmissionRefusal},
@@ -74,7 +75,8 @@ macro_rules! mount_auth_endpoints {
             }
         };
         const _: () = {
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
             use $crate::auth::{
                 endpoint,
                 protocol::{ReadSession, SessionView, model::SessionReadRefusal},
@@ -96,7 +98,8 @@ macro_rules! mount_auth_endpoints {
             }
         };
         const _: () = {
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
             use $crate::auth::{
                 endpoint,
                 protocol::{Logout, model::LogoutResult},

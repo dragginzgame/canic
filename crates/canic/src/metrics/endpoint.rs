@@ -45,8 +45,61 @@ fn metrics(request: Request) -> Report {
         Request::Endpoints(_) => Report::Unavailable,
         #[cfg(feature = "blob")]
         Request::Blob => blob(),
+        #[cfg(any(feature = "db-schema", feature = "db-store"))]
+        Request::Db => super::store::get::<ic_db::metrics::MetricsStorage>().map_or(
+            Report::Unavailable,
+            |store| {
+                let m = store.snapshot();
+                Report::Db {
+                    queries: m.queries.into(),
+                    query_failures: m.query_failures.into(),
+                    examined: m.examined.into(),
+                    fetched: m.fetched.into(),
+                    returned: m.returned.into(),
+                    output_bytes: m.output_bytes.into(),
+                    commits: m.commits.into(),
+                    commit_failures: m.commit_failures.into(),
+                    job_starts: m.job_starts.into(),
+                    job_resumes: m.job_resumes.into(),
+                    job_failures: m.job_failures.into(),
+                }
+            },
+        ),
+        #[cfg(feature = "jobs")]
+        Request::Jobs => {
+            super::store::get::<ic_jobs::MetricsStorage>().map_or(Report::Unavailable, |store| {
+                let m = store.snapshot();
+                Report::Jobs {
+                    started: m.started.into(),
+                    retry_attempts: m.retry_attempts.into(),
+                    skipped_late: m.skipped_late.into(),
+                    no_work: m.no_work.into(),
+                    succeeded: m.succeeded.into(),
+                    expected_failures: m.expected_failures.into(),
+                    retryable_failures: m.retryable_failures.into(),
+                }
+            })
+        }
+        #[cfg(feature = "entropy")]
+        Request::Entropy => {
+            super::store::get::<ic_entropy::MetricsStorage>().map_or(Report::Unavailable, |store| {
+                let m = store.snapshot().fresh;
+                Report::Entropy {
+                    attempts: m.attempts.into(),
+                    succeeded: m.succeeded.into(),
+                    failed: m.failed.into(),
+                    cancelled: m.cancelled.into(),
+                }
+            })
+        }
         #[cfg(not(feature = "blob"))]
         Request::Blob => Report::Unavailable,
+        #[cfg(not(any(feature = "db-schema", feature = "db-store")))]
+        Request::Db => Report::Unavailable,
+        #[cfg(not(feature = "jobs"))]
+        Request::Jobs => Report::Unavailable,
+        #[cfg(not(feature = "entropy"))]
+        Request::Entropy => Report::Unavailable,
     }
 }
 
@@ -64,7 +117,7 @@ pub(crate) fn start_timer_window() {
 
 #[cfg(feature = "timers")]
 fn timers() -> Option<super::Timers> {
-    use super::{Counter, Timers, store};
+    use super::{Timers, store};
     let (started_at_version, started_at_ns) = WINDOW.with(|window| window.get().copied())?;
     store::get::<ic_timers::MetricsStorage>().map(|storage| {
         let m = storage.snapshot();
@@ -83,10 +136,7 @@ fn timers() -> Option<super::Timers> {
             m.deferred_submissions,
             m.provider_faults,
         ]
-        .map(|counter| Counter {
-            total: counter.total(),
-            overflowed: counter.total_overflowed(),
-        });
+        .map(Into::into);
         Timers {
             started_at_version,
             started_at_ns,
@@ -127,10 +177,7 @@ fn blob() -> Report {
             m.expired,
             m.other_refusals,
         ]
-        .map(|v| Counter {
-            total: v.total(),
-            overflowed: v.total_overflowed(),
-        });
+        .map(Into::into);
         BlobCommand {
             command: name.into(),
             succeeded,

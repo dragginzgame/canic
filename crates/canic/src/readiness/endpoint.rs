@@ -1,6 +1,5 @@
 //! Platform executes the message; Wire admits frames; the application supplies its state.
 use super::{METHOD, REQUEST_LIMITS, RESPONSE_LIMITS, State};
-pub use ic_platform_runtime as runtime;
 use ic_platform_runtime::raw;
 
 /// Decode an empty observation request. No request field selects or activates state.
@@ -48,5 +47,5 @@ pub fn admit() -> Result<(), String> {
 /// # Panics
 /// Always traps.
 pub fn fail(error: impl std::fmt::Debug) -> ! {
-    runtime::system::trap(&format!("endpoint refused: {error:?}"))
+    ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }

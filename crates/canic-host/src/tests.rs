@@ -35,6 +35,7 @@ pub(crate) fn selected_fleet(
             role_receivers: vec![],
             subnet_child_limit: None,
             instance_pool: None,
+            worker_pool: None,
             shard_pool: None,
             auth: Vec::new(),
         },

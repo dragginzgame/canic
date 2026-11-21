@@ -237,7 +237,7 @@ async fn session(
         commands.push("logs [before]");
     }
     if metrics {
-        commands.push("metrics [timers|blob]");
+        commands.push("metrics [blob|db|entropy|jobs|timers]");
     }
     commands.push("exit");
     let hint = commands.join(", ");
@@ -251,7 +251,10 @@ async fn session(
                 &directory, "root", &args,
             )?)?);
         }
-        if metrics && verb == "metrics" && matches!(rest.trim(), "timers" | "blob") {
+        if metrics
+            && verb == "metrics"
+            && matches!(rest.trim(), "blob" | "db" | "entropy" | "jobs" | "timers")
+        {
             return Ok(serde_json::to_string_pretty(&fleet_call(
                 &directory,
                 "root",

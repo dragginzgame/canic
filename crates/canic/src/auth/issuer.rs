@@ -177,7 +177,8 @@ macro_rules! mount_auth_issuer_endpoints {
         $crate::__canic_report_mount!("canic:module:auth");
 
         const _: () = {
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
             use $crate::auth::{
                 endpoint,
                 issuer::{ISSUE, Issue, Refusal, Status},
@@ -198,7 +199,8 @@ macro_rules! mount_auth_issuer_endpoints {
             }
         };
         const _: () = {
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
             use $crate::auth::{
                 endpoint,
                 issuer::{RENEW, Refusal, Renew, Status},
@@ -219,7 +221,8 @@ macro_rules! mount_auth_issuer_endpoints {
             }
         };
         const _: () = {
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
             use $crate::auth::{
                 endpoint,
                 issuer::{Lookup, RECONCILE, Refusal, Status},
@@ -240,7 +243,8 @@ macro_rules! mount_auth_issuer_endpoints {
             }
         };
         const _: () = {
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
             use $crate::auth::{
                 endpoint,
                 issuer::{LOGOUT, Logout, Refusal, Revoked},

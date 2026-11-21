@@ -406,7 +406,10 @@ pub fn plan_fleet(
     execute_at_ns: Option<u64>,
 ) -> Result<FleetPlanning> {
     selected.validate()?;
-    if selected.config.shard_pool.is_some() || selected.config.instance_pool.is_some() {
+    if selected.config.shard_pool.is_some()
+        || selected.config.instance_pool.is_some()
+        || selected.config.worker_pool.is_some()
+    {
         if cycles.is_some() || execute_at_ns.is_some() {
             return Err(Error::Invalid(
                 "pool growth uses its declared budget and deadline".into(),

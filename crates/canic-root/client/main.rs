@@ -64,6 +64,9 @@ enum Command {
 
 #[derive(Subcommand)]
 enum Source {
+    Db,
+    Entropy,
+    Jobs,
     Timers,
     Blob,
     Endpoints { after: Option<String> },
@@ -110,6 +113,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => request::<ChildMetrics>(&(
             slot,
             match source {
+                Source::Db => Request::Db,
+                Source::Entropy => Request::Entropy,
+                Source::Jobs => Request::Jobs,
                 Source::Timers => Request::Timers,
                 Source::Blob => Request::Blob,
                 Source::Endpoints { after } => Request::Endpoints(after),

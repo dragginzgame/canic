@@ -815,6 +815,17 @@ legacy configuration syntax.
 | Shards | Many application keys share each capacity-bounded canister; for example, user records across user shards | Retain each key's exact allocation through growth and upgrades. Application lifecycle preserves shard contents; Canic does not silently move existing keys when capacity changes. |
 | Keyed instances (legacy `instance` / placement index) | Each admitted key selects one dedicated canister within its declared scope; for example, one project canister per project ID | Repeated resolution returns the same allocation. Concurrent creation shares retained pending work. Upgrade preserves the key binding, principal and application state. |
 
+Hubs use the same typed Wire call for assignment and lookup across shards,
+dedicated instances and workers. Root mounts each method with its pool's caller
+guard. A call makes one bounded attempt; recovery uses the original account
+key, project key or worker ordinal.
+
+The [Miner Pool](../../apps/examples/miner-pool/DESIGN.md) exercises scaling
+under a separate worker grant. The operator approves the release, hub,
+creation budget, deadline and count at Root. The hub selects the goal and
+requests ordinals. Root retains each allocation once and counts parked workers
+against its subnet ceiling. The hub resumes the same identities when load rises.
+
 Scope singleton and keyed uniqueness by the owning parent allocation and declared
 role or assignment policy; keyed instances additionally bind the application key.
 The same key in a different parent or Fleet is not automatically the same instance.
@@ -1640,7 +1651,13 @@ An opted-in Root generates one Ed25519 key from IC entropy. Its stable issuer
 record retains the seed and closed assignment generations. Controller retries return
 the same public key, including after a same-layout Root upgrade. The installed
 receiver pins that public key and the installing Root. Renewal takes one bounded
-update from a ready shared shard. The receiver verifies the signature locally.
+update from a ready shared shard, dedicated instance or permanent named service.
+Root binds the transport caller and receiver to the role and generation of the
+original approved installation. An unsettled or failed managed upgrade pauses
+issuance. Shared shards retain their existing drain and retirement contract;
+dedicated instances and named services require a separately approved retirement
+path before managed recycling. Workers do not participate in role issuance.
+The receiver verifies the signature locally.
 At fresh Store-backed fleet bootstrap, `role_receivers` names the permanent
 services whose install frames must contain the prepared key. The approved
 fleet digest covers the Root executable, receiver names and service roles.

@@ -362,6 +362,7 @@ fn compiled_modules(bytes: &[u8], endpoint_metrics: bool) -> Result<Vec<&'static
 
     let mut has_db = false;
     let mut has_auth = false;
+    let mut has_blob = false;
     let mut mount = false;
     let mut query = false;
     for payload in Parser::new(0).parse_all(bytes) {
@@ -369,6 +370,7 @@ fn compiled_modules(bytes: &[u8], endpoint_metrics: bool) -> Result<Vec<&'static
             Payload::CustomSection(section) => match section.name() {
                 "canic:module:db" => has_db = true,
                 "canic:module:auth" => has_auth = true,
+                "canic:module:blob" => has_blob = true,
                 "canic:module:endpoint-metrics" => mount = true,
                 _ => {}
             },
@@ -391,6 +393,7 @@ fn compiled_modules(bytes: &[u8], endpoint_metrics: bool) -> Result<Vec<&'static
     Ok([
         ("DB", has_db),
         ("Auth", has_auth),
+        ("Blob", has_blob),
         ("Endpoint Metrics", mount),
     ]
     .into_iter()

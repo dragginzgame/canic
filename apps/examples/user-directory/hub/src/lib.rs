@@ -96,7 +96,7 @@ fn binding(row: &Route) -> Binding<[u8; 16]> {
 #[cfg(feature = "role-service")]
 #[canic::update(role_contract = user_directory_schema::ReserveProject)]
 fn reserve_project(account: AuthSubject) -> [u8; 16] {
-    let shard = canic::method::runtime::system::caller();
+    let shard = ic_platform_runtime::system::caller();
     if let Some(row) = provisioning::account_row::<Route>(&db!(), account) {
         assert_eq!(row.shard, shard, "reservation belongs to another shard");
         return row.id.to_bytes();

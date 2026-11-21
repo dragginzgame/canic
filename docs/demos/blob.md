@@ -12,6 +12,8 @@ Canic metrics store and log sink. Custom lifecycle hooks call
 `canic::lifecycle::initialize_diagnostics()` first when logging is enabled.
 Use fresh backing for this Storage generation. The historical 0.100.6 catalog retains its original executable. [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8)
 
+The [Asset Library walkthrough](../../apps/examples/asset-library/DESIGN.md) builds the same actor without the qualification fault endpoint and installs it for a two-user exercise.
+
 ## Ownership and use
 
 | Owner | Responsibility |
@@ -33,8 +35,8 @@ Catalog names, identities and capacity are checked before Blob mutation. The
 catalog stores the original authorization and its own publication decision; it
 does not mirror Blob liveness, counters or admission. Supplier ordinary errors
 leave state unchanged. A later catalog persistence-encoding or reply-encoding
-failure traps so the IC rolls back both stores. The qualification application's
-controller-only fault selector exercises those failures; it is not in the product
+failure traps so the IC rolls back both stores. The qualification build's
+controller-only fault selector (enabled by `fault-injection`) exercises those failures; it is not in the product
 adapter. This test application must not be mistaken for a production actor.
 
 Fresh installation takes explicit users, manager and Blob limits, binding both

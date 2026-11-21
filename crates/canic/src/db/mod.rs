@@ -77,7 +77,8 @@ macro_rules! mount_db_endpoints {
             use $protocol as __canic_protocol;
             use __canic_protocol::{$id, $request, $reply};
             use $crate::db::{Operation, endpoint};
-            use endpoint::{api, runtime};
+            use endpoint::api;
+            use $crate::__private::runtime;
 
             fn __canic_admit() -> Result<(), String> {
                 $authorize(api::caller(), Operation::$operation)?;

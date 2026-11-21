@@ -1,8 +1,10 @@
 //! Independent hub grants and shared-shard placement over Store-backed child effects.
 mod capacity;
 mod drain;
+mod workers;
 pub use capacity::{configure_capacity, increase_pool};
 pub use drain::{begin_shard_drain, inspect_shard, release_shard};
+pub use workers::{configure_workers, worker, worker_hub};
 
 use super::{STATE, api, delivery, snapshot};
 use crate::{
@@ -47,6 +49,8 @@ pub(super) struct Pools {
     instance_increases: Vec<u8>,
     instances: Option<stored::InstancePool>,
     projects: Vec<ProjectClaim>,
+    #[serde(skip)]
+    workers: Option<workers::Workers>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -86,6 +90,7 @@ impl Pools {
     fn used(&self) -> usize {
         self.permanent.iter().filter(|&&used| used).count()
             + self.projects.len()
+            + self.workers.as_ref().map_or(0, |w| w.claims.len())
             + self
                 .shards
                 .as_ref()
@@ -99,14 +104,36 @@ impl Pools {
     }
 
     pub(super) fn encode(&self) -> Vec<u8> {
+        if let Some(workers) = &self.workers {
+            let mut bytes = b"WKR1".to_vec();
+            bytes.extend(
+                ic_wire::encode(
+                    &(self, workers),
+                    ic_wire::Encoding::Payload,
+                    ic_wire::Limits {
+                        bytes: BYTES - 4,
+                        ..LIMITS
+                    },
+                )
+                .expect("bounded worker metadata"),
+            );
+            return bytes;
+        }
         ic_wire::encode(self, ic_wire::Encoding::Payload, LIMITS)
             .expect("bounded placement metadata")
     }
 }
 
 pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
-    let pools: Pools =
-        ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS).expect("placement metadata");
+    let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"WKR1") {
+        let (mut pools, workers): (Pools, workers::Workers) =
+            ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("worker metadata");
+        workers.validate(&pools);
+        pools.workers = Some(workers);
+        pools
+    } else {
+        ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS).expect("placement metadata")
+    };
     assert_eq!(
         claim_count,
         pools.shards.as_ref().map_or(0, |ledger| ledger
@@ -270,7 +297,12 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
     assert!(api::is_controller(&api::caller()));
     if let Some(result) = STATE.with_borrow(|s| {
         let pools = &s.as_ref().expect("open Root").pools;
-        if a.max_shards > pools.pool_limit() {
+        if a.max_shards > pools.pool_limit()
+            || pools
+                .workers
+                .as_ref()
+                .is_some_and(|w| !compatible(&a, &w.grant))
+        {
             return Some(Err(Refusal::Binding));
         }
         if let Some(l) = &pools.shards {
@@ -373,7 +405,12 @@ pub fn configure_instances(a: stored::InstancePool) -> Result<(), Refusal> {
     assert!(api::is_controller(&api::caller()));
     let prior = STATE.with_borrow(|s| {
         let pools = &s.as_ref().expect("open Root").pools;
-        if a.max_instances > pools.pool_limit() {
+        if a.max_instances > pools.pool_limit()
+            || pools
+                .workers
+                .as_ref()
+                .is_some_and(|w| !workers::separate(&a, &w.grant))
+        {
             return Some(Err(Refusal::Binding));
         }
         if let Some(previous) = &pools.instances {
@@ -426,12 +463,17 @@ pub(super) fn bind_ready(slot: ChildId, pid: &str) {
         let state = s.as_mut().unwrap();
         let (generation, original) =
             if let Some(index) = ChildId::INSTANCES.iter().position(|id| *id == slot) {
-                let claim = state
-                    .pools
-                    .projects
-                    .get_mut(index)
-                    .expect("claimed project");
-                (claim.generation, &mut claim.principal)
+                let pools = &mut state.pools;
+                if let Some(claim) = pools.projects.get_mut(index) {
+                    (claim.generation, &mut claim.principal)
+                } else {
+                    let claim = pools
+                        .workers
+                        .as_mut()
+                        .and_then(|w| w.claims.get_mut(workers::worker_index(slot)?))
+                        .expect("claimed worker");
+                    (claim.generation, &mut claim.principal)
+                }
             } else {
                 let Some(ledger) = state.pools.shards.as_mut() else {
                     return;
@@ -693,13 +735,33 @@ pub(super) fn validate_claims(state: &super::State) {
     }
     for (index, slot) in ChildId::INSTANCES.into_iter().enumerate() {
         let Some(journal) = state.journal.0.get(&slot) else {
-            assert!(claims.get(index).is_none());
+            assert!(
+                claims.get(index).is_none()
+                    && pools
+                        .workers
+                        .as_ref()
+                        .and_then(|w| w.claim_at(slot))
+                        .is_none()
+            );
             continue;
         };
         let source = state.artifact.0[&slot].sources();
         if let Some(claim) = claims.get(index) {
             assert!(claims[..index].iter().all(|other| other.key != claim.key));
             let grant = state.pools.instances.as_ref().expect("project grant");
+            validate_allocation(
+                state,
+                slot,
+                claim.generation,
+                claim.principal.as_deref(),
+                &grant.reference,
+                &grant.arguments,
+            );
+        } else if let Some((grant, claim)) = pools
+            .workers
+            .as_ref()
+            .and_then(|w| Some((&w.grant, w.claim_at(slot)?)))
+        {
             validate_allocation(
                 state,
                 slot,
@@ -843,50 +905,87 @@ pub fn assign_instance(key: Key) -> Placement {
 }
 
 #[cfg(feature = "role-issuer")]
-pub(super) fn assigned_role(
-    subject: Principal,
-) -> Result<(String, [u8; 32], u32, bool), &'static str> {
+pub(super) struct AssignedRole {
+    pub role: String,
+    pub generation: [u8; 32],
+    /// Live placements and drain state belong only to a shared shard.
+    pub shard: Option<(u32, bool)>,
+}
+
+#[cfg(feature = "role-issuer")]
+pub(super) fn assigned_role(subject: Principal) -> Result<AssignedRole, &'static str> {
     let caller = subject.to_text();
     STATE.with_borrow(|s| {
         let state = s.as_ref().expect("open Root");
-        let ledger = state.pools.shards.as_ref().ok_or("unassigned caller")?;
-        let slot = ChildId::SHARDS
-            .into_iter()
-            .find(|slot| ledger.principals[slot.index()].as_deref() == Some(&caller))
+        let (&slot, journal) = state
+            .journal
+            .0
+            .iter()
+            .find(|(_, journal)| journal.0.worker.as_deref() == Some(caller.as_str()))
             .ok_or("unassigned caller")?;
-        let journal = &state.journal.0[&slot];
-        if journal.0.phase != Phase::Ready
-            || journal.0.failure.is_some()
-            || journal.0.worker.as_deref() != Some(caller.as_str())
-            || journal.1.failure.is_some()
-            || !matches!(
-                journal.1.phase,
-                canic_management_protocol::upgrade::Phase::Empty
-                    | canic_management_protocol::upgrade::Phase::Ready
-            )
-        {
-            return Err("shard unavailable");
+        if !journal.ready_for_role() {
+            return Err("assignment unavailable");
         }
         let Artifact::Application(sources, app) = &state.artifact.0[&slot] else {
-            return Err("missing shard topology");
+            return Err("unassigned caller");
         };
         let generation = sources.creation.operation;
-        if ledger.generations[slot.index()] != Some(generation)
-            || app.creation != ledger.approval.arguments
-            || sources.creation.reference != ledger.approval.reference
+        if ChildId::ALL.contains(&slot)
+            && let Some(named) = super::directory::named_service(slot)
         {
-            return Err("shard assignment changed");
+            return Ok(AssignedRole {
+                role: named.role,
+                generation,
+                shard: None,
+            });
         }
-        let install = canic::topology::Install::approved(app.creation.as_slice())?
-            .ok_or("missing shard topology")?;
-        if install.root != api::canister_self() || install.parent.to_text() != ledger.approval.hub {
-            return Err("shard topology mismatch");
+        let (original, principal, args, reference, hub, shard) =
+            if let Some(index) = ChildId::INSTANCES.iter().position(|id| *id == slot) {
+                let claim = state.pools.projects.get(index).ok_or("unassigned caller")?;
+                let grant = state
+                    .pools
+                    .instances
+                    .as_ref()
+                    .ok_or("missing instance grant")?;
+                (
+                    Some(claim.generation),
+                    &claim.principal,
+                    &grant.arguments,
+                    &grant.reference,
+                    &grant.hub,
+                    None,
+                )
+            } else {
+                let ledger = state.pools.shards.as_ref().ok_or("unassigned caller")?;
+                let index = slot.index();
+                (
+                    ledger.generations[index],
+                    &ledger.principals[index],
+                    &ledger.approval.arguments,
+                    &ledger.approval.reference,
+                    &ledger.approval.hub,
+                    Some((
+                        ledger.counts[index],
+                        state.pools.draining.contains_key(&slot),
+                    )),
+                )
+            };
+        if original != Some(generation)
+            || principal.as_deref() != Some(&caller)
+            || app.creation != *args
+            || sources.creation.reference != *reference
+        {
+            return Err("assignment changed");
         }
-        Ok((
-            install.role,
+        let install = canic::topology::Install::approved(args.as_slice())?
+            .ok_or("missing placement topology")?;
+        if install.root != api::canister_self() || install.parent.to_text() != *hub {
+            return Err("placement topology mismatch");
+        }
+        Ok(AssignedRole {
+            role: install.role,
             generation,
-            ledger.counts[slot.index()],
-            state.pools.draining.contains_key(&slot),
-        ))
+            shard,
+        })
     })
 }

@@ -1,9 +1,7 @@
 //! A parked canister retains only its installation receipt while Root holds custody.
 
-use canic::{
-    lifecycle::runtime::system,
-    topology::dormancy::{DormancyReceipt, Receipt},
-};
+use canic::topology::dormancy::{DormancyReceipt, Receipt};
+use ic_platform_runtime::system;
 use ic_storage::DefaultMemoryImpl;
 use std::cell::OnceCell;
 

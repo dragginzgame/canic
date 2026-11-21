@@ -14,12 +14,17 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 inspection = ["canic/inspection", "ex-user-directory-schema/inspection"]
-role-service = ["canic/role-attestation", "ex-user-directory-schema/role-service"]
+role-service = [
+    "dep:ic-platform-runtime",
+    "canic/role-attestation",
+    "ex-user-directory-schema/role-service",
+]
 
 [dependencies]
 canic = { workspace = true, features = ["provisioning"] }
 ex-user-directory-schema.workspace = true
 ic-db.workspace = true
+ic-platform-runtime = { workspace = true, optional = true }
 
 [dev-dependencies]
 toko-tooling.workspace = true

@@ -9,7 +9,10 @@ mod client;
 #[cfg(feature = "method")]
 pub mod provisioning;
 
-pub use client::{assign, assign_instance, lookup, lookup_instance};
+pub use client::{
+    AssignInstance, AssignShard, LookupInstance, LookupShard, assign, assign_instance, lookup,
+    lookup_instance,
+};
 use serde::{Deserialize, Serialize};
 
 /// Assign a key to an admitted shard or reserve its first allocation.
@@ -20,6 +23,24 @@ pub const LOOKUP: u64 = 92;
 pub const ASSIGN_INSTANCE: u64 = ic_wire::method_id("canic.assign_instance.v1");
 /// Observe a project key at the originally selected Root.
 pub const LOOKUP_INSTANCE: u64 = ic_wire::method_id("canic.lookup_instance.v1");
+/// Reserve the next ordinal under the calling hub’s worker grant.
+pub struct AssignWorker;
+/// Observe an ordinal without issuing new work.
+pub struct LookupWorker;
+impl crate::method::Contract for AssignWorker {
+    const NAME: &'static str = "assign_worker";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REPLY: ic_wire::Limits = LIMITS;
+    type Input = u8;
+    type Output = Placement;
+}
+impl crate::method::Contract for LookupWorker {
+    const NAME: &'static str = "lookup_worker";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REPLY: ic_wire::Limits = LIMITS;
+    type Input = u8;
+    type Output = Placement;
+}
 /// An application-owned stable key, independent of the current login session.
 pub type Key = [u8; 32];
 /// Small request and reply frames for the hub.

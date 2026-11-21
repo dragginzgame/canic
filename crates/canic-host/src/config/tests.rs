@@ -250,6 +250,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                         role_receivers: vec![],
                         subnet_child_limit: None,
                         instance_pool: None,
+                        worker_pool: None,
                         shard_pool: None,
                         auth: Vec::new(),
                         network: FleetNetwork::Bound(selected.config.network.clone()),

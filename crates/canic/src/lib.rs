@@ -4,6 +4,20 @@
 // Endpoint attributes use the same absolute crate path in Canic and in applications.
 extern crate self as canic;
 
+#[cfg(any(
+    feature = "auth",
+    feature = "blob",
+    feature = "db",
+    feature = "lifecycle",
+    feature = "method",
+    feature = "readiness",
+    feature = "sharding"
+))]
+#[doc(hidden)]
+pub mod __private {
+    pub use ic_platform_runtime as runtime;
+}
+
 /// Optional caller-bound Auth endpoints; lifecycle remains explicit.
 #[cfg(feature = "auth")]
 pub mod auth;
@@ -35,7 +49,7 @@ pub mod lifecycle;
 #[cfg(feature = "logging")]
 pub mod logging;
 
-#[cfg(feature = "method")]
+#[cfg(any(feature = "method", feature = "sharding"))]
 pub mod method;
 
 /// Passive operational reports. The optional `metrics` feature exports one guarded reader.

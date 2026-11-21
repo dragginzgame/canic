@@ -292,11 +292,15 @@ async fn first(client: &Client<'_>) -> app::Draft {
 
 #[tokio::test(flavor = "current_thread")]
 async fn captured_users_share_one_object_without_application_authority_leaking() {
-    let (_, binary) = support::inputs();
-    let (mut server, owner) = support::instance(&binary).await;
+    let wasm = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../apps/examples/asset-library/artifacts/library.wasm");
+    let exports = canic_host::endpoints(&wasm).unwrap();
+    assert!(!exports.iter().any(|export| export.name == "catalog_fault"));
+    let (mut server, owner) = support::instance(&canic_qualification::server_directory()).await;
     let pic = owner.client();
-    let client = install(pic).await;
+    let client = install_bytes(pic, std::fs::read(wasm).unwrap()).await;
     let first = first(&client).await;
+    println!("Alice published reference 1.");
     use canic::{
         method::Contract,
         metrics::{ReadMetrics, Report, Request},
@@ -401,6 +405,7 @@ async fn captured_users_share_one_object_without_application_authority_leaking()
         two.entry.request.first_reference
     );
     assert_eq!(one.object.live_references, 2);
+    println!("Bob published reference 2 to the same object. Bob cannot release Alice’s reference.");
     assert_eq!(two.object.original_upload.request.id, first.id);
     assert!(
         matches!(client.inspect_upload(actor(2), 2).await, Ok(Observation::Upload(value)) if value.state == UploadState::Attached)
@@ -435,6 +440,9 @@ async fn captured_users_share_one_object_without_application_authority_leaking()
     assert_eq!(client.publish(actor(1), 1).await, Err(app::Error::Released));
     client.remove(actor(1), 1).await.unwrap();
     assert_eq!(pic.get_stable_memory(client.canister).await, released);
+    println!(
+        "Alice released reference 1. Bob retains the single live reference. Replaying Alice’s request leaves hers released."
+    );
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

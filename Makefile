@@ -96,6 +96,12 @@ endif
 lint: fmt-check toko-tooling-check check-app-endpoints effect-clippy effect-doc artifact-custody-clippy artifact-custody-doc journey-clippy journey-doc counter-clippy counter-doc profile-clippy profile-doc root-clippy root-doc store-clippy blob-clippy blob-doc auth-clippy auth-doc db-clippy
 
 # Build through the same app declaration used in the local walkthrough.
+.PHONY: miner-test
+miner-test:
+	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/miner-pool/canic.toml
+	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test miner
+	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store store_root_tests::miner_pool -- --nocapture
+
 .PHONY: notebook-test
 notebook-test:
 	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/notebook/canic.toml
@@ -271,6 +277,11 @@ auth-clippy:
 auth-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features auth-receiver-stable,auth-issuer-stable --target wasm32-unknown-unknown --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --no-deps
+
+.PHONY: asset-library-test
+asset-library-test:
+	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/asset-library/canic.toml
+	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features profile-state --test blob captured_users_share_one_object_without_application_authority_leaking -- --exact --nocapture
 
 .PHONY: blob-test blob-clippy blob-doc
 blob-test:

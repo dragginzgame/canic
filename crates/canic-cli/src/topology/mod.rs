@@ -5,6 +5,27 @@ mod tests;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Order report records by declared parent, retaining context for filtered builds.
+pub(crate) fn labeled<'a, T>(
+    records: &'a [T],
+    slot: impl Fn(&'a T) -> (&'a str, Option<&'a str>),
+) -> Vec<(String, &'a T)> {
+    let by_name: BTreeMap<_, _> = records.iter().map(|item| (slot(item).0, item)).collect();
+    rows(records.iter().map(&slot))
+        .into_iter()
+        .map(|(name, prefix)| {
+            let item = by_name[name];
+            let label = match slot(item).1 {
+                Some(parent) if !by_name.contains_key(parent) => {
+                    format!("{name} (parent: {parent})")
+                }
+                _ => format!("{prefix}{name}"),
+            };
+            (label, item)
+        })
+        .collect()
+}
+
 /// Slots and branch prefixes in stable parent-before-child order.
 pub(crate) fn rows<'a>(
     parents: impl IntoIterator<Item = (&'a str, Option<&'a str>)>,

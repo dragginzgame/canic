@@ -1,7 +1,6 @@
 //! Platform hooks for the fixed Database adapter. Wire alone admits/encodes frames.
 use super::RPC_LIMITS;
 pub use crate::frame::fail;
-pub use ic_platform_runtime as runtime;
 pub use ic_platform_runtime::system as api;
 use serde::{Serialize, de::DeserializeOwned};
 

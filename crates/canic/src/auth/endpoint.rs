@@ -4,7 +4,6 @@ use super::{
     protocol::{EstablishSession, Logout, ReadSession},
 };
 use ic_auth_wire::wire;
-pub use ic_platform_runtime as runtime;
 use ic_platform_runtime::raw;
 pub use ic_platform_runtime::system as api;
 use serde::{Serialize, de::DeserializeOwned};

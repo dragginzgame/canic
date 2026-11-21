@@ -443,6 +443,7 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
             role_receivers: vec![],
             subnet_child_limit: None,
             instance_pool: None,
+            worker_pool: None,
             shard_pool: None,
             auth: Vec::new(),
             network: Network::Mainnet,

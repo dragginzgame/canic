@@ -4,7 +4,7 @@ mod profile;
 mod state;
 
 use crate::protocol::{
-    self, AUTHORIZE, Asset, Draft, Entry, Error, FAULT, INIT, INSPECT, PUBLISH, REMOVE, UPGRADE,
+    self, AUTHORIZE, Asset, Draft, Entry, Error, INIT, INSPECT, PUBLISH, REMOVE, UPGRADE,
 };
 use canic::blob::RPC_LIMITS;
 use canic::blob::{
@@ -196,9 +196,14 @@ fn catalog_inspect(reference: std::num::NonZeroU128) -> Result<Asset, Error> {
             .inspect(api::caller(), reference)
     })
 }
+#[cfg(feature = "fault-injection")]
+use crate::protocol::FAULT;
+
+#[cfg(feature = "fault-injection")]
 type Ack = ();
 
 /// Select the controller's failure point for catalog rollback qualification.
+#[cfg(feature = "fault-injection")]
 #[runtime::update(
     runtime = runtime,
     guard = endpoint::admit::<FAULT>,

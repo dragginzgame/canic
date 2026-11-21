@@ -16,6 +16,7 @@ crate-type = ["cdylib"]
 [dependencies]
 canic = { workspace = true, features = ["db-store", "lifecycle", "method"] }
 ic-db.workspace = true
+ic-platform-runtime.workspace = true
 
 [build-dependencies]
 ic-db = { workspace = true, features = ["build"] }

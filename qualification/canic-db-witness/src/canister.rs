@@ -337,8 +337,9 @@ mod controls {
     type EmptyReply = ();
     use super::{Entity, Operation, Schema, authorize, memory, open, runtime, schema};
     use canic::db::endpoint;
-    use endpoint::{api, runtime};
+    use endpoint::api;
     use ic_db::{Maintenance, SchemaTransition};
+    use ic_platform_runtime as runtime;
     use std::cell::Cell;
 
     thread_local! { static REPLY_FAILURE: Cell<bool> = const { Cell::new(false) }; }
@@ -471,6 +472,23 @@ mod controls {
     async fn db_test_control(control: u8) -> EmptyReply {
         match control {
             7 => verify_entropy().await,
+            8 => {
+                use canic::jobs::{self, Outcome, Policy, RetryPolicy, Schedule};
+                thread_local! {
+                    static JOB: std::cell::OnceCell<jobs::Job> = const { std::cell::OnceCell::new() };
+                }
+                let job = jobs::bind(
+                    ["witness", "metrics", "once"],
+                    Schedule::once(ic_platform_runtime::system::time()),
+                    Policy::SkipLate {
+                        lateness_ns: u64::MAX,
+                    },
+                    RetryPolicy::NONE,
+                    |_| async { Outcome::Success },
+                )
+                .unwrap();
+                JOB.with(|slot| assert!(slot.set(job).is_ok()));
+            }
             0 => REPLY_FAILURE.set(false),
             1 => REPLY_FAILURE.set(true),
             4 => INSPECTION_FAILURE.set(true),

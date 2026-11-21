@@ -220,7 +220,7 @@ fn expand(update: bool, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             }
 
             {
-                use ::canic::method::{fail as __canic_fail, runtime as platform};
+                use ::canic::{__private::runtime as platform, method::fail as __canic_fail};
                 use self::#handler as __canic_handler;
 
                 /// Apply the declared guard before admitting the request frame.

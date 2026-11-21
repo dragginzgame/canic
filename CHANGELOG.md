@@ -1,5 +1,58 @@
 # Changelog
 
+## [0.248.0] - 2026-11-21
+
+Canic endpoint attributes and built-in mounts now resolve Platform through one
+hidden macro path. Applications using a former Canic runtime re-export should
+declare `ic-platform-runtime` directly and import `ic_platform_runtime`.
+Canic supplies the runtime path for generated query and update endpoints. [Canic #65](https://github.com/dragginzgame/canic/issues/65)
+
+An opted-in Root now issues receiver-bound role proofs to ready dedicated
+instances and permanent named services. Its existing two-hour proof lifetime
+and upgrade checks also apply to these callers. They use their original install
+generation. Shard retirement remains specific to shared shards. [Canic #64](https://github.com/dragginzgame/canic/issues/64)
+
+Build the Miner Pool fleet, then run six local rounds with synthetic cycles.
+The hub requests workers under its own approved grant and parks them for reuse.
+Run `make qualification-setup` once to prepare the simulator.
+
+```sh
+canic app build --config apps/examples/miner-pool/canic.toml
+make miner-test
+```
+
+On a bound local miner fleet, the installed pool operator can advance one step
+of round one toward five blocks. Its reply identifies an outstanding Root
+allocation by worker ordinal or an outstanding miner batch by round and ordinal.
+
+```sh
+canic fleet call --canister pool --identity operator tick 1 5
+```
+
+The guarded metrics reader now reports database operations, job outcomes and
+supplier-managed fresh entropy requests. For a deployed child with the
+corresponding recorder, use its controller Root and approved slot:
+
+```sh
+canic fleet call --canister root --identity operator child-metrics 0 db
+canic fleet call --canister root --identity operator child-metrics 0 jobs
+canic fleet call --canister root --identity operator child-metrics 0 entropy
+```
+
+Build the Asset Library or run its two-user walkthrough on the prepared local simulator.
+
+```sh
+canic app build --config apps/examples/asset-library/canic.toml
+make asset-library-test
+```
+
+Build summaries and fleet placement reports group canisters under their declared
+parents. A filtered build names an omitted parent beside its child.
+
+```sh
+canic app build --config apps/toko/canic.toml --app toko
+```
+
 ## [0.247.0] - 2026-11-21
 
 Config validation reports the fleet, field, supplied value and supported limit

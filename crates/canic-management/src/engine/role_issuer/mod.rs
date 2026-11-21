@@ -135,21 +135,22 @@ pub async fn prepare() -> Result<Bytes<32>, String> {
     })
 }
 
-/// Sign the ready shard's current assignment synchronously.
+/// Sign the ready caller’s original installation role for one receiver.
 /// # Errors
-/// Requires an initialized signer, a canister audience and a verified shared shard.
+/// Requires an initialized signer, a canister audience and a verified role-bearing installation.
 /// # Panics
 /// Requires an open, intact Root key lease.
 pub fn issue(receiver: Principal) -> Result<Proof, String> {
     if receiver.as_slice().last() != Some(&1) {
         return Err("canister receiver required".into());
     }
-    let (role, generation, _, _) = sharding::assigned_role(api::caller())?;
+    let assignment = sharding::assigned_role(api::caller())?;
+    let generation = assignment.generation;
     let claim = Claim {
         root: api::canister_self(),
         subject: api::caller(),
         receiver,
-        role,
+        role: assignment.role,
         generation: Bytes::new(generation.to_vec()).expect("generation size"),
         issued_at_ns: api::time(),
     };
@@ -185,8 +186,9 @@ pub fn close(subject: Principal, generation: &Bytes<32>) -> Result<u64, String> 
     if let Some(deadline) = deadline(subject, &generation) {
         return Ok(deadline);
     }
-    let (_, actual, live, draining) = sharding::assigned_role(subject)?;
-    if actual != generation {
+    let assignment = sharding::assigned_role(subject)?;
+    let (live, draining) = assignment.shard.ok_or("shared shard required")?;
+    if assignment.generation != generation {
         return Err("assignment changed".into());
     }
     if !draining || live != 0 {
@@ -223,7 +225,9 @@ pub(super) fn deadline(subject: Principal, generation: &[u8; 32]) -> Option<u64>
 /// # Errors
 /// Refuses an open issuer or a stale generation.
 pub fn retirement_status(subject: Principal, generation: &Bytes<32>) -> Result<(u64, u32), String> {
-    let (_, actual, live, _) = sharding::assigned_role(subject)?;
+    let assignment = sharding::assigned_role(subject)?;
+    let (live, _) = assignment.shard.ok_or("shared shard required")?;
+    let actual = assignment.generation;
     if generation.as_slice() != actual {
         return Err("assignment changed".into());
     }

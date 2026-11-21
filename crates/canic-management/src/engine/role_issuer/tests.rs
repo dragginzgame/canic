@@ -18,3 +18,25 @@ fn complete_issuer_record_fits_storage_budget() {
     assert_eq!(reopened.seed, issuer.seed);
     assert_eq!(reopened.closed.as_slice(), entries);
 }
+
+#[test]
+fn renewal_requires_completed_creation_and_settled_upgrade() {
+    use canic_management_protocol::{Failure, Phase, upgrade};
+    let mut journal = crate::storage::Journal::default();
+    assert!(!journal.ready_for_role());
+    journal.0.phase = Phase::Ready;
+    assert!(journal.ready_for_role());
+    for phase in [
+        upgrade::Phase::Scheduled,
+        upgrade::Phase::InstallIssued,
+        upgrade::Phase::Verified,
+        upgrade::Phase::Expired,
+    ] {
+        journal.1.phase = phase;
+        assert!(!journal.ready_for_role());
+    }
+    journal.1.phase = upgrade::Phase::Ready;
+    assert!(journal.ready_for_role());
+    journal.1.failure = Some(Failure::Uncertain);
+    assert!(!journal.ready_for_role());
+}

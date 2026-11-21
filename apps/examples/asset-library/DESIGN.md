@@ -1,10 +1,35 @@
-# Asset library
+# Asset Library
 
-**Planned.** Give Alice and Bob private libraries in one application canister. They each save the same bytes. The application authorizes catalog changes and owns the entries. Embedded Blob owns object identity, distinct references, grants and accounting. Both participants use the application's one Storage bootstrap.
+Alice and Bob each own a catalog entry for the same content commitment. The
+application decides who may inspect, publish or release an entry. Blob tracks
+the shared object and the two references. The example registers manifests and
+declared sizes locally. It does not upload or download content from a provider.
 
-1. Save identical content as Alice and Bob. Verify one underlying object with two independently owned references using authorized test observations.
-2. Have Bob try to release Alice’s entry. Refuse the operation and verify both entries still resolve.
-3. Have Alice release her own entry. Bob can still read his copy. Replaying Alice’s earlier operation must not resurrect her released reference.
-4. Reject a conflicting catalog entry before mutating Blob. Exercise a failure after mutation and verify the catalog and Blob changes roll back together.
+## Run the two-user walkthrough
 
-Use the [installed asset-catalog witness](../../../docs/demos/blob.md) as the starting point. Keep the exercise local and retain Blob’s finite replay history and declared-byte accounting assumptions.
+From the Canic repository root, prepare the simulator once and run the example:
+
+```sh
+make qualification-setup
+make asset-library-test
+```
+
+The walkthrough builds the Wasm selected by this fleet's `canic.toml` and
+installs it in a disposable simulator with two distinct user principals and a
+separate manager. Alice publishes reference 1. Bob cannot inspect or remove
+Alice’s entry, but can publish his own reference 2 to the same object. After
+Alice releases reference 1, Bob still sees one live reference. Replaying Alice’s
+original request leaves hers released.
+
+To build the same artifact without starting a simulator:
+
+```sh
+canic app build --config apps/examples/asset-library/canic.toml
+```
+
+The example uses the [existing catalog actor](../../../qualification/canic-asset-catalog/src/canister/mod.rs)
+and its single Storage bootstrap. The catalog admits two users and four lifetime
+entries. Released entries continue to occupy a slot. For the conflict,
+transaction rollback, drain and upgrade cases, run `make blob-test`. That suite
+builds separate qualification Wasms with an explicit fault-injection feature.
+The walkthrough checks the example Wasm exports no fault selector.

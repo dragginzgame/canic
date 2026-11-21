@@ -24,7 +24,7 @@ macro_rules! mount_receiver_lifecycle {
             $crate::mount_auth_lifecycle!(decode = $crate::role::$decode, open = open);
             fn open(initial: Option<role::$config>) {
                 let (host, nonce) = role::$open(initial, $owner, $prefix, &database::keys(), $key, $pages);
-                database::attach(&host, nonce.map(|nonce| (nonce, $crate::lifecycle::runtime::system::canister_self())));
+                database::attach(&host, nonce.map(|nonce| (nonce, $crate::__private::runtime::system::canister_self())));
             }
             $crate::mount_auth_session!(read = $scope);
             $crate::mount_readiness_endpoint!($crate::role::$ready);

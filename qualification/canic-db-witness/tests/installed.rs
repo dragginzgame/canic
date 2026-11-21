@@ -37,6 +37,23 @@ struct Client<'a> {
     owner: Principal,
 }
 impl Client<'_> {
+    async fn metrics(&self, request: canic::metrics::Request) -> canic::metrics::Report {
+        use canic::{method::Contract, metrics::ReadMetrics};
+        let frame = ReadMetrics::encode_request(&request).unwrap();
+        // This witness uses PocketIC's default anonymous installer/controller.
+        let reply = self
+            .pic
+            .query_call(
+                self.canister,
+                Principal::anonymous(),
+                ReadMetrics::NAME,
+                frame,
+            )
+            .await
+            .unwrap();
+        ReadMetrics::decode_reply(&reply).unwrap()
+    }
+
     async fn query<T: Serialize, R: DeserializeOwned>(
         &self,
         method: &str,
@@ -140,6 +157,8 @@ fn wasm(name: &str) -> Vec<u8> {
 
 #[tokio::test]
 async fn typed_application_mount_preserves_authority_pages_and_commit_boundary() {
+    use canic::metrics::{Report, Request as Source};
+
     let directory = PathBuf::from(
         std::env::var_os("IC_TESTKIT_SERVER_DIRECTORY").expect("prepared testkit directory"),
     );
@@ -375,6 +394,9 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
             .as_ref(),
         Some(&original_module)
     );
+    assert!(
+        matches!(client.metrics(Source::Db).await, Report::Db { commits, commit_failures, .. } if commits.total > 0 && commit_failures.total > 0)
+    );
     // Upgrade loses heap caches, not authority/data/continuation.
     canic_qualification::upgrade_stopped(pic, canister, normal.clone(), vec![], None)
         .await
@@ -401,10 +423,30 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         .await
         .is_err()
     );
+    assert!(
+        matches!(client.metrics(Source::Db).await, Report::Db { commits, .. } if commits.total == 0)
+    );
     canic_qualification::upgrade_stopped(pic, canister, fault.clone(), vec![], None)
         .await
         .unwrap();
+    assert!(
+        matches!(client.metrics(Source::Jobs).await, Report::Jobs { started, .. } if started.total == 0)
+    );
+    client.control(8).await;
+    for _ in 0..10 {
+        pic.tick().await;
+        if matches!(client.metrics(Source::Jobs).await, Report::Jobs { succeeded, .. } if succeeded.total == 1)
+        {
+            break;
+        }
+    }
+    assert!(matches!(client.metrics(Source::Jobs).await,
+        Report::Jobs { started, succeeded, retry_attempts, .. }
+        if (started.total, succeeded.total, retry_attempts.total) == (1, 1, 0)));
     client.control(7).await;
+    assert!(matches!(client.metrics(Source::Entropy).await,
+        Report::Entropy {attempts, succeeded, failed, cancelled}
+        if (attempts.total, succeeded.total, failed.total, cancelled.total) == (2, 1, 1, 0)));
     let before_limit = client.catalogue().await;
     let backing = pic.get_stable_memory(canister).await;
     client.control(4).await;

@@ -64,6 +64,80 @@ pub struct InstancePoolConfig {
     pub expires_at_ns: Option<u64>,
 }
 
+/// A hub's allowance for reusable workers on this subnet.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WorkerPoolConfig {
+    /// Approved application child role.
+    pub component: String,
+    /// Management and artifact owners.
+    pub root: String,
+    /// Versioned artifact owner.
+    pub store: String,
+    /// Approved Wasm release.
+    pub release: ic_wasm_store_protocol::Release,
+    /// Worker ceiling, including parked allocations.
+    pub max_workers: u8,
+    /// Lifetime creation debit ceiling.
+    pub creation_budget: u64,
+    /// Last authorized creation time.
+    pub expires_at_ns: Option<u64>,
+}
+
+impl WorkerPoolConfig {
+    fn recipe(&self) -> InstancePoolConfig {
+        InstancePoolConfig {
+            component: self.component.clone(),
+            root: self.root.clone(),
+            store: self.store.clone(),
+            release: self.release.clone(),
+            max_instances: self.max_workers,
+            creation_budget: self.creation_budget,
+            expires_at_ns: self.expires_at_ns,
+            install_args: None,
+            increase_from: None,
+        }
+    }
+    pub(super) fn validate(
+        &self,
+        slots: &BTreeMap<String, CanisterConfig>,
+        cap: Option<u8>,
+        shards: Option<&ShardPoolConfig>,
+        instances: Option<&InstancePoolConfig>,
+    ) -> Result<()> {
+        let cap = cap.ok_or_else(|| {
+            Error::Invalid("worker_pool requires an explicit subnet_child_limit".into())
+        })?;
+        super::positive_count("worker_pool.max_workers", self.max_workers, cap)?;
+        validate_deadline("worker_pool", self.expires_at_ns)?;
+        let hub = validate_pool(
+            slots,
+            &self.component,
+            &self.root,
+            &self.store,
+            &self.release,
+            None,
+        )?;
+        for (component, root, store) in shards
+            .map(|p| (&p.component, &p.root, &p.store))
+            .into_iter()
+            .chain(instances.map(|p| (&p.component, &p.root, &p.store)))
+        {
+            if root != &self.root
+                || store != &self.store
+                || component == &self.component
+                || parent(slots, component)? == hub
+            {
+                return Err(Error::Invalid(format!(
+                    "worker_pool {} and {component} require distinct children and hubs on the same Root and Store",
+                    self.component
+                )));
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Decoded grant and the exact request to submit to Root.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct PoolGrant<T> {
@@ -90,12 +164,13 @@ pub(super) fn validate_capacity(
     limit: Option<u8>,
     shards: Option<&ShardPoolConfig>,
     instances: Option<&InstancePoolConfig>,
+    workers: Option<&WorkerPoolConfig>,
 ) -> Result<()> {
     if let Some(n) = limit {
         super::positive_count("subnet_child_limit", n, stored::MAX_SUBNET_CHILDREN)?;
-        if shards.is_none() && instances.is_none() {
+        if shards.is_none() && instances.is_none() && workers.is_none() {
             return Err(Error::Invalid(format!(
-                "subnet_child_limit = {n} requires a shard_pool or instance_pool"
+                "subnet_child_limit = {n} requires a shard_pool, instance_pool or worker_pool"
             )));
         }
     }
@@ -236,8 +311,11 @@ pub(crate) fn preview(
     }
     let network = selected.config.network.clone();
     let controller = controller.to_owned();
-    if let Some(pool) = &selected.config.instance_pool {
-        let expires_at_ns = check_deadline("instance_pool", pool.expires_at_ns, now)?;
+    let allocation = |pool: &InstancePoolConfig,
+                      label: &str,
+                      method|
+     -> Result<PoolGrant<stored::InstancePool>> {
+        let expires_at_ns = check_deadline(label, pool.expires_at_ns, now)?;
         let (manifest, args) = inputs(
             selected,
             config_path,
@@ -259,7 +337,7 @@ pub(crate) fn preview(
             &hub,
             &args,
         )?;
-        let instances = grant(
+        grant(
             stored::InstancePool {
                 root,
                 hub,
@@ -270,10 +348,30 @@ pub(crate) fn preview(
                 creation_budget: pool.creation_budget,
                 expires_at_ns,
             },
-            stored::CONFIGURE_INSTANCES,
-        )?;
-        if let Some(old) = pool.increase_from {
-            let mut prior = instances.approval.clone();
+            method,
+        )
+    };
+    let instances = selected
+        .config
+        .instance_pool
+        .as_ref()
+        .map(|p| allocation(p, "instance_pool", stored::CONFIGURE_INSTANCES))
+        .transpose()?;
+    let workers = selected
+        .config
+        .worker_pool
+        .as_ref()
+        .map(|p| allocation(&p.recipe(), "worker_pool", stored::CONFIGURE_WORKERS))
+        .transpose()?;
+    if let Some(first) = instances.as_ref().or(workers.as_ref()) {
+        if let Some((instance, old)) = instances.as_ref().zip(
+            selected
+                .config
+                .instance_pool
+                .as_ref()
+                .and_then(|p| p.increase_from),
+        ) {
+            let mut prior = instance.approval.clone();
             let next = std::mem::replace(&mut prior.max_instances, old);
             increases.push(grant(
                 stored::IncreasePool::Instances(prior, next),
@@ -281,14 +379,15 @@ pub(crate) fn preview(
             )?);
         }
         return Ok(FleetPlanning::PlacementPools {
-            capacity: capacity(&instances.approval.root)?,
+            capacity: capacity(&first.approval.root)?,
             increases,
             app: selected.app.clone(),
             fleet: selected.fleet.clone(),
             network,
             controller,
             shards: shards.map(Box::new),
-            instances: Box::new(instances),
+            instances: instances.map(Box::new),
+            workers: workers.map(Box::new),
         });
     }
     let PoolGrant { approval, request } =

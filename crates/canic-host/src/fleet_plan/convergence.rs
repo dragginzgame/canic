@@ -51,7 +51,11 @@ pub enum FleetPlanning {
         #[serde(skip_serializing_if = "Option::is_none")]
         shards: Option<Box<crate::PoolGrant<canic_management_protocol::stored::ShardPool>>>,
         /// Dedicated-instance grant.
-        instances: Box<crate::PoolGrant<canic_management_protocol::stored::InstancePool>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        instances: Option<Box<crate::PoolGrant<canic_management_protocol::stored::InstancePool>>>,
+        /// Independently approved worker allowance.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        workers: Option<Box<crate::PoolGrant<canic_management_protocol::stored::InstancePool>>>,
     },
     /// Create or resume the original Root-plus-child approval.
     Create {

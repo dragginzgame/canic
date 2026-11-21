@@ -364,7 +364,8 @@ macro_rules! mount_auth_session {
 macro_rules! mount_auth_lifecycle {
     (stable = $open:path $(, seal = $seal:path)? $(,)?) => {
         const _: () = {
-            use $crate::auth::{endpoint::{runtime, fail}, install::Install, session::stable};
+            use $crate::__private::runtime;
+            use $crate::auth::{endpoint::fail, install::Install, session::stable};
             #[allow(clippy::needless_pass_by_value)]
             fn __canic_install(input: Install) {
                 stable::open(&$open(Some(&input)), Some(&input));

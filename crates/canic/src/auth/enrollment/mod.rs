@@ -257,8 +257,9 @@ pub enum Error {
 macro_rules! mount_auth_refresh_endpoint {
     ($pull:path) => {
         const _: () = {
+            use $crate::__private::runtime;
             use $crate::auth::{
-                endpoint::{fail, runtime},
+                endpoint::fail,
                 enrollment::{Error, REFRESH, transport},
             };
 

@@ -81,7 +81,8 @@ fn named_frames_follow_each_direction_and_budget() {
 
 #[test]
 fn outbound_call_refuses_oversized_request_before_dispatch() {
-    use canic::method::{CallError, call, runtime};
+    use canic::method::{CallError, call};
+    use ic_platform_runtime as runtime;
     use ic_platform_types::Principal;
     use std::{
         future::Future,

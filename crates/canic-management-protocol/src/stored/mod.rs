@@ -156,7 +156,9 @@ pub struct InstancePool {
 
 /// Approve a dedicated instance pool independently of the shared shard grant.
 pub const CONFIGURE_INSTANCES: u64 = 93;
-/// Maximum managed children across both pools of the single subnet owner.
+/// Approve the bounded worker allowance for one other hub.
+pub const CONFIGURE_WORKERS: u64 = ic_wire::method_id("canic.configure_workers.v1");
+/// Maximum managed children across all pools of the single subnet owner.
 pub const MAX_SUBNET_CHILDREN: u8 = 8;
 /// Dedicated instances also consume the shared subnet allowance.
 pub const MAX_INSTANCES: u8 = MAX_SUBNET_CHILDREN;

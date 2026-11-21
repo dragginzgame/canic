@@ -47,6 +47,17 @@ impl ic_wire::typescript::Wire for Counter {
     }
 }
 
+#[cfg(feature = "metrics")]
+impl From<ic_metrics::MeasurementCounter> for Counter {
+    fn from(counter: ic_metrics::MeasurementCounter) -> Self {
+        Self {
+            total: counter.total(),
+            overflowed: counter.total_overflowed(),
+        }
+    }
+}
+
+// Wire encodes the binary u128. Only human-readable serializers use decimal text.
 mod total {
     use serde::{Deserialize, Deserializer, Serializer, de::Error as _};
 

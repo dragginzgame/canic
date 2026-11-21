@@ -1,7 +1,9 @@
 //! Explicit Root operations for controller-approved shard pools.
 
 use super::controller;
-use canic::sharding::{ASSIGN, ASSIGN_INSTANCE, Key, LIMITS, LOOKUP, LOOKUP_INSTANCE, Placement};
+use canic::sharding::{
+    AssignInstance, AssignShard, Key, LIMITS, LookupInstance, LookupShard, Placement,
+};
 use canic_management::sharding;
 use canic_management_protocol::{
     Refusal,
@@ -43,6 +45,35 @@ fn configure_instances(input: stored::InstancePool) -> Result<(), Refusal> {
     sharding::configure_instances(input)
 }
 
+// configure_workers
+// Approve a hub's worker release, count, funding and deadline.
+// guard  : Root controller
+// limits : stored::LIMITS request, sharding::LIMITS reply
+#[runtime::update(runtime = runtime, name = "configure_workers", guard = controller,
+    decode = approval::<stored::InstancePool, {stored::CONFIGURE_WORKERS}>,
+    encode = configured::<{stored::CONFIGURE_WORKERS}>, max_bytes = 65536, on_error = fail)]
+fn configure_workers(input: stored::InstancePool) -> Result<(), Refusal> {
+    sharding::configure_workers(input)
+}
+
+// assign_worker
+// Recover an ordinal or reserve the next worker.
+// guard  : approved worker hub
+// limits : default request, 1,024-byte placement reply
+#[canic::update(contract = canic::sharding::AssignWorker, guard = sharding::worker_hub)]
+fn assign_worker(ordinal: u8) -> Placement {
+    sharding::worker(ordinal, true)
+}
+
+// lookup_worker
+// Observe the original worker allocation for an ordinal.
+// guard  : approved worker hub
+// limits : default request, 1,024-byte placement reply
+#[canic::update(contract = canic::sharding::LookupWorker, guard = sharding::worker_hub)]
+fn lookup_worker(ordinal: u8) -> Placement {
+    sharding::worker(ordinal, false)
+}
+
 // configure_capacity
 // Set this subnet owner's shared placement ceiling.
 // guard  : Root controller
@@ -77,37 +108,21 @@ fn increase_pool(input: stored::IncreasePool) -> Result<(), Refusal> {
     sharding::increase_pool(input)
 }
 
-// assign
+// assign_shard
 // Return the hub's retained placement for a key or assign it within the approved limits.
 // guard  : approved shard hub
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[runtime::update(
-    runtime = runtime,
-    name = "assign_shard",
-    guard = hub,
-    decode = decode::<ASSIGN>,
-    encode = encode::<ASSIGN>,
-    max_bytes = 1024,
-    on_error = fail,
-)]
-fn assign(key: Key) -> Placement {
+#[canic::update(contract = AssignShard, guard = hub)]
+fn assign_shard(key: Key) -> Placement {
     sharding::assign(key)
 }
 
-// lookup
+// lookup_shard
 // Read a placement for the admitted hub without allocating a shard.
 // guard  : approved shard hub
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[runtime::update(
-    runtime = runtime,
-    name = "lookup_shard",
-    guard = hub,
-    decode = decode::<LOOKUP>,
-    encode = encode::<LOOKUP>,
-    max_bytes = 1024,
-    on_error = fail,
-)]
-fn lookup(key: Key) -> Placement {
+#[canic::update(contract = LookupShard, guard = hub)]
+fn lookup_shard(key: Key) -> Placement {
     sharding::lookup(&key)
 }
 
@@ -115,15 +130,7 @@ fn lookup(key: Key) -> Placement {
 // Return the hub's retained placement for a key or assign it within the approved limits.
 // guard  : approved project hub
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[runtime::update(
-    runtime = runtime,
-    name = "assign_instance",
-    guard = sharding::project_hub,
-    decode = decode::<ASSIGN_INSTANCE>,
-    encode = encode::<ASSIGN_INSTANCE>,
-    max_bytes = 1024,
-    on_error = fail,
-)]
+#[canic::update(contract = AssignInstance, guard = sharding::project_hub)]
 fn assign_instance(key: Key) -> Placement {
     sharding::assign_instance(key)
 }
@@ -132,15 +139,7 @@ fn assign_instance(key: Key) -> Placement {
 // Read a placement for the admitted hub without allocating a dedicated child.
 // guard  : approved project hub
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[runtime::update(
-    runtime = runtime,
-    name = "lookup_instance",
-    guard = sharding::project_hub,
-    decode = decode::<LOOKUP_INSTANCE>,
-    encode = encode::<LOOKUP_INSTANCE>,
-    max_bytes = 1024,
-    on_error = fail,
-)]
+#[canic::update(contract = LookupInstance, guard = sharding::project_hub)]
 fn lookup_instance(key: Key) -> Placement {
     sharding::lookup_instance(&key)
 }
@@ -168,15 +167,6 @@ fn configured<const METHOD: u64>(value: Result<(), Refusal>) -> Result<Vec<u8>, 
     ic_wire::encode(&value, frame(METHOD, ic_wire::Direction::Response), LIMITS)
 }
 
-fn decode<const METHOD: u64>(b: &[u8]) -> Result<Key, ic_wire::Error> {
-    ic_wire::decode(b, frame(METHOD, ic_wire::Direction::Request), LIMITS)
-}
-
-#[allow(clippy::needless_pass_by_value)]
-fn encode<const METHOD: u64>(value: Placement) -> Result<Vec<u8>, ic_wire::Error> {
-    ic_wire::encode(&value, frame(METHOD, ic_wire::Direction::Response), LIMITS)
-}
-
 fn fail(error: impl std::fmt::Debug) -> ! {
     runtime::system::trap(&format!("shard placement: {error:?}"))
 }
@@ -192,7 +182,7 @@ async fn prepare_role_key() -> Result<ic_wire::Bytes<32>, String> {
 }
 
 // issue_role
-// Issue a two-hour credential only for a ready shared-shard caller.
+// Issue a two-hour receiver-bound credential for a ready shard, instance or named service.
 // limits : default
 #[cfg(feature = "role-issuer")]
 #[canic::update(contract = canic::topology::attestation::Issue)]

@@ -1,8 +1,5 @@
 //! Explicit install and strict empty-argument reopen hooks.
 
-#[doc(hidden)]
-pub use ic_platform_runtime as runtime;
-
 #[cfg(all(feature = "metrics", any(feature = "db-store", feature = "db-schema")))]
 impl crate::metrics::store::Source for ic_db::metrics::MetricsStorage {
     type Storage = Self;
@@ -104,7 +101,7 @@ macro_rules! mount_lifecycle {
     (@hooks $binding:tt: $input:ty, $max:literal, $decode:path,
      $call:expr, $reopen:path) => {
         const _: () = {
-            use $crate::lifecycle::runtime as platform;
+            use $crate::__private::runtime as platform;
 
             fn __canic_admit() -> Result<(), std::convert::Infallible> {
                 Ok(())
