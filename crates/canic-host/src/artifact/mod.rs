@@ -299,8 +299,12 @@ pub(crate) fn build_for_role(
         .arg("--target-dir")
         .arg(private.path())
         .env("CARGO_BUILD_BUILD_DIR", cache);
-    // Root is bootstrapped by direct install. Strip symbols before hashing its deployable bytes.
-    if package == "canic-root" {
+    // Strip large Root builds before hashing for direct install. Other Roots retain
+    // symbolized traps for diagnosing refused stable-layout transitions.
+    if package == "canic-root"
+        && (features.iter().any(|f| f == "blob" || f == "role-issuer")
+            || (features.iter().any(|f| f == "auth") && features.iter().any(|f| f == "sharding")))
+    {
         command.args([
             "--config",
             "profile.release.package.canic-root.strip='symbols'",
