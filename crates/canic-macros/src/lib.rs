@@ -27,6 +27,14 @@ pub fn update(options: TokenStream, item: TokenStream) -> TokenStream {
 /// Derive the passive typed caller contract from the same inline role endpoint source.
 #[proc_macro_attribute]
 pub fn role_descriptor(options: TokenStream, item: TokenStream) -> TokenStream {
+    expand(Mode::RoleDescriptor, options.into(), item.into())
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
+/// Derive a passive Wire contract without mounting the handler or importing its guard.
+#[proc_macro_attribute]
+pub fn method_descriptor(options: TokenStream, item: TokenStream) -> TokenStream {
     expand(Mode::Descriptor, options.into(), item.into())
         .unwrap_or_else(syn::Error::into_compile_error)
         .into()
@@ -37,6 +45,7 @@ enum Mode {
     Query,
     Update,
     Descriptor,
+    RoleDescriptor,
 }
 
 fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
@@ -179,10 +188,32 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             quote!(),
         )
     };
-    if mode == Mode::Descriptor {
-        let roles = roles.ok_or_else(|| {
-            syn::Error::new(handler.span(), "role_descriptor requires inline roles")
-        })?;
+    if matches!(mode, Mode::Descriptor | Mode::RoleDescriptor) {
+        if let Some(contract) = contract {
+            return Err(syn::Error::new(
+                contract.span(),
+                "use the explicit contract directly",
+            ));
+        }
+        if mode == Mode::RoleDescriptor && roles.is_none() {
+            return Err(syn::Error::new(
+                handler.span(),
+                "role_descriptor requires inline roles",
+            ));
+        }
+        if mode == Mode::Descriptor && roles.is_some() {
+            return Err(syn::Error::new(
+                handler.span(),
+                "use role_descriptor for an attested endpoint",
+            ));
+        }
+        let role_method = roles.map(|roles| {
+            quote! {
+                impl ::canic::topology::attestation::RoleMethod for #handler {
+                    const ROLES: &'static [&'static str] = #roles;
+                }
+            }
+        });
         let vis = &function.vis;
         let conditions: Vec<_> = cfg.collect();
         return Ok(quote! {
@@ -202,9 +233,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
                     type Input = #request;
                     type Output = #reply;
                 }
-                impl ::canic::topology::attestation::RoleMethod for #handler {
-                    const ROLES: &'static [&'static str] = #roles;
-                }
+                #role_method
             };
         });
     }

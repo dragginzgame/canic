@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.250.0] - 2026-11-21
+
+### ✨ Features
+
+A caller can import `canic::method_descriptor as update` to derive its Wire contract
+from a guarded receiver’s handler. The Miner Pool hub now shares the miner’s
+`mine` declaration. [#69 · Support typed caller descriptors for guarded Wire handlers](https://github.com/dragginzgame/canic/issues/69) · [Caller setup](docs/wire-ci.md#share-a-guarded-endpoint-with-a-rust-caller)
+
+```sh
+# Build both actors, then exercise parent-only dispatch on the prepared local simulator.
+make miner-test
+```
+
 ## [0.249.0] - 2026-11-21
 
 Attested queries and updates can declare `roles = &[PROJECT, PROJECT_REGISTRY]`

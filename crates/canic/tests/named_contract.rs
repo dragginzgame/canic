@@ -79,6 +79,29 @@ fn named_frames_follow_each_direction_and_budget() {
     assert!(Example::decode_reply(&reply[..reply.len() - 1]).is_err());
 }
 
+// The caller has neither the receiver's guard nor its implementation in scope.
+#[canic::method_descriptor(
+    name = "guarded_lookup",
+    guard = require_parent,
+    limits = Example::REQUEST,
+    reply_limits = Example::REPLY,
+)]
+async fn lookup(key: String) -> String {
+    receiver::lookup(key).await
+}
+
+#[test]
+fn passive_descriptor_preserves_export_name_and_directional_limits() {
+    assert_eq!(lookup::NAME, "guarded_lookup");
+    assert_eq!(lookup::ID, wire::method_id("guarded_lookup"));
+    let value = "a".repeat(96);
+    assert!(lookup::encode_request(&value).is_err());
+    assert_eq!(
+        lookup::decode_reply(&lookup::encode_reply(&value).unwrap()).unwrap(),
+        value
+    );
+}
+
 #[test]
 fn outbound_call_refuses_oversized_request_before_dispatch() {
     use canic::method::{CallError, call, call_unbounded};
@@ -99,7 +122,7 @@ fn outbound_call_refuses_oversized_request_before_dispatch() {
     ));
 
     assert!(matches!(
-        pin!(call_unbounded::<Example>(target, &input))
+        pin!(call_unbounded::<lookup>(target, &input))
             .poll(&mut Context::from_waker(Waker::noop())),
         Poll::Ready(Err(CallError::Request(_)))
     ));

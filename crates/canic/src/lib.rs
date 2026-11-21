@@ -77,7 +77,7 @@ pub mod sharding;
 pub mod topology;
 
 #[cfg(feature = "method")]
-pub use canic_macros::{query, role_descriptor, update};
+pub use canic_macros::{method_descriptor, query, role_descriptor, update};
 
 /// Emit a local build-report marker without adding an IC export.
 #[doc(hidden)]

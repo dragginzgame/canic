@@ -103,3 +103,17 @@ A sender enables Canic’s `role-attestation` feature and calls the named servic
 `call_service::<protocol::lookup>("user_hub", 5, account, authorize).await`.
 Keep an explicit shared `RoleMethod` and `role_contract = M` when an existing
 protocol uses a custom numeric ID.
+
+## Share a guarded endpoint with a Rust caller
+
+Miner Pool declares `mine` once in [mine.rs](../apps/examples/miner-pool/miner/src/mine.rs).
+Its miner imports `canic::update` and the receiver-local `require_parent` guard.
+Its hub includes the same file in a protocol module with `use canic::method_descriptor as update;`.
+The generated type implements `canic::method::Contract`. The caller needs only
+Canic’s `method` feature and any types or budget constants referenced by the signature.
+
+Use `call::<protocol::mine>(target, seconds, &batch).await` for a bounded wait or
+`call_unbounded::<protocol::mine>(target, &batch).await` for an unbounded wait.
+Both use the exported name (including a `name` override) to derive the Wire ID.
+Request and reply limits follow the mounted declaration. The installed receiver
+checks its guard against the actual caller on every request.

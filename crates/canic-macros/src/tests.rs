@@ -47,3 +47,26 @@ fn scoped_handler_reserves_auth_for_admitted_identity() {
             .contains("reserved for the admitted identity")
     );
 }
+
+#[test]
+fn caller_descriptors_preserve_the_attestation_boundary() {
+    let handler = quote!(
+        fn receive() {}
+    );
+    for (mode, options, message) in [
+        (
+            Mode::Descriptor,
+            quote!(roles = &[SHARD]),
+            "use role_descriptor",
+        ),
+        (Mode::RoleDescriptor, quote!(), "requires inline roles"),
+        (
+            Mode::Descriptor,
+            quote!(role_contract = M),
+            "use the explicit contract",
+        ),
+    ] {
+        let error = expand(mode, options, handler.clone()).unwrap_err();
+        assert!(error.to_string().contains(message), "{error}");
+    }
+}

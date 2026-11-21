@@ -34,12 +34,9 @@ fn call_failure(error: &CallError) -> &'static str {
     }
 }
 
-struct Mine;
-impl Contract for Mine {
-    const NAME: &'static str = "mine";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
-    type Input = (u64, u8);
-    type Output = u64;
+mod miner {
+    use canic::method_descriptor as update;
+    include!("../../miner/src/mine.rs");
 }
 
 /// Advance one step of the operator-selected round and goal.
@@ -154,7 +151,7 @@ async fn tick(input: (u64, u8)) -> String {
             expected,
         } => {
             let target = &state.workers[usize::from(index)].target;
-            let reply = call::<Mine>(target.shard, 10, &(round, ordinal)).await;
+            let reply = call::<miner::mine>(target.shard, 10, &(round, ordinal)).await;
             let mut latest = Pool::read();
             if latest.pending.as_ref() != Some(&pending) {
                 return "advanced".into();
