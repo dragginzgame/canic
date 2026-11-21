@@ -186,7 +186,7 @@ fn validate_source(
     }
 }
 
-async fn call<T: Serialize, R: DeserializeOwned>(
+pub(super) async fn call<T: Serialize, R: DeserializeOwned>(
     source: &stored::Delivery,
     method: &str,
     id: u64,
@@ -358,6 +358,13 @@ pub(super) async fn observe_cache(
     hash: [u8; 32],
 ) -> Result<(), Failure> {
     let (canister_id, expected) = layout(slot, upgrade, hash);
+    verify_chunks(canister_id, &expected).await
+}
+
+pub(super) async fn verify_chunks(
+    canister_id: Principal,
+    expected: &[ChunkHash],
+) -> Result<(), Failure> {
     let bytes = CanisterArgs { canister_id }
         .encode(1024)
         .expect("cache observation");

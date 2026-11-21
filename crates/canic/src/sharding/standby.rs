@@ -16,6 +16,19 @@ pub struct Refill {
     pub expires_at_ns: u64,
 }
 
+/// How Root originally acquired an inventory principal.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum Source {
+    /// Root spent the approved refill debit.
+    Refill(Refill),
+    /// An existing shard donated its physical slot after verified retirement.
+    Shard(super::ShardTarget),
+    /// Operator supplied unassigned canister.
+    Imported(Principal),
+    /// Root created this entry against the fleet reserve allowance.
+    Automatic(Refill),
+}
+
 /// Original outcome of one refill. Issued entries continue to consume capacity.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Asset {
@@ -31,6 +44,43 @@ pub enum Asset {
     Reset(Principal, super::Allocation, u64, ResetPhase),
     /// Empty and running with this observed balance. Original assignments remain retired.
     Available(Principal, u128),
+    /// Registered for handoff; Root has yet to verify custody.
+    AwaitingHandoff(Principal),
+    /// Former Root has yet to release this principal to the destination.
+    AwaitingRelease(Principal),
+    /// Verified empty and solely controlled until the recorded proof cutoff.
+    Quarantined(Principal, u64),
+    /// Pinned to the destination; the source still counts pending transfers.
+    Transfer(Principal, Principal, u64, TransferPhase),
+}
+
+/// Progress of a source fleet's handoff to one approved destination.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum TransferPhase {
+    /// Removed from the source's claimable inventory.
+    Reserved,
+    /// Sole-controller change issued once. Only custody observation can settle it.
+    ControllersIssued,
+    /// Destination reported verified custody. The source has released its slot.
+    Confirmed,
+}
+
+/// Read the destination inventory entry as its exact configured former Root.
+pub struct HandoffStatus;
+impl Contract for HandoffStatus {
+    const NAME: &'static str = "standby_handoff_status";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    type Input = Principal;
+    type Output = Result<Asset, String>;
+}
+
+/// Export one exact empty spare to its named destination Root.
+pub struct ExportStandby;
+impl Contract for ExportStandby {
+    const NAME: &'static str = "export_standby";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    type Input = (Principal, Principal, u64);
+    type Output = Result<TransferPhase, String>;
 }
 
 /// Approve one refill or recover the original result.
@@ -47,15 +97,24 @@ impl Contract for RefillStandby {
 pub struct InspectStandby;
 impl Contract for InspectStandby {
     const NAME: &'static str = "inspect_standby";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const ID: u64 = ic_wire::method_id("canic.inspect_standby.v3");
     const REPLY: ic_wire::Limits = ic_wire::Limits {
-        bytes: 4096,
-        allocation: 65536,
-        nodes: 4096,
+        bytes: 16384,
+        allocation: 524288,
+        nodes: 16384,
         depth: 12,
     };
     type Input = ();
-    type Output = Vec<(Refill, Asset)>;
+    type Output = Vec<(Source, Asset)>;
+}
+
+/// Verify an approved external handoff or complete its quarantine.
+pub struct ImportStandby;
+impl Contract for ImportStandby {
+    const NAME: &'static str = "import_standby";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    type Input = Principal;
+    type Output = Result<Asset, String>;
 }
 
 /// Read the hub's retained receipt before cleaning its former worker.

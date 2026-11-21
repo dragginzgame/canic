@@ -19,9 +19,14 @@ required-features = ["operator-client"]
 [features]
 operator-client = ["dep:clap", "dep:serde_json"]
 child-metrics = ["operator-client"]
-role-issuer = ["sharding", "canic-management/role-issuer"]
+role-issuer = [
+    "sharding",
+    "canic-management/role-issuer",
+    "canic-management-protocol/retirement",
+]
 backup = ["canic-management/backup", "dep:serde"]
 sharding = [
+    "canic-management-protocol/standby",
     "canic/sharding",
     "canic-management/sharding",
     "operator-client",

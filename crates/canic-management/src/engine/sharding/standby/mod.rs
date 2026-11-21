@@ -3,13 +3,16 @@ use super::super::{MANAGEMENT_LIMITS, create_args, management, reserved_cycles};
 use super::{STATE, api};
 use canic::sharding::{
     Allocation,
-    standby::{Asset, Refill},
+    standby::{Asset, Refill, Source},
 };
 use canic_management_protocol::{CREATION_CYCLES, children::ChildId, stored::MAX_SUBNET_CHILDREN};
 use ic_platform_protocol::management as mgmt;
 use ic_platform_types::Principal;
 
-pub(super) type Inventory = Vec<(Refill, Asset)>;
+pub mod policy;
+pub mod transfer;
+
+pub(super) type Inventory = Vec<(Source, Asset)>;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(super) struct Returned {
@@ -24,18 +27,21 @@ pub(super) struct Returned {
 #[must_use]
 pub fn permits_enrollment(receiver: Principal) -> bool {
     STATE.with_borrow(|s| {
-        !s.as_ref()
-            .unwrap()
-            .pools
-            .standby
-            .iter()
-            .any(|(_, asset)| match asset {
-                Asset::Empty(id)
-                | Asset::Available(id, _)
-                | Asset::Released(id, _)
-                | Asset::Reset(id, ..) => *id == receiver,
-                _ => false,
-            })
+        let pools = &s.as_ref().unwrap().pools;
+        !pools.retirements.values().any(|r| {
+            r.target().shard == receiver
+                && r.phase != canic_management_protocol::stored::RetirementPhase::Returned
+        }) && !pools.standby.iter().any(|(_, asset)| match asset {
+            Asset::Transfer(id, ..)
+            | Asset::AwaitingRelease(id)
+            | Asset::AwaitingHandoff(id)
+            | Asset::Quarantined(id, _)
+            | Asset::Empty(id)
+            | Asset::Available(id, _)
+            | Asset::Released(id, _)
+            | Asset::Reset(id, ..) => *id == receiver,
+            _ => false,
+        })
     })
 }
 
@@ -43,7 +49,7 @@ pub fn permits_enrollment(receiver: Principal) -> bool {
 /// # Panics
 /// Requires the Root controller and an opened ledger.
 #[must_use]
-pub fn inspect() -> Vec<(Refill, Asset)> {
+pub fn inspect() -> Vec<(Source, Asset)> {
     assert!(api::is_controller(&api::caller()));
     STATE.with_borrow(|s| s.as_ref().unwrap().pools.standby.clone())
 }
@@ -58,12 +64,27 @@ pub async fn refill(input: Refill) -> Result<Asset, String> {
     if input.root != api::canister_self() || input.cycles != CREATION_CYCLES {
         return Err("wrong Root or creation debit".into());
     }
-    if let Some((approval, asset)) = inspect().get(usize::from(input.sequence)) {
-        return if approval == &input {
-            Ok(asset.clone())
-        } else {
-            Err("refill approval differs".into())
-        };
+    let original = STATE.with_borrow(|s| {
+        s.as_ref()
+            .unwrap()
+            .pools
+            .standby
+            .iter()
+            .find_map(|(source, asset)| {
+                let Source::Refill(approval) = source else {
+                    return None;
+                };
+                (approval.sequence == input.sequence).then(|| {
+                    if approval == &input {
+                        Ok(asset.clone())
+                    } else {
+                        Err("refill approval differs".into())
+                    }
+                })
+            })
+    });
+    if let Some(result) = original {
+        return result;
     }
     super::admit_pool_change(false).map_err(|e| format!("{e:?}"))?;
     let now = api::time();
@@ -75,20 +96,38 @@ pub async fn refill(input: Refill) -> Result<Asset, String> {
     {
         return Err("insufficient Root reserve".into());
     }
-    STATE.with_borrow_mut(|s| {
+    let index = STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
         if state.pools.capacity.is_none() || state.pools.full() {
             return Err("no approved subnet capacity");
         }
-        if state.pools.standby.len() != usize::from(input.sequence)
+        if state
+            .pools
+            .standby
+            .iter()
+            .filter(|(source, _)| matches!(source, Source::Refill(_)))
+            .count()
+            != usize::from(input.sequence)
             || input.sequence >= MAX_SUBNET_CHILDREN
         {
             return Err("refill sequence outside retained capacity");
         }
-        state.pools.standby.push((input.clone(), Asset::Issued));
+        let index = state.pools.standby.len();
+        state
+            .pools
+            .standby
+            .push((Source::Refill(input.clone()), Asset::Issued));
         state.pool.set(state.pools.encode());
-        Ok(())
+        Ok(index)
     })?;
+    create_issued(index, Source::Refill(input)).await
+}
+
+// Dispatch only after the exact debit and inventory slot have been retained.
+async fn create_issued(index: usize, source: Source) -> Result<Asset, String> {
+    let (Source::Refill(input) | Source::Automatic(input)) = &source else {
+        unreachable!()
+    };
     let bytes = management("create_canister", create_args(), u128::from(input.cycles))
         .await
         .map_err(|e| format!("refill issued: {e:?}"))?;
@@ -97,8 +136,8 @@ pub async fn refill(input: Refill) -> Result<Asset, String> {
         .canister_id;
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
-        let entry = &mut state.pools.standby[usize::from(input.sequence)];
-        assert_eq!(entry, &(input, Asset::Issued));
+        let entry = &mut state.pools.standby[index];
+        assert_eq!(entry, &(source, Asset::Issued));
         entry.1 = Asset::Empty(id);
         state.pool.set(state.pools.encode());
     });
@@ -117,7 +156,11 @@ pub(super) fn available(asset: &Asset) -> Option<(bool, u128, Principal)> {
     }
 }
 
-pub(super) fn reserve(pools: &mut super::Pools, slot: ChildId, generation: [u8; 32]) {
+pub(in crate::engine::sharding) fn reserve(
+    pools: &mut super::Pools,
+    slot: ChildId,
+    generation: [u8; 32],
+) {
     if let Some(((_, _, id), asset)) = pools
         .standby
         .iter_mut()
@@ -153,6 +196,9 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
     let claimed = Asset::Claimed(target.shard, target.allocation.clone());
     let released = Asset::Released(target.shard, target.allocation.clone());
     let slot = ChildId::placement(target.allocation.slot as usize).ok_or("unknown worker slot")?;
+    if super::workers::worker_index(slot).is_none() {
+        return Err("released worker allocation required".into());
+    }
     let (index, hub) = match STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
         if state.pools.returns.iter().any(|r| r.target == target)
@@ -212,3 +258,8 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
 
 mod reset;
 pub use reset::reset;
+
+mod shard;
+pub(in crate::engine) use shard::Retirement;
+#[cfg(feature = "role-issuer")]
+pub use shard::retire;

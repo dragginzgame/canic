@@ -7,6 +7,20 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Root journal hard cut — 2026-11-21
+
+The storage codec tests reopened CUJC at two slots, four slots and sparse
+placement identities, preserving the original child, Store approval, issued stop
+and installation evidence. On PocketIC, the shared and dedicated placement journey
+recovered existing assignments after fleet growth and Root replacement.
+All seven Store-maintenance cases passed, including recovery after callback loss
+and refusal of a predecessor upgrade with a Store installation already issued.
+
+The installed `storage_reopen::` test placed the frozen two-slot CUJ9 record
+from `d5f2906` in a current named cell. The candidate reported
+`unsupported Root journal format`. The installed module hash, full stable
+memory and subnet canister count matched their values before the attempt.
+
 ## Indexed shared-shard placement — 2026-11-21
 
 On PocketIC, 20,000 distinct callers signed up through one hub under a

@@ -30,6 +30,14 @@ pub(crate) fn render(snapshot: &Fleet, links: &[String], details: bool, color: b
         "Canic fleet\n".into()
     };
     if let Some(config) = &snapshot.configuration {
+        if let Some(policy) = &config.config.standby_pool {
+            writeln!(
+                output,
+                "{}",
+                super::spare_summary(snapshot, policy.minimum_available)
+            )
+            .expect("String write");
+        }
         if config.config.canisters.is_empty() {
             output.push_str("No canisters declared yet.\n");
         }

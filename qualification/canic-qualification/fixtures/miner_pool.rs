@@ -12,6 +12,7 @@ pub(crate) struct Fleet<'a> {
     pub root: Client<'a>,
     pub pool: CanisterId,
     pub capacity: canic_host::PoolGrant<stored::SubnetCapacity>,
+    pub standby: Option<canic_host::PoolGrant<stored::StandbyPolicy>>,
     pub workers: Box<canic_host::PoolGrant<stored::InstancePool>>,
 }
 
@@ -122,6 +123,7 @@ pub(crate) async fn install<'a>(
     .unwrap();
     let canic_host::FleetPlanning::PlacementPools {
         capacity: Some(capacity),
+        standby,
         workers: Some(workers),
         instances: None,
         shards: None,
@@ -135,6 +137,7 @@ pub(crate) async fn install<'a>(
         root,
         pool,
         capacity,
+        standby,
         workers,
     }
 }

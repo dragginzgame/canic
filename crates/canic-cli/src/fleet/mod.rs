@@ -21,6 +21,41 @@ fn escape(value: &str) -> String {
         .replace('\'', "&#39;")
 }
 
+fn spare_summary(snapshot: &Fleet, configured: u8) -> String {
+    use canic_management_protocol::stored::RefillStatus;
+    let mut line = format!("Min available spares: {configured} (subnet fleet)");
+    if let Some(counts) = &snapshot.spare_counts {
+        use std::fmt::Write as _;
+        let refill = match counts.refill {
+            RefillStatus::AtTarget => "target met",
+            RefillStatus::AwaitingCreation => "awaiting creation",
+            RefillStatus::AllowanceSpent => "creation allowance spent",
+            RefillStatus::SubnetFull => "subnet full",
+            RefillStatus::Expired => "approval expired",
+            RefillStatus::Occupied => "management busy",
+            RefillStatus::Underfunded => "more cycles required",
+            RefillStatus::Due => "refill due",
+        };
+        write!(
+            line,
+            " · {} ready · {refill} · {}/{} automatic creations used",
+            counts.ready, counts.creations_used, counts.maximum_creations
+        )
+        .unwrap();
+        if configured != counts.min_available_spares {
+            write!(
+                line,
+                " · Root approved minimum {}",
+                counts.min_available_spares
+            )
+            .unwrap();
+        }
+    } else {
+        line.push_str(" · ready count unknown");
+    }
+    line
+}
+
 fn manager_kind(snapshot: &Fleet, manager: &canic_host::FleetManager) -> &'static str {
     let planned_root = snapshot.operations.iter().any(|operation| {
         operation.network_id == manager.network_id
@@ -83,6 +118,14 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
     ).expect("writing to a String");
     if let Some(config) = &snapshot.configuration {
         write!(html, "<h2>App: {}</h2><h3>Fleet: {}</h3><p>Local declarations; deployment evidence is shown separately.</p><p>Configured network: {}</p>", escape(&config.app), escape(&config.fleet), escape(&configured_network(config))).expect("writing to String");
+        if let Some(policy) = &config.config.standby_pool {
+            write!(
+                html,
+                "<p>{}</p>",
+                spare_summary(snapshot, policy.minimum_available)
+            )
+            .expect("String write");
+        }
         if config.config.canisters.is_empty() {
             html.push_str(
                 "<p>No canisters declared yet. Add canister definitions to this app before planning.</p>",

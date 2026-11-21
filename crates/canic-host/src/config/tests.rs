@@ -250,6 +250,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                         role_receivers: vec![],
                         subnet_child_limit: None,
                         instance_pool: None,
+                        standby_pool: None,
                         worker_pool: None,
                         shard_pool: None,
                         auth: Vec::new(),
@@ -1362,4 +1363,91 @@ fn ephemeral_fleet_requires_fresh_bindings_and_journal() {
             toml::from_str::<Config>(&invalid).map_or(true, |config| config.validate().is_err())
         );
     }
+}
+
+#[test]
+fn standby_only_fleet_resolves_root_and_frames_the_configured_import() {
+    use canic_management_protocol::stored;
+    let source = r#"
+[apps.reserve.canisters.app]
+[apps.reserve.fleets.local]
+network = { kind = "Mainnet" }
+subnet_child_limit = 4
+[apps.reserve.fleets.local.canisters]
+root = { id = "rrkah-fqaaa-aaaaa-aaaaq-cai" }
+[apps.reserve.fleets.local.standby_pool]
+root = "root"
+min_available_spares = 2
+maximum_creations = 3
+expires_at_ns = 1800000000000000000
+minimum_import_cycles = 500000000000
+[[apps.reserve.fleets.local.standby_pool.imports]]
+network = "ic"
+principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai", "r7inp-6aaaa-aaaaa-aaabq-cai"]
+"#;
+    let config: Config = toml::from_str(source).unwrap();
+    let selected = config.select(None, None).unwrap();
+    let canic_management_protocol::stored::StandbyPolicy { root, .. } =
+        selected.config.standby_pool.as_ref().unwrap();
+    assert_eq!(root, "root");
+    let crate::FleetPlanning::PlacementPools {
+        standby: Some(grant),
+        capacity: Some(capacity),
+        ..
+    } = sharding::preview(
+        Path::new("canic.toml"),
+        &selected,
+        "r7inp-6aaaa-aaaaa-aaabq-cai",
+    )
+    .unwrap()
+    else {
+        panic!("reserve approval")
+    };
+    assert_eq!(grant.approval.root, capacity.approval.root);
+    let decoded: stored::StandbyPolicy = ic_wire::decode(
+        &grant.request,
+        ic_wire::Encoding::Frame {
+            method: stored::CONFIGURE_STANDBY,
+            direction: ic_wire::Direction::Request,
+        },
+        stored::LIMITS,
+    )
+    .unwrap();
+    assert_eq!(decoded, grant.approval);
+    assert_eq!(decoded.minimum_available, 2);
+    assert_eq!(decoded.imports.len(), 2);
+    assert_eq!(decoded.imports[1].principal, "r7inp-6aaaa-aaaaa-aaabq-cai");
+    assert!(
+        toml::from_str::<Config>(&source.replace("network = \"ic\"\n", ""))
+            .unwrap_err()
+            .to_string()
+            .contains("network")
+    );
+    for (net, imports) in [("Mainnet", "local"), ("Local", "ic")] {
+        let mut wrong = source
+            .replace("Mainnet", net)
+            .replace("network = \"ic\"", &format!("network = {imports:?}"));
+        if net == "Local" {
+            wrong=wrong.replace("[apps.reserve.fleets.local.canisters]\nroot = { id = \"rrkah-fqaaa-aaaaa-aaaaq-cai\" }\n","");
+        }
+        assert!(
+            toml::from_str::<Config>(&wrong)
+                .unwrap()
+                .validate()
+                .unwrap_err()
+                .to_string()
+                .contains("standby_pool.imports[0].network")
+        );
+    }
+    assert_eq!(decoded.imports[0].previous_root, None);
+    let invalid: Config =
+        toml::from_str(&source.replace("min_available_spares = 2", "min_available_spares = 5"))
+            .unwrap();
+    assert!(
+        invalid
+            .select(None, None)
+            .unwrap_err()
+            .to_string()
+            .contains("standby_pool.min_available_spares = 5 exceeds subnet_child_limit = 4")
+    );
 }

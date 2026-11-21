@@ -2,6 +2,22 @@
 use super::*;
 use canic::sharding::Placement;
 
+pub(super) async fn counts(root: &Client<'_>) -> stored::SpareCounts {
+    let reply = root
+        .pic
+        .query_call(
+            root.id,
+            CanisterId::anonymous(),
+            stored::ReadSpareCounts::NAME,
+            stored::ReadSpareCounts::encode_request(&()).unwrap(),
+        )
+        .await
+        .unwrap();
+    stored::ReadSpareCounts::decode_reply(&reply)
+        .unwrap()
+        .unwrap()
+}
+
 pub(super) async fn approve(root: &Client<'_>, max_children: u8) {
     root.update::<_, Result<(), management::Refusal>>(
         "configure_capacity",
@@ -93,6 +109,7 @@ pub(super) async fn exercise(
         )
         .unwrap()
     };
+    let from_reserve = limit == 4 && module == "pool-root.wasm";
     let shard = stored::ShardPool {
         arguments: args(hub),
         root: root.id.to_text(),
@@ -100,7 +117,11 @@ pub(super) async fn exercise(
         pool: "users".into(),
         max_shards: 1,
         keys_per_shard: if module == "role-root.wasm" { 3 } else { 1 },
-        creation_budget: management::CREATION_CYCLES,
+        creation_budget: if from_reserve {
+            0
+        } else {
+            management::CREATION_CYCLES
+        },
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
     };
@@ -110,7 +131,11 @@ pub(super) async fn exercise(
         hub: project.to_text(),
         component: "project".into(),
         max_instances: 2,
-        creation_budget: 2 * management::CREATION_CYCLES,
+        creation_budget: if from_reserve {
+            0
+        } else {
+            2 * management::CREATION_CYCLES
+        },
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
     };

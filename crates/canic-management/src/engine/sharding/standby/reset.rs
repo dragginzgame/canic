@@ -16,6 +16,9 @@ pub async fn reset(
 ) -> Result<ResetPhase, String> {
     assert!(api::is_controller(&api::caller()));
     let slot = ChildId::placement(target.allocation.slot as usize).ok_or("invalid worker slot")?;
+    if super::super::workers::worker_index(slot).is_none() {
+        return Err("released worker allocation required".into());
+    }
     let _lock = super::super::super::observing(slot).ok_or("worker observation in progress")?;
     if let Some(original) = STATE.with_borrow(|s| {
         s.as_ref()
@@ -71,63 +74,11 @@ pub async fn reset(
     }
     .encode(1024)
     .expect("principal");
-    let inventory = management("list_canister_snapshots", args.clone(), 0)
-        .await
-        .map_err(|e| format!("snapshot inventory: {e:?}"))?;
-    if !decode_list_snapshots(&inventory, MANAGEMENT_LIMITS)
-        .map_err(|_| "invalid snapshot inventory")?
-        .is_empty()
-    {
-        return Err("worker has retained snapshots".into());
-    }
-    let reply = management("canister_status", args.clone(), 0)
-        .await
-        .map_err(|e| format!("worker status: {e:?}"))?;
-    let status = mgmt::decode_canister_status(&reply, MANAGEMENT_LIMITS)
-        .map_err(|_| "invalid worker status")?;
-    if status.settings.controllers != [api::canister_self()] {
-        return Err("Root must be sole controller".into());
-    }
-    let balance = if matches!(
-        before,
-        Asset::Reset(_, _, _, ResetPhase::Uninstalled | ResetPhase::StartIssued)
-    ) {
-        let resources = mgmt::decode_canister_resources(&reply, MANAGEMENT_LIMITS)
-            .map_err(|_| "missing worker resource evidence")?;
-        if resources.memory_metrics.snapshots_size != 0_u64.into() {
-            return Err("worker snapshot memory is occupied".into());
-        }
-        let balance = u128::try_from(resources.cycles.0)
-            .map_err(|_| "worker balance exceeds accounting range")?;
-        if balance < u128::from(minimum.get()) {
-            return Err(format!(
-                "worker has {balance} cycles; return requires at least {minimum}"
-            ));
-        }
-        Some(balance)
-    } else {
-        None
+    let prior_phase = match before {
+        Asset::Reset(_, _, _, phase) => Some(phase),
+        _ => None,
     };
-    let (phase, method) = match (&before, status.status, status.module_hash) {
-        (Asset::Reset(_, _, _, ResetPhase::StartIssued), Status::Running, None) => {
-            (ResetPhase::Returned, None)
-        }
-        (Asset::Reset(_, _, _, ResetPhase::Uninstalled), Status::Stopped, None) => {
-            (ResetPhase::StartIssued, Some("start_canister"))
-        }
-        (Asset::Reset(_, _, _, ResetPhase::UninstallIssued), Status::Stopped, None) => {
-            (ResetPhase::Uninstalled, None)
-        }
-        (
-            Asset::Released(..) | Asset::Reset(_, _, _, ResetPhase::StopIssued),
-            Status::Stopped,
-            Some(actual),
-        ) if actual == hash => (ResetPhase::UninstallIssued, Some("uninstall_code")),
-        (Asset::Released(..), Status::Running, Some(actual)) if actual == hash => {
-            (ResetPhase::StopIssued, Some("stop_canister"))
-        }
-        _ => return Err("worker status does not yet confirm the expected reset phase".into()),
-    };
+    let (phase, method, balance) = observe_reset(&args, prior_phase, &hash, minimum).await?;
     admit_receiver(target.shard)?;
     super::super::admit_pool_change(false).map_err(|e| format!("outstanding custody: {e:?}"))?;
     let now = api::time();
@@ -158,6 +109,79 @@ pub async fn reset(
         management(method, args, 0)
             .await
             .map_err(|e| format!("{method} issued; observe original reset: {e:?}"))?;
+        #[cfg(feature = "fault-injection")]
+        if phase == ResetPhase::UninstallIssued {
+            // Root-wide uninstall callback fault, selected on the same channel as reply faults.
+            super::super::super::fault(ChildId::FIRST, 26);
+        }
     }
     Ok(phase)
+}
+
+pub(super) async fn observe_reset(
+    args: &[u8],
+    before: Option<ResetPhase>,
+    hash: &[u8],
+    minimum: std::num::NonZeroU64,
+) -> Result<(ResetPhase, Option<&'static str>, Option<u128>), String> {
+    let (status, balance) = observe_target(args).await?;
+    let balance = if matches!(
+        before,
+        Some(ResetPhase::Uninstalled | ResetPhase::StartIssued)
+    ) {
+        if balance < u128::from(minimum.get()) {
+            return Err(format!(
+                "worker has {balance} cycles; return requires at least {minimum}"
+            ));
+        }
+        Some(balance)
+    } else {
+        None
+    };
+    let (phase, method) = match (before, status.status, status.module_hash) {
+        (Some(ResetPhase::StartIssued), Status::Running, None) => (ResetPhase::Returned, None),
+        (Some(ResetPhase::Uninstalled), Status::Stopped, None) => {
+            (ResetPhase::StartIssued, Some("start_canister"))
+        }
+        (Some(ResetPhase::UninstallIssued), Status::Stopped, None) => {
+            (ResetPhase::Uninstalled, None)
+        }
+        (None | Some(ResetPhase::StopIssued), Status::Stopped, Some(actual)) if actual == hash => {
+            (ResetPhase::UninstallIssued, Some("uninstall_code"))
+        }
+        (None, Status::Running, Some(actual)) if actual == hash => {
+            (ResetPhase::StopIssued, Some("stop_canister"))
+        }
+        _ => return Err("worker status does not yet confirm the expected reset phase".into()),
+    };
+    Ok((phase, method, balance))
+}
+
+/// Observe snapshot custody, sole control, module and balance from management.
+pub(super) async fn observe_target(args: &[u8]) -> Result<(mgmt::CanisterStatus, u128), String> {
+    let inventory = management("list_canister_snapshots", args.to_vec(), 0)
+        .await
+        .map_err(|e| format!("snapshot inventory: {e:?}"))?;
+    if !decode_list_snapshots(&inventory, MANAGEMENT_LIMITS)
+        .map_err(|_| "invalid snapshot inventory")?
+        .is_empty()
+    {
+        return Err("target has retained snapshots".into());
+    }
+    let reply = management("canister_status", args.to_vec(), 0)
+        .await
+        .map_err(|e| format!("target status: {e:?}"))?;
+    let status = mgmt::decode_canister_status(&reply, MANAGEMENT_LIMITS)
+        .map_err(|_| "invalid target status")?;
+    if status.settings.controllers != [api::canister_self()] {
+        return Err("Root must be sole controller".into());
+    }
+    let resources = mgmt::decode_canister_resources(&reply, MANAGEMENT_LIMITS)
+        .map_err(|_| "missing target resource evidence")?;
+    if resources.memory_metrics.snapshots_size != 0_u64.into() {
+        return Err("target snapshot memory is occupied".into());
+    }
+    let balance = u128::try_from(resources.cycles.0)
+        .map_err(|_| "target balance exceeds accounting range")?;
+    Ok((status, balance))
 }

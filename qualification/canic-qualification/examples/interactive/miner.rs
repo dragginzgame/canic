@@ -71,6 +71,24 @@ pub(super) async fn session(owner: &mut Instance, artifacts: &Path, seconds: u64
         )?;
         approved.map_err(|why| format!("Root refused {name}: {why:?}"))?;
     }
+    if let Some(reserve) = &fleet.standby {
+        let bytes = fleet
+            .root
+            .pic
+            .update_call(
+                fleet.root.id,
+                fleet.root.operator,
+                "configure_standby",
+                reserve.request.clone(),
+            )
+            .await
+            .map_err(|reject| reject.reject_message)?;
+        canic_host::application::codec::decode(&artifacts.join("root.client"), &bytes)?;
+        println!(
+            "Min available spares: {} (subnet fleet) · automatic creation allowance: {}.",
+            reserve.approval.minimum_available, reserve.approval.maximum_creations
+        );
+    }
     let hint = format!(
         "Commands: miners 0..{limit}, report, exit. Try miners 3, miners 1, then miners 3 again."
     );

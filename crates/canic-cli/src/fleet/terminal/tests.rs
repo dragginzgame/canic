@@ -13,6 +13,7 @@ fn empty() -> Fleet {
         issues: vec![],
         managers: vec![],
         metrics: vec![],
+        spare_counts: None,
         stores: vec![],
         wallet: None,
     }
@@ -443,6 +444,7 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
             role_receivers: vec![],
             subnet_child_limit: None,
             instance_pool: None,
+            standby_pool: None,
             worker_pool: None,
             shard_pool: None,
             auth: Vec::new(),
@@ -661,4 +663,50 @@ fn upgrade_progress_stays_uncertified_and_unknowns_do_not_hide_creation() {
     assert!(!text.contains("\nforged"));
     assert!(html.contains("Upgrade phase: <strong>UNKNOWN</strong>"));
     assert!(!html.contains("<provider>"));
+}
+
+#[test]
+fn spare_minimum_is_one_fleet_target_in_the_terminal_and_browser() {
+    let config: canic_host::Config = toml::from_str(
+        r#"
+[apps.miners.canisters.pool]
+[apps.miners.canisters.worker]
+parent = "pool"
+[apps.miners.fleets.local]
+network = { kind = "Mainnet" }
+subnet_child_limit = 6
+[apps.miners.fleets.local.standby_pool]
+root = "root"
+min_available_spares = 2
+maximum_creations = 3
+expires_at_ns = 1800000000000000000
+minimum_import_cycles = 1
+"#,
+    )
+    .unwrap();
+    let mut snapshot = empty();
+    snapshot.configuration = Some(config.select(None, None).unwrap());
+    for output in [
+        render(&snapshot, &[], false, false),
+        super::super::render(&snapshot, ""),
+    ] {
+        assert_eq!(
+            output.matches("Min available spares: 2").count(),
+            1,
+            "{output}"
+        );
+    }
+    snapshot.spare_counts = Some(canic_management_protocol::stored::SpareCounts {
+        min_available_spares: 3,
+        ready: 1,
+        creations_used: 4,
+        maximum_creations: 4,
+        refill: canic_management_protocol::stored::RefillStatus::AllowanceSpent,
+    });
+    for output in [
+        render(&snapshot, &[], false, false),
+        super::super::render(&snapshot, ""),
+    ] {
+        assert!(output.contains("1 ready · creation allowance spent · 4/4 automatic creations used · Root approved minimum 3"));
+    }
 }

@@ -45,27 +45,27 @@ fn previous_artifact(artifact: &Artifact) -> Vec<u8> {
 }
 
 #[test]
-fn positional_journals_migrate_to_identified_records_without_reassignment() {
-    let previous = [journal("first"), journal("second")];
-    let bytes = encoded(
-        b"CUJ7",
-        &(
-            &previous,
-            None::<store_maintenance::Status>,
-            Vec::<store_maintenance::Status>::new(),
-        ),
-        JOURNAL_LIMITS,
-    );
-    let loaded = Journals::from_bytes(&bytes).unwrap();
-    let bytes = loaded.to_bytes().unwrap();
-    assert!(bytes.starts_with(b"CUJ9"));
-    let reopened = Journals::from_bytes(&bytes).unwrap();
-    for slot in ChildId::ALL {
-        assert_eq!(reopened.0[&slot].0, previous[slot.index()].0);
+fn only_the_current_journal_format_is_admitted() {
+    let current = Journals::default().to_bytes().unwrap().into_owned();
+    for tag in [
+        b"CUJ2", b"CUJ3", b"CUJ4", b"CUJ5", b"CUJ6", b"CUJ7", b"CUJ8", b"CUJ9", b"CUJA", b"CUJB",
+        b"CUJD",
+    ] {
+        let mut bytes = current.clone();
+        bytes[..4].copy_from_slice(tag);
+        assert_eq!(
+            Journals::from_bytes(&bytes).err(),
+            Some("unsupported Root journal format")
+        );
     }
-    let mut incomplete = Journals::default();
-    incomplete.0.remove(&ChildId::SECOND);
-    assert!(incomplete.to_bytes().is_err());
+    let untagged = encoded(b"", &Status::default(), LIMITS);
+    assert_eq!(
+        Journals::from_bytes(&untagged).err(),
+        Some("unsupported Root journal format")
+    );
+    for length in 0..current.len() {
+        assert!(Journals::from_bytes(&current[..length]).is_err());
+    }
 }
 
 #[test]
@@ -77,10 +77,11 @@ fn identified_journal_refuses_missing_duplicate_reordered_and_unknown_ids() {
         vec![1, 0],
         vec![0, 2],
         vec![0, 1, 2],
+        vec![0, 1, 16],
     ] {
         let entries: Vec<_> = ids.into_iter().map(|id| (id, Journal::default())).collect();
         let bytes = encoded(
-            b"CUJ8",
+            JOURNAL_TAG,
             &(
                 entries,
                 None::<store_maintenance::Status>,
@@ -95,30 +96,16 @@ fn identified_journal_refuses_missing_duplicate_reordered_and_unknown_ids() {
         Default::default(),
         vec![upgrade::Status::default(); upgrade::MAX_UPGRADES],
     );
-    for tag in [b"CUJ7", b"CUJ8"] {
-        let bytes = if tag == b"CUJ7" {
-            encoded(
-                tag,
-                &(
-                    [&journal, &journal],
-                    None::<store_maintenance::Status>,
-                    Vec::<store_maintenance::Status>::new(),
-                ),
-                JOURNAL_LIMITS,
-            )
-        } else {
-            encoded(
-                tag,
-                &(
-                    vec![(0_u8, &journal), (1, &journal)],
-                    None::<store_maintenance::Status>,
-                    Vec::<store_maintenance::Status>::new(),
-                ),
-                JOURNAL_LIMITS,
-            )
-        };
-        assert!(Journals::from_bytes(&bytes).is_err());
-    }
+    let bytes = encoded(
+        JOURNAL_TAG,
+        &(
+            vec![(0_u8, &journal), (1, &journal)],
+            None::<store_maintenance::Status>,
+            Vec::<store_maintenance::Status>::new(),
+        ),
+        JOURNAL_LIMITS,
+    );
+    assert!(Journals::from_bytes(&bytes).is_err());
 }
 
 #[test]
@@ -279,7 +266,7 @@ fn assert_application_artifact_codec(sources: &canic_management_protocol::stored
 }
 
 #[test]
-fn scan_contract_requires_its_journal_version_and_survives_reopen() {
+fn growth_preserves_child_and_store_evidence_in_one_format() {
     use store_maintenance::{Approval, Phase, Scan};
     let record = store_maintenance::Status {
         approval: Approval {
@@ -293,29 +280,43 @@ fn scan_contract_requires_its_journal_version_and_survives_reopen() {
             expires_at_ns: 100,
         },
         operator: "r7inp-6aaaa-aaaaa-aaabq-cai".into(),
-        phase: Phase::Reserved,
-        stop_request: None,
+        phase: Phase::Installed,
+        stop_request: Some([4; 32]),
         failure: None,
         preservation: Scan::Entries(None),
-        installation: None,
+        installation: Some(store_maintenance::Installation {
+            upload_request: [5; 32],
+            request: Some([6; 32]),
+            sender_version: Some(17),
+            start_request: None,
+            verification: Scan::Entries(None),
+            activation_request: None,
+        }),
     };
-    let mut journals = Journals(Journals::default().0, Some(record), vec![]);
-    let bytes = journals.to_bytes().unwrap().into_owned();
-    let loaded = Journals::from_bytes(&bytes).unwrap();
-    assert_eq!(loaded.1, journals.1);
-    let mut mislabeled = bytes;
-    mislabeled[..4].copy_from_slice(b"CUJ8");
-    assert!(Journals::from_bytes(&mislabeled).is_err());
-    journals.1.as_mut().unwrap().preservation = Scan::Legacy(None);
-    let mut historical = journals.to_bytes().unwrap().into_owned();
-    historical[..4].copy_from_slice(b"CUJ8");
-    let loaded = Journals::from_bytes(&historical).unwrap();
-    assert_eq!(loaded.1, journals.1);
-    assert!(loaded.to_bytes().unwrap().starts_with(b"CUJ9"));
+    let mut journals = Journals(Journals::default().0, Some(record.clone()), vec![]);
+    journals.0.insert(ChildId::FIRST, journal("first"));
+    for additions in [
+        &[][..],
+        &ChildId::PROJECT[..],
+        &[ChildId::SHARDS[6], ChildId::INSTANCES[7]],
+    ] {
+        for slot in additions {
+            journals.0.insert(*slot, journal("added"));
+        }
+        let bytes = journals.to_bytes().unwrap().into_owned();
+        assert!(bytes.starts_with(b"CUJC"));
+        journals = Journals::from_bytes(&bytes).unwrap();
+        assert_eq!(
+            journals.0[&ChildId::FIRST].0.worker.as_deref(),
+            Some("first")
+        );
+        assert_eq!(journals.1.as_ref(), Some(&record));
+        assert_eq!(&*journals.to_bytes().unwrap(), bytes.as_slice());
+    }
 }
 
 #[test]
-fn project_custody_requires_four_ordered_records_and_its_own_format() {
+fn project_custody_requires_paired_ordered_records() {
     let mut journals = Journals::default();
     let mut artifacts = Artifacts::default();
     for slot in ChildId::PROJECT {
@@ -323,7 +324,7 @@ fn project_custody_requires_four_ordered_records_and_its_own_format() {
         artifacts.0.insert(slot, Artifact::default());
     }
     let mut bytes = journals.to_bytes().unwrap().into_owned();
-    assert!(bytes.starts_with(b"CUJA"));
+    assert!(bytes.starts_with(b"CUJC"));
     assert_eq!(Journals::from_bytes(&bytes).unwrap().0.len(), 4);
     bytes[..4].copy_from_slice(b"CUJ9");
     assert!(Journals::from_bytes(&bytes).is_err());
@@ -360,7 +361,7 @@ fn extended_custody_round_trips_sparse_placement_identities() {
     artifacts.0.insert(slot, Artifact::default());
     let encoded_journals = journals.to_bytes().unwrap();
     let encoded_artifacts = artifacts.to_bytes().unwrap();
-    assert!(encoded_journals.starts_with(b"CUJB"));
+    assert!(encoded_journals.starts_with(b"CUJC"));
     assert!(encoded_artifacts.starts_with(b"CUA7"));
     assert_eq!(
         Journals::from_bytes(&encoded_journals)

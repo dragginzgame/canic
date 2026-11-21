@@ -44,6 +44,10 @@ struct Ledger {
 pub(super) struct Pools {
     #[serde(skip)]
     returns: Vec<standby::Returned>,
+    #[serde(skip)]
+    pub(super) retirements: BTreeMap<ChildId, standby::Retirement>,
+    #[serde(skip)]
+    reserve_policy: Option<stored::StandbyPolicy>,
     permanent: [bool; 2],
     draining: BTreeMap<ChildId, [u8; 32]>,
     shards: Option<Ledger>,
@@ -108,8 +112,17 @@ impl Pools {
             .filter(|(_, asset)| {
                 matches!(
                     asset,
-                    canic::sharding::standby::Asset::Empty(_)
+                    canic::sharding::standby::Asset::Transfer(
+                        _,
+                        _,
+                        _,
+                        canic::sharding::standby::TransferPhase::Reserved
+                            | canic::sharding::standby::TransferPhase::ControllersIssued
+                    ) | canic::sharding::standby::Asset::Empty(_)
                         | canic::sharding::standby::Asset::Available(..)
+                        | canic::sharding::standby::Asset::AwaitingRelease(_)
+                        | canic::sharding::standby::Asset::AwaitingHandoff(_)
+                        | canic::sharding::standby::Asset::Quarantined(..)
                         | canic::sharding::standby::Asset::Issued
                 )
             })
@@ -130,6 +143,13 @@ impl Pools {
                 _ => None,
             })
             .or_else(|| {
+                if self.retirements.get(&slot).is_some_and(|r| {
+                    self.standby.iter().any(|(source, _)| {
+                        source == &canic::sharding::standby::Source::Shard(r.target())
+                    })
+                }) {
+                    return None;
+                }
                 self.returns
                     .iter()
                     .find(|r| r.target.allocation.slot == slot.index() as u32)
@@ -144,45 +164,63 @@ impl Pools {
     }
 
     pub(super) fn withdrawn(&self, slot: ChildId) -> bool {
-        self.archived(slot)
+        self.retirements.contains_key(&slot)
+            || self.archived(slot)
             || self.standby.iter().any(|(_, asset)| {
                 standby::released_binding(asset).is_some_and(|(_, a)| a.slot == slot.index() as u32)
             })
     }
 
-    fn empty_spare(&self) -> bool {
+    pub(super) fn empty_spare(&self) -> bool {
         self.standby
             .iter()
             .any(|(_, asset)| standby::available(asset).is_some())
     }
 
-    fn full(&self) -> bool {
+    fn creation_debit(&self, slots: impl Iterator<Item = ChildId>) -> u64 {
+        slots
+            .filter(|slot| self.standby_claim(*slot).is_none())
+            .count() as u64
+            * CREATION_CYCLES
+    }
+
+    fn admit_growth(
+        &self,
+        slots: impl Iterator<Item = ChildId>,
+        budget: u64,
+    ) -> Result<(), Placement> {
+        if self.empty_spare() {
+            return Ok(());
+        }
+        if self.full() {
+            return Err(Placement::Full);
+        }
+        if self.creation_debit(slots) + CREATION_CYCLES > budget {
+            return Err(Placement::GrowthRefused);
+        }
+        Ok(())
+    }
+
+    pub(super) fn full(&self) -> bool {
         self.capacity.as_ref().is_some_and(|c| {
             self.used() + self.held() - self.returns.len() >= usize::from(c.max_children)
         })
     }
 
     pub(super) fn encode(&self) -> Vec<u8> {
-        if !self.standby.is_empty() {
-            if !self.returns.is_empty() {
-                let mut bytes = b"SBY2".to_vec();
-                bytes.extend(
-                    ic_wire::encode(
-                        &(self, &self.workers, &self.standby, &self.returns),
-                        ic_wire::Encoding::Payload,
-                        ic_wire::Limits {
-                            bytes: BYTES - 4,
-                            ..LIMITS
-                        },
-                    )
-                    .expect("bounded return ledger"),
-                );
-                return bytes;
-            }
-            let mut bytes = b"SBY1".to_vec();
+        if !self.standby.is_empty() || !self.retirements.is_empty() || self.reserve_policy.is_some()
+        {
+            let mut bytes = b"SBY5".to_vec();
             bytes.extend(
                 ic_wire::encode(
-                    &(self, &self.workers, &self.standby),
+                    &(
+                        self,
+                        &self.workers,
+                        &self.standby,
+                        &self.returns,
+                        &self.retirements,
+                        &self.reserve_policy,
+                    ),
                     ic_wire::Encoding::Payload,
                     ic_wire::Limits {
                         bytes: BYTES - 4,
@@ -214,55 +252,114 @@ impl Pools {
 }
 
 pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
-    let pools: Pools = if bytes.starts_with(b"SBY1") || bytes.starts_with(b"SBY2") {
-        let (mut pools, workers, standby, returns): (
+    use canic::sharding::standby::{Refill, Source};
+    let pools: Pools = if [b"SBY1", b"SBY2", b"SBY3", b"SBY4", b"SBY5"]
+        .iter()
+        .any(|tag| bytes.starts_with(*tag))
+    {
+        let (mut pools, workers, standby, returns, retirements): (
             Pools,
             Option<workers::Workers>,
             standby::Inventory,
             Vec<standby::Returned>,
-        ) = if bytes.starts_with(b"SBY2") {
-            ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS).expect("return ledger")
+            BTreeMap<ChildId, standby::Retirement>,
+        ) = if bytes.starts_with(b"SBY4") || bytes.starts_with(b"SBY5") {
+            let (mut p, w, s, r, t, policy): (Pools, _, _, _, _, _) =
+                ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS)
+                    .expect("reserve custody");
+            p.reserve_policy = policy;
+            (p, w, s, r, t)
+        } else if bytes.starts_with(b"SBY3") {
+            ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS)
+                .expect("standby custody")
         } else {
-            let (p, w, s) = ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS)
-                .expect("standby ledger");
-            (p, w, s, Vec::new())
+            let (p, w, history, r): (_, _, Vec<(Refill, canic::sharding::standby::Asset)>, _) =
+                if bytes.starts_with(b"SBY2") {
+                    ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS)
+                        .expect("return ledger")
+                } else {
+                    let (p, w, s) =
+                        ic_wire::decode(&bytes[4..], ic_wire::Encoding::Payload, LIMITS)
+                            .expect("standby ledger");
+                    (p, w, s, Vec::new())
+                };
+            (
+                p,
+                w,
+                history
+                    .into_iter()
+                    .map(|(r, a)| (Source::Refill(r), a))
+                    .collect(),
+                r,
+                BTreeMap::new(),
+            )
         };
         assert!(
             pools.capacity.is_some()
-                && !standby.is_empty()
-                && standby.len() <= usize::from(stored::MAX_SUBNET_CHILDREN)
+                && (!standby.is_empty()
+                    || !retirements.is_empty()
+                    || pools.reserve_policy.is_some())
+                // Each of the four origins has its own lifetime bound. Exported rows remain receipts.
+                && standby.len() <= 4 * usize::from(stored::MAX_SUBNET_CHILDREN)
         );
+        pools.retirements = retirements;
+        let mut refill_sequence = 0;
         let mut principals = std::collections::BTreeSet::new();
         let mut slots = std::collections::BTreeSet::new();
-        for (index, (approval, asset)) in standby.iter().enumerate() {
+        for (origin, asset) in &standby {
             use canic::sharding::standby::Asset;
             let principal = match asset {
                 Asset::Issued => None,
-                Asset::Empty(id) => Some(id),
+                Asset::Transfer(id, destination, deadline, _) => {
+                    assert!(
+                        *deadline > 0
+                            && destination != id
+                            && *destination != api::canister_self()
+                            && destination.as_slice().last() == Some(&1)
+                    );
+                    Some(id)
+                }
+                Asset::Empty(id)
+                | Asset::AwaitingRelease(id)
+                | Asset::AwaitingHandoff(id)
+                | Asset::Quarantined(id, _) => Some(id),
                 Asset::Available(id, balance) => {
-                    let last = returns
-                        .iter()
-                        .rev()
-                        .find(|r| r.target.shard == *id)
-                        .expect("returned asset");
-                    assert_eq!(*balance, last.balance);
+                    if matches!(origin, Source::Imported(_))
+                        && !returns.iter().any(|r| r.target.shard == *id)
+                    {
+                        assert!(
+                            *balance
+                                >= u128::from(
+                                    pools
+                                        .reserve_policy
+                                        .as_ref()
+                                        .unwrap()
+                                        .minimum_import_cycles
+                                        .get()
+                                )
+                        );
+                    } else {
+                        let last = returns
+                            .iter()
+                            .rev()
+                            .find(|r| r.target.shard == *id)
+                            .expect("returned asset");
+                        assert_eq!(*balance, last.balance);
+                    }
                     Some(id)
                 }
                 Asset::Claimed(id, allocation)
                 | Asset::Released(id, allocation)
                 | Asset::Reset(id, allocation, ..) => {
                     let slot = ChildId::placement(allocation.slot as usize).expect("standby slot");
-                    let claim = workers
-                        .as_ref()
-                        .and_then(|w| w.claim_at(slot))
-                        .expect("standby worker claim");
-                    assert!(slots.insert(slot) && claim.generation == allocation.generation);
-                    assert!(claim.principal.as_ref().is_none_or(|p| p == &id.to_text()));
+                    assert!(slots.insert(slot));
                     if matches!(asset, Asset::Released(..) | Asset::Reset(..)) {
-                        assert!(
-                            claim.principal.is_some(),
-                            "release requires installed worker"
-                        );
+                        let claim = workers
+                            .as_ref()
+                            .and_then(|w| w.claim_at(slot))
+                            .expect("released worker claim");
+                        assert_eq!(claim.generation, allocation.generation);
+                        assert_eq!(claim.principal.as_deref(), Some(id.to_text().as_str()));
                     }
                     Some(id)
                 }
@@ -275,15 +372,50 @@ pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
                         && *id != Principal::management_canister()
                 );
             }
-            assert!(
-                approval.root == api::canister_self()
-                    && usize::from(approval.sequence) == index
-                    && approval.cycles == CREATION_CYCLES
-            );
+            match origin {
+                Source::Refill(approval) => {
+                    assert!(
+                        approval.root == api::canister_self()
+                            && approval.sequence == refill_sequence
+                            && approval.cycles == CREATION_CYCLES
+                    );
+                    refill_sequence += 1;
+                }
+                Source::Imported(id) => {
+                    assert_eq!(principal, Some(id));
+                    assert!(
+                        pools
+                            .reserve_policy
+                            .as_ref()
+                            .is_some_and(|p| p.imports.iter().any(|i| i.principal == id.to_text()))
+                    );
+                }
+                Source::Automatic(a) => assert!(pools.reserve_policy.as_ref().is_some_and(
+                    |p| a.root == api::canister_self()
+                        && a.expires_at_ns == p.expires_at_ns
+                        && a.cycles == CREATION_CYCLES
+                )),
+                Source::Shard(target) => {
+                    assert_eq!(principal, Some(&target.shard));
+                    let retirement =
+                        &pools.retirements[&ChildId::placement(target.allocation.slot as usize)
+                            .expect("source slot")];
+                    assert_eq!(retirement.target(), *target);
+                    assert_eq!(retirement.phase, stored::RetirementPhase::Returned);
+                }
+            }
         }
         for receipt in &returns {
             let target = &receipt.target;
             let slot = ChildId::placement(target.allocation.slot as usize).expect("returned slot");
+            if let Some(r) = pools.retirements.get(&slot) {
+                assert_eq!(r.target(), *target);
+                assert_eq!(r.phase, stored::RetirementPhase::Returned);
+                assert!(principals.contains(&target.shard) && slots.insert(slot));
+                assert_eq!(r.input.approval.expires_at_ns, receipt.deadline);
+                assert!(receipt.balance >= u128::from(r.input.approval.minimum_reuse_cycles.get()));
+                continue;
+            }
             let workers = workers.as_ref().expect("return without worker grant");
             let claim = workers.claim_at(slot).expect("returned worker claim");
             assert!(principals.contains(&target.shard) && slots.insert(slot));
@@ -295,6 +427,58 @@ pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
             assert!(
                 receipt.balance
                     >= u128::from(workers.minimum_reuse_cycles().expect("return grant").get())
+            );
+        }
+        for (&slot, r) in &pools.retirements {
+            let target = r.target();
+            let ledger = pools
+                .shards
+                .as_ref()
+                .expect("retirement requires original shard pool");
+            assert!(
+                ChildId::SHARDS.contains(&slot)
+                    && slot.index() as u32 == target.allocation.slot
+                    && pools.draining.get(&slot) == Some(&target.allocation.generation)
+                    && ledger.principals[slot.index()].as_deref()
+                        == Some(r.input.approval.shard.as_str())
+                    && ledger.counts[slot.index()] == 0
+                    && r.input.approval.root == api::canister_self().to_text()
+                    && r.input.reference.store == ledger.approval.reference.store
+                    && r.input.reference.manifest.valid()
+                    && r.proof_deadline < r.input.approval.expires_at_ns,
+                "retained shard retirement binding"
+            );
+            let returned = r.phase == stored::RetirementPhase::Returned;
+            assert_eq!(
+                returned,
+                returns.iter().any(|receipt| receipt.target == target)
+            );
+        }
+        if let Some(policy) = &pools.reserve_policy {
+            standby::policy::validate(policy, pools.capacity.as_ref().unwrap().max_children)
+                .expect("retained policy");
+            let mut automatic = 0;
+            for (source, asset) in &standby {
+                if let Source::Automatic(a) = source {
+                    assert_eq!(a.sequence, automatic);
+                    automatic += 1;
+                }
+                if matches!(
+                    asset,
+                    canic::sharding::standby::Asset::AwaitingRelease(_)
+                        | canic::sharding::standby::Asset::AwaitingHandoff(_)
+                        | canic::sharding::standby::Asset::Quarantined(..)
+                ) {
+                    assert!(matches!(source, Source::Imported(_)));
+                }
+            }
+            assert!(automatic <= policy.maximum_creations);
+            assert_eq!(
+                policy.imports.len(),
+                standby
+                    .iter()
+                    .filter(|(s, _)| matches!(s, Source::Imported(_)))
+                    .count()
             );
         }
         pools.returns = returns;
@@ -372,7 +556,13 @@ pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
         assert!(grant.max_instances <= pools.pool_limit());
         validate_instance(grant).expect("retained instance grant");
         assert!(pools.projects.len() <= pools.instance_slots(grant).len());
-        assert!(pools.projects.len() as u64 * CREATION_CYCLES <= grant.creation_budget);
+        assert!(
+            pools.creation_debit(
+                pools.instance_slots(grant)[..pools.projects.len()]
+                    .iter()
+                    .copied()
+            ) <= grant.creation_budget
+        );
         if let Some(shared) = &pools.shards {
             assert!(
                 compatible(&shared.approval, grant),
@@ -385,8 +575,12 @@ pub(super) fn open(bytes: &[u8], claim_count: u64) -> Pools {
         check_shard_topology(&l.approval).expect("retained shard topology");
         let slots = pools.shard_slots(&l.approval);
         assert!(
-            l.generations.iter().flatten().count() as u64 * CREATION_CYCLES
-                <= l.approval.creation_budget
+            pools.creation_debit(
+                slots
+                    .iter()
+                    .copied()
+                    .filter(|slot| l.generations[slot.index()].is_some())
+            ) <= l.approval.creation_budget
         );
         for (index, count) in l.counts.iter().copied().enumerate() {
             assert!(count <= l.approval.keys_per_shard);
@@ -441,14 +635,18 @@ pub(super) fn ordinary_slot(slot: ChildId) -> bool {
     })
 }
 
-pub(super) fn retain_permanent(slot: ChildId) {
+pub(super) fn retain_child(slot: ChildId, generation: [u8; 32], origin: super::Origin) {
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().expect("open Root");
         if state.pools.capacity.is_some() {
-            state.pools.permanent[slot.index()] = true;
+            if origin == super::Origin::Permanent {
+                state.pools.permanent[slot.index()] = true;
+            }
+            standby::reserve(&mut state.pools, slot, generation);
             state.pool.set(state.pools.encode());
         }
     });
+    standby::policy::wake();
 }
 
 pub(super) fn worker_generation(slot: ChildId) -> Option<[u8; 32]> {
@@ -460,10 +658,6 @@ pub(super) fn worker_generation(slot: ChildId) -> Option<[u8; 32]> {
             .claim_at(slot)
             .map(|claim| claim.generation)
     })
-}
-
-pub(super) fn at_capacity() -> bool {
-    STATE.with_borrow(|s| s.as_ref().expect("open Root").pools.full())
 }
 
 /// Ingress guard before accepting an account key.
@@ -776,14 +970,20 @@ pub fn assign(key: Key) -> Placement {
         let Some((_, slot)) = free else {
             return Placement::Full;
         };
-        if STATE.with_borrow(|s| s.as_ref().unwrap().pools.full()) {
-            return Placement::Full;
-        }
-        let issued = generations.iter().flatten().count() as u64;
         let now = api::time();
-        if (issued + 1) * CREATION_CYCLES > approval.creation_budget
-            || now >= approval.expires_at_ns
-        {
+        if let Err(outcome) = STATE.with_borrow(|s| {
+            let pools = &s.as_ref().unwrap().pools;
+            pools.admit_growth(
+                pools
+                    .shard_slots(&approval)
+                    .into_iter()
+                    .filter(|slot| generations[slot.index()].is_some()),
+                approval.creation_budget,
+            )
+        }) {
+            return outcome;
+        }
+        if now >= approval.expires_at_ns {
             return Placement::GrowthRefused;
         }
         let Some(generation) = create(
@@ -878,6 +1078,21 @@ pub(super) fn validate_claims(state: &super::State) {
     });
     let claims = &state.pools.projects;
     let pools = &state.pools;
+    for (_, asset) in &pools.standby {
+        if let canic::sharding::standby::Asset::Claimed(id, allocation) = asset {
+            let slot = ChildId::placement(allocation.slot as usize).expect("claimed slot");
+            let journal = &state.journal.0[&slot].0;
+            let approval = journal.approval.as_ref().expect("claimed admission");
+            assert_eq!(
+                state.artifact.0[&slot]
+                    .sources()
+                    .map_or(approval.module_hash, |s| s.creation.operation),
+                allocation.generation
+            );
+            assert!(journal.worker.as_ref().is_none_or(|p| p == &id.to_text()));
+            assert_eq!(journal.attempts[0], 0);
+        }
+    }
     if pools.capacity.is_some() {
         assert_eq!(
             pools.used(),
@@ -1060,20 +1275,21 @@ pub fn assign_instance(key: Key) -> Placement {
     if previous != Placement::Unknown {
         return previous;
     }
-    let Some((grant, count, slot)) = STATE.with_borrow(|s| {
+    let selection = STATE.with_borrow(|s| {
         let pools = &s.as_ref().unwrap().pools;
         let grant = pools.instances.as_ref().unwrap();
         let count = pools.projects.len();
-        if pools.full() {
-            return None;
-        }
-        let &slot = pools.instance_slots(grant).get(count)?;
-        Some((grant.clone(), count, slot))
-    }) else {
-        return Placement::Full;
+        let slots = pools.instance_slots(grant);
+        let slot = *slots.get(count).ok_or(Placement::Full)?;
+        pools.admit_growth(slots[..count].iter().copied(), grant.creation_budget)?;
+        Ok((grant.clone(), slot))
+    });
+    let (grant, slot) = match selection {
+        Ok(selected) => selected,
+        Err(outcome) => return outcome,
     };
     let now = api::time();
-    if now >= grant.expires_at_ns || (count as u64 + 1) * CREATION_CYCLES > grant.creation_budget {
+    if now >= grant.expires_at_ns {
         return Placement::GrowthRefused;
     }
     let Some(generation) = create(

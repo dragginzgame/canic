@@ -64,6 +64,78 @@ pub struct InstancePoolConfig {
     pub expires_at_ns: Option<u64>,
 }
 
+/// Named surplus canisters on one network with the same release authority.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandbyImports {
+    /// Source network: `ic` or `local`. Must match the fleet.
+    pub network: String,
+    /// Ordered canister principals to reserve.
+    pub principals: Vec<String>,
+    /// Former fleet Root required to release every principal in this group.
+    pub previous_root: Option<String>,
+}
+
+/// Operator declaration resolved to Root's ordered, per-principal approval.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandbyPoolConfig {
+    /// Fleet Root slot.
+    pub root: String,
+    /// Desired ready spares.
+    pub min_available_spares: u8,
+    /// Lifetime allowance for paid creations.
+    pub maximum_creations: u8,
+    /// Cutoff for paid creation in IC nanoseconds.
+    pub expires_at_ns: u64,
+    /// Cycle floor for each imported canister.
+    pub minimum_import_cycles: std::num::NonZeroU64,
+    /// Explicit network and principals for each import group.
+    #[serde(default)]
+    pub imports: Vec<StandbyImports>,
+}
+
+impl StandbyPoolConfig {
+    pub(super) fn resolve(&self, network: &super::FleetNetwork) -> Result<stored::StandbyPolicy> {
+        let expected = match network {
+            super::FleetNetwork::Bound(crate::Network::Mainnet) => "ic",
+            super::FleetNetwork::Bound(crate::Network::Local { .. })
+            | super::FleetNetwork::Unbound(_) => "local",
+        };
+        let mut imports = Vec::new();
+        for (index, group) in self.imports.iter().enumerate() {
+            if group.network != expected {
+                return Err(Error::Invalid(format!(
+                    "standby_pool.imports[{index}].network = {:?}; this fleet requires {expected:?}",
+                    group.network
+                )));
+            }
+            if group.principals.is_empty() {
+                return Err(Error::Invalid(format!(
+                    "standby_pool.imports[{index}].principals requires at least one canister"
+                )));
+            }
+            imports.extend(
+                group
+                    .principals
+                    .iter()
+                    .map(|principal| stored::StandbyImport {
+                        principal: principal.clone(),
+                        previous_root: group.previous_root.clone(),
+                    }),
+            );
+        }
+        Ok(stored::StandbyPolicy {
+            root: self.root.clone(),
+            minimum_available: self.min_available_spares,
+            maximum_creations: self.maximum_creations,
+            expires_at_ns: self.expires_at_ns,
+            minimum_import_cycles: self.minimum_import_cycles,
+            imports,
+        })
+    }
+}
+
 /// A hub's allowance for reusable workers on this subnet.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -168,12 +240,61 @@ pub(super) fn validate_capacity(
     shards: Option<&ShardPoolConfig>,
     instances: Option<&InstancePoolConfig>,
     workers: Option<&WorkerPoolConfig>,
+    standby: Option<&stored::StandbyPolicy>,
 ) -> Result<()> {
+    if let Some(p) = standby {
+        let cap = limit
+            .ok_or_else(|| Error::Invalid("standby_pool requires subnet_child_limit".into()))?;
+        name(&p.root)?;
+        for (label, count) in [
+            ("min_available_spares", usize::from(p.minimum_available)),
+            ("maximum_creations", usize::from(p.maximum_creations)),
+            ("imports", p.imports.len()),
+        ] {
+            if count > usize::from(cap) {
+                return Err(Error::Invalid(format!(
+                    "standby_pool.{label} = {count} exceeds subnet_child_limit = {cap}"
+                )));
+            }
+        }
+        validate_deadline("standby_pool", Some(p.expires_at_ns))?;
+        if shards
+            .iter()
+            .map(|p| &p.root)
+            .chain(instances.iter().map(|p| &p.root))
+            .chain(workers.iter().map(|p| &p.root))
+            .any(|root| root != &p.root)
+        {
+            return Err(Error::Invalid(format!(
+                "standby_pool.root = {:?} must match the placement Root",
+                p.root
+            )));
+        }
+        let mut seen = std::collections::BTreeSet::new();
+        for candidate in &p.imports {
+            let text = &candidate.principal;
+            if let Some(previous) = &candidate.previous_root {
+                let id = crate::network::principal(previous)?;
+                if id.as_slice().last() != Some(&1) || previous == text || id.to_text() != *previous
+                {
+                    return Err(Error::Invalid(format!(
+                        "invalid standby_pool previous_root {previous} for {text}"
+                    )));
+                }
+            }
+            let id = crate::network::principal(text)?;
+            if id.to_text() != *text || id.as_slice().last() != Some(&1) || !seen.insert(id) {
+                return Err(Error::Invalid(format!(
+                    "standby_pool.imports contains invalid or duplicate principal {text}"
+                )));
+            }
+        }
+    }
     if let Some(n) = limit {
         super::positive_count("subnet_child_limit", n, stored::MAX_SUBNET_CHILDREN)?;
-        if shards.is_none() && instances.is_none() && workers.is_none() {
+        if shards.is_none() && instances.is_none() && workers.is_none() && standby.is_none() {
             return Err(Error::Invalid(format!(
-                "subnet_child_limit = {n} requires a shard_pool, instance_pool or worker_pool"
+                "subnet_child_limit = {n} requires a shard_pool, instance_pool, worker_pool or standby_pool"
             )));
         }
     }
@@ -385,7 +506,45 @@ pub(crate) fn preview(
             )
         })
         .transpose()?;
-    if let Some(first) = instances.as_ref().or(workers.as_ref()) {
+    let standby = selected
+        .config
+        .standby_pool
+        .as_ref()
+        .map(|p| {
+            let mut policy = p.clone();
+            let binding = selected
+                .config
+                .canisters
+                .get(&p.root)
+                .filter(|c| c.role.as_deref() == Some("root"))
+                .and_then(|c| c.id.clone())
+                .ok_or_else(|| {
+                    Error::Invalid(format!(
+                        "standby_pool.root = {:?} requires a bound Root",
+                        p.root
+                    ))
+                })?;
+            if p.imports.iter().any(|id| {
+                selected
+                    .config
+                    .canisters
+                    .values()
+                    .any(|c| c.id.as_ref() == Some(&id.principal))
+            }) {
+                return Err(Error::Invalid(
+                    "standby_pool.imports conflicts with a bound fleet canister".into(),
+                ));
+            }
+            policy.root = binding;
+            grant(policy, stored::CONFIGURE_STANDBY)
+        })
+        .transpose()?;
+    if let Some(root) = instances
+        .as_ref()
+        .or(workers.as_ref())
+        .map(|g| &g.approval.root)
+        .or_else(|| standby.as_ref().map(|g| &g.approval.root))
+    {
         if let Some((instance, old)) = instances.as_ref().zip(
             selected
                 .config
@@ -401,7 +560,8 @@ pub(crate) fn preview(
             )?);
         }
         return Ok(FleetPlanning::PlacementPools {
-            capacity: capacity(&first.approval.root)?,
+            capacity: capacity(root)?,
+            standby,
             increases,
             app: selected.app.clone(),
             fleet: selected.fleet.clone(),

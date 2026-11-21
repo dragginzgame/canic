@@ -98,9 +98,7 @@ lint: fmt-check toko-tooling-check check-app-endpoints effect-clippy effect-doc 
 # Build through the same app declaration used in the local walkthrough.
 .PHONY: miner-test
 miner-test:
-	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/miner-pool/canic.toml
-	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test miner
-	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store store_root_tests::miner_pool -- --nocapture
+	bash scripts/dev/test-store.sh miner
 
 .PHONY: notebook-test
 notebook-test:

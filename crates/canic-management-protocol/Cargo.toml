@@ -9,6 +9,8 @@ publish.workspace = true
 description = "Bounded child management authority and evidence"
 
 [features]
+standby = ["dep:canic", "canic/method"]
+retirement = ["dep:canic", "canic/method"]
 backup = ["dep:canic", "dep:ic-platform-protocol"]
 
 [dependencies]

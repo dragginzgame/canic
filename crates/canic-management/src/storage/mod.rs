@@ -18,14 +18,8 @@ type Records<T> = List<(u8, T), { ChildId::SHARDS.len() + ChildId::INSTANCES.len
 
 // Older formats require every historical slot. Expanded records retain sorted
 // identities explicitly and need no placeholder for an unallocated child.
-fn identified<T>(
-    entries: Records<T>,
-    legacy_count: Option<usize>,
-) -> Result<BTreeMap<ChildId, T>, &'static str> {
+fn identified<T>(entries: Records<T>) -> Result<BTreeMap<ChildId, T>, &'static str> {
     let entries = entries.into_vec();
-    if legacy_count.is_some_and(|n| n != entries.len()) {
-        return Err("child identities");
-    }
     let mut map = BTreeMap::new();
     for (id, value) in entries {
         let slot = ChildId::placement(usize::from(id)).ok_or("child identity bound")?;
@@ -34,7 +28,7 @@ fn identified<T>(
         }
         map.insert(slot, value);
     }
-    if !complete(&map) || expanded(&map) != legacy_count.is_none() {
+    if !complete(&map) {
         return Err("child identities");
     }
     Ok(map)
@@ -51,7 +45,7 @@ fn complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
         && entries.contains_key(&ChildId::PROJECT[0]) == entries.contains_key(&ChildId::PROJECT[1])
 }
 
-const JOURNAL_TAG: &[u8] = b"CUJ3";
+const JOURNAL_TAG: &[u8; 4] = b"CUJC";
 const ARTIFACT_TAG: &[u8] = b"CUA2";
 pub(super) const JOURNAL_BYTES: usize = 16_384;
 pub(super) const ARTIFACT_BYTES: usize = 2 * MAX_WASM + 24;
@@ -92,40 +86,13 @@ const ARTIFACT_LIMITS: ic_wire::Limits = ic_wire::Limits {
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub(super) struct Journal(pub Status, pub upgrade::Status, pub Vec<upgrade::Status>);
+#[cfg(feature = "role-issuer")]
 impl Journal {
-    #[cfg(feature = "role-issuer")]
     pub(super) fn ready_for_role(&self) -> bool {
         self.0.phase == canic_management_protocol::Phase::Ready
             && self.0.failure.is_none()
             && self.1.failure.is_none()
             && matches!(self.1.phase, upgrade::Phase::Empty | upgrade::Phase::Ready)
-    }
-
-    fn decode(bytes: &[u8]) -> Result<Self, &'static str> {
-        if let Some(payload) = bytes.strip_prefix(JOURNAL_TAG) {
-            let (creation, upgrade, history) =
-                ic_wire::decode::<(Status, upgrade::Status, Vec<upgrade::Status>)>(
-                    payload,
-                    ic_wire::Encoding::Payload,
-                    JOURNAL_LIMITS,
-                )
-                .map_err(|_| "upgrade journal")?;
-            if history.len() >= upgrade::MAX_UPGRADES {
-                return Err("upgrade history bound");
-            }
-            Ok(Self(creation, upgrade, history))
-        } else if let Some(payload) = bytes.strip_prefix(b"CUJ2") {
-            let (creation, upgrade) =
-                ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
-                    .map_err(|_| "single upgrade journal migration")?;
-            Ok(Self(creation, upgrade, vec![]))
-        } else {
-            // The sole historical schema is the original bounded creation status.
-            // Lifecycle validates both stores before committing the migration.
-            ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS)
-                .map(|creation| Self(creation, upgrade::Status::default(), vec![]))
-                .map_err(|_| "creation journal migration")
-        }
     }
 }
 
@@ -294,95 +261,19 @@ impl Journals {
             JOURNAL_LIMITS,
         )
         .map_err(|_| "child journals")?;
-        let mut bytes = if expanded(&self.0) {
-            b"CUJB"
-        } else if self.0.len() > 2 {
-            b"CUJA"
-        } else {
-            b"CUJ9"
-        }
-        .to_vec();
+        let mut bytes = JOURNAL_TAG.to_vec();
         bytes.extend_from_slice(&payload);
         Ok(Cow::Owned(bytes))
     }
 
     pub(super) fn from_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
-        let value =
-            if let Some(payload) = bytes
-                .strip_prefix(b"CUJB")
-                .or_else(|| bytes.strip_prefix(b"CUJA"))
-                .or_else(|| bytes.strip_prefix(b"CUJ9"))
-                .or_else(|| bytes.strip_prefix(b"CUJ8"))
-            {
-                let (entries, maintenance, history): (Records<Journal>, _, _) =
-                    ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
-                        .map_err(|_| "identified child journals")?;
-                let expected = (!bytes.starts_with(b"CUJB"))
-                    .then_some(if bytes.starts_with(b"CUJA") { 4 } else { 2 });
-                Ok::<_, &'static str>(Self(identified(entries, expected)?, maintenance, history))
-            } else if let Some(payload) = bytes.strip_prefix(b"CUJ7") {
-                let (journals, maintenance, history) =
-                    ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
-                        .map_err(|_| "Store maintenance history")?;
-                Ok(Self(bind(journals), maintenance, history))
-            } else if let Some(payload) = bytes.strip_prefix(b"CUJ6") {
-                let (journals, maintenance) =
-                    ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
-                        .map_err(|_| "Store maintenance journal")?;
-                Ok(Self(bind(journals), maintenance, vec![]))
-            } else if let Some(payload) = bytes.strip_prefix(b"CUJ5") {
-                // Wire records have exact arity: decode the historical shape explicitly.
-                #[derive(Deserialize)]
-                struct Previous {
-                    approval: store_maintenance::Approval,
-                    operator: String,
-                    phase: store_maintenance::Phase,
-                    stop_request: Option<[u8; 32]>,
-                    failure: Option<canic_management_protocol::Failure>,
-                }
-                let (journals, maintenance): ([Journal; 2], Option<Previous>) =
-                    ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
-                        .map_err(|_| "previous Store maintenance journal")?;
-                Ok(Self(
-                    bind(journals),
-                    maintenance.map(|old| store_maintenance::Status {
-                        approval: old.approval,
-                        operator: old.operator,
-                        phase: old.phase,
-                        stop_request: old.stop_request,
-                        failure: old.failure,
-                        preservation: store_maintenance::Scan::Legacy(None),
-                        installation: None,
-                    }),
-                    vec![],
-                ))
-            } else if let Some(payload) = bytes.strip_prefix(b"CUJ4") {
-                let journals: [Journal; 2] =
-                    ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
-                        .map_err(|_| "child journals")?;
-                Ok(Self(bind(journals), None, vec![]))
-            } else {
-                Ok(Self(
-                    bind([Journal::decode(bytes)?, Journal::default()]),
-                    None,
-                    vec![],
-                ))
-            }?;
-        if !bytes.starts_with(b"CUJB")
-            && !bytes.starts_with(b"CUJA")
-            && !bytes.starts_with(b"CUJ9")
-            && value.1.iter().chain(value.2.iter()).any(|record| {
-                matches!(record.preservation, store_maintenance::Scan::Entries(_))
-                    || record.installation.as_ref().is_some_and(|installation| {
-                        matches!(
-                            installation.verification,
-                            store_maintenance::Scan::Entries(_)
-                        )
-                    })
-            })
-        {
-            return Err("versioned scan in historical journal");
-        }
+        let payload = bytes
+            .strip_prefix(JOURNAL_TAG)
+            .ok_or("unsupported Root journal format")?;
+        let (entries, maintenance, history): (Records<Journal>, _, _) =
+            ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
+                .map_err(|_| "identified child journals")?;
+        let value = Self(identified(entries)?, maintenance, history);
         value.validate()?;
         Ok(value)
     }
@@ -481,7 +372,13 @@ impl Artifacts {
                         .map_err(|_| "identified child artifacts")?;
                 let expected = (!bytes.starts_with(b"CUA7"))
                     .then_some(if bytes.starts_with(b"CUA6") { 4 } else { 2 });
-                Ok::<_, &'static str>(Self(identified(entries, expected)?))
+                let entries = identified(entries)?;
+                if expected.is_some_and(|count| entries.len() != count)
+                    || expanded(&entries) != expected.is_none()
+                {
+                    return Err("child identities");
+                }
+                Ok::<_, &'static str>(Self(entries))
             } else if let Some(payload) = bytes.strip_prefix(b"CUA3") {
                 let length: [u8; 4] = payload
                     .get(..4)

@@ -4,6 +4,7 @@ mod tests;
 mod report;
 
 mod metrics;
+mod spares;
 mod stores;
 
 use crate::{Error, Network, Result, network, operation, store, supplier};
@@ -39,6 +40,9 @@ pub struct Fleet {
     pub metrics: Vec<FleetMetrics>,
     /// Uncertified Store maintenance reports from owners named by retained Store deployment plans.
     pub stores: Vec<FleetStoreMaintenance>,
+    /// Anonymous Root query. Absent when the fleet has no observed reserve.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spare_counts: Option<canic_management_protocol::stored::SpareCounts>,
     /// Optional, explicitly selected mainnet default wallet; separate from canister balances.
     pub wallet: Option<crate::Wallet>,
 }
@@ -690,6 +694,17 @@ pub async fn fleet_with_config(
     let selected = select_managers(&operations, &targets, &selected)?;
     let metric_targets = selected.clone();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    let spare_counts = if let Some(config) = configuration {
+        match spares::observe(config, &operations).await {
+            Ok(value) => value,
+            Err(error) => {
+                issues.push(format!("Fleet spares: {error}"));
+                None
+            }
+        }
+    } else {
+        None
+    };
     let mut managers = Vec::new();
     for ((network_id, manager), network) in selected {
         // Creation and upgrade share this owner's existing five-second budget.
@@ -846,6 +861,7 @@ pub async fn fleet_with_config(
         managers,
         metrics,
         stores,
+        spare_counts,
         wallet: None,
     })
 }

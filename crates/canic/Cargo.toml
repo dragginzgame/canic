@@ -41,6 +41,7 @@ inspection = [
     "ic-wire/derive",
     "ic-wire/platform-types",
     "ic-auth-wire?/typescript",
+    "ic-db?/wire",
 ]
 jobs = ["dep:ic-jobs", "timers"]
 lifecycle = ["dep:ic-platform-runtime"]

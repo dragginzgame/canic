@@ -47,7 +47,7 @@ ex-user-directory-shard = { path = "../apps/examples/user-directory/shard" }
 ic-auth = { version = "0.48.8", features = ["receiver-memory", "ed25519-verification"] }
 ic-auth-protocol-types = "0.43.0"
 ic-backup = "0.105.5"
-ic-db = "0.26"
+ic-db = "0.26.8"
 ic-host-artifacts = { version = "0.80.3", default-features = false }
 ic-host-fs = { version = "0.80.3", default-features = false }
 ic-host-process = { version = "0.81.0", default-features = false }

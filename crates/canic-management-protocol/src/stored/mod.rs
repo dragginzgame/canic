@@ -163,6 +163,83 @@ pub const MAX_SUBNET_CHILDREN: u8 = 8;
 /// Dedicated instances also consume the shared subnet allowance.
 pub const MAX_INSTANCES: u8 = MAX_SUBNET_CHILDREN;
 
+/// Aggregate fleet reserve observation, without principals or handoff records.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct SpareCounts {
+    /// Root's approved target.
+    pub min_available_spares: u8,
+    /// Immediately claimable principals.
+    pub ready: u8,
+    /// Automatic creations charged, including unresolved attempts.
+    pub creations_used: u8,
+    /// Lifetime paid creation allowance.
+    pub maximum_creations: u8,
+    /// Current eligibility for the next automatic refill.
+    pub refill: RefillStatus,
+}
+
+/// First applicable condition controlling reserve demand.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub enum RefillStatus {
+    /// Enough spares for the target.
+    AtTarget,
+    /// Issued creations cover the remaining deficit.
+    AwaitingCreation,
+    /// Lifetime count exhausted.
+    AllowanceSpent,
+    /// Subnet limit reached.
+    SubnetFull,
+    /// The spending deadline passed.
+    Expired,
+    /// Management custody currently excludes growth.
+    Occupied,
+    /// More liquid cycles are needed.
+    Underfunded,
+    /// Eligible to create a spare.
+    Due,
+}
+
+#[cfg(feature = "standby")]
+/// Unsigned read of the active Root policy and its inventory totals.
+pub struct ReadSpareCounts;
+#[cfg(feature = "standby")]
+impl canic::method::Contract for ReadSpareCounts {
+    const NAME: &'static str = "spare_counts";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    type Input = ();
+    type Output = Option<SpareCounts>;
+}
+
+/// A surplus principal and the former fleet authority when its origin is known.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandbyImport {
+    /// Exact canister principal.
+    pub principal: String,
+    /// Former fleet Root which must explicitly release this candidate.
+    #[serde(default)]
+    pub previous_root: Option<String>,
+}
+
+/// One immutable fleet reserve approval. Imports identify unassigned, externally released assets.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct StandbyPolicy {
+    /// Addressed Root (its component name in a fleet declaration).
+    pub root: String,
+    /// Desired claimable spare count.
+    pub minimum_available: u8,
+    /// Lifetime number of new canisters this approval may pay for.
+    pub maximum_creations: u8,
+    /// Absolute cutoff for new paid dispatch, in IC nanoseconds.
+    pub expires_at_ns: u64,
+    /// Least observed cycle balance of a surplus canister at admission.
+    pub minimum_import_cycles: std::num::NonZeroU64,
+    /// Exact surplus principals released to this fleet by their former owner.
+    #[serde(default)]
+    pub imports: Vec<StandbyImport>,
+}
+
 /// Controller's immutable child ceiling for this subnet owner.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SubnetCapacity {
@@ -171,6 +248,33 @@ pub struct SubnetCapacity {
     /// Lifetime allocation limit across both pools.
     pub max_children: u8,
 }
+/// Approve the fleet reserve target and paid creation allowance.
+pub const CONFIGURE_STANDBY: u64 = ic_wire::method_id("configure_standby");
+
+#[cfg(feature = "standby")]
+/// Controller's exact reserve policy.
+pub struct ConfigureStandby;
+#[cfg(feature = "standby")]
+impl canic::method::Contract for ConfigureStandby {
+    const NAME: &'static str = "configure_standby";
+    const ID: u64 = CONFIGURE_STANDBY;
+    const REQUEST: ic_wire::Limits = LIMITS;
+    type Input = StandbyPolicy;
+    type Output = Result<(), String>;
+}
+
+#[cfg(feature = "standby")]
+/// Shared controller-approved subnet ceiling.
+pub struct ConfigureCapacity;
+#[cfg(feature = "standby")]
+impl canic::method::Contract for ConfigureCapacity {
+    const NAME: &'static str = "configure_capacity";
+    const ID: u64 = CONFIGURE_CAPACITY;
+    const REQUEST: ic_wire::Limits = LIMITS;
+    type Input = SubnetCapacity;
+    type Output = Result<(), crate::Refusal>;
+}
+
 /// Admit the shared ceiling before configuring larger pools.
 pub const CONFIGURE_CAPACITY: u64 = ic_wire::method_id("canic.configure_capacity.v1");
 
@@ -190,3 +294,59 @@ pub const MAX_KEYS_PER_SHARD: u32 = 100_000;
 
 /// Supplier-owned Store frame budgets.
 pub use ic_wasm_store_protocol::{CHUNK_LIMITS as STORE_CHUNK_LIMITS, LIMITS as STORE_LIMITS};
+
+/// Controller approval for destructive retirement under an immutable Store release.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ShardRetirement {
+    /// Root allowed to execute the retirement.
+    pub root: String,
+    /// Installed shard principal and original allocation.
+    pub shard: String,
+    /// Original placement slot.
+    pub slot: u32,
+    /// Original placement generation.
+    pub generation: [u8; 32],
+    /// Required balance when returning the running empty principal.
+    pub minimum_reuse_cycles: std::num::NonZeroU64,
+    /// Absolute cutoff for new effects, including restart after the proof wait.
+    pub expires_at_ns: u64,
+}
+
+/// Progress of one immutable retirement approval.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum RetirementPhase {
+    /// Exact release pin dispatched. Resume by observation.
+    PinIssued,
+    /// Root owns the pin.
+    Pinned,
+    /// Store cache preparation dispatched.
+    CacheIssued,
+    /// Root observed every approved chunk.
+    Cached,
+    /// Destructive dormant installation dispatched, never repeated.
+    InstallIssued,
+    /// Approved code and receipt observed; original proof deadline still applies.
+    Dormant,
+    /// Stop dispatched.
+    StopIssued,
+    /// Uninstall dispatched.
+    UninstallIssued,
+    /// Empty module observed.
+    Uninstalled,
+    /// Start dispatched.
+    StartIssued,
+    /// Returned once to the shared physical inventory.
+    Returned,
+}
+
+/// Advance the exact controller-approved shard retirement.
+#[cfg(feature = "retirement")]
+pub struct RetireShard;
+#[cfg(feature = "retirement")]
+impl canic::method::Contract for RetireShard {
+    const NAME: &'static str = "retire_shard";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REQUEST: ic_wire::Limits = LIMITS;
+    type Input = Stage<ShardRetirement>;
+    type Output = Result<RetirementPhase, String>;
+}

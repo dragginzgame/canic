@@ -6,6 +6,7 @@ mkdir -p target/store
 scope=${1:-all}
 case "$scope" in
     all) filter= ;;
+    miner) filter=store_root_tests::miner_pool ;;
     db-roles) filter=store_root_tests::db_role_tests ;;
     directory) filter=store_root_tests::directory_tests ;;
     sharding) filter=store_root_tests::sharding_tests ;;
@@ -20,7 +21,7 @@ case "$scope" in
     preservation) filter=store_root_tests::preservation_limits_tests ;;
     removal) filter=store_root_tests::removal_tests ;;
     root-maintenance) filter=store_root_tests::root_custody_tests ;;
-    *) printf 'Usage: %s [all|db-roles|directory|user-directory|sharding|readiness|publication|dispatch|custody|admission|quiescence|maintenance|preservation|removal|root-maintenance]\n' "$0" >&2; exit 2 ;;
+    *) printf 'Usage: %s [all|miner|db-roles|directory|user-directory|sharding|readiness|publication|dispatch|custody|admission|quiescence|maintenance|preservation|removal|root-maintenance]\n' "$0" >&2; exit 2 ;;
 esac
 records=$(mktemp target/store/cli.XXXXXX.jsonl)
 cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$records"
@@ -32,9 +33,14 @@ build() {
     "$cli" artifact build --package "$package" "$@" --json > "target/store/$name.json"
     cp -- "$(jq -r .wasm "target/store/$name.json")" "target/store/$name.wasm"
 }
-if [[ "$scope" == all ]]; then
+if [[ "$scope" == all || "$scope" == miner ]]; then
     "$cli" app build --config apps/examples/miner-pool/canic.toml
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test miner
+fi
+if [[ "$scope" == miner ]]; then
+    build pool-faults canic-root --features sharding,fault-injection
+    CANIC_CLI="$cli" CANIC_STORE_APP_DIRECTORY="$root/target/store" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
+    exit
 fi
 if [[ "$scope" == all || "$scope" == db-roles ]]; then
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-schema-role --output target/store/db-role-schema.wasm --json > target/store/db-role-schema.json
@@ -50,6 +56,7 @@ fi
 if [[ "$scope" == all || "$scope" == directory ]]; then
     cargo build --locked --release -p canic-root --features role-issuer --bin canic-root-client --message-format=json-render-diagnostics > "$records"
     cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic-root-client" and .executable != null) | .executable] | if length == 1 then .[0] else error("expected role-enabled Root client") end' "$records")" target/store/role-root.client
+    build recycled-miner ex-miner-pool-miner
     build dormant canic-dormant
     build role-root canic-root --features role-issuer
     build directory canic-directory-witness --manifest qualification/Cargo.toml --features placement,role-probe

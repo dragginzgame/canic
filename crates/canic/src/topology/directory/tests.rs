@@ -202,3 +202,56 @@ fn approved_shard_topology_checks_both_install_envelopes() {
     truncated.pop();
     assert!(Install::approved(&truncated).is_err());
 }
+
+#[cfg(all(feature = "storage", feature = "method"))]
+#[test]
+fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_after_reopen() {
+    let memory = ic_storage::VectorMemory::default();
+    let key = "app.services.v1";
+    let open = |fresh| crate::storage::bootstrap(memory.clone(), fresh, "app", &[key], 16);
+    let directory = Directory {
+        revision: 1,
+        services: vec![service("unrelated", 9)],
+    };
+    let children = ["shard", "shard", "shard", "worker"].map(|role| role.to_owned());
+    let children: Vec<_> = children
+        .into_iter()
+        .zip(1u8..)
+        .map(|(role, id)| Hop {
+            canister: Principal::from_slice(&[id, 1]),
+            role,
+            generation: [id; 32],
+        })
+        .collect();
+    let expected = [children[0].canister, children[1].canister];
+    {
+        let runtime = open(true);
+        let mut index =
+            retained::Index::create(&runtime, key, Principal::from_slice(&[8, 1]), "hub");
+        for child in &children {
+            index.apply(&directory, [7; 32], Some(child)).unwrap();
+        }
+        for child in [&children[0], &children[1], &children[3]] {
+            index.acknowledge(&directory, child).unwrap();
+        }
+        assert_eq!(
+            index.acknowledged_children("shard").collect::<Vec<_>>(),
+            expected
+        );
+        let newer = Directory {
+            revision: 2,
+            ..directory
+        };
+        index.apply(&newer, [7; 32], None).unwrap();
+    }
+    let index = retained::Index::open(&open(false), key);
+    assert_eq!(
+        index.acknowledged_children("shard").collect::<Vec<_>>(),
+        expected
+    );
+    assert_eq!(
+        index.acknowledged_children("worker").collect::<Vec<_>>(),
+        [children[3].canister]
+    );
+    assert_eq!(index.acknowledged_children("hub").count(), 0);
+}

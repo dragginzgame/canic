@@ -350,6 +350,18 @@ pub mod retained {
                 .map(|entry| (&entry.hop, entry.acknowledged))
         }
 
+        /// Direct children of this role that confirmed at least one directory delivery.
+        /// Includes unnamed children even while a newer revision awaits delivery.
+        pub fn acknowledged_children<'a>(
+            &'a self,
+            role: &'a str,
+        ) -> impl Iterator<Item = Principal> + 'a {
+            self.record.children.iter().filter_map(move |child| {
+                (child.hop.role == role && child.acknowledged.is_some())
+                    .then_some(child.hop.canister)
+            })
+        }
+
         /// Validate the IC caller and branch against this receiver, then commit its local projection.
         /// # Errors
         /// Refuses an invalid publisher, target, role, path or superseded directory.
@@ -376,6 +388,29 @@ pub mod retained {
                 }
             }
             self.apply(&update.directory, first.generation, update.path.get(1))
+        }
+
+        #[cfg(feature = "method")]
+        pub(super) fn acknowledge(
+            &mut self,
+            directory: &Directory,
+            child: &Hop,
+        ) -> Result<(), &'static str> {
+            let rev = directory.revision;
+            if self.current() != Some(directory) {
+                return Err("directory revision changed");
+            }
+            let mut record = self.record.clone();
+            let entry = record
+                .children
+                .iter_mut()
+                .find(|entry| &entry.hop == child)
+                .ok_or("child installation changed")?;
+            if entry.acknowledged != Some(rev) {
+                entry.acknowledged = Some(rev);
+                self.save(record)?;
+            }
+            Ok(())
         }
 
         fn save(&mut self, record: Record) -> Result<(), &'static str> {
@@ -466,21 +501,9 @@ pub mod retained {
             .map_err(|_| "child directory delivery unconfirmed")??;
         index.with_borrow_mut(|slot| {
             let index = slot.as_mut().expect("open service index");
-            let rev = update.directory.revision;
-            if index.current() != Some(&update.directory) {
-                return Err("directory revision changed".into());
-            }
-            let mut record = index.record.clone();
-            let entry = record
-                .children
-                .iter_mut()
-                .find(|entry| entry.hop == child)
-                .ok_or("child installation changed")?;
-            if entry.acknowledged != Some(rev) {
-                entry.acknowledged = Some(rev);
-                index.save(record)?;
-            }
-            Ok(())
+            index
+                .acknowledge(&update.directory, &child)
+                .map_err(String::from)
         })
     }
 }

@@ -20,6 +20,7 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
     }
     #[cfg(feature = "sharding")]
     if crate::sharding::occupied()
+        && !(cfg!(feature = "fault-injection") && private && _method == protocol::children::INJECT)
         && !(private
             && crate::sharding::has_capacity()
             && matches!(

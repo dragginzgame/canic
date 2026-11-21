@@ -6,13 +6,34 @@
 installed pool’s growth, parking and reuse under one Root. The Host planner
 binds the simulator identities to the example’s `worker_pool` grant.
 The witness checks production across hub and Root upgrades, outsider refusal
-and the four-worker ceiling. A second installed fleet has two physical slots,
+and the four-worker ceiling. A qualification-only Root traps the uninstall callback
+after management applies it. The normal Root reopens the issued intent and
+the controller resumes the same reset to recover exactly one available spare.
+A second installed fleet has two physical slots,
 one hub and a separately funded spare. Its zero creation budget refuses growth
-until the spare exists. The worker returns through stop, uninstall, an observed
+until the spare exists. Requests for distinct worker ordinals compete for that
+spare. Only the next ordinal gets an allocation. The other stays unassigned
+until the worker returns through stop, uninstall, an observed
 balance refusal, manual top-up and restart. Concurrent hub calls recover the same
 principal at a fresh generation. Root reopens before and after reassignment,
 the miner rejects an old batch, and the new generation completes work.
-Shared-shard recycling and cross-fleet transfers remain outside this fixture.
+The reserve case plans an exact fleet policy, fills the initial deficit, claims
+a worker, replenishes and exhausts the lifetime allowance. It exercises a named
+former Root release, two-hour import quarantine, a Root upgrade, and use of the
+imported principal with zero worker creation budget. A later policy approval
+can append unassigned surplus after spending expires. The installed Registry
+lookup fixture reports a distinct subnet for a surplus canister created on the
+simulator’s NNS subnet. Root refuses the import on retry and its inventory stays
+unchanged. Stopping a candidate during quarantine blocks final admission. The
+simulator restarts it as Root and the same import completes exactly once.
+The release case uses the former Root principal as the simulated caller. Its
+immediate retry leaves the candidate awaiting handoff. Trying to release another
+candidate in the same policy leaves the inventory unchanged.
+
+The two-Root handoff case uses distinct controllers, an actual controller change,
+a one-slot source, and upgrades of both Roots. The destination's first custody
+observation frees source capacity when the source reconciles. The destination
+separately completes quarantine. The directory suite installs two permanent hubs, a shared shard and a dedicated project from four ready spares. Each child records zero create dispatches. It also retires and reuses both a newly created shard and a spare-backed shard.
 [Fleet and expected rounds](../apps/examples/miner-pool/DESIGN.md)
 
 ## Named service and dedicated instance role issuance
@@ -165,6 +186,12 @@ incompatible budgets, missing or extra names, and out-of-prefix refusal.
 `make profile-test` exercises named Wire mounts on an installed actor,
 including byte-exact replies, caller rejection before decode, wrong direction
 and method, bounded requests, synchronous reply rollback and an async worker check.
+
+The Root journal uses CUJC at every fleet size. The installed `storage_reopen::`
+case presents a frozen CUJ9 journal in the current named cell and checks the
+journal-specific refusal, stable bytes, module hash and subnet canister count.
+The installed sharding journey grows a fresh Root through shared and dedicated
+child allocations and checks their identities after upgrade.
 
 Fresh counter and Root installations use named stable cells on registry Storage
 0.78.3. Application codecs retain their payload bounds. Storage owns directory
@@ -1038,11 +1065,20 @@ with one live assignment, and later reopens the empty allocation with its
 original proof deadline. The allocation continues to consume subnet capacity.
 The simulator installs the supplied dormant Wasm as the controlling Root. A
 different declared installer or target is refused. The dormant canister returns
-the same retirement receipt before and after its own upgrade.
+the same retirement receipt before and after its own upgrade. While that
+receipt is installed, restarting Root preserves the closed generation and
+its original proof deadline. The standby inventory stays empty and the
+worker reset endpoint refuses the shard.
 After a simulator controller forcibly reinstalls the same principal as a worker, renewal
 remains closed. A saved proof still works until its original expiry.
-The simulator performs the controller handover directly. Managed dormancy,
-early handover approvals, rotation and
+That earlier issuer case performs the controller handover directly.
+The separate installed case `drained_shard_returns_as_a_worker_after_proof_expiry`
+submits the controller’s exact retirement approval through Root. It fills the
+three-slot subnet, installs the pinned dormant release, reopens Root, and observes
+an empty inventory until expiry. After verified uninstall and restart, the same
+principal serves a worker request under a fresh generation and zero creation
+budget. The original receiver refuses the expired proof. Root reopens with both
+allocation histories. Early handover approvals, rotation and
 Host verification of signing-key custody remain open. This issuer currently
 accepts shared shards installed with the direct topology frame.
 

@@ -430,7 +430,6 @@ pub(super) async fn exercise(
     pic.advance_time(Duration::from_secs(7201)).await;
     pic.tick().await;
     assert!(renew(&child).await.is_ok());
-    let copy = retained(child.id).await;
     let mut stale = target.clone();
     stale.allocation.generation[0] ^= 1;
     assert!(release(1u8, stale).await.is_err());
@@ -457,6 +456,7 @@ pub(super) async fn exercise(
     assert_eq!(prepare(issuer).await, pin);
     assert_eq!(inspect().await["live_placements"], 1);
     assert!(renew(&child).await.is_ok());
+    let copy = retained(child.id).await;
     assert_eq!(place(2u8).await, placed);
     assert_eq!(release(2u8, target.clone()).await, Ok(()));
     assert_eq!(inspect().await["live_placements"], 0);
@@ -529,6 +529,45 @@ pub(super) async fn exercise(
             .await
     };
     assert_eq!(observe().await, binding);
+    // Neither a dormant receipt nor restarting its Root releases this principal.
+    let standby = async || {
+        use canic::sharding::standby::InspectStandby;
+        issuer
+            .update::<_, <InspectStandby as Contract>::Output>(
+                InspectStandby::NAME,
+                InspectStandby::ID,
+                &(),
+                InspectStandby::REPLY,
+            )
+            .await
+    };
+    assert!(standby().await.is_empty());
+    canic_qualification::upgrade_stopped(
+        pic,
+        issuer.id,
+        std::fs::read(artifacts().join("role-root.wasm")).unwrap(),
+        vec![],
+        Some(owner),
+    )
+    .await
+    .unwrap();
+    assert_eq!(retirement_status().await, Ok((deadline, 0)));
+    assert!(pic.get_time().await.as_nanos_since_unix_epoch() < deadline);
+    assert!(standby().await.is_empty());
+    use canic::sharding::standby::ResetWorker;
+    let dispatch_until = pic.get_time().await.as_nanos_since_unix_epoch() + 60_000_000_000;
+    let worker_reset: Result<_, String> = issuer
+        .update::<_, <ResetWorker as Contract>::Output>(
+            ResetWorker::NAME,
+            ResetWorker::ID,
+            &(target.clone(), dispatch_until),
+            ResetWorker::REQUEST,
+        )
+        .await;
+    assert_eq!(
+        worker_reset.unwrap_err(),
+        "released worker allocation required"
+    );
     canic_qualification::upgrade_stopped(pic, child.id, wasm, vec![], Some(issuer.id))
         .await
         .unwrap();

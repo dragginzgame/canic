@@ -22,6 +22,7 @@ async fn growth_park_reuse_and_capacity() {
         pool,
         capacity,
         workers,
+        ..
     } = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
         fleet.worker_pool.as_mut().unwrap().creation_budget = 3 * management::CREATION_CYCLES
     })
@@ -151,7 +152,10 @@ async fn growth_park_reuse_and_capacity() {
     };
     assert_eq!(
         inventory().await,
-        vec![(refill.clone(), Asset::Empty(spare))]
+        vec![(
+            canic::sharding::standby::Source::Refill(refill.clone()),
+            Asset::Empty(spare)
+        )]
     );
     let client = codec::output(&base.join("pool.wasm"));
     assert!(codec::encode(&client, &["tick".into(), "0".into(), "5".into()]).is_err());
@@ -424,7 +428,7 @@ async fn growth_park_reuse_and_capacity() {
     assert_eq!(
         inventory().await,
         vec![(
-            refill.clone(),
+            canic::sharding::standby::Source::Refill(refill.clone()),
             Asset::Released(spare, spare_target.allocation.clone())
         )]
     );
@@ -489,7 +493,7 @@ async fn growth_park_reuse_and_capacity() {
     pic.start_canister(id, Some(root.id)).await.unwrap();
     assert_eq!(
         reset(&spare_target, deadline).await.unwrap_err(),
-        "worker has retained snapshots"
+        "target has retained snapshots"
     );
     assert!(
         pic.canister_status(id, Some(root.id))
@@ -506,8 +510,38 @@ async fn growth_park_reuse_and_capacity() {
         ResetPhase::StopIssued
     );
     assert!(reset(&spare_target, deadline + 1).await.is_err());
-    // Long-running fleet exercise spends part of the creation balance.
+    // Interrupt Root's callback after the management canister commits uninstall.
     pic.add_cycles(id, u128::from(floor.get())).await;
+    canic_qualification::upgrade_stopped(
+        pic,
+        root.id,
+        std::fs::read(artifacts().join("pool-faults.wasm")).unwrap(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
+    inject(&root, 26).await;
+    let lost = pic
+        .update_call(
+            root.id,
+            root.operator,
+            ResetWorker::NAME,
+            ResetWorker::encode_request(&(spare_target.clone(), deadline)).unwrap(),
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        lost.reject_message.contains("injected growth boundary"),
+        "{lost:?}"
+    );
+    assert!(
+        pic.canister_status(id, Some(root.id))
+            .await
+            .unwrap()
+            .module_hash
+            .is_none()
+    );
     canic_qualification::upgrade_stopped(
         pic,
         root.id,
@@ -518,8 +552,16 @@ async fn growth_park_reuse_and_capacity() {
     .await
     .unwrap();
     assert_eq!(
-        reset(&spare_target, deadline).await.unwrap(),
-        ResetPhase::UninstallIssued
+        inventory().await,
+        vec![(
+            canic::sharding::standby::Source::Refill(refill.clone()),
+            Asset::Reset(
+                spare,
+                spare_target.allocation.clone(),
+                deadline,
+                ResetPhase::UninstallIssued
+            )
+        )]
     );
     for phase in [
         ResetPhase::Uninstalled,
@@ -672,7 +714,6 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
     let Asset::Empty(spare) = RefillStandby::decode_reply(&bytes).unwrap().unwrap() else {
         panic!("expected one prepaid spare")
     };
-    settle(1, 1).await;
     let lookup = async |ordinal| {
         LookupWorker::decode_reply(
             &pic.update_call(
@@ -686,6 +727,34 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
         )
         .unwrap()
     };
+    // Queue distinct worker destinations before executing either request.
+    // The grant permits both ordinals and has no budget to create a second principal.
+    let submit = async |ordinal| {
+        pic.submit_call(
+            root.id,
+            hub,
+            canic::sharding::AssignWorker::NAME,
+            canic::sharding::AssignWorker::encode_request(&ordinal).unwrap(),
+        )
+        .await
+        .unwrap()
+    };
+    let first = submit(0).await;
+    let second = submit(1).await;
+    let result = async |request| {
+        canic::sharding::AssignWorker::decode_reply(&pic.await_call(request).await.unwrap())
+            .unwrap()
+    };
+    let Placement::Pending(winner) = result(first).await else {
+        panic!("next ordinal must reserve the spare")
+    };
+    assert!(matches!(
+        result(second).await,
+        Placement::Busy | Placement::Full
+    ));
+    assert_eq!(lookup(1).await, Placement::Unknown);
+    assert_eq!(result(submit(1).await).await, Placement::Full);
+    settle(1, 1).await;
     let target = |p: Placement| {
         let (allocation, shard) = p.assigned_target().unwrap().unwrap();
         assert_eq!(shard, spare);
@@ -695,6 +764,7 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
         }
     };
     let original = target(lookup(0).await);
+    assert_eq!(original.allocation, winner);
     settle(2, 0).await;
     Release::decode_reply(
         &pic.update_call(
@@ -765,7 +835,7 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
         .unwrap()
     };
     reopen().await;
-    // Two ingress calls race the same growth request while the subnet is full.
+    // Duplicate growth requests must converge on the retained winner.
     for _ in 0..2 {
         pic.submit_call(
             hub,
@@ -808,3 +878,5 @@ async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget()
     );
     assert_eq!(server.stop().unwrap().abandoned, 0);
 }
+
+mod reserve;

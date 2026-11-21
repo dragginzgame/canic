@@ -409,6 +409,7 @@ pub fn plan_fleet(
     if selected.config.shard_pool.is_some()
         || selected.config.instance_pool.is_some()
         || selected.config.worker_pool.is_some()
+        || selected.config.standby_pool.is_some()
     {
         if cycles.is_some() || execute_at_ns.is_some() {
             return Err(Error::Invalid(

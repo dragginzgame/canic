@@ -23,6 +23,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
                 role_receivers: vec![],
                 subnet_child_limit: None,
                 instance_pool: None,
+                standby_pool: None,
                 worker_pool: None,
                 shard_pool: None,
                 auth: Vec::new(),
@@ -58,6 +59,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
         issues: vec![],
         managers: vec![],
         metrics: vec![],
+        spare_counts: None,
         stores: vec![],
         wallet: None,
     };
@@ -131,6 +133,7 @@ fn report_escapes_untrusted_text_and_labels_partial_inventory() {
         issues: vec!["<script>alert('unsafe')</script> & \"quoted\"".into()],
         managers: vec![],
         metrics: vec![],
+        spare_counts: None,
         stores: vec![],
         wallet: None,
     };
@@ -197,6 +200,7 @@ fn declared_routes_require_unambiguous_known_network_and_escape_text() {
         issues: vec![],
         managers: vec![],
         metrics: vec![],
+        spare_counts: None,
         stores: vec![],
         wallet: None,
     };
@@ -250,6 +254,7 @@ fn metrics_views_preserve_exact_text_unknowns_and_reset_windows() {
         issues: vec![],
         managers: vec![],
         metrics: vec![],
+        spare_counts: None,
         stores: vec![],
         wallet: None,
     };

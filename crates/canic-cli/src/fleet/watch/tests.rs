@@ -63,6 +63,7 @@ fn oversized_refresh_cannot_replace_the_current_page() {
         operations: vec![],
         managers: vec![],
         metrics: vec![],
+        spare_counts: None,
         stores: vec![],
         wallet: None,
         issues: vec!["&".repeat(crate::view::MAX_REPORT_BYTES)],

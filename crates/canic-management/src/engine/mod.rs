@@ -173,6 +173,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
                 .into_owned()
         }),
     );
+    let journal = Journals::from_bytes(journal_cell.get()).unwrap_or_else(|error| api::trap(error));
     let artifact_cell = canic::storage::cell(
         &runtime,
         ARTIFACT_KEY,
@@ -210,7 +211,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
         }
     };
     let mut state = State {
-        journal: Journals::from_bytes(journal_cell.get()).expect("journal custody"),
+        journal,
         artifact: Artifacts::from_bytes(artifact_cell.get().as_slice().into())
             .expect("artifact custody"),
         #[cfg(feature = "role-issuer")]
@@ -262,9 +263,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
             );
         }
     }
-    // Commit identified collections only after strict validation of both old/new stores.
-    // A post-upgrade trap rolls back both writes with the executable change.
-    state.set_journal(state.journal.clone());
+    // Normalize admitted artifact payloads only after validating complete custody.
     state.set_artifact(state.artifact.clone());
     STATE.with_borrow_mut(|slot| *slot = Some(state));
     canic::lifecycle::initialize_diagnostics();
@@ -272,6 +271,8 @@ pub fn open(fresh: bool, readiness: Readiness) {
     for slot in slots {
         schedule(slot);
     }
+    #[cfg(feature = "sharding")]
+    sharding::standby::policy::wake();
     if !fresh {
         directory::schedule(None);
     }
@@ -508,8 +509,6 @@ enum Origin {
     Permanent,
     #[cfg(feature = "sharding")]
     Placement,
-    #[cfg(feature = "sharding")]
-    StandbyWorker,
 }
 
 fn admit(
@@ -521,17 +520,22 @@ fn admit(
     if origin == Origin::Permanent && !ChildId::ALL.contains(&slot) {
         return Err(Refusal::Binding);
     }
-    #[cfg(feature = "sharding")]
-    if sharding::at_capacity() && origin != Origin::StandbyWorker {
-        return Err(Refusal::Occupied);
-    }
     let attachment = u128::from(CREATION_CYCLES);
     #[cfg(feature = "sharding")]
-    let attachment = if origin == Origin::StandbyWorker {
-        0
-    } else {
-        attachment
-    };
+    let attachment = STATE.with_borrow(|state| {
+        let pools = &state.as_ref().expect("open Root").pools;
+        if pools.empty_spare() {
+            Ok(0)
+        } else if pools.full() {
+            Err(Refusal::Occupied)
+        } else {
+            Ok(attachment)
+        }
+    })?;
+    #[cfg(feature = "sharding")]
+    let generation = artifact
+        .sources()
+        .map_or(approval.module_hash, |s| s.creation.operation);
     if ic_platform_runtime::raw::liquid_cycle_balance() < reserved_cycles() + attachment {
         return Err(Refusal::Reserve);
     }
@@ -562,9 +566,7 @@ fn admit(
         s.phase = Phase::Scheduled;
     });
     #[cfg(feature = "sharding")]
-    if origin == Origin::Permanent {
-        sharding::retain_permanent(slot);
-    }
+    sharding::retain_child(slot, generation, origin);
     schedule(slot);
     Ok(status(slot))
 }
@@ -584,7 +586,7 @@ fn fault(slot: ChildId, point: u8) {
 /// Traps unless the caller controls this canister and the point is in range.
 pub fn inject_fault(slot: ChildId, value: u8) {
     assert!(api::is_controller(&api::caller()), "controller required");
-    assert!(value <= 25);
+    assert!(value <= 26);
     FAULT.with_borrow_mut(|faults| {
         if value == 0 {
             faults.remove(&slot);

@@ -11,7 +11,12 @@ description = "Reusable bounded child management engine"
 [features]
 role-issuer = ["sharding", "canic/raw-rand", "dep:ic-platform"]
 backup = ["canic-management-protocol/backup"]
-sharding = ["canic/sharding", "canic/topology", "dep:sha2"]
+sharding = [
+    "ic-platform-protocol/registry-placement",
+    "canic/sharding",
+    "canic/topology",
+    "dep:sha2",
+]
 blob = ["canic/blob"]
 fault-injection = []
 maintenance-candidate = []

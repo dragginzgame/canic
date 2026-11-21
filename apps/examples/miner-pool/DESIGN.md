@@ -72,3 +72,83 @@ The local worker grant binds a reuse floor of 500 billion cycles. A change
 of even one cycle conflicts with the existing approval. Omitting
 `minimum_reuse_cycles` preserves the prior worker install and leaves recycling
 unapproved. Both forms deliver only the exact allocation generation to the miner.
+
+## Keeping spare canisters ready
+
+A sharding Root can maintain a fleet reserve even when the worker hub’s own
+creation budget is zero. In a fleet with a bound Root and an approved subnet
+ceiling, add the optional table below to `canic.toml`. Select an absolute
+spending deadline in Unix nanoseconds. The example timestamp is illustrative.
+
+```toml
+[apps.ex-miner-pool.fleets.local.standby_pool]
+root = "root"
+min_available_spares = 2
+maximum_creations = 3
+expires_at_ns = 1_800_000_000_000_000_000
+minimum_import_cycles = 500_000_000_000
+
+[[apps.ex-miner-pool.fleets.local.standby_pool.imports]]
+network = "local"
+principals = ["<first-canister-principal>", "<second-canister-principal>"]
+```
+
+Replace the placeholders with surplus canisters you control. Omit the imports
+table when there are no candidates. Each group requires `network = "ic"` for
+mainnet or `network = "local"` for a local fleet. When the previous fleet is
+known, put its `previous_root` on the group; use separate groups for different
+former Roots.
+Review the resolved principals, spending ceiling and deadline before submission.
+Set `IDENTITY` to the controller signer name and run these commands from the configured fleet directory.
+
+```sh
+canic --json fleet plan --identity "$IDENTITY" > reserve-plan.json
+canic fleet call --canister root --identity "$IDENTITY" configure-capacity "$(jq -c '.capacity.approval' reserve-plan.json)"
+canic fleet call --canister root --identity "$IDENTITY" configure-standby "$(jq -c '.standby.approval' reserve-plan.json)"
+canic fleet call --canister root --identity "$IDENTITY" inspect-standby
+```
+
+The target counts ready spares once across the whole subnet fleet. Permanent
+children, shared shards, dedicated instances and workers all claim from it at
+install admission. A hit skips canister creation; Wasm installation and readiness
+still run. `canic fleet show` reads Root’s aggregate counts without signing.
+A missing Root or unavailable query leaves the ready count unknown. Root retains one charge for each automatic
+creation, including an uncertain one, and stops dispatching at its creation
+allowance, spending deadline or physical subnet ceiling. Manual refills have
+their own approvals. A fleet can import with `maximum_creations = 0`.
+
+After approval, an existing controller must hand the **running, uninstalled**
+candidate to Root as its sole controller. Both subnet Registry lookups must
+be available. A declared former Root must also send its release to the
+destination. The controller then runs the following command twice, once to
+begin quarantine and again after two hours to verify and admit the canister.
+
+```sh
+canic fleet call --canister root --identity "$IDENTITY" import-standby "$PRINCIPAL"
+```
+
+A stopped or underfunded candidate stays quarantined. For a low balance, top it
+up and repeat the same import. Restarting a stopped candidate requires its IC
+controller, which at this point is Root. The import command only observes it.
+
+Canic validates each import group against the fleet network before planning.
+The selected local fleet supplies the replica and trust key.
+
+Append additional candidates to the original list and review and submit the
+updated approval. Exact retries preserve earlier handoffs and spending.
+`make miner-test` exercises this workflow with a local simulator.
+
+### Moving an empty spare between managed fleets
+
+Approve the destination import with the source principal as `previous_root`.
+From the source fleet, call `export-standby SPARE DESTINATION_ROOT DEADLINE_NS`
+as its controller. Choose a deadline within ten minutes. The source checks the
+destination reservation and subnet, reserves the spare, and issues one
+sole-controller change. While pending the spare still consumes source capacity
+and cannot be claimed by a source worker.
+
+Call `import-standby SPARE` on the destination to verify sole empty custody and
+start quarantine. Repeat the original export on the source to record confirmation
+and free its slot. The destination still waits two hours before admission.
+An uncertain controller change stays issued. If the deadline passes before
+dispatch, a reserved spare stays blocked for operator investigation.

@@ -1,7 +1,7 @@
 //! Independent worker allowance. Ordinals are permanent within the approved pool.
 use super::{Pools, STATE, api, create, placement, validate_instance};
 use canic::sharding::{Allocation, Placement};
-use canic_management_protocol::{CREATION_CYCLES, Refusal, children::ChildId, stored};
+use canic_management_protocol::{Refusal, children::ChildId, stored};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -27,23 +27,14 @@ impl Workers {
         self.claims.get(worker_index(slot)?)
     }
 
-    // Every reserved creation keeps its full debit, including uncertain attempts.
-    // A claim backed by an exact standby receipt already has a paid principal.
-    fn creation_debit(&self, pools: &Pools) -> u64 {
-        ChildId::INSTANCES
-            .iter()
-            .rev()
-            .take(self.claims.len())
-            .filter(|slot| pools.standby_claim(**slot).is_none())
-            .count() as u64
-            * CREATION_CYCLES
-    }
-
     pub fn validate(&self, pools: &Pools) {
         validate_instance(&self.grant).expect("retained worker grant");
         assert!(compatible(pools, &self.grant));
         assert!(self.claims.len() <= usize::from(self.grant.max_instances));
-        assert!(self.creation_debit(pools) <= self.grant.creation_budget);
+        assert!(
+            pools.creation_debit(ChildId::INSTANCES.into_iter().rev().take(self.claims.len()))
+                <= self.grant.creation_budget
+        );
         assert!(self.claims.len() + pools.projects.len() <= ChildId::INSTANCES.len());
     }
 }
@@ -144,7 +135,7 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
     let Some(&slot) = ChildId::INSTANCES.iter().rev().nth(index) else {
         return Placement::Full;
     };
-    let (grant, source) = match STATE.with_borrow(|s| {
+    let grant = match STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
         let workers = state.pools.workers.as_ref().unwrap();
         if let Some(claim) = workers.claims.get(index) {
@@ -175,17 +166,11 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
         if index != workers.claims.len() {
             return Err(Placement::Busy);
         }
-        let source = if state.pools.empty_spare() {
-            super::super::Origin::StandbyWorker
-        } else {
-            if workers.creation_debit(&state.pools) + CREATION_CYCLES
-                > workers.grant.creation_budget
-            {
-                return Err(Placement::GrowthRefused);
-            }
-            super::super::Origin::Placement
-        };
-        Ok((workers.grant.clone(), source))
+        state.pools.admit_growth(
+            ChildId::INSTANCES.into_iter().rev().take(index),
+            workers.grant.creation_budget,
+        )?;
+        Ok(workers.grant.clone())
     }) {
         Ok(grant) => grant,
         Err(outcome) => return outcome,
@@ -195,7 +180,7 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
         return Placement::GrowthRefused;
     }
     let Some(generation) = create(
-        source,
+        super::super::Origin::Placement,
         slot,
         grant.reference,
         grant.arguments,
@@ -216,7 +201,6 @@ pub fn worker(ordinal: u8, reserve: bool) -> Placement {
                 generation,
                 principal: None,
             });
-        super::standby::reserve(&mut state.pools, slot, generation);
         state.pool.set(state.pools.encode());
     });
     Placement::Pending(Allocation {

@@ -64,6 +64,14 @@ pub(super) fn validate_closures(
     drained: impl Fn(Principal, &[u8; 32]) -> bool,
 ) {
     let issuer = Issuer::load(&state.role_key);
+    for r in state.pools.retirements.values() {
+        let target = r.target();
+        assert_eq!(
+            issuer.deadline(target.shard, &target.allocation.generation),
+            Some(r.proof_deadline),
+            "retirement must retain original issuer deadline"
+        );
+    }
     assert!(
         issuer
             .closed
@@ -225,12 +233,19 @@ pub(super) fn deadline(subject: Principal, generation: &[u8; 32]) -> Option<u64>
 /// # Errors
 /// Refuses an open issuer or a stale generation.
 pub fn retirement_status(subject: Principal, generation: &Bytes<32>) -> Result<(u64, u32), String> {
+    let generation: [u8; 32] = generation
+        .as_slice()
+        .try_into()
+        .map_err(|_| "invalid generation")?;
+    if let Some(deadline) = deadline(subject, &generation) {
+        // A closure is admitted only at zero and the draining generation cannot grow.
+        return Ok((deadline, 0));
+    }
     let assignment = sharding::assigned_role(subject)?;
-    let (live, _) = assignment.shard.ok_or("shared shard required")?;
+    assignment.shard.ok_or("shared shard required")?;
     let actual = assignment.generation;
-    if generation.as_slice() != actual {
+    if generation != actual {
         return Err("assignment changed".into());
     }
-    let deadline = deadline(subject, &actual).ok_or("role issuance remains open")?;
-    Ok((deadline, live))
+    Err("role issuance remains open".into())
 }

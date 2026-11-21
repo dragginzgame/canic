@@ -9,7 +9,10 @@ pub(crate) mod sharding;
 use crate::{Error, Network, Plan, PlanInput, Result, plan, store, supplier};
 pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
 use serde::{Deserialize, Serialize};
-pub use sharding::{InstancePoolConfig, PoolGrant, ShardPoolConfig, WorkerPoolConfig};
+pub use sharding::{
+    InstancePoolConfig, PoolGrant, ShardPoolConfig, StandbyImports, StandbyPoolConfig,
+    WorkerPoolConfig,
+};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -127,6 +130,9 @@ pub struct FleetDeclaration {
     /// Dedicated children owned by one keyed-instance hub.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instance_pool: Option<InstancePoolConfig>,
+    /// Subnet reserve maintenance and unassigned external candidates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standby_pool: Option<StandbyPoolConfig>,
     /// Allowance owned by the worker hub.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worker_pool: Option<WorkerPoolConfig>,
@@ -166,6 +172,9 @@ pub struct FleetConfig {
     /// Dedicated children owned by one keyed-instance hub.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub instance_pool: Option<InstancePoolConfig>,
+    /// Subnet reserve maintenance and unassigned external candidates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standby_pool: Option<canic_management_protocol::stored::StandbyPolicy>,
     /// Allowance owned by the worker hub.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub worker_pool: Option<WorkerPoolConfig>,
@@ -347,6 +356,7 @@ impl Config {
                         config.shard_pool.as_ref(),
                         config.instance_pool.as_ref(),
                         config.worker_pool.as_ref(),
+                        config.standby_policy().map_err(context)?.as_ref(),
                     )
                     .map_err(context)?;
                     if let Some(pool) = &config.shard_pool {
@@ -420,6 +430,13 @@ impl Config {
 }
 
 impl FleetDeclaration {
+    fn standby_policy(&self) -> Result<Option<canic_management_protocol::stored::StandbyPolicy>> {
+        self.standby_pool
+            .as_ref()
+            .map(|pool| pool.resolve(&self.network))
+            .transpose()
+    }
+
     /// Bind this ephemeral declaration in memory to the current simulator and its journal.
     /// # Errors
     /// Refuses persistent targets, existing bindings and relative journal paths.
@@ -457,6 +474,7 @@ impl AppConfig {
             role_receivers: fleet.role_receivers.clone(),
             subnet_child_limit: fleet.subnet_child_limit,
             instance_pool: fleet.instance_pool.clone(),
+            standby_pool: fleet.standby_policy()?,
             worker_pool: fleet.worker_pool.clone(),
             shard_pool: fleet.shard_pool.clone(),
             auth: fleet.auth.clone(),
@@ -495,6 +513,24 @@ impl AppConfig {
                         ..Default::default()
                     },
                 );
+            }
+        }
+        if let Some(policy) = &fleet.standby_pool {
+            let slot = canisters
+                .entry(policy.root.clone())
+                .or_insert_with(|| CanisterConfig {
+                    role: Some("root".into()),
+                    id: fleet
+                        .canisters
+                        .get(&policy.root)
+                        .map(|binding| binding.id.clone()),
+                    ..Default::default()
+                });
+            if slot.role.as_deref() != Some("root") || slot.profile_manager {
+                return Err(Error::Invalid(format!(
+                    "standby_pool.root = {:?} requires the fleet Root",
+                    policy.root
+                )));
             }
         }
         if let Some(slot) = fleet
@@ -571,6 +607,7 @@ impl FleetConfig {
             self.shard_pool.as_ref(),
             self.instance_pool.as_ref(),
             self.worker_pool.as_ref(),
+            self.standby_pool.as_ref(),
         )?;
         if let Some(pool) = &self.worker_pool {
             pool.validate(
@@ -963,6 +1000,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
                 role_receivers: vec![],
                 subnet_child_limit: None,
                 instance_pool: None,
+                standby_pool: None,
                 worker_pool: None,
                 shard_pool: None,
                 auth: Vec::new(),

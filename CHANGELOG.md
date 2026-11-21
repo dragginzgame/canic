@@ -1,5 +1,72 @@
 # Changelog
 
+## [0.253.0] - 2026-11-21
+
+A hub can call `Index::acknowledged_children(role)` to enumerate its direct children locally, including unnamed shards that confirmed directory delivery. The lookup survives reopening the index. [Canic #71](https://github.com/dragginzgame/canic/issues/71)
+
+Set `standby_pool.min_available_spares` once for the subnet fleet. `canic fleet show` and `canic fleet plan` display that configured target. Fleet show also queries Root for ready spares and refill status. All Root-managed child installs claim a ready spare before issuing a paid create, subject to their existing placement and install approvals.
+
+A fleet’s `standby_pool` can keep a minimum number of available canisters,
+bound automatic creations by count and expiry, and accept named surplus
+canisters after verified handoff and a two-hour quarantine. The
+[Miner Pool instructions](apps/examples/miner-pool/DESIGN.md#keeping-spare-canisters-ready)
+cover configuration, approval and imports. Each TOML import group declares its
+network and an ordered array of canister principals. When the Registry places a candidate on a different subnet, Root reports the candidate, its subnet and the required subnet. Import errors also identify installed code, a stopped candidate or the cycle shortfall.
+
+```sh
+# Review a fleet with standby_pool configured, then inspect its installed Root.
+canic fleet show
+canic --json fleet plan --identity "$IDENTITY"
+canic fleet call --canister root --identity "$IDENTITY" inspect-standby
+# Import an approved surplus principal into the selected local fleet.
+canic fleet call --canister root --identity "$IDENTITY" import-standby "$PRINCIPAL"
+make miner-test  # Installed reserve, growth and handoff on the local simulator.
+```
+
+Two same-subnet fleets can hand off an empty spare. First approve its import
+on the destination with the source as `previous_root`. Use each fleet's own
+controller identity and the same absolute dispatch deadline on every export.
+
+```sh
+canic fleet call --fleet "$SOURCE" --canister root --identity "$SOURCE_OWNER" export-standby "$SPARE" "$DEST_ROOT" "$DEADLINE_NS"
+canic fleet call --fleet "$DEST" --canister root --identity "$DEST_OWNER" import-standby "$SPARE"
+canic fleet call --fleet "$SOURCE" --canister root --identity "$SOURCE_OWNER" export-standby "$SPARE" "$DEST_ROOT" "$DEADLINE_NS"
+```
+
+A role-enabled Root can return a drained shared shard to its fleet’s standby
+pool. The controller approves the original allocation, dormant Store release,
+minimum balance and deadline. Repeat the exact approval to advance or observe
+the operation. A worker can then reuse the principal under a fresh generation.
+The `inspect_standby` Wire contract moves to v3 to include transfer progress and larger retained inventories. Each inventory row identifies
+its source (manual refill, automatic refill, external import or retired shard). Rebuild its clients with Root.
+
+```sh
+# On a role-enabled fleet, after drain, exact placement release and issuance closure.
+canic fleet call --canister root retire-shard "$APPROVAL"
+canic fleet call --canister root inspect-standby
+# Exercise the full handover with the prepared local simulator.
+bash scripts/dev/test-store.sh directory
+```
+
+Fresh Roots use one journal format (CUJC) as the fleet grows. An upgrade from
+a pre-cut journal is refused. Keep that Root and its outstanding operations
+under its original executable. Start a new fleet with a fresh Root.
+
+```sh
+# With Rust and the prepared local simulator, check refusal and fleet growth.
+bash scripts/dev/test-root.sh storage_reopen::
+bash scripts/dev/test-store.sh sharding
+```
+
+Canic and its qualification workspace use IC DB 0.26.8. When a build selects
+both Canic endpoint inspection and the IC DB adapter, inspection can describe
+DB types such as `ic_db::Ulid` and `ic_db::QueryCursor` through IC DB’s Wire feature.
+
+```sh
+canic app build --config apps/examples/user-directory/canic.toml
+make check-wire-endpoints  # Verify the reviewed hub and shard contracts.
+```
+
 ## [0.252.0] - 2026-11-21
 
 DB-backed Auth receivers now use one Wasm for both fleet storage policies.

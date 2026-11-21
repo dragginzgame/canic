@@ -51,6 +51,23 @@ pub(crate) fn pool_preview<'a>(
         )
         .unwrap();
     }
+    if let Some(p) = &selected.config.standby_pool {
+        writeln!(
+            text,
+            "Min available spares: {} (subnet fleet) · at most {} automatic creations · deadline {} Unix ns",
+            p.minimum_available, p.maximum_creations, p.expires_at_ns
+        )
+        .unwrap();
+        for candidate in &p.imports {
+            let id = &candidate.principal;
+            writeln!(
+                text,
+                "  Import {id} · minimum {} cycles",
+                p.minimum_import_cycles
+            )
+            .unwrap();
+        }
+    }
     for change in increases {
         use canic_management_protocol::stored::IncreasePool;
         let (pool, old, new) = match &change.approval {

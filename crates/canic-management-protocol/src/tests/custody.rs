@@ -153,7 +153,7 @@ fn complete_root_custody_fits_combined_budget() {
         .unwrap(),
         history
     );
-    // Same tuple shape as Root's CUJ9 payload, including both full child journals.
+    // Same tuple shape as Root's CUJC payload, including both full child journals.
     // The existing checked journal lease must fit every admitted record at its worst field sizes.
     let child_journal = (
         &child.creation,

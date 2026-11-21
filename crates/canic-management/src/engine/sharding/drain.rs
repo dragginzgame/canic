@@ -35,7 +35,10 @@ pub fn inspect_shard(
         let ledger = pools.shards.as_ref().ok_or("missing shard pool")?;
         let slot = ChildId::SHARDS
             .into_iter()
-            .find(|s| ledger.principals[s.index()].as_deref() == Some(principal.as_str()))
+            .find(|s| {
+                !pools.archived(*s)
+                    && ledger.principals[s.index()].as_deref() == Some(principal.as_str())
+            })
             .ok_or("unknown shard")?;
         Ok(canic::sharding::ShardStatus {
             target: ShardTarget {

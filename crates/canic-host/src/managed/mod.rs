@@ -276,7 +276,11 @@ fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) -> Result<(
     if status.approval.as_ref() != Some(&approval(plan)?)
         || status.phase == Phase::Empty
         || status.attempts.iter().any(|count| *count > 1)
-        || (status.worker.is_some() && status.attempts[0] != 1)
+        || (status.worker.is_some()
+            && status.attempts[0] == 0
+            && (status.requests[0].is_some()
+                || status.creation_refund.is_some()
+                || matches!(status.phase, Phase::Scheduled | Phase::CreateIssued)))
         || status
             .observed_module
             .as_ref()
@@ -284,7 +288,7 @@ fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) -> Result<(
         || (status.phase == Phase::Ready
             && (status.worker.is_none()
                 || status.observed_module.is_none()
-                || status.attempts != [1; 3]
+                || status.attempts[1..] != [1; 2]
                 || status.failure.is_some()))
     {
         return Err(Error::Invalid(
@@ -315,6 +319,7 @@ fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) -> Result<(
                 .iter()
                 .zip(status.requests)
                 .any(|(old, new)| old.is_some() && *old != new)
+            || (old.worker.is_some() && old.attempts[0] != status.attempts[0])
             || (old.creation_refund.is_some() && old.creation_refund != status.creation_refund)
             || (old.observed_module.is_some() && old.observed_module != status.observed_module)
             || (old.phase == Phase::Ready && status.phase != Phase::Ready))

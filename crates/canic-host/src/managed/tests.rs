@@ -306,6 +306,12 @@ fn managed_reply_preserves_binding_child_and_attempt_evidence() {
     };
     assert!(validate(&plan, Some(&scheduled), &ready).is_ok());
     assert!(validate(&plan, Some(&ready), &scheduled).is_err());
+    let mut reused = ready.clone();
+    reused.attempts[0] = 0;
+    assert!(validate(&plan, Some(&scheduled), &reused).is_ok());
+    assert!(validate(&plan, Some(&reused), &ready).is_err());
+    reused.creation_refund = Some(0);
+    assert!(validate(&plan, None, &reused).is_err());
     let mut changed = ready.clone();
     changed.worker = Some("r7inp-6aaaa-aaaaa-aaabq-cai".into());
     assert!(validate(&plan, Some(&ready), &changed).is_err());

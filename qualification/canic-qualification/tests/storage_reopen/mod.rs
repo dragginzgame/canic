@@ -134,6 +134,42 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
         .unwrap();
     assert_eq!(pic.get_stable_memory(fresh).await, stable);
     assert_eq!(status(pic, fresh).await.phase, Phase::Empty);
+    // Frozen empty two-slot CUJ9 record from d5f2906, in the current named cell.
+    let mut frozen = [0; 57];
+    frozen[..5].copy_from_slice(b"CUJ9\x02");
+    frozen[30] = 1; // Second child identity.
+    let mut old = stable.clone();
+    let offset = old.windows(4).position(|tag| tag == b"CUJC").unwrap();
+    assert_eq!(&old[offset + 4..offset + frozen.len()], &frozen[4..]);
+    old[offset..offset + frozen.len()].copy_from_slice(&frozen);
+    pic.set_stable_memory(fresh, old.clone(), BlobCompression::NoCompression)
+        .await;
+    let refusal = canic_qualification::upgrade_stopped(
+        pic,
+        fresh,
+        children::artifact("maintenance.wasm"),
+        vec![],
+        None,
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        refusal
+            .reject_message
+            .contains("unsupported Root journal format"),
+        "{refusal:?}"
+    );
+    pic.advance_time(Duration::from_secs(11)).await;
+    settle(pic).await;
+    assert_eq!(
+        pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
+        count
+    );
+    assert_eq!(
+        pic.canister_status(fresh, None).await.unwrap().module_hash,
+        Some(digest(&current).to_vec())
+    );
+    assert!(pic.get_stable_memory(fresh).await == old);
     let mut corrupt = stable;
     corrupt[0] ^= 0xff;
     // Administrative fixture injection only; product code has no raw backing path.

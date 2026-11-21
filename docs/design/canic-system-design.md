@@ -1078,15 +1078,15 @@ preserve existing child identities, signed attempts and retained custody through
 an explicitly qualified migration; numeric position must never silently reassign
 an existing allocation. Reusable empty capacity remains a separate owner contract.
 
-Root now stores child journals and artifact custody as bounded, ordered records
-with explicit numeric identities (CUJ8/CUA4), within the original two Storage
-allocations. Opening historical positional formats maps their positions exactly
-once, validates both stores, then commits both collection payloads in the upgrade
-message. Missing, duplicate, reordered or unsupported identities refuse; a load
-failure never initializes replacement state. Older executables refuse the new
-format. This storage migration leaves request/pin encodings and the two-child
-admission ceiling unchanged; expanding complete custody and its Host consumers
-is still required before admitting additional children.
+Root writes CUJC for every child journal layout, from the two ordinary children
+through sparse shard and project slots. Each bounded, ordered record carries its
+stable numeric child identity. Growth preserves existing identities and retained
+creation, upgrade and Store evidence. This reuses the legacy placement findings
+and pinned regression paths in the shared and dedicated placement discussion below.
+Root creates the journal on fresh installation and requires CUJC on reopen.
+Pre-cut Roots keep their existing approvals, stop requests and installation
+outcomes under their original executable. A new fleet starts with a fresh Root.
+A refused upgrade preserves the old state and grants no replacement effect.
 
 Host projects the historical complete Root response formats into one identity-keyed
 view, shared by child recovery and Root maintenance. The projection retains empty
@@ -1547,7 +1547,7 @@ application request key. `lookup_instance(root, key)` observes the same claim
 after a lost reply. First admission retains the key and Store-backed creation
 together. The initial two dedicated child identities (2 and 3) share the engine's existing
 storage leases and timers. The first accepted creation writes the extended
-journal, artifact and placement formats. Ordinary two-slot request decoding
+artifact and placement formats. Ordinary two-slot request decoding
 continues to reject these identities. The installed witness recovers both
 projects and the full shared pool after a Root upgrade.
 
@@ -1736,12 +1736,29 @@ cannot release a single application key.
 
 After drain, use dormancy only while outstanding role proofs require a wait.
 Root retains the original generation, closure deadline and retirement evidence
-outside the child. The dormant child has no renewal timer or outgoing work.
+outside the child. Its issuer records closure time plus the full two-hour proof
+lifetime for that principal and generation. This bounds every previous proof
+without a stable write on each renewal. Replaying closure returns the original
+deadline. The dormant child has no renewal timer or outgoing work.
 When Root can establish that no old proof remains usable and the release
 conditions below hold, it uninstalls the code and verifies the result before
 admitting the principal to the [standby pool](#release-to-reusable-capacity).
 A retired child with no outstanding exposure can go directly through uninstall
 and verification. A missing proof record leaves eligibility unresolved.
+
+For a managed shared shard, the controller submits one `retire-shard`
+approval binding Root, principal, slot, original generation, minimum remaining
+cycles, absolute deadline and an immutable dormant release in the pool’s Store.
+Installing that release erases the application state. Root requires an empty
+draining allocation with issuance already closed. It pins the release, checks
+the installed module and sole controller, then verifies the dormant receipt.
+At or after proof expiry it can stop and uninstall the canister, verify empty
+code and snapshot state, and restart it. Only the final running, funded observation
+admits the principal to standby. The approval must outlast proof expiry and may
+extend at most ten minutes beyond the later of expiry and initial approval.
+Retry with the same approval. An expired dispatch window leaves unresolved work
+in Root custody. Reassignment keeps the original physical slot and issues a
+fresh allocation generation.
 
 The supplied `canic-dormant` Wasm is built independently like Root. It accepts
 one installation binding with the original generation and deadline, checks its own
@@ -2059,9 +2076,8 @@ callback faults qualify recovery through observation without repeating stop.
 Root replacement preserves that record. Stopped status under the approved old
 code and sole Root control establishes the drain boundary, even when observed
 after the dispatch deadline. This does not rely on canister-version arithmetic.
-The CUJ9 journal loads recognized predecessors, including CUJ6/CUJ7/CUJ8, without inventing
-maintenance authority. Current and completed attempts remain in the original
-checked allocation. Existing child-only reads refuse Store custody; after a second
+The CUJC journal retains current and completed attempts in the original checked
+allocation. Existing child-only reads refuse Store custody; after a second
 attempt, full-history observation is required so Root maintenance cannot omit any
 predecessor. Older executables reject the new journal rather than losing history.
 
@@ -2073,7 +2089,7 @@ progress and shared pins participate. Strict key progression, unchanged counters
 matching release count and an explicit end page prevent incomplete enumeration.
 Concurrent responses to one cursor can commit only once, and Root replacement
 preserves progress. This is a metadata preservation boundary, not payload hashing
-or a cache snapshot. Old CUJ5 attempts load without this evidence; already-stopped
+or a cache snapshot. The current Root refuses CUJ5 journals. Already-stopped
 records and Stores without the new observation cannot acquire it by assumption.
 
 New attempts select Store 0.2.3's explicit active/removed entry and defined
@@ -2082,10 +2098,8 @@ first page; its cursor retains the removed flag, and its digest has a separate
 domain including the entry kind. Historical attempts retain method 113, their
 original digest and name/version ordering, including an existing refusal. Their
 Wire discriminants and Host JSON encodings stay exact. Versioned evidence uses a
-new discriminant rejected by historical readers; CUJ9 prevents an older executable
-from dropping that evidence. No endpoint probing or mirrored catalog is added.
-Existing fleets must upgrade Store to 0.2.3 using their old Root before installing
-the new Root. Fresh attempts require method 117; missing support blocks before
+new discriminant rejected by historical readers; CUJC preserves that evidence across supported Root
+upgrades. Fresh attempts require method 117; missing support blocks before
 stop without falling back.
 
 Root's separate `store_removal` contract forwards one exact deletion or cancellation
@@ -2537,11 +2551,70 @@ Claim it for a worker, install the approved release, drain and release it, then
 install another approved release on the same principal with a fresh generation.
 Root reopens before and after reuse. Two concurrent calls for the same
 growth request resolve the fresh generation under a zero creation budget.
-A protected snapshot blocks reset. A further fixture should interrupt the
-uninstall callback and race two different destination claims for the last spare. Qualify cross-fleet custody transfer separately. Any automatic refill
+A protected snapshot blocks reset. The installed reset fixture traps Root’s
+uninstall callback, observes the empty module and reopens Root with the
+original issued intent. Finishing and replaying reset leaves one available
+principal. Two distinct worker ordinals queued for the sole spare under one
+grant yield one installation. Worker admission requires sequential ordinals.
+Qualify cross-fleet custody transfer separately. Any automatic refill
 must wake on retained demand and quiesce at target. The
 [legacy maintenance study](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/docs/design/ideas/demand-driven-canister-pool-maintenance/design.md)
 documents the cost of polling a healthy pool.
+
+#### Standby minimum, replenishment and surplus imports
+
+The fleet operator needs three flows: establish a minimum available inventory,
+replenish it after allocations, and contribute specific surplus principals.
+Use one fleet-level `min_available_spares` for both initial fill and replenishment.
+All newly admitted Root-managed child installs share this inventory, including permanent children, keyed instances, shards and workers. Retain the exact spare before scheduling install. If there is no spare, only the placement’s original paid creation authority may fund a new canister. Root exposes aggregate counts and refill status for unsigned fleet observation. Individual inventory records remain protected.
+Count claimable entries against that target. An issued creation reserves its
+debit and slot, and covers one outstanding deficit until its outcome is known.
+The subnet limit still counts held, allocated and uncertain capacity together.
+Declaring a target alone cannot spend cycles. Exact imported principals and
+returned assets can satisfy demand without a creation debit.
+
+Legacy `377fbce` retained Root and sequence for every creation and tested that
+an unresolved expiry never authorizes a retry
+(`canic-control-plane/src/workflow/canister_pool/refill/tests`). Its
+`canister_pool/capacity_import` workflow reserved exact candidates before
+controller handoff and checked destination and eligibility again across awaits.
+Keep both protections. In the rewrite a fleet has one managed subnet Root;
+the existing management create journal owns paid dispatch. The legacy
+maintenance study measured 312 no-work checks on a healthy pool. Reconstruct
+demand on Root reopen and rearm on inventory changes; a healthy fleet should
+leave its refill timer idle.
+
+A configured sharding Root accepts the minimum, lifetime `maximum_creations`,
+absolute `expires_at_ns`, `minimum_import_cycles` and exact `imports` through
+the controller’s `configure_standby` approval. Each paid creation spends one
+count at the fixed Canic creation debit before dispatch. A lost creation reply
+remains issued. Replaying the approval can wake a funded deficit after a manual
+cycles deposit. The operator may append principals with the original terms,
+including after the spending deadline. Prior approvals cannot remove candidates
+or refresh the spending allowance. Each pending import occupies a physical slot.
+Only a claimable asset or an issued creation covers the refill target.
+
+In `canic.toml`, each standby import group names its network and lists its
+canister principals in order. Host rejects a missing or mismatched network
+before planning, then expands the groups into the existing Root approval.
+An operator who knows the previous fleet declares its `previous_root` on the group.
+That actual Root must call `import_standby(principal)` on the destination to
+release the candidate. The operator owns the provenance declaration; Canic
+cannot discover all prior fleets from current canister status. For a managed export the source controller names one claimable spare and one
+destination Root on the same subnet. The source retains that pair, excludes the
+spare from claims, and continues counting it while transfer is pending. Only
+after the destination acknowledges its named reservation may the source issue
+the controller change once. The destination controller verifies custody through
+the existing import operation. Quarantine or later evidence of its admission
+lets the source release its slot. Missing replies permit observation only after
+dispatch. A retained export receipt prevents local reuse or a second export. For surplus
+of unknown origin, the existing controller transfers the empty canister to the
+destination Root after the reservation. The destination never erases a candidate.
+It reads placement for both principals from the fixed NNS Registry, then checks
+snapshot inventory, snapshot bytes, sole controller, empty module, running state
+and balance. This first successful observation starts a two-hour proof window.
+Calling again after the cutoff repeats the observations and admits the principal
+exactly once. The cutoff and spent allowance survive Root upgrade.
 
 For assets with outstanding role proofs, the default wait and optional
 destination-bound early approval follow the [role admission contract](#role-admission-for-dynamic-children).

@@ -25,9 +25,8 @@ forwards exact deletion/cancellation through `store_removal`; Host retains their
 exact signed attempts under the existing journal lock. New Root attempts use Store 0.2.3's
 `observe_preservation_v2`: explicit active/removed entries ordered by name, active
 before removed, then version. The retained cursor includes that flag, and a
-separate digest domain commits to the entry kind. CUJ9 preserves both new and
-historical scan contracts; old attempts keep their exact digest and ordering,
-including any refusal. Old executables refuse the new journal format.
+separate digest domain commits to the entry kind. Pre-cut Roots retain their original scan contracts, digests and refusals.
+Fresh Roots use CUJC for the entire fleet. Old executables refuse the new journal format.
 
 The historical 0.2.3 rollout upgraded Store under the old Root before
 upgrading Root. New attempts require the versioned supplier endpoint; no probing
@@ -285,11 +284,9 @@ control. Root retains each immutable approval and stop-request commitment outsid
 Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CUJ9 journal preserves current and completed attempts across Root replacement
-and loads recognized predecessor journals, including CUJ6/CUJ7/CUJ8, without inventing or
-resetting authority. The 16 KiB journal ceiling within its original checked
-allocation is unchanged; full child and Store histories fit that budget.
-Older executables refuse CUJ9. Existing complete child-custody
+The CUJC journal preserves current and completed attempts across supported Root
+upgrades, within the existing 16 KiB ceiling. A pre-cut Root keeps its original
+executable and evidence. Existing complete child-custody
 observations refuse any retained Store maintenance, including completion,
 preventing the current Host Root-maintenance path from omitting it.
 Run `bash scripts/dev/test-store.sh quiescence` for the installed proof.

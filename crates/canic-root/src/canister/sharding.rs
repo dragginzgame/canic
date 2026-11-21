@@ -260,12 +260,12 @@ async fn refill_standby(
 }
 
 // inspect_standby
-// Read original refill and allocation custody.
+// Read original refill, allocation and transfer custody.
 // guard  : Root controller
-// limits : default request, 4096-byte reply
+// limits : default request, 16384-byte reply
 #[canic::update(contract = canic::sharding::standby::InspectStandby, guard = controller)]
 fn inspect_standby() -> Vec<(
-    canic::sharding::standby::Refill,
+    canic::sharding::standby::Source,
     canic::sharding::standby::Asset,
 )> {
     sharding::standby::inspect()
@@ -293,4 +293,83 @@ async fn reset_worker(
     #[cfg(not(feature = "auth"))]
     let admit_receiver = |_| Ok(());
     sharding::standby::reset(target, deadline, admit_receiver).await
+}
+
+// retire_shard
+// Advance the approved dormant installation or verify return after proof expiry.
+// guard  : Root controller
+// limits : stored request limits, default reply
+#[cfg(feature = "role-issuer")]
+#[canic::update(contract = stored::RetireShard, guard = controller)]
+async fn retire_shard(
+    input: stored::Stage<stored::ShardRetirement>,
+) -> Result<stored::RetirementPhase, String> {
+    #[cfg(feature = "auth")]
+    let grant = crate::auth::require_no_worker_grant;
+    #[cfg(not(feature = "auth"))]
+    let grant = |_| Ok(());
+    sharding::standby::retire(input, grant).await
+}
+
+// configure_standby
+// Retain the reserve policy and start bounded fill.
+// guard  : Root controller
+// limits : stored request, default reply
+#[canic::update(contract = stored::ConfigureStandby, guard = controller)]
+fn configure_standby(policy: stored::StandbyPolicy) -> Result<(), String> {
+    #[cfg(feature = "auth")]
+    for text in &policy.imports {
+        crate::auth::require_no_worker_grant(
+            text.principal
+                .parse()
+                .map_err(|_| "invalid import principal")?,
+        )?;
+    }
+    sharding::standby::policy::configure(policy)
+}
+
+// import_standby
+// Observe an approved external handoff or finish its proof quarantine.
+// guard  : controller or declared former Root; exact principal checked in handler
+// limits : default Wire
+#[canic::update(contract = canic::sharding::standby::ImportStandby, guard = sharding::standby::policy::import_caller)]
+async fn import_standby(
+    id: ic_platform_types::Principal,
+) -> Result<canic::sharding::standby::Asset, String> {
+    sharding::standby::policy::import(id).await
+}
+
+// export_standby
+// Reserve one empty spare and hand it to its named destination Root.
+// guard  : Root controller
+// limits : default Wire
+#[canic::update(contract = canic::sharding::standby::ExportStandby, guard = controller)]
+async fn export_standby(
+    input: (
+        ic_platform_types::Principal,
+        ic_platform_types::Principal,
+        u64,
+    ),
+) -> Result<canic::sharding::standby::TransferPhase, String> {
+    sharding::standby::transfer::export(input.0, input.1, input.2).await
+}
+
+// standby_handoff_status
+// Report the destination's retained import state to its declared former Root.
+// guard  : exact former Root for this principal
+// limits : default Wire
+#[canic::update(contract = canic::sharding::standby::HandoffStatus, guard = sharding::standby::policy::import_caller)]
+fn standby_handoff_status(
+    id: ic_platform_types::Principal,
+) -> Result<canic::sharding::standby::Asset, String> {
+    sharding::standby::policy::handoff_status(id)
+}
+
+// spare_counts
+// Report the subnet fleet's aggregate ready count, target and refill availability.
+// guard  : public
+// limits : default Wire
+#[canic::query(contract = stored::ReadSpareCounts)]
+fn spare_counts() -> Option<stored::SpareCounts> {
+    sharding::standby::policy::spare_counts()
 }

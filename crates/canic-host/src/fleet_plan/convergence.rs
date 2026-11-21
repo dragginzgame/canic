@@ -53,6 +53,9 @@ pub enum FleetPlanning {
         /// Dedicated-instance grant.
         #[serde(skip_serializing_if = "Option::is_none")]
         instances: Option<Box<crate::PoolGrant<canic_management_protocol::stored::InstancePool>>>,
+        /// Subnet reserve approval and exact external principals.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        standby: Option<crate::PoolGrant<canic_management_protocol::stored::StandbyPolicy>>,
         /// Independently approved worker allowance.
         #[serde(skip_serializing_if = "Option::is_none")]
         workers: Option<Box<crate::PoolGrant<canic_management_protocol::stored::InstancePool>>>,

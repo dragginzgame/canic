@@ -49,6 +49,9 @@ enum Command {
         #[arg(value_parser = generation)]
         generation: [u8; 32],
     },
+    /// Advance an exact shard retirement using its approved Store release and balance floor (JSON).
+    #[cfg(feature = "role-issuer")]
+    RetireShard { approval: String },
     /// Stop new placements on the exact allocation returned by inspect-shard.
     #[cfg(feature = "sharding")]
     DrainShard {
@@ -57,6 +60,22 @@ enum Command {
         #[arg(value_parser = generation)]
         generation: [u8; 32],
     },
+    /// Approve the subnet ceiling from the reviewed fleet plan.
+    #[cfg(feature = "sharding")]
+    ConfigureCapacity { approval: String },
+    /// Approve the reserve policy from the reviewed fleet plan.
+    #[cfg(feature = "sharding")]
+    ConfigureStandby { approval: String },
+    /// Hand a claimable spare to the exact destination Root.
+    #[cfg(feature = "sharding")]
+    ExportStandby {
+        principal: Principal,
+        destination: Principal,
+        expires_at_ns: u64,
+    },
+    /// Observe an exact external handoff and verify its proof quarantine.
+    #[cfg(feature = "sharding")]
+    ImportStandby { principal: Principal },
     /// Observe the standby inventory and the exact worker allocation holding each spare.
     #[cfg(feature = "sharding")]
     InspectStandby,
@@ -125,6 +144,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             shard,
             ic_wire::Bytes::new(generation.to_vec()).expect("32-byte generation"),
         ))?,
+        #[cfg(feature = "role-issuer")]
+        Action::Encode {
+            command: Command::RetireShard { approval },
+        } => request::<canic_management_protocol::stored::RetireShard>(&serde_json::from_str(
+            &approval,
+        )?)?,
         Action::Encode {
             command: Command::ChildMetrics { slot, source },
         } => request::<ChildMetrics>(&(
@@ -169,6 +194,35 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             serde_json::from_str(&target)?,
             expires_at_ns,
         ))?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
+            command: Command::ConfigureCapacity { approval },
+        } => request::<canic_management_protocol::stored::ConfigureCapacity>(
+            &serde_json::from_str(&approval)?,
+        )?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
+            command: Command::ConfigureStandby { approval },
+        } => request::<canic_management_protocol::stored::ConfigureStandby>(
+            &serde_json::from_str(&approval)?,
+        )?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
+            command:
+                Command::ExportStandby {
+                    principal,
+                    destination,
+                    expires_at_ns,
+                },
+        } => request::<canic::sharding::standby::ExportStandby>(&(
+            principal,
+            destination,
+            expires_at_ns,
+        ))?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
+            command: Command::ImportStandby { principal },
+        } => request::<canic::sharding::standby::ImportStandby>(&principal)?,
         #[cfg(feature = "sharding")]
         Action::Encode {
             command: Command::InspectStandby,
@@ -252,6 +306,24 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
         return Ok(json!({"draining": true, "live_placements": reply?}));
     }
     #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic_management_protocol::stored::ConfigureCapacity::decode_reply(bytes) {
+        reply.map_err(|e| format!("capacity: {e:?}"))?;
+        return Ok(json!({"approved":true}));
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic_management_protocol::stored::ConfigureStandby::decode_reply(bytes) {
+        reply?;
+        return Ok(json!({"approved":true}));
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic::sharding::standby::ExportStandby::decode_reply(bytes) {
+        return Ok(serde_json::to_value(reply?)?);
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic::sharding::standby::ImportStandby::decode_reply(bytes) {
+        return Ok(serde_json::to_value(reply?)?);
+    }
+    #[cfg(feature = "sharding")]
     if let Ok(reply) = canic::sharding::standby::InspectStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply)?);
     }
@@ -267,6 +339,10 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     #[cfg(feature = "sharding")]
     if let Ok(reply) = canic::sharding::standby::ResetWorker::decode_reply(bytes) {
         return Ok(json!({"reset": reply?}));
+    }
+    #[cfg(feature = "role-issuer")]
+    if let Ok(reply) = canic_management_protocol::stored::RetireShard::decode_reply(bytes) {
+        return Ok(json!({"retirement":reply?}));
     }
     Err("unknown Root reply".into())
 }

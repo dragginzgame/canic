@@ -54,7 +54,7 @@ ic-auth.workspace = true
 ic-auth-protocol-types.workspace = true
 ic-host-process.workspace = true
 ic-platform-crypto.workspace = true
-ic-platform-protocol = { workspace = true, features = ["management-snapshots"] }
+ic-platform-protocol = { workspace = true, features = ["management-snapshots", "registry-placement"] }
 ic-testkit = { workspace = true, features = ["held-reply-fixtures"] }
 ic-wasm-store-protocol.workspace = true
 rustyline-async.workspace = true

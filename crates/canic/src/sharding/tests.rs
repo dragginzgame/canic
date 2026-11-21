@@ -77,7 +77,7 @@ fn keyed_methods_preserve_the_published_placement_frames() {
 }
 
 #[test]
-fn standby_inspection_can_return_eight_distinct_claimed_assets() {
+fn standby_inspection_covers_claimed_assets_and_retained_transfer_history() {
     use super::standby::{Asset, InspectStandby, Refill};
     use crate::method::Contract;
     use ic_platform_types::Principal;
@@ -85,12 +85,12 @@ fn standby_inspection_can_return_eight_distinct_claimed_assets() {
     let history = (0..8u8)
         .map(|sequence| {
             (
-                Refill {
+                super::standby::Source::Refill(Refill {
                     root,
                     sequence,
                     cycles: 1_000_000_000_000,
                     expires_at_ns: u64::MAX,
-                },
+                }),
                 Asset::Claimed(
                     Principal::from_slice(&[sequence; 29]),
                     super::Allocation {
@@ -101,6 +101,48 @@ fn standby_inspection_can_return_eight_distinct_claimed_assets() {
             )
         })
         .collect::<Vec<_>>();
-    let reply = InspectStandby::encode_reply(&history).unwrap();
-    assert_eq!(InspectStandby::decode_reply(&reply).unwrap(), history);
+    let retired = history
+        .iter()
+        .map(|(_, asset)| {
+            let Asset::Claimed(shard, allocation) = asset else {
+                unreachable!()
+            };
+            (
+                super::standby::Source::Shard(super::ShardTarget {
+                    shard: *shard,
+                    allocation: allocation.clone(),
+                }),
+                Asset::Reset(
+                    *shard,
+                    allocation.clone(),
+                    u64::MAX,
+                    super::standby::ResetPhase::StartIssued,
+                ),
+            )
+        })
+        .collect();
+    let exported = (0..32u8)
+        .map(|index| {
+            let spare = Principal::from_slice(&[index; 29]);
+            (
+                super::standby::Source::Shard(super::ShardTarget {
+                    shard: spare,
+                    allocation: super::Allocation {
+                        slot: u32::from(index),
+                        generation: [255; 32],
+                    },
+                }),
+                Asset::Transfer(
+                    spare,
+                    root,
+                    u64::MAX,
+                    super::standby::TransferPhase::Confirmed,
+                ),
+            )
+        })
+        .collect();
+    for rows in [history, retired, exported] {
+        let reply = InspectStandby::encode_reply(&rows).unwrap();
+        assert_eq!(InspectStandby::decode_reply(&reply).unwrap(), rows);
+    }
 }
