@@ -214,9 +214,17 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
         store_wasm,
     )
     .await;
-    let mut payload = vec![42; store::CHUNK_BYTES + 17];
+    // The installed Store 0.1.0 requires a manifest using its original chunk size.
+    let chunk_bytes = if historical_scan {
+        256 * 1024
+    } else {
+        store::CHUNK_BYTES
+    };
+    let mut payload = vec![42; chunk_bytes + 17];
     payload[..8].copy_from_slice(b"\0asm\x01\0\0\0");
-    let first = supplier.publish_bytes("first", &payload).await;
+    let first = supplier
+        .publish_with_chunks("greeting", "first", &payload, chunk_bytes)
+        .await;
     let alias = store::Manifest {
         release: store::Release {
             version: "alias".into(),

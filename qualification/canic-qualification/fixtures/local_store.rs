@@ -52,6 +52,17 @@ impl Client<'_> {
         version: &str,
         bytes: &[u8],
     ) -> store::Manifest {
+        self.publish_with_chunks(name, version, bytes, store::CHUNK_BYTES)
+            .await
+    }
+
+    pub(crate) async fn publish_with_chunks(
+        &self,
+        name: &str,
+        version: &str,
+        bytes: &[u8],
+        chunk_bytes: usize,
+    ) -> store::Manifest {
         let manifest = store::Manifest {
             release: store::Release {
                 name: name.into(),
@@ -59,10 +70,7 @@ impl Client<'_> {
             },
             hash: store::digest(bytes),
             bytes: bytes.len() as u64,
-            chunks: bytes
-                .chunks(store::CHUNK_BYTES)
-                .map(store::digest)
-                .collect(),
+            chunks: bytes.chunks(chunk_bytes).map(store::digest).collect(),
         };
         self.update::<_, Result<store::Status, store::Error>>(
             "prepare",
@@ -72,7 +80,7 @@ impl Client<'_> {
         )
         .await
         .unwrap();
-        for (index, bytes) in bytes.chunks(store::CHUNK_BYTES).enumerate() {
+        for (index, bytes) in bytes.chunks(chunk_bytes).enumerate() {
             self.update::<_, Result<store::Status, store::Error>>(
                 "put",
                 store::PUT,
