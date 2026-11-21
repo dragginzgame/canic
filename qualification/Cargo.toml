@@ -103,3 +103,7 @@ missing_panics_doc = "warn"
 must_use_candidate = "warn"
 too_many_lines = "allow"
 empty_line_after_doc_comments = "allow"
+
+# This recipient also exercises the bounded inline install and upgrade path.
+[profile.release.package.canic-directory-witness]
+strip = "symbols"

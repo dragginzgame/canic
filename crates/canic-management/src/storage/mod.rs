@@ -56,7 +56,9 @@ fn historical_or_complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
 const JOURNAL_TAG: &[u8; 4] = b"CUJD";
 const ARTIFACT_TAG: &[u8] = b"CUA2";
 pub(super) const JOURNAL_BYTES: usize = 65_536;
-pub(super) const ARTIFACT_BYTES: usize = 2 * MAX_WASM + 24;
+// Each extra empty record encodes its slot, inline variant and two empty byte vectors.
+const SLOT_FRAMING: usize = 4 * (ChildId::SLOT_COUNT - 2);
+pub(super) const ARTIFACT_BYTES: usize = 2 * MAX_WASM + 24 + SLOT_FRAMING;
 pub(super) const JOURNAL_KEY: &str = "manager.journal.v2";
 pub(super) const ARTIFACT_KEY: &str = "manager.artifacts.v1";
 #[cfg(feature = "sharding")]
@@ -303,9 +305,25 @@ impl Default for Artifacts {
     }
 }
 impl Artifacts {
+    fn limits(expanded_layout: bool) -> ic_wire::Limits {
+        if expanded_layout {
+            ic_wire::Limits {
+                bytes: ARTIFACT_LIMITS.bytes + SLOT_FRAMING,
+                ..ARTIFACT_LIMITS
+            }
+        } else {
+            ARTIFACT_LIMITS
+        }
+    }
+
     pub(super) fn fits(&self) -> bool {
         self.entries().is_ok_and(|entries| {
-            ic_wire::encoded_len(&entries, ic_wire::Encoding::Payload, ARTIFACT_LIMITS).is_ok()
+            ic_wire::encoded_len(
+                &entries,
+                ic_wire::Encoding::Payload,
+                Self::limits(expanded(&self.0)),
+            )
+            .is_ok()
         })
     }
 
@@ -363,7 +381,7 @@ impl Artifacts {
             ic_wire::encode(
                 &self.entries()?,
                 ic_wire::Encoding::Payload,
-                ARTIFACT_LIMITS,
+                Self::limits(expanded(&self.0)),
             )
             .map_err(|_| "identified child artifacts")?,
         );
@@ -379,8 +397,9 @@ impl Artifacts {
                 .or_else(|| bytes.strip_prefix(b"CUA5"))
                 .or_else(|| bytes.strip_prefix(b"CUA4"))
             {
+                let limits = Self::limits(bytes.starts_with(b"CUA7"));
                 let entries: Records<Artifact> =
-                    ic_wire::decode(payload, ic_wire::Encoding::Payload, ARTIFACT_LIMITS)
+                    ic_wire::decode(payload, ic_wire::Encoding::Payload, limits)
                         .map_err(|_| "identified child artifacts")?;
                 let expected = (!bytes.starts_with(b"CUA7"))
                     .then_some(if bytes.starts_with(b"CUA6") { 4 } else { 2 });

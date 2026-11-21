@@ -226,6 +226,7 @@ async fn historical_scan_keeps_its_refusal_and_digest_after_refused_root_upgrade
     assert!(matches!(status.preservation, wire::Scan::Legacy(_)));
     super::refuse_old_backing(&root).await;
     assert_eq!(maintenance_tests::observe(&root).await, status);
+    maintenance_tests::check_predecessor_custody(&root, &status).await;
     // Duplicate continuation cannot bypass the refused cursor or issue stop.
     assert_eq!(maintenance_tests::advance(&root, &approval).await, status);
     assert_eq!(maintenance_tests::activate(&root, &approval).await, status);

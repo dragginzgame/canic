@@ -293,8 +293,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     assert_eq!(both[0], migrated[0]);
     assert_eq!(both[1].creation.phase, Phase::Ready);
     assert_eq!(both[1].creation.attempts, [1; 3]);
-    let ids = both
-        .each_ref()
+    let ids = [&both[0], &both[1]]
         .map(|c| CanisterId::from_text(c.creation.worker.as_ref().unwrap()).unwrap());
     assert_ne!(ids[0], ids[1]);
     for child in ids {
@@ -472,7 +471,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     }
     let upgraded = read(pic, root).await;
     assert!(
-        upgraded
+        upgraded[..2]
             .iter()
             .all(|c| c.upgrades.len() == upgrade::MAX_UPGRADES)
     );
@@ -722,7 +721,16 @@ async fn child_admission_reserves_siblings_unissued_attachment() {
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     let evidence = read(pic, root).await;
-    assert!(evidence.iter().all(|c| c.creation.phase == Phase::Ready));
+    assert!(
+        evidence[..2]
+            .iter()
+            .all(|c| c.creation.phase == Phase::Ready)
+    );
+    assert!(
+        evidence[2..]
+            .iter()
+            .all(|c| c.creation == Status::default())
+    );
     assert!(pic.cycle_balance(root).await > u128::from(canic_management_protocol::RESERVE_CYCLES));
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,

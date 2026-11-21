@@ -51,6 +51,25 @@ pub(super) async fn observe(root: &Client<'_>) -> Status {
         .unwrap(),
         Some(retained.clone())
     );
+    retained
+}
+
+// The frozen Roots have a two-child Wire tuple. Decode their exact installed shape.
+pub(super) async fn check_predecessor_custody(root: &Client<'_>, expected: &Status) {
+    type Children = [management::custody::Custody; 2];
+    type Sources = [Option<management::stored::Sources>; 2];
+    let (_, operation): ((Children, Sources), Option<Status>) = root
+        .update(
+            "observe_root_custody",
+            management::custody::ROOT,
+            &(),
+            management::custody::ROOT_LIMITS,
+        )
+        .await;
+    assert_eq!(operation.as_ref(), Some(expected));
+}
+
+async fn check_current_custody(root: &Client<'_>, expected: &Status) {
     let complete: management::custody::Root = root
         .update(
             "observe_root_custody",
@@ -59,8 +78,7 @@ pub(super) async fn observe(root: &Client<'_>) -> Status {
             management::custody::ROOT_LIMITS,
         )
         .await;
-    assert_eq!(complete.store_operation.as_ref(), Some(&retained));
-    retained
+    assert_eq!(complete.store_operation.as_ref(), Some(expected));
 }
 
 pub(super) async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
@@ -308,6 +326,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     if historical_scan {
         super::refuse_old_backing(&root).await;
         assert_eq!(observe(&root).await, pending_upload);
+        check_predecessor_custody(&root, &pending_upload).await;
         assert_eq!(pic.get_stable_memory(supplier.id).await, before_store);
         assert_eq!(
             owner.close(Duration::from_secs(10)).await,
@@ -431,6 +450,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     quiescence_tests::child_stage(&root).await.unwrap(); // Completion releases the mutation fence.
     maintain(&root).await; // Later child work does not invalidate completed maintenance custody.
     assert_eq!(observe(&root).await, ready);
+    check_current_custody(&root, &ready).await;
     assert!(
         pic.update_call(
             root.id,
