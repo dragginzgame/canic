@@ -2549,7 +2549,7 @@ use install mode. Store prepares its IC chunk cache and Root passes hashes to
 `install_chunked_code`. Root retains the approval and receipt without copying
 Store-backed Wasm through its journal.
 
-[Funding policy (#78)](https://github.com/dragginzgame/canic/issues/78) determines
+[Canic #78](https://github.com/dragginzgame/canic/issues/78) determines
 who pays. Root attaches the creation cycles. Requester-funded work must cover
 its approved cost before Root spends or releases a spare. For a requester-funded
 spare, retain the current same-subnet creation fee with the allocation and
@@ -2557,8 +2557,8 @@ recover the same payment on retry. Account separately for the spare's operating
 balance. A requester's attached cycles set a maximum debit. For example, a
 5T attachment authorizes a debit up to 5T. Root must bind the payer, ceiling,
 fee and operating balance to the allocation and commit accepted cycles and
-the receipt in the same execution. An insufficient attachment cannot claim a
-spare or dispatch a create. Leave excess cycles unaccepted. A replay recovers
+the receipt in the same execution. A quote may hold a spare temporarily. An
+insufficient attachment cannot transfer it or dispatch a create. Leave excess cycles unaccepted. A replay recovers
 the original result and accepts zero additional cycles, including after an
 upgrade or a lost reply. An uncertain install retains the original charge and
 allocation for observation. If the verified operating balance plus the quoted
@@ -2569,12 +2569,40 @@ the creation fee or delivered a funded spare, retain the charge and principal
 with that allocation for recovery. Any refund requires separate operator
 approval. An install retry cannot charge for a second principal.
 
-Existing grants authorize Root-sponsored work. Requester-funded admission
-requires [incoming cycle acceptance](https://github.com/dragginzgame/ic-platform/issues/41)
-as well as the [fee lookup in Platform #39](https://github.com/dragginzgame/ic-platform/issues/39).
-The fleet's `top_up_children` list selects ongoing parent-to-child funding.
-It defaults to empty and applies independently of the original payer. Toko
-can sponsor `project_registry` while leaving its `project` children self-funded.
+New grants default to Root-sponsored work. Set `creation_payer = "requester"` on the pool to require reimbursement. The PLS2 ledger requires a fresh Root. Platform Runtime 0.23.25 supplies
+`cost_create_canister`, `msg_cycles_available` and `msg_cycles_accept` for
+requester-funded admission. Root currently records a fresh spare's principal
+without observing its working balance. A reimbursement quote requires an actual
+balance observation. The retained zero creation attachment on a reserve hit
+measures the cost of Root’s create dispatch alone.
+The operator chooses one creation payer per pool grant. All allocations under
+that grant are either Root-sponsored or requester-funded. For a requester-funded
+reserve hit, Root reserves the exact spare for the original request before
+observing its balance. The hub settles the quote with an unbounded-wait call to
+its retained Root. Retain the attachment and refund against the same request.
+A bounded-wait call can lose unaccepted cycles on `SYS_UNKNOWN`. [IC message execution properties 10 and 11](https://docs.internetcomputer.org/references/message-execution-properties/#property-10)
+
+At the grant deadline an unpaid reservation releases the spare and refuses late
+settlement. A charged allocation retains its principal and receipt for recovery.
+
+A fleet may declare an ongoing funding edge with
+`top_up_children = [{ child = "project_registry", below_cycles = "10.3T", amount_cycles = "0.1B" }]`.
+Both fields accept whole-cycle integers and the exact, case-sensitive quoted B, T and Q
+quantities used by legacy `377fbce` in `crates/canic-contracts/src/cycles`.
+Legacy `377fbce` checked the remaining child budget including unresolved grants
+before granting more cycles. [Legacy funding policy and regressions](https://github.com/dragginzgame/canic-legacy/tree/377fbce/crates/canic-core/src/domain/policy/pure/cycles_funding)
+
+The amounts here are examples. When the observed child balance is strictly below
+the threshold, the parent pays the fixed amount. A balance at the threshold
+requires no payment. Eligibility applies only to that direct edge. The original
+payer and allocation source have no bearing on later top-ups. Name-only entries
+from older configs declare eligibility without specifying an automated payment.
+Root can pay its directly installed named services. The operator binds the
+configured amounts, child principal, lifetime budget and deadline with
+`fleet canister plan-funding`, then submits that approval to Root. An exact
+retry preserves spent budget. Uncertain deposits close the grant and retain
+their exposure. Ongoing payments from an application parent still require
+that parent’s own spending authority. Further qualification is tracked in [Canic #78](https://github.com/dragginzgame/canic/issues/78).
 
 Keep Root as the management owner unless measured dispatch delay across
 independent pools warrants delegation. Measure time from approval to Root

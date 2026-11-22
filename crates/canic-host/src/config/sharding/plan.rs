@@ -155,6 +155,7 @@ pub(crate) fn preview(
                 reference: stored::Reference { store, manifest },
                 arguments,
                 max_instances: pool.max_instances,
+                creation_payer: pool.creation_payer,
                 creation_budget: pool.creation_budget,
                 expires_at_ns,
             },

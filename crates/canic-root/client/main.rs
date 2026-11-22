@@ -63,6 +63,12 @@ enum Command {
     /// Approve the subnet ceiling from the reviewed fleet plan.
     #[cfg(feature = "sharding")]
     ConfigureCapacity { approval: String },
+    /// Approve recurring top-ups or inspect the original approval.
+    #[cfg(feature = "sharding")]
+    ConfigureChildFunding { approval: String },
+    /// Stop future deposits to the named child.
+    #[cfg(feature = "sharding")]
+    StopChildFunding { child: Principal },
     /// Approve the reserve policy from the reviewed fleet plan.
     #[cfg(feature = "sharding")]
     ConfigureStandby { approval: String },
@@ -202,6 +208,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?,
         #[cfg(feature = "sharding")]
         Action::Encode {
+            command: Command::ConfigureChildFunding { approval },
+        } => request::<canic_management_protocol::stored::ConfigureChildFunding>(
+            &serde_json::from_str(&approval)?,
+        )?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
+            command: Command::StopChildFunding { child },
+        } => request::<canic_management_protocol::stored::StopChildFunding>(&child)?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
             command: Command::ConfigureStandby { approval },
         } => request::<canic_management_protocol::stored::ConfigureStandby>(
             &serde_json::from_str(&approval)?,
@@ -309,6 +325,15 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     if let Ok(reply) = canic_management_protocol::stored::ConfigureCapacity::decode_reply(bytes) {
         reply.map_err(|e| format!("capacity: {e:?}"))?;
         return Ok(json!({"approved":true}));
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic_management_protocol::stored::ConfigureChildFunding::decode_reply(bytes)
+    {
+        return Ok(serde_json::to_value(reply?)?);
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic_management_protocol::stored::StopChildFunding::decode_reply(bytes) {
+        return Ok(serde_json::to_value(reply?)?);
     }
     #[cfg(feature = "sharding")]
     if let Ok(reply) = canic_management_protocol::stored::ConfigureStandby::decode_reply(bytes) {

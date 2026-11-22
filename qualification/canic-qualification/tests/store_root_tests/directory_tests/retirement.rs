@@ -65,6 +65,7 @@ pub(super) async fn exercise(
         pool: "users".into(),
         max_shards: 1,
         keys_per_shard: 1,
+        creation_payer: Default::default(),
         creation_budget: if from_spare {
             0
         } else {
@@ -292,6 +293,7 @@ pub(super) async fn exercise(
         hub: pool.to_text(),
         component: "miner".into(),
         max_instances: 1,
+        creation_payer: Default::default(),
         creation_budget: 0,
         expires_at_ns: expires,
         reference: reference(miner),

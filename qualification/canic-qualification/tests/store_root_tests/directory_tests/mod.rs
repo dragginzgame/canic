@@ -80,6 +80,7 @@ async fn refused_delivery(
 }
 
 mod capacity;
+mod funding;
 mod peer;
 mod retirement;
 mod role_proof;
@@ -87,6 +88,7 @@ mod role_proof;
 enum Scenario {
     Capacity(u8),
     ThreeServices,
+    Funding,
     RoleProof,
     Retirement { from_spare: bool },
     BothHubs,
@@ -167,11 +169,17 @@ async fn standby_backed_shard_returns_to_its_original_inventory_row() {
     installed_publication(Scenario::Retirement { from_spare: true }).await;
 }
 
+#[tokio::test]
+async fn only_the_approved_direct_child_receives_recurring_funding() {
+    installed_publication(Scenario::Funding).await;
+}
+
 async fn installed_publication(scenario: Scenario) {
     let capacity = match scenario {
         Scenario::Capacity(limit) => Some(limit),
         Scenario::RoleProof => Some(4),
         Scenario::ThreeServices => Some(5),
+        Scenario::Funding => Some(2),
         Scenario::Retirement { .. } => Some(3),
         _ => None,
     };
@@ -180,6 +188,7 @@ async fn installed_publication(scenario: Scenario) {
     } else if matches!(
         scenario,
         Scenario::ThreeServices
+            | Scenario::Funding
             | Scenario::Capacity(_)
             | Scenario::StoppedChild
             | Scenario::StoppedHub
@@ -485,6 +494,15 @@ async fn installed_publication(scenario: Scenario) {
     }
     stage(ChildId::SECOND, named("project_hub")).await.unwrap();
     let project = ready(ChildId::SECOND).await;
+    if matches!(scenario, Scenario::Funding) {
+        funding::exercise(&root, project, user).await;
+        assert_eq!(
+            instance.close(Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        assert!(server.stop().unwrap().process.cleanup.is_empty());
+        return;
+    }
     if matches!(scenario, Scenario::ThreeServices) {
         let third = ChildId::ALL[2];
         stage(third, named("discovery_hub")).await.unwrap();

@@ -30,7 +30,7 @@ pub async fn call<M: Contract>(
     seconds: u32,
     input: &M::Input,
 ) -> Result<M::Output, CallError> {
-    submit::<M>(target, Wait::Bounded { seconds }, input).await
+    submit::<M>(target, Wait::Bounded { seconds }, input, 0).await
 }
 
 /// Submit once and wait without a caller-selected timeout.
@@ -40,17 +40,30 @@ pub async fn call_unbounded<M: Contract>(
     target: Principal,
     input: &M::Input,
 ) -> Result<M::Output, CallError> {
-    submit::<M>(target, Wait::Unbounded, input).await
+    submit::<M>(target, Wait::Unbounded, input, 0).await
+}
+
+/// Submit one paid call using guaranteed response delivery for unaccepted cycles.
+/// # Errors
+/// Returns the original submission, transport or Wire failure.
+pub async fn call_with_cycles<M: Contract>(
+    target: Principal,
+    input: &M::Input,
+    cycles: u128,
+) -> Result<M::Output, CallError> {
+    submit::<M>(target, Wait::Unbounded, input, cycles).await
 }
 
 async fn submit<M: Contract>(
     target: Principal,
     wait: Wait,
     input: &M::Input,
+    cycles: u128,
 ) -> Result<M::Output, CallError> {
     let request = M::encode_request(input).map_err(CallError::Request)?;
     let result = Call::new(target, M::NAME, wait)
         .owned_args(request)
+        .cycles(cycles)
         .execute()
         .await;
     decode_result::<M>(result)

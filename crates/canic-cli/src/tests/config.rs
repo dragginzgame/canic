@@ -1388,20 +1388,22 @@ parent = "project_registry"
 [apps.toko.fleets.local]
 network = { kind = "Local" }
 lifetime = "ephemeral"
-top_up_children = ["project_registry"]
+top_up_children = [{ child = "project_registry", below_cycles = 100, amount_cycles = 200 }]
 "#,
     )
     .unwrap();
     let Output::Text(text) = crate::catalog::canisters(&path, None, None, false).unwrap() else {
         panic!("expected fleet table");
     };
-    assert!(text.contains("Eligible for parent top-ups: root → project_registry\n"));
+    assert!(text.contains(
+        "Eligible for parent top-ups: root → project_registry (below 100 cycles, add 200)\n"
+    ));
     let Output::Json(json) = crate::catalog::canisters(&path, None, None, true).unwrap() else {
         panic!("expected declared configuration");
     };
     assert_eq!(
         json["configuration"]["config"]["top_up_children"],
-        serde_json::json!(["project_registry"])
+        serde_json::json!([{ "child": "project_registry", "below_cycles": 100, "amount_cycles": 200 }])
     );
     assert_eq!(
         json["configuration"]["config"]["canisters"]["project"]["parent"],

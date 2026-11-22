@@ -3,7 +3,7 @@ mod actor;
 #[cfg(test)]
 mod tests;
 
-pub use actor::{CallError, admit_request, call, call_unbounded};
+pub use actor::{CallError, admit_request, call, call_unbounded, call_with_cycles};
 
 #[doc(hidden)]
 pub use ic_wire as wire;

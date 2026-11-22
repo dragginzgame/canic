@@ -44,8 +44,8 @@ ex-miner-pool-hub = { path = "../apps/examples/miner-pool/hub" }
 ex-user-directory-hub = { path = "../apps/examples/user-directory/hub" }
 ex-user-directory-schema = { path = "../apps/examples/user-directory/schema" }
 ex-user-directory-shard = { path = "../apps/examples/user-directory/shard" }
-ic-auth = { version = "0.48.8", features = ["receiver-memory", "ed25519-verification"] }
-ic-auth-protocol-types = "0.43.0"
+ic-auth = { version = "0.49.0", features = ["receiver-memory", "ed25519-verification"] }
+ic-auth-protocol-types = "0.44.0"
 ic-backup = "0.105.5"
 ic-db = "0.27.0"
 ic-host-artifacts = { version = "0.80.3", default-features = false }

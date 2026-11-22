@@ -344,6 +344,20 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     serde_json::json!({"config_path":path,"configuration":selected,"deployed":false}),
                 )
             }
+            CanisterCommand::PlanFunding {
+                name,
+                budget_cycles,
+                expires_at_ns,
+                selection,
+            } => {
+                let path = selection.config.path(selection.app.as_deref())?;
+                let fleet = canic_host::load_config(&path)?
+                    .select(selection.app.as_deref(), selection.fleet.as_deref())?;
+                let approval = fleet
+                    .config
+                    .child_funding(name, *budget_cycles, *expires_at_ns)?;
+                Ok(serde_json::json!(approval))
+            }
             CanisterCommand::List { selection } => {
                 return catalog::canisters(
                     &selection.config.path(selection.app.as_deref())?,

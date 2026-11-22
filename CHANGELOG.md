@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.256.0] - 2026-11-22
+
+The product and qualification lockfiles select IC DB and its macros at 0.27.1.
+
+Canic adopts IC Auth 0.49.0. Session admission and read replies carry the
+issuer’s optional application bytes. Update browser clients alongside receivers
+for the revised Wire reply. Check an app’s reviewed contracts after updating.
+
+```sh
+canic app check-wire --config apps/examples/user-directory/canic.toml
+```
+
+Fleet config can declare a threshold and fixed top-up amount per direct child.
+For example, `top_up_children = [{ child = "project_registry", below_cycles = "10.3T", amount_cycles = "0.1B" }]`
+covers that registry only. Existing name-only entries retain their original
+eligibility. For a named service directly installed by Root, the operator can
+approve a lifetime budget and deadline. Root checks its balance once a minute.
+To fund the registry without subsidising project creation, set
+`creation_payer = "requester"` on the registry grant. Its hub first requests a
+quote, then attaches cycles to settle the exact allocation. Use a fresh Root
+for the PLS2 pool ledger and generate fresh pool approvals with the v2 grant frames.
+
+```sh
+# In a configured fleet, inspect the funding edges and their amounts.
+canic fleet canister list
+# For a bound registry, review the approval before submitting it as the controller.
+approval=$(canic fleet canister plan-funding project_registry --budget-cycles 2000000000000 --expires-at-ns "$DEADLINE_NS" --json)
+canic fleet call --canister root --identity "$IDENTITY" configure-child-funding "$approval"
+```
+
 ## [0.255.0] - 2026-11-22
 
 Canic’s DB adapter now accepts IC DB 0.27 schemas. The installed two-store

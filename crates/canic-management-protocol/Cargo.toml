@@ -16,6 +16,7 @@ backup = ["dep:canic", "dep:ic-platform-protocol"]
 [dependencies]
 canic = { workspace = true, features = ["recovery"], optional = true }
 ic-platform-protocol = { workspace = true, features = ["management-snapshots"], optional = true }
+ic-platform-types.workspace = true
 ic-wasm-store-protocol.workspace = true
 ic-wire.workspace = true
 serde.workspace = true

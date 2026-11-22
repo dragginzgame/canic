@@ -373,3 +373,36 @@ fn standby_handoff_status(
 fn spare_counts() -> Option<stored::SpareCounts> {
     sharding::standby::policy::spare_counts()
 }
+
+// configure_child_funding
+// Start fixed deposits below an approved balance or observe the original grant.
+// guard  : Root controller
+// limits : default Wire limits
+#[canic::update(contract = stored::ConfigureChildFunding, guard = controller)]
+fn configure_child_funding(
+    input: stored::ChildFunding,
+) -> Result<stored::ChildFundingStatus, String> {
+    sharding::funding::configure(input)
+}
+
+// stop_child_funding
+// Cancel future deposits while preserving charged and unresolved attempts.
+// guard  : Root controller
+// limits : default Wire limits
+#[canic::update(contract = stored::StopChildFunding, guard = controller)]
+fn stop_child_funding(
+    child: ic_platform_types::Principal,
+) -> Result<stored::ChildFundingStatus, String> {
+    sharding::funding::stop(child)
+}
+
+// fund_placement
+// Recover or pay for the original demand under a requester-funded grant.
+// guard  : exact approved hub checked before reading or changing any assignment
+// limits : 1 KiB request and reply
+#[canic::update(contract = canic::sharding::payment::FundPlacement)]
+async fn fund_placement(
+    input: (canic::sharding::payment::Demand, u128),
+) -> Result<canic::sharding::payment::Payment, String> {
+    sharding::payment::fund(input.0, input.1).await
+}

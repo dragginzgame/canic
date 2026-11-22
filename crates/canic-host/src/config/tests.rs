@@ -1497,6 +1497,7 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
             release: fleet.worker_pools[0].release.clone(),
             max_shards: 1,
             keys_per_shard: 3,
+            creation_payer: Default::default(),
             creation_budget: 0,
             expires_at_ns: Some(u64::MAX),
             install_args: None,
@@ -1574,11 +1575,105 @@ top_up_children = ["project_registry"]
     let path = directory().join("canic.toml");
     std::fs::write(&path, text).unwrap();
     let selected = load_config(&path).unwrap().select(None, None).unwrap();
-    assert_eq!(selected.config.top_up_children, ["project_registry"]);
+    assert_eq!(
+        selected.config.top_up_children[0].child(),
+        "project_registry"
+    );
+    assert!(
+        selected
+            .config
+            .child_funding("project_registry", 400, u64::MAX)
+            .is_err()
+    );
+    let bound = text.replace(
+        r#"["project_registry"]"#,
+        r#"[{ child = "project_registry", below_cycles = 100, amount_cycles = 200 }]"#,
+    ) + r#"
+[apps.toko.fleets.local.canisters]
+root = { id = "rrkah-fqaaa-aaaaa-aaaaq-cai" }
+project_registry = { id = "ryjl3-tyaaa-aaaaa-aaaba-cai" }
+"#;
+    std::fs::write(&path, &bound).unwrap();
+    let fleet = load_config(&path)
+        .unwrap()
+        .select(None, None)
+        .unwrap()
+        .config;
+    let rule = fleet
+        .child_funding("project_registry", 400, u64::MAX)
+        .unwrap();
+    assert_eq!(rule.parent.to_text(), "rrkah-fqaaa-aaaaa-aaaaq-cai");
+    assert_eq!(rule.child.to_text(), "ryjl3-tyaaa-aaaaa-aaaba-cai");
+    assert_eq!(
+        (rule.below_cycles, rule.amount_cycles, rule.budget_cycles),
+        (100, 200, 400)
+    );
+    assert!(
+        fleet
+            .child_funding("project_registry", 199, u64::MAX)
+            .is_err()
+    );
+    assert!(fleet.child_funding("project_registry", 400, 1).is_err());
+    assert!(fleet.child_funding("project", 400, u64::MAX).is_err());
+    for (quantity, cycles) in [
+        ("10.3T", 10_300_000_000_000),
+        ("0.1B", 100_000_000),
+        (".25Q", 250_000_000_000_000),
+        ("0.0000000010B", 1),
+        ("18446.744073709551615Q", u64::MAX),
+    ] {
+        let source = bound
+            .replace(
+                "below_cycles = 100",
+                &format!("below_cycles = \"{quantity}\""),
+            )
+            .replace(
+                "amount_cycles = 200",
+                &format!("amount_cycles = \"{quantity}\""),
+            );
+        std::fs::write(&path, source).unwrap();
+        let selected = load_config(&path).unwrap().select(None, None).unwrap();
+        let approval = selected
+            .config
+            .child_funding("project_registry", u64::MAX, u64::MAX)
+            .unwrap();
+        assert_eq!(
+            (approval.below_cycles, approval.amount_cycles),
+            (cycles, cycles)
+        );
+    }
     for (entries, error) in [
+        (
+            r#"{ child = "project", below_cycles = 0, amount_cycles = 200 }"#,
+            "below_cycles=0",
+        ),
+        (
+            r#"{ child = "project", below_cycles = 100, amount_cycles = 0 }"#,
+            "amount_cycles=0",
+        ),
+        (
+            r#"{ child = "project", below_cycles = "5t", amount_cycles = 1 }"#,
+            "uppercase B, T or Q",
+        ),
+        (
+            r#"{ child = "project", below_cycles = 1, amount_cycles = "0.0000000001B" }"#,
+            "precision is below one cycle",
+        ),
+        (
+            r#"{ child = "project", below_cycles = "18446.744073709551616Q", amount_cycles = 1 }"#,
+            "exceeds u64",
+        ),
+        (
+            r#"{ child = "project", below_cycles = "5e3B", amount_cycles = 1 }"#,
+            "unsigned decimal",
+        ),
         (r#""missing""#, "unknown component"),
         (r#""root""#, "no declared parent"),
         (r#""project", "project""#, "duplicate component"),
+        (
+            r#""project", { child = "project", below_cycles = 1, amount_cycles = 1 }"#,
+            "duplicate component",
+        ),
     ] {
         std::fs::write(
             &path,

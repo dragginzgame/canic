@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 root="$PWD"
 source_repo="${1:-../ic-auth}"
-revision=a05b5ddd4099a3f64b95deb173a0c16746d98ac5
+revision=d5382b197ec794b9f30943a3beb978cbaffe8321
 out="$root/target/auth-browser"
 mkdir -p "$out"
 scratch=$(mktemp -d "$out/source.XXXXXX")

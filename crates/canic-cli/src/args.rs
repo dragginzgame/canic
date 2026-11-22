@@ -449,6 +449,19 @@ pub(super) enum CanisterCommand {
         #[command(flatten)]
         selection: CanisterConfigArgs,
     },
+    /// Prepare a finite top-up approval from the declared direct funding edge.
+    PlanFunding {
+        /// Bound child component.
+        name: String,
+        /// Total cycles available to this child under this approval.
+        #[arg(long)]
+        budget_cycles: u64,
+        /// Exclusive deadline in Unix nanoseconds.
+        #[arg(long)]
+        expires_at_ns: u64,
+        #[command(flatten)]
+        selection: CanisterConfigArgs,
+    },
 }
 
 impl FleetCommand {

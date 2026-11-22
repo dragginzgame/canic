@@ -667,22 +667,43 @@ async fn pending_worker_growth_delivers_original_job_after_hub_reopen() {
         pic.advance_time(Duration::from_secs(1)).await;
         pic.tick().await;
     }
-    let bytes = pic
-        .query_call(
-            fleet.pool,
-            root.operator,
-            PoolReport::NAME,
-            PoolReport::encode_request(&()).unwrap(),
-        )
-        .await
-        .unwrap();
-    let report = PoolReport::decode_reply(&bytes).unwrap();
-    assert_eq!((report.round, report.goal, report.completed), (2, 0, 0));
-    let [worker] = report.workers.as_slice() else {
+    let report = async || {
+        let bytes = pic
+            .query_call(
+                fleet.pool,
+                root.operator,
+                PoolReport::NAME,
+                PoolReport::encode_request(&()).unwrap(),
+            )
+            .await
+            .unwrap();
+        PoolReport::decode_reply(&bytes).unwrap()
+    };
+    let parked = report().await;
+    assert_eq!((parked.round, parked.goal, parked.completed), (2, 0, 0));
+    let [worker] = parked.workers.as_slice() else {
         panic!("expected one worker")
     };
     assert_eq!((worker.last_batch, worker.attempts), (Some((1, 1)), 1));
     assert_eq!(worker.status, "parked");
+
+    // Reuse the retained route and dispatch one batch while Root is unavailable.
+    pic.stop_canister(root.id, Some(root.operator))
+        .await
+        .unwrap();
+    assert_eq!(tick(3, 1).await, "advanced");
+    assert_eq!(tick(3, 1).await, "settled");
+    let live = report().await;
+    let [same] = live.workers.as_slice() else {
+        panic!("expected the original worker")
+    };
+    assert_eq!(same.principal, worker.principal);
+    assert_eq!(same.allocation, worker.allocation);
+    assert_eq!(
+        (live.completed, same.last_batch, same.attempts),
+        (1, Some((3, 1)), 2)
+    );
+
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

@@ -13,7 +13,7 @@ pub(super) struct Workers {
 #[derive(Serialize, Deserialize)]
 pub(super) struct WorkerClaim {
     pub returned: bool,
-    pub paid: bool,
+    pub created: bool,
     pub slot: ChildId,
     pub generation: [u8; 32],
     pub principal: Option<String>,
@@ -45,7 +45,7 @@ pub(super) fn archive(state: &mut super::super::State, slot: ChildId, generation
     let mut artifacts = state.artifact.clone();
     let journal = std::mem::take(journals.0.get_mut(&slot).expect("original journal"));
     let artifact = std::mem::take(artifacts.0.get_mut(&slot).expect("original artifact"));
-    assert_eq!(journal.0.attempts[0], u8::from(claim.paid));
+    assert_eq!(journal.0.attempts[0], u8::from(claim.created));
     let bytes = ic_wire::encode(
         &(journal, artifact),
         ic_wire::Encoding::Payload,
@@ -67,8 +67,8 @@ impl Workers {
         self.claims.iter().filter(|claim| !claim.returned).count()
     }
 
-    fn debit(&self) -> u64 {
-        self.claims.iter().filter(|claim| claim.paid).count() as u64
+    pub(super) fn debit(&self) -> u64 {
+        self.claims.iter().filter(|claim| claim.created).count() as u64
             * canic_management_protocol::CREATION_CYCLES
     }
 
@@ -190,6 +190,15 @@ pub fn worker_hub() -> Result<(), &'static str> {
 /// Requires the approved hub and intact allocation custody.
 #[must_use]
 pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
+    resolve_worker(component, ordinal, reserve, None)
+}
+
+pub(super) fn resolve_worker(
+    component: &str,
+    ordinal: u8,
+    reserve: bool,
+    paid: Option<super::payment::Settlement>,
+) -> Placement {
     let index = usize::from(ordinal);
     let (grant, slot, origin) = match STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
@@ -223,11 +232,13 @@ pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
         if workers.live() >= usize::from(workers.grant.max_instances) {
             return Err(Placement::Full);
         }
-        let acquisition = state.pools.acquisition()?;
+
         if index != workers.claims.len() {
             return Err(Placement::Busy);
         }
-        let origin = acquisition.approve(
+        let origin = state.pools.source(
+            workers.grant.creation_payer,
+            paid,
             workers
                 .grant
                 .creation_budget
@@ -261,7 +272,7 @@ pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
     };
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
-        let paid = state.pools.standby_claim(slot).is_none();
+        let created = state.pools.standby_claim(slot).is_none();
         state
             .pools
             .workers
@@ -269,7 +280,7 @@ pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
             .unwrap()
             .claims
             .push(WorkerClaim {
-                paid,
+                created,
                 returned: false,
                 slot,
                 generation,

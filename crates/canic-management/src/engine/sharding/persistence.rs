@@ -17,7 +17,7 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
 
 impl Pools {
     pub(in crate::engine) fn encode(&self) -> Vec<u8> {
-        let mut bytes = b"PLS1".to_vec();
+        let mut bytes = b"PLS2".to_vec();
         bytes.extend(
             ic_wire::encode(
                 self,
@@ -143,11 +143,15 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
 
 fn decode(bytes: &[u8]) -> Pools {
     let payload = bytes
-        .strip_prefix(b"PLS1")
+        .strip_prefix(b"PLS2")
         .expect("placement custody requires its original Root");
     let pools: Pools =
         ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("placement custody");
     validate_inventory(&pools);
+    super::payment::validate(&pools);
+    for (slot, grant) in &pools.funding {
+        assert!(slot.service_index().is_some() && grant.valid());
+    }
     let mut claimed = std::collections::BTreeSet::new();
     assert!(pools.workers.len() <= usize::from(pools.pool_limit()));
     for (name, pool) in &pools.workers {

@@ -1,6 +1,8 @@
 //! Independent hub grants and shared-shard placement over Store-backed child effects.
 mod capacity;
 mod drain;
+pub mod funding;
+pub mod payment;
 mod persistence;
 pub mod standby;
 mod workers;
@@ -38,6 +40,9 @@ struct Ledger {
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Pools {
+    funding: BTreeMap<ChildId, funding::Grant>,
+    quotes: BTreeMap<String, payment::Reservation>,
+    payments: BTreeMap<[u8; 32], payment::Receipt>,
     returns: Vec<standby::Returned>,
     pub(super) retirements: BTreeMap<ChildId, standby::Retirement>,
     reserve_policy: Option<stored::StandbyPolicy>,
@@ -95,18 +100,42 @@ impl Pools {
     }
 
     pub(super) fn acquisition(&self) -> Result<Acquisition, Placement> {
-        if let Some((index, (_, _, principal))) = self
+        if let Some((index, (principal, _))) = self
             .standby
             .iter()
             .enumerate()
+            .filter(|(index, _)| !self.reserved_for_payment(*index))
             .filter_map(|(index, (_, asset))| Some((index, standby::available(asset)?)))
-            .min_by_key(|(_, key)| *key)
+            .min_by_key(|(_, (id, balance))| (balance.is_none(), *balance, *id))
         {
             Ok(Acquisition::Reserve { index, principal })
         } else if self.full() {
             Err(Placement::Full)
         } else {
             Ok(Acquisition::Create)
+        }
+    }
+
+    fn reserved_for_payment(&self, index: usize) -> bool {
+        self.quotes
+            .values()
+            .any(|q| q.index == Some(index) && api::time() < q.deadline)
+    }
+
+    fn source(
+        &self,
+        payer: stored::CreationPayer,
+        paid: Option<payment::Settlement>,
+        budget: u64,
+    ) -> Result<super::Origin, Placement> {
+        match (payer, paid) {
+            (stored::CreationPayer::Root, None) => self.acquisition()?.approve(budget),
+            (stored::CreationPayer::Requester, Some(settlement))
+                if settlement.source.attachment() <= budget =>
+            {
+                Ok(super::Origin::Paid(settlement.source, settlement.charge))
+            }
+            _ => Err(Placement::GrowthRefused),
         }
     }
 
@@ -234,9 +263,14 @@ impl Pools {
         &self,
         slots: impl Iterator<Item = ChildId>,
         budget: u64,
+        payer: stored::CreationPayer,
+        paid: Option<payment::Settlement>,
     ) -> Result<super::Origin, Placement> {
-        self.acquisition()?
-            .approve(budget.saturating_sub(self.creation_debit(slots)))
+        self.source(
+            payer,
+            paid,
+            budget.saturating_sub(self.creation_debit(slots)),
+        )
     }
 
     pub(super) fn full(&self) -> bool {
@@ -590,6 +624,10 @@ pub fn lookup(pool: &str, key: &Key) -> Placement {
 /// Requires the approved hub. All durable writes share one IC message commit.
 #[must_use]
 pub fn assign(pool: &str, key: Key) -> Placement {
+    assign_shard(pool, key, None)
+}
+
+fn assign_shard(pool: &str, key: Key, paid: Option<payment::Settlement>) -> Placement {
     let retained = lookup(pool, &key);
     if retained != Placement::Unknown {
         return retained;
@@ -666,6 +704,8 @@ pub fn assign(pool: &str, key: Key) -> Placement {
                     .into_iter()
                     .filter(|slot| generations[slot.index()].is_some()),
                 approval.creation_budget,
+                approval.creation_payer,
+                paid,
             )
         }) {
             Ok(origin) => origin,
@@ -970,6 +1010,10 @@ pub fn lookup_instance(key: &Key) -> Placement {
 /// Requires the approved project hub and valid retained custody.
 #[must_use]
 pub fn assign_instance(key: Key) -> Placement {
+    instance(key, None)
+}
+
+fn instance(key: Key, paid: Option<payment::Settlement>) -> Placement {
     let previous = lookup_instance(&key);
     if previous != Placement::Unknown {
         return previous;
@@ -983,7 +1027,12 @@ pub fn assign_instance(key: Key) -> Placement {
             .get(count)
             .filter(|slot| pools.worker_at(**slot).is_none())
             .ok_or(Placement::Full)?;
-        let origin = pools.admit_growth(slots[..count].iter().copied(), grant.creation_budget)?;
+        let origin = pools.admit_growth(
+            slots[..count].iter().copied(),
+            grant.creation_budget,
+            grant.creation_payer,
+            paid,
+        )?;
         Ok((grant.clone(), slot, origin))
     });
     let (grant, slot, origin) = match selection {

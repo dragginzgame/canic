@@ -63,6 +63,7 @@ pub(super) async fn ready_project(
         hub: hub.to_text(),
         component: "project".into(),
         max_instances: 1,
+        creation_payer: Default::default(),
         creation_budget: management::CREATION_CYCLES,
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
@@ -123,6 +124,7 @@ pub(super) async fn exercise(
         pool: "users".into(),
         max_shards: 1,
         keys_per_shard: if module == "role-root.wasm" { 3 } else { 1 },
+        creation_payer: Default::default(),
         creation_budget: if from_reserve {
             0
         } else {
@@ -137,6 +139,7 @@ pub(super) async fn exercise(
         hub: project.to_text(),
         component: "project".into(),
         max_instances: 2,
+        creation_payer: Default::default(),
         creation_budget: if from_reserve {
             0
         } else {
@@ -350,6 +353,7 @@ pub(super) async fn separate_hub_pools(
             arguments: management::application::Arguments::new(install.encode().unwrap()).unwrap(),
             keys_per_shard: 1,
             max_shards: 1,
+            creation_payer: Default::default(),
             creation_budget: management::CREATION_CYCLES,
             expires_at_ns: source.approval.expires_at_ns,
             reference: source.reference.clone(),

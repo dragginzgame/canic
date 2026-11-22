@@ -7,7 +7,7 @@ use ic_platform_types::Principal;
 fn replace(index: usize, expected: &Asset, next: Asset) -> Result<(), String> {
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().expect("opened Root");
-        if s.pools.standby[index].1 != *expected {
+        if s.pools.reserved_for_payment(index) || s.pools.standby[index].1 != *expected {
             return Err("source inventory advanced; observe the original transfer".into());
         }
         s.pools.standby[index].1 = next;
@@ -43,8 +43,9 @@ pub async fn export(
                 .standby
                 .iter()
                 .enumerate()
+                .filter(|(i, _)| !s.as_ref().unwrap().pools.reserved_for_payment(*i))
                 .find_map(|(i, (_, a))| {
-                    (available(a).is_some_and(|(_, _, subject)| subject == id)
+                    (available(a).is_some_and(|(subject, _)| subject == id)
                         || matches!(a, Asset::Transfer(subject,..) if *subject == id))
                     .then(|| (i, a.clone()))
                 })

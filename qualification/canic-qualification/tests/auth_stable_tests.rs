@@ -92,6 +92,10 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
     let (browser, input) = input(now);
     let frame = EstablishSession::encode_request(&input).unwrap();
     let session = admit(pic, target, browser, &frame).await.unwrap();
+    assert_eq!(
+        session.ext.as_ref().unwrap().as_slice(),
+        b"qualification-binding"
+    );
     exercise_coordinator(pic, target, browser, grant.issuer, session.subject, now).await;
     let issue = issuer_test::request(1);
     let issued = issuer_test::call(&f, issuer_test::account(), issuer::ISSUE, &issue)

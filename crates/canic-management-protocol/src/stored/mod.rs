@@ -107,10 +107,23 @@ pub struct Custody {
     pub sources: [Option<Sources>; crate::children::ChildId::ALL.len()],
 }
 
+/// Source of the initial fee and operating balance for a new allocation.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CreationPayer {
+    /// Root spends its approved pool budget.
+    #[default]
+    Root,
+    /// Only the approved hub may settle the allocation with attached cycles.
+    Requester,
+}
+
 /// Controller-only approval for Root-managed shard growth from one immutable release.
 /// The selected hub is independent of Root's two managed child identities.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ShardPool {
+    /// Approved economic payer, independent of future operating top-ups.
+    pub creation_payer: CreationPayer,
     /// Exact application-owned initialization bytes for each created shard.
     pub arguments: crate::application::Arguments,
     /// Exact effect owner receiving this approval.
@@ -131,11 +144,13 @@ pub struct ShardPool {
     pub reference: Reference,
 }
 /// Controller approval frame for a fresh shard pool.
-pub const CONFIGURE_SHARDS: u64 = 90;
+pub const CONFIGURE_SHARDS: u64 = ic_wire::method_id("canic.configure_shards.v2");
 
 /// Controller approval for dedicated instances owned by one project hub.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct InstancePool {
+    /// Approved economic payer, independent of future operating top-ups.
+    pub creation_payer: CreationPayer,
     /// Installing Root and effect owner.
     pub root: String,
     /// Only this parent may claim a child for a retained key.
@@ -155,9 +170,9 @@ pub struct InstancePool {
 }
 
 /// Approve a dedicated instance pool independently of the shared shard grant.
-pub const CONFIGURE_INSTANCES: u64 = 93;
+pub const CONFIGURE_INSTANCES: u64 = ic_wire::method_id("canic.configure_instances.v2");
 /// Approve the bounded worker allowance for one other hub.
-pub const CONFIGURE_WORKERS: u64 = ic_wire::method_id("canic.configure_workers.v1");
+pub const CONFIGURE_WORKERS: u64 = ic_wire::method_id("canic.configure_workers.v2");
 /// Maximum managed children across all pools of the single subnet owner.
 pub const MAX_SUBNET_CHILDREN: u8 = 8;
 /// Dedicated instances also consume the shared subnet allowance.
@@ -287,7 +302,7 @@ pub enum IncreasePool {
     Instances(InstancePool, u8),
 }
 /// Increase one pool count without renewing funding or time.
-pub const INCREASE_POOL: u64 = ic_wire::method_id("canic.increase_pool.v1");
+pub const INCREASE_POOL: u64 = ic_wire::method_id("canic.increase_pool.v2");
 
 /// Absolute backstop for any single shared shard. Fleets approve their own lower limit.
 pub const MAX_KEYS_PER_SHARD: u32 = 100_000;
@@ -349,4 +364,61 @@ impl canic::method::Contract for RetireShard {
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = Stage<ShardRetirement>;
     type Output = Result<RetirementPhase, String>;
+}
+
+/// A finite recurring debit approved for one directly installed service.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ChildFunding {
+    /// Principal that owns the cycles.
+    pub parent: ic_platform_types::Principal,
+    /// Exact child installation and declared component.
+    pub child: ic_platform_types::Principal,
+    /// Name retained by Root when installing the service.
+    pub component: String,
+    /// Trigger only below this working balance.
+    pub below_cycles: u64,
+    /// One payment always transfers this amount in full.
+    pub amount_cycles: u64,
+    /// Total permitted debit for this child including unresolved payments.
+    pub budget_cycles: u64,
+    /// No new deposits after this IC timestamp.
+    pub expires_at_ns: u64,
+}
+
+/// Approve the rule once or observe the original grant.
+#[cfg(feature = "standby")]
+pub struct ConfigureChildFunding;
+#[cfg(feature = "standby")]
+impl canic::method::Contract for ConfigureChildFunding {
+    const NAME: &'static str = "configure_child_funding";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    type Input = ChildFunding;
+    type Output = Result<ChildFundingStatus, String>;
+}
+
+/// The lifetime exposure and outcome of the latest payment.
+#[derive(Clone, Debug, Default, Eq, PartialEq, Serialize, Deserialize)]
+pub struct ChildFundingStatus {
+    /// Includes the amount of any unresolved deposit.
+    pub charged_cycles: u64,
+    /// Number of deposits dispatched.
+    pub attempts: u64,
+    /// Last deposit is awaiting its original callback.
+    pub issued: bool,
+    /// Original refund on the latest completed deposit, if known.
+    pub refund_cycles: Option<u128>,
+    /// Revocation or failure prevents further spending.
+    pub closed: bool,
+}
+
+/// Revoke future payments without erasing an outstanding debit.
+#[cfg(feature = "standby")]
+pub struct StopChildFunding;
+#[cfg(feature = "standby")]
+impl canic::method::Contract for StopChildFunding {
+    const NAME: &'static str = "stop_child_funding";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    type Input = ic_platform_types::Principal;
+    type Output = Result<ChildFundingStatus, String>;
 }

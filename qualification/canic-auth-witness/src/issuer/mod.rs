@@ -19,6 +19,7 @@ use std::cell::RefCell;
 
 const SECOND: u64 = 1_000_000_000;
 const POLICY: IssuerPolicy = IssuerPolicy {
+    ext: None,
     login_ttl_ns: 300 * SECOND,
     proof_ttl_ns: 60 * SECOND,
     receipt_timeout_ns: 30 * SECOND,

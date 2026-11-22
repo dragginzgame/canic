@@ -288,7 +288,10 @@ pub fn open(fresh: bool, readiness: Readiness) {
         schedule(slot);
     }
     #[cfg(feature = "sharding")]
-    sharding::standby::policy::wake();
+    {
+        sharding::standby::policy::wake();
+        sharding::funding::resume();
+    }
     if !fresh {
         directory::schedule(None);
     }
@@ -525,6 +528,8 @@ enum Origin {
     Permanent,
     #[cfg(feature = "sharding")]
     Placement(sharding::Acquisition),
+    #[cfg(feature = "sharding")]
+    Paid(sharding::Acquisition, u128),
 }
 
 fn admit(
@@ -548,7 +553,7 @@ fn admit(
                 .acquisition()
                 .map_err(|_| Refusal::Occupied)
         })?,
-        Origin::Placement(acquisition) => acquisition,
+        Origin::Placement(acquisition) | Origin::Paid(acquisition, _) => acquisition,
     };
     #[cfg(feature = "sharding")]
     let attachment = u128::from(selected.attachment());
@@ -556,7 +561,13 @@ fn admit(
     let generation = artifact
         .sources()
         .map_or(approval.module_hash, |s| s.creation.operation);
-    if ic_platform_runtime::raw::liquid_cycle_balance() < reserved_cycles() + attachment {
+    let liquid = ic_platform_runtime::raw::liquid_cycle_balance();
+    #[cfg(feature = "sharding")]
+    let liquid = match origin {
+        Origin::Paid(_, credit) => liquid.saturating_add(credit),
+        _ => liquid,
+    };
+    if liquid < reserved_cycles() + attachment {
         return Err(Refusal::Reserve);
     }
     let mut artifacts =

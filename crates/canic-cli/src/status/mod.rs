@@ -78,7 +78,13 @@ pub(crate) fn pool_preview<'a>(
     }
     for a in shards {
         writeln!(text, "\nShared shards · {}\nRoot: {}\nHub: {}\nCapacity: {} shards × {} live keys per shard\nInit bytes (hex): {}", escape(&a.pool), a.root, a.hub, a.max_shards, a.keys_per_shard, hex(a.arguments.as_slice())).unwrap();
-        pool_release(&mut text, &a.reference, a.creation_budget, a.expires_at_ns);
+        pool_release(
+            &mut text,
+            &a.reference,
+            a.creation_payer,
+            a.creation_budget,
+            a.expires_at_ns,
+        );
     }
     for (label, a) in allocations {
         writeln!(
@@ -90,7 +96,13 @@ pub(crate) fn pool_preview<'a>(
             a.max_instances
         )
         .unwrap();
-        pool_release(&mut text, &a.reference, a.creation_budget, a.expires_at_ns);
+        pool_release(
+            &mut text,
+            &a.reference,
+            a.creation_payer,
+            a.creation_budget,
+            a.expires_at_ns,
+        );
     }
     text.push_str("\nOffline review only. No operation submitted.\n");
     Ok(text)
@@ -99,11 +111,17 @@ pub(crate) fn pool_preview<'a>(
 fn pool_release(
     text: &mut String,
     reference: &canic_management_protocol::stored::Reference,
+    payer: canic_management_protocol::stored::CreationPayer,
     budget: u64,
     deadline: u64,
 ) {
+    use canic_management_protocol::stored::CreationPayer;
+    let payer = match payer {
+        CreationPayer::Root => "Root",
+        CreationPayer::Requester => "requesting hub",
+    };
     let m = &reference.manifest;
-    writeln!(text, "Store: {}\nRelease: {} @ {}\nWasm SHA-256: {}\nCreation budget: {budget} cycles\nGrowth deadline: {deadline} Unix ns", reference.store, escape(&m.release.name), escape(&m.release.version), hex(&m.hash)).unwrap();
+    writeln!(text, "Store: {}\nRelease: {} @ {}\nWasm SHA-256: {}\nCreation payer: {payer}\nCreation budget: {budget} cycles\nGrowth deadline: {deadline} Unix ns", reference.store, escape(&m.release.name), escape(&m.release.version), hex(&m.hash)).unwrap();
 }
 
 pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> {

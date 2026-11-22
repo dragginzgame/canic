@@ -355,7 +355,7 @@ fixtures do not yet replace all of their obligations:
 | Coverage | Why it remains |
 | --- | --- |
 | Creation dispatch, callback-write and later-message traps | Isolates each IC commit boundary; product growth covers a narrower set of interruption points |
-| Direct-cycle funding, rejected recipient and refunds | Product runtime has no equivalent funding journey yet |
+| Direct-cycle funding, rejected recipient and refunds | Root qualifies recurring deposits into a ready named service. The probe retains rejected-recipient and refund interruption coverage. |
 | Failed/successful owner upgrade with empty, successful, rejected and uncertain journals | Preserves the combined creation/funding rollback matrix |
 | Retained artifact, occupied target, lost upload/install replies and maintenance | Proves install-only behavior on a pre-existing target; product growth creates its own target |
 

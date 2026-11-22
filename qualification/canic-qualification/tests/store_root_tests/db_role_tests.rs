@@ -494,6 +494,7 @@ async fn dedicated_receiver(
         install_args: Some("db-role-nonce.bin".into()),
         max_instances: 1,
         increase_from: None,
+        creation_payer: Default::default(),
         creation_budget: management::CREATION_CYCLES,
         expires_at_ns: Some(grant.expires_at_ns),
     });

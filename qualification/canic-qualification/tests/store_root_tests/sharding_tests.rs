@@ -715,6 +715,7 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
         pool: "user_shard".into(),
         max_shards: 2,
         keys_per_shard: 100_000,
+        creation_payer: Default::default(),
         creation_budget: 0,
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
         reference: stored::Reference {
@@ -848,6 +849,7 @@ fn instance_grant(
         )
         .unwrap(),
         max_instances: 2,
+        creation_payer: Default::default(),
         creation_budget: 6 * management::CREATION_CYCLES,
         expires_at_ns,
     }
@@ -918,6 +920,7 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
         pool: "user_shard".into(),
         max_shards: 2,
         keys_per_shard: 1,
+        creation_payer: Default::default(),
         creation_budget: 2 * management::CREATION_CYCLES,
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
         reference: stored::Reference {
@@ -1022,6 +1025,7 @@ async fn fresh_user_shard_grant(
         pool: "user_shard".into(),
         max_shards: 2,
         keys_per_shard: 10_000,
+        creation_payer: Default::default(),
         creation_budget: 2 * management::CREATION_CYCLES,
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
         reference: stored::Reference {
@@ -1155,6 +1159,234 @@ async fn ten_thousand_keys_per_shard_survive_rollover_and_root_reopen() {
         user(pic, hub, account(20_001), "signup").await,
         Placement::Full
     );
+    assert_eq!(
+        owner.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
+    use canic::{
+        method::Contract,
+        sharding::{
+            payment::{Demand, Payment},
+            standby::{Asset, Refill, RefillStandby},
+        },
+    };
+    let (_, binary) = support::inputs();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
+    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let (root, store) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
+    let (hub, shared) = fresh_user_shard_grant(&root, &store).await;
+    let mut grant = instance_grant(root.id, hub, shared.reference, shared.expires_at_ns);
+    grant.max_instances = 3;
+    grant.creation_payer = stored::CreationPayer::Requester;
+    root.update::<_, Result<(), management::Refusal>>(
+        "configure_capacity",
+        stored::CONFIGURE_CAPACITY,
+        &stored::SubnetCapacity {
+            root: root.id.to_text(),
+            max_children: 3,
+        },
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
+    configure_project(&root, &grant).await.unwrap();
+    let maximum = 2 * u128::from(management::CREATION_CYCLES);
+    let method = ic_wire::method_id("pay");
+    let frame = |direction| ic_wire::Encoding::Frame { method, direction };
+    let request = |id: u8, limit: u128, attached: u128| {
+        ic_wire::encode(
+            &(Demand::Instance([id; 32]), limit, attached),
+            frame(ic_wire::Direction::Request),
+            canic::sharding::LIMITS,
+        )
+        .unwrap()
+    };
+    let pay = async |id: u8, attached: u128| {
+        let reply = pic
+            .update_call(
+                hub,
+                CanisterId::anonymous(),
+                "pay",
+                request(id, maximum, attached),
+            )
+            .await
+            .unwrap();
+        ic_wire::decode::<Result<Payment, String>>(
+            &reply,
+            frame(ic_wire::Direction::Response),
+            canic::sharding::LIMITS,
+        )
+        .unwrap()
+    };
+    let denied = root
+        .update::<_, Result<Payment, String>>(
+            canic::sharding::payment::FundPlacement::NAME,
+            canic::sharding::payment::FundPlacement::ID,
+            &(Demand::Instance([1; 32]), maximum),
+            canic::sharding::LIMITS,
+        )
+        .await;
+    assert!(denied.unwrap_err().contains("calling hub"));
+    for id in [1, 2] {
+        let spare = if id == 1 {
+            let asset = root
+                .update::<_, Result<Asset, String>>(
+                    RefillStandby::NAME,
+                    RefillStandby::ID,
+                    &Refill {
+                        root: root.id.to_text().parse().unwrap(),
+                        sequence: 0,
+                        cycles: management::CREATION_CYCLES,
+                        expires_at_ns: grant.expires_at_ns,
+                    },
+                    RefillStandby::REPLY,
+                )
+                .await
+                .unwrap();
+            let Asset::Empty(spare) = asset else {
+                panic!("ready spare")
+            };
+            Some(spare)
+        } else {
+            None
+        };
+        let Payment::Quoted(quote) = pay(id, 0).await.unwrap() else {
+            panic!("quote required")
+        };
+        if id == 1 {
+            // The held spare and its exact balance quote survive an ordinary Root upgrade.
+            canic_qualification::upgrade_stopped(
+                pic,
+                root.id,
+                wasm.clone(),
+                vec![],
+                Some(root.operator),
+            )
+            .await
+            .unwrap();
+            assert_eq!(pay(id, 0).await.unwrap(), Payment::Quoted(quote.clone()));
+            assert!(pay(2, 0).await.is_err());
+        }
+        assert_eq!(quote.spare, spare);
+        let charge = quote.creation_fee + quote.working_cycles;
+        assert!(quote.creation_fee > 0 && quote.working_cycles > 0 && charge <= maximum);
+        assert!(pay(id, charge - 1).await.is_err());
+        let before = pic.cycle_balance(hub).await;
+        // Discard the first settlement reply. Recover using only the original demand.
+        let _discarded = pic
+            .submit_call(
+                hub,
+                CanisterId::anonymous(),
+                "pay",
+                request(id, maximum, maximum),
+            )
+            .await
+            .unwrap();
+        settle(pic).await;
+        let Payment::Placed(Placement::Assigned(original, original_target), Some(receipt)) =
+            pay(id, 0).await.unwrap()
+        else {
+            panic!("recover paid admission after lost reply")
+        };
+        assert_eq!(quote, receipt);
+        let child_balance = pic.cycle_balance(original_target.parse().unwrap()).await;
+        assert!(child_balance > charge.saturating_sub(quote.creation_fee) / 2);
+        assert!(before - pic.cycle_balance(hub).await >= charge);
+        settle(pic).await;
+        canic_qualification::upgrade_stopped(
+            pic,
+            root.id,
+            wasm.clone(),
+            vec![],
+            Some(root.operator),
+        )
+        .await
+        .unwrap();
+        let before = pic.cycle_balance(hub).await;
+        let Payment::Placed(Placement::Assigned(recovered, target), Some(replayed)) =
+            pay(id, maximum).await.unwrap()
+        else {
+            panic!("recover original paid child")
+        };
+        assert_eq!(original, recovered);
+        assert_eq!(original_target, target);
+        assert_eq!(quote, replayed);
+        if let Some(spare) = spare {
+            assert_eq!(target, spare.to_text());
+        }
+        assert!(before - pic.cycle_balance(hub).await < charge / 100);
+    }
+    // An unpaid reservation excludes other claims only until its original deadline.
+    root.update::<_, Result<(), String>>(
+        "configure_standby",
+        stored::CONFIGURE_STANDBY,
+        &stored::StandbyPolicy {
+            root: root.id.to_text(),
+            minimum_available: 0,
+            maximum_creations: 0,
+            expires_at_ns: grant.expires_at_ns,
+            minimum_import_cycles: 1_u64.try_into().unwrap(),
+            imports: vec![],
+        },
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
+    let counts = async || {
+        let reply = pic
+            .query_call(
+                root.id,
+                root.operator,
+                stored::ReadSpareCounts::NAME,
+                stored::ReadSpareCounts::encode_request(&()).unwrap(),
+            )
+            .await
+            .unwrap();
+        stored::ReadSpareCounts::decode_reply(&reply)
+            .unwrap()
+            .unwrap()
+            .ready
+    };
+    root.update::<_, Result<Asset, String>>(
+        RefillStandby::NAME,
+        RefillStandby::ID,
+        &Refill {
+            root: grant.root.parse().unwrap(),
+            sequence: 1,
+            cycles: management::CREATION_CYCLES,
+            expires_at_ns: grant.expires_at_ns,
+        },
+        RefillStandby::REPLY,
+    )
+    .await
+    .unwrap();
+    assert_eq!(counts().await, 1);
+    let low = pic
+        .update_call(hub, CanisterId::anonymous(), "pay", request(3, 1, 0))
+        .await
+        .unwrap();
+    assert!(
+        ic_wire::decode::<Result<Payment, String>>(
+            &low,
+            frame(ic_wire::Direction::Response),
+            canic::sharding::LIMITS
+        )
+        .unwrap()
+        .is_err()
+    );
+    assert_eq!(counts().await, 1);
+    assert!(matches!(pay(3, 0).await.unwrap(), Payment::Quoted(_)));
+    assert_eq!(counts().await, 0);
+    pic.advance_time(Duration::from_secs(601)).await;
+    pic.tick().await;
+    assert_eq!(counts().await, 1);
+    assert!(pay(3, maximum).await.is_err());
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

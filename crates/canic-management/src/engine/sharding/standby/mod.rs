@@ -157,10 +157,11 @@ pub(in crate::engine) fn claimed(slot: ChildId) -> Option<Principal> {
     STATE.with_borrow(|s| s.as_ref().unwrap().pools.standby_claim(slot))
 }
 
-pub(super) fn available(asset: &Asset) -> Option<(bool, u128, Principal)> {
+// A newly created spare has no observed working balance until management reports it.
+pub(super) fn available(asset: &Asset) -> Option<(Principal, Option<u128>)> {
     match asset {
-        Asset::Empty(id) => Some((true, 0, *id)),
-        Asset::Available(id, balance) => Some((false, *balance, *id)),
+        Asset::Empty(id) => Some((*id, None)),
+        Asset::Available(id, balance) => Some((*id, Some(*balance))),
         _ => None,
     }
 }
@@ -178,7 +179,7 @@ pub(in crate::engine::sharding) fn reserve(
     {
         let asset = &mut pools.standby[index].1;
         assert_eq!(
-            available(asset).map(|(_, _, id)| id),
+            available(asset).map(|(id, _)| id),
             Some(id),
             "selected reserve changed"
         );
@@ -313,6 +314,7 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
 }
 
 mod reset;
+pub(super) use reset::observe_target;
 pub use reset::reset;
 
 mod shard;

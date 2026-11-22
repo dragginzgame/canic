@@ -96,6 +96,17 @@
             "k": "bytes",
             "max": 29
           },
+          "Wire_Bytes_f48f109af4454406": {
+            "k": "bytes",
+            "max": 4096
+          },
+          "Wire_Option_a6592b9dcb478bd1": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_Bytes_f48f109af4454406"
+            },
+            "k": "option"
+          },
           "Wire_Principal_f14095eb1cc0831f": {
             "k": "ref",
             "name": "Wire_Bytes_ceafa818703233a0"
@@ -140,6 +151,13 @@
                   "k": "ref",
                   "name": "Wire_u64_4d35d3193e8d66f2"
                 }
+              },
+              {
+                "name": "ext",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Option_a6592b9dcb478bd1"
+                }
               }
             ],
             "k": "record"
@@ -151,8 +169,8 @@
         }
       },
       "reply_limits": {
-        "allocation": 16384,
-        "bytes": 4096,
+        "allocation": 65536,
+        "bytes": 8192,
         "depth": 8,
         "nodes": 128
       },
@@ -1071,6 +1089,17 @@
             "k": "bytes",
             "max": 29
           },
+          "Wire_Bytes_f48f109af4454406": {
+            "k": "bytes",
+            "max": 4096
+          },
+          "Wire_Option_a6592b9dcb478bd1": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_Bytes_f48f109af4454406"
+            },
+            "k": "option"
+          },
           "Wire_Principal_f14095eb1cc0831f": {
             "k": "ref",
             "name": "Wire_Bytes_ceafa818703233a0"
@@ -1155,6 +1184,13 @@
                   "k": "ref",
                   "name": "Wire_u64_4d35d3193e8d66f2"
                 }
+              },
+              {
+                "name": "ext",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Option_a6592b9dcb478bd1"
+                }
               }
             ],
             "k": "record"
@@ -1166,8 +1202,8 @@
         }
       },
       "reply_limits": {
-        "allocation": 16384,
-        "bytes": 4096,
+        "allocation": 65536,
+        "bytes": 8192,
         "depth": 8,
         "nodes": 128
       },
@@ -1577,6 +1613,17 @@
             "k": "bytes",
             "max": 29
           },
+          "Wire_Bytes_f48f109af4454406": {
+            "k": "bytes",
+            "max": 4096
+          },
+          "Wire_Option_a6592b9dcb478bd1": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_Bytes_f48f109af4454406"
+            },
+            "k": "option"
+          },
           "Wire_Principal_f14095eb1cc0831f": {
             "k": "ref",
             "name": "Wire_Bytes_ceafa818703233a0"
@@ -1621,6 +1668,13 @@
                   "k": "ref",
                   "name": "Wire_u64_4d35d3193e8d66f2"
                 }
+              },
+              {
+                "name": "ext",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Option_a6592b9dcb478bd1"
+                }
               }
             ],
             "k": "record"
@@ -1632,8 +1686,8 @@
         }
       },
       "reply_limits": {
-        "allocation": 16384,
-        "bytes": 4096,
+        "allocation": 65536,
+        "bytes": 8192,
         "depth": 8,
         "nodes": 128
       },
@@ -2556,6 +2610,17 @@
             "k": "bytes",
             "max": 29
           },
+          "Wire_Bytes_f48f109af4454406": {
+            "k": "bytes",
+            "max": 4096
+          },
+          "Wire_Option_a6592b9dcb478bd1": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_Bytes_f48f109af4454406"
+            },
+            "k": "option"
+          },
           "Wire_Principal_f14095eb1cc0831f": {
             "k": "ref",
             "name": "Wire_Bytes_ceafa818703233a0"
@@ -2640,6 +2705,13 @@
                   "k": "ref",
                   "name": "Wire_u64_4d35d3193e8d66f2"
                 }
+              },
+              {
+                "name": "ext",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Option_a6592b9dcb478bd1"
+                }
               }
             ],
             "k": "record"
@@ -2651,8 +2723,8 @@
         }
       },
       "reply_limits": {
-        "allocation": 16384,
-        "bytes": 4096,
+        "allocation": 65536,
+        "bytes": 8192,
         "depth": 8,
         "nodes": 128
       },

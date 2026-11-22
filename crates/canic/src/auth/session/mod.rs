@@ -135,6 +135,9 @@ fn initialize_with(
 
 fn view(receipt: SessionReceipt) -> SessionView {
     SessionView {
+        ext: receipt.ext.map(|bytes| {
+            ic_wire::Bytes::new(bytes).expect("verified Auth extension within protocol limit")
+        }),
         caller: receipt.caller,
         issuer: receipt.issuer,
         subject: receipt.subject,
@@ -255,7 +258,7 @@ pub fn read_scope(
     now: u64,
     scope: &str,
 ) -> Result<SessionView, SessionReadRefusal> {
-    authorized(caller, now, scope, |receipt| view(*receipt))
+    authorized(caller, now, scope, |receipt| view(receipt.clone()))
 }
 
 fn authorized<R>(

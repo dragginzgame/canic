@@ -161,7 +161,9 @@ pub(super) async fn observe_reset(
 }
 
 /// Observe snapshot custody, sole control, module and balance from management.
-pub(super) async fn observe_target(args: &[u8]) -> Result<(mgmt::CanisterStatus, u128), String> {
+pub(in crate::engine::sharding) async fn observe_target(
+    args: &[u8],
+) -> Result<(mgmt::CanisterStatus, u128), String> {
     let inventory = management("list_canister_snapshots", args.to_vec(), 0)
         .await
         .map_err(|e| format!("snapshot inventory: {e:?}"))?;

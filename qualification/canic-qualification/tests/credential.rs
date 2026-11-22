@@ -30,6 +30,7 @@ pub fn signed(
         .verifying_key()
         .to_bytes();
     let claims = encode_claims(&PortableClaims {
+        ext: Some(b"qualification-binding".to_vec()),
         mechanism: PortableMechanism::Ed25519,
         audience: canic_auth_witness::audience(),
         issuer,

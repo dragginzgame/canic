@@ -156,8 +156,8 @@ pub fn spare_counts() -> Option<canic_management_protocol::stored::SpareCounts> 
         let mut ready = 0;
         let mut issued = 0;
         let mut paid = 0;
-        for (source, asset) in &pools.standby {
-            ready += u8::from(available(asset).is_some());
+        for (index, (source, asset)) in pools.standby.iter().enumerate() {
+            ready += u8::from(available(asset).is_some() && !pools.reserved_for_payment(index));
             issued += u8::from(matches!(asset, Asset::Issued));
             paid += u8::from(matches!(source, Source::Automatic(_)));
         }

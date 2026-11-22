@@ -37,6 +37,9 @@ pub struct ShardPoolConfig {
     pub increase_from: Option<u8>,
     /// Total authorized creation attachments in cycles.
     pub creation_budget: u64,
+    /// Economic payer for new children under this grant.
+    #[serde(default)]
+    pub creation_payer: stored::CreationPayer,
     /// Final deadline for dispatching new creation work, in IC nanoseconds.
     pub expires_at_ns: Option<u64>,
 }
@@ -61,6 +64,9 @@ pub struct RegistryConfig {
     pub increase_from: Option<u8>,
     /// Total authorized creation attachments in cycles.
     pub creation_budget: u64,
+    /// Economic payer for new children under this grant.
+    #[serde(default)]
+    pub creation_payer: stored::CreationPayer,
     /// Deadline for new work, required when planning.
     pub expires_at_ns: Option<u64>,
 }
@@ -156,6 +162,9 @@ pub struct WorkerPoolConfig {
     pub max_workers: u8,
     /// Lifetime creation debit ceiling.
     pub creation_budget: u64,
+    /// Economic payer for new children under this grant.
+    #[serde(default)]
+    pub creation_payer: stored::CreationPayer,
     /// Last authorized creation time.
     pub expires_at_ns: Option<u64>,
 }
@@ -168,6 +177,7 @@ impl WorkerPoolConfig {
             store: self.store.clone(),
             release: self.release.clone(),
             max_instances: self.max_workers,
+            creation_payer: self.creation_payer,
             creation_budget: self.creation_budget,
             expires_at_ns: self.expires_at_ns,
             install_args: None,
@@ -469,6 +479,7 @@ impl FleetConfig {
             hub,
             max_shards: policy.max_shards,
             keys_per_shard: policy.keys_per_shard,
+            creation_payer: policy.creation_payer,
             creation_budget: policy.creation_budget,
             expires_at_ns: policy.deadline()?,
             reference: stored::Reference { store, manifest },

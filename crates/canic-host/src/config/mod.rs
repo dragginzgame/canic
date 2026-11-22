@@ -4,10 +4,12 @@
 mod tests;
 
 mod discovery;
+mod funding;
 pub(crate) mod sharding;
 
 use crate::{Error, Network, Plan, PlanInput, Result, plan, store, supplier};
 pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
+pub use funding::ChildTopUp;
 use serde::{Deserialize, Serialize};
 pub use sharding::{
     PoolGrant, RegistryConfig, ShardPoolConfig, StandbyImports, StandbyPoolConfig, WorkerPoolConfig,
@@ -122,7 +124,7 @@ pub struct FleetDeclaration {
     pub receiver_policy: Option<crate::ReceiverPolicy>,
     /// Direct child components eligible for subsequent top-ups by their declared parent.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub top_up_children: Vec<String>,
+    pub top_up_children: Vec<ChildTopUp>,
     /// Named permanent services whose installation pins the fleet Root's role key.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub role_receivers: Vec<String>,
@@ -167,7 +169,7 @@ pub struct FleetConfig {
     pub receiver_policy: Option<crate::ReceiverPolicy>,
     /// Direct child components eligible for subsequent top-ups by their declared parent.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub top_up_children: Vec<String>,
+    pub top_up_children: Vec<ChildTopUp>,
     /// Named permanent services whose installation pins the fleet Root's role key.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub role_receivers: Vec<String>,
@@ -642,12 +644,76 @@ impl FleetConfig {
     }
 }
 
+impl FleetConfig {
+    /// Resolve a finite payment grant from a declared direct Root-to-service edge.
+    /// # Errors
+    /// Requires bound principals, a configured threshold and amount, sufficient budget and a future deadline.
+    pub fn child_funding(
+        &self,
+        name: &str,
+        budget_cycles: u64,
+        expires_at_ns: u64,
+    ) -> Result<canic_management_protocol::stored::ChildFunding> {
+        let Some(ChildTopUp::Rule {
+            below_cycles,
+            amount_cycles,
+            ..
+        }) = self.top_up_children.iter().find(|r| r.child() == name)
+        else {
+            return Err(Error::Invalid(format!(
+                "no top-up amount and threshold declared for {name:?}"
+            )));
+        };
+        let child = self
+            .canisters
+            .get(name)
+            .ok_or_else(|| Error::Invalid(format!("unknown child {name:?}")))?;
+        let parent = child.parent.as_ref().and_then(|p| self.canisters.get(p))
+            .filter(|p| p.role.as_deref() == Some("root")).ok_or_else(|| Error::Invalid(format!(
+                "funding {name:?} requires its declared parent to own the payment; this adapter pays from Root"
+            )))?;
+        if budget_cycles < *amount_cycles || expires_at_ns <= crate::now()? {
+            return Err(Error::Invalid(format!(
+                "budget_cycles={budget_cycles} must cover amount_cycles={amount_cycles} and expires_at_ns={expires_at_ns} must be in the future"
+            )));
+        }
+        let binding = |c: &CanisterConfig| -> Result<_> {
+            crate::network::principal(c.id.as_deref().ok_or_else(|| {
+                Error::Invalid(format!(
+                    "funding {name:?} requires bound parent and child principals"
+                ))
+            })?)
+        };
+        Ok(canic_management_protocol::stored::ChildFunding {
+            parent: binding(parent)?,
+            child: binding(child)?,
+            component: name.into(),
+            below_cycles: *below_cycles,
+            amount_cycles: *amount_cycles,
+            budget_cycles,
+            expires_at_ns,
+        })
+    }
+}
+
 fn validate_top_up_children(
     slots: &BTreeMap<String, CanisterConfig>,
-    children: &[String],
+    children: &[ChildTopUp],
 ) -> Result<()> {
     let mut seen = std::collections::BTreeSet::new();
-    for child in children {
+    for rule in children {
+        let child = rule.child();
+        if let ChildTopUp::Rule {
+            below_cycles,
+            amount_cycles,
+            ..
+        } = rule
+            && (*below_cycles == 0 || *amount_cycles == 0)
+        {
+            return Err(Error::Invalid(format!(
+                "top_up_children {child:?} has below_cycles={below_cycles}, amount_cycles={amount_cycles}; both must be positive"
+            )));
+        }
         let slot = slots.get(child).ok_or_else(|| {
             Error::Invalid(format!(
                 "top_up_children references unknown component {child:?}"
