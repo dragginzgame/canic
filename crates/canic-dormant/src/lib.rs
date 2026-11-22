@@ -29,7 +29,7 @@ thread_local! {
 }
 
 fn install(receipt: Receipt) {
-    canic::topology::require_sender(receipt.root).expect("installing Root required");
+    canic::guard::require_sender(receipt.root).expect("installing Root required");
     assert!(
         system::is_controller(&receipt.root),
         "Root must control child"

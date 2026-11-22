@@ -136,7 +136,7 @@ impl Contract for Request {
 /// # Errors
 /// Requires the parent's controller, an acknowledged child and finite bounds.
 pub async fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, String> {
-    controller()?;
+    canic::guard::require_controller()?;
     let generation = direct(rule.child)?;
     if rule.parent != system::canister_self()
         || rule.component.is_empty()
@@ -181,17 +181,11 @@ pub async fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, String>
     Ok(read(|b| b.children[&child].status.clone()))
 }
 
-fn controller() -> Result<(), String> {
-    system::is_controller(&system::caller())
-        .then_some(())
-        .ok_or_else(|| "controller required".into())
-}
-
 /// Revoke future payments and preserve any issued debit.
 /// # Errors
 /// Requires the parent's controller and an admitted child.
 pub fn stop(child: Principal) -> Result<ChildFundingStatus, String> {
-    controller()?;
+    canic::guard::require_controller()?;
     change(|b| {
         let g = b.children.get_mut(&child).ok_or("unknown funding child")?;
         g.status.closed = true;

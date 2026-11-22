@@ -14,18 +14,7 @@ use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "storage")]
-pub use actor::{attach_parent, parent, require_canister, require_parent, role};
-
-/// Check the actual caller against a locally retained topology authority.
-/// # Errors
-/// Refuses an invalid authority or a call from another principal.
-pub fn require_sender(expected: Principal) -> Result<(), &'static str> {
-    if expected.as_slice().last() == Some(&1) && expected == ic_platform_runtime::system::caller() {
-        Ok(())
-    } else {
-        Err("unexpected topology sender")
-    }
-}
+pub use actor::{attach_parent, parent, role};
 
 /// In a worker grant, request the exact allocation generation as the inner install payload.
 pub const WORKER_GENERATION: &[u8] = b"canic.worker_generation.v1";
@@ -69,7 +58,7 @@ impl Install {
     #[cfg(feature = "storage")]
     fn installing_parent(&self) -> Principal {
         self.validate().expect("shard topology");
-        if require_sender(self.root).is_err() {
+        if crate::guard::require_sender(self.root).is_err() {
             ic_platform_runtime::system::trap("wrong shard installer");
         }
         assert_ne!(
@@ -198,24 +187,5 @@ mod actor {
     #[must_use]
     pub fn role() -> Option<String> {
         IDENTITY.with(|cell| cell.get().map(|id| id.role.clone()))
-    }
-
-    /// Require the actual IC caller to be the named canister in this actor's directory.
-    /// # Errors
-    /// Refuses an unopened directory, an unpublished name, or a different caller.
-    pub fn require_canister(name: &str) -> Result<(), &'static str> {
-        let principal = super::directory::retained::DIRECTORY
-            .with_borrow(|slot| slot.as_ref()?.current()?.by_name(name))
-            .ok_or("service unpublished")?;
-        super::require_sender(principal)
-    }
-
-    /// Pre-decode guard for a parent-only endpoint.
-    /// # Errors
-    /// Refuses a missing binding or a caller other than this actor's parent.
-    pub fn require_parent() -> Result<(), &'static str> {
-        (parent() == Some(api::caller()))
-            .then_some(())
-            .ok_or("unauthorized hub")
     }
 }

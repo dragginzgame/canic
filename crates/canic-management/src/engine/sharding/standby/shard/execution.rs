@@ -54,7 +54,7 @@ pub async fn retire(
             || !ChildId::SHARDS.contains(&slot)
             || ledger.principals[slot.index()].as_deref() != Some(&approval.shard)
             || s.pools.draining.get(&slot) != Some(&approval.generation)
-            || ledger.counts[slot.index()] != 0
+            || s.pools.remaining(slot, ledger) != 0
             || input.reference.store != ledger.approval.reference.store
         {
             return Err("retirement binding differs");

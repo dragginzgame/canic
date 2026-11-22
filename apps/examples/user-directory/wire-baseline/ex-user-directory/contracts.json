@@ -913,6 +913,230 @@
         "nodes": 65536
       }
     },
+    "hub_shard_status": {
+      "id": "0xa8c0308cce4649e1",
+      "mode": "update",
+      "reply": {
+        "rust": "core::result::Result<canic::sharding::ShardStatus, alloc::string::String>",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Result_c6b5e51edc1720b3"
+          },
+          "Wire_Allocation_36c53f69779f0c6f": {
+            "fields": [
+              {
+                "name": "slot",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u32_4d2bdf193e8526d1"
+                }
+              },
+              {
+                "name": "generation",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire__u8__32__a6c3ffa4fc6f7348"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_Bytes_ceafa818703233a0": {
+            "k": "bytes",
+            "max": 29
+          },
+          "Wire_Principal_f14095eb1cc0831f": {
+            "k": "ref",
+            "name": "Wire_Bytes_ceafa818703233a0"
+          },
+          "Wire_Result_c6b5e51edc1720b3": {
+            "err": {
+              "k": "ref",
+              "name": "Wire_String_76e26e9121e02e46"
+            },
+            "k": "result",
+            "ok": {
+              "k": "ref",
+              "name": "Wire_ShardStatus_15cf43af504124e5"
+            }
+          },
+          "Wire_ShardStatus_15cf43af504124e5": {
+            "fields": [
+              {
+                "name": "target",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_ShardTarget_0faa5d1d3bc98256"
+                }
+              },
+              {
+                "name": "draining",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_bool_cd2fd49bc6b014bd"
+                }
+              },
+              {
+                "name": "live_placements",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u32_4d2bdf193e8526d1"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_ShardTarget_0faa5d1d3bc98256": {
+            "fields": [
+              {
+                "name": "allocation",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Allocation_36c53f69779f0c6f"
+                }
+              },
+              {
+                "name": "shard",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Principal_f14095eb1cc0831f"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          },
+          "Wire__u8__32__a6c3ffa4fc6f7348": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_u8_08c48207b56753d8"
+            },
+            "k": "array",
+            "max": 32
+          },
+          "Wire_bool_cd2fd49bc6b014bd": {
+            "k": "bool"
+          },
+          "Wire_u32_4d2bdf193e8526d1": {
+            "bits": 32,
+            "k": "u"
+          },
+          "Wire_u8_08c48207b56753d8": {
+            "bits": 8,
+            "k": "u"
+          }
+        }
+      },
+      "reply_limits": {
+        "allocation": 32768,
+        "bytes": 1024,
+        "depth": 12,
+        "nodes": 1024
+      },
+      "request": {
+        "rust": "(alloc::string::String, canic::sharding::ShardTarget, bool)",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_ShardTarget__bool__bbff195215fd1676"
+          },
+          "Wire_Allocation_36c53f69779f0c6f": {
+            "fields": [
+              {
+                "name": "slot",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u32_4d2bdf193e8526d1"
+                }
+              },
+              {
+                "name": "generation",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire__u8__32__a6c3ffa4fc6f7348"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_Bytes_ceafa818703233a0": {
+            "k": "bytes",
+            "max": 29
+          },
+          "Wire_Principal_f14095eb1cc0831f": {
+            "k": "ref",
+            "name": "Wire_Bytes_ceafa818703233a0"
+          },
+          "Wire_ShardTarget_0faa5d1d3bc98256": {
+            "fields": [
+              {
+                "name": "allocation",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Allocation_36c53f69779f0c6f"
+                }
+              },
+              {
+                "name": "shard",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Principal_f14095eb1cc0831f"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_ShardTarget__bool__bbff195215fd1676": {
+            "items": [
+              {
+                "k": "ref",
+                "name": "Wire_String_76e26e9121e02e46"
+              },
+              {
+                "k": "ref",
+                "name": "Wire_ShardTarget_0faa5d1d3bc98256"
+              },
+              {
+                "k": "ref",
+                "name": "Wire_bool_cd2fd49bc6b014bd"
+              }
+            ],
+            "k": "tuple"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          },
+          "Wire__u8__32__a6c3ffa4fc6f7348": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_u8_08c48207b56753d8"
+            },
+            "k": "array",
+            "max": 32
+          },
+          "Wire_bool_cd2fd49bc6b014bd": {
+            "k": "bool"
+          },
+          "Wire_u32_4d2bdf193e8526d1": {
+            "bits": 32,
+            "k": "u"
+          },
+          "Wire_u8_08c48207b56753d8": {
+            "bits": 8,
+            "k": "u"
+          }
+        }
+      },
+      "request_limits": {
+        "allocation": 32768,
+        "bytes": 1024,
+        "depth": 12,
+        "nodes": 1024
+      }
+    },
     "logout_portable_session": {
       "id": "0x0000415554480014",
       "mode": "update",

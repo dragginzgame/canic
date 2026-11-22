@@ -412,7 +412,7 @@ pub mod retained {
         /// Refuses an invalid publisher, target, role, path or superseded directory.
         pub fn accept(&mut self, update: &Delivery) -> Result<(), &'static str> {
             let receiver = ic_platform_runtime::system::canister_self();
-            crate::topology::require_sender(self.publisher())?;
+            crate::guard::require_sender(self.publisher())?;
             let first = update.path.first().ok_or("empty topology path")?;
             if first.canister != receiver || first.role != self.role() {
                 return Err("unexpected topology receiver or role");
@@ -558,7 +558,7 @@ pub mod retained {
     pub fn withdraw(target: (Principal, [u8; 32])) -> Result<(), String> {
         DIRECTORY.with_borrow_mut(|cell| {
             let index = cell.as_mut().ok_or("directory unavailable")?;
-            crate::topology::require_sender(index.publisher())?;
+            crate::guard::require_sender(index.publisher())?;
             Ok(index.withdraw(target)?)
         })
     }

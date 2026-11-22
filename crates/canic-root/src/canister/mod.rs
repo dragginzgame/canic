@@ -70,7 +70,7 @@ management::mount_endpoints! {
 // Read one page of Root diagnostics using the operator’s signed call.
 // guard  : Root controller
 // limits : default request, Logs::REPLY (4,096 bytes)
-#[canic::update(contract = canic::logging::Logs, guard = controller)]
+#[canic::update(contract = canic::logging::Logs, guard = canic::guard::require_controller)]
 fn logs(before: Option<u64>) -> canic::logging::Page {
     canic::logging::page(before)
 }
@@ -79,7 +79,7 @@ fn logs(before: Option<u64>) -> canic::logging::Page {
 // Deliver one exact revision to a ready named service under the operator's approval.
 // guard  : Root controller
 // limits : default
-#[canic::update(guard = controller)]
+#[canic::update(guard = canic::guard::require_controller)]
 async fn publish_directory(request: (String, u64)) -> Result<u64, String> {
     let (name, revision) = request;
     management::application::publish_directory(&name, revision)
@@ -92,7 +92,7 @@ async fn publish_directory(request: (String, u64)) -> Result<u64, String> {
 // guard  : Root controller
 // limits : ChildMetrics::REQUEST and ChildMetrics::REPLY (4,096-byte reply)
 #[cfg(feature = "child-metrics")]
-#[canic::update(contract = canic::metrics::ChildMetrics, guard = controller)]
+#[canic::update(contract = canic::metrics::ChildMetrics, guard = canic::guard::require_controller)]
 async fn child_metrics(request: (u8, canic::metrics::Request)) -> canic::metrics::Report {
     use canic::metrics::ReadMetrics;
     use canic_management_protocol::{Phase, children::ChildId};
@@ -117,13 +117,6 @@ async fn child_metrics(request: (u8, canic::metrics::Request)) -> canic::metrics
         "controller required"
     );
     report
-}
-
-/// Require a current controller of this Root.
-fn controller() -> Result<(), &'static str> {
-    runtime::system::is_controller(&runtime::system::caller())
-        .then_some(())
-        .ok_or("controller required")
 }
 
 fn readiness() -> Readiness {

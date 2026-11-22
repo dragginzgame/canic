@@ -10,7 +10,7 @@ use ic_platform_runtime as runtime;
 #[runtime::update(
     runtime = runtime,
     name = "snapshot_execute",
-    guard = guard,
+    guard = canic::guard::require_controller,
     decode = decode::<Request, 80>,
     encode = encode::<Result<Record, Error>, 80>,
     max_bytes = 1_081_344,
@@ -27,7 +27,7 @@ async fn execute(request: Request) -> Result<Record, Error> {
 #[runtime::update(
     runtime = runtime,
     name = "snapshot_lookup",
-    guard = guard,
+    guard = canic::guard::require_controller,
     decode = decode::<Binding, 81>,
     encode = encode::<Result<Record, Error>, 81>,
     max_bytes = 4096,
@@ -46,7 +46,7 @@ fn lookup(binding: Binding) -> Result<Record, Error> {
 #[runtime::update(
     runtime = runtime,
     name = "snapshot_fault",
-    guard = guard,
+    guard = canic::guard::require_controller,
     decode = decode::<u8, 82>,
     encode = encode::<(), 82>,
     max_bytes = 128,
@@ -54,15 +54,6 @@ fn lookup(binding: Binding) -> Result<Record, Error> {
 )]
 fn inject(point: u8) {
     backup::inject(point);
-}
-
-/// Restrict snapshot execution and observation to Root controllers.
-fn guard() -> Result<(), &'static str> {
-    if runtime::system::is_controller(&runtime::system::caller()) {
-        Ok(())
-    } else {
-        Err("controller required")
-    }
 }
 
 fn decode<T: serde::de::DeserializeOwned, const METHOD: u64>(

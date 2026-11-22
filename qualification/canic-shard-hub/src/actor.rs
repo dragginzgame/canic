@@ -147,15 +147,9 @@ fn fail(error: impl std::fmt::Debug) -> ! {
 // Exercise real requester-attached cycles from this installed hub.
 // guard  : fixture controller
 // limits : 1 KiB request and reply
-#[canic::update(guard = controller, limits = sharding::LIMITS)]
+#[canic::update(guard = canic::guard::require_controller, limits = sharding::LIMITS)]
 async fn pay(
     input: (sharding::payment::Demand, u128, u128),
 ) -> Result<sharding::payment::Payment, String> {
     sharding::payment::fund(ROOT.get().unwrap(), input.0, input.1, input.2).await
-}
-
-fn controller() -> Result<(), &'static str> {
-    runtime::system::is_controller(&runtime::system::caller())
-        .then_some(())
-        .ok_or("controller required")
 }

@@ -1,5 +1,5 @@
 //! Explicit endpoints for the opted-in payment participant.
-use super::peer::controller;
+
 use canic_management::funding;
 use canic_management_protocol::stored;
 pub(super) const KEY: &str = "hub.funding.v1";
@@ -8,7 +8,7 @@ pub(super) const KEY: &str = "hub.funding.v1";
 // Approve a finite budget for one directory child.
 // guard  : controller
 // limits : default Wire limits
-#[canic::update(contract = stored::ConfigureChildFunding, guard = controller)]
+#[canic::update(contract = stored::ConfigureChildFunding, guard = canic::guard::require_controller)]
 async fn configure_child_funding(
     rule: stored::ChildFunding,
 ) -> Result<stored::ChildFundingStatus, String> {
@@ -19,7 +19,7 @@ async fn configure_child_funding(
 // Close the child's payment edge.
 // guard  : controller
 // limits : default Wire limits
-#[canic::update(contract = stored::StopChildFunding, guard = controller)]
+#[canic::update(contract = stored::StopChildFunding, guard = canic::guard::require_controller)]
 fn stop_child_funding(
     child: ic_platform_types::Principal,
 ) -> Result<stored::ChildFundingStatus, String> {

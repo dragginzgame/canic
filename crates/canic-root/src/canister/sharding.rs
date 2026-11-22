@@ -1,6 +1,6 @@
 //! Explicit Root operations for controller-approved shard pools.
 
-use super::controller;
+use canic::guard::require_controller;
 use canic::sharding::{
     AssignInstance, AssignShard, Key, LIMITS, LookupInstance, LookupShard, Placement,
 };
@@ -18,7 +18,7 @@ use ic_platform_runtime as runtime;
 #[runtime::update(
     runtime = runtime,
     name = "configure_shards",
-    guard = controller,
+    guard = require_controller,
     decode = approval::<ShardPool, {stored::CONFIGURE_SHARDS}>,
     encode = configured::<{stored::CONFIGURE_SHARDS}>,
     max_bytes = 65536,
@@ -35,7 +35,7 @@ fn configure(input: ShardPool) -> Result<(), Refusal> {
 #[runtime::update(
     runtime = runtime,
     name = "configure_instances",
-    guard = controller,
+    guard = require_controller,
     decode = approval::<stored::InstancePool, {stored::CONFIGURE_INSTANCES}>,
     encode = configured::<{stored::CONFIGURE_INSTANCES}>,
     max_bytes = 65536,
@@ -49,7 +49,7 @@ fn configure_instances(input: stored::InstancePool) -> Result<(), Refusal> {
 // Approve a hub's worker release, count, funding and deadline.
 // guard  : Root controller
 // limits : stored::LIMITS request, sharding::LIMITS reply
-#[runtime::update(runtime = runtime, name = "configure_workers", guard = controller,
+#[runtime::update(runtime = runtime, name = "configure_workers", guard = require_controller,
     decode = approval::<stored::InstancePool, {stored::CONFIGURE_WORKERS}>,
     encode = configured::<{stored::CONFIGURE_WORKERS}>, max_bytes = 65536, on_error = fail)]
 fn configure_workers(input: stored::InstancePool) -> Result<(), Refusal> {
@@ -81,7 +81,7 @@ fn lookup_worker(request: (String, u8)) -> Placement {
 #[runtime::update(
     runtime = runtime,
     name = "configure_capacity",
-    guard = controller,
+    guard = require_controller,
     decode = approval::<stored::SubnetCapacity, {stored::CONFIGURE_CAPACITY}>,
     encode = configured::<{stored::CONFIGURE_CAPACITY}>,
     max_bytes = 65536,
@@ -98,7 +98,7 @@ fn configure_capacity(input: stored::SubnetCapacity) -> Result<(), Refusal> {
 #[runtime::update(
     runtime = runtime,
     name = "increase_pool",
-    guard = controller,
+    guard = require_controller,
     decode = approval::<stored::IncreasePool, {stored::INCREASE_POOL}>,
     encode = configured::<{stored::INCREASE_POOL}>,
     max_bytes = 65536,
@@ -176,7 +176,7 @@ fn fail(error: impl std::fmt::Debug) -> ! {
 // guard  : Root controller
 // limits : default
 #[cfg(feature = "role-issuer")]
-#[canic::update(contract = canic::topology::attestation::PrepareRoleKey, guard = controller)]
+#[canic::update(contract = canic::topology::attestation::PrepareRoleKey, guard = require_controller)]
 async fn prepare_role_key() -> Result<ic_wire::Bytes<32>, String> {
     canic_management::role_issuer::prepare().await
 }
@@ -196,20 +196,20 @@ fn issue_role(
 // Observe placement custody using the signed operator call path.
 // guard  : Root controller
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[canic::update(contract = canic::sharding::InspectShard, guard = controller)]
-fn inspect_shard(
+#[canic::update(contract = canic::sharding::InspectShard, guard = require_controller)]
+async fn inspect_shard(
     shard: ic_platform_types::Principal,
 ) -> Result<canic::sharding::ShardStatus, String> {
-    sharding::inspect_shard(shard)
+    sharding::inspect_shard(shard).await
 }
 
 // begin_shard_drain
 // Stop accepting new keys while continuing to serve existing routes.
 // guard  : Root controller
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[canic::update(contract = canic::sharding::BeginShardDrain, guard = controller)]
-fn begin_shard_drain(target: canic::sharding::ShardTarget) -> Result<u32, String> {
-    sharding::begin_shard_drain(&target)
+#[canic::update(contract = canic::sharding::BeginShardDrain, guard = require_controller)]
+async fn begin_shard_drain(target: canic::sharding::ShardTarget) -> Result<u32, String> {
+    sharding::begin_shard_drain(&target).await
 }
 
 // release_shard
@@ -228,7 +228,7 @@ fn release_shard((key, target): (Key, canic::sharding::ShardTarget)) -> Result<(
 #[cfg(feature = "role-issuer")]
 #[canic::update(
     contract = canic::topology::attestation::CloseRoleIssuance,
-    guard = controller,
+    guard = require_controller,
 )]
 fn close_role_issuance(
     (subject, generation): (ic_platform_types::Principal, ic_wire::Bytes<32>),
@@ -241,7 +241,7 @@ fn close_role_issuance(
 // guard  : Root controller
 // limits : default
 #[cfg(feature = "role-issuer")]
-#[canic::query(guard = controller)]
+#[canic::query(guard = require_controller)]
 fn retirement_status(
     (subject, generation): (ic_platform_types::Principal, ic_wire::Bytes<32>),
 ) -> Result<(u64, u32), String> {
@@ -252,7 +252,7 @@ fn retirement_status(
 // Create one empty canister under the exact expiring refill approval.
 // guard  : Root controller
 // limits : default Wire
-#[canic::update(contract = canic::sharding::standby::RefillStandby, guard = controller)]
+#[canic::update(contract = canic::sharding::standby::RefillStandby, guard = require_controller)]
 async fn refill_standby(
     input: canic::sharding::standby::Refill,
 ) -> Result<canic::sharding::standby::Asset, String> {
@@ -263,7 +263,7 @@ async fn refill_standby(
 // Read original refill, allocation and transfer custody.
 // guard  : Root controller
 // limits : default request, 16384-byte reply
-#[canic::update(contract = canic::sharding::standby::InspectStandby, guard = controller)]
+#[canic::update(contract = canic::sharding::standby::InspectStandby, guard = require_controller)]
 fn inspect_standby() -> Vec<(
     canic::sharding::standby::Source,
     canic::sharding::standby::Asset,
@@ -275,7 +275,7 @@ fn inspect_standby() -> Vec<(
 // Withdraw an exact worker allocation once its hub confirms durable release.
 // guard  : Root controller
 // limits : sharding request, default reply
-#[canic::update(contract = canic::sharding::standby::ConfirmRelease, guard = controller)]
+#[canic::update(contract = canic::sharding::standby::ConfirmRelease, guard = require_controller)]
 async fn confirm_worker_release(target: canic::sharding::ShardTarget) -> Result<(), String> {
     sharding::standby::confirm_release(target).await
 }
@@ -284,7 +284,7 @@ async fn confirm_worker_release(target: canic::sharding::ShardTarget) -> Result<
 // Advance an exact released worker through stop and uninstall.
 // guard  : Root controller
 // limits : sharding request, default reply
-#[canic::update(contract = canic::sharding::standby::ResetWorker, guard = controller)]
+#[canic::update(contract = canic::sharding::standby::ResetWorker, guard = require_controller)]
 async fn reset_worker(
     (target, deadline): (canic::sharding::ShardTarget, u64),
 ) -> Result<canic::sharding::standby::ResetPhase, String> {
@@ -300,7 +300,7 @@ async fn reset_worker(
 // guard  : Root controller
 // limits : stored request limits, default reply
 #[cfg(feature = "role-issuer")]
-#[canic::update(contract = stored::RetireShard, guard = controller)]
+#[canic::update(contract = stored::RetireShard, guard = require_controller)]
 async fn retire_shard(
     input: stored::Stage<stored::ShardRetirement>,
 ) -> Result<stored::RetirementPhase, String> {
@@ -315,7 +315,7 @@ async fn retire_shard(
 // Retain the reserve policy and start bounded fill.
 // guard  : Root controller
 // limits : stored request, default reply
-#[canic::update(contract = stored::ConfigureStandby, guard = controller)]
+#[canic::update(contract = stored::ConfigureStandby, guard = require_controller)]
 fn configure_standby(policy: stored::StandbyPolicy) -> Result<(), String> {
     #[cfg(feature = "auth")]
     for text in &policy.imports {
@@ -343,7 +343,7 @@ async fn import_standby(
 // Reserve one empty spare and hand it to its named destination Root.
 // guard  : Root controller
 // limits : default Wire
-#[canic::update(contract = canic::sharding::standby::ExportStandby, guard = controller)]
+#[canic::update(contract = canic::sharding::standby::ExportStandby, guard = require_controller)]
 async fn export_standby(
     input: (
         ic_platform_types::Principal,
@@ -378,7 +378,7 @@ fn spare_counts() -> Option<stored::SpareCounts> {
 // Start fixed deposits below an approved balance or observe the original grant.
 // guard  : Root controller
 // limits : default Wire limits
-#[canic::update(contract = stored::ConfigureChildFunding, guard = controller)]
+#[canic::update(contract = stored::ConfigureChildFunding, guard = require_controller)]
 async fn configure_child_funding(
     input: stored::ChildFunding,
 ) -> Result<stored::ChildFundingStatus, String> {
@@ -395,7 +395,7 @@ async fn configure_child_funding(
 // Cancel future deposits while preserving charged and unresolved attempts.
 // guard  : Root controller
 // limits : default Wire limits
-#[canic::update(contract = stored::StopChildFunding, guard = controller)]
+#[canic::update(contract = stored::StopChildFunding, guard = require_controller)]
 fn stop_child_funding(
     child: ic_platform_types::Principal,
 ) -> Result<stored::ChildFundingStatus, String> {
@@ -406,7 +406,7 @@ fn stop_child_funding(
 // Revoke future payments at the managed parent that owns the grant.
 // guard  : Root controller
 // limits : default Wire limits
-#[canic::update(contract = stored::StopApplicationChildFunding, guard = controller)]
+#[canic::update(contract = stored::StopApplicationChildFunding, guard = require_controller)]
 async fn stop_application_child_funding(
     input: (ic_platform_types::Principal, ic_platform_types::Principal),
 ) -> Result<stored::ChildFundingStatus, String> {

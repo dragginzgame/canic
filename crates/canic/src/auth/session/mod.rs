@@ -66,20 +66,8 @@ struct State {
 
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
 
-/// Admit only the issuer canister bound by the receiver's protected installation.
-///
-/// # Errors
-/// Refuses when the receiver is closed or the caller is not its issuer.
-pub fn require_issuer() -> Result<(), &'static str> {
-    let caller = ic_platform_runtime::system::caller();
-    STATE.with_borrow(|slot| {
-        let state = slot.as_ref().ok_or("receiver unavailable")?;
-        if caller.as_slice().last() == Some(&1) && caller == state.policy.issuer {
-            Ok(())
-        } else {
-            Err("configured issuer required")
-        }
-    })
+pub(crate) fn configured_issuer() -> Option<Principal> {
+    STATE.with_borrow(|slot| slot.as_ref().map(|state| state.policy.issuer))
 }
 
 /// Installed acceptance policy for credentials from one issuer and role.

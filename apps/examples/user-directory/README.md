@@ -33,7 +33,9 @@ canic app build
 
 For a deployed shard pool with the Root client built and a controller identity,
 inspect the shard first. Use the slot and generation from that reply to start
-the drain. Inspect again to see the current count.
+the drain. For a pool with hub-local routes, inspect reads the hub’s current
+occupancy. Repeat the drain after the application moves its last account so
+Root retains the hub’s acknowledgement before retirement.
 
 ```sh
 canic fleet call --canister root --identity operator inspect-shard "$SHARD"

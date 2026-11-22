@@ -17,11 +17,11 @@ canic::mount_receiver_lifecycle! {
 
 // provision_user
 // Insert the private account row or confirm an exact replay.
-// guard  : canic::topology::require_parent
+// guard  : canic::guard::require_parent
 // limits : Provision<Users>
 #[canic::update(
     contract = Provision<Users>,
-    guard = canic::topology::require_parent,
+    guard = canic::guard::require_parent,
 )]
 fn provision_user(request: Request<[u8; 16], ()>) -> Result<Binding<[u8; 16]>, ProvisionRefusal> {
     let binding = request.binding;

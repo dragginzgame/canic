@@ -180,7 +180,7 @@ async fn installed_publication(scenario: Scenario) {
         Scenario::RoleProof => Some(4),
         Scenario::ThreeServices => Some(5),
         Scenario::Funding => Some(2),
-        Scenario::Retirement { .. } => Some(3),
+        Scenario::Retirement { from_spare } => Some(if from_spare { 4 } else { 3 }),
         _ => None,
     };
     let module = if matches!(scenario, Scenario::RoleProof | Scenario::Retirement { .. }) {

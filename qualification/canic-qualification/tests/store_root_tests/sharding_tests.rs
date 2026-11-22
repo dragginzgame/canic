@@ -1499,6 +1499,24 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
     let first = register(alice).await;
     let first_id = first.assigned_target().unwrap().unwrap().1;
     assert_eq!(first_id, spare);
+    // The first capacity ordinal has the same bytes as an all-zero account key.
+    let target = sharding::ShardTarget {
+        allocation: first.assigned_target().unwrap().unwrap().0.clone(),
+        shard: first_id,
+    };
+    let released = pic
+        .update_call(
+            root.id,
+            hub,
+            sharding::ReleaseShard::NAME,
+            sharding::ReleaseShard::encode_request(&([0; 32], target)).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        sharding::ReleaseShard::decode_reply(&released).unwrap(),
+        Err("account releases belong to the hub for this pool".into())
+    );
     pic.stop_canister(root.id, Some(root.operator))
         .await
         .unwrap();

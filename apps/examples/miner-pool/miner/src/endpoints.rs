@@ -1,6 +1,6 @@
 //! The configured pool issues bounded work and may repeat an unacknowledged batch.
 use crate::{WORK_CELL, Work};
-use canic::topology::{Install, require_parent};
+use canic::{guard::require_parent, topology::Install};
 
 canic::mount_lifecycle! {
     input = Install, max_bytes = 4096, decode = Install::decode,

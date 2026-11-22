@@ -63,14 +63,10 @@ pub(super) async fn exercise(
         root: root.id.to_text(),
         hub: user.to_text(),
         pool: "users".into(),
-        max_shards: 1,
-        keys_per_shard: 1,
+        max_shards: if from_spare { 2 } else { 1 },
+        keys_per_shard: if from_spare { 2 } else { 1 },
         creation_payer: Default::default(),
-        creation_budget: if from_spare {
-            0
-        } else {
-            management::CREATION_CYCLES
-        },
+        creation_budget: management::CREATION_CYCLES,
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
     };
@@ -82,7 +78,25 @@ pub(super) async fn exercise(
     )
     .await
     .unwrap();
+    let local_place = async |owner| {
+        Client {
+            pic,
+            id: user,
+            operator: owner,
+        }
+        .update::<_, Placement>(
+            "local_place",
+            ic_wire::method_id("local_place"),
+            &(),
+            canic::sharding::LIMITS,
+        )
+        .await
+    };
+    let alice = CanisterId::self_authenticating(b"alice");
     let place = async || {
+        if from_spare {
+            return local_place(alice).await;
+        }
         super::capacity::place(&hub, Some("users"), 1)
             .await
             .unwrap()
@@ -171,14 +185,141 @@ pub(super) async fn exercise(
         .await,
         Ok(1)
     );
-    hub.update::<_, Result<(), String>>(
-        "release_route",
-        ic_wire::method_id("release_route"),
-        &([1u8; 32], &target),
-        canic::sharding::LIMITS,
-    )
-    .await
-    .unwrap();
+    if from_spare {
+        assert_eq!(
+            place().await.assigned_target().unwrap().unwrap().1,
+            target.shard
+        );
+        let writer = Client {
+            pic,
+            id: child.id,
+            operator: alice,
+        };
+        let write = async |value: u64| {
+            writer
+                .update::<_, Result<(), String>>(
+                    "write_value",
+                    ic_wire::method_id("write_value"),
+                    &value,
+                    canic::method::LIMITS,
+                )
+                .await
+        };
+        write(42).await.unwrap();
+        assert!(
+            root.update::<_, Result<u64, String>>(
+                CloseRoleIssuance::NAME,
+                CloseRoleIssuance::ID,
+                &(child.id, proof.0.generation.clone()),
+                canic::method::LIMITS
+            )
+            .await
+            .is_err()
+        );
+        let bob = CanisterId::self_authenticating(b"bob");
+        assert!(matches!(local_place(bob).await, Placement::Pending(_)));
+        settle(pic).await;
+        let bob_route = local_place(bob).await;
+        let (allocation, shard) = bob_route.assigned_target().unwrap().unwrap();
+        assert_ne!(shard, target.shard);
+        let destination = ShardTarget {
+            allocation: allocation.clone(),
+            shard,
+        };
+        let arguments = (target.clone(), destination);
+        let shard_id = CanisterId::from_slice(shard.as_slice());
+        let name = "move_account";
+        let frame = ic_wire::Encoding::Frame {
+            method: ic_wire::method_id(name),
+            direction: ic_wire::Direction::Request,
+        };
+        let _lost = pic
+            .submit_call(
+                user,
+                alice,
+                name,
+                ic_wire::encode(&arguments, frame, canic::sharding::LIMITS).unwrap(),
+            )
+            .await
+            .unwrap();
+        settle(pic).await;
+        assert_eq!(place().await, bob_route);
+        let read_value = async || {
+            let name = "read_value";
+            let frame = |direction| ic_wire::Encoding::Frame {
+                method: ic_wire::method_id(name),
+                direction,
+            };
+            let input = ic_wire::encode(
+                &(),
+                frame(ic_wire::Direction::Request),
+                canic::method::LIMITS,
+            )
+            .unwrap();
+            let output = pic.query_call(shard_id, alice, name, input).await.unwrap();
+            ic_wire::decode::<Option<u64>>(
+                &output,
+                frame(ic_wire::Direction::Response),
+                canic::method::LIMITS,
+            )
+            .unwrap()
+        };
+        assert_eq!(read_value().await, Some(42));
+        let destination_writer = Client {
+            pic,
+            id: shard_id,
+            operator: alice,
+        };
+        destination_writer
+            .update::<_, Result<(), String>>(
+                "write_value",
+                ic_wire::method_id("write_value"),
+                &43_u64,
+                canic::method::LIMITS,
+            )
+            .await
+            .unwrap();
+        let mover = Client {
+            pic,
+            id: user,
+            operator: alice,
+        };
+        mover
+            .update::<_, Result<(), String>>(
+                name,
+                ic_wire::method_id(name),
+                &arguments,
+                canic::sharding::LIMITS,
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            read_value().await,
+            Some(43),
+            "retry preserved the later destination edit"
+        );
+        assert_eq!(write(43).await, Err("account fenced".into()));
+        assert_eq!(place().await, bob_route);
+        assert_eq!(
+            root.update::<_, Result<u32, String>>(
+                BeginShardDrain::NAME,
+                BeginShardDrain::ID,
+                &target,
+                canic::sharding::LIMITS
+            )
+            .await,
+            Ok(0)
+        );
+    } else {
+        hub.update::<_, Result<(), String>>(
+            "release_route",
+            ic_wire::method_id("release_route"),
+            &([1u8; 32], &target),
+            canic::sharding::LIMITS,
+        )
+        .await
+        .unwrap();
+    }
     let deadline = root
         .update::<_, Result<u64, String>>(
             CloseRoleIssuance::NAME,
@@ -266,7 +407,7 @@ pub(super) async fn exercise(
             .contains("hub withdrawal unconfirmed")
     );
     pic.start_canister(user, Some(root.id)).await.unwrap();
-    assert_eq!(members().await, [child.id]);
+    assert!(members().await.contains(&child.id));
     for phase in [P::InstallIssued, P::Dormant] {
         assert_eq!(advance(&input).await, Ok(phase));
     }
@@ -337,7 +478,7 @@ pub(super) async fn exercise(
     );
     reopen("available").await;
     assert!(
-        members().await.is_empty(),
+        !members().await.contains(&child.id),
         "returned shard remains discoverable"
     );
     assert!(matches!(worker().await, Placement::Pending(_)));
@@ -347,7 +488,7 @@ pub(super) async fn exercise(
     };
     assert_eq!(worker_id, child.id.to_text());
     assert!(
-        members().await.is_empty(),
+        !members().await.contains(&child.id),
         "former shard now runs worker code"
     );
     assert_ne!(generation, allocation.generation);
@@ -371,6 +512,25 @@ pub(super) async fn exercise(
     assert_eq!(attempt, 1);
     assert_eq!(use_proof().await, Err("role refused".into()));
     reopen("reassigned").await;
+    if from_spare {
+        use canic::sharding::GrowShard;
+        let original = Client {
+            pic,
+            id: root.id,
+            operator: user,
+        }
+        .update::<_, (Placement, u32)>(
+            GrowShard::NAME,
+            GrowShard::ID,
+            &("users", 0_u8),
+            GrowShard::REPLY,
+        )
+        .await;
+        assert_eq!(
+            original.0,
+            Placement::Unavailable(target.allocation.clone(), Some(target.shard.to_text()))
+        );
+    }
     assert_eq!(advance(&input).await, Ok(P::Returned));
     assert!(
         matches!(inventory().await.as_slice(),[(original,Asset::Claimed(_,new))] if original==&origin && new.generation==generation)

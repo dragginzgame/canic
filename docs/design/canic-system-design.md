@@ -958,8 +958,27 @@ keeps creation and reserve custody at Root. Applications call
 `sharding::routes::get_shard(pool, subject)` on reads. Canic requests and recovers
 the original growth ordinal internally. The application can distinguish a reserved
 route from a completed business write through its own admission or provisioning state. Root persists this mode in the PLS3 pool record.
-Account counts for this mode belong to the hub. Managed draining requires a
-future hub evacuation acknowledgement and remains unavailable for these pools.
+Account counts for this mode belong to the hub. A capacity ordinal retained at
+Root identifies an installed shard. Releasing an account must never remove that
+ordinal. Managed retirement of hub-local routes requires the hub to acknowledge
+evacuation of the exact allocation.
+
+During evacuation the hub must durably stop new assignments to the source while
+existing accounts keep their routes. The application owns moving each account's
+data. It durably fences writes to that account on the source before copying
+and confirms the destination is usable. Only then may the hub commit the
+new route. An acknowledgement lost after commit must recover the same result.
+Root may return the old principal to reserve only after the original hub
+acknowledges zero occupancy for that generation and withdrawal completes. The
+hub reserves destination capacity with `routes::prepare_move` and commits the
+exact source/destination with `routes::confirm_move` after application confirmation.
+Both reservations count while the copy is pending. If the pool cannot admit
+a destination, the source route stays intact. Fresh hubs use the v2 route
+frame. Root retains the hub’s zero acknowledgement in PLS4 alongside the original
+capacity claim. Repeating the operator drain recovers a missing acknowledgement.
+Legacy `377fbce` tests in `ops/storage/placement/sharding/tests` cover
+release decrementing occupancy and concurrent assignment retaining the first
+mapping. The installed acceptance case needs both invariants across evacuation.
 
 The local installed witness exercises this contract on a fresh Root with the
 `sharding` feature. It starts with a two-shard grant and an independently installed hub.
@@ -1626,7 +1645,7 @@ occupies capacity. The 0.239.0 two-slot whole-fleet approval and custody APIs
 retain their original scope.
 
 For #53 the receiver declares the permitted service with
-`guard = require_canister("project_hub")` on its endpoint. The application opens
+`guard = canic::guard::require_canister("project_hub")` on its endpoint. The application opens
 the retained `DIRECTORY` during install or upgrade. The guard
 checks the actual IC caller against the exact service name in the local directory
 admitted from the retained publisher. Missing names deny access. Fixed published
@@ -1732,8 +1751,10 @@ The controller uses the supplied Root command codec with `fleet call`.
 signed replicated call. `drain-shard PRINCIPAL SLOT GENERATION` starts drain
 for the reviewed allocation. This fences new
 placements while allowing the shard to renew proofs for its existing accounts.
-After committing a route migration or removal, the approved hub may release
-one exact key, principal and allocation generation. Repeating that release
+For a pool with Root-owned routes, after committing a route migration or
+removal the approved hub may release one exact key, principal and allocation
+generation. A hub with local routes instead commits the exact move locally.
+The controller repeats the drain so Root retains the hub’s zero acknowledgement. Repeating that release
 leaves other keys and generations untouched. Managed closure of role issuance
 requires the drained generation to have zero live placements. The role-enabled
 Root command codec exposes `close-role-issuance PRINCIPAL GENERATION` and

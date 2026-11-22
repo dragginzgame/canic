@@ -161,17 +161,8 @@ impl RoleVerifier {
     }
 }
 
-/// Admission shared by query and update mounts with a role contract.
-/// # Errors
-/// Refuses missing trust or a proof that fails this method's role check.
 #[cfg(feature = "role-verification")]
-pub fn admit_role<M: RoleMethod>(proof: &Proof) -> Result<(), &'static str> {
-    admit_roles(M::ROLES, proof)
-}
-
-#[cfg(feature = "role-verification")]
-#[doc(hidden)]
-pub fn admit_roles(roles: &[&str], proof: &Proof) -> Result<(), &'static str> {
+pub(crate) fn verify_roles(roles: &[&str], proof: &Proof) -> Result<(), &'static str> {
     TRUST.with(|slot| {
         slot.get()
             .ok_or("missing role verifier")?

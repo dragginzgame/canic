@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
-    method: ic_wire::method_id("canic.hub_routes.v1"),
+    method: ic_wire::method_id("canic.hub_routes.v2"),
     direction: ic_wire::Direction::Response,
 };
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
@@ -32,6 +32,7 @@ struct Shard {
     target: ShardTarget,
     limit: u32,
     occupied: u32,
+    draining: bool,
 }
 #[derive(Serialize, Deserialize)]
 struct Roster {
@@ -46,10 +47,13 @@ impl Roster {
         self.pools.iter().position(|p| p.name == name)
     }
 }
+// Values retain (current ordinal, previous ordinal). Equal ordinals mean initial assignment.
+type Owners = StableBTreeMap<(u8, [u8; 30]), (u8, u8)>;
+
 struct Index {
     roster: Roster,
     cell: StableCell<Vec<u8>>,
-    owners: StableBTreeMap<(u8, [u8; 30]), u8>,
+    owners: Owners,
 }
 thread_local! {
     static INDEX: RefCell<Option<Index>> = const { RefCell::new(None) };
@@ -120,7 +124,7 @@ pub fn get_shard(pool: &str, subject: Principal) -> Option<ShardTarget> {
     INDEX.with_borrow(|i| {
         let i = i.as_ref().expect("open routes");
         let n = i.roster.pool(pool)?;
-        let slot = i.owners.get(&(
+        let (slot, _) = i.owners.get(&(
             u8::try_from(n).expect("pool namespace"),
             subject_key(subject),
         ))?;
@@ -140,47 +144,118 @@ pub async fn assign_shard(
     subject: Principal,
     authorize: impl Fn(),
 ) -> Result<Placement, &'static str> {
+    reserve(pool, subject, None, authorize).await
+}
+
+/// Reserve a destination while preserving the account's active source route.
+/// The application fences source writes before copying and verifies destination readiness.
+/// # Errors
+/// Refuses a changed route or a source that is still accepting accounts.
+pub async fn prepare_move(
+    pool: &str,
+    subject: Principal,
+    source: &ShardTarget,
+    authorize: impl Fn(),
+) -> Result<Placement, &'static str> {
+    reserve(pool, subject, Some(source), authorize).await
+}
+
+fn reservation_key(subject: Principal, moving: bool) -> [u8; 30] {
+    let mut key = subject_key(subject);
+    // Principal lengths occupy 0..=29. The high bit identifies a pending destination.
+    if moving {
+        key[0] |= 128;
+    }
+    key
+}
+
+enum Reservation {
+    Assigned(ShardTarget),
+    Grow(Principal, u8),
+}
+
+async fn reserve(
+    pool: &str,
+    subject: Principal,
+    source: Option<&ShardTarget>,
+    authorize: impl Fn(),
+) -> Result<Placement, &'static str> {
     loop {
         authorize();
-        if let Some(target) = get_shard(pool, subject) {
-            return Ok(Placement::Assigned(
-                target.allocation,
-                target.shard.to_text(),
-            ));
-        }
-        let growth = INDEX.with_borrow_mut(|i| {
+        let reservation = INDEX.with_borrow_mut(|i| {
             let i = i.as_mut().expect("open routes");
             let root = i.roster.root;
             let Some(n) = i.roster.pool(pool) else {
-                return Some((root, 0));
+                if source.is_some() {
+                    return Err("unknown source pool");
+                }
+                return Ok(Reservation::Grow(root, 0));
             };
+            let namespace = u8::try_from(n).expect("pool namespace");
+            if let Some(source) = source {
+                let (slot, previous) = i
+                    .owners
+                    .get(&(namespace, subject_key(subject)))
+                    .ok_or("unknown source route")?;
+                let shard = &i.roster.pools[n].shards[usize::from(slot)];
+                if slot != previous
+                    && &i.roster.pools[n].shards[usize::from(previous)].target == source
+                {
+                    return Ok(Reservation::Assigned(shard.target.clone()));
+                }
+                if &shard.target != source || !shard.draining {
+                    return Err("source route is not draining");
+                }
+            }
+            let key = (namespace, reservation_key(subject, source.is_some()));
+            if let Some((slot, _)) = i.owners.get(&key) {
+                return Ok(Reservation::Assigned(
+                    i.roster.pools[n].shards[usize::from(slot)].target.clone(),
+                ));
+            }
             let shards = &mut i.roster.pools[n].shards;
             if let Some((slot, s)) = shards
                 .iter_mut()
                 .enumerate()
-                .find(|(_, s)| s.occupied < s.limit)
+                .find(|(_, s)| !s.draining && s.occupied < s.limit)
             {
-                let old = i.owners.insert(
-                    (u8::try_from(n).unwrap(), subject_key(subject)),
-                    u8::try_from(slot).unwrap(),
-                );
+                let ordinal = u8::try_from(slot).unwrap();
+                let old = i.owners.insert(key, (ordinal, ordinal));
                 assert!(old.is_none(), "route changed");
                 s.occupied += 1;
+                let target = s.target.clone();
                 i.cell.set(i.roster.encode());
-                None
+                Ok(Reservation::Assigned(target))
             } else {
-                Some((root, u8::try_from(shards.len()).expect("shard ordinal")))
+                Ok(Reservation::Grow(
+                    root,
+                    u8::try_from(shards.len()).expect("shard ordinal"),
+                ))
             }
-        });
-        let Some((root, ordinal)) = growth else {
-            continue;
+        })?;
+        let (root, ordinal) = match reservation {
+            Reservation::Assigned(target) => {
+                return Ok(Placement::Assigned(
+                    target.allocation,
+                    target.shard.to_text(),
+                ));
+            }
+            Reservation::Grow(root, ordinal) => (root, ordinal),
         };
         let reply = grow_shard(root, pool, ordinal).await;
         authorize();
         let (result, limit) = reply.map_err(|_| "shard capacity reply unavailable")?;
         let Some((allocation, shard)) = result.assigned_target()? else {
             // A concurrent registration may have committed this subject while suspended.
-            if get_shard(pool, subject).is_some() {
+            if INDEX.with_borrow(|index| {
+                let i = index.as_ref().expect("open routes");
+                i.roster.pool(pool).is_some_and(|n| {
+                    i.owners.contains_key(&(
+                        u8::try_from(n).unwrap(),
+                        reservation_key(subject, source.is_some()),
+                    ))
+                })
+            }) {
                 continue;
             }
             return Ok(result);
@@ -217,8 +292,116 @@ fn record_shard(pool: &str, ordinal: u8, target: ShardTarget, limit: u32) {
                 target,
                 limit,
                 occupied: 0,
+                draining: false,
             });
             i.cell.set(i.roster.encode());
         }
     });
+}
+
+/// Commit the exact prepared move after the app has verified the destination.
+/// Replaying a completed move acknowledges the same binding.
+/// # Errors
+/// Refuses a different active source, unreserved destination or changed allocation.
+/// # Panics
+/// Requires an opened route index with consistent retained occupancy.
+pub fn confirm_move(
+    pool: &str,
+    subject: Principal,
+    source: &ShardTarget,
+    destination: &ShardTarget,
+) -> Result<(), &'static str> {
+    INDEX.with_borrow_mut(|index| {
+        let i = index.as_mut().expect("open routes");
+        let n = i.roster.pool(pool).ok_or("unknown pool")?;
+        let shards = &mut i.roster.pools[n].shards;
+        let from = shards
+            .iter()
+            .position(|s| &s.target == source && s.draining)
+            .ok_or("invalid draining source")?;
+        let to = shards
+            .iter()
+            .position(|s| &s.target == destination)
+            .ok_or("unknown destination")?;
+        if from == to {
+            return Err("source equals destination");
+        }
+        let namespace = u8::try_from(n).expect("pool namespace");
+        let key = (namespace, subject_key(subject));
+        let pending = (namespace, reservation_key(subject, true));
+        let (current, previous) = i.owners.get(&key).ok_or("unknown subject")?;
+        let current = usize::from(current);
+        if current == to && usize::from(previous) == from {
+            return Ok(());
+        }
+        if current != from || i.owners.get(&pending).map(|(slot, _)| usize::from(slot)) != Some(to)
+        {
+            return Err("route reservation changed");
+        }
+        i.owners.remove(&pending);
+        i.owners.insert(
+            key,
+            (u8::try_from(to).unwrap(), u8::try_from(from).unwrap()),
+        );
+        shards[from].occupied -= 1;
+        i.cell.set(i.roster.encode());
+        Ok(())
+    })
+}
+
+/// Observe or permanently fence an exact allocation on request from its retained Root.
+/// # Errors
+/// Refuses foreign callers and unknown pool or allocation bindings.
+/// # Panics
+/// Requires an open hub route index.
+pub fn shard_status(
+    pool: &str,
+    target: &ShardTarget,
+    drain: bool,
+) -> Result<super::ShardStatus, String> {
+    status(ic_platform_runtime::system::caller(), pool, target, drain)
+}
+
+fn status(
+    caller: Principal,
+    pool: &str,
+    target: &ShardTarget,
+    drain: bool,
+) -> Result<super::ShardStatus, String> {
+    INDEX.with_borrow_mut(|index| {
+        let i = index.as_mut().expect("open routes");
+        if i.roster.root != caller {
+            return Err("routing Root required".into());
+        }
+        let n = i.roster.pool(pool).ok_or("unknown shard pool")?;
+        let shard = i.roster.pools[n]
+            .shards
+            .iter_mut()
+            .find(|s| &s.target == target)
+            .ok_or("unknown shard generation")?;
+        let changed = drain && !shard.draining;
+        shard.draining |= drain;
+        let status = super::ShardStatus {
+            target: target.clone(),
+            draining: shard.draining,
+            live_placements: shard.occupied,
+        };
+        if changed {
+            i.cell.set(i.roster.encode());
+        }
+        Ok(status)
+    })
+}
+
+/// Mount Root's route occupancy and drain operation in a hub that opens the index.
+#[macro_export]
+macro_rules! mount_hub_routes {
+    () => {
+        #[$crate::update(contract = $crate::sharding::HubShardStatus)]
+        fn hub_shard_status(
+            (pool, target, drain): (String, $crate::sharding::ShardTarget, bool),
+        ) -> Result<$crate::sharding::ShardStatus, String> {
+            $crate::sharding::routes::shard_status(&pool, &target, drain)
+        }
+    };
 }

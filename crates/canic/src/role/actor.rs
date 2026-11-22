@@ -84,7 +84,7 @@ impl HubConfig {
 pub fn decode_hub(input: &Install) -> Result<HubConfig, &'static str> {
     #[cfg(feature = "role-attestation")]
     let (service, bindings) = {
-        topology::require_sender(input.root)?;
+        crate::guard::require_sender(input.root)?;
         let service = topology::directory::ServiceInstall::decode(&input.application)?;
         let bindings = topology::directory::DbService::decode(&service.application)?;
         (service, bindings)

@@ -15,6 +15,7 @@ macro_rules! mount_receiver_lifecycle {
      $(reserved_keys = [$($reserved:literal),* $(,)?],)?
      $(auth_read = $scope:expr,)? $(max_login_secs = $seconds:expr,)?
      $(init = $init:path,)? $(pre_upgrade = $pre:path,)? $(post_upgrade = $post:path,)? ) => {
+        $crate::mount_hub_routes!();
         $crate::role::mount_directory!();
         const _: () = {
             fn hub_storage(install: Option<&$crate::auth::install::Install>) -> $crate::role::RoleStorage {
@@ -36,6 +37,7 @@ macro_rules! mount_receiver_lifecycle {
     };
     (config_key = $key:literal, authority = $owner:literal, $(prefix = $prefix:literal,)?
      pages = $pages:literal, auth_read = $scope:literal $(, max_login_secs = $seconds:expr)? $(,)?) => {
+        $crate::mount_hub_routes!();
         $crate::mount_receiver_lifecycle!(@hooks hub_readiness, $scope,
             open_hub, $owner, $crate::mount_receiver_lifecycle!(@prefix $owner $(, $prefix)?), $key, $pages $(, $seconds)?);
     };

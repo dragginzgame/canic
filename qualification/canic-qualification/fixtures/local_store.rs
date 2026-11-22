@@ -34,7 +34,7 @@ impl Client<'_> {
                 .unwrap(),
             )
             .await
-            .unwrap();
+            .unwrap_or_else(|e| panic!("{method} on {}: {e:?}", self.id));
         ic_wire::decode(
             &reply,
             ic_wire::Encoding::Frame {

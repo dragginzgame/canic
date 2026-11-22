@@ -37,6 +37,8 @@ pub mod db;
 #[cfg(feature = "raw-rand")]
 pub mod entropy;
 
+pub mod guard;
+
 /// Opt-in Jobs runtime. The application owns job binding and timer initialization.
 #[cfg(feature = "jobs")]
 pub use ic_jobs as jobs;

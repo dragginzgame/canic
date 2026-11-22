@@ -38,7 +38,7 @@ fn on_post_upgrade() {
 // Report which lifecycle callback completed in this incarnation.
 // guard  : installed issuer
 // limits : default
-#[canic::query(guard = canic::auth::session::require_issuer)]
+#[canic::query(guard = canic::guard::require_issuer)]
 fn restored() -> Option<bool> {
     RESTORED.get()
 }

@@ -56,6 +56,10 @@ The two-Root handoff case uses distinct controllers, an actual controller change
 a one-slot source, and upgrades of both Roots. The destination's first custody
 observation frees source capacity when the source reconciles. The destination
 separately completes quarantine. The directory suite installs two permanent hubs, a shared shard and a dedicated project from four ready spares. Each child records zero create dispatches. The three-service case adds a discovery hub to two existing services, retries all three approvals and checks independent routing for two hubs. The Store dispatch case upgrades the third service while preserving both earlier journals and pins. A separate case assigns the same key in two named pools under one hub and recovers both placements after Root reopens. It also retires and reuses both a newly created shard and a spare-backed shard.
+In the latter case the hub routes Bob to a second shard during drain, moves
+Alice after fencing her source writes, and recovers a lost move reply after
+Alice edits her destination record. Root retains the zero-occupancy evidence
+through dormancy and reuse of the original principal as a worker.
 [Fleet and expected rounds](../apps/examples/miner-pool/DESIGN.md)
 
 ## Named service and dedicated instance role issuance

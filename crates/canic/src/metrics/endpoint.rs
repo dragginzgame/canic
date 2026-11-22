@@ -19,9 +19,7 @@ pub fn set_guard(guard: fn() -> Result<(), &'static str>) {
 fn admit() -> Result<(), &'static str> {
     GUARD.with(|slot| match slot.get() {
         Some(guard) => guard(),
-        None => system::is_controller(&system::caller())
-            .then_some(())
-            .ok_or("controller required"),
+        None => crate::guard::require_controller(),
     })
 }
 

@@ -2,9 +2,8 @@
 use super::{AuthSubject, Binding, Progress, Provision, Request, Resource, SendError};
 use crate::{
     auth::session::Authorization,
-    method, role,
+    guard, method, role,
     sharding::{self, Allocation, Placement},
-    topology,
 };
 use ic_platform_runtime::system as api;
 use ic_platform_types::Principal;
@@ -133,7 +132,7 @@ impl<I> Binding<I> {
     /// # Errors
     /// Refuses an anonymous account component or wrong destination.
     pub fn check_target(&self) -> Result<(), &'static str> {
-        topology::require_parent().unwrap_or_else(|e| method::fail(e));
+        guard::require_parent().unwrap_or_else(|e| method::fail(e));
         if !self.account.valid() || self.shard != api::canister_self() {
             return Err("invalid provisioning target");
         }

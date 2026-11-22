@@ -1,7 +1,7 @@
 //! Endpoint-owned project sync policy on a directory-backed accounts hub.
 use super::{DIRECTORY, Principal};
+use canic::guard::require_canister;
 use canic::method::{Contract, wire};
-use canic::topology::require_canister;
 use ic_platform_runtime::{call, system};
 use std::cell::Cell;
 
@@ -15,13 +15,7 @@ fn writable() -> Result<(), &'static str> {
     (!PAUSED.get()).then_some(()).ok_or("writes paused")
 }
 
-pub(super) fn controller() -> Result<(), &'static str> {
-    system::is_controller(&system::caller())
-        .then_some(())
-        .ok_or("controller required")
-}
-
-#[canic::update(guard = controller)]
+#[canic::update(guard = canic::guard::require_controller)]
 fn pause_writes(paused: bool) {
     if PAUSED.replace(paused) != paused {
         EPOCH.update(|n| n.checked_add(1).expect("write epoch"));
@@ -60,7 +54,7 @@ async fn project_sync(barrier: Option<Principal>) -> Result<u64, String> {
 
 // Both the service and its controller may inspect this witness counter.
 fn may_read_count() -> Result<(), &'static str> {
-    require_canister("project_hub").or_else(|_| controller())
+    require_canister("project_hub").or_else(|_| canic::guard::require_controller())
 }
 
 #[canic::query(guard = may_read_count)]
@@ -68,7 +62,7 @@ fn sync_count() -> u64 {
     WRITES.get()
 }
 
-#[canic::update(guard = controller)]
+#[canic::update(guard = canic::guard::require_controller)]
 async fn send_sync(barrier: Option<Principal>) -> Result<u64, String> {
     let target = DIRECTORY
         .with_borrow(|s| s.as_ref()?.current()?.by_name("accounts_hub"))
@@ -96,7 +90,7 @@ fn certificate_available() -> bool {
         .is_some()
 }
 
-#[canic::update(guard = controller)]
+#[canic::update(guard = canic::guard::require_controller)]
 async fn probe_certificate() -> bool {
     let receiver = DIRECTORY
         .with_borrow(|s| s.as_ref()?.current()?.by_name("accounts_hub"))
@@ -115,7 +109,7 @@ impl Contract for HasDeadline {
     type Output = bool;
 }
 
-#[canic::update(guard = controller)]
+#[canic::update(guard = canic::guard::require_controller)]
 async fn probe_wait((target, seconds): (Principal, Option<u32>)) -> bool {
     match seconds {
         Some(seconds) => canic::method::call::<HasDeadline>(target, seconds, &()).await,

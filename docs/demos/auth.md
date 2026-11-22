@@ -39,7 +39,7 @@ canic::mount_receiver_lifecycle! {
 
 Omit `auth_read` on a discovery-only hub to leave the portable session endpoints
 unmounted. A private issuer callback uses
-`#[canic::update(guard = canic::auth::session::require_issuer)]`. Its authority
+`#[canic::update(guard = canic::guard::require_issuer)]`. Its authority
 comes from the actual caller and protected receiver installation. A browser session
 is unnecessary. The stable receiver recovers that binding on upgrade.
 

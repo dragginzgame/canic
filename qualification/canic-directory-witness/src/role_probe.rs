@@ -1,5 +1,5 @@
 //! Qualification client and locally pinned receiver for the Root role issuer.
-use super::{Principal, peer::controller};
+use super::Principal;
 use canic::{
     method::{Contract, call, wire},
     topology::attestation::{Issue, Proof, RoleCalls, RoleMethod, RoleVerifier},
@@ -43,7 +43,7 @@ pub(super) fn open(
     }
 }
 
-#[canic::update(guard = controller)]
+#[canic::update(guard = canic::guard::require_controller)]
 async fn renew_role((issuer, receiver): (Principal, Principal)) -> Result<u64, String> {
     let proof = call::<Issue>(issuer, 5, &receiver)
         .await
@@ -63,10 +63,10 @@ impl Contract for Use {
 
 #[canic::update(contract = Use)]
 fn use_role(proof: Proof) -> Result<(), String> {
-    canic::topology::attestation::admit_role::<Visit>(&proof).map_err(String::from)
+    canic::guard::require_role::<Visit>(&proof).map_err(String::from)
 }
 
-#[canic::update(guard = controller)]
+#[canic::update(guard = canic::guard::require_controller)]
 async fn present_role((receiver, copy): (Principal, Option<Proof>)) -> Result<(), String> {
     let proof = copy
         .or_else(|| PROOF.with_borrow(Clone::clone))
@@ -77,7 +77,7 @@ async fn present_role((receiver, copy): (Principal, Option<Proof>)) -> Result<()
 }
 
 // Let the installed test replay a copied proof and alter its bytes.
-#[canic::query(guard = controller)]
+#[canic::query(guard = canic::guard::require_controller)]
 fn retained_role() -> Option<Proof> {
     PROOF.with_borrow(Clone::clone)
 }
@@ -111,7 +111,7 @@ fn visit() -> Result<u64, String> {
     Ok(VISITS.get())
 }
 
-#[canic::update(guard = controller)]
+#[canic::update(guard = canic::guard::require_controller)]
 async fn visit_hub() -> Result<u64, String> {
     let caller = ic_platform_runtime::system::caller();
     canic::topology::call_service::<Visit>("accounts_hub", 5, (), || {
@@ -134,7 +134,7 @@ mod protocol {
     include!("visit_count.rs");
 }
 
-#[canic::update(guard = controller)]
+#[canic::update(guard = canic::guard::require_controller)]
 async fn read_visits(receiver: Principal) -> Result<u64, String> {
     let calls = CALLS.with(|s| s.get().expect("installed issuer").clone());
     calls

@@ -57,6 +57,7 @@ pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
 
 /// Identity scoped to the addressed Root and its immutable pool approval.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 pub struct Allocation {
     /// Permanent child slot.
     pub slot: u32,
@@ -66,6 +67,7 @@ pub struct Allocation {
 
 /// Exact original destination of a placement under the addressed Root.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 pub struct ShardTarget {
     /// Original slot and creation generation.
     pub allocation: Allocation,
@@ -75,12 +77,13 @@ pub struct ShardTarget {
 
 /// Operator observation of one installed shard allocation.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 pub struct ShardStatus {
     /// Target to bind into a subsequent drain decision.
     pub target: ShardTarget,
     /// Whether the allocation has stopped accepting new placements.
     pub draining: bool,
-    /// Current count of placement keys in Root's ledger.
+    /// Live placements reported by the pool's route owner, including reservations.
     pub live_placements: u32,
 }
 
@@ -160,4 +163,14 @@ impl Placement {
         }
         Ok(Some((allocation, principal)))
     }
+}
+
+/// Root reads or fences an exact shard in the named hub's durable route roster.
+pub struct HubShardStatus;
+impl crate::method::Contract for HubShardStatus {
+    const NAME: &'static str = "hub_shard_status";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REQUEST: ic_wire::Limits = LIMITS;
+    type Input = (String, ShardTarget, bool);
+    type Output = Result<ShardStatus, String>;
 }

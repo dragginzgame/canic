@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.258.0] - 2026-11-22
+
+### 🔌 Endpoint guards
+
+Reusable endpoint guards now live under `canic::guard`. Update imports of
+`require_parent`, `require_canister`, `require_sender` and `require_issuer`.
+Use `guard::require_controller` for controller-only endpoints and
+`guard::require_role::<M>(&proof)` for an attached role verifier.
+
+```sh
+# From the app directory, rebuild and verify the reviewed Wire contracts.
+canic app build
+canic app check-wire
+```
+
+### 🗂 Shard evacuation
+
+Receiver hubs retain draining shard generations and in-flight account moves.
+The application fences an account's writes on its source and confirms its
+destination before committing the route. This hub layout requires fresh hubs.
+On a fleet with a sharding-enabled Root, inspect the shard, then drain the
+reported generation. Repeat the drain after evacuation so Root records zero
+occupancy before closing proof issuance.
+
+```sh
+canic fleet call --canister root --identity operator inspect-shard "$SHARD"
+canic fleet call --canister root --identity operator drain-shard "$SHARD" "$SLOT" "$GENERATION"
+```
+
+### 📦 Dependencies
+
+Both workspaces select IC DB and IC DB Macros 0.27.3.
+
 ## [0.257.0] - 2026-11-22
 
 Scoped endpoints can read the issuer-attested application identifier with
@@ -627,7 +660,7 @@ grants and their storage layout are retired. Use fresh installations for fleets
 that tried that feature.
 
 ```rust
-use canic::topology::require_canister;
+use canic::guard::require_canister;
 
 #[canic::update(guard = require_canister("project_hub"))]
 fn project_sync(request: ProjectSync) { /* application operation */ }

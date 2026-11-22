@@ -42,6 +42,8 @@ struct Ledger {
 pub(super) struct Pools {
     #[serde(skip)]
     local_routes: std::collections::BTreeSet<String>,
+    #[serde(skip)]
+    evacuated: std::collections::BTreeSet<ChildId>,
     funding: BTreeMap<ChildId, funding::Grant>,
     quotes: BTreeMap<String, payment::Reservation>,
     payments: BTreeMap<[u8; 32], payment::Receipt>,
@@ -539,6 +541,9 @@ fn resolve(slot: ChildId, generation: [u8; 32]) -> Placement {
     STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
         let principal = state.pools.shard_at(slot).unwrap().principals[slot.index()].as_deref();
+        if state.pools.retirements.contains_key(&slot) {
+            return Placement::Unavailable(allocation, principal.map(str::to_owned));
+        }
         let generation = state.artifact.0[&slot]
             .sources()
             .map(|s| s.creation.operation);
@@ -888,7 +893,6 @@ pub(super) fn validate_claims(state: &super::State) {
                 seen.insert(slot)
                     && ledger.generations[slot.index()].is_some()
                     && ledger.counts[slot.index()] == 1
-                    && !pools.draining.contains_key(&slot)
             );
         }
     }
@@ -1210,7 +1214,7 @@ pub(super) fn assigned_role(subject: Principal) -> Result<AssignedRole, &'static
                     &ledger.approval.reference,
                     &ledger.approval.hub,
                     Some((
-                        ledger.counts[index],
+                        state.pools.remaining(slot, ledger),
                         state.pools.draining.contains_key(&slot),
                     )),
                 )

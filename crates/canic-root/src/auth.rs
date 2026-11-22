@@ -17,9 +17,7 @@ pub(crate) fn fresh() {
 // None after upgrade is closed, not an empty configuration to refill.
 /// Require a current controller of this Root.
 fn controller<const ID: u64>() -> Result<(), String> {
-    if !api::is_controller(&api::caller()) {
-        return Err("controller required".into());
-    }
+    canic::guard::require_controller()?;
     transport::admit::<ID>()
 }
 

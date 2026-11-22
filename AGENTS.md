@@ -120,7 +120,9 @@ bytes, recovery boundaries and qualified predecessor paths:
 In `apps/examples` and the starter template, declare application queries and
 updates with `#[canic::query]` or `#[canic::update]`, or use an existing Canic
 endpoint mount. Share a typed Wire contract when a client needs the same
-encoding and budgets. Canic owns the Platform entrypoint wiring.
+encoding and budgets. Canic owns the Platform entrypoint wiring. Expose reusable
+Canic caller guards through `canic::guard`. Application-specific checks stay
+with their application and may compose those guards.
 
 Use function-level `#[allow(clippy::needless_pass_by_value)]` on endpoint handlers
 and reply encoders when the runtime supplies an owned value. Canic endpoint attributes

@@ -297,7 +297,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         quote! {
             let (__canic_proof,__canic_input) = __canic_input;
             const __CANIC_ROLES: &[&str] = #roles;
-            ::canic::topology::attestation::admit_roles(__CANIC_ROLES, &__canic_proof)
+            ::canic::guard::admit_roles(__CANIC_ROLES, &__canic_proof)
                 .unwrap_or_else(|e| ::canic::method::fail(e));
         }
     });

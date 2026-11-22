@@ -7,6 +7,8 @@ use canic::topology::directory::{
 use ic_platform_types::Principal;
 use ic_storage::DefaultMemoryImpl;
 
+#[cfg(feature = "placement")]
+mod evacuation;
 #[cfg(feature = "funding")]
 mod funding;
 mod peer;
@@ -27,12 +29,26 @@ fn open(installation: Option<Installation>) {
         "hub",
         &[
             KEY,
+            #[cfg(feature = "placement")]
+            evacuation::KEYS[0],
+            #[cfg(feature = "placement")]
+            evacuation::KEYS[1],
+            #[cfg(feature = "placement")]
+            evacuation::KEYS[2],
             #[cfg(feature = "funding")]
             funding::KEY,
             #[cfg(feature = "role-probe")]
             role_probe::KEY,
         ],
         16,
+    );
+    #[cfg(feature = "placement")]
+    evacuation::open(
+        &runtime,
+        installation.as_ref().map(|i| match i {
+            Installation::Child(child) => child.root,
+            Installation::Service(_) => ic_platform_runtime::system::caller(),
+        }),
     );
     #[cfg(feature = "funding")]
     {

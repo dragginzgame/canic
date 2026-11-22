@@ -21,7 +21,16 @@ impl Pools {
             bytes: BYTES - 4,
             ..LIMITS
         };
-        let (prefix, payload) = if self.local_routes.is_empty() {
+        let (prefix, payload) = if !self.evacuated.is_empty() {
+            (
+                b"PLS4",
+                ic_wire::encode(
+                    &(self, &self.local_routes, &self.evacuated),
+                    ic_wire::Encoding::Payload,
+                    limits,
+                ),
+            )
+        } else if self.local_routes.is_empty() {
             (
                 b"PLS2",
                 ic_wire::encode(self, ic_wire::Encoding::Payload, limits),
@@ -151,7 +160,27 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
 }
 
 fn decode(bytes: &[u8]) -> Pools {
-    let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"PLS3") {
+    let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"PLS4") {
+        let (mut pools, local, evacuated): (
+            Pools,
+            std::collections::BTreeSet<String>,
+            std::collections::BTreeSet<super::ChildId>,
+        ) = ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
+            .expect("evacuated placement custody");
+        assert!(local.iter().all(|pool| pools.shards.contains_key(pool)));
+        assert!(
+            !evacuated.is_empty()
+                && evacuated
+                    .iter()
+                    .all(|slot| pools.draining.contains_key(slot)
+                        && pools
+                            .shard_at(*slot)
+                            .is_some_and(|ledger| local.contains(&ledger.approval.pool)))
+        );
+        pools.local_routes = local;
+        pools.evacuated = evacuated;
+        pools
+    } else if let Some(payload) = bytes.strip_prefix(b"PLS3") {
         let (mut pools, local): (Pools, std::collections::BTreeSet<String>) =
             ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
                 .expect("hub placement custody");
@@ -371,7 +400,7 @@ fn validate_inventory(pools: &Pools) {
                 && pools.draining.get(&slot) == Some(&target.allocation.generation)
                 && ledger.principals[slot.index()].as_deref()
                     == Some(r.input.approval.shard.as_str())
-                && ledger.counts[slot.index()] == 0
+                && pools.remaining(slot, ledger) == 0
                 && r.input.approval.root == api::canister_self().to_text()
                 && r.input.reference.store == ledger.approval.reference.store
                 && r.input.reference.manifest.valid()
