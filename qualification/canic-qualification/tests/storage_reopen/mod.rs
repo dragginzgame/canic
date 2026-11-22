@@ -134,10 +134,10 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
         .unwrap();
     assert_eq!(pic.get_stable_memory(fresh).await, stable);
     assert_eq!(status(pic, fresh).await.phase, Phase::Empty);
-    // The prior two-service layout is refused before its payload can be opened.
+    // The prior Store maintenance layout is refused before its payload can be opened.
     let mut old = stable.clone();
-    let offset = old.windows(4).position(|tag| tag == b"CUJD").unwrap();
-    old[offset..offset + 4].copy_from_slice(b"CUJC");
+    let offset = old.windows(4).position(|tag| tag == b"CUJE").unwrap();
+    old[offset..offset + 4].copy_from_slice(b"CUJD");
     pic.set_stable_memory(fresh, old.clone(), BlobCompression::NoCompression)
         .await;
     let refusal = canic_qualification::upgrade_stopped(

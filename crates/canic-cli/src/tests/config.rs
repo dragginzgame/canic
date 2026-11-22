@@ -1370,3 +1370,43 @@ fn release_selection_requires_child_authority_and_conflicts_with_publication() {
         .is_ok()
     );
 }
+
+#[test]
+fn unbound_fleet_lists_only_declared_top_up_edges() {
+    let dir = std::env::temp_dir();
+    let dir = crate::tests::directory(&dir, "unbound-top-ups").unwrap();
+    let path = dir.join("canic.toml");
+    std::fs::write(
+        &path,
+        r#"
+[apps.toko.canisters.root]
+role = "root"
+[apps.toko.canisters.project_registry]
+parent = "root"
+[apps.toko.canisters.project]
+parent = "project_registry"
+[apps.toko.fleets.local]
+network = { kind = "Local" }
+lifetime = "ephemeral"
+top_up_children = ["project_registry"]
+"#,
+    )
+    .unwrap();
+    let Output::Text(text) = crate::catalog::canisters(&path, None, None, false).unwrap() else {
+        panic!("expected fleet table");
+    };
+    assert!(text.contains("Eligible for parent top-ups: root → project_registry\n"));
+    let Output::Json(json) = crate::catalog::canisters(&path, None, None, true).unwrap() else {
+        panic!("expected declared configuration");
+    };
+    assert_eq!(
+        json["configuration"]["config"]["top_up_children"],
+        serde_json::json!(["project_registry"])
+    );
+    assert_eq!(
+        json["configuration"]["config"]["canisters"]["project"]["parent"],
+        "project_registry"
+    );
+    assert!(!dir.join(".canic").exists());
+    std::fs::remove_dir_all(dir).unwrap();
+}

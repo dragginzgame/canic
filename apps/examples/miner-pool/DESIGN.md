@@ -21,6 +21,10 @@ lifetime attempt number and hit/miss. It retains the outcomes of both ordinals
 for its latest round. An exact retry after a lost reply or upgrade recovers the
 original receipt. The hub confirms the expected attempt number before counting
 a find. A changed target starts another round, draining any retained batch first.
+If a batch needs a new worker, its round stays bound while Root is unavailable
+or the allocation is pending. When the worker becomes ready, the hub records
+that original batch before it processes a later goal. A request to park every
+miner can therefore finish one outstanding attempt.
 The terminal starts new rounds while the target is positive. If the terminal
 stops, it issues no further ticks.
 

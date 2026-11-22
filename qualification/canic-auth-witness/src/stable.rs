@@ -5,14 +5,43 @@ use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
 const READ_SCOPE: &str = "read";
 canic::mount_auth_session!(read = READ_SCOPE);
 #[cfg(not(feature = "changed-login-limit"))]
-canic::mount_auth_lifecycle!(storage = open, seal = crate::issuer::seal);
+canic::mount_auth_lifecycle!(
+    storage = open,
+    init = on_init,
+    pre_upgrade = crate::issuer::seal,
+    post_upgrade = on_post_upgrade,
+);
 
 #[cfg(feature = "changed-login-limit")]
 canic::mount_auth_lifecycle!(
     storage = open,
-    seal = crate::issuer::seal,
-    max_login_secs = 600
+    max_login_secs = 600,
+    init = on_init,
+    pre_upgrade = crate::issuer::seal,
+    post_upgrade = on_post_upgrade,
 );
+
+thread_local! {
+    static RESTORED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
+}
+
+fn on_init(input: &Install) {
+    assert_eq!(input.storage, canic::auth::install::Storage::Stable);
+    RESTORED.set(Some(false));
+}
+
+fn on_post_upgrade() {
+    RESTORED.set(Some(true));
+}
+
+// restored
+// Report which lifecycle callback completed in this incarnation.
+// guard  : installed issuer
+// limits : default
+#[canic::query(guard = canic::auth::session::require_issuer)]
+fn restored() -> Option<bool> {
+    RESTORED.get()
+}
 
 fn open(input: Option<&Install>) -> MemoryRuntime<DefaultMemoryImpl> {
     let runtime = canic::storage::bootstrap(

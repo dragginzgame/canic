@@ -813,7 +813,14 @@ legacy configuration syntax.
 | Singleton | At most one live allocation of a declared role per concrete parent; for example, a project's settings canister | Concurrent creation resolves the same admitted slot. Upgrade preserves its identity and application state. A singleton under each project is not a Fleet-wide singleton. |
 | Scaling workers (legacy `replica`) | Bounded interchangeable workers serving equivalent requests | Retain worker identities and capacity accounting. Qualify bounded rollout, drain and readiness before routing new work. The name grants no data replication, leader election or failover semantics. |
 | Shards | Many application keys share each capacity-bounded canister; for example, user records across user shards | Retain each key's exact allocation through growth and upgrades. Application lifecycle preserves shard contents; Canic does not silently move existing keys when capacity changes. |
-| Keyed instances (legacy `instance` / placement index) | Each admitted key selects one dedicated canister within its declared scope; for example, one project canister per project ID | Repeated resolution returns the same allocation. Concurrent creation shares retained pending work. Upgrade preserves the key binding, principal and application state. |
+| Registry (legacy placement index) | Each admitted key selects one dedicated canister within its declared scope; for example, one project canister per project ID | Repeated resolution returns the same allocation. Concurrent creation shares retained pending work. Upgrade preserves the key binding, principal and application state. |
+
+In the registry pattern, a registry assigns one dedicated instance per key.
+For Toko, the parent is `project_registry` and each child is a `project`. The fleet directory publishes named services for discovery. A project
+child can be allocated by key without becoming a directory entry. Legacy
+`377fbce` kept these operations separate in `api/placement/index.rs` and
+`protocol/component_directory`. Its index tests cover pending claims, exact
+bindings and conflicting provisional children.
 
 Hubs use the same typed Wire call for assignment and lookup across shards,
 dedicated instances and workers. Root mounts each method with its pool's caller
@@ -1008,7 +1015,7 @@ The application supplies its bounded installation bytes, for example an encoded
 trusted hub principal. Root retains them in its existing application creation
 journal and binds them to the generation and Store pin. An empty argument
 uses the existing Store-only path. Replaying the exact grant is idempotent.
-One Root can authorize several named shard pools, named worker pools and a dedicated-instance pool. Multiple shard pools share an explicit subnet child limit. Each
+One Root can authorize several named shard pools, named worker pools and a registry. Multiple shard pools share an explicit subnet child limit. Each
 shard admits 1–100,000 live keys. Without an explicit subnet ceiling each pool
 is limited to two children. A controller-approved subnet ceiling allows up to eight
 children in total, including permanent children created by that Root. Each creation reserves the engine's fixed creation attachment.
@@ -1086,7 +1093,7 @@ This follows legacy revision `377fbce`, whose
 [activation regression](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/ops/component_registry/tests/activation_children/mod.rs)
 retains an unfinished child operation under its original owner.
 
-The CUJD journal is a fresh-layout hard cut. A Root using CUJC keeps its
+The CUJE journal is a fresh-layout hard cut. A Root using CUJD or earlier keeps its
 original executable. On a fresh Root, adding a service preserves the existing
 canister principals, signed attempts, funding approvals and upgrade targets.
 
@@ -1104,7 +1111,7 @@ finite concurrency and failure policy; concurrent growth cannot silently add
 unapproved upgrade targets. Ordering and mixed-version protocol compatibility
 come from the application. Partial completion retains per-target evidence and
 resumes exact operations; it is not an atomic subtree upgrade or automatic rollback.
-Singletons, keyed instances and shards preserve bindings and application invariants;
+Singletons, registry instances and shards preserve bindings and application invariants;
 interchangeable workers still require the application's drain/readiness contract.
 Unlimited recursive spawning, automatic rebalancing and data replication remain
 outside these four patterns.
@@ -1540,11 +1547,11 @@ their own approval and a custody format that accounts for every issued child.
 The Root controller can retain an `InstancePool` grant alongside the shared
 pool. Each approval binds its hub, child component, Store release, creation
 budget and deadline. For projects, Root verifies that the exact installation
-frame names itself as installer and the approved project hub as parent.
+frame names itself as installer and the approved project registry as parent.
 The first project approval changes the placement record format in the existing
 lease. Shared-only fleets retain the predecessor encoding. An exact approval
 retry acknowledges the original terms, including the original deadline.
-The project hub calls `canic::sharding::assign_instance(root, key)` with a stable
+The project registry calls `canic::sharding::assign_instance(root, key)` with a stable
 application request key. `lookup_instance(root, key)` observes the same claim
 after a lost reply. First admission retains the key and Store-backed creation
 together. The initial two dedicated child identities (2 and 3) share the engine's existing
@@ -1554,11 +1561,11 @@ continues to reject these identities. The installed witness recovers both
 projects and the full shared pool after a Root upgrade.
 
 Declare the project component and its parent in the app. The fleet can then
-select the dedicated pool alone or alongside its existing shard pool. Both pools
-use the same Root and Store with independent hubs and creation budgets.
+select registry placement alone or alongside its existing shard pool. Both pools
+use the same Root and Store with independent parents and creation budgets.
 
 ```toml
-[apps.toko.fleets.local.instance_pool]
+[apps.toko.fleets.local.registry]
 component = "project"
 root = "root"
 store = "store"
@@ -1813,6 +1820,12 @@ that exact `parent_storage_key`. The approved install context supplies the
 parent principal and role. Upgrades between role-aware executables strictly reopen the same cell.
 
 ### Endpoint ownership and actor composition
+
+A hub without a database can mount the retained role and Auth receiver lifecycle
+directly. Canic restores the topology and receiver before optional application
+post-upgrade work. Install and reinstall call init with the fresh envelope.
+Pre-upgrade work and receiver sealing share the upgrade transaction. Issuer-only
+callbacks compare the real caller with the receiver’s installed issuer.
 
 Native inspection is opt-in. Endpoint declarations own the effective name, mode,
 Wire ID and Rust request and reply roots. The native tool collects the linked
@@ -2087,7 +2100,7 @@ callback faults qualify recovery through observation without repeating stop.
 Root replacement preserves that record. Stopped status under the approved old
 code and sole Root control establishes the drain boundary, even when observed
 after the dispatch deadline. This does not rely on canister-version arithmetic.
-The CUJD journal retains current and completed attempts in the original checked
+The CUJE journal retains current and completed attempts in the original checked
 allocation. Existing child-only reads refuse Store custody; after a second
 attempt, full-history observation is required so Root maintenance cannot omit any
 predecessor. Older executables reject the new journal rather than losing history.
@@ -2103,13 +2116,13 @@ preserves progress. This is a metadata preservation boundary, not payload hashin
 or a cache snapshot. The current Root refuses CUJ5 journals. Already-stopped
 records and Stores without the new observation cannot acquire it by assumption.
 
-New attempts select Store 0.2.3's explicit active/removed entry and defined
+New attempts select Store 0.8’s explicit active/removed entry and defined
 `(name, removed, version)` order. The selected scan contract survives before the
 first page; its cursor retains the removed flag, and its digest has a separate
 domain including the entry kind. Historical attempts retain method 113, their
 original digest and name/version ordering, including an existing refusal. Their
 Wire discriminants and Host JSON encodings stay exact. Versioned evidence uses a
-new discriminant rejected by historical readers; CUJD preserves that evidence across supported Root
+new discriminant rejected by historical readers; CUJE preserves that evidence across supported Root
 upgrades. Fresh attempts require method 117; missing support blocks before
 stop without falling back.
 
@@ -2511,6 +2524,64 @@ preserve pending handoffs and uncertain creation. Carry those cases into M6A:
 interrupt uninstall, reopen the owner, verify one available entry, and race two
 claims for it. Only the winning destination may install.
 
+For [#76](https://github.com/dragginzgame/canic/issues/76), use the legacy
+managed-child flow. The hub owns placement in its named pool. It reserves the
+request locally and asks its fleet Root for a child. Root checks the caller,
+grant, subnet ceiling and funding authority. It claims an available reserve
+principal first and issues a paid create only after confirming the reserve is
+empty for that allocation. Root installs the pinned Store release, verifies
+controllers, module and readiness, and returns the original allocation. The hub
+registers the child and routes work to it. Existing ready routes serve locally
+during a Root outage. A pending request keeps its identity across retries.
+
+Legacy `377fbce` used `CreateCanisterParent::ThisCanister` in the
+[hub allocation workflow](https://github.com/dragginzgame/canic-legacy/blob/377fbce/crates/canic-core/src/workflow/placement/allocation/mod.rs#L128-L159).
+Root bound that parent into the [installed topology](https://github.com/dragginzgame/canic-legacy/blob/377fbce/crates/canic-control-plane/src/workflow/component_registry/component_installation/mod.rs#L518-L554).
+Legacy verified Root plus the fleet's configured recovery controllers. The
+current single-Root fixture verifies Root as the sole IC controller of both
+hub and child. Root retains installation, upgrades and retirement authority.
+
+The legacy [child allocation path](https://github.com/dragginzgame/canic-legacy/blob/377fbce/crates/canic-control-plane/src/workflow/component_registry/component_installation/mod.rs#L103-L137)
+returned `CAPACITY_INSUFFICIENT` on a miss. The rewrite deliberately allows
+Root to issue a bounded create in that case. A timeout at the hub cannot
+authorize another create. A ready reserve entry is uninstalled, so both paths
+use install mode. Store prepares its IC chunk cache and Root passes hashes to
+`install_chunked_code`. Root retains the approval and receipt without copying
+Store-backed Wasm through its journal.
+
+[Funding policy (#78)](https://github.com/dragginzgame/canic/issues/78) determines
+who pays. Root attaches the creation cycles. Requester-funded work must cover
+its approved cost before Root spends or releases a spare. For a requester-funded
+spare, retain the current same-subnet creation fee with the allocation and
+recover the same payment on retry. Account separately for the spare's operating
+balance. A requester's attached cycles set a maximum debit. For example, a
+5T attachment authorizes a debit up to 5T. Root must bind the payer, ceiling,
+fee and operating balance to the allocation and commit accepted cycles and
+the receipt in the same execution. An insufficient attachment cannot claim a
+spare or dispatch a create. Leave excess cycles unaccepted. A replay recovers
+the original result and accepts zero additional cycles, including after an
+upgrade or a lost reply. An uncertain install retains the original charge and
+allocation for observation. If the verified operating balance plus the quoted
+fee exceeds the requester's maximum debit, leave the spare available. Root may
+create fresh only if the same approval covers the create and its initial funding.
+Otherwise refuse before spending. If installation fails after Root has spent
+the creation fee or delivered a funded spare, retain the charge and principal
+with that allocation for recovery. Any refund requires separate operator
+approval. An install retry cannot charge for a second principal.
+
+Existing grants authorize Root-sponsored work. Requester-funded admission
+requires [incoming cycle acceptance](https://github.com/dragginzgame/ic-platform/issues/41)
+as well as the [fee lookup in Platform #39](https://github.com/dragginzgame/ic-platform/issues/39).
+The fleet's `top_up_children` list selects ongoing parent-to-child funding.
+It defaults to empty and applies independently of the original payer. Toko
+can sponsor `project_registry` while leaving its `project` children self-funded.
+
+Keep Root as the management owner unless measured dispatch delay across
+independent pools warrants delegation. Measure time from approval to Root
+dispatch separately from Store preparation, subnet creation, installation
+and application readiness. Installed correctness tests alone do not establish
+a throughput limit.
+
 #### Fleet standby pool implementation review
 
 Legacy reset (revision `377fbce`, history `ccca2a1b3`) exposed a gap in the
@@ -2818,7 +2889,7 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | Singleton slots and child trees | Explicit per-parent cardinality over shared allocation, sections 8–10 | Required — fixed child path now; general singleton admission qualifies with its consumer | Concurrent requests cannot create a second live slot; upgrade retains identity |
 | Scaling workers | Bounded interchangeable workers over shared allocation, sections 8–10 | Required — optional building block; general pools consumer-gated | Capacity race, idle quiescence, drain/readiness and bounded rollout; no implied data replication |
 | Sharding | Composable shared-capacity assignment; application owns data movement, section 8 | Required — optional building block qualified with a selected consumer; general policies consumer-gated | Commit-time capacity, stable assignments across upgrade, old release cannot alter replacement |
-| Keyed instances / placement indexes | One dedicated allocation per scoped key, section 8 | Required — optional building block qualified with a selected consumer | Same-key concurrency, exact pending recovery, wrong-parent refusal and binding/data preservation across upgrade |
+| Registry | One dedicated allocation per scoped key, section 8 | Required — optional building block qualified with a selected consumer | Same-key concurrency, exact pending recovery, wrong-parent refusal and binding/data preservation across upgrade |
 | Service publication and Group Directory | Cascading generation-bound projections and scoped local lookup, sections 3, 8, 10 | Required — tree discovery; global directory consumer-gated | Dynamic children, repeated roles, exact replay and stale/conflicting projection refusal |
 | Fleet ingress whitelist/admission | Optional deployment policy with selected consistency semantics, section 6 | Consumer-gated — extra Fleet admission | Application access works without it; selected revocation promise is qualified |
 | Caller/topology access checks and RPC replay | Retain explicit authority and effect identity, sections 6–7, 12 | Required — selected commands and effects | Wrong caller, stale generation and duplicate |

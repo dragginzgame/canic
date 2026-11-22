@@ -555,7 +555,7 @@ pub mod retained {
     /// Local shard routing failures.
     #[derive(Clone, Copy, Debug, Eq, PartialEq)]
     pub enum ShardLookupError {
-        /// The hub has not attached its directory.
+        /// The hub has not opened its directory or received its first revision.
         DirectoryUnavailable,
         /// No acknowledged direct shard belongs to the requested pool.
         NoReadyShard,
@@ -580,6 +580,9 @@ pub mod retained {
         DIRECTORY.with_borrow(|index| {
             let index = index
                 .as_ref()
+                .ok_or(ShardLookupError::DirectoryUnavailable)?;
+            index
+                .current()
                 .ok_or(ShardLookupError::DirectoryUnavailable)?;
             let children = index.record.children.iter().filter(|child| {
                 child.acknowledged.is_some() && child.hop.shard_pool.as_deref() == Some(pool_name)

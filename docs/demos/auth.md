@@ -23,6 +23,33 @@ decoding never invokes the handler. Encoding failure traps, rolling back the
 whole synchronous message; ordinary Auth refusals commit applicable charges.
 Mounting does not initialize an engine, enroll authorities or activate readiness.
 
+## Hubs without a database
+
+Enable `receiver-role` for the stable receiver lifecycle. Add `role-attestation`
+for the retained service directory and verifier used by the Toko hubs.
+
+```rust
+canic::mount_receiver_lifecycle! {
+    hub,
+    config_key = "app.hub.config.v1",
+    authority = "app",
+    auth_read = "read",
+}
+```
+
+Omit `auth_read` on a discovery-only hub to leave the portable session endpoints
+unmounted. A private issuer callback uses
+`#[canic::update(guard = canic::auth::session::require_issuer)]`. Its authority
+comes from the actual caller and protected receiver installation. A browser session
+is unnecessary. The stable receiver recovers that binding on upgrade.
+
+Existing hubs must preserve their original authority, config key and other
+allocations. For example, `reserved_keys = ["app.hub.issuer.v1"],` retains an
+obsolete issuer allocation without reading it as a second source of authority.
+Optional `init`, `pre_upgrade` and `post_upgrade` hooks run after receiver
+initialization, sealing and reopening respectively. Failed reopen traps before
+the application hook runs.
+
 ## Direct Root enrollment
 
 The additional `auth-enrollment` feature uses the supplier engine to validate

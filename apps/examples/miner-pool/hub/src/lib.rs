@@ -72,6 +72,10 @@ impl Pool {
     }
     fn begin(&mut self, round: u64, goal: u8) {
         assert!(round > 0 && round >= self.round, "stale round");
+        if round > self.round && matches!(self.pending, Some(Pending::Grow(..))) {
+            // The retained round identifies the first batch owed to the new worker.
+            return;
+        }
         if round > self.round {
             self.round = round;
             self.goal = goal;

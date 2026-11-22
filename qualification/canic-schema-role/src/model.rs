@@ -52,6 +52,7 @@ pub struct Route {}
     fields(
         field(name = "id", value(item(prim = "Nat64"))),
         field(name = "value", value(item(prim = "Nat64"))),
-    )
+    ),
+    timestamps
 )]
 pub struct Project {}

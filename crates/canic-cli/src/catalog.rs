@@ -44,28 +44,37 @@ pub(crate) fn canisters(
     fleet: Option<&str>,
     json: bool,
 ) -> Result<Output> {
-    let selected = canic_host::load_config(path)?.select(app, fleet)?;
+    let config = canic_host::load_config(path)?;
+    let (app, definition) = config.select_app(app)?;
+    let (fleet, declaration) = definition.fleet_declaration(fleet)?;
+    let canisters = definition.resolve_slots(declaration)?;
     if json {
+        let configuration = match declaration.network {
+            FleetNetwork::Bound(_) => serde_json::json!(config.select(Some(app), Some(fleet))?),
+            FleetNetwork::Unbound(_) => {
+                let mut declared = serde_json::json!(declaration);
+                declared["canisters"] = serde_json::json!(canisters);
+                serde_json::json!({"app":app, "fleet":fleet, "config":declared})
+            }
+        };
         return Ok(Output::Json(serde_json::json!({
-            "scope":"local configuration only", "config_path":path, "configuration":selected,
+            "scope":"local configuration only", "config_path":path, "configuration":configuration,
         })));
     }
-    let title = format!("App: {} · Fleet: {}", selected.app, selected.fleet);
-    if selected.config.canisters.is_empty() {
+    let title = format!("App: {app} · Fleet: {fleet}");
+    if canisters.is_empty() {
         return Ok(Output::Text(format!(
             "{title}\n\nNo canisters defined.\n\n"
         )));
     }
     let rows: Vec<_> = crate::topology::rows(
-        selected
-            .config
-            .canisters
+        canisters
             .iter()
             .map(|(name, slot)| (name.as_str(), slot.parent.as_deref())),
     )
     .into_iter()
     .map(|(slot, prefix)| {
-        let config = &selected.config.canisters[slot];
+        let config = &canisters[slot];
         [
             format!("{prefix}{slot}"),
             config.role.clone().unwrap_or_else(|| "—".into()),
@@ -78,7 +87,25 @@ pub(crate) fn canisters(
         &rows,
         &[Alignment::Left; 3],
     );
-    Ok(Output::Text(format!("{title}\n\n{table}\n\n")))
+    let mut output = format!("{title}\n\n{table}\n\n");
+    if !declaration.top_up_children.is_empty() {
+        let edges: Vec<_> = declaration
+            .top_up_children
+            .iter()
+            .map(|child| {
+                let parent = canisters[child]
+                    .parent
+                    .as_deref()
+                    .expect("validated direct child");
+                format!("{parent} → {child}")
+            })
+            .collect();
+        output.push_str(&format!(
+            "Eligible for parent top-ups: {}\n",
+            edges.join(", ")
+        ));
+    }
+    Ok(Output::Text(output))
 }
 
 pub(crate) fn list(

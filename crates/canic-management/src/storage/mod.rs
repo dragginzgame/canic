@@ -53,7 +53,7 @@ fn historical_or_complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
             .eq([ChildId::FIRST, ChildId::SECOND])
 }
 
-const JOURNAL_TAG: &[u8; 4] = b"CUJD";
+const JOURNAL_TAG: &[u8; 4] = b"CUJE";
 const ARTIFACT_TAG: &[u8] = b"CUA2";
 pub(super) const JOURNAL_BYTES: usize = 65_536;
 // Each extra empty record encodes its slot, inline variant and two empty byte vectors.

@@ -247,9 +247,10 @@ fn declaration(selected: &SelectedFleet) -> Config {
                     FleetDeclaration {
                         lifetime: None,
                         receiver_policy: None,
+                        top_up_children: vec![],
                         role_receivers: vec![],
                         subnet_child_limit: None,
-                        instance_pool: None,
+                        registry: None,
                         standby_pool: None,
                         worker_pools: Vec::new(),
                         shard_pools: Vec::new(),
@@ -1322,14 +1323,14 @@ creation_budget = 2000000000000
 }
 
 #[test]
-fn dedicated_pool_can_be_declared_before_fleet_binding() {
+fn registry_can_be_declared_before_fleet_binding() {
     let source = r#"
 [apps.toko.canisters.project_hub]
 [apps.toko.canisters.project]
 parent = "project_hub"
 [apps.toko.fleets.local]
 network = { kind = "Local" }
-[apps.toko.fleets.local.instance_pool]
+[apps.toko.fleets.local.registry]
 component = "project"
 root = "root"
 store = "store"
@@ -1337,6 +1338,7 @@ release = { name = "project", version = "v1" }
 max_instances = 2
 creation_budget = 2000000000000
 "#;
+    assert!(toml::from_str::<Config>(&source.replace(".registry]", ".instance_pool]")).is_err());
     let config: Config = toml::from_str(source).unwrap();
     assert!(config.select_app(Some("toko")).is_ok());
     assert!(config.select(Some("toko"), Some("local")).is_err());
@@ -1554,4 +1556,35 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
             .contains("hub \"pool\" requires worker pool \"auxiliary\"")
     );
     std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn fleet_top_ups_select_only_the_named_direct_child() {
+    let text = r#"
+[apps.toko.canisters.root]
+role = "root"
+[apps.toko.canisters.project_registry]
+parent = "root"
+[apps.toko.canisters.project]
+parent = "project_registry"
+[apps.toko.fleets.local]
+network = { kind = "Mainnet" }
+top_up_children = ["project_registry"]
+"#;
+    let path = directory().join("canic.toml");
+    std::fs::write(&path, text).unwrap();
+    let selected = load_config(&path).unwrap().select(None, None).unwrap();
+    assert_eq!(selected.config.top_up_children, ["project_registry"]);
+    for (entries, error) in [
+        (r#""missing""#, "unknown component"),
+        (r#""root""#, "no declared parent"),
+        (r#""project", "project""#, "duplicate component"),
+    ] {
+        std::fs::write(
+            &path,
+            text.replace(r#""project_registry"]"#, &format!("{entries}]")),
+        )
+        .unwrap();
+        assert!(load_config(&path).unwrap_err().to_string().contains(error));
+    }
 }

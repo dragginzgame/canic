@@ -413,7 +413,7 @@ pub fn plan_fleet(
 ) -> Result<FleetPlanning> {
     selected.validate()?;
     if !selected.config.shard_pools.is_empty()
-        || selected.config.instance_pool.is_some()
+        || selected.config.registry.is_some()
         || !selected.config.worker_pools.is_empty()
         || selected.config.standby_pool.is_some()
     {

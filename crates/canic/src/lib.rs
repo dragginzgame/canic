@@ -62,7 +62,7 @@ pub mod readiness;
 pub mod recovery;
 
 /// Actor composition for Auth-enrolled stateful hubs and shards.
-#[cfg(feature = "stateful-role")]
+#[cfg(feature = "receiver-role")]
 pub mod role;
 
 #[cfg(feature = "storage")]

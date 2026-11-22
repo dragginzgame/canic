@@ -1,10 +1,38 @@
 //! Compose a receiver lifecycle around the installed topology and retained storage layout.
 
-/// Compose the selected Auth receiver, topology and readiness with the application's database.
+/// Compose the selected Auth receiver, topology and readiness.
+/// Select `hub` for a service without a database. Its optional `init(&Install)` and
+/// `post_upgrade()` hooks run after Canic initializes or restores the receiver.
+/// `pre_upgrade()` runs after the receiver seals its checkpoint. Reinstall runs init.
+/// Omit `auth_read` to omit the portable session endpoints. Reserved keys preserve
+/// an existing storage directory when an application stops using an allocation.
 /// The parent cell stores the principal from the approved topology envelope.
 /// The hub config cell instead retains the routing Root and install context.
 #[macro_export]
 macro_rules! mount_receiver_lifecycle {
+    (hub, config_key = $key:literal, authority = $owner:literal,
+     $(reserved_keys = [$($reserved:literal),* $(,)?],)?
+     $(auth_read = $scope:expr,)? $(max_login_secs = $seconds:expr,)?
+     $(init = $init:path,)? $(pre_upgrade = $pre:path,)? $(post_upgrade = $post:path,)? ) => {
+        $crate::role::mount_directory!();
+        const _: () = {
+            fn hub_storage(install: Option<&$crate::auth::install::Install>) -> $crate::role::RoleStorage {
+                let (storage, _) = $crate::role::open_hub(
+                    install, $owner, concat!($owner, "."), &[$($($reserved),*)?], $key, 65_536,
+                );
+                storage
+            }
+            $crate::mount_auth_lifecycle!(
+                storage = hub_storage
+                $(, max_login_secs = $seconds)?
+                $(, init = $init)?
+                $(, pre_upgrade = $pre)?
+                $(, post_upgrade = $post)?
+            );
+        };
+        $( $crate::mount_auth_session!(read = $scope); )?
+        $crate::mount_readiness_endpoint!($crate::role::hub_readiness);
+    };
     (config_key = $key:literal, authority = $owner:literal, $(prefix = $prefix:literal,)?
      pages = $pages:literal, auth_read = $scope:literal $(, max_login_secs = $seconds:expr)? $(,)?) => {
         $crate::mount_receiver_lifecycle!(@hooks hub_readiness, $scope,

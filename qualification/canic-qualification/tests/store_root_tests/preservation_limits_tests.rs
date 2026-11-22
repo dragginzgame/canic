@@ -26,26 +26,8 @@ async fn page(
         .unwrap()
 }
 
-async fn versioned_page(
-    supplier: &Client<'_>,
-    attempt: &store::MaintenanceAttempt,
-) -> store::preservation::PageV2 {
-    supplier
-        .update::<_, Result<store::preservation::PageV2, store::Error>>(
-            "observe_preservation_v2",
-            store::PRESERVATION_V2,
-            &store::preservation::Request {
-                attempt: attempt.clone(),
-                after: None,
-            },
-            STORE_LIMITS,
-        )
-        .await
-        .unwrap()
-}
-
 #[tokio::test(flavor = "current_thread")]
-async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old_pages() {
+async fn preservation_distinguishes_removal_from_an_incomplete_upload() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let (_, supplier) = readiness_tests::fixture(owner.client()).await;
@@ -100,13 +82,10 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
         .await
         .unwrap();
     let tombstone = page(&supplier, &attempt).await;
-    let versioned_tombstone = versioned_page(&supplier, &attempt).await;
-    assert_eq!(versioned_tombstone.catalog, tombstone.catalog);
     assert_eq!(
-        versioned_tombstone.entry,
+        tombstone.entry,
         Some(store::preservation::Entry::Removed(removed.clone()))
     );
-    assert_eq!(tombstone.entry.as_ref().unwrap().status.manifest, removed);
     assert_eq!(tombstone.catalog.releases, 2);
     supplier
         .update::<_, Result<Option<store::Admission>, store::Error>>(
@@ -140,16 +119,12 @@ async fn versioned_preservation_distinguishes_removal_without_reinterpreting_old
         .await
         .unwrap();
     // Even the counters match: the incomplete alias kept the same reservation.
-    // The old wire contract is deliberately unchanged. Root cannot silently
-    // reinterpret an in-progress digest as a commitment to the new entry kind.
-    assert_eq!(page(&supplier, &attempt).await, tombstone);
-    let restored = versioned_page(&supplier, &attempt).await;
-    assert_eq!(restored.catalog, versioned_tombstone.catalog);
+    let restored = page(&supplier, &attempt).await;
+    assert_eq!(restored.catalog, tombstone.catalog);
     let Some(store::preservation::Entry::Active(custody)) = restored.entry else {
         panic!("restored upload must be active, not a removed label");
     };
     assert_eq!(custody.status.manifest, removed);
-    assert_eq!(Some(custody), tombstone.entry);
     let tombstones = supplier
         .update::<_, Result<Vec<store::Manifest>, store::Error>>(
             "tombstones",
@@ -176,7 +151,7 @@ async fn historical_scan_keeps_its_refusal_and_digest_after_refused_root_upgrade
     let (root, supplier) = readiness_tests::fixture_with_code(
         pic,
         include_bytes!("../../fixtures/root-release-scan.wasm").to_vec(),
-        std::fs::read(artifacts().join("original.wasm")).unwrap(),
+        include_bytes!("../../fixtures/store-0.7.0.wasm").to_vec(),
     )
     .await;
     let removed = supplier.publish_bytes("a", b"\0asm\x01\0\0\0").await;
@@ -200,7 +175,8 @@ async fn historical_scan_keeps_its_refusal_and_digest_after_refused_root_upgrade
     )
     .await
     .unwrap();
-    let approval = quiescence_tests::approval(&root, &supplier).await;
+    let mut approval = quiescence_tests::approval(&root, &supplier).await;
+    approval.previous_module = store::digest(include_bytes!("../../fixtures/store-0.7.0.wasm"));
     root.update::<_, Result<wire::Status, management::Refusal>>(
         "stage_store_maintenance",
         wire::STAGE,

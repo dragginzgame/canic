@@ -100,7 +100,22 @@ service from a worker built with role attestation and no database. Run
 `bash scripts/dev/test-store.sh directory` for copied proofs, expiry and retirement.
 Toko owns qualification of its project payload, reservation rules and account association.
 
+The installed DB role suite also exercises an Auth-wrapped dedicated instance
+through Host planning, Root allocation and registry-only bootstrap. It verifies
+an enrolled owner's write and an unrelated account's refusal. A separate
+fresh Root reopens the populated allocation before enrollment and returns the
+same child for the original key. Run `bash scripts/dev/test-store.sh db-roles`.
+
 ## Runtime shard placement
+
+`bash scripts/dev/test-store.sh directory` exercises Root availability with two
+installed hubs. Each hub requests its first shard while Root is stopped. After
+restart, lookup finds no claim for that key. Retrying through the same hub
+returns a pending allocation and then its matching ready shard. Once the hub has
+received the directory, it can route to that shard while Root is stopped again.
+The installed assertions check Root as the sole controller of both hub and shard.
+The `miner` suite checks the same controller graph for a reserve-backed worker
+and a freshly created worker.
 
 Run `bash scripts/dev/test-store.sh sharding` after `make qualification-setup`.
 The installed hub uses the public `canic/sharding` feature. Root creates the two
@@ -122,14 +137,14 @@ case submits 20,000 distinct signups through the installed hub and retries bound
 accounts after Root reopen. For the hard-cut check, supply an inline-ledger Root
 as `CANIC_PREDECESSOR_SHARD_ROOT_WASM`. An upgrade of that populated Root
 must refuse and leave its original assignment usable.
-The fixture adds a project hub and an `instance_pool` to the same fleet, reruns
+The fixture adds a project registry with a `[registry]` placement declaration to the same fleet, reruns
 `canic fleet plan`, and checks that the original shard request is byte-identical.
 The controller submits the CLI-generated project request to `configure_instances`.
 The fixture checks the topology frame, conflicting grants, unauthorized calls,
 upgrade with both grants and refusal to downgrade to the selected predecessor.
 With both user slots full, one user submits two project keys through the project
-hub. The fixture discards the first reply, retries the key, and verifies two distinct
-ready children with the approved project hub as their database owner. The third
+registry. The fixture discards the first reply, retries the key, and verifies two distinct
+ready children with the approved project registry as their database owner. The third
 key is refused. Reopening Root preserves both projects and the user's shard.
 The controller then raises both pool counts from two to six under one eight-child
 subnet ceiling using the planned Wire requests. The hubs race for the final
@@ -222,8 +237,8 @@ incompatible budgets, missing or extra names, and out-of-prefix refusal.
 including byte-exact replies, caller rejection before decode, wrong direction
 and method, bounded requests, synchronous reply rollback and an async worker check.
 
-The Root journal uses CUJD at every fleet size. The installed `storage_reopen::`
-case injects the predecessor CUJC tag into the current named cell and checks the
+The Root journal uses CUJE at every fleet size. The installed `storage_reopen::`
+case injects the predecessor CUJD tag into the current named cell and checks the
 journal-specific refusal, stable bytes, module hash and subnet canister count.
 The installed sharding journey grows a fresh Root through shared and dedicated
 child allocations and checks their identities after upgrade.
@@ -540,7 +555,7 @@ explicitly and supplies synchronous inspect/query/write handlers to
 Canic. Its passive `db::inspection` contract is versioned independently as
 `method_id("canic.db.inspect.v1")`. The separate optional `db-schema` feature adds
 stateless projection of compiled IC DB metadata, with no database executor,
-storage owner or permission policy. The witness consumes crates.io IC DB and its schema macros at 0.26.11; transport never becomes its durable codec.
+storage owner or permission policy. The witness consumes crates.io IC DB and its schema macros at 0.27.0; transport never becomes its durable codec.
 
 ```sh
 make qualification-setup

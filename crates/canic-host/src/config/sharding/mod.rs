@@ -43,7 +43,7 @@ pub struct ShardPoolConfig {
 /// A dedicated child per project key, bounded independently from shared shards.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-pub struct InstancePoolConfig {
+pub struct RegistryConfig {
     /// Declared child component; its parent owns the pool.
     pub component: String,
     /// Installing management owner.
@@ -161,8 +161,8 @@ pub struct WorkerPoolConfig {
 }
 
 impl WorkerPoolConfig {
-    fn recipe(&self) -> InstancePoolConfig {
-        InstancePoolConfig {
+    fn recipe(&self) -> RegistryConfig {
+        RegistryConfig {
             component: self.component.clone(),
             root: self.root.clone(),
             store: self.store.clone(),
@@ -179,7 +179,7 @@ impl WorkerPoolConfig {
         slots: &BTreeMap<String, CanisterConfig>,
         cap: Option<u8>,
         shards: &[ShardPoolConfig],
-        instances: Option<&InstancePoolConfig>,
+        instances: Option<&RegistryConfig>,
     ) -> Result<()> {
         let cap = cap.ok_or_else(|| {
             Error::Invalid("worker_pool requires an explicit subnet_child_limit".into())
@@ -206,7 +206,7 @@ impl WorkerPoolConfig {
                     && parent(slots, component)? == hub)
             {
                 return Err(Error::Invalid(format!(
-                    "worker_pool {} and {component} require distinct children on the same Root and Store, and a separate dedicated-instance hub",
+                    "worker_pool {} and {component} require distinct children on the same Root and Store, and a separate registry",
                     self.component
                 )));
             }
@@ -228,7 +228,7 @@ pub(super) fn validate_pools(
     slots: &BTreeMap<String, CanisterConfig>,
     limit: Option<u8>,
     shards: &[ShardPoolConfig],
-    instances: Option<&InstancePoolConfig>,
+    instances: Option<&RegistryConfig>,
     workers: &[WorkerPoolConfig],
     standby: Option<&stored::StandbyPolicy>,
 ) -> Result<()> {
@@ -248,7 +248,7 @@ pub(super) fn validate_pools(
 fn validate_capacity(
     limit: Option<u8>,
     shards: &[ShardPoolConfig],
-    instances: Option<&InstancePoolConfig>,
+    instances: Option<&RegistryConfig>,
     workers: &[WorkerPoolConfig],
     standby: Option<&stored::StandbyPolicy>,
 ) -> Result<()> {
@@ -347,7 +347,7 @@ fn validate_capacity(
         super::positive_count("subnet_child_limit", n, stored::MAX_SUBNET_CHILDREN)?;
         if shards.is_empty() && instances.is_none() && workers.is_empty() && standby.is_none() {
             return Err(Error::Invalid(format!(
-                "subnet_child_limit = {n} requires a shard_pool, instance_pool, worker_pool or standby_pool"
+                "subnet_child_limit = {n} requires a shard_pool, registry, worker_pool or standby_pool"
             )));
         }
     }
@@ -356,7 +356,7 @@ fn validate_capacity(
         .map(|p| ("shard_pool", "max_shards", p.max_shards, p.increase_from))
         .chain(instances.map(|p| {
             (
-                "instance_pool",
+                "registry",
                 "max_instances",
                 p.max_instances,
                 p.increase_from,
@@ -460,25 +460,8 @@ impl FleetConfig {
         } else {
             arguments
         };
-        let arguments = if self.receiver_selected(&policy.component) {
-            if self
-                .receiver_policy
-                .as_ref()
-                .is_none_or(|p| p.root != policy.root)
-            {
-                return Err(Error::Invalid(
-                    "shard pool must use the receiver policy Root".into(),
-                ));
-            }
-            let bytes = self.receiver_install_args(
-                &policy.component,
-                &root,
-                arguments.as_slice().to_vec(),
-            )?;
-            canic_management_protocol::application::Arguments::new(bytes).map_err(supplier)?
-        } else {
-            arguments
-        };
+        let arguments =
+            self.pool_receiver_arguments(&policy.component, &policy.root, &root, arguments)?;
         Ok(stored::ShardPool {
             arguments,
             pool: policy.component.clone(),
@@ -494,6 +477,29 @@ impl FleetConfig {
 }
 
 impl FleetConfig {
+    fn pool_receiver_arguments(
+        &self,
+        component: &str,
+        root_slot: &str,
+        root: &str,
+        arguments: canic_management_protocol::application::Arguments,
+    ) -> Result<canic_management_protocol::application::Arguments> {
+        if !self.receiver_selected(component) {
+            return Ok(arguments);
+        }
+        if self
+            .receiver_policy
+            .as_ref()
+            .is_none_or(|p| p.root != root_slot)
+        {
+            return Err(Error::Invalid(
+                "pool must use the receiver policy Root".into(),
+            ));
+        }
+        let bytes = self.receiver_install_args(component, root, arguments.as_slice().to_vec())?;
+        canic_management_protocol::application::Arguments::new(bytes).map_err(supplier)
+    }
+
     fn pool_bindings(
         &self,
         component: &str,
@@ -561,12 +567,12 @@ fn parent<'a>(slots: &'a BTreeMap<String, CanisterConfig>, component: &str) -> R
         .and_then(|c| c.parent.as_deref())
         .ok_or_else(|| {
             Error::Invalid(format!(
-                "pool component {component:?} must have a declared parent hub"
+                "pool component {component:?} must have a declared parent"
             ))
         })
 }
 
-impl InstancePoolConfig {
+impl RegistryConfig {
     fn validate(
         &self,
         slots: &BTreeMap<String, CanisterConfig>,
@@ -581,11 +587,11 @@ impl InstancePoolConfig {
             self.install_args.as_deref(),
         )?;
         super::positive_count(
-            "instance_pool.max_instances",
+            "registry.max_instances",
             self.max_instances,
             stored::MAX_INSTANCES,
         )?;
-        validate_deadline("instance_pool", self.expires_at_ns)?;
+        validate_deadline("registry", self.expires_at_ns)?;
         for other in shared {
             if self.root != other.root
                 || self.store != other.store
@@ -593,7 +599,7 @@ impl InstancePoolConfig {
                 || hub == parent(slots, &other.component)?
             {
                 return Err(Error::Invalid(format!(
-                    "instance_pool (root {:?}, store {:?}, component {:?}, hub {hub:?}) and shard_pool (root {:?}, store {:?}, component {:?}, hub {:?}) require the same root and store and distinct children and hubs",
+                    "registry (root {:?}, store {:?}, component {:?}, parent {hub:?}) and shard_pool (root {:?}, store {:?}, component {:?}, hub {:?}) require the same root and store and distinct children and parents",
                     self.root,
                     self.store,
                     self.component,

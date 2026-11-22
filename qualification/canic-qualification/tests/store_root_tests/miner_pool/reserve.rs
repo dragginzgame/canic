@@ -172,9 +172,23 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
             .unwrap();
         AssignWorker::decode_reply(&reply).unwrap()
     };
-    assert!(matches!(claim(0).await, Placement::Pending(_)));
+    // Both requests use the same ordinal. Treat the first response as lost to the caller.
+    let (first_reply, retry) = tokio::join!(claim(0), claim(0));
+    let allocation = match first_reply {
+        Placement::Pending(a) | Placement::Assigned(a, _) => a,
+        other => panic!("expected admitted first worker: {other:?}"),
+    };
+    assert!(matches!(retry, Placement::Pending(a) | Placement::Assigned(a, _) if a == allocation));
     settle(pic).await;
     let rows = inspect().await;
+    let mut claims = rows.iter().filter_map(|(_, asset)| match asset {
+        Asset::Claimed(id, a) if *a == allocation => Some(id.to_text()),
+        _ => None,
+    });
+    let principal = claims
+        .next()
+        .expect("one spare retained for the allocation");
+    assert_eq!(claims.next(), None);
     assert_eq!(
         rows.iter()
             .filter(|(_, a)| matches!(a, Asset::Empty(_)))
@@ -198,6 +212,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
         .unwrap()
     };
     reopen().await;
+    assert_eq!(claim(0).await, Placement::Assigned(allocation, principal));
     assert_eq!(import().await.unwrap(), first);
     pic.advance_time(Duration::from_secs(7200)).await;
     assert!(matches!(import().await.unwrap(),Asset::Available(id,_) if id==imported));
@@ -586,4 +601,91 @@ pub(super) async fn check_controller_handoff(
     canic_qualification::upgrade_stopped(pic, hub, hub_wasm.to_vec(), vec![], Some(root.id))
         .await
         .unwrap();
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn pending_worker_growth_delivers_original_job_after_hub_reopen() {
+    let base =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/examples/miner-pool/artifacts");
+    let (mut server, mut owner) = support::instance_with_lifetime(
+        &canic_qualification::server_directory(),
+        ic_testkit::pocket_ic::PocketIcBuilder::new()
+            .with_nns_subnet()
+            .with_application_subnet(),
+        Duration::from_secs(180),
+    )
+    .await;
+    let fleet = crate::miner_pool_fixture::install(&mut owner, &base, |_| {}).await;
+    let root = &fleet.root;
+    let pic = root.pic;
+    configure(root, &fleet.capacity, &fleet.workers).await;
+    let tick = async |round, goal| {
+        let bytes = pic
+            .update_call(
+                fleet.pool,
+                root.operator,
+                Tick::NAME,
+                Tick::encode_request(&(round, goal)).unwrap(),
+            )
+            .await
+            .unwrap();
+        Tick::decode_reply(&bytes).unwrap()
+    };
+    pic.stop_canister(root.id, Some(root.operator))
+        .await
+        .unwrap();
+    assert_eq!(tick(1, 1).await, "worker 0: Root call rejected");
+    pic.start_canister(root.id, Some(root.operator))
+        .await
+        .unwrap();
+    // Discard the ingress result after the original job requests capacity.
+    let _lost = pic
+        .submit_call(
+            fleet.pool,
+            root.operator,
+            Tick::NAME,
+            Tick::encode_request(&(1, 1)).unwrap(),
+        )
+        .await
+        .unwrap();
+    settle(pic).await;
+    canic_qualification::upgrade_stopped(
+        pic,
+        fleet.pool,
+        std::fs::read(base.join("pool.wasm")).unwrap(),
+        vec![],
+        Some(root.id),
+    )
+    .await
+    .unwrap();
+    // Two continuations request a new, empty round before the original batch is delivered.
+    let (_, _) = tokio::join!(tick(2, 0), tick(2, 0));
+    for _ in 0..50 {
+        if tick(2, 0).await == "settled" {
+            break;
+        }
+        pic.advance_time(Duration::from_secs(1)).await;
+        pic.tick().await;
+    }
+    let bytes = pic
+        .query_call(
+            fleet.pool,
+            root.operator,
+            PoolReport::NAME,
+            PoolReport::encode_request(&()).unwrap(),
+        )
+        .await
+        .unwrap();
+    let report = PoolReport::decode_reply(&bytes).unwrap();
+    assert_eq!((report.round, report.goal, report.completed), (2, 0, 0));
+    let [worker] = report.workers.as_slice() else {
+        panic!("expected one worker")
+    };
+    assert_eq!((worker.last_batch, worker.attempts), (Some((1, 1)), 1));
+    assert_eq!(worker.status, "parked");
+    assert_eq!(
+        owner.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert_eq!(server.stop().unwrap().abandoned, 0);
 }

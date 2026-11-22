@@ -179,15 +179,14 @@ async fn attempt_delivery() -> Principal {
 // Use the installed hub's identity and retained Root for placement qualification.
 #[cfg(feature = "placement")]
 #[canic::update(reply_limits = canic::sharding::LIMITS)]
-async fn place(request: (bool, u8)) -> canic::sharding::Placement {
+async fn place(request: (Option<String>, u8)) -> Result<canic::sharding::Placement, String> {
     let root = DIRECTORY.with_borrow(|index| index.as_ref().expect("open hub").publisher());
-    let (project, key) = request;
-    if project {
-        canic::sharding::assign_instance(root, [key; 32]).await
-    } else {
-        canic::sharding::assign(root, "users", [key; 32]).await
+    let (pool, key) = request;
+    match pool {
+        Some(pool) => canic::sharding::assign(root, &pool, [key; 32]).await,
+        None => canic::sharding::assign_instance(root, [key; 32]).await,
     }
-    .expect("placement call")
+    .map_err(str::to_owned)
 }
 
 /// Have the installed hub release one qualified route using its retained Root.

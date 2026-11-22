@@ -127,3 +127,10 @@ selected registry executable. It reuses the current replacement/recovery proof,
 including all stable bytes, callback loss, Root maintenance, explicit activation,
 expired-operation recovery and rejection of stale activation. The fixture does
 not add a Git build fallback, runtime migration API or live upgrade authorization.
+
+## Store 0.7 preservation fixtures
+
+The normal Store 0.7.0 Wasm (SHA-256 `1c13ca9792942756c94b0b9a80499a39dcb42f462cee6bf7084bf910b6e77a74`)
+and its maintenance candidate (`e9ca31b6fa78d24dd63d6772b44889088a71537ac8640fdab361b7800dd1e6e8`)
+exercise the original scan and replacement using the retained predecessor Root.
+Store 0.8 retires the endpoint used by those owners.

@@ -837,6 +837,12 @@ async fn return_and_reuse(prepaid: bool) {
         assert_eq!(id, spare);
     }
     assert_eq!(original.allocation, winner);
+    assert_eq!(pic.get_controllers(hub).await, [root.id]);
+    assert_eq!(
+        pic.get_controllers(CanisterId::from_slice(spare.as_slice()))
+            .await,
+        [root.id]
+    );
     settle(2, 0).await;
     Release::decode_reply(
         &pic.update_call(

@@ -83,7 +83,7 @@ pub(crate) fn pool_preview<'a>(
     for (label, a) in allocations {
         writeln!(
             text,
-            "\n{label} · {}\nRoot: {}\nParent hub: {}\nChild limit: {}",
+            "\n{label} · {}\nRoot: {}\nParent: {}\nChild limit: {}",
             escape(&a.component),
             a.root,
             a.hub,

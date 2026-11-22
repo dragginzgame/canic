@@ -169,13 +169,19 @@ pub(in crate::engine::sharding) fn reserve(
     pools: &mut super::Pools,
     slot: ChildId,
     generation: [u8; 32],
+    selected: super::Acquisition,
 ) {
-    if let Some(((_, _, id), asset)) = pools
-        .standby
-        .iter_mut()
-        .filter_map(|(_, asset)| Some((available(asset)?, asset)))
-        .min_by_key(|(key, _)| *key)
+    if let super::Acquisition::Reserve {
+        index,
+        principal: id,
+    } = selected
     {
+        let asset = &mut pools.standby[index].1;
+        assert_eq!(
+            available(asset).map(|(_, _, id)| id),
+            Some(id),
+            "selected reserve changed"
+        );
         *asset = Asset::Claimed(
             id,
             Allocation {

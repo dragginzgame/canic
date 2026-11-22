@@ -2,6 +2,20 @@
 use super::*;
 use canic::sharding::Placement;
 
+pub(super) async fn place(
+    hub: &Client<'_>,
+    pool: Option<&str>,
+    key: u8,
+) -> Result<Placement, String> {
+    hub.update(
+        "place",
+        ic_wire::method_id("place"),
+        &(pool, key),
+        canic::sharding::LIMITS,
+    )
+    .await
+}
+
 pub(super) async fn counts(root: &Client<'_>) -> stored::SpareCounts {
     let reply = root
         .pic
@@ -66,15 +80,7 @@ pub(super) async fn ready_project(
         id: hub,
         operator: root.operator,
     };
-    let place = async || {
-        hub.update::<_, Placement>(
-            "place",
-            ic_wire::method_id("place"),
-            &(true, 1u8),
-            canic::sharding::LIMITS,
-        )
-        .await
-    };
+    let place = async || self::place(&hub, None, 1).await.unwrap();
     assert!(matches!(place().await, Placement::Pending(_)));
     settle(root.pic).await;
     let Placement::Assigned(_, id) = place().await else {
@@ -192,18 +198,14 @@ pub(super) async fn exercise(
     .await
     .unwrap();
     let place = async |dedicated: bool, key: u8| {
-        Client {
+        let caller = Client {
             pic: root.pic,
             id: if dedicated { project } else { hub },
             operator: root.operator,
-        }
-        .update::<_, Placement>(
-            "place",
-            ic_wire::method_id("place"),
-            &(dedicated, key),
-            canic::sharding::LIMITS,
-        )
-        .await
+        };
+        self::place(&caller, (!dedicated).then_some("users"), key)
+            .await
+            .unwrap()
     };
     let (users, projects) = if limit == 3 {
         tokio::join!(place(false, 1), place(true, 1))
@@ -329,7 +331,7 @@ pub(super) async fn separate_hub_pools(
     users: CanisterId,
     discovery: CanisterId,
 ) {
-    use canic::sharding::AssignShard;
+    use canic::sharding::LookupShard;
     let mut children = std::collections::BTreeSet::new();
     for (pool, parent, other) in [
         ("user_shard", users, discovery),
@@ -360,26 +362,64 @@ pub(super) async fn separate_hub_pools(
         )
         .await
         .unwrap();
-        let input = AssignShard::encode_request(&(pool.to_owned(), [42u8; 32])).unwrap();
-        let assign = async || {
-            let reply = root
-                .pic
-                .update_call(root.id, parent, AssignShard::NAME, input.clone())
-                .await
-                .unwrap();
-            AssignShard::decode_reply(&reply).unwrap()
+        let caller = Client {
+            pic: root.pic,
+            id: parent,
+            operator: root.operator,
         };
-        assert!(matches!(assign().await, Placement::Pending(_)));
+        let assign = async || self::place(&caller, Some(pool), 42).await;
+        root.pic
+            .stop_canister(root.id, Some(root.operator))
+            .await
+            .unwrap();
+        assert_eq!(
+            assign().await,
+            Err("placement reply unavailable".to_owned())
+        );
+        root.pic
+            .start_canister(root.id, Some(root.operator))
+            .await
+            .unwrap();
+        let reply = root
+            .pic
+            .update_call(
+                root.id,
+                parent,
+                LookupShard::NAME,
+                LookupShard::encode_request(&(pool.to_owned(), [42; 32])).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            LookupShard::decode_reply(&reply).unwrap(),
+            Placement::Unknown
+        );
+        let Placement::Pending(original) = assign().await.unwrap() else {
+            panic!("expected first allocation")
+        };
         settle(root.pic).await;
-        let Placement::Assigned(_, id) = assign().await else {
+        let Placement::Assigned(allocation, id) = assign().await.unwrap() else {
             panic!("ready named shard")
         };
+        assert_eq!(allocation, original);
         let id = CanisterId::from_text(id).unwrap();
         assert!(children.insert(id));
+        assert_eq!(root.pic.get_controllers(parent).await, [root.id]);
+        assert_eq!(root.pic.get_controllers(id).await, [root.id]);
         let route = async |hub| -> Option<CanisterId> {
             query_service(root.pic, hub, "route_shard", (pool, root.operator)).await
         };
         assert_eq!(route(parent).await, Some(id));
         assert_eq!(route(other).await, None);
+        root.pic
+            .stop_canister(root.id, Some(root.operator))
+            .await
+            .unwrap();
+        assert_eq!(route(parent).await, Some(id));
+        assert_eq!(route(other).await, None);
+        root.pic
+            .start_canister(root.id, Some(root.operator))
+            .await
+            .unwrap();
     }
 }

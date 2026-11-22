@@ -50,7 +50,7 @@ done
 parent="${CARGO_PUBLISH_EVIDENCE_ROOT:?declare an ignored evidence parent}"
 case "$parent" in *$'\n'*|*$'\r'*) exit 2 ;; esac
 mkdir -p "$parent"
-parent="$(cd -P "$parent" && printf '%s/.' "$PWD")"
+parent="$(CDPATH='' cd -P -- "$parent" && printf '%s/.' "$PWD")"
 parent="${parent%/.}"
 selection="$(mktemp -d "$parent/selection.XXXXXX")"
 printf 'Publication selection evidence: %s\n' "$selection"

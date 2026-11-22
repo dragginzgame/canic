@@ -273,6 +273,16 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
         let runtime = open(true);
         let mut index =
             retained::Index::create(&runtime, key, Principal::from_slice(&[8, 1]), "hub");
+        retained::DIRECTORY.with_borrow_mut(|slot| *slot = Some(index));
+        assert_eq!(
+            route(),
+            Err(retained::ShardLookupError::DirectoryUnavailable)
+        );
+        index = retained::DIRECTORY.with_borrow_mut(Option::take).unwrap();
+        index.apply(&directory, [7; 32], None).unwrap();
+        retained::DIRECTORY.with_borrow_mut(|slot| *slot = Some(index));
+        assert_eq!(route(), Err(retained::ShardLookupError::NoReadyShard));
+        index = retained::DIRECTORY.with_borrow_mut(Option::take).unwrap();
         for child in &children {
             index.apply(&directory, [7; 32], Some(child)).unwrap();
         }

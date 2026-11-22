@@ -59,12 +59,10 @@ fn scan(record: &Status) -> &Scan {
 }
 
 pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
-    let entries = matches!(scan(record), Scan::Entries(_));
-    let (method, name) = if entries {
-        (store::PRESERVATION_V2, "observe_preservation_v2")
-    } else {
-        (store::PRESERVATION, "observe_preservation")
-    };
+    if !matches!(scan(record), Scan::Entries(_)) {
+        return Err(Failure::Mismatch);
+    }
+    let method = store::PRESERVATION;
     let request = store::preservation::Request {
         attempt: record.approval.attempt.clone(),
         after: scan(record).as_ref().and_then(|value| value.after.clone()),
@@ -78,37 +76,27 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
         STORE_LIMITS,
     )
     .expect("preservation request");
-    let reply = Call::new(target(&record.approval), name, Wait::Bounded { seconds: 5 })
-        .owned_args(bytes)
-        .execute()
-        .await
-        .map_err(super::super::failure)
-        .and_then(super::super::response)?;
+    let reply = Call::new(
+        target(&record.approval),
+        "observe_preservation",
+        Wait::Bounded { seconds: 5 },
+    )
+    .owned_args(bytes)
+    .execute()
+    .await
+    .map_err(super::super::failure)
+    .and_then(super::super::response)?;
     let encoding = ic_wire::Encoding::Frame {
         method,
         direction: ic_wire::Direction::Response,
     };
-    let page = if entries {
-        ic_wire::decode::<Result<store::preservation::PageV2, store::Error>>(
-            &reply,
-            encoding,
-            STORE_LIMITS,
-        )
-        .map_err(|_| Failure::InvalidReply)?
-        .map_err(|_| Failure::Mismatch)?
-    } else {
-        let page = ic_wire::decode::<Result<store::preservation::Page, store::Error>>(
-            &reply,
-            encoding,
-            STORE_LIMITS,
-        )
-        .map_err(|_| Failure::InvalidReply)?
-        .map_err(|_| Failure::Mismatch)?;
-        store::preservation::PageV2 {
-            catalog: page.catalog,
-            entry: page.entry.map(store::preservation::Entry::Active),
-        }
-    };
+    let page = ic_wire::decode::<Result<store::preservation::Page, store::Error>>(
+        &reply,
+        encoding,
+        STORE_LIMITS,
+    )
+    .map_err(|_| Failure::InvalidReply)?
+    .map_err(|_| Failure::Mismatch)?;
     if !page.catalog.quota.valid()
         || page.catalog.releases > page.catalog.quota.releases
         || page.catalog.reserved_bytes > page.catalog.quota.reserved_bytes
@@ -123,11 +111,7 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
             catalog: page.catalog.clone(),
             after: None,
             observed: 0,
-            digest: store::digest(if entries {
-                b"Canic closed Store metadata v2"
-            } else {
-                b"Canic closed Store metadata v1"
-            }),
+            digest: store::digest(b"Canic closed Store metadata v2"),
             complete: false,
             after_removed: false,
         });
@@ -140,36 +124,20 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
             || matches!(entry, store::preservation::Entry::Active(custody) if custody.pins.len() > store::MAX_PINS)
             || value.observed >= value.catalog.releases
             || value.after.as_ref().is_some_and(|old| {
-                if entries {
-                    (old.name.as_str(), value.after_removed, old.version.as_str())
-                        >= entry.order_key()
-                } else {
-                    (&old.name, &old.version) >= (&release.name, &release.version)
-                }
+                (old.name.as_str(), value.after_removed, old.version.as_str()) >= entry.order_key()
             })
         {
             return Err(Failure::Mismatch);
         }
-        let bytes = if entries {
-            ic_wire::encode(
-                &(value.digest, entry),
-                ic_wire::Encoding::Payload,
-                STORE_LIMITS,
-            )
-        } else {
-            let store::preservation::Entry::Active(custody) = entry else {
-                unreachable!("legacy projection")
-            };
-            ic_wire::encode(
-                &(value.digest, custody),
-                ic_wire::Encoding::Payload,
-                STORE_LIMITS,
-            )
-        }
+        let bytes = ic_wire::encode(
+            &(value.digest, entry),
+            ic_wire::Encoding::Payload,
+            STORE_LIMITS,
+        )
         .map_err(|_| Failure::InvalidReply)?;
         value.digest = store::digest(&bytes);
         value.after = Some(release.clone());
-        value.after_removed = entries && matches!(entry, store::preservation::Entry::Removed(_));
+        value.after_removed = matches!(entry, store::preservation::Entry::Removed(_));
         value.observed += 1;
     } else {
         if value.observed != value.catalog.releases {
@@ -183,11 +151,7 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
     {
         return Err(Failure::Mismatch);
     }
-    let value = if entries {
-        Scan::Entries(Some(value))
-    } else {
-        Scan::Legacy(Some(value))
-    };
+    let value = Scan::Entries(Some(value));
     // Concurrent responses to the same cursor may commit it only once. A later page must win.
     change(&record.approval, record.phase, |current| {
         if scan(current) == scan(record) {

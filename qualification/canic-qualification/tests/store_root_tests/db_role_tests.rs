@@ -12,6 +12,26 @@ use canic::{
 
 #[tokio::test]
 async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
+    installed_roles(Journey::Shards).await;
+}
+
+#[tokio::test]
+async fn dedicated_receiver_bootstraps_and_accepts_its_owners_write() {
+    installed_roles(Journey::DedicatedAuth).await;
+}
+
+#[tokio::test]
+async fn dedicated_receiver_grant_and_allocation_reopen_before_enrollment() {
+    installed_roles(Journey::DedicatedReopen).await;
+}
+
+enum Journey {
+    Shards,
+    DedicatedAuth,
+    DedicatedReopen,
+}
+
+async fn installed_roles(journey: Journey) {
     const HUB: &str = "ex-user-directory-hub";
     let wasm = |name: &str| std::fs::read(artifacts().join(format!("{name}.wasm"))).unwrap();
     let (mut server, mut instance) = support::instance_with(
@@ -134,7 +154,7 @@ async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
         stored::CONFIGURE_CAPACITY,
         &stored::SubnetCapacity {
             root: root.id.to_text(),
-            max_children: 3,
+            max_children: 4,
         },
         stored::LIMITS,
     )
@@ -188,6 +208,23 @@ async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
         not_before_ns: now,
         expires_at_ns: deadline,
     };
+    if !matches!(journey, Journey::Shards) {
+        dedicated_receiver(
+            &root,
+            project,
+            &fleet,
+            &grant,
+            &pool,
+            matches!(journey, Journey::DedicatedReopen),
+        )
+        .await;
+        assert_eq!(
+            instance.close(Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        assert!(server.stop().unwrap().process.cleanup.is_empty());
+        return;
+    }
     user_directory_tests::enroll(&root, hub, &grant, true).await;
     let (browser, credential) = crate::credential::signed(
         pic.get_time().await.as_nanos_since_unix_epoch(),
@@ -422,6 +459,205 @@ async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
     assert!(server.stop().unwrap().process.cleanup.is_empty());
 }
 
+// The same installed DB actor also serves a dedicated allocation. Its registry
+// bootstraps the owner, who then authorizes a write through the child's endpoint.
+async fn dedicated_receiver(
+    root: &Client<'_>,
+    registry: CanisterId,
+    fleet: &canic_host::FleetConfig,
+    grant: &enrollment::Grant,
+    shard: &stored::ShardPool,
+    reopen: bool,
+) {
+    use canic::sharding::{
+        AssignInstance, Placement,
+        provisioning::{AuthSubject, Binding, Provision, Request},
+    };
+    use ic_auth_protocol_types::Principal;
+    let pic = root.pic;
+    let mut config = fleet.clone();
+    config.subnet_child_limit = Some(4);
+    config.shard_pools.clear();
+    for slot in config.canisters.values_mut() {
+        slot.wasm = None;
+    }
+    config.canisters.get_mut("project_hub").unwrap().id = Some(registry.to_text());
+    let mut slot = config.canisters["ex-user-directory-shard"].clone();
+    slot.parent = Some("project_hub".into());
+    slot.wasm = Some("db-role-shard.wasm".into());
+    config.canisters.insert("dedicated".into(), slot);
+    config.registry = Some(canic_host::RegistryConfig {
+        component: "dedicated".into(),
+        root: "root".into(),
+        store: "store".into(),
+        release: shard.reference.manifest.release.clone(),
+        install_args: Some("db-role-nonce.bin".into()),
+        max_instances: 1,
+        increase_from: None,
+        creation_budget: management::CREATION_CYCLES,
+        expires_at_ns: Some(grant.expires_at_ns),
+    });
+    let dir = artifacts();
+    let selection = canic_host::SelectedFleet {
+        app: "ex-user-directory".into(),
+        fleet: "local".into(),
+        config,
+    };
+    let canic_host::FleetPlanning::PlacementPools {
+        instances: Some(plan),
+        ..
+    } = canic_host::plan_fleet(
+        &dir,
+        &dir.join("canic.toml"),
+        &selection,
+        &root.operator.to_text(),
+        None,
+        None,
+    )
+    .unwrap()
+    else {
+        panic!("dedicated allocation plan")
+    };
+    let approved = plan.approval;
+    let receiver = canic::auth::install::Install::decode(approved.arguments.as_slice()).unwrap();
+    let topology = canic::topology::Install::decode(&receiver.application).unwrap();
+    assert_eq!(receiver.role, "user");
+    assert_eq!(receiver.storage, canic::auth::install::Storage::Stable);
+    assert_eq!(topology.role, "user_shard");
+    assert_eq!(topology.application, b"local-shard-v001");
+    let configure = async |approval: &stored::InstancePool| {
+        root.update::<_, Result<(), management::Refusal>>(
+            "configure_instances",
+            stored::CONFIGURE_INSTANCES,
+            approval,
+            stored::LIMITS,
+        )
+        .await
+    };
+    let mut wrong = receiver;
+    wrong.root = Principal::from_slice(registry.as_slice());
+    let mut invalid = approved.clone();
+    invalid.arguments = management::application::Arguments::new(wrong.encode().unwrap()).unwrap();
+    assert_eq!(configure(&invalid).await, Err(management::Refusal::Binding));
+    invalid = approved.clone();
+    invalid.hub = Principal::from_slice(&[99, 1]).to_text();
+    assert_eq!(configure(&invalid).await, Err(management::Refusal::Binding));
+    configure(&approved).await.unwrap();
+    // The configured credential role and application role are independent.
+    // Changing the approved topology role is a conflicting grant on replay.
+    let mut changed_role = topology;
+    changed_role.role = "other".into();
+    wrong.root = changed_role.root;
+    wrong.application = changed_role.encode().unwrap();
+    invalid = approved.clone();
+    invalid.arguments = management::application::Arguments::new(wrong.encode().unwrap()).unwrap();
+    assert_eq!(
+        configure(&invalid).await,
+        Err(management::Refusal::Occupied)
+    );
+    let parent = Client {
+        operator: registry,
+        ..*root
+    };
+    let assign = async || {
+        parent
+            .update::<_, Placement>(
+                AssignInstance::NAME,
+                AssignInstance::ID,
+                &[3_u8; 32],
+                AssignInstance::REPLY,
+            )
+            .await
+    };
+    assert!(matches!(assign().await, Placement::Pending(_)));
+    settle(pic).await;
+    let placement = assign().await;
+    let Placement::Assigned(_, id) = &placement else {
+        panic!("{placement:?}")
+    };
+    assert_eq!(assign().await, placement);
+    if reopen {
+        canic_qualification::upgrade_stopped(
+            pic,
+            root.id,
+            std::fs::read(dir.join("db-role-root.wasm")).unwrap(),
+            vec![],
+            Some(root.operator),
+        )
+        .await
+        .unwrap();
+        configure(&approved).await.unwrap();
+        assert_eq!(assign().await, placement);
+        return;
+    }
+    let child = CanisterId::from_text(id).unwrap();
+    let subject = Principal::from_slice(&[12, 2]);
+    type Bootstrap = Provision<user_directory_schema::Users>;
+    let bootstrap = Request {
+        binding: Binding {
+            id: [12; 16],
+            account: AuthSubject {
+                issuer: grant.issuer,
+                subject,
+            },
+            shard: Principal::from_slice(child.as_slice()),
+        },
+        data: (),
+    };
+    let reply = pic
+        .update_call(
+            child,
+            registry,
+            Bootstrap::NAME,
+            Bootstrap::encode_request(&bootstrap).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        Bootstrap::decode_reply(&reply).unwrap().unwrap(),
+        bootstrap.binding
+    );
+    user_directory_tests::enroll(root, child, grant, true).await;
+    for (device, who) in [(13, Principal::from_slice(&[13, 2])), (12, subject)] {
+        pic.advance_time(Duration::from_secs(3)).await;
+        let (browser, proof) = crate::credential::signed(
+            pic.get_time().await.as_nanos_since_unix_epoch(),
+            device,
+            0,
+            grant.issuer,
+            who,
+            &["read", "write"],
+        );
+        let reply = pic
+            .update_call(
+                child,
+                browser,
+                "establish_portable_session",
+                EstablishSession::encode_request(&proof).unwrap(),
+            )
+            .await
+            .unwrap();
+        EstablishSession::decode_response(&reply).unwrap().unwrap();
+        let result = Client {
+            pic,
+            id: child,
+            operator: browser,
+        }
+        .update::<_, Result<[u8; 16], String>>(
+            "request_project",
+            ic_wire::method_id("request_project"),
+            &(),
+            canic::method::LIMITS,
+        )
+        .await;
+        if who == subject {
+            result.unwrap();
+        } else {
+            assert!(result.unwrap_err().contains("unregistered account"));
+        }
+    }
+}
+
 #[tokio::test]
 async fn schema_mount_reopens_two_stores_by_entity() {
     let wasm = std::fs::read(artifacts().join("db-role-schema.wasm")).unwrap();
@@ -445,10 +681,20 @@ async fn schema_mount_reopens_two_stores_by_entity() {
         .await;
     let values = || user_directory_tests::query::<(u64, u64)>(&client, "values");
     assert_eq!(values().await.unwrap(), (7, 19));
+    pic.advance_time(Duration::from_secs(1)).await;
+    let replaced: u64 = client
+        .update(
+            "replace_project",
+            ic_wire::method_id("replace_project"),
+            &(),
+            canic::method::LIMITS,
+        )
+        .await;
+    assert_eq!(replaced, 20);
     canic_qualification::upgrade_stopped(pic, id, wasm, vec![], None)
         .await
         .unwrap();
-    assert_eq!(values().await.unwrap(), (7, 19));
+    assert_eq!(values().await.unwrap(), (7, 20));
     // A different roster must fail reopen before either retained store is lost.
     let before = pic.get_stable_memory(id).await;
     let other = std::fs::read(artifacts().join("db-role-hub.wasm")).unwrap();
@@ -460,7 +706,7 @@ async fn schema_mount_reopens_two_stores_by_entity() {
         ic_testkit::pocket_ic::RejectCode::CanisterError
     );
     assert_eq!(pic.get_stable_memory(id).await, before);
-    assert_eq!(values().await.unwrap(), (7, 19));
+    assert_eq!(values().await.unwrap(), (7, 20));
     assert_eq!(
         instance.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

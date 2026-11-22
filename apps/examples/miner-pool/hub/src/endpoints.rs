@@ -126,7 +126,9 @@ async fn tick(input: (u64, u8)) -> String {
                         blocks: 0,
                         last_batch: None,
                     });
+                    // Commit the batch that requested growth before accepting a newer goal.
                     latest.pending = None;
+                    latest.begin(latest.round, latest.goal);
                 }
                 Ok(ref refusal @ (Placement::Full | Placement::GrowthRefused))
                     if generation.is_none() =>

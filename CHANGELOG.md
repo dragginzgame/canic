@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.255.0] - 2026-11-22
+
+Canic’s DB adapter now accepts IC DB 0.27 schemas. The installed two-store
+fixture commits a timestamped batch through `db!()`, reads the row returned by
+`replace`, and verifies the update survives reopening. [#80](https://github.com/dragginzgame/canic/issues/80)
+
+Use fresh Root and Wasm Store 0.8 pairs. Finish existing maintenance with the
+original pair. The new Root requires journal CUJE and Store's
+`observe_preservation` method 117. Platform Runtime is 0.23.25.
+
+The one-child-per-key placement pattern is called **registry**. Rename
+`[apps.<app>.fleets.<fleet>.instance_pool]` to
+`[apps.<app>.fleets.<fleet>.registry]` in existing configs. Its fields,
+including `component` and `max_instances`, carry over.
+
+Dedicated instance pools now support fleet-selected Auth receivers. Host binds
+the declared parent, application role and install bytes to the receiver policy.
+Root checks the same installation on approval and when reopening the grant.
+
+```sh
+# With a bound local Root, registry and Store, inspect the exact instance approval.
+canic fleet plan --app toko --fleet local --controller "$CONTROLLER" --json
+```
+
+The Miner Pool keeps the job that requested a worker across a Root outage,
+a hub upgrade and a change of goal. Once the worker is ready it runs that
+batch once, even if the next goal parks the worker.
+
+```sh
+# From a fresh local Miner Pool fleet, use its configured operator identity.
+canic fleet call --canister pool --identity "$IDENTITY" tick 1 1
+canic fleet call --canister pool --identity "$IDENTITY" tick 2 0
+# Repeat the second tick until it reports settled.
+```
+
+Fleet declarations accept `top_up_children = ["project_registry"]` to select which
+direct children may receive parent-funded top-ups. Omitted children receive no
+such permission. This declares policy; cycle transfers and reserve reimbursement
+are tracked in [#78](https://github.com/dragginzgame/canic/issues/78).
+
+```sh
+# Inspect the selected fleet's declared funding policy.
+canic fleet canister list
+```
+
+Use the `receiver-role` feature for hubs without IC DB. Database-free hubs can mount directory, receiver lifecycle and readiness together,
+select session endpoints separately, and supply IC-named lifecycle hooks.
+Receiver callbacks can require the installed issuer directly. [Canic #77](https://github.com/dragginzgame/canic/issues/77)
+
 ## [0.254.0] - 2026-11-22
 
 ### 🌳 Fleet growth and named pools

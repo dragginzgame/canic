@@ -7,6 +7,19 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Database-free Toko hub upgrades — 2026-11-22
+
+An isolated Toko qualification run installed the retained predecessor hubs,
+populated them and upgraded to the declarative receiver mounts. Discovery
+recovered its verified project report. Signup recovered the returning account
+after the hub and shard upgrades. The installed `discovery` and `user_signup`
+targets passed all three cases. Only the initial hub Wasm inputs were substituted.
+
+| Hub | Predecessor SHA-256 | Successor SHA-256 |
+| --- | --- | --- |
+| Discovery | `5882ea7a72c2dfaa4a81bdb718d9adab80aef31926896b1abb70d1ea903c472a` | `d401edf67ccfc2ec7cd53006a682887a13cefa1c4499b1239b7fff80eeac4771` |
+| User | `93b8734f80fa3f10ea5f6cd68ad9ed19762740acb4ac1fc7662847c123150873` | `9b0d3f52ebd341c94f9ba97459e845e022b78bc25bfc5f6452070f345669d974` |
+
 ## Qualification guide and original provisioning role fixture — 2026-11-21
 
 The original role-name experiment installed two hub roles and a shard using Toko's

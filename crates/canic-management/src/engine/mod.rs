@@ -524,7 +524,7 @@ pub fn stage(slot: ChildId, input: Stage) -> Result<Status, Refusal> {
 enum Origin {
     Permanent,
     #[cfg(feature = "sharding")]
-    Placement,
+    Placement(sharding::Acquisition),
 }
 
 fn admit(
@@ -536,18 +536,22 @@ fn admit(
     if origin == Origin::Permanent && !ChildId::ALL.contains(&slot) {
         return Err(Refusal::Binding);
     }
+    #[cfg(not(feature = "sharding"))]
     let attachment = u128::from(CREATION_CYCLES);
     #[cfg(feature = "sharding")]
-    let attachment = STATE.with_borrow(|state| {
-        let pools = &state.as_ref().expect("open Root").pools;
-        if pools.empty_spare() {
-            Ok(0)
-        } else if pools.full() {
-            Err(Refusal::Occupied)
-        } else {
-            Ok(attachment)
-        }
-    })?;
+    let selected = match origin {
+        Origin::Permanent => STATE.with_borrow(|state| {
+            state
+                .as_ref()
+                .expect("open Root")
+                .pools
+                .acquisition()
+                .map_err(|_| Refusal::Occupied)
+        })?,
+        Origin::Placement(acquisition) => acquisition,
+    };
+    #[cfg(feature = "sharding")]
+    let attachment = u128::from(selected.attachment());
     #[cfg(feature = "sharding")]
     let generation = artifact
         .sources()
@@ -582,7 +586,7 @@ fn admit(
         s.phase = Phase::Scheduled;
     });
     #[cfg(feature = "sharding")]
-    sharding::retain_child(slot, generation, origin);
+    sharding::retain_child(slot, generation, origin, selected);
     schedule(slot);
     Ok(status(slot))
 }

@@ -47,6 +47,7 @@ if [[ "$scope" == all || "$scope" == db-roles ]]; then
     build db-role-root canic-root --features auth,role-issuer
     build db-role-hub ex-user-directory-hub --features role-service
     build db-role-shard ex-user-directory-shard --features role-service
+    cp -- apps/examples/user-directory/shard-nonce.bin target/store/db-role-nonce.bin
 fi
 if [[ "$scope" == db-roles ]]; then
     build original ic-wasm-store

@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "canic-host",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "canic-dormant"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -350,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -385,7 +385,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -926,7 +926,7 @@ dependencies = [
 
 [[package]]
 name = "ex-counter"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "clap",
@@ -941,7 +941,7 @@ dependencies = [
 
 [[package]]
 name = "ex-metrics"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "clap",
@@ -951,7 +951,7 @@ dependencies = [
 
 [[package]]
 name = "ex-miner-pool-hub"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "clap",
@@ -966,7 +966,7 @@ dependencies = [
 
 [[package]]
 name = "ex-miner-pool-miner"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -979,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "ex-notebook"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -992,7 +992,7 @@ dependencies = [
 
 [[package]]
 name = "ex-template"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "serde",
@@ -1001,7 +1001,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-hub"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1012,7 +1012,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-schema"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -1023,7 +1023,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-shard"
-version = "0.254.0"
+version = "0.255.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1254,9 +1254,9 @@ checksum = "1b43ede17f21864e81be2fa654110bf1e793774238d86ef8555c37e6519c0403"
 
 [[package]]
 name = "hashbrown"
-version = "0.17.1"
+version = "0.17.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
+checksum = "735eaa21a6a5ffb2e84362faaeb90c05ba8e19797ca30428478cb6ea3a4921bc"
 
 [[package]]
 name = "heck"
@@ -1482,9 +1482,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.26.11"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f7665024990a001e5a7450b03cd177672c1d74174462f06ec60f361ad2d81e4f"
+checksum = "53667da5236961215440a62edcf67102507b2438ed44146257d25014a00c6e5b"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1504,9 +1504,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.26.11"
+version = "0.27.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5fce95143bc5300e74535431e9bf2807e44e8e7904c66907443e2c386d7af81"
+checksum = "b687d3c0115676a8c25dbc5512c888b32a04bac211a4a8c7b71ff9c7861749fd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1652,9 +1652,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-macros"
-version = "0.23.24"
+version = "0.23.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d56705faf76bf52f293449e2d31306f55b5be8f88fad3468e388fef52c64a80"
+checksum = "44735718678dc109c06671ac4036a62053f6190c6010dd608d5c1e7a197014fa"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1676,9 +1676,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-runtime"
-version = "0.23.24"
+version = "0.23.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8538fe1bdaff5b5ae6196118a29bb42859aa16858485a7cf4b66b7c958561e6"
+checksum = "186742997b9845806c447b095aa4358231ad2daf6963736a5767b005c17ccf5e"
 dependencies = [
  "ic-platform-macros",
  "ic-platform-protocol",
@@ -1688,9 +1688,9 @@ dependencies = [
 
 [[package]]
 name = "ic-platform-runtime-guard"
-version = "0.23.24"
+version = "0.23.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3c30cb68abdd77889c2273094f3c5e9b1c343fd3fbfed97fad2e2d9aa8568f0"
+checksum = "bb6f6ef72ea4f7db0eb9dd5484d385ec21654103e852cecaaffd8acaad24f872"
 
 [[package]]
 name = "ic-platform-types"
@@ -1799,9 +1799,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wasm-store"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c22bbc3dcdd4ef142d4ee3f52abd50fd18687941107e5974e333498549597388"
+checksum = "3d961b093d14b1c2f7ababa493bb681e6dffdcc671b33fca18038536c07989bd"
 dependencies = [
  "ic-platform-protocol",
  "ic-platform-runtime",
@@ -1815,9 +1815,9 @@ dependencies = [
 
 [[package]]
 name = "ic-wasm-store-protocol"
-version = "0.7.0"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16a66ce1052495dd65bfaf8e48d7b42dc169abc51f56902cca2584aa1827a774"
+checksum = "061772a7ba9350a010521d81ef278dff80b26267a21bb8d527e855a50f8b6be9"
 dependencies = [
  "ic-wire",
  "serde",
@@ -3464,9 +3464,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.46.0"
+version = "0.46.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4601d2785aaa14e01fd8656d6b3a57653337b214e027810c953595f1d91d6a8d"
+checksum = "4ba519e61553775ef678a64e140be06b9dc303fb259fa51cc3abc326254368a0"
 
 [[package]]
 name = "toml"

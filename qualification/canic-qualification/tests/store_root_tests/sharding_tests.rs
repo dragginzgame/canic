@@ -355,7 +355,7 @@ parent = "project_hub"
 wasm = "project.wasm"
 [apps.toko.fleets.demo.canisters.project_hub]
 id = "{unrelated}"
-[apps.toko.fleets.demo.instance_pool]
+[apps.toko.fleets.demo.registry]
 component = "project"
 root = "root"
 store = "store"
@@ -370,7 +370,7 @@ expires_at_ns = {}
     )
     .unwrap();
     let text = String::from_utf8(plan(false)).unwrap();
-    assert!(text.contains("Dedicated instances · project"));
+    assert!(text.contains("Registry · project"));
     assert!(text.contains("2 shards × 1 live keys"));
     let both: serde_json::Value = serde_json::from_slice(&plan(true)).unwrap();
     assert_eq!(both["action"], "placement_pools");

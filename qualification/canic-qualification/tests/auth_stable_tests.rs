@@ -43,8 +43,39 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
     }
     .encode()
     .unwrap();
-    pic.install_canister(target, wasm.clone(), args, Some(f.installer))
+    pic.install_canister(target, wasm.clone(), args.clone(), Some(f.installer))
         .await;
+    let restored = async || {
+        let method = ic_wire::method_id("restored");
+        let frame = |direction| ic_wire::Encoding::Frame { method, direction };
+        let request = ic_wire::encode(
+            &(),
+            frame(ic_wire::Direction::Request),
+            canic::method::LIMITS,
+        )
+        .unwrap();
+        assert!(
+            pic.query_call(target, f.installer, "restored", request.clone())
+                .await
+                .is_err()
+        );
+        let bytes = pic
+            .query_call(
+                target,
+                CanisterId::from_slice(grant.issuer.as_slice()),
+                "restored",
+                request,
+            )
+            .await
+            .unwrap();
+        ic_wire::decode::<Option<bool>>(
+            &bytes,
+            frame(ic_wire::Direction::Response),
+            canic::method::LIMITS,
+        )
+        .unwrap()
+    };
+    assert_eq!(restored().await, Some(false));
     let reply = pic
         .update_call(
             f.root,
@@ -119,6 +150,7 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
         assert_eq!(read(pic, target, browser).await.unwrap(), session);
     }
     upgrade(vec![]).await.unwrap();
+    assert_eq!(restored().await, Some(true));
     assert_eq!(
         issuer_test::call(
             &f,
@@ -207,6 +239,10 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
         coordinator_write(pic, target, browser).await,
         Err(SessionReadRefusal::Unavailable)
     );
+    pic.reinstall_canister(target, wasm, args, Some(f.installer))
+        .await
+        .unwrap();
+    assert_eq!(restored().await, Some(false));
     f.close().await;
 }
 

@@ -11,7 +11,7 @@ checkout is needed. Existing generated configurations must change only their Sto
 pointing at the Canic workspace. Existing artifacts, approvals and deployed canisters
 are unchanged. Rebuilding does not authorize installing the changed executable.
 
-Fresh builds select Store 0.7.0 and its matching IC Wire 0.28 protocol. Install a fresh Store and rebuild artifact manifests for 1 MiB chunks. The supplier refuses upgrades from the 256 KiB format. The following evidence applies to Store 0.6.0.
+Fresh builds select Store 0.8.0 and its matching IC Wire 0.28 protocol. Install a fresh Store and rebuild artifact manifests for 1 MiB chunks. The supplier refuses upgrades from the 256 KiB format. The following evidence applies to Store 0.6.0.
 A local Root-managed upgrade from 0.5.2 preserved the populated Store’s stable
 memory. [Qualification record](../qualification/history.md#wasm-store-052-to-060--2026-11-21)
 
@@ -22,11 +22,11 @@ underlying directory format changed.
 
 The supplier also supports exact removal/restoration and tombstones. Root now
 forwards exact deletion/cancellation through `store_removal`; Host retains their
-exact signed attempts under the existing journal lock. New Root attempts use Store 0.2.3's
-`observe_preservation_v2`: explicit active/removed entries ordered by name, active
+exact signed attempts under the existing journal lock. New Root attempts use Store 0.8’s
+`observe_preservation` (method 117): explicit active/removed entries ordered by name, active
 before removed, then version. The retained cursor includes that flag, and a
 separate digest domain commits to the entry kind. Pre-cut Roots retain their original scan contracts, digests and refusals.
-Fresh Roots use CUJD for the entire fleet. Old executables refuse the new journal format.
+Deploy the 0.8 Store with a fresh Root. Existing pairs finish maintenance on their original executables. Fresh Roots use CUJE for the entire fleet. Old executables refuse the new journal format.
 
 The historical 0.2.3 rollout upgraded Store under the old Root before
 upgrading Root. New attempts require the versioned supplier endpoint; no probing
@@ -284,7 +284,7 @@ control. Root retains each immutable approval and stop-request commitment outsid
 Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CUJD journal preserves current and completed attempts across supported Root
+The CUJE journal preserves current and completed attempts across supported Root
 upgrades, within the existing 16 KiB ceiling. A pre-cut Root keeps its original
 executable and evidence. Existing complete child-custody
 observations refuse any retained Store maintenance, including completion,

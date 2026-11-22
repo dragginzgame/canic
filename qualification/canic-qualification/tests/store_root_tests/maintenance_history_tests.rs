@@ -53,18 +53,19 @@ async fn refused_root_upgrade_preserves_the_original_issued_store_install() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
-    let (root, supplier) = readiness_tests::fixture_with_root(
+    let (root, supplier) = readiness_tests::fixture_with_code(
         pic,
         include_bytes!("../../fixtures/root-store-single-maintenance.wasm").to_vec(),
+        include_bytes!("../../fixtures/store-0.7.0.wasm").to_vec(),
     )
     .await;
-    let wasm = std::fs::read(artifacts().join("candidate.wasm")).unwrap();
-    let approval = first::stopped(&root, &supplier, &wasm).await;
+    let wasm = include_bytes!("../../fixtures/store-0.7.0-maintenance.wasm").as_slice();
+    let approval = first::stopped(&root, &supplier, wasm).await;
     first::install(
         &root,
         &wire::Install {
             approval: approval.clone(),
-            wasm: wasm.clone(),
+            wasm: wasm.to_vec(),
         },
     )
     .await
@@ -75,7 +76,7 @@ async fn refused_root_upgrade_preserves_the_original_issued_store_install() {
     super::refuse_old_backing(&root).await;
     assert_eq!(first::observe(&root).await, issued);
     first::check_predecessor_custody(&root, &issued).await;
-    let ready = finish(&root, &approval, &wasm).await;
+    let ready = finish(&root, &approval, wasm).await;
     assert_eq!(ready.approval, issued.approval);
     assert_eq!(
         ready.installation.as_ref().unwrap().request,

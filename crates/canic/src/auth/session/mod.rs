@@ -66,6 +66,22 @@ struct State {
 
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
 
+/// Admit only the issuer canister bound by the receiver's protected installation.
+///
+/// # Errors
+/// Refuses when the receiver is closed or the caller is not its issuer.
+pub fn require_issuer() -> Result<(), &'static str> {
+    let caller = ic_platform_runtime::system::caller();
+    STATE.with_borrow(|slot| {
+        let state = slot.as_ref().ok_or("receiver unavailable")?;
+        if caller.as_slice().last() == Some(&1) && caller == state.policy.issuer {
+            Ok(())
+        } else {
+            Err("configured issuer required")
+        }
+    })
+}
+
 /// Installed acceptance policy for credentials from one issuer and role.
 pub struct Policy {
     /// Accepted issuer from the protected install configuration.
@@ -367,22 +383,27 @@ macro_rules! mount_auth_session {
 /// the IC Auth starting profile. Proof and receiver-session TTLs are independent.
 #[macro_export]
 macro_rules! mount_auth_lifecycle {
-    (storage = $open:path $(, seal = $seal:path)? $(, max_login_secs = $seconds:expr)? $(,)?) => {
+    (storage = $open:path $(, max_login_secs = $seconds:expr)?
+     $(, init = $init:path)? $(, pre_upgrade = $pre:path)? $(, post_upgrade = $post:path)? $(,)?) => {
         const _: () = {
             use $crate::__private::runtime;
             use $crate::auth::{endpoint::fail, install::Install, session::stable};
             #[allow(clippy::needless_pass_by_value)]
             fn __canic_install(input: Install) {
                 stable::open_with_login_limit(&$open(Some(&input)), Some(&input), $crate::mount_auth_lifecycle!(@limit $($seconds)?));
+                $( $init(&input); )?
             }
-            fn __canic_reopen() { stable::open_with_login_limit(&$open(None), None, $crate::mount_auth_lifecycle!(@limit $($seconds)?)); }
+            fn __canic_reopen() {
+                stable::open_with_login_limit(&$open(None), None, $crate::mount_auth_lifecycle!(@limit $($seconds)?));
+                $( $post(); )?
+            }
             $crate::mount_lifecycle!(input = Install, max_bytes = 4096, decode = Install::decode,
                 install = __canic_install, reopen = __canic_reopen);
             fn admit() -> Result<(), std::convert::Infallible> { Ok(()) }
             use $crate::lifecycle::empty_arguments;
             #[runtime::pre_upgrade(runtime = runtime, guard = admit,
                 decode = empty_arguments, max_bytes = 0, on_error = fail)]
-            fn __canic_pre_upgrade((): ()) { stable::seal(); $( $seal(); )? }
+            fn __canic_pre_upgrade((): ()) { stable::seal(); $( $pre(); )? }
         };
     };
     (decode = $decode:path, open = $open:path $(, max_login_secs = $seconds:expr)? $(,)?) => {

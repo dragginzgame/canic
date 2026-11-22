@@ -754,6 +754,14 @@ storage allocation, admission, backing access or persistence integrations.
 
 These rules apply to handwritten and generated Rust.
 
+- Start with module comments and inner attributes, then child module declarations
+  (including `mod tests;`), then imports. Leave one blank line before the import
+  block and one before the following item. Prefer one nested `use` per crate
+  for imports with the same scope, visibility and attributes. Preserve imported names.
+- Prefer grouping named module-wide constants after imports and any required
+  endpoint group, before module-wide type declarations. Keep a constant used
+  by just one section with that section. Keep anonymous compile-time assertions
+  with the declarations they validate.
 - In repositories with a documented design, give every macro-defined type,
   including private types, its own `///` block above its attributes or defining
   macro. Start with a bare `///`, put the exact type name alone on the next
@@ -761,18 +769,14 @@ These rules apply to handwritten and generated Rust.
   and leave one blank source line before the code.
 - Use the same header for handwritten structs and enums, including private
   helper enums, entities and unit adapter structs. Prefer module-wide types
-  near the top, after imports and any required endpoint group. Place a type
-  used by just one section immediately above that section.
+  near the top, after the named module-wide constants. Place a type used by
+  just one section immediately above that section.
   After the declaration, leave a blank line and place its inherent `impl`
   blocks first, followed by its trait `impl` blocks alphabetically by trait
   name. Leave a blank line between blocks. If there is no inherent `impl`,
   start with the first trait implementation. Use this layout for new definitions.
   When formatting existing code, limit layout changes to the requested types
   or files.
-- Start with module comments and inner attributes, then child module declarations
-  (including `mod tests;`), then imports. Leave one blank line before the import
-  block and one before the following item. Prefer one nested `use` per crate
-  for imports with the same scope, visibility and attributes. Preserve imported names.
 - Separate item-level macro invocations and functions with a blank line, including
   adjacent methods, tests and test helpers. Keep comments and attributes attached
   to their item. Give each named argument its own line in multi-argument endpoint

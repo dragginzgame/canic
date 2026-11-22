@@ -39,14 +39,9 @@ pub(super) async fn exercise(
         id: hub,
         operator: issuer.id,
     };
-    let placed: Placement = receiver
-        .update(
-            "place",
-            ic_wire::method_id("place"),
-            &(false, 1u8),
-            canic::sharding::LIMITS,
-        )
-        .await;
+    let placed = super::capacity::place(&receiver, Some("users"), 1)
+        .await
+        .unwrap();
     let Placement::Assigned(ref allocation, ref pid) = placed else {
         panic!("ready shared shard")
     };
@@ -101,9 +96,7 @@ pub(super) async fn exercise(
         id: project,
         operator: issuer.id,
     };
-    let dedicated: Placement = registry
-        .update("place", id("place"), &(true, 1u8), canic::sharding::LIMITS)
-        .await;
+    let dedicated = super::capacity::place(&registry, None, 1).await.unwrap();
     let Placement::Assigned(original, instance) = dedicated else {
         panic!("ready dedicated project")
     };
@@ -394,9 +387,9 @@ pub(super) async fn exercise(
         Err("empty draining shard required".into())
     );
     let place = async |key| {
-        receiver
-            .update::<_, Placement>("place", id("place"), &(false, key), canic::sharding::LIMITS)
+        super::capacity::place(&receiver, Some("users"), key)
             .await
+            .unwrap()
     };
     assert_eq!(place(3u8).await, Placement::Full); // one free seat is fenced
     assert_eq!(place(1u8).await, placed);

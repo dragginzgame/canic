@@ -1,5 +1,5 @@
 //! Independent worker allowance. Ordinals are permanent within the approved pool.
-use super::{Pools, STATE, api, create, placement, validate_instance};
+use super::{Pools, STATE, api, create, placement, validate_pool_install};
 use canic::sharding::{Allocation, Placement};
 use canic_management_protocol::{Refusal, children::ChildId, stored};
 use serde::{Deserialize, Serialize};
@@ -79,12 +79,18 @@ impl Workers {
     }
 
     pub fn validate(&self, pools: &Pools) {
-        validate_instance(&self.grant).expect("retained worker grant");
+        validate_worker(&self.grant).expect("retained worker grant");
         assert!(compatible(pools, &self.grant));
         assert!(self.live() <= usize::from(self.grant.max_instances));
         assert!(self.debit() <= self.grant.creation_budget);
         assert!(self.live() + pools.projects.len() <= ChildId::INSTANCES.len());
     }
+}
+
+fn validate_worker(grant: &stored::InstancePool) -> Result<(), Refusal> {
+    let install = canic::topology::Install::decode(grant.arguments.as_slice())
+        .map_err(|_| Refusal::Binding)?;
+    validate_pool_install(grant, &install)
 }
 
 pub(super) fn separate(first: &stored::InstancePool, other: &stored::InstancePool) -> bool {
@@ -148,7 +154,7 @@ pub fn configure_workers(grant: stored::InstancePool) -> Result<(), Refusal> {
         return result;
     }
     super::admit_pool_change(false)?;
-    validate_instance(&grant)?;
+    validate_worker(&grant)?;
     if api::time() >= grant.expires_at_ns {
         return Err(Refusal::Time);
     }
@@ -185,7 +191,7 @@ pub fn worker_hub() -> Result<(), &'static str> {
 #[must_use]
 pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
     let index = usize::from(ordinal);
-    let (grant, slot, paid) = match STATE.with_borrow(|s| {
+    let (grant, slot, origin) = match STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
         let workers = state
             .pools
@@ -214,21 +220,19 @@ pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
         if !reserve {
             return Err(Placement::Unknown);
         }
-        if workers.live() >= usize::from(workers.grant.max_instances)
-            || (state.pools.full() && !state.pools.empty_spare())
-        {
+        if workers.live() >= usize::from(workers.grant.max_instances) {
             return Err(Placement::Full);
         }
+        let acquisition = state.pools.acquisition()?;
         if index != workers.claims.len() {
             return Err(Placement::Busy);
         }
-        let paid = !state.pools.empty_spare();
-        if paid
-            && workers.debit() + canic_management_protocol::CREATION_CYCLES
-                > workers.grant.creation_budget
-        {
-            return Err(Placement::GrowthRefused);
-        }
+        let origin = acquisition.approve(
+            workers
+                .grant
+                .creation_budget
+                .saturating_sub(workers.debit()),
+        )?;
         let slot = ChildId::INSTANCES
             .iter()
             .skip(state.pools.projects.len())
@@ -236,7 +240,7 @@ pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
             .find(|slot| state.pools.worker_at(**slot).is_none())
             .copied()
             .ok_or(Placement::Full)?;
-        Ok((workers.grant.clone(), slot, paid))
+        Ok((workers.grant.clone(), slot, origin))
     }) {
         Ok(grant) => grant,
         Err(outcome) => return outcome,
@@ -246,7 +250,7 @@ pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
         return Placement::GrowthRefused;
     }
     let Some(generation) = create(
-        super::super::Origin::Placement,
+        origin,
         slot,
         grant.reference,
         grant.arguments,
@@ -257,6 +261,7 @@ pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
     };
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
+        let paid = state.pools.standby_claim(slot).is_none();
         state
             .pools
             .workers

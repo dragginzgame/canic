@@ -59,6 +59,29 @@ struct ProjectClaim {
     principal: Option<String>,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(super) enum Acquisition {
+    Reserve { index: usize, principal: Principal },
+    Create,
+}
+
+impl Acquisition {
+    pub(super) fn attachment(self) -> u64 {
+        match self {
+            Self::Reserve { .. } => 0,
+            Self::Create => CREATION_CYCLES,
+        }
+    }
+
+    fn approve(self, remaining_budget: u64) -> Result<super::Origin, Placement> {
+        if self.attachment() > remaining_budget {
+            Err(Placement::GrowthRefused)
+        } else {
+            Ok(super::Origin::Placement(self))
+        }
+    }
+}
+
 impl Pools {
     pub(super) fn shard_pool_name(&self, slot: ChildId) -> Option<&str> {
         self.shard_at(slot)
@@ -69,6 +92,22 @@ impl Pools {
         self.shards
             .values()
             .find(|ledger| ledger.generations[slot.index()].is_some())
+    }
+
+    pub(super) fn acquisition(&self) -> Result<Acquisition, Placement> {
+        if let Some((index, (_, _, principal))) = self
+            .standby
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (_, asset))| Some((index, standby::available(asset)?)))
+            .min_by_key(|(_, key)| *key)
+        {
+            Ok(Acquisition::Reserve { index, principal })
+        } else if self.full() {
+            Err(Placement::Full)
+        } else {
+            Ok(Acquisition::Create)
+        }
     }
 
     fn pool_limit(&self) -> u8 {
@@ -184,12 +223,6 @@ impl Pools {
             })
     }
 
-    pub(super) fn empty_spare(&self) -> bool {
-        self.standby
-            .iter()
-            .any(|(_, asset)| standby::available(asset).is_some())
-    }
-
     fn creation_debit(&self, slots: impl Iterator<Item = ChildId>) -> u64 {
         slots
             .filter(|slot| self.standby_claim(*slot).is_none())
@@ -201,17 +234,9 @@ impl Pools {
         &self,
         slots: impl Iterator<Item = ChildId>,
         budget: u64,
-    ) -> Result<(), Placement> {
-        if self.empty_spare() {
-            return Ok(());
-        }
-        if self.full() {
-            return Err(Placement::Full);
-        }
-        if self.creation_debit(slots) + CREATION_CYCLES > budget {
-            return Err(Placement::GrowthRefused);
-        }
-        Ok(())
+    ) -> Result<super::Origin, Placement> {
+        self.acquisition()?
+            .approve(budget.saturating_sub(self.creation_debit(slots)))
     }
 
     pub(super) fn full(&self) -> bool {
@@ -252,14 +277,19 @@ pub(crate) fn has_capacity() -> bool {
     STATE.with_borrow(|s| s.as_ref().is_some_and(|s| s.pools.capacity.is_some()))
 }
 
-pub(super) fn retain_child(slot: ChildId, generation: [u8; 32], origin: super::Origin) {
+pub(super) fn retain_child(
+    slot: ChildId,
+    generation: [u8; 32],
+    origin: super::Origin,
+    selected: Acquisition,
+) {
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().expect("open Root");
         if state.pools.capacity.is_some() {
             if origin == super::Origin::Permanent {
                 state.pools.permanent[slot.service_index().expect("permanent slot")] = true;
             }
-            standby::reserve(&mut state.pools, slot, generation);
+            standby::reserve(&mut state.pools, slot, generation, selected);
             state.pool.set(state.pools.encode());
         }
     });
@@ -391,6 +421,16 @@ fn compatible(shared: &ShardPool, instances: &stored::InstancePool) -> bool {
 }
 
 fn validate_instance(a: &stored::InstancePool) -> Result<(), Refusal> {
+    let install = canic::topology::Install::approved(a.arguments.as_slice())
+        .map_err(|_| Refusal::Binding)?
+        .ok_or(Refusal::Binding)?;
+    validate_pool_install(a, &install)
+}
+
+fn validate_pool_install(
+    a: &stored::InstancePool,
+    install: &canic::topology::Install,
+) -> Result<(), Refusal> {
     let hub = Principal::from_text(&a.hub).map_err(|_| Refusal::Binding)?;
     if a.root != api::canister_self().to_text()
         || hub.to_text() != a.hub
@@ -403,8 +443,6 @@ fn validate_instance(a: &stored::InstancePool) -> Result<(), Refusal> {
     {
         return Err(Refusal::Binding);
     }
-    let install =
-        canic::topology::Install::decode(a.arguments.as_slice()).map_err(|_| Refusal::Binding)?;
     if install.root != api::canister_self() || install.parent != hub {
         return Err(Refusal::Binding);
     }
@@ -620,7 +658,7 @@ pub fn assign(pool: &str, key: Key) -> Placement {
             return Placement::Full;
         };
         let now = api::time();
-        if let Err(outcome) = STATE.with_borrow(|s| {
+        let origin = match STATE.with_borrow(|s| {
             let pools = &s.as_ref().unwrap().pools;
             pools.admit_growth(
                 pools
@@ -630,13 +668,14 @@ pub fn assign(pool: &str, key: Key) -> Placement {
                 approval.creation_budget,
             )
         }) {
-            return outcome;
-        }
+            Ok(origin) => origin,
+            Err(outcome) => return outcome,
+        };
         if now >= approval.expires_at_ns {
             return Placement::GrowthRefused;
         }
         let Some(generation) = create(
-            super::Origin::Placement,
+            origin,
             slot,
             approval.reference,
             approval.arguments,
@@ -944,10 +983,10 @@ pub fn assign_instance(key: Key) -> Placement {
             .get(count)
             .filter(|slot| pools.worker_at(**slot).is_none())
             .ok_or(Placement::Full)?;
-        pools.admit_growth(slots[..count].iter().copied(), grant.creation_budget)?;
-        Ok((grant.clone(), slot))
+        let origin = pools.admit_growth(slots[..count].iter().copied(), grant.creation_budget)?;
+        Ok((grant.clone(), slot, origin))
     });
-    let (grant, slot) = match selection {
+    let (grant, slot, origin) = match selection {
         Ok(selected) => selected,
         Err(outcome) => return outcome,
     };
@@ -956,7 +995,7 @@ pub fn assign_instance(key: Key) -> Placement {
         return Placement::GrowthRefused;
     }
     let Some(generation) = create(
-        super::Origin::Placement,
+        origin,
         slot,
         grant.reference,
         grant.arguments,

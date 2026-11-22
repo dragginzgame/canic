@@ -1,5 +1,5 @@
 //! Build the offline pool approval from the selected fleet and its exact Wasm inputs.
-use super::{InstancePoolConfig, PoolGrant, parent, topology};
+use super::{PoolGrant, RegistryConfig, parent, topology};
 use crate::{
     DeploymentName, Error, FleetPlanning, Result, SelectedFleet, artifact, store, supplier,
 };
@@ -63,7 +63,7 @@ pub(crate) fn preview(
         .shard_pools
         .iter()
         .map(|p| &p.component)
-        .chain(fleet.instance_pool.iter().map(|p| &p.component))
+        .chain(fleet.registry.iter().map(|p| &p.component))
         .chain(fleet.worker_pools.iter().map(|p| &p.component))
         .collect();
     for (name, slot) in &fleet.canisters {
@@ -120,7 +120,7 @@ pub(crate) fn preview(
             stored::INCREASE_POOL,
         )?);
     }
-    let allocation = |pool: &InstancePoolConfig,
+    let allocation = |pool: &RegistryConfig,
                       label: &str,
                       method,
                       worker_args: Option<Vec<u8>>|
@@ -134,8 +134,10 @@ pub(crate) fn preview(
             pool.install_args.as_deref(),
         )?;
         let (root, hub, store) = fleet.pool_bindings(&pool.component, &pool.root, &pool.store)?;
-        if fleet.receiver_selected(&pool.component) {
-            return Err(Error::Invalid("dedicated children require a topology install frame; receiver installation is unsupported".into()));
+        if worker_args.is_some() && fleet.receiver_selected(&pool.component) {
+            return Err(Error::Invalid(
+                "worker pools do not support receiver installation".into(),
+            ));
         }
         let args = if let Some(worker_args) = worker_args {
             canic_management_protocol::application::Arguments::new(worker_args).map_err(supplier)?
@@ -143,6 +145,8 @@ pub(crate) fn preview(
             args
         };
         let arguments = topology(&fleet.canisters, &pool.component, &root, &hub, &args)?;
+        let arguments =
+            fleet.pool_receiver_arguments(&pool.component, &pool.root, &root, arguments)?;
         grant(
             stored::InstancePool {
                 root,
@@ -158,9 +162,9 @@ pub(crate) fn preview(
         )
     };
     let instances = fleet
-        .instance_pool
+        .registry
         .as_ref()
-        .map(|p| allocation(p, "instance_pool", stored::CONFIGURE_INSTANCES, None))
+        .map(|p| allocation(p, "registry", stored::CONFIGURE_INSTANCES, None))
         .transpose()?;
     let workers = fleet
         .worker_pools
@@ -219,7 +223,7 @@ pub(crate) fn preview(
     {
         if let Some((instance, old)) = instances
             .as_ref()
-            .zip(fleet.instance_pool.as_ref().and_then(|p| p.increase_from))
+            .zip(fleet.registry.as_ref().and_then(|p| p.increase_from))
         {
             let mut prior = instance.approval.clone();
             let next = std::mem::replace(&mut prior.max_instances, old);

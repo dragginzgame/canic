@@ -10,8 +10,7 @@ use crate::{Error, Network, Plan, PlanInput, Result, plan, store, supplier};
 pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
 use serde::{Deserialize, Serialize};
 pub use sharding::{
-    InstancePoolConfig, PoolGrant, ShardPoolConfig, StandbyImports, StandbyPoolConfig,
-    WorkerPoolConfig,
+    PoolGrant, RegistryConfig, ShardPoolConfig, StandbyImports, StandbyPoolConfig, WorkerPoolConfig,
 };
 use std::{
     collections::BTreeMap,
@@ -121,15 +120,18 @@ pub struct FleetDeclaration {
     /// Optional install-time policy for explicitly selected application roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_policy: Option<crate::ReceiverPolicy>,
+    /// Direct child components eligible for subsequent top-ups by their declared parent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub top_up_children: Vec<String>,
     /// Named permanent services whose installation pins the fleet Root's role key.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub role_receivers: Vec<String>,
     /// Fleet-wide limit on occupied child and reserve slots on this managed subnet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subnet_child_limit: Option<u8>,
-    /// Dedicated children owned by one keyed-instance hub.
+    /// Registry assigning one dedicated child per application key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub instance_pool: Option<InstancePoolConfig>,
+    pub registry: Option<RegistryConfig>,
     /// Subnet reserve maintenance and unassigned external candidates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standby_pool: Option<StandbyPoolConfig>,
@@ -163,15 +165,18 @@ pub struct FleetConfig {
     /// Optional install-time policy for explicitly selected application roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_policy: Option<crate::ReceiverPolicy>,
+    /// Direct child components eligible for subsequent top-ups by their declared parent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub top_up_children: Vec<String>,
     /// Named permanent services whose installation pins the fleet Root's role key.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub role_receivers: Vec<String>,
     /// Fleet-wide limit on occupied child and reserve slots on this managed subnet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subnet_child_limit: Option<u8>,
-    /// Dedicated children owned by one keyed-instance hub.
+    /// Registry assigning one dedicated child per application key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub instance_pool: Option<InstancePoolConfig>,
+    pub registry: Option<RegistryConfig>,
     /// Subnet reserve maintenance and unassigned external candidates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standby_pool: Option<canic_management_protocol::stored::StandbyPolicy>,
@@ -347,6 +352,7 @@ impl Config {
                     }
                     let slots = definition.resolve_slots(config).map_err(context)?;
                     validate_canisters(&slots).map_err(context)?;
+                    validate_top_up_children(&slots, &config.top_up_children).map_err(context)?;
                     validate_role_receivers(&slots, &config.role_receivers).map_err(context)?;
                     if let Some(policy) = &config.receiver_policy {
                         policy.validate(&slots).map_err(context)?;
@@ -355,7 +361,7 @@ impl Config {
                         &slots,
                         config.subnet_child_limit,
                         &config.shard_pools,
-                        config.instance_pool.as_ref(),
+                        config.registry.as_ref(),
                         &config.worker_pools,
                         config.standby_policy().map_err(context)?.as_ref(),
                     )
@@ -405,10 +411,10 @@ impl Config {
     /// Refuses missing or ambiguous app/fleet names and invalid configuration.
     pub fn select(&self, app: Option<&str>, fleet: Option<&str>) -> Result<SelectedFleet> {
         let (app, definition) = self.select_app(app)?;
-        let (fleet, config) = select(&definition.fleets, fleet, "fleet")?;
+        let (fleet, config) = definition.fleet_declaration(fleet)?;
         Ok(SelectedFleet {
             app: app.to_owned(),
-            fleet: fleet.clone(),
+            fleet: fleet.to_owned(),
             config: definition.resolve(config)?,
         })
     }
@@ -448,6 +454,14 @@ impl FleetDeclaration {
 }
 
 impl AppConfig {
+    /// Select the declared fleet before binding an ephemeral network.
+    /// # Errors
+    /// Refuses an absent or ambiguous fleet.
+    pub fn fleet_declaration(&self, name: Option<&str>) -> Result<(&str, &FleetDeclaration)> {
+        let (name, fleet) = select(&self.fleets, name, "fleet")?;
+        Ok((name, fleet))
+    }
+
     fn resolve(&self, fleet: &FleetDeclaration) -> Result<FleetConfig> {
         let FleetNetwork::Bound(network) = &fleet.network else {
             return Err(Error::Invalid(
@@ -456,9 +470,10 @@ impl AppConfig {
         };
         let mut config = FleetConfig {
             receiver_policy: fleet.receiver_policy.clone(),
+            top_up_children: fleet.top_up_children.clone(),
             role_receivers: fleet.role_receivers.clone(),
             subnet_child_limit: fleet.subnet_child_limit,
-            instance_pool: fleet.instance_pool.clone(),
+            registry: fleet.registry.clone(),
             standby_pool: fleet.standby_policy()?,
             worker_pools: fleet.worker_pools.clone(),
             shard_pools: fleet.shard_pools.clone(),
@@ -471,14 +486,20 @@ impl AppConfig {
         Ok(config)
     }
 
-    fn resolve_slots(&self, fleet: &FleetDeclaration) -> Result<BTreeMap<String, CanisterConfig>> {
+    /// Project configured canisters, including supplied infrastructure, for a local listing.
+    /// # Errors
+    /// Refuses invalid fleet bindings.
+    pub fn resolve_slots(
+        &self,
+        fleet: &FleetDeclaration,
+    ) -> Result<BTreeMap<String, CanisterConfig>> {
         let mut canisters = self.resolve_canisters(&fleet.canisters);
         for (root, store) in fleet
             .shard_pools
             .iter()
             .map(|p| (&p.root, &p.store))
             .chain(fleet.worker_pools.iter().map(|p| (&p.root, &p.store)))
-            .chain(fleet.instance_pool.iter().map(|p| (&p.root, &p.store)))
+            .chain(fleet.registry.iter().map(|p| (&p.root, &p.store)))
         {
             for (slot, role) in [(root, "root"), (store, "wasm-store")] {
                 if self.canisters.contains_key(slot) {
@@ -583,6 +604,7 @@ fn select<'a, T>(
 
 impl FleetConfig {
     fn validate(&self) -> Result<()> {
+        validate_top_up_children(&self.canisters, &self.top_up_children)?;
         validate_role_receivers(&self.canisters, &self.role_receivers)?;
         if let Some(policy) = &self.receiver_policy {
             policy.validate(&self.canisters)?;
@@ -591,7 +613,7 @@ impl FleetConfig {
             &self.canisters,
             self.subnet_child_limit,
             &self.shard_pools,
-            self.instance_pool.as_ref(),
+            self.registry.as_ref(),
             &self.worker_pools,
             self.standby_pool.as_ref(),
         )?;
@@ -618,6 +640,31 @@ impl FleetConfig {
         }
         validate_canisters(&self.canisters)
     }
+}
+
+fn validate_top_up_children(
+    slots: &BTreeMap<String, CanisterConfig>,
+    children: &[String],
+) -> Result<()> {
+    let mut seen = std::collections::BTreeSet::new();
+    for child in children {
+        let slot = slots.get(child).ok_or_else(|| {
+            Error::Invalid(format!(
+                "top_up_children references unknown component {child:?}"
+            ))
+        })?;
+        if slot.parent.is_none() {
+            return Err(Error::Invalid(format!(
+                "top_up_children entry {child:?} has no declared parent"
+            )));
+        }
+        if !seen.insert(child) {
+            return Err(Error::Invalid(format!(
+                "top_up_children contains duplicate component {child:?}"
+            )));
+        }
+    }
+    Ok(())
 }
 
 fn validate_role_receivers(
@@ -969,9 +1016,10 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
             FleetDeclaration {
                 lifetime: None,
                 receiver_policy: None,
+                top_up_children: vec![],
                 role_receivers: vec![],
                 subnet_child_limit: None,
-                instance_pool: None,
+                registry: None,
                 standby_pool: None,
                 worker_pools: Vec::new(),
                 shard_pools: Vec::new(),

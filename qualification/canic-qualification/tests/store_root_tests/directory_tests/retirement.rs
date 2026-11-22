@@ -82,13 +82,9 @@ pub(super) async fn exercise(
     .await
     .unwrap();
     let place = async || {
-        hub.update::<_, Placement>(
-            "place",
-            ic_wire::method_id("place"),
-            &(false, 1u8),
-            canic::sharding::LIMITS,
-        )
-        .await
+        super::capacity::place(&hub, Some("users"), 1)
+            .await
+            .unwrap()
     };
     assert!(matches!(place().await, Placement::Pending(_)));
     settle(pic).await;
