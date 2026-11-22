@@ -2,6 +2,41 @@ use super::*;
 use canic_host::Plan;
 
 #[test]
+fn reserve_preview_uses_the_prepared_principals_and_terms() {
+    use canic_management_protocol::stored::{StandbyImport, StandbyPolicy};
+
+    let config: canic_host::Config = toml::from_str(
+        r#"
+[apps.miners.canisters.pool]
+[apps.miners.fleets.demo]
+network = { kind = "Mainnet" }
+"#,
+    )
+    .unwrap();
+    let fleet = config.select(None, None).unwrap();
+    let policy = StandbyPolicy {
+        root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        minimum_available: 2,
+        maximum_creations: 3,
+        expires_at_ns: 123,
+        minimum_import_cycles: 17.try_into().unwrap(),
+        imports: vec![StandbyImport {
+            principal: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+            previous_root: Some("r7inp-6aaaa-aaaaa-aaabq-cai".into()),
+        }],
+    };
+    let output = pool_preview(&fleet, "operator", [], [], None, Some(&policy), &[]).unwrap();
+    for line in [
+        "Reserve Root: rrkah-fqaaa-aaaaa-aaaaq-cai",
+        "Min available spares: 2 (subnet fleet) · at most 3 automatic creations · deadline 123 Unix ns",
+        "Import ryjl3-tyaaa-aaaaa-aaaba-cai · minimum 17 cycles",
+        "Previous Root: r7inp-6aaaa-aaaaa-aaabq-cai",
+    ] {
+        assert!(output.contains(line), "{output}");
+    }
+}
+
+#[test]
 fn stored_delivery_keeps_pin_evidence_separate_from_current_cache_and_retry_authority() {
     use canic_management_protocol::stored::{Delivery, PinState};
     let mut delivery: Delivery = serde_json::from_value(serde_json::json!({

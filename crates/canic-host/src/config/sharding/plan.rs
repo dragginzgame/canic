@@ -1,9 +1,9 @@
 //! Build the offline pool approval from the selected fleet and its exact Wasm inputs.
-use super::{PoolGrant, RegistryConfig, parent, topology};
+use super::{PoolGrant, parent, topology};
 use crate::{
     DeploymentName, Error, FleetPlanning, Result, SelectedFleet, artifact, store, supplier,
 };
-use canic_management_protocol::stored;
+use canic_management_protocol::{application::Arguments, stored};
 use serde::Serialize;
 use std::{collections::BTreeSet, path::Path};
 
@@ -16,18 +16,18 @@ fn checked_wasm(selected: &SelectedFleet, config: &Path, component: &str) -> Res
     Ok(bytes)
 }
 
-fn inputs(
+fn manifest(
     selected: &SelectedFleet,
     config: &Path,
     component: &str,
     release: &ic_wasm_store_protocol::Release,
-    args: Option<&Path>,
-) -> Result<(
-    ic_wasm_store_protocol::Manifest,
-    canic_management_protocol::application::Arguments,
-)> {
+) -> Result<ic_wasm_store_protocol::Manifest> {
     let wasm = checked_wasm(selected, config, component)?;
     artifact::check_wasm_header_and_size(&wasm, artifact::MAX_ARTIFACT_BYTES)?;
+    Ok(crate::publication::release_manifest(release.clone(), &wasm))
+}
+
+fn install_args(config: &Path, args: Option<&Path>) -> Result<Arguments> {
     let input = args
         .map(|path| {
             store::read(
@@ -37,10 +37,7 @@ fn inputs(
         })
         .transpose()?
         .unwrap_or_default();
-    Ok((
-        crate::publication::release_manifest(release.clone(), &wasm),
-        canic_management_protocol::application::Arguments::new(input).map_err(supplier)?,
-    ))
+    Arguments::new(input).map_err(supplier)
 }
 
 pub(crate) fn preview(
@@ -80,13 +77,8 @@ pub(crate) fn preview(
         .iter()
         .map(|pool| {
             check_deadline("shard_pool", pool.expires_at_ns, now)?;
-            let (manifest, args) = inputs(
-                selected,
-                config_path,
-                &pool.component,
-                &pool.release,
-                pool.install_args.as_deref(),
-            )?;
+            let manifest = manifest(selected, config_path, &pool.component, &pool.release)?;
+            let args = install_args(config_path, pool.install_args.as_deref())?;
             grant(
                 fleet.shard_pool_approval(&pool.component, manifest, args)?,
                 stored::CONFIGURE_SHARDS,
@@ -120,68 +112,77 @@ pub(crate) fn preview(
             stored::INCREASE_POOL,
         )?);
     }
-    let allocation = |pool: &RegistryConfig,
-                      label: &str,
-                      method,
-                      worker_args: Option<Vec<u8>>|
-     -> Result<PoolGrant<stored::InstancePool>> {
-        let expires_at_ns = check_deadline(label, pool.expires_at_ns, now)?;
-        let (manifest, args) = inputs(
-            selected,
-            config_path,
-            &pool.component,
-            &pool.release,
-            pool.install_args.as_deref(),
-        )?;
-        let (root, hub, store) = fleet.pool_bindings(&pool.component, &pool.root, &pool.store)?;
-        if worker_args.is_some() && fleet.receiver_selected(&pool.component) {
-            return Err(Error::Invalid(
-                "worker pools do not support receiver installation".into(),
-            ));
-        }
-        let args = if let Some(worker_args) = worker_args {
-            canic_management_protocol::application::Arguments::new(worker_args).map_err(supplier)?
-        } else {
-            args
+    let bindings =
+        |component: &str, root_name: &str, store_name: &str, release, args| -> Result<_> {
+            let manifest = manifest(selected, config_path, component, release)?;
+            let (root, hub, store) = fleet.pool_bindings(component, root_name, store_name)?;
+            let arguments = topology(&fleet.canisters, component, &root, &hub, &args)?;
+            let arguments =
+                fleet.pool_receiver_arguments(component, root_name, &root, arguments)?;
+            Ok((root, hub, stored::Reference { store, manifest }, arguments))
         };
-        let arguments = topology(&fleet.canisters, &pool.component, &root, &hub, &args)?;
-        let arguments =
-            fleet.pool_receiver_arguments(&pool.component, &pool.root, &root, arguments)?;
-        grant(
-            stored::InstancePool {
-                root,
-                hub,
-                component: pool.component.clone(),
-                reference: stored::Reference { store, manifest },
-                arguments,
-                max_instances: pool.max_instances,
-                creation_payer: pool.creation_payer,
-                creation_budget: pool.creation_budget,
-                expires_at_ns,
-            },
-            method,
-        )
-    };
     let instances = fleet
         .registry
         .as_ref()
-        .map(|p| allocation(p, "registry", stored::CONFIGURE_INSTANCES, None))
+        .map(|p| {
+            let (root, hub, reference, arguments) = bindings(
+                &p.component,
+                &p.root,
+                &p.store,
+                &p.release,
+                install_args(config_path, p.install_args.as_deref())?,
+            )?;
+            grant(
+                stored::InstancePool {
+                    root,
+                    hub,
+                    reference,
+                    arguments,
+                    component: p.component.clone(),
+                    max_instances: p.max_instances,
+                    creation_payer: p.creation_payer,
+                    creation_budget: p.creation_budget,
+                    expires_at_ns: check_deadline("registry", p.expires_at_ns, now)?,
+                },
+                stored::CONFIGURE_INSTANCES,
+            )
+        })
         .transpose()?;
     let workers = fleet
         .worker_pools
         .iter()
         .map(|p| {
+            if fleet.receiver_selected(&p.component) {
+                return Err(Error::Invalid(
+                    "worker pools do not support receiver installation".into(),
+                ));
+            }
             let args = match p.minimum_reuse_cycles {
                 Some(minimum) => {
                     canic::topology::worker::reuse_policy(minimum).map_err(supplier)?
                 }
                 None => canic::topology::WORKER_GENERATION.to_vec(),
             };
-            allocation(
-                &p.recipe(),
-                "worker_pool",
+            let (root, hub, reference, arguments) = bindings(
+                &p.component,
+                &p.root,
+                &p.store,
+                &p.release,
+                Arguments::new(args).map_err(supplier)?,
+            )?;
+            grant(
+                stored::InstancePool {
+                    root,
+                    hub,
+                    reference,
+                    arguments,
+                    component: p.component.clone(),
+                    max_instances: p.max_workers,
+                    creation_payer: p.creation_payer,
+                    creation_budget: p.creation_budget,
+                    expires_at_ns: check_deadline("worker_pool", p.expires_at_ns, now)?,
+                },
                 stored::CONFIGURE_WORKERS,
-                Some(args),
             )
         })
         .collect::<Result<Vec<_>>>()?;
@@ -201,6 +202,12 @@ pub(crate) fn preview(
                         p.root
                     ))
                 })?;
+            if let Some(import) = p.imports.iter().find(|i| i.previous_root.as_ref() == Some(&binding)) {
+                return Err(Error::Invalid(format!(
+                    "standby_pool.imports previous_root = {binding} for {} matches the destination Root; previous_root must name a different Root for a handoff",
+                    import.principal
+                )));
+            }
             if p.imports.iter().any(|id| {
                 fleet
                     .canisters

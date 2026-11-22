@@ -29,6 +29,7 @@ pub(crate) fn pool_preview<'a>(
         Item = (&'a str, &'a canic_management_protocol::stored::InstancePool),
     >,
     capacity: Option<&canic_host::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
+    standby: Option<&canic_management_protocol::stored::StandbyPolicy>,
     increases: &[canic_host::PoolGrant<canic_management_protocol::stored::IncreasePool>],
 ) -> Result<String> {
     let network = &selected.config.network;
@@ -51,7 +52,8 @@ pub(crate) fn pool_preview<'a>(
         )
         .unwrap();
     }
-    if let Some(p) = &selected.config.standby_pool {
+    if let Some(p) = standby {
+        writeln!(text, "Reserve Root: {}", escape(&p.root)).unwrap();
         writeln!(
             text,
             "Min available spares: {} (subnet fleet) · at most {} automatic creations · deadline {} Unix ns",
@@ -66,6 +68,9 @@ pub(crate) fn pool_preview<'a>(
                 p.minimum_import_cycles
             )
             .unwrap();
+            if let Some(previous) = &candidate.previous_root {
+                writeln!(text, "    Previous Root: {}", escape(previous)).unwrap();
+            }
         }
     }
     for change in increases {

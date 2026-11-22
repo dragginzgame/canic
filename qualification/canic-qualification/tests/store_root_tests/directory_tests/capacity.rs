@@ -340,7 +340,7 @@ pub(super) async fn separate_hub_pools(
     users: CanisterId,
     discovery: CanisterId,
 ) {
-    use canic::sharding::LookupShard;
+    use canic::sharding::{AssignShard, GrowShard, LookupShard, ReleaseShard, ShardTarget};
     let mut children = std::collections::BTreeSet::new();
     for (pool, parent, other) in [
         ("user_shard", users, discovery),
@@ -412,6 +412,44 @@ pub(super) async fn separate_hub_pools(
             panic!("ready named shard")
         };
         assert_eq!(allocation, original);
+        // The sibling is an installed hub; on the second pass it also owns another pool.
+        let account = (pool.to_owned(), [42; 32]);
+        for (method, request) in [
+            (
+                LookupShard::NAME,
+                LookupShard::encode_request(&account).unwrap(),
+            ),
+            (
+                AssignShard::NAME,
+                AssignShard::encode_request(&account).unwrap(),
+            ),
+            (
+                GrowShard::NAME,
+                GrowShard::encode_request(&(pool.to_owned(), 0)).unwrap(),
+            ),
+        ] {
+            assert!(
+                root.pic
+                    .update_call(root.id, other, method, request)
+                    .await
+                    .is_err(),
+                "{method} admitted the wrong hub"
+            );
+        }
+        let target = ShardTarget {
+            allocation,
+            shard: id.parse().unwrap(),
+        };
+        let release = ReleaseShard::encode_request(&([42; 32], target)).unwrap();
+        let refused = root
+            .pic
+            .update_call(root.id, other, ReleaseShard::NAME, release)
+            .await
+            .unwrap();
+        assert_eq!(
+            ReleaseShard::decode_reply(&refused).unwrap(),
+            Err("assignment changed".into())
+        );
         let id = CanisterId::from_text(id).unwrap();
         assert!(children.insert(id));
         assert_eq!(root.pic.get_controllers(parent).await, [root.id]);

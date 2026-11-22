@@ -2,7 +2,7 @@
 use super::{DIRECTORY, Principal};
 use canic::guard::require_canister;
 use canic::method::{Contract, wire};
-use ic_platform_runtime::{call, system};
+use ic_platform_runtime::call;
 use std::cell::Cell;
 
 thread_local! {
@@ -22,6 +22,18 @@ fn pause_writes(paused: bool) {
     }
 }
 
+pub(super) async fn hold(barrier: Principal) -> Result<(), &'static str> {
+    let reply = call::Call::new(barrier, "hold", call::Wait::Bounded { seconds: 300 })
+        .args(&[])
+        .execute()
+        .await
+        .map_err(|_| "barrier unavailable")?;
+    if !matches!(reply.into_parts().0, call::Outcome::Reply(bytes) if bytes.is_empty()) {
+        return Err("barrier refused");
+    }
+    Ok(())
+}
+
 struct ProjectSync;
 impl Contract for ProjectSync {
     const NAME: &'static str = "project_sync";
@@ -35,14 +47,7 @@ async fn project_sync(barrier: Option<Principal>) -> Result<u64, String> {
     writable()?;
     let epoch = EPOCH.get();
     if let Some(barrier) = barrier {
-        let reply = call::Call::new(barrier, "hold", call::Wait::Bounded { seconds: 300 })
-            .args(&[])
-            .execute()
-            .await
-            .map_err(|_| "barrier unavailable")?;
-        if !matches!(reply.into_parts().0, call::Outcome::Reply(bytes) if bytes.is_empty()) {
-            return Err("barrier refused".into());
-        }
+        hold(barrier).await?;
         // The directory binding is immutable. The application's write policy can change.
         if EPOCH.get() != epoch {
             return Err("write permission changed".into());
@@ -85,7 +90,7 @@ impl Contract for CertificateAvailable {
 #[cfg(target_arch = "wasm32")]
 #[canic::query(contract = CertificateAvailable)]
 fn certificate_available() -> bool {
-    system::data_certificate(65536)
+    ic_platform_runtime::system::data_certificate(65536)
         .expect("certificate budget")
         .is_some()
 }

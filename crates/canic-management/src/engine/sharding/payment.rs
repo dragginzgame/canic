@@ -106,11 +106,10 @@ fn fresh_budget(pools: &Pools, demand: &Demand) -> bool {
     let (budget, spent) = match demand {
         Demand::Shard(pool, _) | Demand::ShardCapacity(pool, _) => {
             let ledger = &pools.shards[pool];
-            let slots = pools
-                .shard_slots(&ledger.approval)
-                .into_iter()
-                .filter(|slot| ledger.generations[slot.index()].is_some());
-            (ledger.approval.creation_budget, pools.creation_debit(slots))
+            (
+                ledger.approval.creation_budget,
+                pools.creation_debit(ledger.allocated_slots()),
+            )
         }
         Demand::Instance(_) => {
             let grant = pools.instances.as_ref().expect("approved registry");

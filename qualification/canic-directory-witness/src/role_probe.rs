@@ -103,6 +103,28 @@ impl RoleMethod for Visit {
     const ROLES: &'static [&'static str] = &["user_shard", "hub"];
 }
 
+struct DeferredVisit;
+impl Contract for DeferredVisit {
+    const NAME: &'static str = "deferred_visit";
+    const ID: u64 = wire::method_id(Self::NAME);
+    type Input = Principal;
+    type Output = Result<u64, String>;
+}
+impl RoleMethod for DeferredVisit {
+    const ROLES: &'static [&'static str] = &["user_shard"];
+}
+
+// deferred_visit
+// Count a visit after the held reply, subject to the original user_shard proof.
+// Limits are the default Canic Wire budgets.
+#[canic::update(attested_method = DeferredVisit)]
+async fn deferred_visit(gate: Principal) -> Result<u64, String> {
+    super::peer::hold(gate).await?;
+    attestation.reauthorize()?;
+    VISITS.update(|n| n + 1);
+    Ok(VISITS.get())
+}
+
 const HUB: &str = "hub";
 
 #[canic::update(roles = &["user_shard", HUB], limits = VISIT_REQUEST, reply_limits = VISIT_REPLY)]

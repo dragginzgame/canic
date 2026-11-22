@@ -103,7 +103,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         .attrs
         .iter()
         .filter(|attr| attr.path().is_ident("cfg"));
-    let signature = &function.sig;
+    let signature = function.sig.clone();
     let handler = &signature.ident;
     let export = name.unwrap_or_else(|| {
         LitStr::new(handler.to_string().trim_start_matches("r#"), handler.span())
@@ -293,18 +293,31 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         reply.clone()
     };
     let unit = parameter.is_none().then(|| quote!(let () = __canic_input;));
+    let async_role = asynchronous.is_some() && roles.is_some();
+    let mut arguments = Vec::from_iter(argument);
+    if async_role {
+        function.sig.inputs.push(
+            syn::parse_quote!(attestation: ::canic::topology::attestation::RoleAdmission<'_>),
+        );
+        let body = &function.block;
+        function.block = syn::parse_quote!({ let _ = &attestation; #body });
+        arguments.push(quote!(__canic_admission));
+    }
+    // The invocation itself checks the async handler with its borrowed admission.
+    let signature_check =
+        (!async_role).then(|| quote!(let _: fn(#input_type) -> #return_type = #handler;));
     let admit_proof = roles.map(|roles| {
         quote! {
             let (__canic_proof,__canic_input) = __canic_input;
             const __CANIC_ROLES: &[&str] = #roles;
-            ::canic::guard::admit_roles(__CANIC_ROLES, &__canic_proof)
+            let __canic_admission = ::canic::guard::admit_roles(__CANIC_ROLES, &__canic_proof)
                 .unwrap_or_else(|e| ::canic::method::fail(e));
         }
     });
     let invoke = if update && asynchronous.is_none() {
-        quote!(::canic::__canic_measure_update!(#export, __canic_handler(#argument)))
+        quote!(::canic::__canic_measure_update!(#export, __canic_handler(#(#arguments),*)))
     } else {
-        quote!(__canic_handler(#argument)#wait)
+        quote!(__canic_handler(#(#arguments),*)#wait)
     };
     Ok(quote! {
         #[allow(clippy::needless_pass_by_value)]
@@ -314,7 +327,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         const _: () = {
             use ::canic::method::wire;
 
-            let _: fn(#input_type) -> #return_type = #handler;
+            #signature_check
             #check
             #checked_request
 

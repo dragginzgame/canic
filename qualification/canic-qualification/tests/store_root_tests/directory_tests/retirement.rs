@@ -447,6 +447,45 @@ pub(super) async fn exercise(
     )
     .await
     .unwrap();
+    if !from_spare {
+        let auxiliary = stored::InstancePool {
+            hub: user.to_text(),
+            component: "auxiliary".into(),
+            arguments: args(
+                user,
+                "auxiliary",
+                canic::topology::WORKER_GENERATION.to_vec(),
+            ),
+            ..worker_pool.clone()
+        };
+        root.update::<_, Result<(), management::Refusal>>(
+            "configure_workers",
+            stored::CONFIGURE_WORKERS,
+            &auxiliary,
+            stored::LIMITS,
+        )
+        .await
+        .unwrap();
+        let input = ("miner".to_string(), 0u8);
+        use canic::sharding::LookupWorker;
+        for (method, request) in [
+            (
+                AssignWorker::NAME,
+                AssignWorker::encode_request(&input).unwrap(),
+            ),
+            (
+                LookupWorker::NAME,
+                LookupWorker::encode_request(&input).unwrap(),
+            ),
+        ] {
+            assert!(
+                pic.update_call(root.id, user, method, request)
+                    .await
+                    .is_err(),
+                "{method} admitted another pool's hub"
+            );
+        }
+    }
     let worker = async || {
         Client {
             pic,

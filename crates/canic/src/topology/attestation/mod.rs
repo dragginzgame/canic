@@ -34,6 +34,15 @@ impl Claim {
             .ok_or("role proof deadline overflow")
     }
 
+    #[cfg(feature = "role-verification")]
+    fn check_time(&self) -> Result<(), &'static str> {
+        let now = ic_platform_runtime::system::time();
+        if now < self.issued_at_ns || now >= self.expiry()? {
+            return Err("role refused");
+        }
+        Ok(())
+    }
+
     /// Canonical, domain-separated Ed25519 signing input.
     /// # Errors
     /// Refuses an oversized claim or a malformed generation.
@@ -125,16 +134,14 @@ impl RoleVerifier {
         (claim, signature): &Proof,
     ) -> Result<(), &'static str> {
         use ic_platform_runtime::system;
-        let now = system::time();
         if claim.root != self.root
             || claim.subject != system::caller()
             || claim.receiver != system::canister_self()
             || !roles.contains(&claim.role.as_str())
-            || now < claim.issued_at_ns
-            || now >= claim.expiry()?
         {
             return Err("role refused");
         }
+        claim.check_time()?;
         let signature = ic_platform::ed25519::Signature::from_slice(signature.as_slice())
             .map_err(|_| "signature")?;
         self.key
@@ -161,11 +168,30 @@ impl RoleVerifier {
     }
 }
 
+/// Admission for the original role-bound call. The install pin and signed role are
+/// immutable during a call; its time window can expire while the handler awaits.
 #[cfg(feature = "role-verification")]
-pub(crate) fn verify_roles(roles: &[&str], proof: &Proof) -> Result<(), &'static str> {
+pub struct RoleAdmission<'a>(&'a Claim);
+
+#[cfg(feature = "role-verification")]
+impl RoleAdmission<'_> {
+    /// Check the admitted proof immediately before resuming protected work.
+    /// # Errors
+    /// Refuses outside the original proof's validity window.
+    pub fn reauthorize(&self) -> Result<(), &'static str> {
+        self.0.check_time()
+    }
+}
+
+#[cfg(feature = "role-verification")]
+pub(crate) fn verify_roles<'a>(
+    roles: &[&str],
+    proof: &'a Proof,
+) -> Result<RoleAdmission<'a>, &'static str> {
     TRUST.with(|slot| {
         slot.get()
             .ok_or("missing role verifier")?
-            .require_role(roles, proof)
+            .require_role(roles, proof)?;
+        Ok(RoleAdmission(&proof.0))
     })
 }

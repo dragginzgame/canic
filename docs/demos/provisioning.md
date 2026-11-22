@@ -46,8 +46,7 @@ impl<I: Eq> Binding<I> {
     pub fn require_same(&self, retained: &Self);
 }
 
-pub fn account_row<E: Entity>(database: &DatabaseSession, account: AuthSubject) -> Option<E>;
-pub fn session_row<E: Entity>(database: &DatabaseSession, auth: &Authorization) -> Option<E>;
+pub fn account_row<E: Entity>(database: &impl QuerySession<E>, account: AuthSubject) -> Option<E>;
 ```
 
 1. Validate the name synchronously, including on retries. An already-ready row

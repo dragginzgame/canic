@@ -58,18 +58,18 @@ fn configure_workers(input: stored::InstancePool) -> Result<(), Refusal> {
 
 // assign_worker
 // Recover an ordinal or reserve the next worker.
-// guard  : approved worker hub
+// guard  : caller must own the named worker grant
 // limits : default request, 1,024-byte placement reply
-#[canic::update(contract = canic::sharding::AssignWorker, guard = sharding::worker_hub)]
+#[canic::update(contract = canic::sharding::AssignWorker)]
 fn assign_worker(request: (String, u8)) -> Placement {
     sharding::worker(&request.0, request.1, true)
 }
 
 // lookup_worker
 // Observe the original worker allocation for an ordinal.
-// guard  : approved worker hub
+// guard  : caller must own the named worker grant
 // limits : default request, 1,024-byte placement reply
-#[canic::update(contract = canic::sharding::LookupWorker, guard = sharding::worker_hub)]
+#[canic::update(contract = canic::sharding::LookupWorker)]
 fn lookup_worker(request: (String, u8)) -> Placement {
     sharding::worker(&request.0, request.1, false)
 }
@@ -110,43 +110,38 @@ fn increase_pool(input: stored::IncreasePool) -> Result<(), Refusal> {
 
 // assign_shard
 // Return the hub's retained placement for a key or assign it within the approved limits.
-// guard  : approved shard hub
+// guard  : caller must own the target pool grant
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[canic::update(contract = AssignShard, guard = hub)]
+#[canic::update(contract = AssignShard)]
 fn assign_shard(input: (String, Key)) -> Placement {
     sharding::assign(&input.0, input.1)
 }
 
 // lookup_shard
 // Read a placement for the admitted hub without allocating a shard.
-// guard  : approved shard hub
+// guard  : caller must own the target pool grant
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[canic::update(contract = LookupShard, guard = hub)]
+#[canic::update(contract = LookupShard)]
 fn lookup_shard(input: (String, Key)) -> Placement {
     sharding::lookup(&input.0, &input.1)
 }
 
 // assign_instance
 // Return the hub's retained placement for a key or assign it within the approved limits.
-// guard  : approved project hub
+// guard  : caller must own the dedicated-instance grant
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[canic::update(contract = AssignInstance, guard = sharding::project_hub)]
+#[canic::update(contract = AssignInstance)]
 fn assign_instance(key: Key) -> Placement {
     sharding::assign_instance(key)
 }
 
 // lookup_instance
 // Read a placement for the admitted hub without allocating a dedicated child.
-// guard  : approved project hub
+// guard  : caller must own the dedicated-instance grant
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[canic::update(contract = LookupInstance, guard = sharding::project_hub)]
+#[canic::update(contract = LookupInstance)]
 fn lookup_instance(key: Key) -> Placement {
     sharding::lookup_instance(&key)
-}
-
-/// Require the caller bound as the approved pool hub.
-fn hub() -> Result<(), &'static str> {
-    sharding::hub()
 }
 
 fn frame(method: u64, direction: ic_wire::Direction) -> ic_wire::Encoding {
@@ -214,9 +209,9 @@ async fn begin_shard_drain(target: canic::sharding::ShardTarget) -> Result<u32, 
 
 // release_shard
 // Release an exact placement after its hub has committed its application change.
-// guard  : approved shard hub
+// guard  : caller must own the target pool grant
 // limits : canic::sharding::LIMITS (1,024 bytes each way)
-#[canic::update(contract = canic::sharding::ReleaseShard, guard = hub)]
+#[canic::update(contract = canic::sharding::ReleaseShard)]
 fn release_shard((key, target): (Key, canic::sharding::ShardTarget)) -> Result<(), String> {
     sharding::release_shard(&key, &target)
 }
@@ -432,7 +427,7 @@ async fn fund_placement(
 // Reserve or recover one shard generation for the named hub-local pool ordinal.
 // guard  : approved hub, checked against the named pool
 // limits : 1 KiB request and reply
-#[canic::update(contract = canic::sharding::GrowShard, guard = hub)]
+#[canic::update(contract = canic::sharding::GrowShard)]
 fn grow_shard(input: (String, u8)) -> (Placement, u32) {
     sharding::grow_shard(&input.0, input.1)
 }

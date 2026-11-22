@@ -445,9 +445,9 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 if !cli.json {
                     let (digest, mut text) = match &result {
                         canic_host::FleetPlanning::ShardPool { approval, capacity, increases, .. } =>
-                            return Ok(Output::Text(status::pool_preview(selected, &controller, [approval.as_ref()], [], capacity.as_ref(), increases)?)),
-                        canic_host::FleetPlanning::PlacementPools { shards, instances, workers, capacity, increases, .. } =>
-                            return Ok(Output::Text(status::pool_preview(selected, &controller, shards.iter().map(|s| &s.approval), instances.iter().map(|grant| ("Registry", &grant.approval)).chain(workers.iter().map(|grant| ("Scaling workers", &grant.approval))), capacity.as_ref(), increases)?)),
+                            return Ok(Output::Text(status::pool_preview(selected, &controller, [approval.as_ref()], [], capacity.as_ref(), None, increases)?)),
+                        canic_host::FleetPlanning::PlacementPools { shards, instances, workers, capacity, standby, increases, .. } =>
+                            return Ok(Output::Text(status::pool_preview(selected, &controller, shards.iter().map(|s| &s.approval), instances.iter().map(|grant| ("Registry", &grant.approval)).chain(workers.iter().map(|grant| ("Scaling workers", &grant.approval))), capacity.as_ref(), standby.as_ref().map(|g| &g.approval), increases)?)),
                         canic_host::FleetPlanning::Create { operation, fleet_plan } =>
                             (operation, status::fleet_preview(operation, fleet_plan, &state_dir)?),
                         canic_host::FleetPlanning::AddChild { operation, .. } | canic_host::FleetPlanning::Upgrade { operation, .. } | canic_host::FleetPlanning::Maintenance { operation, .. } | canic_host::FleetPlanning::Publication { operation, .. } =>

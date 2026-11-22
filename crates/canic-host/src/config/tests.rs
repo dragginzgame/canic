@@ -1444,6 +1444,23 @@ principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai", "r7inp-6aaaa-aaaaa-aaabq-cai"]
         );
     }
     assert_eq!(decoded.imports[0].previous_root, None);
+    let self_handoff: Config =
+        toml::from_str(&format!("{source}previous_root = '{}'\n", decoded.root)).unwrap();
+    let selected = self_handoff.select(None, None).unwrap();
+    let error = sharding::preview(
+        Path::new("canic.toml"),
+        &selected,
+        "r7inp-6aaaa-aaaaa-aaabq-cai",
+    )
+    .unwrap_err()
+    .to_string();
+    assert!(
+        error.contains(&format!(
+            "previous_root = {} for {} matches the destination Root",
+            decoded.root, decoded.imports[0].principal
+        )),
+        "{error}"
+    );
     let invalid: Config =
         toml::from_str(&source.replace("min_available_spares = 2", "min_available_spares = 5"))
             .unwrap();

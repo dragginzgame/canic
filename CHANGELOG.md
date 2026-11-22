@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.259.0] - 2026-11-22
+
+Async role-protected updates expose `attestation.reauthorize()` for use after
+an await. The handler takes its application payload and the caller sends the
+existing proof-plus-payload frame. After updating Canic, rebuild the receiver
+and verify its mounted Wire contracts:
+
+```sh
+canic app build
+canic app check-wire
+```
+
+The placement plan preview shows the reserve Root principal and the previous
+Root for each import that requires a handoff. Planning rejects an import whose
+previous Root is the destination Root and identifies the affected canister.
+
+```sh
+# From a configured app, with reserve policy configured, set CONTROLLER to the operator principal.
+canic fleet plan --fleet local --controller "$CONTROLLER"
+```
+
+Shard assignment, lookup and growth authorize the caller against the named
+pool. Release checks the caller and exact allocation together. A caller without
+that grant receives the same release refusal as for an unknown allocation.
+Worker lookup and reservation check the named worker grant. Dedicated-instance
+lookup and reservation check the registry's grant before reading a key.
+
+Replace `provisioning::session_row::<User>(&db!(), &auth)` with
+`provisioning::account_row::<User>(&db!(), (&auth).into())`. Replace the
+`declare_db_store!(…, store = …)` shorthand with `mount_db!(schema = …)`,
+selecting the owning canister schema. The explicit
+`declare_db_store!(…, key = …, schema = …)` form remains for custom stores.
+
+```sh
+# From the app directory, rebuild and verify its reviewed contracts.
+canic app build
+canic app check-wire
+```
+
 ## [0.258.0] - 2026-11-22
 
 ### 🔌 Endpoint guards

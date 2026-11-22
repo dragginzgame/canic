@@ -76,7 +76,7 @@ async fn register() -> Result<Progress, ProvisionRefusal> {
 // limits : default
 #[canic::query(scope = "read")]
 fn my_shard() -> Option<Principal> {
-    provisioning::session_row::<Route>(&db!(), &auth)
+    provisioning::account_row::<Route>(&db!(), (&auth).into())
         .filter(|row| row.ready)
         .map(|row| row.shard)
 }

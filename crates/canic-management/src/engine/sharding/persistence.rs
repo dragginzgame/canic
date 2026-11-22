@@ -130,25 +130,15 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
     for (name, l) in &pools.shards {
         assert!(usize::from(l.namespace) < pools.shards.len() && namespaces.insert(l.namespace));
         assert_eq!(name, &l.approval.pool);
-        for slot in ChildId::SHARDS {
-            if l.generations[slot.index()].is_some() {
-                assert!(owned.insert(slot));
-            }
+        for slot in l.allocated_slots() {
+            assert!(owned.insert(slot));
         }
         assert!(valid_limits(&l.approval) && l.approval.max_shards <= pools.pool_limit());
         check_shard_topology(&l.approval).expect("retained shard topology");
-        let slots = pools.shard_slots(&l.approval);
-        assert!(
-            pools.creation_debit(
-                slots
-                    .iter()
-                    .copied()
-                    .filter(|slot| l.generations[slot.index()].is_some())
-            ) <= l.approval.creation_budget
-        );
+        assert!(pools.creation_debit(l.allocated_slots()) <= l.approval.creation_budget);
         for (index, count) in l.counts.iter().copied().enumerate() {
             assert!(count <= l.approval.keys_per_shard);
-            assert!(count == 0 || slots.iter().any(|slot| slot.index() == index));
+            assert!(count == 0 || ChildId::SHARDS.iter().any(|slot| slot.index() == index));
             let occupied = count > 0
                 || (l.generations[index].is_some()
                     && pools.draining.keys().any(|slot| slot.index() == index));

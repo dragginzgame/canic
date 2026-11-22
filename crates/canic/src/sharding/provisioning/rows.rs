@@ -3,15 +3,6 @@ use super::AuthSubject;
 use crate::auth::session::Authorization;
 use ic_db::{Entity, QuerySession};
 
-/// Read the provisioning row for a session already authorized by the endpoint.
-/// Uses the same unique account index and one-row byte budget as provisioning.
-/// # Panics
-/// Traps on conflicting database access, an incompatible index, or an oversized row.
-#[must_use]
-pub fn session_row<E: Entity>(database: &impl QuerySession<E>, view: &Authorization) -> Option<E> {
-    account_row(database, AuthSubject::from(view))
-}
-
 /// Optional IC DB lookup for applications with a unique issuer/subject index.
 /// # Panics
 /// Refuses an incompatible index, oversized row or conflicting access.

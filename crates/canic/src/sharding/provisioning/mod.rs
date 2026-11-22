@@ -14,7 +14,7 @@ use crate::method::Contract;
 pub use actor::{Assignment, place};
 use ic_platform_types::Principal;
 #[cfg(feature = "provisioning")]
-pub use rows::{account_row, session_row};
+pub use rows::account_row;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 
 /// Durable account selector derived from the authenticated issuer and subject.

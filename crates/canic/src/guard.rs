@@ -1,6 +1,6 @@
 //! Reusable caller checks for Canic endpoints. Each check reads the receiving canister's authority.
 #[cfg(feature = "role-verification")]
-use crate::topology::attestation::{Proof, RoleMethod};
+use crate::topology::attestation::{Proof, RoleAdmission, RoleMethod};
 #[cfg(feature = "topology")]
 use ic_platform_types::Principal;
 
@@ -68,11 +68,14 @@ pub fn require_issuer() -> Result<(), &'static str> {
 /// Refuses missing trust or a proof that fails this method's role check.
 #[cfg(feature = "role-verification")]
 pub fn require_role<M: RoleMethod>(proof: &Proof) -> Result<(), &'static str> {
-    admit_roles(M::ROLES, proof)
+    admit_roles(M::ROLES, proof).map(|_| ())
 }
 
 #[cfg(feature = "role-verification")]
 #[doc(hidden)]
-pub fn admit_roles(roles: &[&str], proof: &Proof) -> Result<(), &'static str> {
+pub fn admit_roles<'a>(
+    roles: &[&str],
+    proof: &'a Proof,
+) -> Result<RoleAdmission<'a>, &'static str> {
     crate::topology::attestation::verify_roles(roles, proof)
 }

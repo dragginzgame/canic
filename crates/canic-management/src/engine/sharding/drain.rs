@@ -1,5 +1,5 @@
 //! Placement-only drain and exact releases by the approved hub.
-use super::{ChildId, Ledger, STATE, api, hub};
+use super::{ChildId, Ledger, STATE, api};
 use canic::sharding::{Key, ShardTarget};
 
 impl Ledger {
@@ -110,19 +110,18 @@ async fn hub_status(
 /// # Panics
 /// Requires an opened Root.
 pub async fn begin_shard_drain(target: &ShardTarget) -> Result<u32, String> {
-    if !api::is_controller(&api::caller()) {
+    let controller = api::caller();
+    if !api::is_controller(&controller) {
         return Err("controller required".into());
     }
-    let controller = api::caller();
     let (count, local) = STATE.with_borrow_mut(|s| {
         let state = s.as_mut().expect("open Root");
-        let ledger = state
+        let (ledger, slot) = state
             .pools
             .shards
             .values()
-            .find(|l| l.target_slot(target).is_ok())
+            .find_map(|ledger| Some((ledger, ledger.target_slot(target).ok()?)))
             .ok_or("assignment changed")?;
-        let slot = ledger.target_slot(target)?;
         let local = hub_binding(&state.pools, ledger);
         let count = ledger.counts[slot.index()];
         if let std::collections::btree_map::Entry::Vacant(entry) = state.pools.draining.entry(slot)
@@ -161,16 +160,19 @@ pub async fn begin_shard_drain(target: &ShardTarget) -> Result<u32, String> {
 /// # Panics
 /// Requires a consistent opened placement ledger.
 pub fn release_shard(key: &Key, target: &ShardTarget) -> Result<(), String> {
-    hub()?;
+    let caller = api::caller().to_text();
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().expect("open Root");
-        let ledger = state
+        let (ledger, slot) = state
             .pools
             .shards
             .values_mut()
-            .find(|l| l.approval.hub == api::caller().to_text() && l.target_slot(target).is_ok())
+            .filter(|ledger| ledger.approval.hub == caller)
+            .find_map(|ledger| {
+                let slot = ledger.target_slot(target).ok()?;
+                Some((ledger, slot))
+            })
             .ok_or("assignment changed")?;
-        let slot = ledger.target_slot(target)?;
         if state.pools.local_routes.contains(&ledger.approval.pool) {
             return Err("account releases belong to the hub for this pool".into());
         }

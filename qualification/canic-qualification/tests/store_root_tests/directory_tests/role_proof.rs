@@ -24,6 +24,95 @@ pub(super) async fn prepare(root: &Client<'_>) -> Vec<u8> {
     .into_vec()
 }
 
+async fn deferred_visits(receiver: &Client<'_>, caller: CanisterId, proof: &Proof) {
+    use ic_testkit::held::{Catalog, Fixture, Limits, Reply};
+    let pic = receiver.pic;
+    let gate = pic.create_canister().await;
+    let catalog = Catalog::new(
+        &[Reply {
+            method: "hold",
+            bytes: &[],
+        }; 2],
+        Limits {
+            slots: 2,
+            name_bytes: 8,
+            reply_bytes: 0,
+        },
+    )
+    .unwrap();
+    let mut held = Fixture::new(
+        pic,
+        gate.to_text().parse().unwrap(),
+        &catalog,
+        100_000_000_000,
+        8192,
+    )
+    .await
+    .unwrap();
+    pic.add_cycles(gate, 1_000_000_000_000).await;
+    pic.install_canister(gate, held.wasm().to_vec(), vec![], None)
+        .await;
+    let frame = |direction| ic_wire::Encoding::Frame {
+        method: ic_wire::method_id("deferred_visit"),
+        direction,
+    };
+    let limits = canic::method::LIMITS;
+    let request =
+        ic_wire::encode(&(proof, gate), frame(ic_wire::Direction::Request), limits).unwrap();
+    let refusal = pic
+        .update_call(
+            receiver.id,
+            receiver.operator,
+            "deferred_visit",
+            request.clone(),
+        )
+        .await
+        .unwrap_err();
+    assert!(refusal.to_string().contains("role refused"), "{refusal}");
+
+    let expiry = proof.0.expiry().unwrap();
+    for expire in [false, true] {
+        if expire {
+            let now = pic.get_time().await.as_nanos_since_unix_epoch();
+            pic.advance_time(Duration::from_nanos(expiry - now - 60_000_000_000))
+                .await;
+        }
+        let msg = pic
+            .submit_call(receiver.id, caller, "deferred_visit", request.clone())
+            .await
+            .unwrap();
+        let mut token = None;
+        for _ in 0..40 {
+            pic.tick().await;
+            token = held.pending(pic).await.unwrap().pop();
+            if token.is_some() {
+                break;
+            }
+        }
+        let token = token.expect("admitted handler suspended at barrier");
+        if expire {
+            let now = pic.get_time().await.as_nanos_since_unix_epoch();
+            pic.advance_time(Duration::from_nanos(expiry - now)).await;
+        }
+        held.release(pic, &token).await.unwrap();
+        let reply = pic.await_call(msg).await.unwrap();
+        let result = ic_wire::decode::<Result<u64, String>>(
+            &reply,
+            frame(ic_wire::Direction::Response),
+            limits,
+        )
+        .unwrap();
+        assert_eq!(
+            result,
+            if expire {
+                Err("role refused".into())
+            } else {
+                Ok(2)
+            }
+        );
+    }
+}
+
 pub(super) async fn exercise(
     issuer: &Client<'_>,
     hub: CanisterId,
@@ -276,17 +365,17 @@ pub(super) async fn exercise(
         .await
     };
     assert_eq!(submit(owner, &proof).await, Err("role refused".into()));
-    let mut forged = proof;
+    let mut forged = proof.clone();
     forged.0.issued_at_ns -= 1;
     assert_eq!(submit(child.id, &forged).await, Err("signature".into()));
-    pic.advance_time(Duration::from_secs(7200)).await;
+    deferred_visits(&receiver, child.id, &proof).await;
     pic.tick().await;
     assert_eq!(present().await, Err("role refused".into()));
     assert!(read_visits().await.is_err());
     assert!(visit(&child).await.is_err());
     pic.start_canister(issuer.id, Some(owner)).await.unwrap();
-    assert_eq!(visit(&child).await, Ok(2));
-    assert_eq!(read_visits().await, Ok(2));
+    assert_eq!(visit(&child).await, Ok(3));
+    assert_eq!(read_visits().await, Ok(3));
     assert!(renew(&child).await.unwrap() > expiry);
     assert_eq!(present().await, Ok(()));
     // Keep a signed copy to exercise out-of-band IC controller reuse below.
@@ -427,11 +516,15 @@ pub(super) async fn exercise(
     stale.allocation.generation[0] ^= 1;
     assert!(release(1u8, stale).await.is_err());
     let raw = canic::sharding::ReleaseShard::encode_request(&([1; 32], target.clone())).unwrap();
-    assert!(
-        pic.update_call(issuer.id, owner, "release_shard", raw)
-            .await
-            .is_err()
+    let refused = pic
+        .update_call(issuer.id, owner, "release_shard", raw)
+        .await
+        .unwrap();
+    assert_eq!(
+        canic::sharding::ReleaseShard::decode_reply(&refused).unwrap(),
+        Err("assignment changed".into())
     );
+    assert_eq!(inspect().await["live_placements"], 2);
     assert_eq!(release(1u8, target.clone()).await, Ok(()));
     assert_eq!(release(1u8, target.clone()).await, Ok(()));
     assert_eq!(inspect().await["live_placements"], 1);

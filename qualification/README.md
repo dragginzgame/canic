@@ -102,6 +102,9 @@ receiver upgrade and retry. The test also submits missing and incorrect issuer
 pins to Root before staging the valid install. The directory witness also calls a named
 service from a worker built with role attestation and no database. Run
 `bash scripts/dev/test-store.sh directory` for copied proofs, expiry and retirement.
+Its async attested receiver holds a reply across the proof deadline. The same
+handler increments its counter with a live admission and refuses the expired
+continuation before changing that counter.
 Toko owns qualification of its project payload, reservation rules and account association.
 
 The installed DB role suite also exercises an Auth-wrapped dedicated instance
@@ -669,13 +672,12 @@ budget, and restores its routing Root. Both layouts keep their Auth policy,
 readiness check and strict reopen behavior. Adding a store to an installed
 directory requires migration.
 
-For a generated schema with an application-owned lifecycle,
-`canic::declare_db_store!(pub mod database, store = app_schema::model::Items);` exposes
-`database::SCHEMA` and `database::DATABASE_KEY` natively and
-`database::store::{attach, with}` on Wasm.
-
-For an application that constructs its schema explicitly, `canic/db-store` also
-accepts an allocation key and a schema function:
+Use `mount_db!(schema = …)` for compiled canister schemas, including when the
+application owns its lifecycle. For a custom store with an explicit allocation
+key and schema function, declare the store directly. For a populated custom
+store, preserve its original key, schema and install incarnation. Switching
+to the schema mount changes how the roster and fresh incarnations are derived
+and needs a qualified upgrade for that application.
 
 ```rust
 canic::declare_db_store!(pub(crate) mod users,

@@ -1734,7 +1734,16 @@ installed role. Roles sharing a method must have the same authority over its inp
 An explicit shared `RoleMethod` can still own a fixed Wire ID and both budgets
 through `attested_method = M`. Both declarations decode the effective request as
 `(Proof, M::Input)` and verify the proof before invoking the application handler
-under the contract's existing method ID and byte budget. The sender uses
+under the contract's existing method ID and byte budget. An async update has a
+handler-local `attestation` bound to that invocation’s verified proof. Call
+`attestation.reauthorize()?` immediately before protected work after an await.
+For a placement callback that takes `Fn()`, pass
+`|| attestation.reauthorize().expect("role admission required")`.
+Check again before a later outbound effect if another await intervenes.
+The receiver checks the original proof’s time window locally. The pinned key,
+signed caller, audience, generation and admitted role stay fixed for that call.
+
+The sender uses
 `RoleCalls::new(retained_root)` once at attach time. Its update call checks
 application authority, renews on a cache miss, rechecks authority after the
 await, and submits one application request. Cached-only calls return a renewal

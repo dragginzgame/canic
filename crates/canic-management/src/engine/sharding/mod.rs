@@ -9,7 +9,7 @@ mod workers;
 pub use capacity::{configure_capacity, increase_pool};
 pub use drain::{begin_shard_drain, inspect_shard, release_shard};
 pub(super) use persistence::{BYTES, open};
-pub use workers::{configure_workers, worker, worker_hub};
+pub use workers::{configure_workers, worker};
 
 use super::{STATE, api, delivery, snapshot};
 use crate::{
@@ -36,6 +36,14 @@ struct Ledger {
     counts: [u32; SLOT_COUNT],
     generations: [Option<[u8; 32]>; SLOT_COUNT],
     principals: [Option<String>; SLOT_COUNT],
+}
+
+impl Ledger {
+    fn allocated_slots(&self) -> impl Iterator<Item = ChildId> {
+        ChildId::SHARDS
+            .into_iter()
+            .filter(|slot| self.generations[slot.index()].is_some())
+    }
 }
 
 #[derive(Default, Serialize, Deserialize)]
@@ -147,18 +155,15 @@ impl Pools {
         self.capacity.as_ref().map_or(2, |c| c.max_children)
     }
 
-    fn shard_slots(&self, grant: &ShardPool) -> Vec<ChildId> {
-        let ledger = &self.shards[&grant.pool];
-        let limit = usize::from(ledger.increases.last().copied().unwrap_or(grant.max_shards));
-        let mut slots: Vec<_> = ChildId::SHARDS
-            .into_iter()
-            .filter(|slot| {
-                ledger
-                    .generations
-                    .get(slot.index())
-                    .is_some_and(Option::is_some)
-            })
-            .collect();
+    fn shard_slots(&self, ledger: &Ledger) -> Vec<ChildId> {
+        let limit = usize::from(
+            ledger
+                .increases
+                .last()
+                .copied()
+                .unwrap_or(ledger.approval.max_shards),
+        );
+        let mut slots: Vec<_> = ledger.allocated_slots().collect();
         let free = limit.saturating_sub(slots.len());
         slots.extend(
             ChildId::SHARDS
@@ -343,21 +348,13 @@ pub(super) fn worker_generation(slot: ChildId) -> Option<[u8; 32]> {
     })
 }
 
-/// Ingress guard before accepting an account key.
-/// # Errors
-/// Refuses any principal other than the approved hub.
-pub fn hub() -> Result<(), &'static str> {
-    STATE.with_borrow(|s| {
-        s.as_ref()
-            .filter(|s| {
-                s.pools
-                    .shards
-                    .values()
-                    .any(|l| l.approval.hub == api::caller().to_text())
-            })
-            .map(|_| ())
-            .ok_or("configured shard hub required")
-    })
+impl Pools {
+    fn caller_pool(&self, pool: &str) -> &Ledger {
+        self.shards
+            .get(pool)
+            .filter(|ledger| ledger.approval.hub == api::caller().to_text())
+            .expect("calling hub must own requested shard pool")
+    }
 }
 
 /// Approve the exact hub, retained artifact and lifetime ceilings once.
@@ -533,22 +530,24 @@ pub fn configure_instances(a: stored::InstancePool) -> Result<(), Refusal> {
     Ok(())
 }
 
-fn resolve(slot: ChildId, generation: [u8; 32]) -> Placement {
+fn resolve(
+    state: &super::State,
+    ledger: &Ledger,
+    slot: ChildId,
+    generation: [u8; 32],
+) -> Placement {
     let allocation = Allocation {
         slot: u32::try_from(slot.index()).unwrap(),
         generation,
     };
-    STATE.with_borrow(|s| {
-        let state = s.as_ref().unwrap();
-        let principal = state.pools.shard_at(slot).unwrap().principals[slot.index()].as_deref();
-        if state.pools.retirements.contains_key(&slot) {
-            return Placement::Unavailable(allocation, principal.map(str::to_owned));
-        }
-        let generation = state.artifact.0[&slot]
-            .sources()
-            .map(|s| s.creation.operation);
-        placement::resolve(allocation, principal, generation, &state.journal.0[&slot].0)
-    })
+    let principal = ledger.principals[slot.index()].as_deref();
+    if state.pools.retirements.contains_key(&slot) {
+        return Placement::Unavailable(allocation, principal.map(str::to_owned));
+    }
+    let generation = state.artifact.0[&slot]
+        .sources()
+        .map(|s| s.creation.operation);
+    placement::resolve(allocation, principal, generation, &state.journal.0[&slot].0)
 }
 
 /// Record the first verified worker in the same callback that commits readiness.
@@ -604,34 +603,29 @@ pub(super) fn bind_ready(slot: ChildId, pid: &str) {
 /// Requires the configured hub.
 #[must_use]
 pub fn lookup(pool: &str, key: &Key) -> Placement {
-    let original = lookup_claim(pool, key);
-    if STATE.with_borrow(|s| s.as_ref().unwrap().pools.local_routes.contains(pool)) {
-        return Placement::GrowthRefused;
-    }
-    original
+    STATE.with_borrow(|s| {
+        let state = s.as_ref().expect("open Root");
+        let ledger = state.pools.caller_pool(pool);
+        if state.pools.local_routes.contains(pool) {
+            return Placement::GrowthRefused;
+        }
+        lookup_claim(state, ledger, key)
+    })
 }
 
-fn lookup_claim(pool: &str, key: &Key) -> Placement {
-    hub().expect("hub required");
-    STATE.with_borrow(|s| {
-        let state = s.as_ref().unwrap();
-        let l = state
-            .pools
-            .shards
-            .get(pool)
-            .filter(|l| l.approval.hub == api::caller().to_text())
-            .expect("calling hub must own requested shard pool");
-        state
-            .claims
-            .get(&(l.namespace, *key))
-            .map_or(Placement::Unknown, |id| {
-                let slot = ChildId::placement(usize::from(id)).expect("retained shard slot");
-                resolve(
-                    slot,
-                    l.generations[slot.index()].expect("retained shard generation"),
-                )
-            })
-    })
+fn lookup_claim(state: &super::State, ledger: &Ledger, key: &Key) -> Placement {
+    state
+        .claims
+        .get(&(ledger.namespace, *key))
+        .map_or(Placement::Unknown, |id| {
+            let slot = ChildId::placement(usize::from(id)).expect("retained shard slot");
+            resolve(
+                state,
+                ledger,
+                slot,
+                ledger.generations[slot.index()].expect("retained shard generation"),
+            )
+        })
 }
 
 /// Commit a capacity claim and, when necessary, the original Store-backed creation.
@@ -669,87 +663,92 @@ pub fn grow_shard(pool: &str, ordinal: u8) -> (Placement, u32) {
 }
 
 fn assign_shard(pool: &str, claim: Claim, paid: Option<payment::Settlement>) -> Placement {
-    hub().expect("hub required");
-    let key = STATE.with_borrow(|s| {
-        let pools = &s.as_ref().unwrap().pools;
-        let ledger = pools
-            .shards
-            .get(pool)
-            .filter(|l| l.approval.hub == api::caller().to_text())
-            .expect("calling hub must own requested shard pool");
+    let reservation = STATE.with_borrow(|s| {
+        let state = s.as_ref().expect("open Root");
+        let pools = &state.pools;
+        let ledger = pools.caller_pool(pool);
         let local = pools.local_routes.contains(pool);
         let count = ledger.generations.iter().flatten().count();
-        match claim {
-            Claim::Account(key) if !local => Ok(key),
+        let key = match claim {
+            Claim::Account(key) if !local => key,
             Claim::Capacity(n) if (local || count == 0) && usize::from(n) <= count => {
-                Ok(ordinal_key(n))
+                ordinal_key(n)
             }
-            _ => Err(Placement::GrowthRefused),
-        }
+            _ => return None,
+        };
+        Some((key, lookup_claim(state, ledger, &key)))
     });
-    let key = match key {
-        Ok(k) => k,
-        Err(outcome) => return outcome,
+    let Some((key, retained)) = reservation else {
+        return Placement::GrowthRefused;
     };
-    let retained = lookup_claim(pool, &key);
     if retained != Placement::Unknown {
         return retained;
     }
-    let (approval, slots, counts, generations) = STATE.with_borrow(|s| {
-        let pools = &s.as_ref().unwrap().pools;
+    let choices = STATE.with_borrow(|s| {
+        let state = s.as_ref().unwrap();
+        let pools = &state.pools;
         let ledger = &pools.shards[pool];
-        (
-            ledger.approval.clone(),
-            pools
-                .shard_slots(&ledger.approval)
-                .into_iter()
-                .filter(|slot| !pools.draining.contains_key(slot))
-                .collect::<Vec<_>>(),
-            ledger.counts,
-            ledger.generations,
-        )
-    });
-    let limit = match claim {
-        Claim::Capacity(_) => 1,
-        Claim::Account(_) => approval.keys_per_shard,
-    };
-    if slots.iter().all(|s| counts[s.index()] == limit) {
-        return Placement::Full;
-    }
-    let mut ready = None;
-    let mut free = None;
-    let mut blocked = false;
-    for slot in slots {
-        if let Some(generation) = generations[slot.index()] {
-            if counts[slot.index()] < limit {
-                match resolve(slot, generation) {
-                    Placement::Assigned(_, pid) => {
-                        let subject = Principal::from_text(pid).expect("retained shard principal");
-                        select(&mut ready, score(&[&key, subject.as_slice()]), slot);
-                    }
-                    _ => blocked = true,
-                }
-            } else if !matches!(resolve(slot, generation), Placement::Assigned(..)) {
-                blocked = true;
-            }
-        } else {
-            let candidate = match slot {
-                id if id == ChildId::SHARDS[0] => 0,
-                id if id == ChildId::SHARDS[1] => 1,
-                id => id.index() as u32,
-            };
-            select(
-                &mut free,
-                score(&[
-                    approval.pool.as_bytes(),
-                    &[0xff],
-                    &key,
-                    &candidate.to_le_bytes(),
-                ]),
-                slot,
-            );
+        let limit = match claim {
+            Claim::Capacity(_) => 1,
+            Claim::Account(_) => ledger.approval.keys_per_shard,
+        };
+        let mut ready = None;
+        let mut free = None;
+        let mut blocked = false;
+        let candidates = pools.shard_slots(ledger);
+        let slots = candidates
+            .iter()
+            .copied()
+            .filter(|s| !pools.draining.contains_key(s));
+        if slots.clone().all(|s| ledger.counts[s.index()] == limit) {
+            return None;
         }
-    }
+        for slot in slots {
+            if let Some(generation) = ledger.generations[slot.index()] {
+                if ledger.counts[slot.index()] < limit {
+                    match resolve(state, ledger, slot, generation) {
+                        Placement::Assigned(_, pid) => {
+                            let subject =
+                                Principal::from_text(pid).expect("retained shard principal");
+                            select(&mut ready, score(&[&key, subject.as_slice()]), slot);
+                        }
+                        _ => blocked = true,
+                    }
+                } else if !matches!(
+                    resolve(state, ledger, slot, generation),
+                    Placement::Assigned(..)
+                ) {
+                    blocked = true;
+                }
+            } else {
+                let candidate = match slot {
+                    id if id == ChildId::SHARDS[0] => 0,
+                    id if id == ChildId::SHARDS[1] => 1,
+                    id => id.index() as u32,
+                };
+                select(
+                    &mut free,
+                    score(&[
+                        ledger.approval.pool.as_bytes(),
+                        &[0xff],
+                        &key,
+                        &candidate.to_le_bytes(),
+                    ]),
+                    slot,
+                );
+            }
+        }
+        Some((
+            ledger.approval.clone(),
+            ledger.generations,
+            ready,
+            free,
+            blocked,
+        ))
+    });
+    let Some((approval, generations, ready, free, blocked)) = choices else {
+        return Placement::Full;
+    };
     let (slot, generation) = if let Some((_, slot)) = ready {
         (slot, generations[slot.index()].unwrap())
     } else {
@@ -763,10 +762,7 @@ fn assign_shard(pool: &str, claim: Claim, paid: Option<payment::Settlement>) -> 
         let origin = match STATE.with_borrow(|s| {
             let pools = &s.as_ref().unwrap().pools;
             pools.admit_growth(
-                pools
-                    .shard_slots(&approval)
-                    .into_iter()
-                    .filter(|slot| generations[slot.index()].is_some()),
+                pools.shards[pool].allocated_slots(),
                 approval.creation_budget,
                 approval.creation_payer,
                 paid,
@@ -805,8 +801,8 @@ fn assign_shard(pool: &str, claim: Claim, paid: Option<payment::Settlement>) -> 
         ledger.counts[slot.index()] += 1;
         ledger.generations[slot.index()] = Some(generation);
         state.pool.set(state.pools.encode());
-    });
-    resolve(slot, generation)
+        resolve(state, &state.pools.shards[pool], slot, generation)
+    })
 }
 
 fn create(
@@ -1045,27 +1041,22 @@ fn validate_allocation(
     }
 }
 
-/// Require the actual caller bound to the dedicated pool.
-/// # Errors
-/// Refuses other callers, including the shared hub.
-pub fn project_hub() -> Result<(), &'static str> {
-    STATE.with_borrow(|s| {
-        s.as_ref()
-            .and_then(|s| s.pools.instances.as_ref())
-            .filter(|a| a.hub == api::caller().to_text())
-            .map(|_| ())
-            .ok_or("configured project hub required")
-    })
-}
-
 /// Observe the original project creation without issuing an effect.
 /// # Panics
 /// Requires the approved project hub.
 #[must_use]
 pub fn lookup_instance(key: &Key) -> Placement {
-    project_hub().expect("project hub required");
     STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
+        let caller = api::caller().to_text();
+        assert!(
+            state
+                .pools
+                .instances
+                .as_ref()
+                .is_some_and(|grant| grant.hub == caller),
+            "configured instance grant required"
+        );
         let Some((i, claim)) = state
             .pools
             .projects

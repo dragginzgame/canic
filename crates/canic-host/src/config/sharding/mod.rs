@@ -170,20 +170,6 @@ pub struct WorkerPoolConfig {
 }
 
 impl WorkerPoolConfig {
-    fn recipe(&self) -> RegistryConfig {
-        RegistryConfig {
-            component: self.component.clone(),
-            root: self.root.clone(),
-            store: self.store.clone(),
-            release: self.release.clone(),
-            max_instances: self.max_workers,
-            creation_payer: self.creation_payer,
-            creation_budget: self.creation_budget,
-            expires_at_ns: self.expires_at_ns,
-            install_args: None,
-            increase_from: None,
-        }
-    }
     fn validate(
         &self,
         slots: &BTreeMap<String, CanisterConfig>,

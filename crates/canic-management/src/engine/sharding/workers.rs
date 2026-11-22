@@ -172,19 +172,6 @@ pub fn configure_workers(grant: stored::InstancePool) -> Result<(), Refusal> {
     Ok(())
 }
 
-/// Admit the actual caller bound to the worker allowance.
-/// # Errors
-/// Refuses any other caller.
-pub fn worker_hub() -> Result<(), &'static str> {
-    let caller = api::caller().to_text();
-    STATE.with_borrow(|s| {
-        s.as_ref()
-            .filter(|s| s.pools.workers.values().any(|w| w.grant.hub == caller))
-            .map(|_| ())
-            .ok_or("configured worker hub required")
-    })
-}
-
 /// Resolve a worker ordinal, optionally reserving the next one.
 /// # Panics
 /// Requires the approved hub and intact allocation custody.

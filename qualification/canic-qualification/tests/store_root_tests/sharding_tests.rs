@@ -433,11 +433,14 @@ expires_at_ns = {}
     )
     .unwrap()
     .unwrap();
-    assert!(
-        pic.update_call(hub, alice, "project", vec![1; 32])
-            .await
-            .is_err()
-    );
+    for method in ["project", "lookup_project"] {
+        assert!(
+            pic.update_call(hub, alice, method, vec![1; 32])
+                .await
+                .is_err(),
+            "{method} admitted the shard hub"
+        );
+    }
     assert_eq!(
         project(pic, unrelated, alice, "lookup_project", 1).await,
         Placement::Unknown

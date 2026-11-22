@@ -57,7 +57,7 @@ fn provision_user(request: Request<[u8; 16], ()>) -> Result<Binding<[u8; 16]>, P
 // limits : default
 #[canic::query(scope = "read")]
 fn my_id() -> Option<[u8; 16]> {
-    provisioning::session_row::<User>(&db!(), &auth).map(|row| row.id.to_bytes())
+    provisioning::account_row::<User>(&db!(), (&auth).into()).map(|row| row.id.to_bytes())
 }
 
 // request_project

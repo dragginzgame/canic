@@ -100,22 +100,10 @@ impl Store {
 }
 
 /// Declare an actor-local database module with `attach` and synchronous `with`.
-/// Select an IC DB store from the schema owner. A custom lifecycle can instead
-/// provide an explicit key and schema function inside its generated module.
+/// Supply the stable key and schema function owned by the custom lifecycle.
+/// Use `mount_db!` for a compiled canister schema.
 #[macro_export]
 macro_rules! declare_db_store {
-    ($vis:vis mod $name:ident, store = $store:path $(,)?) => {
-        /// Database allocation selected from the application schema.
-        $vis mod $name {
-            use $store as Definition;
-            /// Stable allocation key declared by IC DB.
-            pub const DATABASE_KEY: &str = <Definition as ::ic_db::Store>::KEY;
-            /// Compiled schema for this allocation.
-            pub const SCHEMA: fn() -> ::ic_db::Schema = Definition::compiled;
-
-            $crate::declare_db_store!(pub(crate) mod store, key = super::DATABASE_KEY, schema = super::SCHEMA);
-        }
-    };
     ($vis:vis mod $name:ident, key = $key:expr, schema = $schema:path $(,)?) => {
         $vis mod $name {
             use $crate::db::store::{Database, DatabaseSession, DefaultMemoryImpl, MemoryRuntime, Store};
