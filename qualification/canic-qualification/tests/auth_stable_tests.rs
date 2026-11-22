@@ -126,7 +126,7 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
         2,
         grant.issuer,
         Principal::from_slice(&[3]),
-        &["read"],
+        &["read", "write"],
         None,
     );
     pic.advance_time(Duration::from_secs(3)).await;
@@ -140,7 +140,16 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
     .await
     .unwrap();
     assert_eq!(application_id(new_user).await, None);
-    exercise_coordinator(pic, target, browser, grant.issuer, session.subject, now).await;
+    exercise_coordinator(
+        pic,
+        target,
+        browser,
+        new_user,
+        grant.issuer,
+        session.subject,
+        now,
+    )
+    .await;
     let issue = issuer_test::request(1);
     let issued = issuer_test::call(&f, issuer_test::account(), issuer::ISSUE, &issue)
         .await
@@ -303,6 +312,7 @@ async fn exercise_coordinator(
     pic: &PocketIc,
     target: CanisterId,
     browser: CanisterId,
+    other: CanisterId,
     issuer: Principal,
     subject: Principal,
     now: u64,
@@ -326,6 +336,7 @@ async fn exercise_coordinator(
     .await
     .unwrap();
     assert_eq!(write(writer).await, Ok((issuer, subject)));
+    exercise_project_guard(pic, target, writer, other, browser).await;
     let (gate, mut held) = auth_enrollment_tests::held_gate(pic).await;
     let message = pic
         .submit_call(
@@ -336,10 +347,16 @@ async fn exercise_coordinator(
         )
         .await
         .unwrap();
-    let token = auth_enrollment_tests::pending(&held, pic, 1)
+    let deferred = pic
+        .submit_call(
+            target,
+            writer,
+            "project_write",
+            project_write_request(Some(gate)),
+        )
         .await
-        .pop()
         .unwrap();
+    let tokens = auth_enrollment_tests::pending(&held, pic, 2).await;
     let logout = pic
         .update_call(
             target,
@@ -353,7 +370,17 @@ async fn exercise_coordinator(
         Logout::decode_response(&logout).unwrap(),
         LogoutResult::Revoked(_)
     ));
-    held.release(pic, &token).await.unwrap();
+    for token in tokens {
+        held.release(pic, &token).await.unwrap();
+    }
+    let reply = pic.await_call(deferred).await.unwrap();
+    assert_eq!(
+        enrollment_response::<Result<u32, canic_auth_witness::ProjectError>>(
+            ic_wire::method_id("project_write"),
+            &reply
+        ),
+        Err(canic_auth_witness::ProjectError::Forbidden)
+    );
     assert!(matches!(
         write_result(&pic.await_call(message).await.unwrap()),
         Err(SessionReadRefusal::MissingOrExpired | SessionReadRefusal::Revoked)
@@ -395,4 +422,59 @@ async fn coordinator_write(
             .await
             .unwrap(),
     )
+}
+
+fn project_write_request(gate: Option<CanisterId>) -> Vec<u8> {
+    enrollment_request(ic_wire::method_id("project_write"), &gate)
+}
+
+async fn exercise_project_guard(
+    pic: &PocketIc,
+    target: CanisterId,
+    owner: CanisterId,
+    other: CanisterId,
+    read_only: CanisterId,
+) {
+    use canic_auth_witness::ProjectError;
+    let invoke = async |caller, method: &str| {
+        let frame = |direction| ic_wire::Encoding::Frame {
+            method: ic_wire::method_id(method),
+            direction,
+        };
+        let limits = canic::method::LIMITS;
+        let request = ic_wire::encode(&(), frame(ic_wire::Direction::Request), limits).unwrap();
+        let reply = if method == "project_count" {
+            pic.query_call(target, caller, method, request).await
+        } else {
+            pic.update_call(target, caller, method, project_write_request(None))
+                .await
+        }?;
+        Ok::<_, ic_testkit::pocket_ic::RejectResponse>(
+            ic_wire::decode::<Result<u32, ProjectError>>(
+                &reply,
+                frame(ic_wire::Direction::Response),
+                limits,
+            )
+            .unwrap(),
+        )
+    };
+    assert_eq!(invoke(owner, "project_count").await.unwrap(), Ok(0));
+    assert_eq!(invoke(owner, "project_write").await.unwrap(), Ok(1));
+    for method in ["project_count", "project_write"] {
+        assert_eq!(
+            invoke(other, method).await.unwrap(),
+            Err(ProjectError::Forbidden)
+        );
+        let refused = invoke(CanisterId::anonymous(), method).await.unwrap_err();
+        assert!(
+            refused.reject_message.contains("user authorization"),
+            "{refused:?}"
+        );
+    }
+    let refused = invoke(read_only, "project_write").await.unwrap_err();
+    assert!(
+        refused.reject_message.contains("ScopeRejected"),
+        "{refused:?}"
+    );
+    assert_eq!(invoke(owner, "project_count").await.unwrap(), Ok(1));
 }

@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.259.1] - 2026-11-22
+
+Scoped queries and updates can declare `scope_guard = project_owner`. The
+application guard receives the verified `&Authorization` once scope admission
+succeeds. A refusal returns the application’s typed error in the usual reply.
+
+```sh
+# From the app directory, rebuild the receiver and check its Wire contracts.
+canic app build
+canic app check-wire
+```
+
+Fleet planning checks pool growth deadlines before reading the fleet's Wasm
+artifacts. An expired grant reports its configured deadline even when the
+child or hub has no build artifact.
+
+```sh
+# From a configured placement fleet, review its grants using the operator principal.
+canic fleet plan --fleet local --controller "$CONTROLLER"
+```
+
 ## [0.259.0] - 2026-11-22
 
 Async role-protected updates expose `attestation.reauthorize()` for use after

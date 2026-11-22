@@ -1474,6 +1474,56 @@ principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai", "r7inp-6aaaa-aaaaa-aaabq-cai"]
 }
 
 #[test]
+fn expired_pool_deadlines_precede_missing_build_inputs() {
+    for (label, table, count) in [
+        (
+            "registry",
+            "[apps.test.fleets.demo.registry]",
+            "max_instances",
+        ),
+        (
+            "worker_pool",
+            "[[apps.test.fleets.demo.worker_pools]]",
+            "max_workers",
+        ),
+    ] {
+        let source = format!(
+            r#"
+[apps.test.canisters.hub]
+wasm = "missing-hub.wasm"
+[apps.test.canisters.child]
+parent = "hub"
+wasm = "missing-child.wasm"
+[apps.test.fleets.demo]
+network = {{ kind = "Mainnet" }}
+subnet_child_limit = 4
+[apps.test.fleets.demo.canisters]
+root = {{ id = "rrkah-fqaaa-aaaaa-aaaaq-cai" }}
+store = {{ id = "ryjl3-tyaaa-aaaaa-aaaba-cai" }}
+hub = {{ id = "r7inp-6aaaa-aaaaa-aaabq-cai" }}
+{table}
+component = "child"
+root = "root"
+store = "store"
+release = {{ name = "child", version = "1" }}
+{count} = 1
+creation_budget = 0
+expires_at_ns = 1
+"#
+        );
+        let config: Config = toml::from_str(&source).unwrap();
+        let selected = config.select(None, None).unwrap();
+        let error = sharding::preview(Path::new("canic.toml"), &selected, &input().controller)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains(&format!("{label}.expires_at_ns = 1 has expired")),
+            "{error}"
+        );
+    }
+}
+
+#[test]
 fn worker_pools_plan_separately_and_require_the_declared_hub() {
     let source = include_str!("../../../../apps/examples/miner-pool/canic.toml").replace(
         "network = { kind = \"Local\" }",

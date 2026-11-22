@@ -1,5 +1,9 @@
 //! Stable receiver installed through the public Canic mount.
-use canic::auth::{install::Install, session::stable};
+use crate::ProjectError;
+use canic::auth::{
+    install::Install,
+    session::{Authorization, stable},
+};
 use ic_storage::{DefaultMemoryImpl, MemoryRuntime};
 
 const READ_SCOPE: &str = "read";
@@ -22,6 +26,7 @@ canic::mount_auth_lifecycle!(
 );
 
 thread_local! {
+    static PROJECT_WRITES: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
     static RESTORED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
 }
 
@@ -89,18 +94,22 @@ async fn coordinate_write(
     (ic_platform_types::Principal, ic_platform_types::Principal),
     canic::auth::protocol::model::SessionReadRefusal,
 > {
-    use ic_platform_runtime::call::{Call, Outcome, Wait};
     let auth = canic::auth::session::authorize("write")?;
     if let Some(barrier) = barrier {
-        let reply = Call::new(barrier, "hold", Wait::Bounded { seconds: 300 })
-            .args(&[])
-            .execute()
-            .await
-            .expect("qualification barrier");
-        assert!(matches!(reply.into_parts().0, Outcome::Reply(bytes) if bytes.is_empty()));
+        hold(barrier).await;
         auth.reauthorize()?;
     }
     Ok((auth.issuer(), auth.subject()))
+}
+
+async fn hold(barrier: ic_platform_types::Principal) {
+    use ic_platform_runtime::call::{Call, Outcome, Wait};
+    let reply = Call::new(barrier, "hold", Wait::Bounded { seconds: 300 })
+        .args(&[])
+        .execute()
+        .await
+        .expect("qualification barrier");
+    assert!(matches!(reply.into_parts().0, Outcome::Reply(bytes) if bytes.is_empty()));
 }
 
 // application_user_id
@@ -110,4 +119,33 @@ async fn coordinate_write(
 #[canic::query(scope = "read")]
 fn application_user_id() -> Option<Vec<u8>> {
     auth.user_id().map(<[u8]>::to_vec)
+}
+
+fn project_owner(auth: &Authorization) -> Result<(), ProjectError> {
+    (auth.subject() == ic_platform_types::Principal::from_slice(&[2]))
+        .then_some(())
+        .ok_or(ProjectError::Forbidden)
+}
+
+// project_count
+// Read the project's write count as its verified owner.
+// scope  : read, then project_owner
+// limits : default Wire budgets
+#[canic::query(scope = "read", scope_guard = project_owner)]
+fn project_count() -> Result<u32, ProjectError> {
+    Ok(PROJECT_WRITES.get())
+}
+
+// project_write
+// Record one write as the verified project owner.
+// scope  : write, then project_owner
+// limits : default Wire budgets
+#[canic::update(scope = "write", scope_guard = project_owner)]
+async fn project_write(barrier: Option<ic_platform_types::Principal>) -> Result<u32, ProjectError> {
+    if let Some(barrier) = barrier {
+        hold(barrier).await;
+        auth.reauthorize().map_err(|_| ProjectError::Forbidden)?;
+    }
+    PROJECT_WRITES.update(|n| n + 1);
+    Ok(PROJECT_WRITES.get())
 }

@@ -92,3 +92,10 @@ pub struct IssuerObservation {
     /// Supplier current admission epoch.
     pub epoch: u64,
 }
+
+/// Application-owned refusal returned in the project's normal Wire reply.
+#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProjectError {
+    /// The verified subject does not own this fixture project.
+    Forbidden,
+}

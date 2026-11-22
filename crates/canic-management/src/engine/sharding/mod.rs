@@ -738,19 +738,19 @@ fn assign_shard(pool: &str, claim: Claim, paid: Option<payment::Settlement>) -> 
                 );
             }
         }
-        Some((
-            ledger.approval.clone(),
-            ledger.generations,
-            ready,
-            free,
-            blocked,
-        ))
+        let ready = ready.map(|(_, slot)| {
+            (
+                slot,
+                ledger.generations[slot.index()].expect("ready shard generation"),
+            )
+        });
+        Some((ready, free, blocked))
     });
-    let Some((approval, generations, ready, free, blocked)) = choices else {
+    let Some((ready, free, blocked)) = choices else {
         return Placement::Full;
     };
-    let (slot, generation) = if let Some((_, slot)) = ready {
-        (slot, generations[slot.index()].unwrap())
+    let (slot, generation) = if let Some(ready) = ready {
+        ready
     } else {
         if blocked {
             return Placement::Busy;
@@ -759,29 +759,31 @@ fn assign_shard(pool: &str, claim: Claim, paid: Option<payment::Settlement>) -> 
             return Placement::Full;
         };
         let now = api::time();
-        let origin = match STATE.with_borrow(|s| {
+        let growth = STATE.with_borrow(|s| {
             let pools = &s.as_ref().unwrap().pools;
-            pools.admit_growth(
-                pools.shards[pool].allocated_slots(),
+            let ledger = &pools.shards[pool];
+            let approval = &ledger.approval;
+            let origin = pools.admit_growth(
+                ledger.allocated_slots(),
                 approval.creation_budget,
                 approval.creation_payer,
                 paid,
-            )
-        }) {
-            Ok(origin) => origin,
+            )?;
+            if now >= approval.expires_at_ns {
+                return Err(Placement::GrowthRefused);
+            }
+            Ok((
+                origin,
+                approval.reference.clone(),
+                approval.arguments.clone(),
+                approval.expires_at_ns,
+            ))
+        });
+        let (origin, reference, arguments, expires) = match growth {
+            Ok(terms) => terms,
             Err(outcome) => return outcome,
         };
-        if now >= approval.expires_at_ns {
-            return Placement::GrowthRefused;
-        }
-        let Some(generation) = create(
-            origin,
-            slot,
-            approval.reference,
-            approval.arguments,
-            now,
-            approval.expires_at_ns,
-        ) else {
+        let Some(generation) = create(origin, slot, reference, arguments, now, expires) else {
             return Placement::GrowthRefused;
         };
         (slot, generation)

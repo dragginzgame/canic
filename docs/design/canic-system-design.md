@@ -1889,7 +1889,10 @@ The attributes support synchronous queries and synchronous or asynchronous updat
 default to the Wire hash of that name, a unit request for an empty argument list,
 and a 512-byte frame budget in each direction. An existing protocol supplies
 its fixed method ID once through `Contract::ID` and can specify different limits. The default permits ingress;
-a selected application guard runs before argument copy. The handler owns
+a selected `guard` runs before argument copy. On scoped endpoints a synchronous
+`scope_guard` may check application ownership using the same admitted
+`Authorization` as the handler. Its refusal returns the endpoint’s typed error
+before the handler starts. The handler owns
 checks on decoded data and must recheck affected authority or state after a
 suspension. A synchronous reply-encoding trap rolls back that message;
 an async callback cannot undo work committed before its await.

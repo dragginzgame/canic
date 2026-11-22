@@ -5,7 +5,7 @@ use crate::{
 };
 use canic_management_protocol::{application::Arguments, stored};
 use serde::Serialize;
-use std::{collections::BTreeSet, path::Path};
+use std::{collections::BTreeMap, path::Path};
 
 fn checked_wasm(selected: &SelectedFleet, config: &Path, component: &str) -> Result<Vec<u8>> {
     let bytes = store::read(
@@ -56,27 +56,38 @@ pub(crate) fn preview(
     }
     let fleet = &selected.config;
     // Grant construction checks each pooled component while hashing those same bytes.
-    let pooled: BTreeSet<_> = fleet
-        .shard_pools
-        .iter()
-        .map(|p| &p.component)
-        .chain(fleet.registry.iter().map(|p| &p.component))
-        .chain(fleet.worker_pools.iter().map(|p| &p.component))
-        .collect();
+    let now = crate::now()?;
+    let mut deadlines = BTreeMap::new();
+    for p in &fleet.shard_pools {
+        deadlines.insert(
+            &p.component,
+            check_deadline("shard_pool", p.expires_at_ns, now)?,
+        );
+    }
+    if let Some(p) = &fleet.registry {
+        deadlines.insert(
+            &p.component,
+            check_deadline("registry", p.expires_at_ns, now)?,
+        );
+    }
+    for p in &fleet.worker_pools {
+        deadlines.insert(
+            &p.component,
+            check_deadline("worker_pool", p.expires_at_ns, now)?,
+        );
+    }
     for (name, slot) in &fleet.canisters {
         if slot.wasm.is_some()
-            && !pooled.contains(name)
+            && !deadlines.contains_key(name)
             && !matches!(slot.role.as_deref(), Some("root" | "wasm-store"))
         {
             checked_wasm(selected, config_path, name)?;
         }
     }
-    let now = crate::now()?;
     let shards = fleet
         .shard_pools
         .iter()
         .map(|pool| {
-            check_deadline("shard_pool", pool.expires_at_ns, now)?;
             let manifest = manifest(selected, config_path, &pool.component, &pool.release)?;
             let args = install_args(config_path, pool.install_args.as_deref())?;
             grant(
@@ -142,7 +153,7 @@ pub(crate) fn preview(
                     max_instances: p.max_instances,
                     creation_payer: p.creation_payer,
                     creation_budget: p.creation_budget,
-                    expires_at_ns: check_deadline("registry", p.expires_at_ns, now)?,
+                    expires_at_ns: deadlines[&p.component],
                 },
                 stored::CONFIGURE_INSTANCES,
             )
@@ -180,7 +191,7 @@ pub(crate) fn preview(
                     max_instances: p.max_workers,
                     creation_payer: p.creation_payer,
                     creation_budget: p.creation_budget,
-                    expires_at_ns: check_deadline("worker_pool", p.expires_at_ns, now)?,
+                    expires_at_ns: deadlines[&p.component],
                 },
                 stored::CONFIGURE_WORKERS,
             )

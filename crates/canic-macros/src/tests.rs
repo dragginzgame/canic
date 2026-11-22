@@ -12,6 +12,11 @@ fn refuses_ambiguous_contracts_and_invalid_signatures() {
         (quote!(roles = &[], attested_method = Read), "roles cannot"),
         (quote!(contract = Read, roles = &[]), "roles cannot"),
         (quote!(roles = &[], roles = ANY), "repeated"),
+        (quote!(scope_guard = owner), "scope_guard requires scope"),
+        (
+            quote!(scope = "read", scope_guard = owner, scope_guard = owner),
+            "repeated",
+        ),
         (quote!(method = 42), "unknown"),
         (quote!(contract = Read, method = 42), "unknown"),
         (quote!(contract = Read, limits = SMALL), "contract supplies"),

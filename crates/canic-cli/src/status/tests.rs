@@ -5,15 +5,6 @@ use canic_host::Plan;
 fn reserve_preview_uses_the_prepared_principals_and_terms() {
     use canic_management_protocol::stored::{StandbyImport, StandbyPolicy};
 
-    let config: canic_host::Config = toml::from_str(
-        r#"
-[apps.miners.canisters.pool]
-[apps.miners.fleets.demo]
-network = { kind = "Mainnet" }
-"#,
-    )
-    .unwrap();
-    let fleet = config.select(None, None).unwrap();
     let policy = StandbyPolicy {
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         minimum_available: 2,
@@ -25,8 +16,27 @@ network = { kind = "Mainnet" }
             previous_root: Some("r7inp-6aaaa-aaaaa-aaabq-cai".into()),
         }],
     };
-    let output = pool_preview(&fleet, "operator", [], [], None, Some(&policy), &[]).unwrap();
+    let plan = canic_host::FleetPlanning::PlacementPools {
+        app: "miners".into(),
+        fleet: "demo".into(),
+        network: Network::Mainnet,
+        controller: "operator".into(),
+        capacity: None,
+        increases: vec![],
+        shards: vec![],
+        instances: None,
+        workers: vec![],
+        standby: Some(canic_host::PoolGrant {
+            approval: policy,
+            request: vec![],
+        }),
+    };
+    let (operation, output) = plan_preview(&plan, Path::new(".")).unwrap();
+    assert!(operation.is_none());
     for line in [
+        "Placement approvals · miners/demo",
+        "Network: IC mainnet",
+        "Controller: operator",
         "Reserve Root: rrkah-fqaaa-aaaaa-aaaaq-cai",
         "Min available spares: 2 (subnet fleet) · at most 3 automatic creations · deadline 123 Unix ns",
         "Import ryjl3-tyaaa-aaaaa-aaaba-cai · minimum 17 cycles",

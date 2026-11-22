@@ -21,29 +21,104 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-pub(crate) fn pool_preview<'a>(
-    selected: &canic_host::SelectedFleet,
-    controller: &str,
-    shards: impl IntoIterator<Item = &'a canic_management_protocol::stored::ShardPool>,
-    allocations: impl IntoIterator<
-        Item = (&'a str, &'a canic_management_protocol::stored::InstancePool),
-    >,
-    capacity: Option<&canic_host::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
-    standby: Option<&canic_management_protocol::stored::StandbyPolicy>,
-    increases: &[canic_host::PoolGrant<canic_management_protocol::stored::IncreasePool>],
-) -> Result<String> {
-    let network = &selected.config.network;
+pub(crate) fn plan_preview<'a>(
+    plan: &'a canic_host::FleetPlanning,
+    journal: &Path,
+) -> Result<(Option<&'a str>, String)> {
+    use canic_host::FleetPlanning;
+    let mut text = match plan {
+        FleetPlanning::ShardPool {
+            deployment,
+            network,
+            controller,
+            approval,
+            capacity,
+            increases,
+            ..
+        } => {
+            let mut text = pool_header(&deployment.app, &deployment.fleet, network, controller)?;
+            pool_terms(&mut text, capacity.as_ref(), None, increases);
+            write_shard(&mut text, approval);
+            text
+        }
+        FleetPlanning::PlacementPools {
+            app,
+            fleet,
+            network,
+            controller,
+            capacity,
+            standby,
+            increases,
+            shards,
+            instances,
+            workers,
+        } => {
+            let mut text = pool_header(app, fleet, network, controller)?;
+            pool_terms(
+                &mut text,
+                capacity.as_ref(),
+                standby.as_ref().map(|g| &g.approval),
+                increases,
+            );
+            for shard in shards {
+                write_shard(&mut text, &shard.approval);
+            }
+            if let Some(instance) = instances {
+                write_allocation(&mut text, "Registry", &instance.approval);
+            }
+            for worker in workers {
+                write_allocation(&mut text, "Scaling workers", &worker.approval);
+            }
+            text
+        }
+        FleetPlanning::Create {
+            operation,
+            fleet_plan,
+        } => {
+            return Ok((
+                Some(operation),
+                fleet_preview(operation, fleet_plan, journal)?,
+            ));
+        }
+        FleetPlanning::AddChild { operation, .. }
+        | FleetPlanning::Upgrade { operation, .. }
+        | FleetPlanning::Maintenance { operation, .. }
+        | FleetPlanning::Publication { operation, .. } => {
+            return Ok((
+                Some(operation),
+                render(&canic_host::status(journal, operation)?, journal)?,
+            ));
+        }
+        FleetPlanning::Unchanged { .. } => return Ok((
+            None,
+            "No artifact changes. Matches retained completion; network state was not refreshed.\n"
+                .into(),
+        )),
+    };
+    text.push_str("\nOffline review only. No operation submitted.\n");
+    Ok((None, text))
+}
+
+fn pool_header(app: &str, fleet: &str, network: &Network, controller: &str) -> Result<String> {
     let location = match network {
         Network::Mainnet => "IC mainnet",
         Network::Local { url, .. } => url,
     };
-    let mut text = format!(
+    Ok(format!(
         "Placement approvals · {}/{}\nNetwork: {}\nNetwork binding: {}\nController: {controller}\n",
-        selected.app,
-        selected.fleet,
+        app,
+        fleet,
         escape(location),
         network.binding_id()?
-    );
+    ))
+}
+
+fn pool_terms(
+    text: &mut String,
+    capacity: Option<&canic_host::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
+    standby: Option<&canic_management_protocol::stored::StandbyPolicy>,
+    increases: &[canic_host::PoolGrant<canic_management_protocol::stored::IncreasePool>],
+) {
     if let Some(cap) = capacity {
         writeln!(
             text,
@@ -81,36 +156,40 @@ pub(crate) fn pool_preview<'a>(
         };
         writeln!(text, "Increase {}: {old} → {new} children", escape(pool)).unwrap();
     }
-    for a in shards {
-        writeln!(text, "\nShared shards · {}\nRoot: {}\nHub: {}\nCapacity: {} shards × {} live keys per shard\nInit bytes (hex): {}", escape(&a.pool), a.root, a.hub, a.max_shards, a.keys_per_shard, hex(a.arguments.as_slice())).unwrap();
-        pool_release(
-            &mut text,
-            &a.reference,
-            a.creation_payer,
-            a.creation_budget,
-            a.expires_at_ns,
-        );
-    }
-    for (label, a) in allocations {
-        writeln!(
-            text,
-            "\n{label} · {}\nRoot: {}\nParent: {}\nChild limit: {}",
-            escape(&a.component),
-            a.root,
-            a.hub,
-            a.max_instances
-        )
-        .unwrap();
-        pool_release(
-            &mut text,
-            &a.reference,
-            a.creation_payer,
-            a.creation_budget,
-            a.expires_at_ns,
-        );
-    }
-    text.push_str("\nOffline review only. No operation submitted.\n");
-    Ok(text)
+}
+
+fn write_shard(text: &mut String, a: &canic_management_protocol::stored::ShardPool) {
+    writeln!(text, "\nShared shards · {}\nRoot: {}\nHub: {}\nCapacity: {} shards × {} live keys per shard\nInit bytes (hex): {}", escape(&a.pool), a.root, a.hub, a.max_shards, a.keys_per_shard, hex(a.arguments.as_slice())).unwrap();
+    pool_release(
+        text,
+        &a.reference,
+        a.creation_payer,
+        a.creation_budget,
+        a.expires_at_ns,
+    );
+}
+
+fn write_allocation(
+    text: &mut String,
+    label: &str,
+    a: &canic_management_protocol::stored::InstancePool,
+) {
+    writeln!(
+        text,
+        "\n{label} · {}\nRoot: {}\nParent: {}\nChild limit: {}",
+        escape(&a.component),
+        a.root,
+        a.hub,
+        a.max_instances
+    )
+    .unwrap();
+    pool_release(
+        text,
+        &a.reference,
+        a.creation_payer,
+        a.creation_budget,
+        a.expires_at_ns,
+    );
 }
 
 fn pool_release(

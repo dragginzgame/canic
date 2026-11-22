@@ -71,6 +71,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let mut roles: Option<Expr> = None;
     let mut guard: Option<Expr> = None;
     let mut scope: Option<Expr> = None;
+    let mut scope_guard: Option<Path> = None;
     let mut name: Option<LitStr> = None;
     let mut limits: Option<Expr> = None;
     let mut reply_limits: Option<Expr> = None;
@@ -84,6 +85,8 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             roles = Some(option.value()?.parse()?);
         } else if option.path.is_ident("scope") && scope.is_none() {
             scope = Some(option.value()?.parse()?);
+        } else if option.path.is_ident("scope_guard") && scope_guard.is_none() {
+            scope_guard = Some(option.value()?.parse()?);
         } else if option.path.is_ident("guard") && guard.is_none() {
             guard = Some(option.value()?.parse()?);
         } else if option.path.is_ident("name") && name.is_none() {
@@ -124,19 +127,33 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let wait = asynchronous.map(|_| quote!(.await));
     let mut parameters = signature.inputs.iter();
     let scoped = scope.is_some();
+    if let Some(check) = &scope_guard
+        && !scoped
+    {
+        return Err(syn::Error::new(check.span(), "scope_guard requires scope"));
+    }
     if let Some(scope) = scope {
+        let application_check = scope_guard.map(|check| {
+            quote! {
+                match #check(&auth) {
+                    ::core::result::Result::Ok(()) => (),
+                    ::core::result::Result::Err(error) => return ::core::result::Result::Err(error),
+                }
+            }
+        });
         let body = &function.block;
         function.block = if asynchronous.is_some() {
             syn::parse_quote!({
                 const __CANIC_SCOPE: &str = #scope;
                 let auth = ::canic::auth::session::with_authorization(__CANIC_SCOPE, |identity| identity);
                 let _ = &auth;
+                #application_check
                 #body
             })
         } else {
             syn::parse_quote!({
                 const __CANIC_SCOPE: &str = #scope;
-                ::canic::auth::session::with_authorization(__CANIC_SCOPE, |auth| { let _ = &auth; #body })
+                ::canic::auth::session::with_authorization(__CANIC_SCOPE, |auth| { let _ = &auth; #application_check #body })
             })
         };
     }

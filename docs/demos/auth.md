@@ -407,6 +407,27 @@ fn get_me() -> Option<MyProfile> {
 }
 ```
 
+A scoped query or update returning `Result<T, E>` can select a synchronous
+`scope_guard` with signature `fn(&Authorization) -> Result<(), E>`. Canic
+passes the handler’s admitted authorization to it before entering the body.
+A missing session or scope still rejects the call. An application refusal
+returns the guard’s error through the ordinary Wire response.
+
+```rust
+fn project_owner(auth: &canic::auth::session::Authorization) -> Result<(), ProjectError> {
+    ops::require_project_owner(auth.subject()).map(|_| ())
+}
+
+#[canic::query(scope = "read", scope_guard = project_owner, reply_limits = PROJECT_CREATE)]
+fn get_beneficiary(id: Ulid) -> Result<BeneficiaryView, ProjectError> {
+    ops::beneficiary::get(id).map(Into::into)
+}
+```
+
+The same guard can protect a `scope = "write"` update. A separate `guard = …`
+still runs before decoding. After an await, explicitly recheck the session and
+any application ownership that can change before issuing the next effect.
+
 For Toko, change `get_my_route(session: SessionView)` to `get_my_route()`
 and use `Identity::from_authenticated_subject(auth.issuer(), auth.subject())?`.
 Change `register(session: SessionView, name: String)` to `register(name: String)`
