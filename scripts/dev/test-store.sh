@@ -60,7 +60,7 @@ if [[ "$scope" == all || "$scope" == directory ]]; then
     build recycled-miner ex-miner-pool-miner
     build dormant canic-dormant
     build role-root canic-root --features role-issuer
-    build directory canic-directory-witness --manifest qualification/Cargo.toml --features placement,role-probe
+    build directory canic-directory-witness --manifest qualification/Cargo.toml --features placement,role-probe,funding
 fi
 if [[ "$scope" == directory ]]; then
     build pool-root canic-root --features sharding

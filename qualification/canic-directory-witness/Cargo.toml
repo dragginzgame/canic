@@ -14,17 +14,18 @@ category = "tests"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+funding = ["dep:canic-management", "dep:canic-management-protocol", "dep:ic-timers"]
 placement = ["canic/sharding"]
 role-probe = ["canic/role-attestation"]
 
 [dependencies]
 canic = { workspace = true, features = ["lifecycle", "method", "readiness", "topology", "storage"] }
-canic-management.workspace = true
-canic-management-protocol = { workspace = true, features = ["standby"] }
+canic-management = { workspace = true, optional = true }
+canic-management-protocol = { workspace = true, features = ["standby"], optional = true }
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
 ic-storage.workspace = true
-ic-timers.workspace = true
+ic-timers = { workspace = true, optional = true }
 
 [dev-dependencies]
 toko-tooling.workspace = true

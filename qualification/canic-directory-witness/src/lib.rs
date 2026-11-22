@@ -7,6 +7,7 @@ use canic::topology::directory::{
 use ic_platform_types::Principal;
 use ic_storage::DefaultMemoryImpl;
 
+#[cfg(feature = "funding")]
 mod funding;
 mod peer;
 #[cfg(feature = "role-probe")]
@@ -26,14 +27,18 @@ fn open(installation: Option<Installation>) {
         "hub",
         &[
             KEY,
+            #[cfg(feature = "funding")]
             funding::KEY,
             #[cfg(feature = "role-probe")]
             role_probe::KEY,
         ],
         16,
     );
-    ic_timers::initialize().expect("timer runtime");
-    canic_management::funding::open(&runtime, funding::KEY, installation.is_some());
+    #[cfg(feature = "funding")]
+    {
+        ic_timers::initialize().expect("timer runtime");
+        canic_management::funding::open(&runtime, funding::KEY, installation.is_some());
+    }
     #[cfg(feature = "role-probe")]
     let pin = installation.as_ref().map(|i| match i {
         Installation::Service(service) => (
