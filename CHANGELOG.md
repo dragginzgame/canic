@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.257.0] - 2026-11-22
+
+Scoped endpoints can read the issuer-attested application identifier with
+`auth.user_id()`. A session issued before registration can return `None`.
+Apps interpret the bytes and continue to select their own shard routing key.
+
+```sh
+# Build the receiver and check its declared Wire endpoints from the app directory.
+canic app build
+canic app check-wire
+```
+
+Application parents can fund selected direct children under a finite grant.
+The child checks its own balance once a minute. The parent pays the fixed amount
+and retains the debit across retries and upgrades. For a bound funding edge:
+
+```sh
+canic fleet canister plan-funding worker --budget-cycles 400000000000 --expires-at-ns "$DEADLINE_NS"
+```
+
+Shard assignments are always durable. Every receiver hub opens Canic’s route
+index on a fresh installation and reopens it on upgrade. Signup calls
+`sharding::routes::assign_shard`. Reads call `sharding::routes::get_shard`
+and return `None` for a subject without an assignment. The former
+`topology::get_shard` roster selector has been removed.
+[Installed hub example](qualification/canic-shard-hub/src/routes.rs).
+
 ## [0.256.0] - 2026-11-22
 
 The product and qualification lockfiles select IC DB and its macros at 0.27.1.

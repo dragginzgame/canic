@@ -379,10 +379,16 @@ fn spare_counts() -> Option<stored::SpareCounts> {
 // guard  : Root controller
 // limits : default Wire limits
 #[canic::update(contract = stored::ConfigureChildFunding, guard = controller)]
-fn configure_child_funding(
+async fn configure_child_funding(
     input: stored::ChildFunding,
 ) -> Result<stored::ChildFundingStatus, String> {
-    sharding::funding::configure(input)
+    if input.parent == ic_platform_runtime::system::canister_self() {
+        return sharding::funding::configure(input);
+    }
+    sharding::funding::check_parent(input.parent)?;
+    canic::method::call::<stored::ConfigureChildFunding>(input.parent, 15, &input)
+        .await
+        .map_err(|_| "parent funding approval pending")?
 }
 
 // stop_child_funding
@@ -396,6 +402,21 @@ fn stop_child_funding(
     sharding::funding::stop(child)
 }
 
+// stop_application_child_funding
+// Revoke future payments at the managed parent that owns the grant.
+// guard  : Root controller
+// limits : default Wire limits
+#[canic::update(contract = stored::StopApplicationChildFunding, guard = controller)]
+async fn stop_application_child_funding(
+    input: (ic_platform_types::Principal, ic_platform_types::Principal),
+) -> Result<stored::ChildFundingStatus, String> {
+    let (parent, child) = input;
+    sharding::funding::check_parent(parent)?;
+    canic::method::call::<stored::StopChildFunding>(parent, 10, &child)
+        .await
+        .map_err(|_| "parent revocation pending")?
+}
+
 // fund_placement
 // Recover or pay for the original demand under a requester-funded grant.
 // guard  : exact approved hub checked before reading or changing any assignment
@@ -405,4 +426,13 @@ async fn fund_placement(
     input: (canic::sharding::payment::Demand, u128),
 ) -> Result<canic::sharding::payment::Payment, String> {
     sharding::payment::fund(input.0, input.1).await
+}
+
+// grow_shard
+// Reserve or recover one shard generation for the named hub-local pool ordinal.
+// guard  : approved hub, checked against the named pool
+// limits : 1 KiB request and reply
+#[canic::update(contract = canic::sharding::GrowShard, guard = hub)]
+fn grow_shard(input: (String, u8)) -> (Placement, u32) {
+    sharding::grow_shard(&input.0, input.1)
 }

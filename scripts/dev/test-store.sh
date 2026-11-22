@@ -77,7 +77,8 @@ if [[ "$scope" == user-directory ]]; then
     exit
 fi
 if [[ "$scope" == all || "$scope" == sharding ]]; then
-    cargo test --locked -p canic --features sharding sharding::tests
+    cargo check --locked -p canic --features receiver-role --test durable_routes --target wasm32-unknown-unknown
+    cargo test --locked -p canic --features sharding,storage sharding::
     cargo test --locked -p canic-management --features sharding placement::
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-db-witness --features managed-fixture --output target/store/pool-db.wasm --json > target/store/pool-db.json
     build pool-root canic-root --features sharding

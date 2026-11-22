@@ -7,6 +7,7 @@ use canic::topology::directory::{
 use ic_platform_types::Principal;
 use ic_storage::DefaultMemoryImpl;
 
+mod funding;
 mod peer;
 #[cfg(feature = "role-probe")]
 mod role_probe;
@@ -25,11 +26,14 @@ fn open(installation: Option<Installation>) {
         "hub",
         &[
             KEY,
+            funding::KEY,
             #[cfg(feature = "role-probe")]
             role_probe::KEY,
         ],
         16,
     );
+    ic_timers::initialize().expect("timer runtime");
+    canic_management::funding::open(&runtime, funding::KEY, installation.is_some());
     #[cfg(feature = "role-probe")]
     let pin = installation.as_ref().map(|i| match i {
         Installation::Service(service) => (
@@ -124,12 +128,19 @@ fn unique_service(role: String) -> Option<(u64, Result<Principal, String>)> {
     })
 }
 
-// route_shard
-// Read the local route for an unseen principal in the named pool.
-// limits : default
+// pool_children
+// List acknowledged direct shards for the named pool.
+// guard  : public qualification observation
+// limits : default Wire limits
 #[canic::query]
-fn route_shard(input: (String, Principal)) -> Option<Principal> {
-    canic::topology::get_shard(&input.0, input.1).ok()
+fn pool_children(pool: String) -> Vec<Principal> {
+    DIRECTORY.with_borrow(|index| {
+        index
+            .as_ref()
+            .expect("open index")
+            .acknowledged_shards(&pool)
+            .collect()
+    })
 }
 
 // Accept a directory update under the retained installer authority.

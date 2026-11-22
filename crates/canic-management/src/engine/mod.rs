@@ -674,6 +674,28 @@ async fn management_completion(
     .await
 }
 
+pub(crate) async fn deposit_cycles(
+    child: ic_platform_types::Principal,
+    amount: u64,
+) -> (bool, Option<u128>) {
+    use ic_platform_protocol::management as mgmt;
+    let args = mgmt::CanisterArgs { canister_id: child }
+        .encode(1024)
+        .expect("bounded deposit request");
+    let result = management_completion("deposit_cycles", args, amount.into()).await;
+    let (success, refund) = match result {
+        Ok(completion) => {
+            let (outcome, refund) = completion.into_parts();
+            let success = matches!(outcome, Outcome::Reply(ref bytes) if
+                mgmt::decode_empty_response(bytes, MANAGEMENT_LIMITS).is_ok())
+                && refund == Some(0);
+            (success, refund)
+        }
+        Err(_) => (false, None),
+    };
+    (success, refund)
+}
+
 async fn management(method: &str, bytes: Vec<u8>, cycles: u128) -> Result<Vec<u8>, Failure> {
     management_completion(method, bytes, cycles)
         .await

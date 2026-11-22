@@ -1002,6 +1002,14 @@ async fn fresh_user_shard_grant(
     root: &Client<'_>,
     store: &Client<'_>,
 ) -> (CanisterId, stored::ShardPool) {
+    grant_with_child(root, store, "pool-db.wasm").await
+}
+
+async fn grant_with_child(
+    root: &Client<'_>,
+    store: &Client<'_>,
+    child_wasm: &str,
+) -> (CanisterId, stored::ShardPool) {
     let pic = root.pic;
     let hub = pic.create_canister().await;
     pic.add_cycles(hub, 50_000_000_000_000).await;
@@ -1013,7 +1021,7 @@ async fn fresh_user_shard_grant(
         None,
     )
     .await;
-    let child = std::fs::read(artifacts().join("pool-db.wasm")).unwrap();
+    let child = std::fs::read(artifacts().join(child_wasm)).unwrap();
     let manifest = store.publish_named("user_shard", "capacity", &child).await;
     pic.set_controllers(store.id, Some(root.operator), vec![root.id])
         .await
@@ -1387,6 +1395,194 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
     pic.tick().await;
     assert_eq!(counts().await, 1);
     assert!(pay(3, maximum).await.is_err());
+    assert_eq!(
+        owner.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
+    let (_, binary) = support::inputs();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
+    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let (root, store) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
+    let (hub, mut grant) = grant_with_child(&root, &store, "hub.wasm").await;
+    use canic::{
+        method::Contract,
+        sharding::standby::{Asset, Refill, RefillStandby},
+    };
+    root.update::<_, Result<(), management::Refusal>>(
+        "configure_capacity",
+        stored::CONFIGURE_CAPACITY,
+        &stored::SubnetCapacity {
+            root: root.id.to_text(),
+            max_children: 2,
+        },
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
+    let Asset::Empty(spare) = root
+        .update::<_, Result<Asset, String>>(
+            RefillStandby::NAME,
+            RefillStandby::ID,
+            &Refill {
+                root: root.id.to_text().parse().unwrap(),
+                sequence: 0,
+                cycles: management::CREATION_CYCLES,
+                expires_at_ns: grant.expires_at_ns,
+            },
+            RefillStandby::REPLY,
+        )
+        .await
+        .unwrap()
+    else {
+        panic!("expected available spare")
+    };
+    grant.keys_per_shard = 2;
+    configure(&root, &grant).await.unwrap();
+    let grow = async |caller, ordinal| {
+        pic.update_call(
+            root.id,
+            caller,
+            sharding::GrowShard::NAME,
+            sharding::GrowShard::encode_request(&("user_shard".into(), ordinal)).unwrap(),
+        )
+        .await
+    };
+    assert!(grow(root.operator, 0).await.is_err());
+    let skipped = grow(hub, 1).await.unwrap();
+    assert_eq!(
+        sharding::GrowShard::decode_reply(&skipped).unwrap(),
+        (Placement::GrowthRefused, 2)
+    );
+    let request = |name: &str| {
+        ic_wire::encode(
+            &(),
+            ic_wire::Encoding::Frame {
+                method: ic_wire::method_id(name),
+                direction: ic_wire::Direction::Request,
+            },
+            sharding::LIMITS,
+        )
+        .unwrap()
+    };
+    let response = |name: &str| ic_wire::Encoding::Frame {
+        method: ic_wire::method_id(name),
+        direction: ic_wire::Direction::Response,
+    };
+    let register = async |caller| {
+        for _ in 0..5 {
+            let raw = pic
+                .update_call(hub, caller, "register_local", request("register_local"))
+                .await
+                .unwrap();
+            let result: Placement =
+                ic_wire::decode(&raw, response("register_local"), sharding::LIMITS).unwrap();
+            if !matches!(result, Placement::Pending(_) | Placement::Busy) {
+                return result;
+            }
+            settle(pic).await;
+        }
+        panic!("growth remained pending");
+    };
+    let alice = CanisterId::self_authenticating(b"alice");
+    let bob = CanisterId::self_authenticating(b"bob");
+    let carol = CanisterId::self_authenticating(b"carol");
+    let _lost = pic
+        .submit_call(hub, alice, "register_local", request("register_local"))
+        .await
+        .unwrap();
+    let first = register(alice).await;
+    let first_id = first.assigned_target().unwrap().unwrap().1;
+    assert_eq!(first_id, spare);
+    pic.stop_canister(root.id, Some(root.operator))
+        .await
+        .unwrap();
+    assert_eq!(register(bob).await, first);
+    pic.start_canister(root.id, Some(root.operator))
+        .await
+        .unwrap();
+    let pending = pic
+        .update_call(hub, carol, "register_local", request("register_local"))
+        .await
+        .unwrap();
+    assert!(matches!(
+        ic_wire::decode::<Placement>(&pending, response("register_local"), sharding::LIMITS)
+            .unwrap(),
+        Placement::Pending(_)
+    ));
+    settle(pic).await;
+    // Both requests may deliver to the installed shard. Lose one reply after delivery.
+    let _lost_write = pic
+        .submit_call(hub, carol, "register_local", request("register_local"))
+        .await
+        .unwrap();
+    let second = register(carol).await;
+    let second_id = second.assigned_target().unwrap().unwrap().1;
+    assert_eq!(register(carol).await, second);
+    assert!(
+        pic.update_call(
+            hub,
+            CanisterId::anonymous(),
+            "register_local",
+            request("register_local")
+        )
+        .await
+        .is_err()
+    );
+    assert_ne!(first_id, second_id);
+    assert_eq!(
+        register(CanisterId::self_authenticating(b"dave")).await,
+        second
+    );
+    assert_eq!(
+        register(CanisterId::self_authenticating(b"eve")).await,
+        Placement::Full
+    );
+    for shard in [first_id, second_id] {
+        let raw = pic
+            .query_call(
+                CanisterId::from_slice(shard.as_slice()),
+                alice,
+                "record_count",
+                request("record_count"),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            ic_wire::decode::<u32>(&raw, response("record_count"), sharding::LIMITS).unwrap(),
+            2
+        );
+    }
+    canic_qualification::upgrade_stopped(pic, root.id, wasm, vec![], Some(root.operator))
+        .await
+        .unwrap();
+    assert_eq!(register(carol).await, second);
+    pic.stop_canister(root.id, Some(root.operator))
+        .await
+        .unwrap();
+    canic_qualification::upgrade_stopped(
+        pic,
+        hub,
+        std::fs::read(artifacts().join("hub.wasm")).unwrap(),
+        vec![],
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(register(alice).await, first);
+    let raw = pic
+        .query_call(hub, alice, "local_route", request("local_route"))
+        .await
+        .unwrap();
+    assert_eq!(
+        ic_wire::decode::<Option<_>>(&raw, response("local_route"), sharding::LIMITS).unwrap(),
+        Some(first_id)
+    );
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

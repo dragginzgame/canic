@@ -645,7 +645,7 @@ impl FleetConfig {
 }
 
 impl FleetConfig {
-    /// Resolve a finite payment grant from a declared direct Root-to-service edge.
+    /// Resolve a finite payment grant from a declared direct parent-to-child edge.
     /// # Errors
     /// Requires bound principals, a configured threshold and amount, sufficient budget and a future deadline.
     pub fn child_funding(
@@ -668,10 +668,15 @@ impl FleetConfig {
             .canisters
             .get(name)
             .ok_or_else(|| Error::Invalid(format!("unknown child {name:?}")))?;
-        let parent = child.parent.as_ref().and_then(|p| self.canisters.get(p))
-            .filter(|p| p.role.as_deref() == Some("root")).ok_or_else(|| Error::Invalid(format!(
-                "funding {name:?} requires its declared parent to own the payment; this adapter pays from Root"
-            )))?;
+        let parent = child
+            .parent
+            .as_ref()
+            .and_then(|p| self.canisters.get(p))
+            .ok_or_else(|| {
+                Error::Invalid(format!(
+                    "funding {name:?} requires a declared direct parent"
+                ))
+            })?;
         if budget_cycles < *amount_cycles || expires_at_ns <= crate::now()? {
             return Err(Error::Invalid(format!(
                 "budget_cycles={budget_cycles} must cover amount_cycles={amount_cycles} and expires_at_ns={expires_at_ns} must be in the future"

@@ -102,3 +102,12 @@ async fn coordinate_write(
     }
     Ok((auth.issuer(), auth.subject()))
 }
+
+// application_user_id
+// Return the application binding from the admitted session.
+// scope  : read
+// limits : default Wire limits for the fixture ID
+#[canic::query(scope = "read")]
+fn application_user_id() -> Option<Vec<u8>> {
+    auth.user_id().map(<[u8]>::to_vec)
+}

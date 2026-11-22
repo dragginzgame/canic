@@ -24,13 +24,33 @@ pub fn signed(
     subject: Principal,
     scopes: &[&str],
 ) -> (CanisterId, SessionInput) {
+    signed_with_binding(
+        now,
+        device,
+        slot,
+        issuer,
+        subject,
+        scopes,
+        Some(b"qualification-binding"),
+    )
+}
+
+pub fn signed_with_binding(
+    now: u64,
+    device: u8,
+    slot: u8,
+    issuer: Principal,
+    subject: Principal,
+    scopes: &[&str],
+    binding: Option<&[u8]>,
+) -> (CanisterId, SessionInput) {
     let key = SigningKey::from_bytes(&[7; 32]);
     assert_eq!(key.verifying_key().to_bytes(), KEY);
     let browser = SigningKey::from_bytes(&[device; 32])
         .verifying_key()
         .to_bytes();
     let claims = encode_claims(&PortableClaims {
-        ext: Some(b"qualification-binding".to_vec()),
+        ext: binding.map(<[u8]>::to_vec),
         mechanism: PortableMechanism::Ed25519,
         audience: canic_auth_witness::audience(),
         issuer,

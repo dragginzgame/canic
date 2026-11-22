@@ -6,6 +6,7 @@
 /// `pre_upgrade()` runs after the receiver seals its checkpoint. Reinstall runs init.
 /// Omit `auth_read` to omit the portable session endpoints. Reserved keys preserve
 /// an existing storage directory when an application stops using an allocation.
+/// Every hub opens Canic’s durable shard assignments in its Storage bootstrap.
 /// The parent cell stores the principal from the approved topology envelope.
 /// The hub config cell instead retains the routing Root and install context.
 #[macro_export]

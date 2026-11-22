@@ -19,9 +19,12 @@ role-probe = ["canic/role-attestation"]
 
 [dependencies]
 canic = { workspace = true, features = ["lifecycle", "method", "readiness", "topology", "storage"] }
+canic-management.workspace = true
+canic-management-protocol = { workspace = true, features = ["standby"] }
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
 ic-storage.workspace = true
+ic-timers.workspace = true
 
 [dev-dependencies]
 toko-tooling.workspace = true

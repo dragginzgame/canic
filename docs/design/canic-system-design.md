@@ -937,18 +937,29 @@ Read the retained binding or pending operation before ranking, and recheck
 capacity when committing. This selects placement without rebalancing accounts
 when a new shard appears.
 
-For a rebuildable cache, the parent can route an unseen key directly over its
-acknowledged direct shards of the requested pool. Toko discovery at `db12a51`
-ranks the full SHA-256 digest of the exact domain, one-byte key length, key
-and child principal bytes. The greater principal breaks a tie. Canic exposes
-this local synchronous selection as `topology::get_shard(pool_name, principal)`.
-Host already binds the shard component name in the pool approval. Root carries that
-exact name in each shared-shard hop. The hub retains it on delivery and routes
-only after acknowledgement. Other placement kinds carry no shard pool. Apps
-can keep the name in one protocol constant. Directory delivery uses v2 frames. The v3 retained index records withdrawn generations under the same 10 KiB budget. Old index records refuse reopen. A withdrawal that cannot be saved leaves retirement pending.
-The lookup writes no claim. The app validates its
-keys and owns cache misses after membership changes. Root's durable placement
-continues to use the legacy scoring and retained assignments described above.
+Shard assignments are durable from the first reservation. Directory delivery
+records acknowledged membership of each named pool and withdrawn generations.
+Adding a member admits new capacity. A lookup for an unassigned subject returns
+`None`; a write reserves the subject's first destination. Fresh receiver hubs
+open the Canic route index as part of their ordinary Storage bootstrap, including
+database-backed hubs. Upgrades reopen the same index.
+
+For hub-local routing, the Canic library installed in the parent owns the
+indexed account assignments and per-shard occupancy, including pending writes.
+The application supplies the authenticated subject and owns its business records. Under the same named grant it requests
+the next zero-based capacity ordinal only when all local capacity is reserved.
+Root owns one allocation per ordinal and returns the grant’s keys-per-shard
+limit. Existing accounts keep their routes across growth. A grant that has
+started either form of placement cannot mix Root-owned keys and hub-local
+occupancy. Legacy `377fbce` in `domain/policy/pure/placement/sharding` retains
+assignments before ranking new candidates. Canic reuses that rule locally and
+keeps creation and reserve custody at Root. Applications call
+`sharding::routes::assign_shard(pool, subject, authorize)` on registration and
+`sharding::routes::get_shard(pool, subject)` on reads. Canic requests and recovers
+the original growth ordinal internally. The application can distinguish a reserved
+route from a completed business write through its own admission or provisioning state. Root persists this mode in the PLS3 pool record.
+Account counts for this mode belong to the hub. Managed draining requires a
+future hub evacuation acknowledgement and remains unavailable for these pools.
 
 The local installed witness exercises this contract on a fresh Root with the
 `sharding` feature. It starts with a two-shard grant and an independently installed hub.
@@ -1839,7 +1850,8 @@ The agreed application interface is a Rust function with `#[canic::query]` or
 `#[canic::update]` and Canic's `method` feature. Public functions use standard
 Wire defaults. A private function selects `scope = "write"` (or its required
 scope). Its Rust parameters describe only the Wire request. The attribute binds
-`auth` locally to the verified caller's issuer, subject and required scope.
+`auth` locally to the verified caller's issuer, subject, optional issuer-attested application ID and required scope.
+The application interprets `auth.user_id()` and chooses its routing key. Reauthorization also checks the original ID.
 An async invocation retains its own binding and rechecks before further effects. An existing shared protocol selects
 `contract = path::Type` to retain its original ID, directional budgets and
 types. Both declarations use the same Canic codec and Platform entrypoint.
@@ -2601,8 +2613,18 @@ Root can pay its directly installed named services. The operator binds the
 configured amounts, child principal, lifetime budget and deadline with
 `fleet canister plan-funding`, then submits that approval to Root. An exact
 retry preserves spent budget. Uncertain deposits close the grant and retain
-their exposure. Ongoing payments from an application parent still require
-that parent’s own spending authority. Further qualification is tracked in [Canic #78](https://github.com/dragginzgame/canic/issues/78).
+their exposure. For an application parent the approved path follows legacy
+`377fbce` (`workflow/runtime/cycles` and `workflow/rpc/request/handler/nonroot_cycles.rs`).
+An opted-in child observes its own balance. Below the threshold it requests its
+fixed payment from its parent, retaining the same operation on retry. The parent
+checks the actual caller against its current direct child and funding grant,
+charges its own finite budget before dispatch and retains the result. Removing
+the edge requires revoking the live grant. An unresolved deposit retains its
+debit. Each parent retains at most the supported subnet child count in immutable
+grants. A new configuration file alone cannot replace a live budget. The
+installed witness checks payment replay, parent and child upgrades, external
+funding above the threshold, and revocation through Root.
+[Funding qualification](../../qualification/canic-qualification/tests/store_root_tests/directory_tests/funding.rs)
 
 Keep Root as the management owner unless measured dispatch delay across
 independent pools warrants delegation. Measure time from approval to Root

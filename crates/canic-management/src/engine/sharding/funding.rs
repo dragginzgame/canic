@@ -1,14 +1,11 @@
 //! Recurring deposits from Root to its directly installed named services.
-use super::super::{
-    MANAGEMENT_LIMITS, STATE, api, directory, management, management_completion, reserved_cycles,
-};
+use super::super::{MANAGEMENT_LIMITS, STATE, api, directory, management, reserved_cycles};
 use canic_management_protocol::{
     Phase,
     children::ChildId,
     stored::{ChildFunding, ChildFundingStatus},
 };
 use ic_platform_protocol::management as mgmt;
-use ic_platform_runtime::call::Outcome;
 use ic_platform_types::Principal;
 use ic_timers::{Lifetime, Observation, OnceDemand, OnceNext, OnceResult};
 use serde::{Deserialize, Serialize};
@@ -168,7 +165,7 @@ async fn deposit(slot: ChildId, rule: &ChildFunding) -> Result<bool, ()> {
     }
     .encode(1024)
     .map_err(|_| ())?;
-    let raw = management("canister_status", args.clone(), 0)
+    let raw = management("canister_status", args, 0)
         .await
         .map_err(|_| ())?;
     let status = mgmt::decode_canister_status(&raw, MANAGEMENT_LIMITS).map_err(|_| ())?;
@@ -193,17 +190,7 @@ async fn deposit(slot: ChildId, rule: &ChildFunding) -> Result<bool, ()> {
         status.refund_cycles = None;
         s.pool.set(s.pools.encode());
     });
-    let result = management_completion("deposit_cycles", args, rule.amount_cycles.into()).await;
-    let (success, refund) = match result {
-        Ok(completion) => {
-            let (outcome, refund) = completion.into_parts();
-            let success = matches!(outcome, Outcome::Reply(ref bytes) if
-                mgmt::decode_empty_response(bytes, MANAGEMENT_LIMITS).is_ok())
-                && refund == Some(0);
-            (success, refund)
-        }
-        Err(_) => (false, None),
-    };
+    let (success, refund) = super::super::deposit_cycles(rule.child, rule.amount_cycles).await;
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().unwrap();
         let status = &mut s.pools.funding.get_mut(&slot).unwrap().status;
@@ -213,4 +200,27 @@ async fn deposit(slot: ChildId, rule: &ChildFunding) -> Result<bool, ()> {
         s.pool.set(s.pools.encode());
     });
     if success { Ok(true) } else { Err(()) }
+}
+
+/// Verify a managed payment owner before forwarding a controller's funding decision.
+/// # Errors
+/// Requires a ready retained child and Root controller authority.
+/// # Panics
+/// Requires an open Root.
+pub fn check_parent(parent: Principal) -> Result<(), String> {
+    if !api::is_controller(&api::caller()) {
+        return Err("controller required".into());
+    }
+    if STATE.with_borrow(|s| {
+        s.as_ref()
+            .expect("open Root")
+            .journal
+            .0
+            .values()
+            .any(|j| j.0.phase == Phase::Ready && j.0.worker.as_deref() == Some(&parent.to_text()))
+    }) {
+        Ok(())
+    } else {
+        Err("funding parent must be a ready managed installation".into())
+    }
 }

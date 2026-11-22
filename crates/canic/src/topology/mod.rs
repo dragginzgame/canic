@@ -15,8 +15,6 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "storage")]
 pub use actor::{attach_parent, parent, require_canister, require_parent, role};
-#[cfg(feature = "storage")]
-pub use directory::retained::{ShardLookupError, get_shard};
 
 /// Check the actual caller against a locally retained topology authority.
 /// # Errors

@@ -68,7 +68,11 @@ enum Command {
     ConfigureChildFunding { approval: String },
     /// Stop future deposits to the named child.
     #[cfg(feature = "sharding")]
-    StopChildFunding { child: Principal },
+    StopChildFunding {
+        child: Principal,
+        #[arg(long)]
+        parent: Option<Principal>,
+    },
     /// Approve the reserve policy from the reviewed fleet plan.
     #[cfg(feature = "sharding")]
     ConfigureStandby { approval: String },
@@ -214,8 +218,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?,
         #[cfg(feature = "sharding")]
         Action::Encode {
-            command: Command::StopChildFunding { child },
+            command:
+                Command::StopChildFunding {
+                    child,
+                    parent: None,
+                },
         } => request::<canic_management_protocol::stored::StopChildFunding>(&child)?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
+            command:
+                Command::StopChildFunding {
+                    child,
+                    parent: Some(parent),
+                },
+        } => request::<canic_management_protocol::stored::StopApplicationChildFunding>(&(
+            parent, child,
+        ))?,
         #[cfg(feature = "sharding")]
         Action::Encode {
             command: Command::ConfigureStandby { approval },
@@ -333,6 +351,12 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     }
     #[cfg(feature = "sharding")]
     if let Ok(reply) = canic_management_protocol::stored::StopChildFunding::decode_reply(bytes) {
+        return Ok(serde_json::to_value(reply?)?);
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) =
+        canic_management_protocol::stored::StopApplicationChildFunding::decode_reply(bytes)
+    {
         return Ok(serde_json::to_value(reply?)?);
     }
     #[cfg(feature = "sharding")]

@@ -1615,6 +1615,17 @@ project_registry = { id = "ryjl3-tyaaa-aaaaa-aaaba-cai" }
     );
     assert!(fleet.child_funding("project_registry", 400, 1).is_err());
     assert!(fleet.child_funding("project", 400, u64::MAX).is_err());
+    let project_rule = bound.replace("child = \"project_registry\"", "child = \"project\"")
+        + "project = { id = \"r7inp-6aaaa-aaaaa-aaabq-cai\" }\n";
+    std::fs::write(&path, project_rule).unwrap();
+    let project = load_config(&path)
+        .unwrap()
+        .select(None, None)
+        .unwrap()
+        .config
+        .child_funding("project", 400, u64::MAX)
+        .unwrap();
+    assert_eq!(project.parent, rule.child);
     for (quantity, cycles) in [
         ("10.3T", 10_300_000_000_000),
         ("0.1B", 100_000_000),

@@ -96,6 +96,50 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
         session.ext.as_ref().unwrap().as_slice(),
         b"qualification-binding"
     );
+    let application_id = async |caller| {
+        let method = ic_wire::method_id("application_user_id");
+        let frame = |direction| ic_wire::Encoding::Frame { method, direction };
+        let bytes = ic_wire::encode(
+            &(),
+            frame(ic_wire::Direction::Request),
+            canic::method::LIMITS,
+        )
+        .unwrap();
+        let reply = pic
+            .query_call(target, caller, "application_user_id", bytes)
+            .await
+            .unwrap();
+        ic_wire::decode::<Option<Vec<u8>>>(
+            &reply,
+            frame(ic_wire::Direction::Response),
+            canic::method::LIMITS,
+        )
+        .unwrap()
+    };
+    assert_eq!(
+        application_id(browser).await.as_deref(),
+        Some(b"qualification-binding".as_slice())
+    );
+    let (new_user, new_proof) = credential::signed_with_binding(
+        now,
+        11,
+        2,
+        grant.issuer,
+        Principal::from_slice(&[3]),
+        &["read"],
+        None,
+    );
+    pic.advance_time(Duration::from_secs(3)).await;
+    pic.tick().await;
+    admit(
+        pic,
+        target,
+        new_user,
+        &EstablishSession::encode_request(&new_proof).unwrap(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(application_id(new_user).await, None);
     exercise_coordinator(pic, target, browser, grant.issuer, session.subject, now).await;
     let issue = issuer_test::request(1);
     let issued = issuer_test::call(&f, issuer_test::account(), issuer::ISSUE, &issue)
@@ -202,6 +246,11 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
     assert!(read(pic, target, browser).await.is_err());
     receiver_refresh(pic, target, f.installer).await.unwrap();
     assert_eq!(read(pic, target, browser).await.unwrap(), session);
+    assert_eq!(
+        application_id(browser).await.as_deref(),
+        Some(b"qualification-binding".as_slice())
+    );
+    assert_eq!(application_id(new_user).await, None);
     let reply = pic
         .update_call(
             target,

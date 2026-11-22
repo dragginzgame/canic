@@ -103,9 +103,9 @@ pub trait PlainMount<Marker> {
     const CHECK: () = ();
 }
 impl<M: Contract> PlainMount<()> for M {}
-#[cfg(feature = "topology")]
+#[cfg(all(feature = "topology", feature = "method"))]
 impl<M: crate::topology::attestation::RoleMethod> PlainMount<AttestedMount> for M {}
-#[cfg(feature = "topology")]
+#[cfg(all(feature = "topology", feature = "method"))]
 #[doc(hidden)]
 pub enum AttestedMount {}
 

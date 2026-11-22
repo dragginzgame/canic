@@ -422,3 +422,14 @@ impl canic::method::Contract for StopChildFunding {
     type Input = ic_platform_types::Principal;
     type Output = Result<ChildFundingStatus, String>;
 }
+
+/// Stop one payment edge at a managed application parent through Root.
+#[cfg(feature = "standby")]
+pub struct StopApplicationChildFunding;
+#[cfg(feature = "standby")]
+impl canic::method::Contract for StopApplicationChildFunding {
+    const NAME: &'static str = "stop_application_child_funding";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    type Input = (ic_platform_types::Principal, ic_platform_types::Principal);
+    type Output = Result<ChildFundingStatus, String>;
+}

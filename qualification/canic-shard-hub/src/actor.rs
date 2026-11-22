@@ -4,7 +4,7 @@ use ic_platform_types::Principal;
 use sha2::{Digest, Sha256};
 use std::cell::Cell;
 
-thread_local! {static ROOT: Cell<Option<Principal>> = const {Cell::new(None)};}
+thread_local! {pub(super) static ROOT: Cell<Option<Principal>> = const {Cell::new(None)};}
 const KEY: &str = "hub.root.v1";
 
 fn open(initial: Option<Principal>) {
@@ -13,9 +13,11 @@ fn open(initial: Option<Principal>) {
         ic_storage::DefaultMemoryImpl::default(),
         fresh,
         "hub",
-        &[KEY],
-        4,
+        &[KEY, super::routes::KEY, "hub.shards.v1", "hub.owners.v1"],
+        8,
     );
+    sharding::routes::open(&storage, "hub.shards.v1", "hub.owners.v1", initial);
+    super::routes::open(&storage, fresh);
     let cell = canic::storage::cell(&storage, KEY, 29, initial.map(|p| p.as_slice().to_vec()));
     ROOT.set(Some(
         Principal::try_from_slice(cell.get()).expect("retained Root"),
@@ -116,7 +118,7 @@ fn key() -> sharding::Key {
 }
 
 /// Require an identified caller before deriving its placement key.
-fn user() -> Result<(), &'static str> {
+pub(super) fn user() -> Result<(), &'static str> {
     (runtime::system::caller() != Principal::anonymous())
         .then_some(())
         .ok_or("authenticated user")

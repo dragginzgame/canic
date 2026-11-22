@@ -13,6 +13,8 @@ pub enum Demand {
     Instance(Key),
     /// Named worker pool and ordinal.
     Worker(String, u8),
+    /// A whole shared shard for the hub’s locally retained routes.
+    ShardCapacity(String, u8),
 }
 
 /// Exact quote retained by Root for the original allocation.

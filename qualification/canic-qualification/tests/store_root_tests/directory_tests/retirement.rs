@@ -101,10 +101,9 @@ pub(super) async fn exercise(
         id: CanisterId::from_text(&id).unwrap(),
         operator: root.id,
     };
-    let route = async || -> Option<CanisterId> {
-        query_service(pic, user, "route_shard", ("users", root.operator)).await
-    };
-    assert_eq!(route().await, Some(child.id));
+    let members =
+        async || -> Vec<CanisterId> { query_service(pic, user, "pool_children", "users").await };
+    assert_eq!(members().await, [child.id]);
     use canic::topology::directory::WithdrawChild;
     let withdrawal = WithdrawChild::encode_request(&(target.shard, allocation.generation)).unwrap();
     let reply = pic
@@ -115,7 +114,7 @@ pub(super) async fn exercise(
         WithdrawChild::decode_reply(&reply).unwrap(),
         Err("unexpected topology sender".into())
     );
-    assert_eq!(route().await, Some(child.id));
+    assert_eq!(members().await, [child.id]);
     let expiry = child
         .update::<_, Result<u64, String>>(
             "renew_role",
@@ -267,7 +266,7 @@ pub(super) async fn exercise(
             .contains("hub withdrawal unconfirmed")
     );
     pic.start_canister(user, Some(root.id)).await.unwrap();
-    assert_eq!(route().await, Some(child.id));
+    assert_eq!(members().await, [child.id]);
     for phase in [P::InstallIssued, P::Dormant] {
         assert_eq!(advance(&input).await, Ok(phase));
     }
@@ -337,14 +336,20 @@ pub(super) async fn exercise(
         matches!(inventory().await.as_slice(), [(original,Asset::Available(id,_))] if original==&origin && *id==target.shard)
     );
     reopen("available").await;
-    assert_eq!(route().await, None, "returned shard remains discoverable");
+    assert!(
+        members().await.is_empty(),
+        "returned shard remains discoverable"
+    );
     assert!(matches!(worker().await, Placement::Pending(_)));
     settle(pic).await;
     let Placement::Assigned(Allocation { generation, .. }, worker_id) = worker().await else {
         panic!("installed worker")
     };
     assert_eq!(worker_id, child.id.to_text());
-    assert_eq!(route().await, None, "former shard now runs worker code");
+    assert!(
+        members().await.is_empty(),
+        "former shard now runs worker code"
+    );
     assert_ne!(generation, allocation.generation);
     let parent = Client {
         pic,

@@ -104,6 +104,7 @@ pub struct Authorization {
     issuer: Principal,
     subject: Principal,
     scope: &'static str,
+    user_id: Option<Vec<u8>>,
 }
 
 impl Authorization {
@@ -119,7 +120,13 @@ impl Authorization {
         self.subject
     }
 
-    /// Check the original browser, issuer, subject, enrollment and scope before another effect.
+    /// Optional issuer-attested application identifier. The application owns its encoding.
+    #[must_use]
+    pub fn user_id(&self) -> Option<&[u8]> {
+        self.user_id.as_deref()
+    }
+
+    /// Recheck the browser, account, application binding, enrollment and scope before another effect.
     /// # Errors
     /// Refuses when the original account no longer has the declared scope.
     pub fn reauthorize(&self) -> Result<(), SessionReadRefusal> {
@@ -127,7 +134,7 @@ impl Authorization {
             return Err(SessionReadRefusal::AuthorityUnavailable);
         }
         authorized(self.caller, api::time(), self.scope, |r| {
-            if (r.issuer, r.subject) == (self.issuer, self.subject) {
+            if (r.issuer, r.subject) == (self.issuer, self.subject) && r.ext == self.user_id {
                 Ok(())
             } else {
                 Err(SessionReadRefusal::AuthorityUnavailable)
@@ -147,6 +154,7 @@ pub fn authorize(scope: &'static str) -> Result<Authorization, SessionReadRefusa
         caller: r.caller,
         issuer: r.issuer,
         subject: r.subject,
+        user_id: r.ext.clone(),
         scope,
     })
 }

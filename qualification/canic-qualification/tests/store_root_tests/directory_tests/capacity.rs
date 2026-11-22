@@ -253,9 +253,15 @@ pub(super) async fn exercise(
                 let status: (String, Option<Option<u64>>) =
                     query_service(root.pic, parent, "topology_status", child).await;
                 assert_eq!(status.1, Some(Some(2)));
-                let destination: Option<CanisterId> =
-                    query_service(root.pic, parent, "route_shard", ("users", root.operator)).await;
-                assert_eq!(destination, (!dedicated).then_some(child));
+                let children: Vec<CanisterId> =
+                    query_service(root.pic, parent, "pool_children", "users").await;
+                assert_eq!(
+                    children,
+                    (!dedicated)
+                        .then_some(child)
+                        .into_iter()
+                        .collect::<Vec<_>>()
+                );
                 assert_eq!(
                     resolve(root.pic, child).await,
                     Some((2, vec![hub, project]))
@@ -410,17 +416,17 @@ pub(super) async fn separate_hub_pools(
         assert!(children.insert(id));
         assert_eq!(root.pic.get_controllers(parent).await, [root.id]);
         assert_eq!(root.pic.get_controllers(id).await, [root.id]);
-        let route = async |hub| -> Option<CanisterId> {
-            query_service(root.pic, hub, "route_shard", (pool, root.operator)).await
+        let members = async |hub| -> Vec<CanisterId> {
+            query_service(root.pic, hub, "pool_children", pool).await
         };
-        assert_eq!(route(parent).await, Some(id));
-        assert_eq!(route(other).await, None);
+        assert_eq!(members(parent).await, [id]);
+        assert!(members(other).await.is_empty());
         root.pic
             .stop_canister(root.id, Some(root.operator))
             .await
             .unwrap();
-        assert_eq!(route(parent).await, Some(id));
-        assert_eq!(route(other).await, None);
+        assert_eq!(members(parent).await, [id]);
+        assert!(members(other).await.is_empty());
         root.pic
             .start_canister(root.id, Some(root.operator))
             .await

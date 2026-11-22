@@ -5,6 +5,8 @@ mod tests;
 
 mod client;
 pub mod payment;
+#[cfg(feature = "storage")]
+pub mod routes;
 pub mod standby;
 
 /// Optional hub and shard composition for an issuer-qualified account.
@@ -12,8 +14,8 @@ pub mod standby;
 pub mod provisioning;
 
 pub use client::{
-    AssignInstance, AssignShard, LookupInstance, LookupShard, assign, assign_instance, lookup,
-    lookup_instance,
+    AssignInstance, AssignShard, GrowShard, LookupInstance, LookupShard, assign, assign_instance,
+    grow_shard, lookup, lookup_instance,
 };
 use serde::{Deserialize, Serialize};
 

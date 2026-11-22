@@ -108,11 +108,29 @@ same child for the original key. Run `bash scripts/dev/test-store.sh db-roles`.
 
 ## Runtime shard placement
 
+The installed `canic-shard-hub` witness fills two shards while retaining routes
+and pending reservations in Canic’s stable route index on the hub. Every receiver
+hub opens this index during its normal lifecycle. Signup calls
+`sharding::routes::assign_shard` with the configured pool, authenticated subject
+and write authorization check. Reads call `sharding::routes::get_shard` with
+the same pool and subject. Use a fresh hub for this layout.
+The first ordinal claims a reserve and the
+second creates a canister. It checks replay, full-pool refusal, committed shard
+rows, and a local read after hub upgrade with Root stopped.
+Run `bash scripts/dev/test-store.sh sharding`.
+
+Application child funding is exercised by `bash scripts/dev/test-store.sh directory`.
+The installed directory participant contributes one stable key to its existing
+bootstrap, initializes IC Timers and opens `canic_management::funding`. The
+parent mounts configure, stop and request. The child mounts the balance watcher.
+Root forwards the operator's exact grant to the managed parent. Use the Root
+client's `stop-child-funding CHILD --parent PARENT` for revocation.
+
 `bash scripts/dev/test-store.sh directory` exercises Root availability with two
 installed hubs. Each hub requests its first shard while Root is stopped. After
 restart, lookup finds no claim for that key. Retrying through the same hub
 returns a pending allocation and then its matching ready shard. Once the hub has
-received the directory, it can route to that shard while Root is stopped again.
+received the directory, it can list the acknowledged pool member while Root is stopped again.
 The installed assertions check Root as the sole controller of both hub and shard.
 The `miner` suite checks the same controller graph for a reserve-backed worker
 and a freshly created worker.
@@ -169,25 +187,15 @@ and keeps the second slot empty. Native tests check legacy HRW score vectors, fi
 candidate tie breaking, and refusal to resolve replaced generations or principals.
 Run `make store-test` for these and the other installed Store cases.
 
-### Route an unseen principal within a named pool
-
-A hub can keep its pool name in the application protocol and use the same call
-regardless of how many pools its directory contains:
+### Read a subject's retained destination
 
 ```rust
-let destination = canic::topology::get_shard(canic::shard_pool!("discovery_shard"), wallet)?;
+let target = canic::sharding::routes::get_shard(canic::shard_pool!("discovery_shard"), wallet);
 ```
 
-`canic app build` supplies the selected component’s direct children. Native Cargo checks the nearest ancestor `canic.toml` and identifies the hub through its package’s build recipe. Each call site marks the hub Wasm with its required pool. Whole-fleet planning checks the pool kind, component and parent against the selected fleet before approving work.
-
-Use the `component` value from the fleet's shard-pool declaration. Root already
-approves that name and carries it to the hub. The synchronous lookup returns a
-principal from the acknowledged direct shards of that pool. The directory suite
-checks the published binding through an installed Root. Canic's native tests
-cover two pool names with the same child role, an absent directory, pending
-children, and stable routing after reopen. Root currently provisions one shared
-shard pool per Root. The directory's v2 delivery and stored format require
-compatible publishers and fresh indexes.
+The result is `None` until an update assigns the subject. The pool-name macro
+checks the declared component and parent. The installed directory suite
+separately checks acknowledged membership and removal of retired children.
 
 ### Provision an account on its assigned shard
 

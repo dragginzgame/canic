@@ -14,11 +14,12 @@ category = "tests"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-canic = { workspace = true, features = ["lifecycle", "method", "sharding", "storage"] }
+canic = { workspace = true, features = ["lifecycle", "method", "readiness", "sharding", "storage"] }
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
 ic-storage.workspace = true
 ic-wire.workspace = true
+serde.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]

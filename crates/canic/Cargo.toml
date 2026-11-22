@@ -76,16 +76,11 @@ readiness = ["dep:ic-platform-runtime"]
 role-attestation = ["role-verification", "storage"]
 role-verification = ["topology", "method", "dep:ic-platform"]
 sharding = ["dep:ic-platform-runtime", "dep:ic-platform-types"]
-receiver-role = ["auth-receiver-stable", "readiness", "topology"]
+receiver-role = ["auth-receiver-stable", "readiness", "sharding", "topology"]
 stateful-role = ["receiver-role", "db-store"]
 storage = ["dep:ic-storage"]
 timers = ["dep:ic-timers", "lifecycle"]
-topology = [
-    "dep:canic-macros",
-    "dep:ic-platform-types",
-    "dep:ic-platform-runtime",
-    "dep:sha2",
-]
+topology = ["dep:canic-macros", "dep:ic-platform-types", "dep:ic-platform-runtime"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 inventory = { workspace = true, optional = true }
@@ -125,3 +120,7 @@ required-features = ["auth-browser"]
 [[test]]
 name = "named_contract"
 required-features = ["method"]
+
+[[test]]
+name = "durable_routes"
+required-features = ["receiver-role"]

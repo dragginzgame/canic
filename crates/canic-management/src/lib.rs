@@ -8,6 +8,8 @@ pub mod backup;
 
 pub mod endpoint;
 
+pub mod funding;
+
 mod engine;
 #[cfg(feature = "role-issuer")]
 pub use engine::role_issuer;

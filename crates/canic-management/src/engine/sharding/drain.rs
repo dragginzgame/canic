@@ -41,6 +41,9 @@ pub fn inspect_shard(
                 .then_some((slot, ledger))
             })
             .ok_or("unknown shard")?;
+        if pools.local_routes.contains(&ledger.approval.pool) {
+            return Err("live account counts are held by the application hub".into());
+        }
         Ok(canic::sharding::ShardStatus {
             target: ShardTarget {
                 shard,
@@ -74,6 +77,11 @@ pub fn begin_shard_drain(target: &ShardTarget) -> Result<u32, String> {
             .find(|l| l.target_slot(target).is_ok())
             .ok_or("assignment changed")?;
         let slot = ledger.target_slot(target)?;
+        if state.pools.local_routes.contains(&ledger.approval.pool) {
+            return Err(
+                "hub-local routes require an acknowledged evacuation before draining".into(),
+            );
+        }
         let count = ledger.counts[slot.index()];
         if let std::collections::btree_map::Entry::Vacant(entry) = state.pools.draining.entry(slot)
         {

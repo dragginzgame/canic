@@ -188,6 +188,7 @@ async fn installed_publication(scenario: Scenario) {
     } else if matches!(
         scenario,
         Scenario::ThreeServices
+            | Scenario::Descendant
             | Scenario::Funding
             | Scenario::Capacity(_)
             | Scenario::StoppedChild
@@ -446,6 +447,7 @@ async fn installed_publication(scenario: Scenario) {
         let status: (String, Option<Option<u64>>) =
             query_service(pic, child, "topology_status", user).await;
         assert_eq!(status, ("worker".into(), None));
+        funding::application_parent(&root, user, child).await;
         let before = pic.get_stable_memory(child).await;
         for (sender, role, expected) in [
             (outsider, "worker", "unexpected topology sender"),

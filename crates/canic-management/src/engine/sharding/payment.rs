@@ -39,7 +39,7 @@ fn grant(p: &Pools, d: &Demand, caller: Principal) -> Result<(String, u64), Stri
         return Err("requester-funded growth requires an approved subnet limit".into());
     }
     let (name, owner, payer, deadline) = match d {
-        Demand::Shard(name, _) => p.shards.get(name).map(|l| {
+        Demand::Shard(name, _) | Demand::ShardCapacity(name, _) => p.shards.get(name).map(|l| {
             (
                 &l.approval.pool,
                 &l.approval.hub,
@@ -104,7 +104,7 @@ fn valid_quote(quote: &Quote, maximum: u128) -> bool {
 
 fn fresh_budget(pools: &Pools, demand: &Demand) -> bool {
     let (budget, spent) = match demand {
-        Demand::Shard(pool, _) => {
+        Demand::Shard(pool, _) | Demand::ShardCapacity(pool, _) => {
             let ledger = &pools.shards[pool];
             let slots = pools
                 .shard_slots(&ledger.approval)
@@ -130,7 +130,10 @@ fn fresh_budget(pools: &Pools, demand: &Demand) -> bool {
 
 fn place(d: &Demand, paid: Option<Settlement>) -> Placement {
     match d {
-        Demand::Shard(pool, key) => super::assign_shard(pool, *key, paid),
+        Demand::Shard(pool, key) => super::assign_shard(pool, super::Claim::Account(*key), paid),
+        Demand::ShardCapacity(pool, n) => {
+            super::assign_shard(pool, super::Claim::Capacity(*n), paid)
+        }
         Demand::Instance(key) => super::instance(*key, paid),
         Demand::Worker(pool, index) => super::workers::resolve_worker(pool, *index, true, paid),
     }

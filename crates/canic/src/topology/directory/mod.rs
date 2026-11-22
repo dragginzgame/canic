@@ -396,6 +396,17 @@ pub mod retained {
             })
         }
 
+        /// Inspect the pool's acknowledged direct children in the last committed directory.
+        pub fn acknowledged_shards<'a>(
+            &'a self,
+            pool: &'a str,
+        ) -> impl Iterator<Item = Principal> + 'a {
+            self.record.children.iter().filter_map(move |child| {
+                (child.acknowledged.is_some() && child.hop.shard_pool.as_deref() == Some(pool))
+                    .then_some(child.hop.canister)
+            })
+        }
+
         /// Validate the IC caller and branch against this receiver, then commit its local projection.
         /// # Errors
         /// Refuses an invalid publisher, target, role, path or superseded directory.
@@ -549,65 +560,6 @@ pub mod retained {
             let index = cell.as_mut().ok_or("directory unavailable")?;
             crate::topology::require_sender(index.publisher())?;
             Ok(index.withdraw(target)?)
-        })
-    }
-
-    /// Local shard routing failures.
-    #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-    pub enum ShardLookupError {
-        /// The hub has not opened its directory or received its first revision.
-        DirectoryUnavailable,
-        /// No acknowledged direct shard belongs to the requested pool.
-        NoReadyShard,
-    }
-
-    impl std::fmt::Display for ShardLookupError {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            f.write_str(match self {
-                Self::DirectoryUnavailable => "shard directory unavailable",
-                Self::NoReadyShard => "no acknowledged shard in the requested pool",
-            })
-        }
-    }
-
-    impl std::error::Error for ShardLookupError {}
-
-    /// Route a principal to an acknowledged shard of this hub's named pool.
-    /// Use the shard component name from the fleet declaration. Requires no registration.
-    /// # Errors
-    /// Returns a local lookup error if the directory or a matching shard is unavailable.
-    pub fn get_shard(pool_name: &str, principal: Principal) -> Result<Principal, ShardLookupError> {
-        DIRECTORY.with_borrow(|index| {
-            let index = index
-                .as_ref()
-                .ok_or(ShardLookupError::DirectoryUnavailable)?;
-            index
-                .current()
-                .ok_or(ShardLookupError::DirectoryUnavailable)?;
-            let children = index.record.children.iter().filter(|child| {
-                child.acknowledged.is_some() && child.hop.shard_pool.as_deref() == Some(pool_name)
-            });
-            select_child(children.map(|child| child.hop.canister), principal)
-                .ok_or(ShardLookupError::NoReadyShard)
-        })
-    }
-
-    pub(super) fn select_child(
-        children: impl Iterator<Item = Principal>,
-        principal: Principal,
-    ) -> Option<Principal> {
-        use sha2::{Digest, Sha256};
-        let key = principal.as_slice();
-        // Fixed for compatibility with existing discovery wallet routes.
-        let prefix = Sha256::new()
-            .chain_update(b"toko.discovery.hrw.v1\0")
-            .chain_update([key.len() as u8])
-            .chain_update(key);
-        children.max_by_key(|child| {
-            (
-                prefix.clone().chain_update(child.as_slice()).finalize(),
-                *child,
-            )
         })
     }
 

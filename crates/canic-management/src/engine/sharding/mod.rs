@@ -40,6 +40,8 @@ struct Ledger {
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Pools {
+    #[serde(skip)]
+    local_routes: std::collections::BTreeSet<String>,
     funding: BTreeMap<ChildId, funding::Grant>,
     quotes: BTreeMap<String, payment::Reservation>,
     payments: BTreeMap<[u8; 32], payment::Receipt>,
@@ -597,6 +599,14 @@ pub(super) fn bind_ready(slot: ChildId, pid: &str) {
 /// Requires the configured hub.
 #[must_use]
 pub fn lookup(pool: &str, key: &Key) -> Placement {
+    let original = lookup_claim(pool, key);
+    if STATE.with_borrow(|s| s.as_ref().unwrap().pools.local_routes.contains(pool)) {
+        return Placement::GrowthRefused;
+    }
+    original
+}
+
+fn lookup_claim(pool: &str, key: &Key) -> Placement {
     hub().expect("hub required");
     STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
@@ -624,11 +634,59 @@ pub fn lookup(pool: &str, key: &Key) -> Placement {
 /// Requires the approved hub. All durable writes share one IC message commit.
 #[must_use]
 pub fn assign(pool: &str, key: Key) -> Placement {
-    assign_shard(pool, key, None)
+    assign_shard(pool, Claim::Account(key), None)
 }
 
-fn assign_shard(pool: &str, key: Key, paid: Option<payment::Settlement>) -> Placement {
-    let retained = lookup(pool, &key);
+#[derive(Clone, Copy)]
+enum Claim {
+    Account(Key),
+    Capacity(u8),
+}
+
+fn ordinal_key(ordinal: u8) -> Key {
+    let mut key = [0; 32];
+    key[0] = ordinal;
+    key
+}
+
+/// Request the next whole shard, retaining one generation per ordinal.
+/// # Panics
+/// Refuses calls outside the named hub grant.
+#[must_use]
+pub fn grow_shard(pool: &str, ordinal: u8) -> (Placement, u32) {
+    let placed = assign_shard(pool, Claim::Capacity(ordinal), None);
+    let limit = STATE.with_borrow(|s| {
+        s.as_ref().unwrap().pools.shards[pool]
+            .approval
+            .keys_per_shard
+    });
+    (placed, limit)
+}
+
+fn assign_shard(pool: &str, claim: Claim, paid: Option<payment::Settlement>) -> Placement {
+    hub().expect("hub required");
+    let key = STATE.with_borrow(|s| {
+        let pools = &s.as_ref().unwrap().pools;
+        let ledger = pools
+            .shards
+            .get(pool)
+            .filter(|l| l.approval.hub == api::caller().to_text())
+            .expect("calling hub must own requested shard pool");
+        let local = pools.local_routes.contains(pool);
+        let count = ledger.generations.iter().flatten().count();
+        match claim {
+            Claim::Account(key) if !local => Ok(key),
+            Claim::Capacity(n) if (local || count == 0) && usize::from(n) <= count => {
+                Ok(ordinal_key(n))
+            }
+            _ => Err(Placement::GrowthRefused),
+        }
+    });
+    let key = match key {
+        Ok(k) => k,
+        Err(outcome) => return outcome,
+    };
+    let retained = lookup_claim(pool, &key);
     if retained != Placement::Unknown {
         return retained;
     }
@@ -646,10 +704,11 @@ fn assign_shard(pool: &str, key: Key, paid: Option<payment::Settlement>) -> Plac
             ledger.generations,
         )
     });
-    if slots
-        .iter()
-        .all(|s| counts[s.index()] == approval.keys_per_shard)
-    {
+    let limit = match claim {
+        Claim::Capacity(_) => 1,
+        Claim::Account(_) => approval.keys_per_shard,
+    };
+    if slots.iter().all(|s| counts[s.index()] == limit) {
         return Placement::Full;
     }
     let mut ready = None;
@@ -657,7 +716,7 @@ fn assign_shard(pool: &str, key: Key, paid: Option<payment::Settlement>) -> Plac
     let mut blocked = false;
     for slot in slots {
         if let Some(generation) = generations[slot.index()] {
-            if counts[slot.index()] < approval.keys_per_shard {
+            if counts[slot.index()] < limit {
                 match resolve(slot, generation) {
                     Placement::Assigned(_, pid) => {
                         let subject = Principal::from_text(pid).expect("retained shard principal");
@@ -728,6 +787,9 @@ fn assign_shard(pool: &str, key: Key, paid: Option<payment::Settlement>) -> Plac
     };
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
+        if matches!(claim, Claim::Capacity(_)) {
+            state.pools.local_routes.insert(pool.to_owned());
+        }
         let ledger = state.pools.shards.get_mut(pool).unwrap();
         assert!(
             state
@@ -811,6 +873,25 @@ pub(super) fn validate_claims(state: &super::State) {
     });
     let claims = &state.pools.projects;
     let pools = &state.pools;
+    for name in &pools.local_routes {
+        let ledger = &pools.shards[name];
+        let count = ledger.generations.iter().flatten().count();
+        assert!(count > 0);
+        let mut seen = std::collections::BTreeSet::new();
+        for ordinal in 0..u8::try_from(count).expect("bounded shard count") {
+            let index = state
+                .claims
+                .get(&(ledger.namespace, ordinal_key(ordinal)))
+                .expect("missing retained capacity claim");
+            let slot = ChildId::placement(usize::from(index)).expect("capacity slot");
+            assert!(
+                seen.insert(slot)
+                    && ledger.generations[slot.index()].is_some()
+                    && ledger.counts[slot.index()] == 1
+                    && !pools.draining.contains_key(&slot)
+            );
+        }
+    }
     for (_, asset) in &pools.standby {
         if let canic::sharding::standby::Asset::Claimed(id, allocation) = asset {
             let slot = ChildId::placement(allocation.slot as usize).expect("claimed slot");

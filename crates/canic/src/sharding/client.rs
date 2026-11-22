@@ -87,3 +87,24 @@ async fn call<M: Contract<Output = Placement>>(
             CallError::Reply(_) => "placement reply",
         })
 }
+
+/// Request or recover one whole shard by its ordinal. The hub owns its account routes.
+pub struct GrowShard;
+impl Contract for GrowShard {
+    const NAME: &'static str = "grow_shard";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REQUEST: ic_wire::Limits = super::LIMITS;
+    type Input = (String, u8);
+    type Output = (Placement, u32);
+}
+
+/// Recover the same ordinal after reply loss. The second value is the approved keys per shard.
+/// # Errors
+/// A transport or framing error leaves the original request unresolved.
+pub async fn grow_shard(
+    root: Principal,
+    pool: &str,
+    ordinal: u8,
+) -> Result<(Placement, u32), CallError> {
+    method::call::<GrowShard>(root, 10, &(pool.to_owned(), ordinal)).await
+}

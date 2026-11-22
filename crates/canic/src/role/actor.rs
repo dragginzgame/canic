@@ -127,7 +127,9 @@ pub fn open_hub(
     #[cfg(feature = "role-attestation")]
     let directory = format!("{prefix}services.v1");
     let mut keys = keys.to_vec();
-    keys.push(config_key);
+    let roster = format!("{prefix}shard_roster.v1");
+    let owners = format!("{prefix}shard_owners.v1");
+    keys.extend([config_key, &roster, &owners]);
     #[cfg(feature = "role-attestation")]
     keys.push(&directory);
     let host = bootstrap(
@@ -162,6 +164,7 @@ pub fn open_hub(
             .expect("retained service trust");
         topology::attach_role_calls(config.root);
     }
+    crate::sharding::routes::open(&host, &roster, &owners, initial.as_ref().map(|c| c.root));
     ROOT.set(Some(config.root));
     (host, initial.map(|c| c.nonce))
 }

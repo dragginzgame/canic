@@ -17,18 +17,27 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
 
 impl Pools {
     pub(in crate::engine) fn encode(&self) -> Vec<u8> {
-        let mut bytes = b"PLS2".to_vec();
-        bytes.extend(
-            ic_wire::encode(
-                self,
-                ic_wire::Encoding::Payload,
-                ic_wire::Limits {
-                    bytes: BYTES - 4,
-                    ..LIMITS
-                },
+        let limits = ic_wire::Limits {
+            bytes: BYTES - 4,
+            ..LIMITS
+        };
+        let (prefix, payload) = if self.local_routes.is_empty() {
+            (
+                b"PLS2",
+                ic_wire::encode(self, ic_wire::Encoding::Payload, limits),
             )
-            .expect("bounded placement ledger"),
-        );
+        } else {
+            (
+                b"PLS3",
+                ic_wire::encode(
+                    &(self, &self.local_routes),
+                    ic_wire::Encoding::Payload,
+                    limits,
+                ),
+            )
+        };
+        let mut bytes = prefix.to_vec();
+        bytes.extend(payload.expect("bounded placement ledger"));
         bytes
     }
 }
@@ -142,11 +151,19 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
 }
 
 fn decode(bytes: &[u8]) -> Pools {
-    let payload = bytes
-        .strip_prefix(b"PLS2")
-        .expect("placement custody requires its original Root");
-    let pools: Pools =
-        ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("placement custody");
+    let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"PLS3") {
+        let (mut pools, local): (Pools, std::collections::BTreeSet<String>) =
+            ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
+                .expect("hub placement custody");
+        assert!(!local.is_empty() && local.iter().all(|pool| pools.shards.contains_key(pool)));
+        pools.local_routes = local;
+        pools
+    } else {
+        let payload = bytes
+            .strip_prefix(b"PLS2")
+            .expect("placement custody requires its original Root");
+        ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("placement custody")
+    };
     validate_inventory(&pools);
     super::payment::validate(&pools);
     for (slot, grant) in &pools.funding {

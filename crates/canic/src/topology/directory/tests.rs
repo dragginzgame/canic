@@ -237,11 +237,6 @@ fn an_unversioned_directory_cannot_reopen_as_a_pool_aware_index() {
 #[cfg(all(feature = "storage", feature = "method"))]
 #[test]
 fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_after_reopen() {
-    let route = || retained::get_shard("wallets", Principal::from_slice(&[3, 2]));
-    assert_eq!(
-        route(),
-        Err(retained::ShardLookupError::DirectoryUnavailable)
-    );
     let memory = ic_storage::DefaultMemoryImpl::default();
     let key = "app.services.v1";
     let open = |fresh| crate::storage::bootstrap(memory.clone(), fresh, "app", &[key], 16);
@@ -273,16 +268,8 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
         let runtime = open(true);
         let mut index =
             retained::Index::create(&runtime, key, Principal::from_slice(&[8, 1]), "hub");
-        retained::DIRECTORY.with_borrow_mut(|slot| *slot = Some(index));
-        assert_eq!(
-            route(),
-            Err(retained::ShardLookupError::DirectoryUnavailable)
-        );
-        index = retained::DIRECTORY.with_borrow_mut(Option::take).unwrap();
         index.apply(&directory, [7; 32], None).unwrap();
-        retained::DIRECTORY.with_borrow_mut(|slot| *slot = Some(index));
-        assert_eq!(route(), Err(retained::ShardLookupError::NoReadyShard));
-        index = retained::DIRECTORY.with_borrow_mut(Option::take).unwrap();
+        assert_eq!(index.acknowledged_shards("wallets").count(), 0);
         for child in &children {
             index.apply(&directory, [7; 32], Some(child)).unwrap();
         }
@@ -298,9 +285,10 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
             ..directory
         };
         index.apply(&newer, [7; 32], None).unwrap();
-        retained::DIRECTORY.with_borrow_mut(|slot| *slot = Some(index));
-        assert_eq!(route(), Ok(expected[1]));
-        retained::DIRECTORY.with_borrow_mut(Option::take);
+        assert_eq!(
+            index.acknowledged_shards("wallets").collect::<Vec<_>>(),
+            expected[..2]
+        );
     }
     let index = retained::Index::open(&open(false), key);
     assert_eq!(
@@ -312,17 +300,11 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
         [children[3].canister]
     );
     assert_eq!(index.acknowledged_children("hub").count(), 0);
-    retained::DIRECTORY.with_borrow_mut(|slot| *slot = Some(index));
-    assert_eq!(route(), Ok(expected[1]));
     assert_eq!(
-        retained::get_shard("projects", expected[0]),
-        Ok(expected[2])
+        index.acknowledged_shards("projects").collect::<Vec<_>>(),
+        [expected[2]]
     );
-    assert_eq!(
-        retained::get_shard("shard", expected[0]),
-        Err(retained::ShardLookupError::NoReadyShard)
-    );
-    retained::DIRECTORY.with_borrow_mut(Option::take);
+    assert_eq!(index.acknowledged_shards("shard").count(), 0);
 }
 
 #[cfg(all(feature = "storage", feature = "method"))]
@@ -362,24 +344,4 @@ fn withdrawn_generation_refuses_delayed_delivery_and_ack_after_reopen() {
         index.child_delivery(child.canister),
         Some((&replacement, Some(1)))
     );
-}
-
-#[cfg(feature = "storage")]
-#[test]
-fn rendezvous_preserves_toko_wallet_routes_and_only_moves_keys_to_added_children() {
-    let [a, b, c] = [1, 2, 3].map(|n| Principal::from_slice(&[n, 1]));
-    let select = |children: &[Principal], key: &[u8]| {
-        retained::select_child(children.iter().copied(), Principal::from_slice(key))
-    };
-    for (n, expected) in [(1, c), (2, b), (5, a), (29, a), (100, b)] {
-        assert_eq!(select(&[a, b, c], &[n, 2]), Some(expected));
-    }
-    assert_eq!(select(&[a, b, c], &(0..29).collect::<Vec<_>>()), Some(c));
-    for n in 0..=255 {
-        let key = [n, 2];
-        let old = select(&[a, b], &key);
-        let new = select(&[b, c, a], &key);
-        assert_eq!(new, select(&[c, a, b], &key));
-        assert!(new == Some(c) || new == old);
-    }
 }
