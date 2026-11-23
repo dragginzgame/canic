@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.262.0] - 2026-11-23
+
+- The database adapter uses IC DB 0.28.1. All store fingerprints change. Export any required data with the 0.27.8 executable before switching. Old stores refuse to open and old cursors cannot resume.
+
+
+- `sharding::assign_instance` and `lookup_instance` return `method::CallError`. Request and dispatch failures precede submission. Keep the same placement key when retrying or observing an uncertain result.
+
+```sh
+# Build the updated actors and verify their mounted Wire contracts.
+canic app build
+canic app check-wire
+```
+
 ## [0.261.0] - 2026-11-23
 
 ### ⚠️ Breaking

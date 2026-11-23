@@ -434,11 +434,13 @@ expires_at_ns = {}
     .unwrap()
     .unwrap();
     for method in ["project", "lookup_project"] {
+        let refusal = pic
+            .update_call(hub, alice, method, vec![1; 32])
+            .await
+            .unwrap_err();
         assert!(
-            pic.update_call(hub, alice, method, vec![1; 32])
-                .await
-                .is_err(),
-            "{method} admitted the shard hub"
+            refusal.reject_message.contains("hub: Rejected("),
+            "{method}: {refusal:?}"
         );
     }
     assert_eq!(

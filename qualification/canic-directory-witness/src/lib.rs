@@ -215,10 +215,13 @@ async fn place(request: (Option<String>, u8)) -> Result<canic::sharding::Placeme
     let root = DIRECTORY.with_borrow(|index| index.as_ref().expect("open hub").publisher());
     let (pool, key) = request;
     match pool {
-        Some(pool) => canic::sharding::assign(root, &pool, [key; 32]).await,
-        None => canic::sharding::assign_instance(root, [key; 32]).await,
+        Some(pool) => canic::sharding::assign(root, &pool, [key; 32])
+            .await
+            .map_err(str::to_owned),
+        None => canic::sharding::assign_instance(root, [key; 32])
+            .await
+            .map_err(|error| format!("{error:?}")),
     }
-    .map_err(str::to_owned)
 }
 
 /// Have the installed hub release one qualified route using its retained Root.

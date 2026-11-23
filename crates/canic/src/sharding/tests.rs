@@ -2,6 +2,28 @@ use super::*;
 use ic_platform_types::Principal;
 
 #[test]
+fn instance_clients_preserve_local_dispatch_failure() {
+    use crate::method::CallError;
+    use std::{
+        future::Future,
+        pin::pin,
+        task::{Context, Poll, Waker},
+    };
+
+    let root = Principal::from_slice(&[4, 1]);
+    let key = [42; 32];
+    let mut context = Context::from_waker(Waker::noop());
+    assert!(matches!(
+        pin!(assign_instance(root, key)).poll(&mut context),
+        Poll::Ready(Err(CallError::Dispatch(_)))
+    ));
+    assert!(matches!(
+        pin!(lookup_instance(root, key)).poll(&mut context),
+        Poll::Ready(Err(CallError::Dispatch(_)))
+    ));
+}
+
+#[test]
 fn assigned_target_preserves_generation_and_refuses_invalid_principals() {
     let original = Allocation {
         slot: 2,

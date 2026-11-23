@@ -62,16 +62,18 @@ pub async fn lookup(root: Principal, pool: &str, key: Key) -> Result<Placement, 
 
 /// Request the original dedicated child for a stable application key.
 /// # Errors
-/// A transport or framing failure requires observing the same key.
-pub async fn assign_instance(root: Principal, key: Key) -> Result<Placement, &'static str> {
-    call::<AssignInstance>(root, key).await
+/// [`CallError::Request`] and [`CallError::Dispatch`] mean this attempt was never
+/// submitted. For a rejection, unknown outcome or unreadable reply, observe the
+/// original key with [`lookup_instance`]. Retain that key on every retry.
+pub async fn assign_instance(root: Principal, key: Key) -> Result<Placement, CallError> {
+    method::call::<AssignInstance>(root, 10, &key).await
 }
 
 /// Look up the original project claim without allocating.
 /// # Errors
 /// Returns an error for a missing or invalid reply.
-pub async fn lookup_instance(root: Principal, key: Key) -> Result<Placement, &'static str> {
-    call::<LookupInstance>(root, key).await
+pub async fn lookup_instance(root: Principal, key: Key) -> Result<Placement, CallError> {
+    method::call::<LookupInstance>(root, 10, &key).await
 }
 
 async fn call<M: Contract<Output = Placement>>(
