@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.266.1] - 2026-11-23
+
+### 🐛 Fixed
+
+- Wire checks and TypeScript export support actors that use IC Timers Once. The generated client contains the declared Wire methods. IC Timers keeps its self-call executor private.
+
+```sh
+# From a configured app with an inspector, generate clients into a fresh directory.
+canic app export-wire --out generated
+```
+
 ## [0.266.0] - 2026-11-23
 
 ### ✨ Added

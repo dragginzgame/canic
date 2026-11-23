@@ -22,6 +22,30 @@ candidate() {
 }
 baseline=wire-baseline/sample/contracts.json
 check
+# Link a real retained Once and prove its private update stays out of the client.
+sed -i.bak '/^\[dependencies\]$/a\
+ic-timers = "0.46.13"
+' starter-app/Cargo.toml
+sed -i.bak 's/"readiness"/"readiness", "lifecycle"/' starter-app/Cargo.toml
+echo 'mod lifecycle;' >>starter-app/src/lib.rs
+cat >starter-app/src/lifecycle.rs <<'RS'
+canic::mount_lifecycle!(install = timers, reopen = timers);
+fn timers() {
+    ic_timers::initialize().unwrap();
+    ic_timers::bind_once(["sample", "app", "once"], ic_timers::Lifetime::Retained, async || {
+        ic_timers::OnceResult { observation: ic_timers::Observation::NoWork, next: ic_timers::OnceNext::Stop }
+    }).unwrap();
+}
+RS
+cargo metadata --offline --format-version 1 >/dev/null
+check
+cli app export-wire --out generated
+cli artifact endpoints artifacts/app.wasm --json | jq -e 'any(.endpoints[]; .name == "__ic_scheduling_once" and .mode == "update")' >/dev/null
+grep -F 'transport.query(canisterId, "greet"' generated/service-0.ts >/dev/null
+if grep -Fq '__ic_scheduling_once' generated/*.ts; then
+    echo "Timer executor leaked into the generated client" >&2
+    exit 1
+fi
 # An optional query mounted in a dependency must appear in both the Wasm and manifest.
 sed -i.bak '/^package = "starter-app"$/a\
 features = ["canic/endpoint-metrics"]

@@ -189,3 +189,35 @@ pub(crate) fn wire_fixture(name: &str) -> Vec<u8> {
     )
     .unwrap()
 }
+
+#[test]
+fn wire_comparison_excludes_only_the_exact_timer_update() {
+    use crate::{WasmEndpoint, app_wire::verify_exports};
+    let method = |name: &str, mode| WasmEndpoint {
+        name: name.into(),
+        mode,
+    };
+    let timer = "__ic_scheduling_once";
+    let mut declared =
+        std::collections::BTreeMap::from([("greet".into(), serde_json::json!({"mode": "query"}))]);
+    for (name, mode) in [
+        (timer, "query"),
+        (timer, "composite_query"),
+        ("__unknown", "update"),
+    ] {
+        assert!(
+            verify_exports(
+                "app",
+                &declared,
+                &[method(name, mode), method("greet", "query")]
+            )
+            .is_err()
+        );
+    }
+    assert!(verify_exports("app", &declared, &[method(timer, "update")]).is_err());
+    assert!(verify_exports("app", &declared, &[method("greet", "update")]).is_err());
+    let mixed = [method(timer, "update"), method("greet", "query")];
+    verify_exports("app", &declared, &mixed).unwrap();
+    declared.insert(timer.into(), serde_json::json!({"mode": "update"}));
+    assert!(verify_exports("app", &declared, &mixed).is_err());
+}

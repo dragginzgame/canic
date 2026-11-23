@@ -117,8 +117,25 @@ fn inspect_actor(
     )
     .map_err(crate::artifact::cargo_failure)?;
     let methods: BTreeMap<String, Value> = serde_json::from_slice(&bytes).map_err(supplier)?;
+    verify_exports(name, &methods, exports)?;
+    Ok(methods)
+}
+
+pub(super) fn verify_exports(
+    name: &str,
+    methods: &BTreeMap<String, Value>,
+    exports: &[crate::WasmEndpoint],
+) -> Result<()> {
+    // IC Timers reserves this update for its raw, self-only Once dispatch.
+    const TIMER_EXECUTOR: &str = "__ic_scheduling_once";
+    if methods.contains_key(TIMER_EXECUTOR) {
+        return Err(Error::Invalid(format!(
+            "{name} declares the reserved IC Timers executor {TIMER_EXECUTOR} as a Wire method"
+        )));
+    }
     let actual: Vec<_> = exports
         .iter()
+        .filter(|e| !(e.name == TIMER_EXECUTOR && e.mode == "update"))
         .map(|e| (e.name.as_str(), Some(e.mode)))
         .collect();
     let inspected: Vec<_> = methods
@@ -130,5 +147,5 @@ fn inspect_actor(
             "{name} Wire declarations {inspected:?} disagree with Wasm exports {actual:?}"
         )));
     }
-    Ok(methods)
+    Ok(())
 }

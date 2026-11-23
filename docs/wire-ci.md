@@ -78,9 +78,10 @@ Forward the inspection feature to any application schema crates that need it.
 Derive IC Wire's schema trait for owned data. For a custom Serde representation,
 supply a separately tested layout with `Schemas::describe_as` and pass those
 schemas to `print_manifest`. The inspector includes dependency-provided mounts
-such as the shared metrics query. The current command requires a Wire
-declaration for every callable application export. Raw non-Wire exports cause
-a mismatch. Lifecycle hooks are outside the callable export table.
+such as the shared metrics query. Canic classifies the exact IC Timers `update __ic_scheduling_once`
+export as a runtime callback. Actors using retained Once timers need no extra
+configuration. The callback stays out of the baseline and generated client.
+Every other callable export must match a Wire declaration by name and mode. Lifecycle hooks are outside the callable export table.
 
 ## Review a change
 
