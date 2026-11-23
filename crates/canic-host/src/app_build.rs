@@ -12,6 +12,9 @@ use std::{
 pub struct BuiltCanister {
     /// Shared app definition name.
     pub canister: String,
+    /// Role declared by the application for this slot.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
     /// Output path relative to the invoking directory.
     pub wasm: PathBuf,
     /// Exact built bytes.
@@ -182,6 +185,7 @@ pub fn build_app(
         built.push(BuiltCanister {
             canister: name.clone(),
             parent: definition.parent.clone(),
+            role: definition.role.clone(),
             modules,
             build_ms: started.elapsed().as_millis(),
             artifact,

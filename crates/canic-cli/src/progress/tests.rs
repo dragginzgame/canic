@@ -128,6 +128,7 @@ fn planning_requires_exactly_one_controller_source() {
 fn app_build_summary_shows_mounts_and_omits_unused_codec_column() {
     let mut build = BuiltCanister {
         canister: "user_shard".into(),
+        role: None,
         wasm: "artifacts/user_shard.wasm".into(),
         artifact: canic_host::Artifact {
             bytes: 956_693,
@@ -156,6 +157,7 @@ fn app_build_summary_shows_mounts_and_omits_unused_codec_column() {
     hub.parent = None;
     let shard = BuiltCanister {
         canister: "user_shard".into(),
+        role: None,
         parent: Some("user_hub".into()),
         wasm: "shard.wasm".into(),
         artifact: hub.artifact.clone(),
@@ -163,7 +165,22 @@ fn app_build_summary_shows_mounts_and_omits_unused_codec_column() {
         build_ms: 0,
         client: None,
     };
-    let table = built(&[shard, hub]);
+    let mut store = BuiltCanister {
+        canister: "store".into(),
+        role: None,
+        parent: Some("user_hub".into()),
+        wasm: "artifacts/wasm_store.wasm".into(),
+        artifact: hub.artifact.clone(),
+        modules: vec![],
+        build_ms: 0,
+        client: None,
+    };
+    assert!(!built(std::slice::from_ref(&store)).contains("[WASM STORE]"));
+    store.canister = "artifacts".into();
+    store.role = Some("wasm-store".into());
+    assert!(built(std::slice::from_ref(&store)).contains("[WASM STORE]"));
+    let table = built(&[shard, hub, store]);
+    assert!(table.contains("├─ artifacts [WASM STORE]"));
     assert!(table.find("user_hub").unwrap() < table.find("└─ user_shard").unwrap());
     assert!(table.contains("COMMAND CODEC"));
     assert!(table.contains("artifacts/user_shard.codec"));

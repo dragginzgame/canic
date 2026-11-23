@@ -32,7 +32,7 @@ cp -- "$scratch/project/artifacts/app.wasm" target/root/app.wasm
 "$cli" artifact build --json --package canic-greeting-witness --manifest qualification/Cargo.toml --features greeting-v2 > target/root/app-v2.json
 cp -- "$(jq -r .wasm target/root/app-v2.json)" target/root/app-v2.wasm
 cp -- "$scratch/project/artifacts/root.wasm" target/root/root.wasm
-cp -- "$scratch/project/artifacts/store.wasm" target/root/store.wasm
+cp -- "$scratch/project/artifacts/wasm_store.wasm" target/root/store.wasm
 "$cli" artifact build --json --package ic-wasm-store --features maintenance-candidate > target/root/store-maintenance.json
 cp -- "$(jq -r .wasm target/root/store-maintenance.json)" target/root/store-maintenance.wasm
 "$cli" artifact build --json --package canic-root --features maintenance-candidate > target/root/maintenance.json

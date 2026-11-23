@@ -25,7 +25,7 @@ fn hub_routes_reopen_ten_thousand_subjects_and_isolate_named_pools() {
         shard: Principal::from_slice(&[id, 1]),
     };
     let assign = |pool: &str, subject| {
-        let mut call = std::pin::pin!(routes::assign_shard(pool, subject, || {}));
+        let mut call = std::pin::pin!(routes::assign_shard(pool, subject, || Ok::<_, ()>(())));
         let Poll::Ready(Ok(Placement::Assigned(_, id))) =
             call.as_mut().poll(&mut Context::from_waker(Waker::noop()))
         else {
@@ -92,10 +92,15 @@ fn drain_preserves_both_reservations_through_reopen_and_exact_confirmation() {
     for (n, shard) in [a.clone(), b.clone(), c.clone()].into_iter().enumerate() {
         record_shard("users", n.try_into().unwrap(), shard, 2);
     }
-    local(assign_shard("users", alice, || {})).unwrap();
+    local(assign_shard("users", alice, || Ok::<_, ()>(()))).unwrap();
     assert!(status(alice, "users", &a, true).is_err());
     assert_eq!(status(root, "users", &a, true).unwrap().live_placements, 1);
-    local(prepare_move("users", alice, &a, || {})).unwrap();
+    assert_eq!(
+        local(prepare_move("users", alice, &a, || Err("forbidden"))),
+        Err(ReservationError::Authorization("forbidden"))
+    );
+    assert_eq!(status(root, "users", &b, false).unwrap().live_placements, 0);
+    local(prepare_move("users", alice, &a, || Ok::<_, ()>(()))).unwrap();
     INDEX.set(None);
     open(false);
     assert_eq!(get_shard("users", alice), Some(a.clone()));

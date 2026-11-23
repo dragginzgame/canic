@@ -201,8 +201,8 @@ remains an unqualified Host flow.
 From this checkout, after `make canic` and Wasm toolchain preparation:
 
 ```sh
-canic artifact build --package ic-wasm-store --output target/wasm-store.wasm
-canic artifact inspect target/wasm-store.wasm
+canic artifact build --package ic-wasm-store --output target/wasm_store.wasm
+canic artifact inspect target/wasm_store.wasm
 ```
 
 These commands build and inspect locally. They do not install the Store or open
@@ -427,7 +427,7 @@ local fleet or debits the operator's cycles-ledger account on mainnet (default
 ceiling 1T, including the ledger fee):
 
 ```sh
-canic app canister add store --app starter --role wasm-store --parent root --wasm target/wasm-store.wasm
+canic app canister add store --app starter --role wasm-store --parent root --wasm target/wasm_store.wasm
 canic fleet plan --app starter --fleet mainnet --canister store --root-module ROOT_SHA256 --identity canic-mainnet
 canic fleet apply OPERATION --app starter --fleet mainnet --identity canic-mainnet
 canic fleet status OPERATION --app starter --fleet mainnet

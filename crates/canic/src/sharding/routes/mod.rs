@@ -132,31 +132,40 @@ pub fn get_shard(pool: &str, subject: Principal) -> Option<ShardTarget> {
     })
 }
 
+/// A failed authorization belongs to the application. Placement errors belong to Canic.
+#[derive(Debug, PartialEq, Eq)]
+pub enum ReservationError<E> {
+    /// The application's check refused the request.
+    Authorization(E),
+    /// The route state or capacity reply could not establish an assignment.
+    Placement(&'static str),
+}
+
 /// Reserve the subject's original shard, growing through Root only on exhaustion.
-/// The application supplies its authorization check, which must trap on refusal.
+/// The application supplies its fallible authorization check.
 /// Canic repeats it after each await before committing an assignment.
 /// # Errors
-/// Transport or invalid replies leave the original growth ordinal retryable.
+/// Returns the original authorization refusal. Placement failures leave the growth ordinal retryable.
 /// # Panics
 /// Requires an open index. Conflicting replies or storage failures trap the message.
-pub async fn assign_shard(
+pub async fn assign_shard<E>(
     pool: &str,
     subject: Principal,
-    authorize: impl Fn(),
-) -> Result<Placement, &'static str> {
+    authorize: impl Fn() -> Result<(), E>,
+) -> Result<Placement, ReservationError<E>> {
     reserve(pool, subject, None, authorize).await
 }
 
 /// Reserve a destination while preserving the account's active source route.
 /// The application fences source writes before copying and verifies destination readiness.
 /// # Errors
-/// Refuses a changed route or a source that is still accepting accounts.
-pub async fn prepare_move(
+/// Preserves authorization refusals separately from changed or non-draining source routes.
+pub async fn prepare_move<E>(
     pool: &str,
     subject: Principal,
     source: &ShardTarget,
-    authorize: impl Fn(),
-) -> Result<Placement, &'static str> {
+    authorize: impl Fn() -> Result<(), E>,
+) -> Result<Placement, ReservationError<E>> {
     reserve(pool, subject, Some(source), authorize).await
 }
 
@@ -174,14 +183,14 @@ enum Reservation {
     Grow(Principal, u8),
 }
 
-async fn reserve(
+async fn reserve<E>(
     pool: &str,
     subject: Principal,
     source: Option<&ShardTarget>,
-    authorize: impl Fn(),
-) -> Result<Placement, &'static str> {
+    authorize: impl Fn() -> Result<(), E>,
+) -> Result<Placement, ReservationError<E>> {
     loop {
-        authorize();
+        authorize().map_err(ReservationError::Authorization)?;
         let reservation = INDEX.with_borrow_mut(|i| {
             let i = i.as_mut().expect("open routes");
             let root = i.roster.root;
@@ -232,8 +241,8 @@ async fn reserve(
                     u8::try_from(shards.len()).expect("shard ordinal"),
                 ))
             }
-        })?;
-        let (root, ordinal) = match reservation {
+        });
+        let (root, ordinal) = match reservation.map_err(ReservationError::Placement)? {
             Reservation::Assigned(target) => {
                 return Ok(Placement::Assigned(
                     target.allocation,
@@ -243,9 +252,13 @@ async fn reserve(
             Reservation::Grow(root, ordinal) => (root, ordinal),
         };
         let reply = grow_shard(root, pool, ordinal).await;
-        authorize();
-        let (result, limit) = reply.map_err(|_| "shard capacity reply unavailable")?;
-        let Some((allocation, shard)) = result.assigned_target()? else {
+        authorize().map_err(ReservationError::Authorization)?;
+        let (result, limit) =
+            reply.map_err(|_| ReservationError::Placement("shard capacity reply unavailable"))?;
+        let Some((allocation, shard)) = result
+            .assigned_target()
+            .map_err(ReservationError::Placement)?
+        else {
             // A concurrent registration may have committed this subject while suspended.
             if INDEX.with_borrow(|index| {
                 let i = index.as_ref().expect("open routes");

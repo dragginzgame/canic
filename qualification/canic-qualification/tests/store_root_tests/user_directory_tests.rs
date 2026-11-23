@@ -127,7 +127,8 @@ async fn directory(revoke: bool, stable: bool) {
     let gateway = instance.client_mut().make_live(None).await;
     instance.client_mut().stop_live().await;
     let pic = instance.client();
-    let (root, store) = readiness_tests::fixture_with_code(pic, wasm("root"), wasm("store")).await;
+    let (root, store) =
+        readiness_tests::fixture_with_code(pic, wasm("root"), wasm("wasm_store")).await;
     let hub = pic
         .create_canister_with_settings(Some(root.operator), None)
         .await;

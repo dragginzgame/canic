@@ -15,6 +15,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 canic = { workspace = true, features = ["lifecycle", "method", "readiness", "sharding", "storage"] }
+canic-profile-protocol.workspace = true
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
 ic-storage.workspace = true

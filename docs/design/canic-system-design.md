@@ -1734,8 +1734,9 @@ through `attested_method = M`. Both declarations decode the effective request as
 under the contract's existing method ID and byte budget. An async update has a
 handler-local `attestation` bound to that invocation’s verified proof. Call
 `attestation.reauthorize()?` immediately before protected work after an await.
-For a placement callback that takes `Fn()`, pass
-`|| attestation.reauthorize().expect("role admission required")`.
+For a durable shard reservation, pass `|| attestation.reauthorize()` or
+`|| auth.reauthorize()`. The hub receives the original refusal in
+`routes::ReservationError::Authorization` before any local capacity or route write.
 Check again before a later outbound effect if another await intervenes.
 The receiver checks the original proof’s time window locally. The pinned key,
 signed caller, audience, generation and admitted role stay fixed for that call.

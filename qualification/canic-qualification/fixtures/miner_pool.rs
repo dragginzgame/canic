@@ -26,7 +26,8 @@ pub(crate) async fn install<'a>(
     owner.client_mut().stop_live().await;
     let pic = owner.client();
     let (root, store) =
-        super::local_store::fixture_with_code(pic, read("root.wasm"), read("store.wasm")).await;
+        super::local_store::fixture_with_code(pic, read("root.wasm"), read("wasm_store.wasm"))
+            .await;
     let hub_manifest = store.publish_named("pool", "1", &read("pool.wasm")).await;
     let worker_manifest = store.publish_named("miner", "1", &read("miner.wasm")).await;
     pic.set_controllers(store.id, Some(root.operator), vec![root.id])

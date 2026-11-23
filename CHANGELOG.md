@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.263.0] - 2026-11-23
+
+- Durable shard assignment and move preparation now take a fallible authorization callback. Pass `|| auth.reauthorize()` and map `ReservationError::Authorization` to the application’s access error. The hub checks again when Root replies, before writing local capacity or routes. [Canic #88](https://github.com/dragginzgame/canic/issues/88)
+- The build tree marks the declared Store with `[WASM STORE]`. New starters and example fleets build it to `artifacts/wasm_store.wasm`.
+
+```sh
+# Build the example fleet and inspect its Store in the canister tree.
+canic app build --config apps/examples/user-directory/canic.toml
+```
+
 ## [0.262.0] - 2026-11-23
 
 - The database adapter uses IC DB 0.28.1. All store fingerprints change. Export any required data with the 0.27.8 executable before switching. Old stores refuse to open and old cursors cannot resume.

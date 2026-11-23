@@ -52,7 +52,7 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
                         CanisterDefinition {
                             role: Some("wasm-store".into()),
                             parent: Some("root".into()),
-                            wasm: Some("artifacts/store.wasm".into()),
+                            wasm: Some("artifacts/wasm_store.wasm".into()),
                             build: Some(crate::BuildInput {
                                 manifest: source.join("Cargo.toml"),
                                 package: "ic-wasm-store".into(),

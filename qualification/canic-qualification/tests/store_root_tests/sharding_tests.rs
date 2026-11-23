@@ -1,6 +1,9 @@
 //! The hub is an independent installed application. Only Root controls the shards.
 use super::*;
 use canic::sharding::{self, Placement};
+use canic_profile_protocol::ProfileError;
+
+type Registration = Result<Placement, ProfileError>;
 
 async fn user(pic: &PocketIc, hub: CanisterId, caller: CanisterId, method: &str) -> Placement {
     let reply = pic.update_call(hub, caller, method, vec![]).await.unwrap();
@@ -1484,7 +1487,9 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
                 .await
                 .unwrap();
             let result: Placement =
-                ic_wire::decode(&raw, response("register_local"), sharding::LIMITS).unwrap();
+                ic_wire::decode::<Registration>(&raw, response("register_local"), sharding::LIMITS)
+                    .unwrap()
+                    .unwrap();
             if !matches!(result, Placement::Pending(_) | Placement::Busy) {
                 return result;
             }
@@ -1495,11 +1500,24 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
     let alice = CanisterId::self_authenticating(b"alice");
     let bob = CanisterId::self_authenticating(b"bob");
     let carol = CanisterId::self_authenticating(b"carol");
+    // Obtain Root's actual first allocation, then control when its successful reply arrives.
+    assert!(matches!(
+        sharding::GrowShard::decode_reply(&grow(hub, 0).await.unwrap())
+            .unwrap()
+            .0,
+        Placement::Pending(_)
+    ));
+    settle(pic).await;
+    let ready = grow(hub, 0).await.unwrap();
+    let (original, _) = sharding::GrowShard::decode_reply(&ready).unwrap();
+    assert_eq!(original.assigned_target().unwrap().unwrap().1, spare);
+    revoked_growth(&root, hub, alice, &ready, &wasm, &request("register_local")).await;
     let _lost = pic
         .submit_call(hub, alice, "register_local", request("register_local"))
         .await
         .unwrap();
     let first = register(alice).await;
+    assert_eq!(first, original);
     let first_id = first.assigned_target().unwrap().unwrap().1;
     assert_eq!(first_id, spare);
     // The first capacity ordinal has the same bytes as an all-zero account key.
@@ -1532,7 +1550,8 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
         .await
         .unwrap();
     assert!(matches!(
-        ic_wire::decode::<Placement>(&pending, response("register_local"), sharding::LIMITS)
+        ic_wire::decode::<Registration>(&pending, response("register_local"), sharding::LIMITS)
+            .unwrap()
             .unwrap(),
         Placement::Pending(_)
     ));
@@ -1609,4 +1628,119 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
         ic_testkit::server::Deletion::Attempted
     );
     assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+// Deliver the captured successful Root reply only after this subject's permission is revoked.
+async fn revoked_growth(
+    root: &Client<'_>,
+    hub: CanisterId,
+    subject: CanisterId,
+    ready: &[u8],
+    root_wasm: &[u8],
+    register: &[u8],
+) {
+    use canic::method::Contract;
+    use ic_testkit::held::{Catalog, Fixture, Limits, Reply};
+
+    let pic = root.pic;
+    let (assigned, _) = sharding::GrowShard::decode_reply(ready).unwrap();
+    let shard = CanisterId::from_slice(assigned.assigned_target().unwrap().unwrap().1.as_slice());
+    let hub_memory = pic.get_stable_memory(hub).await;
+    let shard_memory = pic.get_stable_memory(shard).await;
+    let catalog = Catalog::new(
+        &[Reply {
+            method: sharding::GrowShard::NAME,
+            bytes: ready,
+        }],
+        Limits {
+            slots: 1,
+            name_bytes: 32,
+            reply_bytes: 1024,
+        },
+    )
+    .unwrap();
+    let mut held = Fixture::new(
+        pic,
+        root.id.to_text().parse().unwrap(),
+        &catalog,
+        100_000_000_000,
+        8192,
+    )
+    .await
+    .unwrap();
+    canic_qualification::upgrade_stopped(
+        pic,
+        root.id,
+        held.wasm().to_vec(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
+    let disable = async |value: Option<CanisterId>| {
+        Client {
+            pic,
+            id: hub,
+            operator: CanisterId::anonymous(),
+        }
+        .update::<_, ()>(
+            "disable_registration",
+            ic_wire::method_id("disable_registration"),
+            &value,
+            canic::method::LIMITS,
+        )
+        .await;
+    };
+    let refused = |raw: &[u8]| {
+        let frame = ic_wire::Encoding::Frame {
+            method: ic_wire::method_id("register_local"),
+            direction: ic_wire::Direction::Response,
+        };
+        assert_eq!(
+            ic_wire::decode::<Registration>(raw, frame, sharding::LIMITS).unwrap(),
+            Err(ProfileError::Forbidden)
+        );
+    };
+    disable(Some(subject)).await;
+    refused(
+        &pic.update_call(hub, subject, "register_local", register.to_vec())
+            .await
+            .unwrap(),
+    );
+    assert!(held.pending(pic).await.unwrap().is_empty());
+    disable(None).await;
+    let attempt = pic
+        .submit_call(hub, subject, "register_local", register.to_vec())
+        .await
+        .unwrap();
+    let mut pending = vec![];
+    for _ in 0..40 {
+        pic.tick().await;
+        pending = held.pending(pic).await.unwrap();
+        if !pending.is_empty() {
+            break;
+        }
+    }
+    let token = pending.pop().expect("hub suspended waiting for growth");
+    disable(Some(subject)).await;
+    held.release(pic, &token).await.unwrap();
+    refused(&pic.await_call(attempt).await.unwrap());
+    assert!(
+        pic.get_stable_memory(hub).await == hub_memory,
+        "capacity or route changed"
+    );
+    assert!(
+        pic.get_stable_memory(shard).await == shard_memory,
+        "provisioning continued"
+    );
+    canic_qualification::upgrade_stopped(
+        pic,
+        root.id,
+        root_wasm.to_vec(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
+    disable(None).await;
 }

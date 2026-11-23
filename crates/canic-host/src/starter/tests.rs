@@ -46,7 +46,7 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
     assert_eq!(recipe.manifest, source().join("Cargo.toml"));
     assert_eq!(
         selected.wasm_path(&config, "store", None).unwrap(),
-        destination.join("artifacts/store.wasm")
+        destination.join("artifacts/wasm_store.wasm")
     );
     assert_eq!(
         selected.config.canisters["app"].parent.as_deref(),

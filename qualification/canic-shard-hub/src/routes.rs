@@ -4,6 +4,7 @@ use canic::{
     method::Contract,
     sharding::{self, Placement, routes},
 };
+use canic_profile_protocol::ProfileError;
 use ic_platform_runtime::system;
 use ic_platform_types::Principal;
 use ic_storage::{DefaultMemoryImpl, MemoryRuntime, adapter::StableCell};
@@ -100,9 +101,21 @@ fn readiness() -> canic::readiness::State {
 }
 canic::mount_readiness_endpoint!(crate::routes::readiness);
 
-fn authorize(subject: Principal) {
-    user().unwrap();
-    assert_eq!(system::caller(), subject);
+thread_local! { static DISABLED: RefCell<Option<Principal>> = const { RefCell::new(None) }; }
+
+// disable_registration
+// Change the qualification hub's registration permission for one subject.
+// guard  : controller
+// limits : default Wire limits
+#[canic::update(guard = canic::guard::require_controller)]
+fn disable_registration(subject: Option<Principal>) {
+    DISABLED.set(subject);
+}
+
+fn authorize(subject: Principal) -> Result<(), ProfileError> {
+    (system::caller() == subject && DISABLED.with_borrow(|disabled| *disabled != Some(subject)))
+        .then_some(())
+        .ok_or(ProfileError::Forbidden)
 }
 
 // local_route
@@ -123,20 +136,23 @@ fn local_route() -> Option<Principal> {
 // guard  : identified caller, rechecked after each await
 // limits : sharding Wire limits
 #[canic::update(guard = user, limits = sharding::LIMITS)]
-async fn register_local() -> Placement {
+async fn register_local() -> Result<Placement, ProfileError> {
     let subject = system::caller();
     let placed = routes::assign_shard("user_shard", subject, || authorize(subject))
         .await
-        .expect("retry capacity");
+        .map_err(|error| match error {
+            routes::ReservationError::Authorization(refusal) => refusal,
+            routes::ReservationError::Placement(reason) => panic!("retry capacity: {reason}"),
+        })?;
     if let Some((_, shard)) = placed.assigned_target().unwrap()
         && !read(|r| r.records.contains(&subject))
     {
         let ack = canic::method::call::<Insert>(shard, 10, &subject)
             .await
             .expect("retry original write");
-        authorize(subject);
+        authorize(subject)?;
         assert_eq!(ack, subject);
         change(|r| r.records.insert(subject));
     }
-    placed
+    Ok(placed)
 }

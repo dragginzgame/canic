@@ -6,7 +6,7 @@ build = { manifest = "../../../Cargo.toml", package = "canic-root", client = "ca
 [apps.ex-user-directory.canisters.store]
 role = "wasm-store"
 parent = "root"
-wasm = "artifacts/store.wasm"
+wasm = "artifacts/wasm_store.wasm"
 build = { manifest = "../../../Cargo.toml", package = "ic-wasm-store" }
 
 [apps.ex-user-directory.canisters.ex-user-directory-hub]

@@ -65,7 +65,11 @@ pub(crate) fn next(
     format!("\nNext:\n{}\n", escape(&parts.join(" ")))
 }
 
-fn build_row(label: String, item: &BuiltCanister) -> [String; 5] {
+fn build_row(mut label: String, item: &BuiltCanister) -> [String; 5] {
+    if item.role.as_deref() == Some("wasm-store") {
+        label.push_str(" [WASM STORE]");
+    }
+
     [
         label,
         item.wasm.display().to_string(),

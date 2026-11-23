@@ -27,9 +27,11 @@ canic::mount_hub_routes!();
 // Reserve the actual caller's stable route under this witness pool.
 #[canic::update(limits = canic::sharding::LIMITS)]
 async fn local_place() -> Placement {
-    routes::assign_shard("users", system::caller(), || {})
-        .await
-        .unwrap()
+    routes::assign_shard("users", system::caller(), || {
+        Ok::<_, std::convert::Infallible>(())
+    })
+    .await
+    .unwrap()
 }
 
 // Edit the actual caller's payload unless the app has fenced it for evacuation.
@@ -117,7 +119,14 @@ async fn move_account((source, destination): (ShardTarget, ShardTarget)) -> Resu
         return routes::confirm_move("users", subject, &source, &destination)
             .map_err(str::to_owned);
     }
-    let placed = routes::prepare_move("users", subject, &source, || {}).await?;
+    let placed = routes::prepare_move("users", subject, &source, || {
+        Ok::<_, std::convert::Infallible>(())
+    })
+    .await
+    .map_err(|e| match e {
+        routes::ReservationError::Placement(reason) => reason,
+        routes::ReservationError::Authorization(never) => match never {},
+    })?;
     assert_eq!(
         placed.assigned_target()?.unwrap(),
         (&destination.allocation, destination.shard)
