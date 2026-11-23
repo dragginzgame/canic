@@ -666,25 +666,23 @@ expires_at_ns = {}
 }
 
 async fn check_db_owner(pic: &PocketIc, id: CanisterId, hub: CanisterId, operator: CanisterId) {
-    // The installed DB witness only opens its catalogue for the owner passed at init.
+    // The installed DB witness only exposes its admission for the owner passed at init.
     use canic::db::{RPC_LIMITS, inspection};
     let frame = |direction| ic_wire::Encoding::Frame {
         method: inspection::INSPECT,
         direction,
     };
-    let request = ic_wire::encode(
-        &inspection::Request::Catalogue,
-        frame(ic_wire::Direction::Request),
-        RPC_LIMITS,
-    )
-    .unwrap();
+    let request = ic_wire::encode(&(), frame(ic_wire::Direction::Request), RPC_LIMITS).unwrap();
     let bytes = pic
         .query_call(id, hub, "db_inspect", request.clone())
         .await
         .unwrap();
-    let reply: inspection::Reply =
+    let reply: inspection::Response =
         ic_wire::decode(&bytes, frame(ic_wire::Direction::Response), RPC_LIMITS).unwrap();
-    assert!(reply.is_ok());
+    assert!(matches!(
+        reply.admission,
+        inspection::Admission::Readable { .. }
+    ));
     assert!(
         pic.query_call(id, operator, "db_inspect", request)
             .await

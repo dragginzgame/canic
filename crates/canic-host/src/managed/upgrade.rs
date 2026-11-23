@@ -1,11 +1,11 @@
 //! Authenticated one-use child upgrade custody through the existing plan and signer.
-use super::{OBSERVATIONS, complete, wire::Method};
+use super::{complete, stage_evidence, visit_observations, wire::Method};
 use crate::{
     ApplyOutcome, Error, Plan, Result,
     network::principal,
     operation,
     signed::{self},
-    store, supplier,
+    supplier,
 };
 use canic_management_protocol::{
     LIMITS, Refusal, STAGE_LIMITS,
@@ -130,76 +130,66 @@ pub(crate) fn evidence_with_source(
     dir: &Path,
     plan: &Plan,
 ) -> Result<Option<(Status, Option<canic_management_protocol::stored::Delivery>)>> {
-    let mut latest = None;
-    let path = dir.join("stage/reply.bin");
-    if path.try_exists().map_err(supplier)? {
-        match stage_reply(plan, &store::read(&path, LIMITS.bytes)?) {
-            Ok(status) => {
-                validate(plan, None, &status)?;
-                latest = Some((status, None));
-            }
-            Err(Error::Blocked(_)) => {}
-            Err(error) => return Err(error),
-        }
-    }
-    for index in 0..OBSERVATIONS {
-        for (name, method) in [
-            ("reconcile/reply.bin", Method::ReconcileUpgrade.id(plan)),
-            ("reply.bin", Method::ObserveUpgrade.id(plan)),
-        ] {
-            let path = dir.join(format!("observe/{index}/{name}"));
-            if path.try_exists().map_err(supplier)? {
-                let bytes =
-                    store::read(&path, canic_management_protocol::application::LIMITS.bytes)?;
-                let (status, source) = if matches!(
-                    method,
-                    canic_management_protocol::stored::CUSTODY
-                        | canic_management_protocol::custody::ROOT
-                        | canic_management_protocol::custody::ROOT_HISTORY
-                        | canic_management_protocol::application::CUSTODY
-                ) {
-                    super::stored::upgrade_evidence(plan, &bytes)?
-                } else {
-                    (
-                        ic_wire::decode(
-                            &bytes,
-                            ic_wire::Encoding::Frame {
-                                method,
-                                direction: ic_wire::Direction::Response,
-                            },
-                            LIMITS,
-                        )
-                        .or_else(|error| {
-                            // Historical on-disk unit observations remain readable; no live fallback.
-                            if method == OBSERVE {
-                                ic_wire::decode(
-                                    &bytes,
-                                    ic_wire::Encoding::Frame {
-                                        method: STATUS,
-                                        direction: ic_wire::Direction::Response,
-                                    },
-                                    LIMITS,
-                                )
-                            } else {
-                                Err(error)
-                            }
-                        })
-                        .map_err(supplier)?,
-                        None,
+    let mut latest = stage_evidence(dir, |bytes| stage_reply(plan, bytes))?
+        .map(|status| {
+            validate(plan, None, &status)?;
+            Ok::<_, Error>((status, None))
+        })
+        .transpose()?;
+    visit_observations(
+        dir,
+        [Method::ReconcileUpgrade, Method::ObserveUpgrade],
+        |method, bytes| {
+            let method = method.id(plan);
+            let (status, source) = if matches!(
+                method,
+                canic_management_protocol::stored::CUSTODY
+                    | canic_management_protocol::custody::ROOT
+                    | canic_management_protocol::custody::ROOT_HISTORY
+                    | canic_management_protocol::application::CUSTODY
+            ) {
+                super::stored::upgrade_evidence(plan, bytes)?
+            } else {
+                (
+                    ic_wire::decode(
+                        bytes,
+                        ic_wire::Encoding::Frame {
+                            method,
+                            direction: ic_wire::Direction::Response,
+                        },
+                        LIMITS,
                     )
-                };
-                if status == Status::default() && latest.is_none() {
-                    continue;
-                }
-                validate(plan, latest.as_ref().map(|(s, _)| s), &status)?;
-                let source = super::stored::retain_delivery(
-                    latest.as_ref().and_then(|(_, source)| source.as_ref()),
-                    source,
-                )?;
-                latest = Some((status, source));
+                    .or_else(|error| {
+                        // Historical on-disk unit observations remain readable; no live fallback.
+                        if method == OBSERVE {
+                            ic_wire::decode(
+                                bytes,
+                                ic_wire::Encoding::Frame {
+                                    method: STATUS,
+                                    direction: ic_wire::Direction::Response,
+                                },
+                                LIMITS,
+                            )
+                        } else {
+                            Err(error)
+                        }
+                    })
+                    .map_err(supplier)?,
+                    None,
+                )
+            };
+            if status == Status::default() && latest.is_none() {
+                return Ok(());
             }
-        }
-    }
+            validate(plan, latest.as_ref().map(|(s, _)| s), &status)?;
+            let source = super::stored::retain_delivery(
+                latest.as_ref().and_then(|(_, source)| source.as_ref()),
+                source,
+            )?;
+            latest = Some((status, source));
+            Ok(())
+        },
+    )?;
     Ok(latest)
 }
 

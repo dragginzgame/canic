@@ -1,6 +1,32 @@
 //! Native byte and direction compatibility for application-declared contracts.
 use canic::method::{Contract, LIMITS, wire};
 
+#[canic::method_descriptor]
+fn echo(text: String) -> String {
+    text
+}
+
+#[test]
+fn default_contract_accepts_a_full_frame_in_each_direction() {
+    for limits in [echo::REQUEST, echo::REPLY] {
+        assert_eq!(
+            (limits.bytes, limits.allocation, limits.nodes, limits.depth),
+            (16_384, 393_216, 4_096, 16)
+        );
+    }
+    // The frame header takes 11 bytes and this string's length takes two.
+    let mut text = "x".repeat(16_384 - 13);
+    let request = echo::encode_request(&text).unwrap();
+    let reply = echo::encode_reply(&echo::decode_request(&request).unwrap()).unwrap();
+    assert_eq!(request.len(), 16_384);
+    assert_eq!(reply.len(), 16_384);
+    assert_eq!(echo::decode_reply(&reply).unwrap(), text);
+
+    text.push('x');
+    assert!(echo::encode_request(&text).is_err());
+    assert!(echo::encode_reply(&text).is_err());
+}
+
 struct Example;
 impl Contract for Example {
     const NAME: &'static str = "provision_user";

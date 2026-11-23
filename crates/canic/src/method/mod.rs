@@ -16,12 +16,12 @@ pub fn fail(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))
 }
 
-/// Default Wire budgets for small application requests and replies.
+/// Default Wire budgets for application requests and replies.
 pub const LIMITS: wire::Limits = wire::Limits {
-    bytes: 512,
-    allocation: 16384,
-    nodes: 128,
-    depth: 8,
+    bytes: 16 * 1024,
+    allocation: 384 * 1024,
+    nodes: 4_096,
+    depth: 16,
 };
 
 /// Application-owned protocol for one named Wire call.
@@ -30,7 +30,7 @@ pub trait Contract {
     const NAME: &'static str;
     /// Stable Wire method identity.
     const ID: u64;
-    /// Request budget, defaulting to the standard small endpoint limits.
+    /// Request budget, defaulting to the standard endpoint limits.
     const REQUEST: wire::Limits = LIMITS;
     /// Reply budget, defaulting to the request budget.
     const REPLY: wire::Limits = Self::REQUEST;

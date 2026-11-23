@@ -1,13 +1,19 @@
 //! A miner retains its last round and its attempt receipts across code upgrades.
 mod endpoints;
 
-use canic::{method::LIMITS, topology::Install};
+use canic::topology::Install;
 use ic_storage::{DefaultMemoryImpl, adapter::StableCell};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 const PARENT: &str = "miner.parent.v1";
 const WORK: &str = "miner.work.v3";
+const WORK_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 512,
+    allocation: 16_384,
+    nodes: 128,
+    depth: 8,
+};
 
 thread_local! {
     static WORK_CELL: RefCell<Option<StableCell<Vec<u8>>>> = const { RefCell::new(None) };
@@ -24,11 +30,11 @@ struct Work {
 
 impl Work {
     fn encode(&self) -> Vec<u8> {
-        ic_wire::encode(self, ic_wire::Encoding::Payload, LIMITS).expect("encode work")
+        ic_wire::encode(self, ic_wire::Encoding::Payload, WORK_LIMITS).expect("encode work")
     }
 
     fn decode(cell: &StableCell<Vec<u8>>) -> Self {
-        ic_wire::decode(cell.get(), ic_wire::Encoding::Payload, LIMITS).expect("open work")
+        ic_wire::decode(cell.get(), ic_wire::Encoding::Payload, WORK_LIMITS).expect("open work")
     }
 }
 
@@ -56,7 +62,7 @@ fn open(binding: Option<Install>) {
     let cell = canic::storage::cell(
         &runtime,
         WORK,
-        LIMITS.bytes,
+        WORK_LIMITS.bytes,
         binding.map(|v| {
             Work {
                 generation: ic_wire::Bytes::new(v.application).expect("worker generation"),

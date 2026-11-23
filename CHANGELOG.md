@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.260.0] - 2026-11-23
+
+### ⚠️ Breaking
+
+- `canic db inspect` now reports the executable schema fingerprint and stored admission in one query. Rebuild the CLI and mounted receiver together. Use a unit request and `db::inspection::Response` on the new `canic.db.inspect.v2` Wire ID. The `db-schema` feature, entity catalogue, `--entity` and `--count` are retired. Detailed inspection belongs to [IC DB](https://github.com/dragginzgame/ic-db/issues/26).
+
+### 🔧 Changed
+
+- Application methods now default to a 16 KiB Wire frame, 384 KiB of allocation accounting, 4,096 nodes and depth 16 for each request and reply. Rebuild both caller and receiver to use the larger frames.
+- Fleet validation names the pools and configured values when their Root or Store differs. It also identifies the shared parent when a registry conflicts with a worker or shard pool.
+- The database adapter uses IC DB 0.27.7.
+- Contributor tooling uses Toko Tooling 0.46.3.
+
+### ▶️ Try it
+
+```sh
+# From an app using the updated Canic dependency, rebuild and check the endpoint contracts.
+canic app build
+canic app check-wire
+
+# Query a v2 receiver on mainnet with an identity authorized by the application.
+canic db inspect --network ic --canister "$CANISTER" --identity "$IDENTITY_PEM"
+
+# From a configured app, validate its declarations and list its fleets.
+canic fleet list
+```
+
 ## [0.259.1] - 2026-11-22
 
 Scoped queries and updates can declare `scope_guard = project_owner`. The

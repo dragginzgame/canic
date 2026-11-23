@@ -56,7 +56,12 @@ impl Claim {
                 method: wire::method_id("canic.role-proof.v1"),
                 direction: wire::Direction::Response,
             },
-            crate::method::LIMITS,
+            ic_wire::Limits {
+                bytes: 512,
+                allocation: 16_384,
+                nodes: 128,
+                depth: 8,
+            },
         )
     }
 }

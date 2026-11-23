@@ -129,8 +129,10 @@ impl crate::method::Contract for ReadMetrics {
     const NAME: &'static str = "metrics";
     const ID: u64 = ic_wire::method_id(Self::NAME);
     const REQUEST: ic_wire::Limits = ic_wire::Limits {
+        bytes: 512,
+        allocation: 16_384,
         nodes: 256,
-        ..crate::method::LIMITS
+        depth: 8,
     };
     const REPLY: ic_wire::Limits = ic_wire::Limits {
         bytes: 4096,

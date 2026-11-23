@@ -44,7 +44,7 @@ pub(super) enum Commands {
     /// Build or inspect local Wasm artifacts.
     #[command(subcommand)]
     Artifact(ArtifactCommand),
-    /// Inspect a database exposed by a Canic application.
+    /// Check database admission and the executable schema fingerprint.
     #[command(subcommand)]
     Db(crate::inspection::DbCommand),
     /// List, deploy and observe fleets, or view a saved fleet report.
@@ -429,6 +429,22 @@ pub(super) struct CanisterConfigArgs {
     /// Select a fleet within the app; required when the app has multiple fleets.
     #[arg(long)]
     pub(super) fleet: Option<String>,
+}
+
+impl CanisterConfigArgs {
+    pub(super) fn resolve_journal(
+        &self,
+        state_dir: Option<&std::path::Path>,
+    ) -> canic_host::Result<(PathBuf, canic_host::SelectedFleet, PathBuf)> {
+        let path = self.config.path(self.app.as_deref())?;
+        let selected =
+            canic_host::load_config(&path)?.select(self.app.as_deref(), self.fleet.as_deref())?;
+        let journal = state_dir.map_or_else(
+            || selected.journal_path(&path),
+            std::path::Path::to_path_buf,
+        );
+        Ok((path, selected, journal))
+    }
 }
 
 #[derive(Subcommand)]

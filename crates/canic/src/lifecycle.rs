@@ -1,6 +1,6 @@
 //! Explicit install and strict empty-argument reopen hooks.
 
-#[cfg(all(feature = "metrics", any(feature = "db-store", feature = "db-schema")))]
+#[cfg(all(feature = "metrics", feature = "db-store"))]
 impl crate::metrics::store::Source for ic_db::metrics::MetricsStorage {
     type Storage = Self;
 }
@@ -52,10 +52,10 @@ pub fn initialize_diagnostics() {
     #[cfg(feature = "logging")]
     crate::logging::initialize();
 
-    #[cfg(all(feature = "logging", any(feature = "db-store", feature = "db-schema")))]
+    #[cfg(all(feature = "logging", feature = "db-store"))]
     ic_db::logging::initialize_with_logger(crate::logging::record).expect("attach DB log sink");
 
-    #[cfg(all(feature = "metrics", any(feature = "db-store", feature = "db-schema")))]
+    #[cfg(all(feature = "metrics", feature = "db-store"))]
     {
         use ic_db::metrics::{MetricsStorage, initialize_with_metrics};
         initialize_with_metrics(crate::metrics::store::open::<MetricsStorage>())

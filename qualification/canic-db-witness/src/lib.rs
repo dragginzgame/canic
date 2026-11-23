@@ -3,7 +3,6 @@ mod canister;
 
 /// Typed protocol for this witness application, not a general dynamic DB frontend.
 pub mod protocol {
-    pub use canic::db::inspection::{INSPECT, Reply as InspectReply, Request as InspectRequest};
     use serde::{Deserialize, Serialize};
     /// Listing Wire identity.
     pub const QUERY: u64 = ic_wire::method_id("canic-db-witness.query.v1");

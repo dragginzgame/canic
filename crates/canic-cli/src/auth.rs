@@ -14,12 +14,7 @@ pub(crate) fn run(command: &FleetAuthCommand, json: bool) -> canic_host::Result<
             ..
         } => (selection, state_dir),
     };
-    let path = selection.config.path(selection.app.as_deref())?;
-    let selected = canic_host::load_config(&path)?
-        .select(selection.app.as_deref(), selection.fleet.as_deref())?;
-    let journal = state_dir
-        .clone()
-        .unwrap_or_else(|| selected.journal_path(&path));
+    let (path, selected, journal) = selection.resolve_journal(state_dir.as_deref())?;
     let (operation, plan) = match command {
         FleetAuthCommand::Plan {
             controller,

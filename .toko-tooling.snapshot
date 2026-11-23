@@ -1,9 +1,9 @@
 # Toko Tooling snapshot v1
-# version	0.46.2
+# version	0.46.3
 # layout	vendor
 format	1
 source	https://crates.io/crates/toko-tooling
-revision	4ba519e61553775ef678a64e140be06b9dc303fb259fa51cc3abc326254368a0
+revision	3f6d677af6c5ed88e3ba9ccf4d7b0c2eaad5f0fc49f0ad5b697e412ea4be600e
 # entrypoint	TOKO-TOOLING.md
 # entrypoint	vendor/toko-tooling/make/consumer.mk
 # entrypoint	vendor/toko-tooling/make/cargo-dependencies.mk
@@ -18,7 +18,7 @@ revision	4ba519e61553775ef678a64e140be06b9dc303fb259fa51cc3abc326254368a0
 # entrypoint	vendor/toko-tooling/scripts/ci/run-validation-stage.pl
 # entrypoint	vendor/toko-tooling/scripts/ci/SetupDiagnostics.pm
 # entrypoint	vendor/toko-tooling/scripts/ci/check-api-baseline.sh
-file	7f99af17303b02135e74e6332a4755f7afb8bf9c08c74e8c609d7364304e669c	-	TOKO-TOOLING.md
+file	74a31e560650f34b70e1d8f40131c78c9bc7f9c39e2e36bf6bcbcfdec06e38ae	-	TOKO-TOOLING.md
 file	e5be6f538ee619be119aef9b3fca9d156f35c08732d9775e4e2efd698db8cbd7	-	vendor/toko-tooling/make/consumer.mk
 file	07b59f8cc784c79c648d379561f2493e40bac5b7c2809e8eda960cba661fae7d	-	vendor/toko-tooling/make/cargo-dependencies.mk
 file	1085e5521dfacb38aed065b70f905aab666ab73ef49dd5a25270c2ec2cf63710	x	vendor/toko-tooling/.githooks/pre-commit

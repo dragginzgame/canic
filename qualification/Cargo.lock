@@ -78,9 +78,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.104"
+version = "1.0.105"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+checksum = "2cb931c189b85683d69a5cfad41d4d418671e1ac413dd209f3f2fc31e3cfd902"
 
 [[package]]
 name = "ar_archive_writer"
@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.259.1"
+version = "0.260.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -429,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.259.1"
+version = "0.260.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -462,7 +462,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.259.1"
+version = "0.260.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -472,7 +472,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.259.1"
+version = "0.260.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -488,7 +488,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.259.1"
+version = "0.260.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -1176,7 +1176,7 @@ dependencies = [
 
 [[package]]
 name = "ex-counter"
-version = "0.259.1"
+version = "0.260.0"
 dependencies = [
  "canic",
  "clap",
@@ -1190,7 +1190,7 @@ dependencies = [
 
 [[package]]
 name = "ex-miner-pool-hub"
-version = "0.259.1"
+version = "0.260.0"
 dependencies = [
  "canic",
  "clap",
@@ -1204,7 +1204,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-hub"
-version = "0.259.1"
+version = "0.260.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1213,7 +1213,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-schema"
-version = "0.259.1"
+version = "0.260.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -1223,7 +1223,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-shard"
-version = "0.259.1"
+version = "0.260.0"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1675,9 +1675,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.27.4"
+version = "0.27.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb53e7958293848fb05a05edb994999890dd0907654c9f8150198474301d0398"
+checksum = "628900dcfeaf8fe9fc75786367a6e94f40f5f602c3be5073b429710cd3ea7489"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1697,9 +1697,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.27.4"
+version = "0.27.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59213f815a2637bb6293c51e9e6043f2fcee60fc84b3067b589d0a43b4327569"
+checksum = "cd86b28d4d72456964f9412beb6eac97921282af666c92e385859f85a535dede"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3727,9 +3727,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.46.2"
+version = "0.46.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ba519e61553775ef678a64e140be06b9dc303fb259fa51cc3abc326254368a0"
+checksum = "3f6d677af6c5ed88e3ba9ccf4d7b0c2eaad5f0fc49f0ad5b697e412ea4be600e"
 
 [[package]]
 name = "toml"

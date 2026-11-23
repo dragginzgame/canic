@@ -1362,7 +1362,7 @@ checked that reading logs did not add entries or rearm timers. The reader
 preserves that property and reports the initialization version for pagination.
 
 Supplier diagnostics are composed per canister package. Selecting `metrics` with
-`db-store`, `db-schema` or `jobs` attaches the supplier’s typed recorder to
+`db-store` or `jobs` attaches the supplier’s typed recorder to
 Canic’s metrics store. Selecting `logging` with either DB integration forwards
 DB failures to the canister’s bounded log. The Canic lifecycle mount does this
 before install/reopen application code. A custom lifecycle calls
@@ -1485,15 +1485,12 @@ deployment, production key custody or managed Auth preservation. The broader
 
 ### Optional DB inspection
 
-The existing typed DB mount admits a passive versioned inspection contract alongside
-application-owned query/write DTOs. Metadata exposure and actual-caller permission
-remain application decisions. The optional compiled-schema projection owns no engine,
-memory, row scan or migration. Complete bounded catalogues and finite named type
-graphs report logical fields/indexes/reference facts; schema identity, readable
-incarnation and closed/incompatible admission remain distinct. Cardinality uses
-the engine's maintained metadata only under ordinary application admission.
-Unsupported state stays intact. See the [installed DB witness](../../qualification/README.md#typed-database-composition)
-for selected inputs, bounds and preservation evidence.
+Canic mounts a caller-authorized status query for an application-selected database.
+Its bounded v2 reply carries the executable schema fingerprint and ordinary storage
+admission, including the incarnation when readable. IC DB owns detailed schema
+descriptions, indexes and maintained counts. The application owns authorization
+and opens its database through its ordinary path. See the
+[installed DB witness](../../qualification/README.md#typed-database-composition).
 
 ### Embedded Blob composition witness
 
@@ -1887,7 +1884,10 @@ An async invocation retains its own binding and rechecks before further effects.
 types. Both declarations use the same Canic codec and Platform entrypoint.
 The attributes support synchronous queries and synchronous or asynchronous updates. The Rust function supplies its export name and request/reply types. New methods
 default to the Wire hash of that name, a unit request for an empty argument list,
-and a 512-byte frame budget in each direction. An existing protocol supplies
+and a 16 KiB frame in each direction. Each direction also allows 384 KiB of
+Wire allocation accounting, 4,096 node visits and depth 16. The frame limit
+includes the header. `limits` sets both directions and `reply_limits` can
+select a separate reply budget. An existing protocol supplies
 its fixed method ID once through `Contract::ID` and can specify different limits. The default permits ingress;
 a selected `guard` runs before argument copy. On scoped endpoints a synchronous
 `scope_guard` may check application ownership using the same admitted
@@ -1956,9 +1956,7 @@ contracts and synchronous caller authorization before request decoding; IC DB
 remains an independent library with its own durable codec and fluent semantics.
 The adapter owns no schema, query planner, authority store or lifecycle hooks.
 `make db-test` qualifies the actual library through sparse pages, batch refusal,
-reply rollback, upgrades and maintenance closure. The passive inspection v1
-contract and optional compiled-schema projection are implemented as described
-above. Native application CLI access remains IC DB's separate consumer work;
+reply rollback, upgrades and maintenance closure. The v2 diagnostic reports the schema fingerprint and admission status. Native application CLI access remains IC DB's separate consumer work;
 query/write DTOs and exposure policy stay application-owned.
 
 This follows the existing Blob mount pattern and retains IcyDB

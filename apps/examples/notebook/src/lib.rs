@@ -11,6 +11,12 @@ use std::cell::RefCell;
 
 const KEY: &str = "notebook.record.v1";
 const MAX_BYTES: usize = 256;
+const RECORD_LIMITS: ic_wire::Limits = ic_wire::Limits {
+    bytes: 512,
+    allocation: 16_384,
+    nodes: 128,
+    depth: 8,
+};
 
 thread_local! {
     static NOTE: RefCell<Option<StableCell<Vec<u8>>>> = const { RefCell::new(None) };
@@ -59,7 +65,7 @@ impl Note {
     }
 
     fn encode(&self) -> Vec<u8> {
-        ic_wire::encode(self, ic_wire::Encoding::Payload, canic::method::LIMITS)
+        ic_wire::encode(self, ic_wire::Encoding::Payload, RECORD_LIMITS)
             .expect("encode notebook record")
     }
 }
@@ -69,7 +75,7 @@ fn read_note() -> Note {
         ic_wire::decode(
             slot.as_ref().expect("notebook open").get(),
             ic_wire::Encoding::Payload,
-            canic::method::LIMITS,
+            RECORD_LIMITS,
         )
         .expect("decode notebook record")
     })
@@ -107,7 +113,7 @@ fn open(fresh: bool) {
         }
         .encode()
     });
-    let cell = canic::storage::cell(&runtime, KEY, canic::method::LIMITS.bytes, initial);
+    let cell = canic::storage::cell(&runtime, KEY, RECORD_LIMITS.bytes, initial);
     NOTE.with_borrow_mut(|slot| *slot = Some(cell));
     let note = read_note();
     assert!(

@@ -95,6 +95,7 @@ async fn signed_inspection_tracks_authority_and_admission_across_upgrades() {
     for (args, anonymous, trust) in [
         (&["--json"][..], true, root.as_str()),
         (&["--entity", "Missing", "--json"], false, root.as_str()),
+        (&["--count", "--json"], false, root.as_str()),
         (&["--json"], false, "00"),
     ] {
         let refused = call(args, anonymous, trust);
@@ -109,19 +110,17 @@ async fn signed_inspection_tracks_authority_and_admission_across_upgrades() {
     );
     let json: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
     assert_eq!(json["caller"], owner.to_text());
-    assert_eq!(
-        json["inspection"]["selection"]["Catalogue"],
-        serde_json::json!(["Item"])
-    );
-    let result = call(&["--entity", "Item", "--count"], false, &root);
+    assert_eq!(json["inspection"]["schema"].as_array().unwrap().len(), 32);
+    assert!(json["inspection"]["admission"]["Readable"]["incarnation"].is_array());
+    let result = call(&[], false, &root);
     assert!(
         result.status.success(),
         "{}",
         String::from_utf8_lossy(&result.stderr)
     );
     let table = String::from_utf8(result.stdout).unwrap();
-    assert_eq!(table.matches("query call (db_inspect)").count(), 2);
-    assert!(table.contains("Maintained count") && table.contains("score"));
+    assert_eq!(table.matches("query call (db_inspect)").count(), 1);
+    assert!(table.contains("Executable schema") && table.contains("Readable"));
     assert_eq!(peer.get_stable_memory(target).await, before);
     peer.stop_live().await;
     for (image, state) in [
@@ -143,7 +142,7 @@ async fn signed_inspection_tracks_authority_and_admission_across_upgrades() {
         }
         let before = peer.get_stable_memory(target).await;
         peer.make_live(Some(url.port().unwrap())).await;
-        let result = call(&["--entity", "Item", "--count", "--json"], false, &root);
+        let result = call(&["--json"], false, &root);
         assert!(
             result.status.success(),
             "{}",
@@ -153,16 +152,8 @@ async fn signed_inspection_tracks_authority_and_admission_across_upgrades() {
         let observed = &json["inspection"];
         if state == "Readable" {
             assert!(observed["admission"].get(state).is_some());
-            assert_eq!(
-                observed["selection"]["Entity"]["cardinality"]["Available"],
-                2
-            );
         } else {
             assert_eq!(observed["admission"], state);
-            assert_eq!(
-                observed["selection"]["Entity"]["cardinality"],
-                "Unavailable"
-            );
         }
         peer.stop_live().await;
         assert_eq!(peer.get_stable_memory(target).await, before);

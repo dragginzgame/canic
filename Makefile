@@ -302,8 +302,8 @@ db-test:
 	bash scripts/dev/test-db.sh
 
 db-clippy:
-	cargo clippy --locked -p canic --features db-schema,provisioning --all-targets -- -D warnings
-	cargo clippy --locked -p canic --features db-schema,provisioning --lib --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked -p canic --features provisioning --all-targets -- -D warnings
+	cargo clippy --locked -p canic --features provisioning --lib --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features fault-injection -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features incompatible-schema -- -D warnings

@@ -1,7 +1,6 @@
 //! This application owns storage, authority, schema and fluent operations.
 use crate::protocol::{
-    InspectReply, InspectRequest, Page, QueryReply, QueryRequest, Receipt, Refusal, Row,
-    WriteReply, WriteRequest,
+    Page, QueryReply, QueryRequest, Receipt, Refusal, Row, WriteReply, WriteRequest,
 };
 use canic::db::Operation;
 use ic_db::{Batch, Comparison, Database, Entity, Error, QueryCursor, Schema};
@@ -205,37 +204,20 @@ fn refusal(error: Error) -> Refusal {
     }
 }
 
-#[allow(clippy::needless_pass_by_value)]
-fn inspect(_caller: ic_db::Principal, request: InspectRequest) -> InspectReply {
-    use canic::db::inspection::{Admission, Cardinality};
-    let host = runtime();
-    // The pre-decode owner gate also permits this application's cardinality.
-    // Closed/unsupported state is never opened through an alternate reader.
-    let (admission, count) = match open(&host) {
-        Ok(db) => {
-            let count = if matches!(&request, InspectRequest::Entity { name, count: true, .. } if name.as_str() == Item::SCHEMA.name)
-            {
-                db.cardinality::<Item>()
-                    .map(Cardinality::Available)
-                    .unwrap_or(Cardinality::Unavailable)
-            } else {
-                Cardinality::NotExposed
-            };
-            (
-                Admission::Readable {
-                    incarnation: db.incarnation(),
-                },
-                count,
-            )
-        }
-        Err(Error::Maintenance) => (Admission::Maintenance, Cardinality::Unavailable),
-        Err(Error::IncompatibleSchema) => (Admission::Incompatible, Cardinality::Unavailable),
-        Err(_) => (Admission::Unavailable, Cardinality::Unavailable),
+fn inspect(_caller: ic_db::Principal, (): ()) -> canic::db::inspection::Response {
+    use canic::db::inspection::Admission;
+    let admission = match open(&runtime()) {
+        Ok(db) => Admission::Readable {
+            incarnation: db.incarnation(),
+        },
+        Err(Error::Maintenance) => Admission::Maintenance,
+        Err(Error::IncompatibleSchema) => Admission::Incompatible,
+        Err(_) => Admission::Unavailable,
     };
-    let reply = canic::db::schema::inspect(&schema(), &request, admission, count);
-    #[cfg(feature = "fault-injection")]
-    let reply = controls::inspection_reply(reply);
-    reply
+    canic::db::inspection::Response {
+        schema: schema().fingerprint(),
+        admission,
+    }
 }
 
 #[allow(clippy::needless_pass_by_value)]
@@ -344,8 +326,6 @@ mod controls {
 
     thread_local! { static REPLY_FAILURE: Cell<bool> = const { Cell::new(false) }; }
 
-    thread_local! { static INSPECTION_FAILURE: Cell<bool> = const { Cell::new(false) }; }
-
     pub(super) fn reply_failure() -> bool {
         REPLY_FAILURE.get()
     }
@@ -380,36 +360,6 @@ mod controls {
         drop(outer);
         assert_eq!(database::store::with(|db| db.incarnation()), [91; 16]);
         Ok(())
-    }
-
-    // Deliberately corrupt an otherwise admitted application reply after projection.
-    // This qualifies the endpoint's final byte ceiling, not a different DB schema.
-    pub(super) fn inspection_reply(
-        mut reply: crate::protocol::InspectReply,
-    ) -> crate::protocol::InspectReply {
-        use canic::db::inspection::{Body, Definition, Selection};
-        if INSPECTION_FAILURE.get()
-            && let Ok(response) = &mut reply
-            && let Selection::Entity(entity) = &mut response.selection
-        {
-            let fields = (0..64)
-                .map(|index| {
-                    let mut field = entity.fields.as_slice()[0].clone();
-                    field.name = ic_wire::Text::new(format!("field{index:059}")).unwrap();
-                    field
-                })
-                .collect::<Vec<_>>();
-            entity.types = ic_wire::List::new(
-                (0..64)
-                    .map(|index| Definition {
-                        name: ic_wire::Text::new(format!("type{index:060}")).unwrap(),
-                        body: Body::Record(ic_wire::List::new(fields.clone()).unwrap()),
-                    })
-                    .collect(),
-            )
-            .unwrap();
-        }
-        reply
     }
 
     ///
@@ -491,8 +441,6 @@ mod controls {
             }
             0 => REPLY_FAILURE.set(false),
             1 => REPLY_FAILURE.set(true),
-            4 => INSPECTION_FAILURE.set(true),
-            5 => INSPECTION_FAILURE.set(false),
             6 => nested_update().unwrap(),
             2 | 3 => {
                 let host = runtime();

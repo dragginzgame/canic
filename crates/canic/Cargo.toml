@@ -31,7 +31,6 @@ blob = [
     "dep:ic-storage",
 ]
 db = ["dep:ic-platform-runtime"]
-db-schema = ["db", "dep:ic-db"]
 db-store = ["dep:ic-db", "dep:sha2", "storage"]
 endpoint-metrics = ["metrics"]
 entropy = ["dep:ic-entropy", "raw-rand"]

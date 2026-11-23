@@ -419,6 +419,38 @@ fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
     })
 }
 
+fn stage_evidence<T>(dir: &Path, decode: impl FnOnce(&[u8]) -> Result<T>) -> Result<Option<T>> {
+    let path = dir.join("stage/reply.bin");
+    if !path.try_exists().map_err(supplier)? {
+        return Ok(None);
+    }
+    match decode(&store::read(&path, LIMITS.bytes)?) {
+        Ok(value) => Ok(Some(value)),
+        Err(Error::Blocked(_)) => Ok(None),
+        Err(error) => Err(error),
+    }
+}
+
+fn visit_observations(
+    dir: &Path,
+    [reconcile, observe]: [Method; 2],
+    mut visit: impl FnMut(Method, &[u8]) -> Result<()>,
+) -> Result<()> {
+    for index in 0..OBSERVATIONS {
+        let base = dir.join(format!("observe/{index}"));
+        for (name, method) in [("reconcile/reply.bin", reconcile), ("reply.bin", observe)] {
+            let path = base.join(name);
+            if path.try_exists().map_err(supplier)? {
+                visit(
+                    method,
+                    &store::read(&path, canic_management_protocol::application::LIMITS.bytes)?,
+                )?;
+            }
+        }
+    }
+    Ok(())
+}
+
 /// Read only authenticated retained replies; public queries never establish output custody.
 pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
     evidence_with_source(dir, plan).map(|value| value.map(|(status, _)| status))
@@ -428,51 +460,41 @@ pub(crate) fn evidence_with_source(
     dir: &Path,
     plan: &Plan,
 ) -> Result<Option<(Status, Option<canic_management_protocol::stored::Delivery>)>> {
-    let mut latest = None;
-    let stage = dir.join("stage/reply.bin");
-    if stage.try_exists().map_err(supplier)? {
-        match stage_reply(plan, &store::read(&stage, LIMITS.bytes)?) {
-            Ok(status) => {
-                validate(plan, None, &status)?;
-                latest = Some((status, None));
+    let mut latest = stage_evidence(dir, |bytes| stage_reply(plan, bytes))?
+        .map(|status| {
+            validate(plan, None, &status)?;
+            Ok::<_, Error>((status, None))
+        })
+        .transpose()?;
+    visit_observations(
+        dir,
+        [Method::Reconcile, Method::Observe],
+        |method, bytes| {
+            let method = method.id(plan);
+            let (status, source) = if matches!(
+                method,
+                canic_management_protocol::stored::CUSTODY
+                    | canic_management_protocol::custody::ROOT
+                    | canic_management_protocol::custody::ROOT_HISTORY
+                    | canic_management_protocol::application::CHILD_EVIDENCE
+                    | canic_management_protocol::application::CUSTODY
+            ) {
+                stored::creation_evidence(plan, bytes)?
+            } else {
+                (decode_observation(plan, method, bytes)?, None)
+            };
+            if status.phase == Phase::Empty && status.approval.is_none() && latest.is_none() {
+                return Ok(());
             }
-            Err(Error::Blocked(_)) => {}
-            Err(error) => return Err(error),
-        }
-    }
-    for index in 0..OBSERVATIONS {
-        for (name, method) in [
-            ("reconcile/reply.bin", Method::Reconcile.id(plan)),
-            ("reply.bin", Method::Observe.id(plan)),
-        ] {
-            let reply = dir.join(format!("observe/{index}/{name}"));
-            if reply.try_exists().map_err(supplier)? {
-                let bytes =
-                    store::read(&reply, canic_management_protocol::application::LIMITS.bytes)?;
-                let (status, source) = if matches!(
-                    method,
-                    canic_management_protocol::stored::CUSTODY
-                        | canic_management_protocol::custody::ROOT
-                        | canic_management_protocol::custody::ROOT_HISTORY
-                        | canic_management_protocol::application::CHILD_EVIDENCE
-                        | canic_management_protocol::application::CUSTODY
-                ) {
-                    stored::creation_evidence(plan, &bytes)?
-                } else {
-                    (decode_observation(plan, method, &bytes)?, None)
-                };
-                if status.phase == Phase::Empty && status.approval.is_none() && latest.is_none() {
-                    continue;
-                }
-                validate(plan, latest.as_ref().map(|(s, _)| s), &status)?;
-                let source = stored::retain_delivery(
-                    latest.as_ref().and_then(|(_, source)| source.as_ref()),
-                    source,
-                )?;
-                latest = Some((status, source));
-            }
-        }
-    }
+            validate(plan, latest.as_ref().map(|(s, _)| s), &status)?;
+            let source = stored::retain_delivery(
+                latest.as_ref().and_then(|(_, source)| source.as_ref()),
+                source,
+            )?;
+            latest = Some((status, source));
+            Ok(())
+        },
+    )?;
     Ok(latest)
 }
 

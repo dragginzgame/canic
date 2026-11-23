@@ -2,7 +2,7 @@
 //! schema, query construction and explicit storage/lifecycle hooks.
 //! No database executor, registry or durable transport representation lives here.
 
-#[cfg(all(test, any(feature = "db-store", feature = "db-schema")))]
+#[cfg(all(test, feature = "db-store"))]
 pub(crate) mod test_store {
     use ic_db::design::prelude::*;
 
@@ -23,9 +23,6 @@ pub mod endpoint;
 /// Passive bounded inspection contract, usable independently of the database engine.
 #[cfg(feature = "db")]
 pub mod inspection;
-/// Optional projection of compiled DB metadata; application authorization stays external.
-#[cfg(feature = "db-schema")]
-pub mod schema;
 
 /// Fixed transport envelope, independent of the application's narrower work bounds.
 #[cfg(feature = "db")]
@@ -39,7 +36,7 @@ pub const RPC_LIMITS: ic_wire::Limits = ic_wire::Limits {
 #[cfg(feature = "db")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operation {
-    /// Application-selected schema/status information.
+    /// Read the executable schema fingerprint and ordinary database admission.
     Inspect,
     /// Application-defined bounded reads.
     Query,
@@ -49,8 +46,8 @@ pub enum Operation {
 
 /// Mount typed `db_inspect`, `db_query` and `db_write` methods.
 ///
-/// `protocol` supplies passive `INSPECT`, `QUERY`, `WRITE` Wire IDs and corresponding
-/// `InspectRequest/Reply`, `QueryRequest/Reply`, `WriteRequest/Reply` types. Those
+/// Inspection uses Canic’s fixed unit request and [inspection::Response].
+/// `protocol` supplies the `QUERY` and `WRITE` IDs and their `QueryRequest/Reply` and `WriteRequest/Reply` types. Those
 /// contracts belong to the application; no arbitrary database query is exposed.
 /// `authorize(caller, Operation)` returns `Result<(), String>` before payload copy.
 /// Inspect/query handlers receive `(caller, request)`; write receives
@@ -64,8 +61,8 @@ pub enum Operation {
 macro_rules! mount_db_endpoints {
     (protocol = $protocol:path, authorize = $authorize:path,
      inspect = $inspect:path, query = $query:path, write = $write:path $(,)?) => {
-        $crate::mount_db_endpoints!(@method $protocol, $authorize, $inspect, Inspect,
-            query, "db_inspect", INSPECT, InspectRequest, InspectReply);
+        $crate::mount_db_endpoints!(@method $crate::db::inspection, $authorize, $inspect, Inspect,
+            query, "db_inspect", INSPECT, Request, Response);
         $crate::mount_db_endpoints!(@method $protocol, $authorize, $query, Query,
             query, "db_query", QUERY, QueryRequest, QueryReply);
         $crate::mount_db_endpoints!(@method $protocol, $authorize, $write, Write,

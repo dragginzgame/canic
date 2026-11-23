@@ -163,7 +163,7 @@ when changing component boundaries.
 Finish the accepted coherent outcome, including directly required callers,
 fixtures, docs and cleanup. Split independent outcomes, not compiler fallout or
 each proof of the same change. Stop at new independent scope or a release boundary.
-Maintain meaningful [changelog notes](https://github.com/dragginzgame/toko-tooling/blob/a716b501274678a8ebf163ef576bbb549e974acd/rules/changelogs.md) once per completed batch;
+Maintain meaningful [changelog notes](https://github.com/dragginzgame/toko-tooling/blob/5dd76be2840958cdb8c00f7d34f0a40e4a9e718c/rules/changelogs.md) once per completed batch;
 governance-only edits need no note unless they change a maintained surface or one
 is requested. Exclude all legal and licensing content from changelogs, including
 adoption notices and notes about this policy or its cleanup. This exclusion overrides
@@ -724,8 +724,10 @@ for exceptions, historical cleanup and protected release/recovery records.
 Use `### 🎯 Qualification` for results such as cursor behavior across an upgrade
 or the workload budget at which an operation completes. Use `### 🧪 Testing`
 for changes to test tooling or coverage.
-Use IcyDB-style emoji category sections in the owning release changelog; read the
-[changelog rules](https://github.com/dragginzgame/toko-tooling/blob/a716b501274678a8ebf163ef576bbb549e974acd/rules/changelogs.md) when updating them. Every issue fixed must
+Use IcyDB-style emoji category sections in the owning release changelog. Keep
+adjacent bullets together without blank lines and leave space around fenced
+examples. Read the
+[changelog rules](https://github.com/dragginzgame/toko-tooling/blob/5dd76be2840958cdb8c00f7d34f0a40e4a9e718c/rules/changelogs.md) when updating them. Every issue fixed must
 have a descriptive link with its number and title in that changelog before handoff, except legal and licensing
 changes, which must not be recorded there: root `CHANGELOG.md` for a
 workspace without independent release groups, or `releases/<group>/CHANGELOG.md`

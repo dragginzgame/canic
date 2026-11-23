@@ -149,7 +149,7 @@ journals. The hub is installed independently and retains its configured Root in
 one named cell. The fleet declaration supplies the shard component and its hub
 parent. Only the controller can admit the resulting grant. The approved application
 init bytes bind the hub principal as owner of each installed database shard.
-The test reads each shard's catalogue as that principal, checks the operator is
+The test reads each shard's database admission as that principal, checks the operator is
 refused and checks the original generation against the argument-bound Store pin.
 
 The witness checks same-key concurrent signup, lost replies, separate shard
@@ -568,9 +568,9 @@ controller guard, Root client selections and absent recorders.
 explicitly and supplies synchronous inspect/query/write handlers to
 `canic::mount_db_endpoints!`. The `db` feature adds no IC DB runtime dependency to
 Canic. Its passive `db::inspection` contract is versioned independently as
-`method_id("canic.db.inspect.v1")`. The separate optional `db-schema` feature adds
-stateless projection of compiled IC DB metadata, with no database executor,
-storage owner or permission policy. The witness consumes crates.io IC DB and its schema macros at 0.27.0; transport never becomes its durable codec.
+`method_id("canic.db.inspect.v2")`. The unit request returns the executable schema fingerprint
+and ordinary admission status, including the incarnation when readable. The application
+obtains both from IC DB. The witness uses IC DB and its schema macros at 0.27.7.
 
 ```sh
 make qualification-setup
@@ -599,25 +599,6 @@ A fresh CLI invocation reconciles the original approval, signed request and
 single install attempt. The child advances one executable version, retains its
 stable bytes and both rows, denies Root's application query, and admits the
 original user's next write. These runs use local synthetic cycles.
-
-The fault artifact also deliberately expands an inspection reply after successful
-schema projection. The installed endpoint must refuse its final encoding rather
-than return truncated metadata, preserve the entire stable backing, and resume
-the original catalogue/incarnation/cardinality after the fault is cleared. This
-tests the final application reply ceiling; the injected metadata is not a claim
-that IC DB admits that compiled schema. Ordinary artifacts have no such control.
-
-Inspection returns a complete catalogue of at most 64 exposed entities and a
-selected entity bound to the observed executable schema fingerprint. Names have
-64-byte bounds; fields, indexes, named definitions and enum alternatives are each
-capped at 64, index components at 16, with the shared 64 KiB reply ceiling. Recursive
-types use finite named links. References expose logical target/supporting-index
-facts separately from value types. Limits refuse without truncating complete
-metadata. There is no pagination or snapshot-consistency claim. Executable schema,
-readable incarnation and closed/incompatible admission are distinct facts.
-Cardinality uses `Database::cardinality`, only under application permission and
-ordinary admission; closed/unsupported state never triggers a row scan or repair.
-Native schema cases cover recursion, reference/index projection and capacity.
 
 `target/db/` retains the source archive, lockfile/compiler, Cargo artifact records, selected
 feature graphs, normal/fault/incompatible Wasm and installed run log. Simulator setup is

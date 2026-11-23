@@ -22,6 +22,14 @@ pub struct Receipt {
 }
 
 impl Receipt {
+    /// Wire budget for the versioned install argument and retained receipt.
+    pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
+        bytes: 512,
+        allocation: 16_384,
+        nodes: 128,
+        depth: 8,
+    };
+
     const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
         method: ic_wire::method_id("canic.dormant.install.v1"),
         direction: ic_wire::Direction::Request,
@@ -32,7 +40,7 @@ impl Receipt {
     /// # Errors
     /// Returns any bounded encoding error.
     pub fn encode(&self) -> Result<Vec<u8>, ic_wire::Error> {
-        ic_wire::encode(self, Self::FRAME, crate::method::LIMITS)
+        ic_wire::encode(self, Self::FRAME, Self::LIMITS)
     }
 
     /// Decode the exact versioned retirement binding.
@@ -40,7 +48,7 @@ impl Receipt {
     /// # Errors
     /// Refuses malformed or oversized installation arguments.
     pub fn decode(bytes: &[u8]) -> Result<Self, ic_wire::Error> {
-        ic_wire::decode(bytes, Self::FRAME, crate::method::LIMITS)
+        ic_wire::decode(bytes, Self::FRAME, Self::LIMITS)
     }
 }
 

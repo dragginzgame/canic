@@ -43,7 +43,7 @@ fn metrics(request: Request) -> Report {
         Request::Endpoints(_) => Report::Unavailable,
         #[cfg(feature = "blob")]
         Request::Blob => blob(),
-        #[cfg(any(feature = "db-schema", feature = "db-store"))]
+        #[cfg(feature = "db-store")]
         Request::Db => super::store::get::<ic_db::metrics::MetricsStorage>().map_or(
             Report::Unavailable,
             |store| {
@@ -92,7 +92,7 @@ fn metrics(request: Request) -> Report {
         }
         #[cfg(not(feature = "blob"))]
         Request::Blob => Report::Unavailable,
-        #[cfg(not(any(feature = "db-schema", feature = "db-store")))]
+        #[cfg(not(feature = "db-store"))]
         Request::Db => Report::Unavailable,
         #[cfg(not(feature = "jobs"))]
         Request::Jobs => Report::Unavailable,

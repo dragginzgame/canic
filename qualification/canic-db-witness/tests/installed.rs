@@ -5,10 +5,10 @@ mod managed;
 
 use canic::db::{
     RPC_LIMITS,
-    inspection::{Admission, Cardinality, Entity, Kind, Request, Selection},
+    inspection::{Admission, INSPECT, Response},
 };
 use canic_db_witness::protocol::{
-    INSPECT, InspectReply, QUERY, QueryReply, QueryRequest, Refusal, Row, WRITE, WriteReply,
+    QUERY, QueryReply, QueryRequest, Refusal, Row, WRITE, WriteReply,
 };
 use ic_testkit::{
     pocket_ic::{
@@ -108,30 +108,27 @@ impl Client<'_> {
         .unwrap()
     }
 
-    async fn catalogue(&self) -> canic::db::inspection::Response {
-        self.query::<_, InspectReply>("db_inspect", INSPECT, &Request::Catalogue)
-            .await
-            .unwrap()
+    async fn inspect(&self) -> Response {
+        self.query("db_inspect", INSPECT, &()).await
     }
 
-    async fn inspect(&self) -> Entity {
-        let catalog = self.catalogue().await;
-        let reply = self
-            .query::<_, InspectReply>(
-                "db_inspect",
-                INSPECT,
-                &Request::Entity {
-                    schema: catalog.schema,
-                    name: ic_wire::Text::new("Item".into()).unwrap(),
-                    count: true,
-                },
-            )
-            .await
-            .unwrap();
-        let Selection::Entity(entity) = reply.selection else {
-            panic!("entity description");
+    async fn rows(&self) -> Vec<Row> {
+        let mut query = QueryRequest {
+            minimum: 0,
+            limit: 3,
+            work: 4,
+            after: None,
         };
-        entity
+        let mut rows = Vec::new();
+        for _ in 0..4 {
+            let page = self.page(&query).await.unwrap();
+            rows.extend(page.rows);
+            query.after = page.next;
+            if query.after.is_none() {
+                return rows;
+            }
+        }
+        panic!("fixture exceeded four pages");
     }
 
     async fn page(&self, request: &QueryRequest) -> QueryReply {
@@ -194,75 +191,27 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         canister,
         owner,
     };
-    let info = client.inspect().await;
-    assert_eq!(info.name.as_str(), "Item");
-    assert_eq!(info.primary_key.as_str(), "id");
+    let initial = client.inspect().await;
     assert_eq!(
-        info.fields
-            .as_slice()
-            .iter()
-            .map(|f| (f.name.as_str(), f.value.kind.clone()))
-            .collect::<Vec<_>>(),
-        [("id", Kind::Unsigned(64)), ("score", Kind::Unsigned(64))]
-    );
-    assert_eq!(info.indexes.as_slice()[0].name.as_str(), "score,id");
-    assert_eq!(info.cardinality, Cardinality::Available(0));
-    let catalogue = client.catalogue().await;
-    assert_eq!(
-        catalogue.admission,
+        initial.admission,
         Admission::Readable {
             incarnation: [91; 16]
         }
     );
-    assert_eq!(
-        catalogue.selection,
-        Selection::Catalogue(
-            ic_wire::List::new(vec![ic_wire::Text::new("Item".into()).unwrap()]).unwrap()
-        )
-    );
-    let no_count = client
-        .query::<_, InspectReply>(
+    assert!(
+        pic.query_call(
+            canister,
+            owner,
             "db_inspect",
-            INSPECT,
-            &Request::Entity {
-                schema: catalogue.schema,
-                name: ic_wire::Text::new("Item".into()).unwrap(),
-                count: false,
-            },
+            frame(
+                ic_wire::method_id("canic.db.inspect.v1"),
+                &(),
+                ic_wire::Direction::Request
+            )
         )
         .await
-        .unwrap();
-    let Selection::Entity(no_count) = no_count.selection else {
-        panic!("entity");
-    };
-    assert_eq!(no_count.cardinality, Cardinality::NotExposed);
-    for (hash, name, expected) in [
-        (
-            [0; 32],
-            "Item",
-            canic::db::inspection::Refusal::SchemaChanged,
-        ),
-        (
-            catalogue.schema,
-            "missing",
-            canic::db::inspection::Refusal::UnknownEntity,
-        ),
-    ] {
-        assert_eq!(
-            client
-                .query::<_, InspectReply>(
-                    "db_inspect",
-                    INSPECT,
-                    &Request::Entity {
-                        schema: hash,
-                        name: ic_wire::Text::new(name.into()).unwrap(),
-                        count: false
-                    }
-                )
-                .await,
-            Err(expected)
-        );
-    }
+        .is_err()
+    );
     // Production artifact has no private maintenance/fault entrypoint.
     assert!(
         pic.update_call(
@@ -326,10 +275,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
                 .is_err()
         );
     }
-    assert_eq!(
-        client.inspect().await.cardinality,
-        Cardinality::Available(0)
-    );
+    assert_eq!(client.rows().await.len(), 0);
     assert_eq!(
         client
             .write(&[row(1, 0), row(2, 0), row(3, 10), row(4, 20)])
@@ -346,10 +292,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         client.write(&[row(5, 30), row(5, 40)]).await,
         Err(Refusal::DuplicateTarget)
     );
-    assert_eq!(
-        client.inspect().await.cardinality,
-        Cardinality::Available(4)
-    );
+    assert_eq!(client.rows().await.len(), 4);
     let mut request = QueryRequest {
         minimum: 10,
         limit: 2,
@@ -401,10 +344,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
     canic_qualification::upgrade_stopped(pic, canister, normal.clone(), vec![], None)
         .await
         .unwrap();
-    assert_eq!(
-        client.inspect().await.cardinality,
-        Cardinality::Available(4)
-    );
+    assert_eq!(client.rows().await.len(), 4);
     let page = client.page(&request).await.unwrap();
     assert_eq!(page.rows, [row(3, 10), row(4, 20)]);
     if let Some(next) = page.next {
@@ -447,37 +387,6 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
     assert!(matches!(client.metrics(Source::Entropy).await,
         Report::Entropy {attempts, succeeded, failed, cancelled}
         if (attempts.total, succeeded.total, failed.total, cancelled.total) == (2, 1, 1, 0)));
-    let before_limit = client.catalogue().await;
-    let backing = pic.get_stable_memory(canister).await;
-    client.control(4).await;
-    let error = pic
-        .query_call(
-            canister,
-            owner,
-            "db_inspect",
-            frame(
-                INSPECT,
-                &Request::Entity {
-                    schema: before_limit.schema,
-                    name: ic_wire::Text::new("Item".into()).unwrap(),
-                    count: true,
-                },
-                ic_wire::Direction::Request,
-            ),
-        )
-        .await
-        .unwrap_err();
-    assert!(
-        error.reject_message.contains("endpoint refused: Encode("),
-        "oversized inspection must reach the final encoder: {error:?}"
-    );
-    assert_eq!(pic.get_stable_memory(canister).await, backing);
-    client.control(5).await;
-    assert_eq!(client.catalogue().await, before_limit);
-    assert_eq!(
-        client.inspect().await.cardinality,
-        Cardinality::Available(4)
-    );
     client.control(1).await;
     let error = pic
         .update_call(
@@ -496,10 +405,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         error.reject_message.contains("endpoint refused: Encode("),
         "must reach post-mutation encoder: {error:?}"
     );
-    assert_eq!(
-        client.inspect().await.cardinality,
-        Cardinality::Available(4)
-    );
+    assert_eq!(client.rows().await.len(), 4);
     client.control(0).await;
     assert_eq!(
         client
@@ -510,8 +416,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         2
     );
     client.control(2).await;
-    assert_eq!(client.catalogue().await.admission, Admission::Maintenance);
-    assert_eq!(client.inspect().await.cardinality, Cardinality::Unavailable);
+    assert_eq!(client.inspect().await.admission, Admission::Maintenance);
     request.after = None;
     assert_eq!(client.page(&request).await, Err(Refusal::Maintenance));
     assert_eq!(client.write(&[row(7, 50)]).await, Err(Refusal::Maintenance));
@@ -519,16 +424,12 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
     canic_qualification::upgrade_stopped(pic, canister, normal.clone(), vec![], None)
         .await
         .unwrap();
-    assert_eq!(client.inspect().await.cardinality, Cardinality::Unavailable);
     assert_eq!(client.write(&[row(7, 50)]).await, Err(Refusal::Maintenance));
     canic_qualification::upgrade_stopped(pic, canister, fault, vec![], None)
         .await
         .unwrap();
     client.control(3).await;
-    assert_eq!(
-        client.inspect().await.cardinality,
-        Cardinality::Available(6)
-    );
+    assert_eq!(client.rows().await.len(), 6);
     assert_eq!(client.write(&[row(7, 50)]).await.unwrap().inserted, 1);
     client.control(6).await;
     // A different executable can describe its schema, but cannot silently open
@@ -537,19 +438,15 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         .await
         .unwrap();
     let backing = pic.get_stable_memory(canister).await;
-    let changed = client.catalogue().await;
-    assert_ne!(changed.schema, catalogue.schema);
+    let changed = client.inspect().await;
+    assert_ne!(changed.schema, initial.schema);
     assert_eq!(changed.admission, Admission::Incompatible);
-    assert_eq!(client.inspect().await.cardinality, Cardinality::Unavailable);
     assert_eq!(pic.get_stable_memory(canister).await, backing);
     canic_qualification::upgrade_stopped(pic, canister, normal.clone(), vec![], None)
         .await
         .unwrap();
-    assert_eq!(client.catalogue().await.schema, catalogue.schema);
-    assert_eq!(
-        client.inspect().await.cardinality,
-        Cardinality::Available(7)
-    );
+    assert_eq!(client.inspect().await, initial);
+    assert_eq!(client.rows().await.len(), 7);
     request.minimum = 51;
     let mut reopened = Vec::new();
     for _ in 0..4 {

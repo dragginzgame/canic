@@ -52,7 +52,7 @@ fn open(initial: Option<Receipt>) {
     let cell = canic::storage::cell(
         &runtime,
         KEY,
-        canic::method::LIMITS.bytes,
+        Receipt::LIMITS.bytes,
         initial.map(|receipt| receipt.encode().expect("encode retirement receipt")),
     );
     let receipt = Receipt::decode(cell.get()).expect("open retirement receipt");

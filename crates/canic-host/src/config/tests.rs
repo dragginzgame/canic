@@ -1524,6 +1524,60 @@ expires_at_ns = 1
 }
 
 #[test]
+fn registry_and_workers_share_infrastructure_but_require_separate_parents() {
+    let source = include_str!("../../../../apps/examples/miner-pool/canic.toml");
+    let mut config: Config = toml::from_str(source).unwrap();
+    let app = config.apps.get_mut("ex-miner-pool").unwrap();
+    app.canisters
+        .insert("registry".into(), app.canisters["pool"].clone());
+    let mut project = app.canisters["miner"].clone();
+    project.parent = Some("registry".into());
+    app.canisters.insert("project".into(), project);
+    let fleet = app.fleets.get_mut("local").unwrap();
+    let worker = &fleet.worker_pools[0];
+    fleet.registry = Some(RegistryConfig {
+        component: "project".into(),
+        root: worker.root.clone(),
+        store: worker.store.clone(),
+        release: worker.release.clone(),
+        max_instances: 1,
+        creation_payer: worker.creation_payer,
+        creation_budget: worker.creation_budget,
+        expires_at_ns: worker.expires_at_ns,
+        increase_from: None,
+        install_args: None,
+    });
+    config.validate().unwrap();
+    for (field, expected) in [
+        (
+            "root",
+            r#"pool "miner".root = "other" must match pool "project".root = "root""#,
+        ),
+        (
+            "store",
+            r#"pool "miner".store = "other" must match pool "project".store = "store""#,
+        ),
+        (
+            "component",
+            r#"placement component "project" is declared in more than one pool"#,
+        ),
+        ("parent", r#"both have parent "pool""#),
+    ] {
+        let mut invalid = config.clone();
+        let app = invalid.apps.get_mut("ex-miner-pool").unwrap();
+        let worker = &mut app.fleets.get_mut("local").unwrap().worker_pools[0];
+        match field {
+            "root" => worker.root = "other".into(),
+            "store" => worker.store = "other".into(),
+            "component" => worker.component = "project".into(),
+            _ => app.canisters.get_mut("project").unwrap().parent = Some("pool".into()),
+        }
+        let error = invalid.validate().unwrap_err().to_string();
+        assert!(error.contains(expected), "{error}");
+    }
+}
+
+#[test]
 fn worker_pools_plan_separately_and_require_the_declared_hub() {
     let source = include_str!("../../../../apps/examples/miner-pool/canic.toml").replace(
         "network = { kind = \"Local\" }",
@@ -1572,6 +1626,8 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
             increase_from: None,
         });
     }
+    fleet.shard_pools[1].max_shards = 2;
+    fleet.shard_pools[1].increase_from = Some(1);
     let mut selected = config.select(None, None).unwrap();
     let header = b"\0asm\x01\0\0\0";
     let mut hub = header.to_vec();
@@ -1597,11 +1653,21 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
         )
     };
     let crate::FleetPlanning::PlacementPools {
-        workers, shards, ..
+        workers,
+        shards,
+        increases,
+        ..
     } = plan(&selected).unwrap()
     else {
         panic!("worker approvals")
     };
+    let mut previous = shards[1].approval.clone();
+    previous.max_shards = 1;
+    assert_eq!(increases.len(), 1);
+    assert_eq!(
+        increases[0].approval,
+        canic_management_protocol::stored::IncreasePool::Shards(previous, 2)
+    );
     assert_eq!(shards.len(), 2);
     assert_ne!(shards[0].approval.pool, shards[1].approval.pool);
     assert_eq!(shards[0].approval.hub, workers[0].approval.hub);

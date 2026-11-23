@@ -170,19 +170,13 @@ pub struct WorkerPoolConfig {
 }
 
 impl WorkerPoolConfig {
-    fn validate(
-        &self,
-        slots: &BTreeMap<String, CanisterConfig>,
-        cap: Option<u8>,
-        shards: &[ShardPoolConfig],
-        instances: Option<&RegistryConfig>,
-    ) -> Result<()> {
+    fn validate(&self, slots: &BTreeMap<String, CanisterConfig>, cap: Option<u8>) -> Result<()> {
         let cap = cap.ok_or_else(|| {
             Error::Invalid("worker_pool requires an explicit subnet_child_limit".into())
         })?;
         super::positive_count("worker_pool.max_workers", self.max_workers, cap)?;
         validate_deadline("worker_pool", self.expires_at_ns)?;
-        let hub = validate_pool(
+        validate_pool(
             slots,
             &self.component,
             &self.root,
@@ -190,23 +184,6 @@ impl WorkerPoolConfig {
             &self.release,
             None,
         )?;
-        for (component, root, store) in shards
-            .iter()
-            .map(|p| (&p.component, &p.root, &p.store))
-            .chain(instances.map(|p| (&p.component, &p.root, &p.store)))
-        {
-            if root != &self.root
-                || store != &self.store
-                || component == &self.component
-                || (instances.is_some_and(|p| p.component == *component)
-                    && parent(slots, component)? == hub)
-            {
-                return Err(Error::Invalid(format!(
-                    "worker_pool {} and {component} require distinct children on the same Root and Store, and a separate registry",
-                    self.component
-                )));
-            }
-        }
         Ok(())
     }
 }
@@ -233,10 +210,16 @@ pub(super) fn validate_pools(
         pool.validate(slots)?;
     }
     if let Some(pool) = instances {
-        pool.validate(slots, shards)?;
+        pool.validate(
+            slots,
+            shards
+                .iter()
+                .map(|p| &p.component)
+                .chain(workers.iter().map(|p| &p.component)),
+        )?;
     }
     for pool in workers {
-        pool.validate(slots, limit, shards, instances)?;
+        pool.validate(slots, limit)?;
     }
     Ok(())
 }
@@ -249,46 +232,49 @@ fn validate_capacity(
     standby: Option<&stored::StandbyPolicy>,
 ) -> Result<()> {
     let mut components = std::collections::BTreeSet::new();
-    for pool in shards {
-        if !components.insert(&pool.component)
-            || pool.root != shards[0].root
-            || pool.store != shards[0].store
-        {
+    let mut placement = None;
+    for (component, root, store) in shards
+        .iter()
+        .map(|p| (&p.component, &p.root, &p.store))
+        .chain(instances.map(|p| (&p.component, &p.root, &p.store)))
+        .chain(workers.iter().map(|p| (&p.component, &p.root, &p.store)))
+    {
+        if !components.insert(component) {
             return Err(Error::Invalid(format!(
-                "shard_pools repeats {:?} or differs in Root or Store",
-                pool.component
+                "placement component {component:?} is declared in more than one pool"
             )));
         }
+        let (first, expected_root, expected_store) =
+            *placement.get_or_insert((component, root, store));
+        for (field, value, expected) in [
+            ("root", root, expected_root),
+            ("store", store, expected_store),
+        ] {
+            if value != expected {
+                return Err(Error::Invalid(format!(
+                    "pool {component:?}.{field} = {value:?} must match pool {first:?}.{field} = {expected:?}"
+                )));
+            }
+        }
     }
-    if shards.len() > 1 && limit.is_none() {
+    if let Some(cap) = limit {
+        if shards.len() > usize::from(cap) {
+            return Err(Error::Invalid(format!(
+                "{} shard pools exceed subnet_child_limit = {cap}",
+                shards.len()
+            )));
+        }
+    } else if shards.len() > 1 {
         return Err(Error::Invalid(
             "multiple shard pools require subnet_child_limit".into(),
         ));
     }
-    if shards.len() > usize::from(limit.unwrap_or(2)) {
-        return Err(Error::Invalid(
-            "too many shard pools for the subnet child limit".into(),
-        ));
-    }
-    for pool in workers {
-        if !components.insert(&pool.component) {
-            return Err(Error::Invalid(format!(
-                "worker_pools repeats component {:?}",
-                pool.component
-            )));
-        }
-        if pool.root != workers[0].root || pool.store != workers[0].store {
-            return Err(Error::Invalid(format!(
-                "worker pool {:?} must share the fleet Root and Store",
-                pool.component
-            )));
-        }
-    }
-    if workers.len() > usize::from(limit.unwrap_or_default()) {
+    if let Some(cap) = limit
+        && workers.len() > usize::from(cap)
+    {
         return Err(Error::Invalid(format!(
-            "{} worker pools exceed subnet_child_limit = {:?}",
-            workers.len(),
-            limit
+            "{} worker pools exceed subnet_child_limit = {cap}",
+            workers.len()
         )));
     }
     if let Some(p) = standby {
@@ -307,15 +293,11 @@ fn validate_capacity(
             }
         }
         validate_deadline("standby_pool", Some(p.expires_at_ns))?;
-        if shards
-            .iter()
-            .map(|p| &p.root)
-            .chain(instances.iter().map(|p| &p.root))
-            .chain(workers.iter().map(|p| &p.root))
-            .any(|root| root != &p.root)
+        if let Some((component, root, _)) = placement
+            && root != &p.root
         {
             return Err(Error::Invalid(format!(
-                "standby_pool.root = {:?} must match the placement Root",
+                "standby_pool.root = {:?} must match pool {component:?}.root = {root:?}",
                 p.root
             )));
         }
@@ -445,6 +427,15 @@ impl FleetConfig {
                     "no shard pool configured for component {component:?}"
                 ))
             })?;
+        self.approve_shard_policy(policy, manifest, arguments)
+    }
+
+    fn approve_shard_policy(
+        &self,
+        policy: &ShardPoolConfig,
+        manifest: ic_wasm_store_protocol::Manifest,
+        arguments: canic_management_protocol::application::Arguments,
+    ) -> Result<stored::ShardPool> {
         policy.validate(&self.canisters)?;
         if !manifest.valid() || manifest.release != policy.release {
             return Err(Error::Invalid("invalid shard release manifest".into()));
@@ -570,10 +561,10 @@ fn parent<'a>(slots: &'a BTreeMap<String, CanisterConfig>, component: &str) -> R
 }
 
 impl RegistryConfig {
-    fn validate(
+    fn validate<'a>(
         &self,
         slots: &BTreeMap<String, CanisterConfig>,
-        shared: &[ShardPoolConfig],
+        other_components: impl Iterator<Item = &'a String>,
     ) -> Result<()> {
         let hub = validate_pool(
             slots,
@@ -589,21 +580,11 @@ impl RegistryConfig {
             stored::MAX_INSTANCES,
         )?;
         validate_deadline("registry", self.expires_at_ns)?;
-        for other in shared {
-            if self.root != other.root
-                || self.store != other.store
-                || self.component == other.component
-                || hub == parent(slots, &other.component)?
-            {
+        for component in other_components {
+            if parent(slots, component)? == hub {
                 return Err(Error::Invalid(format!(
-                    "registry (root {:?}, store {:?}, component {:?}, parent {hub:?}) and shard_pool (root {:?}, store {:?}, component {:?}, hub {:?}) require the same root and store and distinct children and parents",
-                    self.root,
-                    self.store,
-                    self.component,
-                    other.root,
-                    other.store,
-                    other.component,
-                    parent(slots, &other.component)?
+                    "registry component {:?} and pool component {component:?} both have parent {hub:?}; the registry requires a separate parent",
+                    self.component
                 )));
             }
         }
