@@ -124,7 +124,8 @@ fn initialize_with(
 fn view(receipt: SessionReceipt) -> SessionView {
     SessionView {
         ext: receipt.ext.map(|bytes| {
-            ic_wire::Bytes::new(bytes).expect("verified Auth extension within protocol limit")
+            ic_auth_wire::wire::Bytes::new(bytes)
+                .expect("verified Auth extension within protocol limit")
         }),
         caller: receipt.caller,
         issuer: receipt.issuer,

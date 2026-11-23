@@ -46,11 +46,12 @@ pub(super) async fn approve(root: &Client<'_>, max_children: u8) {
     .unwrap();
 }
 
-pub(super) async fn ready_project(
+pub(super) async fn approve_projects(
     root: &Client<'_>,
     hub: CanisterId,
     source: &stored::Stage<management::Approval>,
-) -> CanisterId {
+    max_instances: u8,
+) {
     let install = canic::topology::Install {
         root: root.id.to_text().parse().unwrap(),
         parent: hub.to_text().parse().unwrap(),
@@ -62,9 +63,9 @@ pub(super) async fn ready_project(
         root: root.id.to_text(),
         hub: hub.to_text(),
         component: "project".into(),
-        max_instances: 1,
+        max_instances,
         creation_payer: Default::default(),
-        creation_budget: management::CREATION_CYCLES,
+        creation_budget: management::CREATION_CYCLES * u64::from(max_instances),
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
     };
@@ -76,12 +77,15 @@ pub(super) async fn ready_project(
     )
     .await
     .unwrap();
+}
+
+pub(super) async fn ready_project(root: &Client<'_>, hub: CanisterId, key: u8) -> CanisterId {
     let hub = Client {
         pic: root.pic,
         id: hub,
         operator: root.operator,
     };
-    let place = async || self::place(&hub, None, 1).await.unwrap();
+    let place = async || self::place(&hub, None, key).await.unwrap();
     assert!(matches!(place().await, Placement::Pending(_)));
     settle(root.pic).await;
     let Placement::Assigned(_, id) = place().await else {

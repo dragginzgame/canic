@@ -59,6 +59,34 @@ fn manifest(version: &str, bytes: &[u8]) -> store::Manifest {
     }
 }
 
+pub(super) async fn publish_shard_successor(root: &Client<'_>, supplier: &Client<'_>) {
+    let mut wasm = std::fs::read(artifacts().join("pool-db.wasm")).unwrap();
+    // Append an empty custom section named "v2" to the actual shard executable.
+    wasm.extend_from_slice(b"\0\x03\x02v2");
+    let mut manifest = manifest("after-assignment", &wasm);
+    manifest.release.name = "user_shard".into();
+    let prepare = request(root, supplier, Command::Prepare(manifest.clone())).await;
+    let progress = send(root, &prepare).await.unwrap();
+    for index in progress.missing {
+        let bytes = wasm.chunks(store::CHUNK_BYTES).nth(index as usize).unwrap();
+        let put = request(
+            root,
+            supplier,
+            Command::Put(store::Put {
+                release: manifest.release.clone(),
+                index,
+                bytes: bytes.to_vec(),
+            }),
+        )
+        .await;
+        send(root, &put).await.unwrap();
+    }
+    let publish = request(root, supplier, Command::Publish(manifest.release.clone())).await;
+    let status = send(root, &publish).await.unwrap();
+    assert!(status.published);
+    assert_eq!(status.manifest, manifest);
+}
+
 #[tokio::test(flavor = "current_thread")]
 async fn publication_after_handover_resumes_across_root_maintenance_without_a_root_catalog() {
     let (_, binary) = support::inputs();

@@ -50,6 +50,9 @@ pub enum FleetPlanning {
         /// Shared-shard grant when configured.
         #[serde(skip_serializing_if = "Vec::is_empty")]
         shards: Vec<crate::PoolGrant<canic_management_protocol::stored::ShardPool>>,
+        /// Singleton policy for all projects allocated by the registry.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        singleton: Option<Box<crate::PoolGrant<canic_management_protocol::stored::SingletonGrant>>>,
         /// Dedicated-instance grant.
         #[serde(skip_serializing_if = "Option::is_none")]
         instances: Option<Box<crate::PoolGrant<canic_management_protocol::stored::InstancePool>>>,

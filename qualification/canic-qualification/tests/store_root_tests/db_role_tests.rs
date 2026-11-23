@@ -487,6 +487,7 @@ async fn dedicated_receiver(
     slot.wasm = Some("db-role-shard.wasm".into());
     config.canisters.insert("dedicated".into(), slot);
     config.registry = Some(canic_host::RegistryConfig {
+        singleton: None,
         component: "dedicated".into(),
         root: "root".into(),
         store: "store".into(),

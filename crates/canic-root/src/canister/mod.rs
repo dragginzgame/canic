@@ -58,7 +58,7 @@ management::mount_endpoints! {
     stage_child_upgrade, observe_child_upgrade, child_upgrade_status, reconcile_child_upgrade,
 }
 
-#[cfg(feature = "role-issuer")]
+#[cfg(feature = "sharding")]
 management::mount_endpoints! { observe_role_children, }
 
 #[cfg(feature = "blob")]

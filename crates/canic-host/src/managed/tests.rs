@@ -1040,6 +1040,32 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         stored::upgraded(&plan, &encode(&custody)).unwrap(),
         upgraded
     );
+    let mut mixed = plan.clone();
+    mixed.version = 8;
+    mixed.validate().unwrap();
+    assert_eq!(observation(&mixed).unwrap().method, "observe_role_children");
+    let child_evidence = canic_management_protocol::application::Custody {
+        root: canic_management_protocol::custody::RootHistory {
+            current: canic_management_protocol::custody::Root {
+                stored: custody.clone(),
+                store_operation: None,
+            },
+            store_history: Vec::new(),
+        },
+        applications: Default::default(),
+    };
+    let frame = ic_wire::encode(
+        &child_evidence,
+        ic_wire::Encoding::Frame {
+            method: canic_management_protocol::application::CHILD_EVIDENCE,
+            direction: ic_wire::Direction::Response,
+        },
+        canic_management_protocol::application::LIMITS,
+    )
+    .unwrap();
+    assert_eq!(stored::upgraded(&mixed, &frame).unwrap(), upgraded);
+    assert!(stored::upgraded(&mixed, &encode(&custody)).is_err());
+    assert!(stored::upgraded(&plan, &frame).is_err());
     assert_delivery_history(&plan, custody.clone());
     std::fs::write(&reply, encode(&custody)).unwrap();
     let value = projected(&plan).unwrap();

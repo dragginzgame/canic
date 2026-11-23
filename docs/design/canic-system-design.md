@@ -843,6 +843,17 @@ allocation-generation regression in `ops/storage/placement/scaling/tests`.
 
 Scope singleton and keyed uniqueness by the owning parent allocation and declared
 role or assignment policy; keyed instances additionally bind the application key.
+For a project's singleton ledger, Root supplies the canister and remains its sole
+IC controller. Only Root can install or replace its Wasm. The project requests
+its own ledger and manages its application operations. The operator approves
+code changes through Root and has no direct controller entry on the ledger.
+One registry-wide approval pins the singleton role, Store release, payer, count, creation budget and deadline. The requesting project is identified by its ready registry allocation. For project-funded ledgers it settles its own Root quote. Operating top-ups are a separate direct edge from project to ledger. The registry owes no payment on that edge.
+The installed `root_installs_separate_ledgers_for_two_registry_projects` witness
+has two real projects quote, pay for and recover their own ledgers. Each project
+sees its own ledger in its direct children. A separate exact child-funding approval
+lets one project replenish its ledger across an upgrade. The fresh PLS5 placement
+ledger retains singleton claims by the parent allocation's generation and refuses
+older pool formats.
 The same key in a different parent or Fleet is not automatically the same instance.
 A Fleet-wide uniqueness promise needs an explicit authoritative owner and cannot
 be inferred from a role name or a per-parent limit. Application authentication and
@@ -957,7 +968,7 @@ keeps creation and reserve custody at Root. Applications call
 `sharding::routes::assign_shard(pool, subject, authorize)` on registration and
 `sharding::routes::get_shard(pool, subject)` on reads. Canic requests and recovers
 the original growth ordinal internally. The application can distinguish a reserved
-route from a completed business write through its own admission or provisioning state. Root persists this mode in the PLS3 pool record.
+route from a completed business write through its own admission or provisioning state. Root persists this mode in the placement ledger.
 Account counts for this mode belong to the hub. A capacity ordinal retained at
 Root identifies an installed shard. Releasing an account must never remove that
 ordinal. Managed retirement of hub-local routes requires the hub to acknowledge
@@ -974,7 +985,7 @@ hub reserves destination capacity with `routes::prepare_move` and commits the
 exact source/destination with `routes::confirm_move` after application confirmation.
 Both reservations count while the copy is pending. If the pool cannot admit
 a destination, the source route stays intact. Fresh hubs use the v2 route
-frame. Root retains the hub’s zero acknowledgement in PLS4 alongside the original
+frame. Root retains the hub’s zero acknowledgement in the placement ledger alongside the original
 capacity claim. Repeating the operator drain recovers a missing acknowledgement.
 Legacy `377fbce` tests in `ops/storage/placement/sharding/tests` cover
 release decrementing occupancy and concurrent assignment retaining the first
@@ -2034,6 +2045,22 @@ Build records bind exact sources, selected lock graph, toolchain, features, targ
 
 ### Per-fleet versioned Wasm Store
 
+The Root controlling the fleet Store may publish immutable releases for any
+application descendant in its declared tree, including a ledger beneath a project.
+An occupied placement pool or a full child allowance permits publication and
+read-only Store observations. Publication consumes no child slot and leaves
+install authority, pool artifact pins, and maintenance admission in their existing owners.
+Legacy `377fbce` distinguished per-project singleton ledgers from globally indexed
+Root services in `docs/design/archive/0.64-service-singleton-topology/0.64-design.md`.
+The descendant's logical parent determines its singleton scope; publication binds
+the common Root and Store independently of the depth of that parent.
+
+A fleet with an approved child ceiling can upgrade an ordinary Store-backed
+permanent service in its existing slot. New Host plans use the child-deployment
+evidence contract to verify the exact upgrade approval, successor reference and
+retained pin. The same report cannot authorize maintenance of Root: it does
+not enumerate placement holdings. An upgrade does not reserve another child.
+
 Selected on 2026-11-15. Store implements versioned publication, chunk custody,
 quota changes, durable pins and bounded management-cache preparation. Root
 qualifies reference-backed effects/custody, controller-mediated publication and
@@ -2613,7 +2640,7 @@ the creation fee or delivered a funded spare, retain the charge and principal
 with that allocation for recovery. Any refund requires separate operator
 approval. An install retry cannot charge for a second principal.
 
-New grants default to Root-sponsored work. Set `creation_payer = "requester"` on the pool to require reimbursement. The PLS2 ledger requires a fresh Root. Platform Runtime 0.23.25 supplies
+New grants default to Root-sponsored work. Set `creation_payer = "requester"` on the pool to require reimbursement. The PLS5 ledger requires a fresh Root. Platform Runtime 0.23.25 supplies
 `cost_create_canister`, `msg_cycles_available` and `msg_cycles_accept` for
 requester-funded admission. Root currently records a fresh spare's principal
 without observing its working balance. A reimbursement quote requires an actual

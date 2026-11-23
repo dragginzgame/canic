@@ -110,3 +110,13 @@ pub async fn grow_shard(
 ) -> Result<(Placement, u32), CallError> {
     method::call::<GrowShard>(root, 10, &(pool.to_owned(), ordinal)).await
 }
+
+/// Recover or request one singleton belonging to the calling registry instance.
+pub struct RequestSingleton;
+impl Contract for RequestSingleton {
+    const NAME: &'static str = "request_singleton";
+    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const REQUEST: ic_wire::Limits = super::LIMITS;
+    type Input = String;
+    type Output = Placement;
+}

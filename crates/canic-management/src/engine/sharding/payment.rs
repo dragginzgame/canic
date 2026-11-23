@@ -34,7 +34,13 @@ pub(super) struct Receipt {
     quote: Quote,
 }
 
-fn grant(p: &Pools, d: &Demand, caller: Principal) -> Result<(String, u64), String> {
+#[derive(Clone, Debug, PartialEq, Eq, Ord, PartialOrd, Serialize, Deserialize)]
+pub(super) enum Owner {
+    Pool(String),
+    Project(Principal),
+}
+
+fn grant(p: &Pools, d: &Demand, caller: Principal) -> Result<(Owner, u64), String> {
     if p.capacity.is_none() {
         return Err("requester-funded growth requires an approved subnet limit".into());
     }
@@ -47,6 +53,16 @@ fn grant(p: &Pools, d: &Demand, caller: Principal) -> Result<(String, u64), Stri
                 l.approval.expires_at_ns,
             )
         }),
+        Demand::Singleton(role) => {
+            let registry = p.singleton.as_ref().ok_or("missing singleton grant")?;
+            if registry.grant.role != *role
+                || registry.grant.creation_payer != CreationPayer::Requester
+                || p.project(caller).is_none()
+            {
+                return Err("requester-funded singleton requires its installed project".into());
+            }
+            return Ok((Owner::Project(caller), registry.grant.expires_at_ns));
+        }
         Demand::Instance(_) => p
             .instances
             .as_ref()
@@ -64,7 +80,7 @@ fn grant(p: &Pools, d: &Demand, caller: Principal) -> Result<(String, u64), Stri
     if owner != &caller.to_text() || payer != CreationPayer::Requester {
         return Err("requester-funded grant for the calling hub required".into());
     }
-    Ok((name.clone(), deadline))
+    Ok((Owner::Pool(name.clone()), deadline))
 }
 
 pub(super) fn validate(pools: &Pools) {
@@ -111,6 +127,13 @@ fn fresh_budget(pools: &Pools, demand: &Demand) -> bool {
                 pools.creation_debit(ledger.allocated_slots()),
             )
         }
+        Demand::Singleton(_) => {
+            let registry = pools.singleton.as_ref().expect("approved singleton");
+            (
+                registry.grant.creation_budget,
+                pools.creation_debit(registry.slots()),
+            )
+        }
         Demand::Instance(_) => {
             let grant = pools.instances.as_ref().expect("approved registry");
             let slots = &pools.instance_slots(grant)[..pools.projects.len()];
@@ -133,6 +156,7 @@ fn place(d: &Demand, paid: Option<Settlement>) -> Placement {
         Demand::ShardCapacity(pool, n) => {
             super::assign_shard(pool, super::Claim::Capacity(*n), paid)
         }
+        Demand::Singleton(role) => super::singleton::request(role, paid),
         Demand::Instance(key) => super::instance(*key, paid),
         Demand::Worker(pool, index) => super::workers::resolve_worker(pool, *index, true, paid),
     }

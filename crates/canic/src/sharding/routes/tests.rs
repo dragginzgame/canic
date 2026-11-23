@@ -92,7 +92,22 @@ fn drain_preserves_both_reservations_through_reopen_and_exact_confirmation() {
     for (n, shard) in [a.clone(), b.clone(), c.clone()].into_iter().enumerate() {
         record_shard("users", n.try_into().unwrap(), shard, 2);
     }
+    // A free local slot must still check permission before consuming occupancy.
+    let denied = || Err("scope lost");
+    assert_eq!(
+        local(assign_shard("users", alice, denied)),
+        Err(ReservationError::Authorization("scope lost"))
+    );
+    assert_eq!(get_shard("users", alice), None);
+    assert_eq!(status(root, "users", &a, false).unwrap().live_placements, 0);
+
     local(assign_shard("users", alice, || Ok::<_, ()>(()))).unwrap();
+    // An exact retry also needs permission to return the retained assignment.
+    assert_eq!(
+        local(assign_shard("users", alice, denied)),
+        Err(ReservationError::Authorization("scope lost"))
+    );
+    assert_eq!(get_shard("users", alice), Some(a.clone()));
     assert!(status(alice, "users", &a, true).is_err());
     assert_eq!(status(root, "users", &a, true).unwrap().live_placements, 1);
     assert_eq!(

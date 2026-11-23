@@ -47,6 +47,9 @@ pub struct ShardPoolConfig {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RegistryConfig {
+    /// Optional child that each allocated instance can request for itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub singleton: Option<SingletonConfig>,
     /// Declared child component; its parent owns the pool.
     pub component: String,
     /// Installing management owner.
@@ -69,6 +72,24 @@ pub struct RegistryConfig {
     pub creation_payer: stored::CreationPayer,
     /// Deadline for new work, required when planning.
     pub expires_at_ns: Option<u64>,
+}
+
+/// A registry-wide singleton uses the registry's Root, Store and expiry.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SingletonConfig {
+    /// Direct child of the allocated instance in the app topology.
+    pub component: String,
+    /// Exact release to install.
+    pub release: ic_wasm_store_protocol::Release,
+    /// Optional application initialization bytes.
+    pub install_args: Option<PathBuf>,
+    /// Maximum registry-wide allocations under this approval.
+    pub maximum: u8,
+    /// Lifetime creation attachment budget.
+    pub creation_budget: u64,
+    /// Explicit payer, independent of the parent instance's own creation.
+    pub creation_payer: stored::CreationPayer,
 }
 
 /// Named surplus canisters on one network with the same release authority.
@@ -580,6 +601,27 @@ impl RegistryConfig {
             stored::MAX_INSTANCES,
         )?;
         validate_deadline("registry", self.expires_at_ns)?;
+        if let Some(child) = &self.singleton {
+            let owner = validate_pool(
+                slots,
+                &child.component,
+                &self.root,
+                &self.store,
+                &child.release,
+                child.install_args.as_deref(),
+            )?;
+            if owner != self.component || slots[&child.component].id.is_some() {
+                return Err(Error::Invalid(format!(
+                    "registry.singleton.component = {:?} requires an unbound child of {:?}",
+                    child.component, self.component
+                )));
+            }
+            super::positive_count(
+                "registry.singleton.maximum",
+                child.maximum,
+                stored::MAX_SUBNET_CHILDREN,
+            )?;
+        }
         for component in other_components {
             if parent(slots, component)? == hub {
                 return Err(Error::Invalid(format!(

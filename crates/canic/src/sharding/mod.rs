@@ -14,8 +14,8 @@ pub mod standby;
 pub mod provisioning;
 
 pub use client::{
-    AssignInstance, AssignShard, GrowShard, LookupInstance, LookupShard, assign, assign_instance,
-    grow_shard, lookup, lookup_instance,
+    AssignInstance, AssignShard, GrowShard, LookupInstance, LookupShard, RequestSingleton, assign,
+    assign_instance, grow_shard, lookup, lookup_instance,
 };
 use serde::{Deserialize, Serialize};
 

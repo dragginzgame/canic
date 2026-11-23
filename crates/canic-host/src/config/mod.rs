@@ -12,7 +12,8 @@ pub use discovery::{DiscoveredConfig, discover_configs, resolve_config_path};
 pub use funding::ChildTopUp;
 use serde::{Deserialize, Serialize};
 pub use sharding::{
-    PoolGrant, RegistryConfig, ShardPoolConfig, StandbyImports, StandbyPoolConfig, WorkerPoolConfig,
+    PoolGrant, RegistryConfig, ShardPoolConfig, SingletonConfig, StandbyImports, StandbyPoolConfig,
+    WorkerPoolConfig,
 };
 use std::{
     collections::BTreeMap,

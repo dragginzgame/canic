@@ -4,6 +4,44 @@ The current checkout names the provisioning identity `AuthSubject { issuer, subj
 Canic 0.244.0 and earlier expose it as `Account`. Updating the Rust type name
 preserves the published provisioning frame and the account’s shard placement key.
 
+## Durable hub routes in Canic 0.263.0
+
+Toko’s user hub assigns a shard with `routes::assign_shard` before it calls
+`provision_user`. To return a typed access refusal, append `Forbidden` to
+`UserHubError` and review the changed Wire reply baseline. Keep existing variants
+in order. In `apps/toko/user_hub/src/ops/mod.rs`, pass the check directly:
+
+```rust
+let placement = routes::assign_shard(USER_POOL, subject.into(), || auth.reauthorize())
+    .await
+    .map_err(|error| match error {
+        routes::ReservationError::Authorization(_) => Error::Forbidden,
+        routes::ReservationError::Placement(_) => Error::PlacementUnavailable,
+    })?;
+```
+
+Continue matching the successful `Placement` as before, including pending, full
+and growth refused. Only the assigned case can continue to shard provisioning.
+
+Toko’s discovery hub uses an attested project caller. Its `DiscoveryHubError` is
+a re-export of `DiscoveryShardError`, so append `Forbidden` to that shared enum
+and review the affected Wire baselines. In `ops::assign_shard`, accept
+`authorize: impl Fn() -> Result<(), DiscoveryHubError>` and return the inner error
+from `ReservationError::Authorization(error)`. Map `ReservationError::Placement(_)`
+to `DiscoveryHubError::Unavailable`. The endpoint can then use the same check
+both during assignment and immediately before dispatch to the cache shard:
+
+```rust
+let reauthorize = || attestation.reauthorize().map_err(|_| DiscoveryHubError::Forbidden);
+let shard = ops::assign_shard(wallet, &reauthorize).await?;
+reauthorize()?;
+```
+
+The installed Canic witness covers revocation during growth and recovery of
+the original allocation. In Toko’s installed `user_signup` and `discovery`
+suites, check the public typed reply and verify the refused request leaves the
+user profile or wallet association untouched.
+
 ## Coordinated hub and shard update (Canic #61)
 
 In Toko’s `crates/toko/src/user/provisioning.rs`, add
@@ -163,3 +201,34 @@ to her shard, assert the returned binding and compare both her current name and
 the shard's stable bytes. A repeat call to a ready hub can return locally and
 does not exercise this shard branch. Toko owns the final adoption run with its
 selected lockfiles, actual predecessor Wasms and private account assertions.
+
+### Project-funded singleton ledgers
+
+Declare the ledger's application parent as `project`. Under the existing fleet
+registry that allocates projects, select its singleton release and payer.
+
+```toml
+[apps.toko.fleets.local.registry.singleton]
+component = "project_ledger"
+release = { name = "project_ledger", version = "1" }
+maximum = 2
+creation_budget = 2000000000000
+creation_payer = "requester"
+```
+
+Host uses the registry's Store and deadline. Publish the ledger release first.
+After capacity and registry approval, pass the planned singleton approval JSON
+to Root's `configure-singleton` command. This path currently accepts a plain
+topology install. Host refuses a selected Auth receiver policy for the ledger.
+
+The project calls `canic::sharding::payment::fund` with the installed Root,
+`Demand::Singleton("project_ledger".into())`, its maximum debit and zero cycles.
+On a quote it calls again with the same maximum and the quoted sum of creation
+fee and working cycles. Recover a pending or lost reply with the same request
+and zero attachment. Root pins that claim to the calling project's original
+allocation. The project must first have enough cycles to pay its quote.
+
+Operating top-ups use a separate `top_up_children` entry for `project_ledger`.
+Leave `project` out to give the registry no ongoing project funding edge.
+Approve the finite payment rule against each installed project/ledger pair.
+Both canisters must mount their funding endpoints.

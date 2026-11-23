@@ -241,8 +241,8 @@ pub fn create_managed_plan(
         .transpose()?;
     let now = crate::now()?;
     let execute_at_ns = execute_at_ns.unwrap_or(now);
-    plan::retain(
-        journal,
+    let pool_child_evidence = source.is_some() && selection.config.subnet_child_limit.is_some();
+    let (mut plan, bytes) = plan::prepare(
         wasm,
         input,
         Some(DeploymentName {
@@ -260,7 +260,11 @@ pub fn create_managed_plan(
             execute_at_ns,
         }),
         now,
-    )
+    )?;
+    if pool_child_evidence {
+        plan.version = 8;
+    }
+    plan::retain_locked(&store::Store::open(journal)?, plan, &bytes)
 }
 
 // A newly declared service may sort before an already approved one. Only unclaimed

@@ -15,6 +15,8 @@ pub enum Demand {
     Worker(String, u8),
     /// A whole shared shard for the hub’s locally retained routes.
     ShardCapacity(String, u8),
+    /// One child of this role belonging to the calling registry instance.
+    Singleton(String),
 }
 
 /// Exact quote retained by Root for the original allocation.

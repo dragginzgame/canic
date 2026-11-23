@@ -146,6 +146,7 @@ pub(crate) fn evidence_with_source(
                 canic_management_protocol::stored::CUSTODY
                     | canic_management_protocol::custody::ROOT
                     | canic_management_protocol::custody::ROOT_HISTORY
+                    | canic_management_protocol::application::CHILD_EVIDENCE
                     | canic_management_protocol::application::CUSTODY
             ) {
                 super::stored::upgrade_evidence(plan, bytes)?

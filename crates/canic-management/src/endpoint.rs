@@ -33,7 +33,13 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
         && !(private
             && matches!(
                 _method,
-                protocol::stored::RECONCILE
+                protocol::publication::EXECUTE
+                    | protocol::publication::INFO
+                    | protocol::publication::CUSTODY
+                    | protocol::application::CHILD_EVIDENCE
+                    | protocol::stored::STAGE_UPGRADE
+                    | protocol::stored::RECONCILE_UPGRADE
+                    | protocol::stored::RECONCILE
                     | protocol::application::RECONCILE
                     | protocol::children::STATUS
             ))

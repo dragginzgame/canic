@@ -81,13 +81,18 @@ pub(super) async fn exercise(root: &Client<'_>, target: CanisterId, sibling: Can
     assert_eq!(configure(&rule).await.unwrap(), closed);
 }
 
-pub(super) async fn application_parent(root: &Client<'_>, parent: CanisterId, child: CanisterId) {
+pub(super) async fn application_parent(
+    root: &Client<'_>,
+    parent: CanisterId,
+    child: CanisterId,
+    component: &str,
+) {
     let pic = root.pic;
     let amount = 100_000_000_000;
     let rule = ChildFunding {
         parent: parent.to_text().parse().unwrap(),
         child: child.to_text().parse().unwrap(),
-        component: "worker".into(),
+        component: component.into(),
         below_cycles: u64::try_from(pic.cycle_balance(child).await).unwrap() + 4 * amount,
         amount_cycles: amount,
         budget_cycles: amount * 3,

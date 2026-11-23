@@ -142,6 +142,26 @@ async fn fixture<'a>(
     stored::Stage<management::Approval>,
     store::Manifest,
 ) {
+    fixture_with_module(
+        pic,
+        if fault {
+            "root-faults.wasm"
+        } else {
+            "root.wasm"
+        },
+    )
+    .await
+}
+
+async fn fixture_with_module<'a>(
+    pic: &'a PocketIc,
+    module: &str,
+) -> (
+    Client<'a>,
+    Client<'a>,
+    stored::Stage<management::Approval>,
+    store::Manifest,
+) {
     let operator = CanisterId::self_authenticating(b"Root Store fixture");
     let root = pic
         .create_canister_with_settings(Some(operator), None)
@@ -153,12 +173,7 @@ async fn fixture<'a>(
     pic.add_cycles(store_id, 10_000_000_000_000).await;
     pic.install_canister(
         root,
-        std::fs::read(artifacts().join(if fault {
-            "root-faults.wasm"
-        } else {
-            "root.wasm"
-        }))
-        .unwrap(),
+        std::fs::read(artifacts().join(module)).unwrap(),
         vec![],
         Some(operator),
     )

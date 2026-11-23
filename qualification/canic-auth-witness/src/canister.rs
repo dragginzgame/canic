@@ -236,7 +236,8 @@ async fn refresh() -> Result<(), enrollment::Error> {
 fn view(receipt: SessionReceipt) -> SessionView {
     SessionView {
         ext: receipt.ext.map(|bytes| {
-            ic_wire::Bytes::new(bytes).expect("verified Auth extension within protocol limit")
+            canic::auth::protocol::wire::Bytes::new(bytes)
+                .expect("verified Auth extension within protocol limit")
         }),
         caller: receipt.caller,
         issuer: receipt.issuer,

@@ -24,6 +24,7 @@ fn reserve_preview_uses_the_prepared_principals_and_terms() {
         capacity: None,
         increases: vec![],
         shards: vec![],
+        singleton: None,
         instances: None,
         workers: vec![],
         standby: Some(canic_host::PoolGrant {

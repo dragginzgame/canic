@@ -51,6 +51,7 @@ pub(crate) fn plan_preview<'a>(
             increases,
             shards,
             instances,
+            singleton,
             workers,
         } => {
             let mut text = pool_header(app, fleet, network, controller)?;
@@ -65,6 +66,24 @@ pub(crate) fn plan_preview<'a>(
             }
             if let Some(instance) = instances {
                 write_allocation(&mut text, "Registry", &instance.approval);
+            }
+            if let Some(grant) = singleton {
+                let grant = &grant.approval;
+                writeln!(
+                    text,
+                    "\nSingleton · {}\nRegistry: {}\nChild limit: {}",
+                    escape(&grant.role),
+                    grant.registry,
+                    grant.maximum
+                )
+                .unwrap();
+                pool_release(
+                    &mut text,
+                    &grant.reference,
+                    grant.creation_payer,
+                    grant.creation_budget,
+                    grant.expires_at_ns,
+                );
             }
             for worker in workers {
                 write_allocation(&mut text, "Scaling workers", &worker.approval);

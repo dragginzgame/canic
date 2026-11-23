@@ -84,10 +84,12 @@ mod funding;
 mod peer;
 mod retirement;
 mod role_proof;
+mod singleton;
 
 enum Scenario {
     Capacity(u8),
     ThreeServices,
+    ProjectLedgers,
     Funding,
     RoleProof,
     Retirement { from_spare: bool },
@@ -127,6 +129,11 @@ async fn stopped_child_lags_while_hub_advances_and_recovers_after_hub_upgrade() 
 #[tokio::test]
 async fn root_installs_descendant_with_hub_as_its_directory_publisher() {
     installed_publication(Scenario::Descendant).await;
+}
+
+#[tokio::test]
+async fn root_installs_separate_ledgers_for_two_registry_projects() {
+    installed_publication(Scenario::ProjectLedgers).await;
 }
 
 #[tokio::test]
@@ -179,6 +186,7 @@ async fn installed_publication(scenario: Scenario) {
         Scenario::Capacity(limit) => Some(limit),
         Scenario::RoleProof => Some(4),
         Scenario::ThreeServices => Some(5),
+        Scenario::ProjectLedgers => Some(6),
         Scenario::Funding => Some(2),
         Scenario::Retirement { from_spare } => Some(if from_spare { 4 } else { 3 }),
         _ => None,
@@ -188,6 +196,7 @@ async fn installed_publication(scenario: Scenario) {
     } else if matches!(
         scenario,
         Scenario::ThreeServices
+            | Scenario::ProjectLedgers
             | Scenario::Descendant
             | Scenario::Funding
             | Scenario::Capacity(_)
@@ -435,19 +444,25 @@ async fn installed_publication(scenario: Scenario) {
         let status: (String, Option<Option<u64>>) =
             query_service(pic, user, "topology_status", child).await;
         assert_eq!(status, ("hub".into(), Some(Some(1))));
-        canic_qualification::upgrade_stopped(
-            pic,
-            child,
-            std::fs::read(artifacts().join("directory.wasm")).unwrap(),
-            vec![],
-            Some(root.id),
-        )
-        .await
-        .unwrap();
+        assert_eq!(pic.get_controllers(child).await, [root.id]);
+        let wasm = std::fs::read(artifacts().join("directory.wasm")).unwrap();
+        for caller in [user, root.operator] {
+            let refused = pic
+                .upgrade_canister(child, wasm.clone(), vec![], Some(caller))
+                .await
+                .expect_err("only Root may replace a descendant's Wasm");
+            assert_eq!(
+                refused.error_code,
+                ic_testkit::pocket_ic::ErrorCode::CanisterInvalidController
+            );
+        }
+        canic_qualification::upgrade_stopped(pic, child, wasm, vec![], Some(root.id))
+            .await
+            .unwrap();
         let status: (String, Option<Option<u64>>) =
             query_service(pic, child, "topology_status", user).await;
         assert_eq!(status, ("worker".into(), None));
-        funding::application_parent(&root, user, child).await;
+        funding::application_parent(&root, user, child, "worker").await;
         let before = pic.get_stable_memory(child).await;
         for (sender, role, expected) in [
             (outsider, "worker", "unexpected topology sender"),
@@ -480,7 +495,8 @@ async fn installed_publication(scenario: Scenario) {
     }
     let stopped_child = if matches!(scenario, Scenario::StoppedChild) {
         capacity::approve(&root, 3).await;
-        let child = capacity::ready_project(&root, user, &source).await;
+        capacity::approve_projects(&root, user, &source, 1).await;
+        let child = capacity::ready_project(&root, user, 1).await;
         assert_eq!(resolve(pic, child).await, Some((1, vec![user])));
         pic.stop_canister(child, Some(root.id)).await.unwrap();
         Some(child)
@@ -496,6 +512,25 @@ async fn installed_publication(scenario: Scenario) {
     }
     stage(ChildId::SECOND, named("project_hub")).await.unwrap();
     let project = ready(ChildId::SECOND).await;
+    if matches!(scenario, Scenario::ProjectLedgers) {
+        let parent = singleton::exercise(&root, project, &source, module).await;
+        let duplicate = canic::topology::Install {
+            role: "project_ledger".into(),
+            root: root.id.to_text().parse().unwrap(),
+            parent: parent.to_text().parse().unwrap(),
+            application: vec![],
+        };
+        assert_eq!(
+            stage(ChildId::ALL[2], duplicate.encode().unwrap()).await,
+            Err(management::Refusal::Binding)
+        );
+        assert_eq!(
+            instance.close(Duration::from_secs(10)).await,
+            ic_testkit::server::Deletion::Attempted
+        );
+        assert!(server.stop().unwrap().process.cleanup.is_empty());
+        return;
+    }
     if matches!(scenario, Scenario::Funding) {
         funding::exercise(&root, project, user).await;
         assert_eq!(
@@ -595,7 +630,8 @@ async fn installed_publication(scenario: Scenario) {
     }
     if matches!(scenario, Scenario::StoppedHub) {
         capacity::approve(&root, 3).await;
-        let child = capacity::ready_project(&root, project, &source).await;
+        capacity::approve_projects(&root, project, &source, 1).await;
+        let child = capacity::ready_project(&root, project, 1).await;
         assert_eq!(resolve(pic, child).await, latest);
         // The child joined the project branch. Its readiness cannot replay the
         // missed publication to the independently restarted accounts hub.

@@ -84,6 +84,15 @@ pub fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Statu
             .map_err(|_| Refusal::Binding)?;
         // A declared parent receives authority over this child. Check Root's
         // own installation evidence before reserving capacity or cycles.
+        #[cfg(feature = "sharding")]
+        if STATE.with_borrow(|s| {
+            s.as_ref()
+                .expect("open engine")
+                .pools
+                .singleton_owns(&binding)
+        }) {
+            return Err(Refusal::Binding);
+        }
         let parent = binding.parent.to_text();
         let owns_parent = STATE.with_borrow(|state| {
             state

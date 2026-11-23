@@ -1536,6 +1536,7 @@ fn registry_and_workers_share_infrastructure_but_require_separate_parents() {
     let fleet = app.fleets.get_mut("local").unwrap();
     let worker = &fleet.worker_pools[0];
     fleet.registry = Some(RegistryConfig {
+        singleton: None,
         component: "project".into(),
         root: worker.root.clone(),
         store: worker.store.clone(),
@@ -1689,6 +1690,66 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
             .to_string()
             .contains("hub \"pool\" requires worker pool \"auxiliary\"")
     );
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn registry_plans_project_paid_singletons_without_funding_projects() {
+    use canic_management_protocol::stored;
+    let source = r#"
+[apps.projects.canisters]
+root = { role = "root" }
+store = { role = "wasm-store", parent = "root" }
+registry = { role = "registry", parent = "root" }
+project = { role = "project", parent = "registry", wasm = "project.wasm" }
+ledger = { role = "project_ledger", parent = "project", wasm = "ledger.wasm" }
+[apps.projects.fleets.local]
+network = { kind = "Mainnet" }
+subnet_child_limit = 6
+top_up_children = [{ child = "ledger", below_cycles = "1T", amount_cycles = "0.5T" }]
+[apps.projects.fleets.local.canisters]
+root = { id = "rrkah-fqaaa-aaaaa-aaaaq-cai" }
+store = { id = "ryjl3-tyaaa-aaaaa-aaaba-cai" }
+registry = { id = "r7inp-6aaaa-aaaaa-aaabq-cai" }
+[apps.projects.fleets.local.registry]
+component = "project"
+root = "root"
+store = "store"
+release = { name = "project", version = "1" }
+max_instances = 2
+creation_payer = "root"
+creation_budget = 2000000000000
+expires_at_ns = 9000000000000000000
+[apps.projects.fleets.local.registry.singleton]
+component = "ledger"
+release = { name = "ledger", version = "1" }
+creation_payer = "requester"
+maximum = 2
+creation_budget = 2000000000000
+"#;
+    let config: Config = toml::from_str(source).unwrap();
+    let fleet = config.select(None, None).unwrap();
+    let dir = directory();
+    for name in ["ledger.wasm", "project.wasm"] {
+        std::fs::write(dir.join(name), b"\0asm\x01\0\0\0").unwrap();
+    }
+    let crate::FleetPlanning::PlacementPools {
+        instances: Some(project),
+        singleton: Some(child),
+        ..
+    } = sharding::preview(&dir.join("canic.toml"), &fleet, &input().controller).unwrap()
+    else {
+        panic!("expected project and ledger approvals")
+    };
+    assert_eq!(project.approval.creation_payer, stored::CreationPayer::Root);
+    assert_eq!(
+        child.approval.creation_payer,
+        stored::CreationPayer::Requester
+    );
+    assert_eq!(child.approval.registry, project.approval.hub);
+    assert_eq!(child.approval.role, "project_ledger");
+    assert_eq!(fleet.config.top_up_children.len(), 1);
+    assert_eq!(fleet.config.top_up_children[0].child(), "ledger");
     std::fs::remove_dir_all(dir).unwrap();
 }
 

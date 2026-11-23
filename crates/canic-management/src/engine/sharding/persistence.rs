@@ -21,31 +21,8 @@ impl Pools {
             bytes: BYTES - 4,
             ..LIMITS
         };
-        let (prefix, payload) = if !self.evacuated.is_empty() {
-            (
-                b"PLS4",
-                ic_wire::encode(
-                    &(self, &self.local_routes, &self.evacuated),
-                    ic_wire::Encoding::Payload,
-                    limits,
-                ),
-            )
-        } else if self.local_routes.is_empty() {
-            (
-                b"PLS2",
-                ic_wire::encode(self, ic_wire::Encoding::Payload, limits),
-            )
-        } else {
-            (
-                b"PLS3",
-                ic_wire::encode(
-                    &(self, &self.local_routes),
-                    ic_wire::Encoding::Payload,
-                    limits,
-                ),
-            )
-        };
-        let mut bytes = prefix.to_vec();
+        let payload = ic_wire::encode(self, ic_wire::Encoding::Payload, limits);
+        let mut bytes = b"PLS5".to_vec();
         bytes.extend(payload.expect("bounded placement ledger"));
         bytes
     }
@@ -150,39 +127,23 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
 }
 
 fn decode(bytes: &[u8]) -> Pools {
-    let pools: Pools = if let Some(payload) = bytes.strip_prefix(b"PLS4") {
-        let (mut pools, local, evacuated): (
-            Pools,
-            std::collections::BTreeSet<String>,
-            std::collections::BTreeSet<super::ChildId>,
-        ) = ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
-            .expect("evacuated placement custody");
-        assert!(local.iter().all(|pool| pools.shards.contains_key(pool)));
-        assert!(
-            !evacuated.is_empty()
-                && evacuated
-                    .iter()
-                    .all(|slot| pools.draining.contains_key(slot)
-                        && pools
-                            .shard_at(*slot)
-                            .is_some_and(|ledger| local.contains(&ledger.approval.pool)))
-        );
-        pools.local_routes = local;
-        pools.evacuated = evacuated;
+    let payload = bytes
+        .strip_prefix(b"PLS5")
+        .expect("placement custody requires its original Root");
+    let pools: Pools =
+        ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("placement custody");
+    assert!(
         pools
-    } else if let Some(payload) = bytes.strip_prefix(b"PLS3") {
-        let (mut pools, local): (Pools, std::collections::BTreeSet<String>) =
-            ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS)
-                .expect("hub placement custody");
-        assert!(!local.is_empty() && local.iter().all(|pool| pools.shards.contains_key(pool)));
-        pools.local_routes = local;
-        pools
-    } else {
-        let payload = bytes
-            .strip_prefix(b"PLS2")
-            .expect("placement custody requires its original Root");
-        ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("placement custody")
-    };
+            .local_routes
+            .iter()
+            .all(|pool| pools.shards.contains_key(pool))
+    );
+    assert!(pools.evacuated.iter().all(|slot| {
+        pools.draining.contains_key(slot)
+            && pools
+                .shard_at(*slot)
+                .is_some_and(|ledger| pools.local_routes.contains(&ledger.approval.pool))
+    }));
     validate_inventory(&pools);
     super::payment::validate(&pools);
     for (slot, grant) in &pools.funding {

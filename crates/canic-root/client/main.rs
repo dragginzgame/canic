@@ -63,6 +63,9 @@ enum Command {
     /// Approve the subnet ceiling from the reviewed fleet plan.
     #[cfg(feature = "sharding")]
     ConfigureCapacity { approval: String },
+    /// Approve one singleton role for this registry.
+    #[cfg(feature = "sharding")]
+    ConfigureSingleton { approval: String },
     /// Approve recurring top-ups or inspect the original approval.
     #[cfg(feature = "sharding")]
     ConfigureChildFunding { approval: String },
@@ -212,6 +215,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?,
         #[cfg(feature = "sharding")]
         Action::Encode {
+            command: Command::ConfigureSingleton { approval },
+        } => request::<canic_management_protocol::stored::ConfigureSingleton>(
+            &serde_json::from_str(&approval)?,
+        )?,
+        #[cfg(feature = "sharding")]
+        Action::Encode {
             command: Command::ConfigureChildFunding { approval },
         } => request::<canic_management_protocol::stored::ConfigureChildFunding>(
             &serde_json::from_str(&approval)?,
@@ -342,6 +351,11 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     #[cfg(feature = "sharding")]
     if let Ok(reply) = canic_management_protocol::stored::ConfigureCapacity::decode_reply(bytes) {
         reply.map_err(|e| format!("capacity: {e:?}"))?;
+        return Ok(json!({"approved":true}));
+    }
+    #[cfg(feature = "sharding")]
+    if let Ok(reply) = canic_management_protocol::stored::ConfigureSingleton::decode_reply(bytes) {
+        reply.map_err(|e| format!("singleton: {e:?}"))?;
         return Ok(json!({"approved":true}));
     }
     #[cfg(feature = "sharding")]

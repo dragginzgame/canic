@@ -169,6 +169,29 @@ pub struct InstancePool {
     pub expires_at_ns: u64,
 }
 
+/// One controller-approved child role for every ready project of this registry.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SingletonGrant {
+    /// Registry principal owning the eligible parent allocations.
+    pub registry: String,
+    /// Child role installed under the requesting project.
+    pub role: String,
+    /// Store and immutable release.
+    pub reference: Reference,
+    /// Application bytes nested under the project topology binding.
+    pub application: crate::application::Arguments,
+    /// Economic payer for the initial allocation.
+    pub creation_payer: CreationPayer,
+    /// Maximum admitted children across the registry.
+    pub maximum: u8,
+    /// Lifetime creation attachment ceiling.
+    pub creation_budget: u64,
+    /// Deadline for new claims.
+    pub expires_at_ns: u64,
+}
+/// Configure one registry-wide singleton rule.
+pub const CONFIGURE_SINGLETON: u64 = ic_wire::method_id("configure_singleton");
+
 /// Approve a dedicated instance pool independently of the shared shard grant.
 pub const CONFIGURE_INSTANCES: u64 = ic_wire::method_id("canic.configure_instances.v2");
 /// Approve the bounded worker allowance for one other hub.
@@ -290,6 +313,18 @@ impl canic::method::Contract for ConfigureCapacity {
     type Output = Result<(), crate::Refusal>;
 }
 
+/// Controller approval for a per-project singleton.
+pub struct ConfigureSingleton;
+#[cfg(feature = "standby")]
+impl canic::method::Contract for ConfigureSingleton {
+    const NAME: &'static str = "configure_singleton";
+    const ID: u64 = CONFIGURE_SINGLETON;
+    const REQUEST: ic_wire::Limits = LIMITS;
+    const REPLY: ic_wire::Limits = crate::LIMITS;
+    type Input = SingletonGrant;
+    type Output = Result<(), crate::Refusal>;
+}
+
 /// Admit the shared ceiling before configuring larger pools.
 pub const CONFIGURE_CAPACITY: u64 = ic_wire::method_id("canic.configure_capacity.v1");
 
@@ -308,7 +343,25 @@ pub const INCREASE_POOL: u64 = ic_wire::method_id("canic.increase_pool.v2");
 pub const MAX_KEYS_PER_SHARD: u32 = 100_000;
 
 /// Supplier-owned Store frame budgets.
-pub use ic_wasm_store_protocol::{CHUNK_LIMITS as STORE_CHUNK_LIMITS, LIMITS as STORE_LIMITS};
+pub const STORE_LIMITS: ic_wire::Limits = {
+    let limits = ic_wasm_store_protocol::LIMITS;
+    ic_wire::Limits {
+        bytes: limits.bytes,
+        nodes: limits.nodes,
+        depth: limits.depth,
+        allocation: limits.allocation,
+    }
+};
+/// Supplier chunk budget for the Canic Wire codec.
+pub const STORE_CHUNK_LIMITS: ic_wire::Limits = {
+    let limits = ic_wasm_store_protocol::CHUNK_LIMITS;
+    ic_wire::Limits {
+        bytes: limits.bytes,
+        nodes: limits.nodes,
+        depth: limits.depth,
+        allocation: limits.allocation,
+    }
+};
 
 /// Controller approval for destructive retirement under an immutable Store release.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

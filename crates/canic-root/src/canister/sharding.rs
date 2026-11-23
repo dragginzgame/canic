@@ -431,3 +431,21 @@ async fn fund_placement(
 fn grow_shard(input: (String, u8)) -> (Placement, u32) {
     sharding::grow_shard(&input.0, input.1)
 }
+
+// configure_singleton
+// Approve a registry's singleton child release, payer and limits.
+// guard  : Root controller
+// limits : stored::LIMITS request, management protocol reply limits
+#[canic::update(contract = stored::ConfigureSingleton, guard = require_controller)]
+fn configure_singleton(input: stored::SingletonGrant) -> Result<(), Refusal> {
+    sharding::configure_singleton(input)
+}
+
+// request_singleton
+// Reserve or recover the calling registry instance's own child.
+// guard  : ready project allocation checked by Root
+// limits : sharding::LIMITS
+#[canic::update(contract = canic::sharding::RequestSingleton)]
+fn request_singleton(role: String) -> Placement {
+    sharding::request_singleton(&role)
+}

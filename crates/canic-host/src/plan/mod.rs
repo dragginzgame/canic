@@ -107,8 +107,7 @@ impl Plan {
             || (self.version == 5) != self.auth().is_some()
             || (self.version != 8
                 && (self.version == 6) != self.management().is_some_and(|m| m.arguments.is_some()))
-            || (self.version == 8
-                && !matches!(&self.action, PlanAction::CreateChild(m) if m.source.is_some()))
+            || (self.version == 8 && !self.management().is_some_and(|m| m.source.is_some()))
             || (self.version == 7) != self.application_call().is_some()
             || self.artifact.bytes > self.artifact_limit()
             || self.artifact.sha256.len() != 64
@@ -265,6 +264,17 @@ pub(crate) fn retain(
     management: Option<ManagedOwner>,
     now: u64,
 ) -> Result<(String, Plan)> {
+    let (plan, bytes) = prepare(wasm, input, deployment, management, now)?;
+    retain_locked(&Store::open(root)?, plan, &bytes)
+}
+
+pub(crate) fn prepare(
+    wasm: &Path,
+    input: PlanInput,
+    deployment: Option<crate::DeploymentName>,
+    management: Option<ManagedOwner>,
+    now: u64,
+) -> Result<(Plan, Vec<u8>)> {
     let limit = if management.as_ref().is_some_and(|m| m.source.is_some()) {
         artifact::MAX_ARTIFACT_BYTES
     } else {
@@ -331,8 +341,7 @@ pub(crate) fn retain(
         created_at_ns: now,
         expires_at_ns,
     };
-    let store = Store::open(root)?;
-    retain_locked(&store, plan, &bytes)
+    Ok((plan, bytes))
 }
 
 /// Lookup and publication share the caller's journal lock.

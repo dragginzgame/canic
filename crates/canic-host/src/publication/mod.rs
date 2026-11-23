@@ -109,19 +109,20 @@ pub fn create_publication_plan(
     let child = slots
         .get(&input.canister)
         .ok_or_else(|| Error::Invalid("unknown artifact canister".into()))?;
-    let parent = child
-        .parent
-        .as_ref()
-        .ok_or_else(|| Error::Invalid("artifact needs a declared Root parent".into()))?;
-    let root = &slots[parent];
+    // Fleet validation has already checked every parent reference and rejected cycles.
+    let mut root_name = &input.canister;
+    while let Some(parent) = &slots[root_name].parent {
+        root_name = parent;
+    }
     let store_slot = slots
         .get(&input.store)
         .ok_or_else(|| Error::Invalid("unknown Store slot".into()))?;
-    if root.role.as_deref() != Some("root")
-        || root.parent.is_some()
+    let root = &slots[root_name];
+    if child.parent.is_none()
+        || root.role.as_deref() != Some("root")
         || input.canister == input.store
         || store_slot.role.as_deref() != Some("wasm-store")
-        || store_slot.parent.as_ref() != Some(parent)
+        || store_slot.parent.as_ref() != Some(root_name)
     {
         return Err(Error::Invalid(
             "artifact and wasm-store must share the declared top-level Root".into(),

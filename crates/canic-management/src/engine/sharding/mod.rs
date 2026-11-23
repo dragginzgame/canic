@@ -4,6 +4,8 @@ mod drain;
 pub mod funding;
 pub mod payment;
 mod persistence;
+mod singleton;
+pub use singleton::{configure_singleton, request_singleton};
 pub mod standby;
 mod workers;
 pub use capacity::{configure_capacity, increase_pool};
@@ -48,12 +50,10 @@ impl Ledger {
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Pools {
-    #[serde(skip)]
     local_routes: std::collections::BTreeSet<String>,
-    #[serde(skip)]
     evacuated: std::collections::BTreeSet<ChildId>,
     funding: BTreeMap<ChildId, funding::Grant>,
-    quotes: BTreeMap<String, payment::Reservation>,
+    quotes: BTreeMap<payment::Owner, payment::Reservation>,
     payments: BTreeMap<[u8; 32], payment::Receipt>,
     returns: Vec<standby::Returned>,
     pub(super) retirements: BTreeMap<ChildId, standby::Retirement>,
@@ -65,6 +65,7 @@ pub(super) struct Pools {
     instance_increases: Vec<u8>,
     instances: Option<stored::InstancePool>,
     projects: Vec<ProjectClaim>,
+    singleton: Option<singleton::Registry>,
     workers: BTreeMap<String, workers::Workers>,
     standby: standby::Inventory,
 }
@@ -874,6 +875,7 @@ pub(super) fn validate_claims(state: &super::State) {
     super::role_issuer::validate_closures(state, |p, g| {
         drain::closed_assignment(&state.pools, p, g)
     });
+    singleton::validate(state);
     let claims = &state.pools.projects;
     let pools = &state.pools;
     for name in &pools.local_routes {

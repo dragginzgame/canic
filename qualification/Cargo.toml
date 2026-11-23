@@ -47,7 +47,7 @@ ex-user-directory-shard = { path = "../apps/examples/user-directory/shard" }
 ic-auth = { version = "0.49.0", features = ["receiver-memory", "ed25519-verification"] }
 ic-auth-protocol-types = "0.44.0"
 ic-backup = "0.105.5"
-ic-db = "0.28.1"
+ic-db = "0.29.0"
 ic-host-artifacts = { version = "0.80.3", default-features = false }
 ic-host-fs = { version = "0.80.3", default-features = false }
 ic-host-process = { version = "0.81.0", default-features = false }
@@ -60,7 +60,7 @@ ic-storage = "0.78.0"
 ic-testkit = { version = "0.110.0", default-features = false, features = ["managed-server"] }
 ic-timers = "0.46.13"
 ic-wasm-store-protocol = "0.8.0"
-ic-wire = { version = "0.28.1", default-features = false }
+ic-wire = { version = "0.29.0", default-features = false }
 rustyline-async = "0.4.9"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_bytes = "0.11.19"

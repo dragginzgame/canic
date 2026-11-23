@@ -161,7 +161,50 @@ pub(crate) fn preview(
             approval: Box::new(approval),
         });
     }
+    let singleton = if let (Some(rule), Some(registry)) = (
+        fleet.registry.as_ref().and_then(|r| r.singleton.as_ref()),
+        instances.as_ref(),
+    ) {
+        if fleet.receiver_selected(&rule.component) {
+            return Err(Error::Invalid(format!(
+                "registry.singleton.component = {:?}: Auth-wrapped singleton installations require a qualified receiver policy",
+                rule.component
+            )));
+        }
+        let role = fleet.canisters[&rule.component]
+            .role
+            .clone()
+            .ok_or_else(|| {
+                Error::Invalid(format!(
+                    "singleton {:?} needs a declared role",
+                    rule.component
+                ))
+            })?;
+        let cap = fleet.subnet_child_limit.ok_or_else(|| {
+            Error::Invalid("registry.singleton requires subnet_child_limit".into())
+        })?;
+        super::super::positive_count("registry.singleton.maximum", rule.maximum, cap)?;
+        Some(Box::new(grant(
+            stored::SingletonGrant {
+                registry: registry.approval.hub.clone(),
+                role,
+                reference: stored::Reference {
+                    store: registry.approval.reference.store.clone(),
+                    manifest: manifest(selected, config_path, &rule.component, &rule.release)?,
+                },
+                application: install_args(config_path, rule.install_args.as_deref())?,
+                creation_payer: rule.creation_payer,
+                creation_budget: rule.creation_budget,
+                maximum: rule.maximum,
+                expires_at_ns: registry.approval.expires_at_ns,
+            },
+            stored::CONFIGURE_SINGLETON,
+        )?))
+    } else {
+        None
+    };
     Ok(FleetPlanning::PlacementPools {
+        singleton,
         capacity,
         standby,
         increases,

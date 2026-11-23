@@ -50,6 +50,44 @@ pub(super) fn publication(version: &str) -> PublicationInput {
 }
 
 #[test]
+fn descendant_release_uses_its_own_fleet_root() {
+    let dir = directory();
+    let wasm = dir.join("ledger.wasm");
+    std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
+    let mut selected = selection();
+    for (name, parent) in [("project", "app"), ("ledger", "project")] {
+        selected.config.canisters.insert(
+            name.into(),
+            CanisterConfig {
+                parent: Some(parent.into()),
+                ..Default::default()
+            },
+        );
+    }
+    let publish = |selected: &SelectedFleet| {
+        create_publication_plan(
+            &dir,
+            &wasm,
+            selected,
+            &input().controller,
+            PublicationInput {
+                canister: "ledger".into(),
+                ..publication("v2")
+            },
+        )
+    };
+    let (_, plan) = publish(&selected).unwrap();
+    let binding = plan.publication().unwrap();
+    assert_eq!(binding.release.name, "ledger");
+    assert_eq!(
+        Some(&binding.root.canister),
+        selected.config.canisters["root"].id.as_ref()
+    );
+    selected.config.canisters.get_mut("project").unwrap().parent = None;
+    assert!(publish(&selected).is_err());
+}
+
+#[test]
 fn artifact_listing_preserves_unknown_outcomes_scope_and_corrupt_evidence() {
     let dir = directory();
     let selected = selection();

@@ -1004,6 +1004,114 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
     assert!(server.stop().unwrap().process.cleanup.is_empty());
 }
 
+#[tokio::test(flavor = "current_thread")]
+async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
+    let (_, binary) = support::inputs();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
+    let (root, supplier, mut input, second) = fixture_with_module(pic, "pool-root.wasm").await;
+    root.update::<_, Result<(), management::Refusal>>(
+        "configure_capacity",
+        stored::CONFIGURE_CAPACITY,
+        &stored::SubnetCapacity {
+            root: root.id.to_text(),
+            max_children: 1,
+        },
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
+    let now = pic.get_time().await.as_nanos_since_unix_epoch();
+    input.approval.execute_at_ns = now;
+    stage(&root, &input).await.unwrap();
+    settle(pic).await;
+    let evidence = async || {
+        root.update::<_, management::application::Custody>(
+            "observe_role_children",
+            management::application::CHILD_EVIDENCE,
+            &(),
+            management::application::LIMITS,
+        )
+        .await
+    };
+    let prior = evidence().await.root.current.stored;
+    let creation = &prior.children[0].creation;
+    assert_eq!(creation.phase, management::Phase::Ready);
+    let child = creation.worker.clone().unwrap();
+    let change = stored::Stage {
+        approval: upgrade::Approval {
+            manager: root.id.to_text(),
+            child: child.clone(),
+            previous_module: input.approval.module_hash,
+            module_hash: second.hash,
+            execute_at_ns: pic.get_time().await.as_nanos_since_unix_epoch(),
+            expires_at_ns: input.approval.expires_at_ns,
+        },
+        reference: stored::Reference {
+            store: supplier.id.to_text(),
+            manifest: second,
+        },
+    };
+    let req = Request {
+        slot: ChildId::FIRST,
+        value: &change,
+    };
+    root.update::<_, Result<upgrade::Status, management::Refusal>>(
+        "stage_stored_upgrade",
+        stored::STAGE_UPGRADE,
+        &req,
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
+    settle(pic).await;
+    let after = evidence().await.root.current.stored;
+    let status = root
+        .update::<_, upgrade::Status>(
+            "reconcile_stored_upgrade",
+            stored::RECONCILE_UPGRADE,
+            &req,
+            stored::LIMITS,
+        )
+        .await;
+    assert_eq!(status.phase, upgrade::Phase::Ready);
+    assert_eq!(after.children[0].creation, *creation);
+    assert_eq!(after.children[0].upgrades, [status]);
+    let delivery = &after.sources[0].as_ref().unwrap().upgrades[0];
+    assert_eq!(delivery.reference, change.reference);
+    assert_eq!(delivery.state, stored::PinState::Retained);
+    assert_eq!(
+        pic.canister_status(CanisterId::from_text(child).unwrap(), Some(root.id))
+            .await
+            .unwrap()
+            .module_hash,
+        Some(change.approval.module_hash.to_vec())
+    );
+    let frame = ic_wire::encode(
+        &(),
+        ic_wire::Encoding::Frame {
+            method: stored::CUSTODY,
+            direction: ic_wire::Direction::Request,
+        },
+        stored::LIMITS,
+    )
+    .unwrap();
+    let refused = pic
+        .update_call(root.id, root.operator, "observe_stored_children", frame)
+        .await
+        .unwrap_err();
+    assert!(
+        refused
+            .reject_message
+            .contains("shard pool custody required")
+    );
+    assert_eq!(
+        owner.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
 async fn fresh_user_shard_grant(
     root: &Client<'_>,
     store: &Client<'_>,
@@ -1065,6 +1173,17 @@ async fn approved_hub_retries_first_key_in_fresh_named_pool() {
     let (root, store) = readiness_tests::fixture_with_root(pic, wasm).await;
     let (hub, mut grant) = fresh_user_shard_grant(&root, &store).await;
     grant.max_shards = 1;
+    root.update::<_, Result<(), management::Refusal>>(
+        "configure_capacity",
+        stored::CONFIGURE_CAPACITY,
+        &stored::SubnetCapacity {
+            root: root.id.to_text(),
+            max_children: 1,
+        },
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
     configure(&root, &grant).await.unwrap();
 
     let input = ("user_shard".to_owned(), [0xa5; 32]);
@@ -1096,6 +1215,10 @@ async fn approved_hub_retries_first_key_in_fresh_named_pool() {
     let assigned = assign().await;
     let (allocation, _) = assigned.assigned_target().unwrap().expect("ready shard");
     assert_eq!(allocation, &original);
+    // Publication through Root must still work when the only allocation slot is occupied.
+    let custody = pic.get_stable_memory(root.id).await;
+    publication_tests::publish_shard_successor(&root, &store).await;
+    assert_eq!(pic.get_stable_memory(root.id).await, custody);
     assert_eq!(lookup().await, assigned);
     assert_eq!(assign().await, assigned);
     assert_eq!(

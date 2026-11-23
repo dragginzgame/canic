@@ -65,9 +65,10 @@ pub(crate) fn next(
     format!("\nNext:\n{}\n", escape(&parts.join(" ")))
 }
 
-fn build_row(mut label: String, item: &BuiltCanister) -> [String; 5] {
+fn build_row(label: String, item: &BuiltCanister) -> [String; 5] {
+    let mut modules = item.modules.clone();
     if item.role.as_deref() == Some("wasm-store") {
-        label.push_str(" [WASM STORE]");
+        modules.insert(0, "[WS]");
     }
 
     [
@@ -77,10 +78,10 @@ fn build_row(mut label: String, item: &BuiltCanister) -> [String; 5] {
             "{:.2} KiB",
             f64::from(u32::try_from(item.artifact.bytes).expect("bounded Wasm size")) / 1024.0
         ),
-        if item.modules.is_empty() {
+        if modules.is_empty() {
             "—".into()
         } else {
-            item.modules.join(", ")
+            modules.join(", ")
         },
         format!(
             "{}.{:02} s",
@@ -96,41 +97,15 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
     let ordered = crate::topology::labeled(built, |item| {
         (item.canister.as_str(), item.parent.as_deref())
     });
-    let table = if built.iter().any(|item| item.client.is_some()) {
-        let rows: Vec<_> = ordered
-            .into_iter()
-            .map(|(label, item)| {
-                let [canister, wasm, size, modules, time] = build_row(label, item);
-                let codec = item
-                    .client
-                    .as_ref()
-                    .map_or_else(|| "—".into(), |path| path.display().to_string());
-                [canister, wasm, size, modules, time, codec]
-            })
-            .collect();
-        plain_table(
-            &[
-                "CANISTER",
-                "WASM",
-                "SIZE",
-                "MODULES",
-                "BUILD TIME",
-                "COMMAND CODEC",
-            ],
-            &rows,
-            &[Left, Left, Right, Left, Right, Left],
-        )
-    } else {
-        let rows: Vec<_> = ordered
-            .into_iter()
-            .map(|(label, item)| build_row(label, item))
-            .collect();
-        plain_table(
-            &["CANISTER", "WASM", "SIZE", "MODULES", "BUILD TIME"],
-            &rows,
-            &[Left, Left, Right, Left, Right],
-        )
-    };
+    let rows: Vec<_> = ordered
+        .into_iter()
+        .map(|(label, item)| build_row(label, item))
+        .collect();
+    let table = plain_table(
+        &["CANISTER", "WASM", "SIZE", "MODULES", "BUILD TIME"],
+        &rows,
+        &[Left, Left, Right, Left, Right],
+    );
     format!("Built app canisters\n\n{table}\n\nNothing deployed.\n")
 }
 

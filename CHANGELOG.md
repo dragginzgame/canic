@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.265.0] - 2026-11-23
+
+### 📦 Dependencies
+
+- Product and qualification use IC DB and IC Wire 0.29.0. DB’s optional Wire schema implementation now uses the 0.29 trait.
+
+### 🔄 Changed
+
+- A registry can approve one singleton per installed project. Each project can pay Root for its own ledger and independently fund ongoing ledger top-ups. This requires a fresh sharding Root (placement layout PLS5).
+
+```sh
+# Preview registry and singleton approvals for a built, bound fleet.
+canic fleet plan --controller "$CONTROLLER" --json
+# Submit the reviewed singleton approval to a sharding Root with its command codec.
+canic fleet call --canister root --identity "$OPERATOR" configure-singleton "$SINGLETON_APPROVAL"
+```
+
+- A fleet at its child limit can upgrade an existing permanent Store-backed service. Host verifies the successor release against Root’s child deployment evidence.
+
+- A bound fleet can publish a descendant's Wasm to its Root's Store after placement has begun, including when the child allowance is full. The release does not change an existing pool approval.
+
+```sh
+# In a bound fleet, plan publication of a built ledger using its infrastructure hashes.
+canic fleet plan --canister project_ledger --publish-version v2 --store store \
+  --root-module "$ROOT_SHA256" --store-module "$STORE_SHA256" --identity "$OPERATOR"
+```
+
+- `app build` marks the declared Wasm Store with `[WS]` in the modules column. The optional command-codec path is available in JSON.
+
+```sh
+canic app build
+canic app build --json
+```
+
 ## [0.264.0] - 2026-11-23
 
 - Generate an application's TypeScript client with `canic app export-wire`. From a Canic checkout with the matching CLI installed, this creates a greeting workspace and writes its IC Wire 0.28.1 service clients and codecs to a new directory. Pass a canister ID and your query/update transport to each client factory.

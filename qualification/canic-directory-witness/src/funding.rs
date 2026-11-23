@@ -43,3 +43,18 @@ fn watch_child_balance(terms: (u64, u64)) -> Result<(), String> {
 async fn request_child_funding(request: (u64, u128)) -> Result<u64, String> {
     funding::request(request).await
 }
+
+// fund_ledger
+// Have this installed project pay its own Root for its singleton.
+// guard  : installing Root (sole controller)
+// limits : sharding::LIMITS
+#[canic::update(guard = canic::guard::require_controller, limits = canic::sharding::LIMITS)]
+async fn fund_ledger(terms: (u128, u128)) -> Result<canic::sharding::payment::Payment, String> {
+    canic::sharding::payment::fund(
+        ic_platform_runtime::system::caller(),
+        canic::sharding::payment::Demand::Singleton("project_ledger".into()),
+        terms.0,
+        terms.1,
+    )
+    .await
+}
