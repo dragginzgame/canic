@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.266.0] - 2026-11-23
+
+### ✨ Added
+
+- Auth receiver installs accept `receiver_policy.limits.max_admitted_logins` independently of `max_sessions`. Omit it to keep the 1,024-row default. Stable upgrades retain the installed policy.
+
+```sh
+# Exercise signed admission, capacity refusal and a populated stable upgrade locally.
+bash scripts/dev/test-auth.sh known_login_capacity
+```
+
 ## [0.265.0] - 2026-11-23
 
 ### 📦 Dependencies

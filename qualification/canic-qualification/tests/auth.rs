@@ -1,4 +1,5 @@
 //! Actual Canic mounts with Auth's real volatile receiver and Platform signatures.
+mod auth_capacity_tests;
 mod auth_enrollment_tests;
 mod auth_host_tests;
 mod auth_issuer_tests;
@@ -143,6 +144,10 @@ impl Fixture {
 }
 
 async fn fixture(cross_subnet: bool) -> Fixture {
+    fixture_with_lifetime(cross_subnet, Duration::from_secs(180)).await
+}
+
+async fn fixture_with_lifetime(cross_subnet: bool, lifetime: Duration) -> Fixture {
     let repo = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .ancestors()
         .nth(2)
@@ -162,7 +167,7 @@ async fn fixture(cross_subnet: bool) -> Fixture {
         server,
         Limits {
             startup: Duration::from_secs(30),
-            lifetime: Duration::from_secs(180),
+            lifetime,
             stdout_bytes: 1024 * 1024,
             stderr_bytes: 1024 * 1024,
         },

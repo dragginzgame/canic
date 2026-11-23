@@ -347,13 +347,33 @@ issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai"
 role = "user"
 network_id = "1111111111111111111111111111111111111111111111111111111111111111"
 application_id = "2222222222222222222222222222222222222222222222222222222222222222"
-limits = { default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns = 60000000000 }
+[apps.toko.fleets.local.receiver_policy.limits]
+default_session_secs = 60
+max_session_secs = 1800
+max_proof_ttl_ns = 60000000000
+max_admitted_logins = 10_000
 ```
 
 `roles` selects app canister roles. The singular `role` selects the credential
-role they accept. The session engine uses Auth 0.48.0's bounded starting profile;
-set `limits.max_sessions` to override its physical session capacity. The
-lower-level `session::init(memory, policy)` accepts the supplier's full custom
+role they accept. Both receiver storage modes inherit the IC Auth starting profile. Set
+`limits.max_sessions` for physical sessions and `limits.max_admitted_logins`
+for retained (issuer, account, device slot) rows. Each defaults to 1,024
+independently. Expiry and logout retain the device-generation fence. A full
+login table refuses a new slot even when the receiver has spare session capacity.
+One issuer with 10,000 accounts using one device slot each needs 10,000 rows.
+Eight used slots per account would need 80,000. The installed test qualified
+10,000 single-slot accounts with at most 32 active sessions. See the
+[checkpoint size and upgrade measurements](../qualification/history.md#auth-known-login-capacity--2026-11-23)
+before choosing a larger limit.
+
+A stable upgrade reopens the policy saved at installation. An older receiver
+with no override keeps its 1,024-row policy. Editing fleet TOML only changes
+future installs. Enlarging an existing stable receiver requires a migration
+that preserves every generation fence and revocation. IC Auth currently
+requires exact checkpoint configuration equality. Keep the original receiver
+and policy until such a migration is qualified.
+
+The lower-level `session::init(memory, policy)` accepts the supplier's full custom
 memory configuration. Use the lower-level handler mounts for custom subject admission.
 
 Each receiver still needs an individual Root grant. Existing explicit declarations

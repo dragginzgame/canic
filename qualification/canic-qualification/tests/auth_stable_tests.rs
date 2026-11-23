@@ -38,6 +38,7 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
             max_session_secs: 300,
             max_proof_ttl_ns: 60 * SECOND,
             max_sessions: None,
+            max_admitted_logins: None,
         },
         application: ic_wire::encode(&Storage::Stable, ic_wire::Encoding::Payload, LIMITS).unwrap(),
     }

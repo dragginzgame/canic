@@ -39,6 +39,7 @@ async fn display_names_preserve_behavior_and_storage() {
                 max_session_secs: 1800,
                 max_proof_ttl_ns: 600_000_000_000,
                 max_sessions: None,
+            max_admitted_logins: None,
             },
             application,
         }

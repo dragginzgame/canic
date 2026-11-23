@@ -49,6 +49,9 @@ pub(super) fn configuration(
             .checked_mul(1_000_000_000)
             .expect("login lifetime overflow");
     }
+    if let Some(max) = input.limits.max_admitted_logins {
+        memory.login.max_admitted_logins = max as usize;
+    }
     if let Some(max) = input.limits.max_sessions {
         memory.capacity.max_sessions = max as usize;
     }

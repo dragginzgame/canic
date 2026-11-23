@@ -17,6 +17,22 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: 24,
 };
 
+const HOST_FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
+    method: 0x4341_5554_4848,
+    direction: ic_wire::Direction::Request,
+};
+
+pub(super) fn decode_host(bytes: &[u8]) -> (Install, Option<crate::auth::enrollment::Receiver>) {
+    // The old payload starts with Storage::Stable (variant 1).
+    if bytes.first() == Some(&1) {
+        let (old, saved): (Install<crate::auth::install::PreviousLimits>, _) =
+            ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS)
+                .expect("previous Auth host record");
+        return (old.into_current(), saved);
+    }
+    ic_wire::decode(bytes, HOST_FRAME, LIMITS).expect("retained Auth installation")
+}
+
 thread_local! {
     static HOST: RefCell<Option<StableCell<Vec<u8>>>> = const { RefCell::new(None) };
 }
@@ -67,15 +83,13 @@ pub fn open_with_login_limit(
     let initial = install.map(|input| {
         ic_wire::encode(
             &(input, None::<&crate::auth::enrollment::Receiver>),
-            ic_wire::Encoding::Payload,
+            HOST_FRAME,
             LIMITS,
         )
         .expect("initial Auth host record")
     });
     let host = crate::storage::cell(runtime, HOST_KEY, LIMITS.bytes, initial);
-    let (input, saved): (Install, Option<crate::auth::enrollment::Receiver>) =
-        ic_wire::decode(host.get(), ic_wire::Encoding::Payload, LIMITS)
-            .expect("retained Auth installation");
+    let (input, saved) = decode_host(host.get());
     assert_eq!(
         saved.is_none(),
         install.is_some(),
@@ -128,15 +142,9 @@ pub fn seal() {
         engine.seal().expect("seal Auth receiver");
         HOST.with_borrow_mut(|slot| {
             let host = slot.as_mut().expect("Auth host checkpoint");
-            let (input, _): (Install, Option<crate::auth::enrollment::Receiver>) =
-                ic_wire::decode(host.get(), ic_wire::Encoding::Payload, LIMITS)
-                    .expect("original Auth installation");
-            let bytes = ic_wire::encode(
-                &(input, Some(&state.enrollment)),
-                ic_wire::Encoding::Payload,
-                LIMITS,
-            )
-            .expect("seal Auth host record");
+            let (input, _) = decode_host(host.get());
+            let bytes = ic_wire::encode(&(input, Some(&state.enrollment)), HOST_FRAME, LIMITS)
+                .expect("seal Auth host record");
             host.set(bytes);
         });
     });

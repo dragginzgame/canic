@@ -178,6 +178,7 @@ fn approved_shard_topology_checks_both_install_envelopes() {
             max_session_secs: 60,
             max_proof_ttl_ns: 60,
             max_sessions: None,
+            max_admitted_logins: None,
         },
         application: direct.clone(),
     };

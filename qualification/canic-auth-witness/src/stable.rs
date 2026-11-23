@@ -26,6 +26,7 @@ canic::mount_auth_lifecycle!(
 );
 
 thread_local! {
+    static CHECKPOINT_BYTES: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
     static PROJECT_WRITES: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
     static RESTORED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
 }
@@ -61,6 +62,12 @@ fn open(input: Option<&Install>) -> MemoryRuntime<DefaultMemoryImpl> {
         ],
         320,
     );
+    if input.is_none() {
+        let engine = runtime
+            .open_memory(&ic_storage::StableKey::parse(stable::ENGINE_KEY).unwrap())
+            .unwrap();
+        CHECKPOINT_BYTES.set(ic_storage::stable_cell_payload_length(&engine, usize::MAX).unwrap());
+    }
     #[cfg(feature = "damaged-checkpoint")]
     if input.is_none() {
         use ic_storage::StableKey;
@@ -148,4 +155,13 @@ async fn project_write(barrier: Option<ic_platform_types::Principal>) -> Result<
     }
     PROJECT_WRITES.update(|n| n + 1);
     Ok(PROJECT_WRITES.get())
+}
+
+// checkpoint_bytes
+// Read the sealed Auth engine image size observed immediately before reopen.
+// guard  : controller
+// limits : default Wire budgets
+#[canic::query(guard = canic::guard::require_controller)]
+fn checkpoint_bytes() -> u64 {
+    CHECKPOINT_BYTES.get() as u64
 }

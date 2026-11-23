@@ -305,7 +305,7 @@ fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
         role = "user"
         network_id = "{}"
         application_id = "{}"
-        limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns = 60000000000, max_sessions = 7 }}
+        limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns = 60000000000, max_sessions = 7, max_admitted_logins = 10000 }}
     "#, "11".repeat(32), "22".repeat(32))).unwrap();
     config.receiver_policy = Some(policy);
     let root = "rrkah-fqaaa-aaaaa-aaaaq-cai";
@@ -328,6 +328,7 @@ fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
     );
     assert_eq!(decoded.root.to_text(), root);
     assert_eq!(decoded.limits.max_sessions, Some(7));
+    assert_eq!(decoded.limits.max_admitted_logins, Some(10_000));
     assert_eq!(decoded.application, [5, 4]);
     assert_eq!(decoded.audience, [0x22; 32]);
     assert_eq!(decoded.encode().unwrap(), args);
@@ -370,6 +371,18 @@ fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
             .receiver_install_args("receiver", root, vec![0; 4096])
             .is_err()
     );
+    let limits = &mut config.receiver_policy.as_mut().unwrap().limits;
+    limits.max_admitted_logins = Some(0);
+    let error = config
+        .receiver_install_args("receiver", root, vec![])
+        .unwrap_err();
+    assert!(error.to_string().contains("max_admitted_logins = 0"));
+    config
+        .receiver_policy
+        .as_mut()
+        .unwrap()
+        .limits
+        .max_admitted_logins = None;
     config
         .receiver_policy
         .as_mut()
@@ -402,6 +415,7 @@ fn receiver_grant_inherits_only_install_identity_and_preserves_its_own_authority
             max_session_secs: 60,
             max_proof_ttl_ns: 10,
             max_sessions: None,
+            max_admitted_logins: None,
         },
     });
     let grant = &mut config.auth[0];

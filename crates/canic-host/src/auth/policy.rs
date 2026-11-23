@@ -77,6 +77,11 @@ impl ReceiverPolicy {
                 "receiver_policy.limits.max_proof_ttl_ns = 0; expected a positive duration in nanoseconds",
             ));
         }
+        if limits.max_admitted_logins == Some(0) {
+            return Err(invalid(
+                "receiver_policy.limits.max_admitted_logins = 0; expected at least one known login",
+            ));
+        }
         if limits.max_sessions == Some(0) {
             return Err(invalid(
                 "receiver_policy.limits.max_sessions = 0; expected at least one session",

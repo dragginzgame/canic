@@ -7,6 +7,22 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Auth known-login capacity — 2026-11-23
+
+An installed stable receiver using IC Auth 0.49.2 admitted 10,000 distinct
+signed accounts with one device each and a separate 32-session limit. The test
+used four-byte account subjects, one read scope and no application binding.
+Sessions expired between batches. The next account received `Capacity` before
+upgrade and again after reopen, expiry and a fresh Root refresh.
+
+The sealed Auth receiver image occupied 2,015,235 bytes including its digest.
+PocketIC debited 8,333,082,947 receiver cycles across stop, upgrade and start of
+the witness Wasm, which also contained its fixture issuer. The checkpoint size
+measures only the receiver. IC Auth caps each encoded owner payload at 8 MiB.
+This run qualifies this population and credential shape. An 80,000-row receiver
+or a population with many simultaneously live sessions needs its own measurement.
+Run `bash scripts/dev/test-auth.sh known_login_capacity` to repeat the case.
+
 ## Database-free Toko hub upgrades — 2026-11-22
 
 An isolated Toko qualification run installed the retained predecessor hubs,

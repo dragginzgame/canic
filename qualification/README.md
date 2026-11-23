@@ -352,6 +352,8 @@ the consumer lockfile stays byte-identical. To run that case on its own after
 from the repository root.
 
 Auth tests exercise distinct receiver grants, enrollment, issuance, recovery and logout.
+Run `bash scripts/dev/test-auth.sh known_login_capacity` for signed admission at
+a configured row limit and checkpoint size and cycle measurements across upgrade.
 The installed browser and Blob suites select `profile-state` for independent readback of
 persisted application rows. Blob also checks that catalog and reference changes roll back
 together, and that reopen requires activation of the matching maintenance attempt.
