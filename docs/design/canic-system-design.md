@@ -1486,7 +1486,7 @@ deployment, production key custody or managed Auth preservation. The broader
 ### Optional DB inspection
 
 Canic mounts a caller-authorized status query for an application-selected database.
-Its bounded v2 reply carries the executable schema fingerprint and ordinary storage
+Its bounded v1 status reply carries the executable schema fingerprint and ordinary storage
 admission, including the incarnation when readable. IC DB owns detailed schema
 descriptions, indexes and maintained counts. The application owns authorization
 and opens its database through its ordinary path. See the
@@ -1956,7 +1956,7 @@ contracts and synchronous caller authorization before request decoding; IC DB
 remains an independent library with its own durable codec and fluent semantics.
 The adapter owns no schema, query planner, authority store or lifecycle hooks.
 `make db-test` qualifies the actual library through sparse pages, batch refusal,
-reply rollback, upgrades and maintenance closure. The v2 diagnostic reports the schema fingerprint and admission status. Native application CLI access remains IC DB's separate consumer work;
+reply rollback, upgrades and maintenance closure. The v1 status diagnostic reports the schema fingerprint and admission status. Native application CLI access remains IC DB's separate consumer work;
 query/write DTOs and exposure policy stay application-owned.
 
 This follows the existing Blob mount pattern and retains IcyDB

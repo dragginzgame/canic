@@ -145,7 +145,55 @@ pub enum Placement {
     GrowthRefused,
 }
 
+/// Client interpretation of a Root placement reply.
+#[derive(Debug, PartialEq, Eq)]
+pub enum PlacementOutcome {
+    /// No assignment has been reserved.
+    Unknown,
+    /// The original allocation is in progress.
+    Pending(Allocation),
+    /// Original allocation and its validated canister principal.
+    Assigned(Allocation, ic_platform_types::Principal),
+    /// The original allocation is unavailable, with its retained observation.
+    Unavailable(Allocation, Option<String>),
+    /// The pool is at capacity.
+    Full,
+    /// An earlier creation is outstanding.
+    Busy,
+    /// New creation lacks funding or approval.
+    GrowthRefused,
+}
+
+fn assigned_principal(text: &str) -> Result<ic_platform_types::Principal, &'static str> {
+    let principal =
+        ic_platform_types::Principal::from_text(text).map_err(|_| "invalid assigned canister")?;
+    if principal.to_text() != text || principal.as_slice().last() != Some(&1) {
+        return Err("invalid assigned canister");
+    }
+
+    Ok(principal)
+}
+
 impl Placement {
+    /// Consume a reply, keeping each placement state and its retained evidence.
+    /// # Errors
+    /// Refuses an assigned target that is not canonical canister text.
+    pub fn into_outcome(self) -> Result<PlacementOutcome, &'static str> {
+        Ok(match self {
+            Self::Assigned(allocation, text) => {
+                PlacementOutcome::Assigned(allocation, assigned_principal(&text)?)
+            }
+            Self::Pending(allocation) => PlacementOutcome::Pending(allocation),
+            Self::Unavailable(allocation, reason) => {
+                PlacementOutcome::Unavailable(allocation, reason)
+            }
+            Self::Unknown => PlacementOutcome::Unknown,
+            Self::Full => PlacementOutcome::Full,
+            Self::Busy => PlacementOutcome::Busy,
+            Self::GrowthRefused => PlacementOutcome::GrowthRefused,
+        })
+    }
+
     /// Return the retained allocation identity and its canonical canister target.
     /// Other placement states have no usable target; applications retain their original state.
     /// # Errors
@@ -156,12 +204,7 @@ impl Placement {
         let Self::Assigned(allocation, text) = self else {
             return Ok(None);
         };
-        let principal = ic_platform_types::Principal::from_text(text)
-            .map_err(|_| "invalid assigned canister")?;
-        if principal.to_text() != *text || principal.as_slice().last() != Some(&1) {
-            return Err("invalid assigned canister");
-        }
-        Ok(Some((allocation, principal)))
+        Ok(Some((allocation, assigned_principal(text)?)))
     }
 }
 

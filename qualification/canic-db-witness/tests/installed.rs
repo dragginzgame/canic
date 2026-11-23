@@ -198,20 +198,22 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
             incarnation: [91; 16]
         }
     );
-    assert!(
-        pic.query_call(
-            canister,
-            owner,
-            "db_inspect",
-            frame(
-                ic_wire::method_id("canic.db.inspect.v1"),
-                &(),
-                ic_wire::Direction::Request
+    for retired in ["canic.db.inspect.v1", "canic.db.inspect.v2"] {
+        assert!(
+            pic.query_call(
+                canister,
+                owner,
+                "db_inspect",
+                frame(
+                    ic_wire::method_id(retired),
+                    &(),
+                    ic_wire::Direction::Request
+                )
             )
-        )
-        .await
-        .is_err()
-    );
+            .await
+            .is_err()
+        );
+    }
     // Production artifact has no private maintenance/fault entrypoint.
     assert!(
         pic.update_call(

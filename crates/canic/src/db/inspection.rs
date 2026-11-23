@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 pub type Request = ();
 
 /// Wire method for the executable fingerprint and ordinary database admission.
-pub const INSPECT: u64 = ic_wire::method_id("canic.db.inspect.v2");
+pub const INSPECT: u64 = ic_wire::method_id("canic.db.status.v1");
 /// Stored admission, separate from the executable schema identity.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum Admission {

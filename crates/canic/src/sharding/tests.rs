@@ -13,6 +13,10 @@ fn assigned_target_preserves_generation_and_refuses_invalid_principals() {
         placement(target.to_text()).assigned_target().unwrap(),
         Some((&original, target))
     );
+    assert_eq!(
+        placement(target.to_text()).into_outcome(),
+        Ok(PlacementOutcome::Assigned(original.clone(), target))
+    );
     for text in [
         target.to_text().to_uppercase(),
         Principal::anonymous().to_text(),
@@ -20,12 +24,37 @@ fn assigned_target_preserves_generation_and_refuses_invalid_principals() {
         Principal::from_slice(&[7, 2]).to_text(),
         "invalid".into(),
     ] {
-        assert!(placement(text).assigned_target().is_err());
+        assert!(placement(text.clone()).assigned_target().is_err());
+        assert!(placement(text).into_outcome().is_err());
     }
     assert_eq!(
         Placement::Pending(original).assigned_target().unwrap(),
         None
     );
+}
+
+#[test]
+fn owned_outcomes_preserve_each_unassigned_state() {
+    let allocation = Allocation {
+        slot: 23,
+        generation: [9; 32],
+    };
+    for (reply, expected) in [
+        (Placement::Unknown, PlacementOutcome::Unknown),
+        (Placement::Full, PlacementOutcome::Full),
+        (Placement::Busy, PlacementOutcome::Busy),
+        (Placement::GrowthRefused, PlacementOutcome::GrowthRefused),
+        (
+            Placement::Pending(allocation.clone()),
+            PlacementOutcome::Pending(allocation.clone()),
+        ),
+        (
+            Placement::Unavailable(allocation.clone(), Some("retired".into())),
+            PlacementOutcome::Unavailable(allocation, Some("retired".into())),
+        ),
+    ] {
+        assert_eq!(reply.into_outcome(), Ok(expected));
+    }
 }
 
 #[test]

@@ -3,23 +3,25 @@ use super::{AuthSubject, Binding, Progress, Provision, Request, Resource, SendEr
 use crate::{
     auth::session::Authorization,
     guard, method, role,
-    sharding::{self, Allocation, Placement},
+    sharding::{self, Allocation, Placement, PlacementOutcome},
 };
 use ic_platform_runtime::system as api;
 use ic_platform_types::Principal;
 use std::marker::PhantomData;
 
-fn target(placement: &Placement, root: Principal) -> Result<(Allocation, Principal), Progress> {
-    match placement {
-        Placement::Pending(_) | Placement::Busy => Err(Progress::PlacementPending),
-        Placement::Full => Err(Progress::PoolFull),
-        _ => placement
-            .assigned_target()
-            .ok()
-            .flatten()
-            .filter(|(_, p)| *p != root && *p != api::canister_self())
-            .map(|(allocation, p)| (allocation.clone(), p))
-            .ok_or(Progress::PlacementUnavailable),
+fn target(placement: Placement, root: Principal) -> Result<(Allocation, Principal), Progress> {
+    match placement
+        .into_outcome()
+        .map_err(|_| Progress::PlacementUnavailable)?
+    {
+        PlacementOutcome::Pending(_) | PlacementOutcome::Busy => Err(Progress::PlacementPending),
+        PlacementOutcome::Full => Err(Progress::PoolFull),
+        PlacementOutcome::Assigned(allocation, shard)
+            if shard != root && shard != api::canister_self() =>
+        {
+            Ok((allocation, shard))
+        }
+        _ => Err(Progress::PlacementUnavailable),
     }
 }
 
@@ -60,7 +62,7 @@ pub async fn place<'a, R: Resource>(
         sharding::assign(root, pool, key).await
     };
     admit(auth);
-    let (allocation, shard) = target(&result.map_err(|_| Progress::PlacementUnavailable)?, root)?;
+    let (allocation, shard) = target(result.map_err(|_| Progress::PlacementUnavailable)?, root)?;
     if retained.is_some_and(|p| p != shard) {
         return Err(Progress::PlacementUnavailable);
     }

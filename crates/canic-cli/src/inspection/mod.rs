@@ -50,7 +50,7 @@ fn decode(bytes: &[u8]) -> canic_host::Result<protocol::Response> {
         },
         RPC_LIMITS,
     )
-    .map_err(|e| Error::Invalid(format!("invalid Canic inspection v2 reply: {e}")))
+    .map_err(|e| Error::Invalid(format!("invalid Canic database status reply: {e}")))
 }
 
 pub(super) async fn run(options: &Options, json: bool) -> canic_host::Result<crate::Output> {

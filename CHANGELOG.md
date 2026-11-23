@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.261.0] - 2026-11-23
+
+### ⚠️ Breaking
+
+- The database status query now accepts only the `canic.db.status.v1` Wire ID. Rebuild the CLI and the receiver together. The request and reply payloads are unchanged from 0.260.0.
+
+### Added
+
+- Consume a Root reply with `placement.into_outcome()?` and match `PlacementOutcome::Assigned(allocation, canister)` to retain its generation and validated principal. [Canic #86](https://github.com/dragginzgame/canic/issues/86)
+- Use `MyMethod::request_len(&borrowed_request)?` to check a complete Wire request against its contract before spending cycles on a child. The borrowed input must serialize like the method’s input. [Canic #87](https://github.com/dragginzgame/canic/issues/87)
+
+### ▶️ Try it
+
+```sh
+# Query an updated receiver with an identity authorized by the application.
+canic db inspect --network ic --canister "$CANISTER" --identity "$IDENTITY_PEM"
+```
+
 ## [0.260.0] - 2026-11-23
 
 ### ⚠️ Breaking

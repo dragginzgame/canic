@@ -43,6 +43,22 @@ impl Contract for Example {
     type Output = String;
 }
 
+#[test]
+fn borrowed_preflight_matches_request_encoding_on_the_host() {
+    fn check<M: Contract<Input = String>>(text: &String) {
+        assert_eq!(
+            M::request_len(text.as_str()),
+            M::encode_request(text).map(|frame| frame.len())
+        );
+    }
+
+    for size in [1, 64, 16_384] {
+        let text = "x".repeat(size);
+        check::<echo>(&text);
+        check::<Example>(&text);
+    }
+}
+
 /// Return the submitted name using the application's published contract.
 #[canic::update(contract = Example)]
 fn provision_user(name: String) -> String {

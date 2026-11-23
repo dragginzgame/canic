@@ -24,6 +24,13 @@ pub const LIMITS: wire::Limits = wire::Limits {
     depth: 16,
 };
 
+const fn request_frame<M: Contract + ?Sized>() -> wire::Encoding {
+    wire::Encoding::Frame {
+        method: M::ID,
+        direction: wire::Direction::Request,
+    }
+}
+
 /// Application-owned protocol for one named Wire call.
 pub trait Contract {
     /// Exported canister method.
@@ -39,32 +46,26 @@ pub trait Contract {
     /// Public reply shape.
     type Output: serde::Serialize + serde::de::DeserializeOwned;
 
+    /// Measure the complete request frame without allocating output or issuing a call.
+    /// A borrowed representation must serialize identically to `Self::Input`.
+    /// # Errors
+    /// Propagates the Wire codec refusal.
+    fn request_len<T: serde::Serialize + ?Sized>(value: &T) -> Result<usize, wire::Error> {
+        wire::encoded_len(value, request_frame::<Self>(), Self::REQUEST)
+    }
+
     /// Encode the request using this method's directional frame and limits.
     /// # Errors
     /// Propagates the Wire codec refusal.
     fn encode_request(value: &Self::Input) -> Result<Vec<u8>, wire::Error> {
-        wire::encode(
-            value,
-            wire::Encoding::Frame {
-                method: Self::ID,
-                direction: wire::Direction::Request,
-            },
-            Self::REQUEST,
-        )
+        wire::encode(value, request_frame::<Self>(), Self::REQUEST)
     }
 
     /// Decode the request using this method's directional frame and limits.
     /// # Errors
     /// Propagates the Wire codec refusal.
     fn decode_request(bytes: &[u8]) -> Result<Self::Input, wire::Error> {
-        wire::decode(
-            bytes,
-            wire::Encoding::Frame {
-                method: Self::ID,
-                direction: wire::Direction::Request,
-            },
-            Self::REQUEST,
-        )
+        wire::decode(bytes, request_frame::<Self>(), Self::REQUEST)
     }
 
     /// Encode the reply using this method's directional frame and limits.

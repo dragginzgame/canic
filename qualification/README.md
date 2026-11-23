@@ -568,7 +568,7 @@ controller guard, Root client selections and absent recorders.
 explicitly and supplies synchronous inspect/query/write handlers to
 `canic::mount_db_endpoints!`. The `db` feature adds no IC DB runtime dependency to
 Canic. Its passive `db::inspection` contract is versioned independently as
-`method_id("canic.db.inspect.v2")`. The unit request returns the executable schema fingerprint
+`method_id("canic.db.status.v1")`. The unit request returns the executable schema fingerprint
 and ordinary admission status, including the incarnation when readable. The application
 obtains both from IC DB. The witness uses IC DB and its schema macros at 0.27.7.
 
