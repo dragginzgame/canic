@@ -110,6 +110,13 @@ pub(super) enum AppCommand {
         #[command(flatten)]
         selection: AppConfigArgs,
     },
+    /// Generate TypeScript clients for application canisters in a new directory.
+    ExportWire {
+        #[command(flatten)]
+        selection: AppConfigArgs,
+        #[arg(long, value_name = "DIRECTORY")]
+        out: PathBuf,
+    },
     /// Add a fleetless app, creating the config if missing; preserves existing source.
     Init {
         /// Logical application name.

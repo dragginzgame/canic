@@ -7,7 +7,9 @@ mod tests;
 
 mod app_build;
 mod app_wire;
+mod wire_export;
 pub use app_wire::{check_wire, wire_manifest};
+pub use wire_export::export_wire;
 pub mod application;
 mod artifact;
 mod auth;

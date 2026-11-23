@@ -24,6 +24,30 @@ After installing the CLI and toolchain, a consumer's PR workflow needs one step:
   run: canic app check-wire
 ```
 
+## Generate the greeting client
+
+With a matching CLI installed, run these commands from a Canic checkout. Pick an unused directory for the starter and an unused output directory for the generated files.
+
+```sh
+canic app init hello --source frontend-example --canic-source .
+cd frontend-example
+canic app export-wire --out generated
+```
+
+The exporter uses the same Wasm-checked inventory as `check-wire`. IC Wire generates each actor’s service factory and method codecs. Pass the target canister ID and a transport implementing `query(id, method, bytes)` and `update(id, method, bytes)`. Both return the raw reply bytes. A frontend can use its existing agent and identity.
+
+```ts
+import { clients, type Transport } from "./generated/index.js";
+
+export async function greetVisitor<Id>(id: Id, transport: Transport<Id>, name: string) {
+  const app = clients.app(id, transport);
+  const greeting = await app.greet(name);
+  return greeting.message;
+}
+```
+
+The earlier producer research for legacy revision `377fbce` in the [system design](design/canic-system-design.md#endpoint-ownership-and-actor-composition) applies here. Keep the native actor inspection and finalized Wasm comparison as the inventory source. Export is local and needs no fleet.
+
 ## Adopt it in an existing actor
 
 In each application actor package, provide an example named

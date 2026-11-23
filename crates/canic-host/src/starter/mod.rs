@@ -12,9 +12,10 @@ use std::{
 
 #[derive(Debug, thiserror::Error)]
 #[error(
-    "starter publication failed: {source}; inspect staging {staging:?} and destination {destination:?}"
+    "{kind} publication failed: {source}; inspect staging {staging:?} and destination {destination:?}"
 )]
 struct PublicationError {
+    kind: String,
     staging: PathBuf,
     destination: PathBuf,
     #[source]
@@ -185,6 +186,15 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
 pub fn create_starter(destination: &Path, app: &str, source: &Path) -> Result<PathBuf> {
     let source = source.canonicalize().map_err(supplier)?;
     let files = files(app, &source)?;
+    let destination = publish_files(destination, &files, "starter")?;
+    Ok(destination.join("canic.toml"))
+}
+
+pub(crate) fn publish_files(
+    destination: &Path,
+    files: &BTreeMap<PathBuf, Vec<u8>>,
+    kind: &str,
+) -> Result<PathBuf> {
     let parent = destination
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
@@ -193,24 +203,25 @@ pub fn create_starter(destination: &Path, app: &str, source: &Path) -> Result<Pa
         .map_err(supplier)?;
     let name = destination
         .file_name()
-        .ok_or_else(|| Error::Invalid("starter requires a new directory name".into()))?;
+        .ok_or_else(|| Error::Invalid(format!("{kind} requires a new directory name")))?;
     let destination = parent.join(name);
     match std::fs::symlink_metadata(&destination) {
         Ok(_) => {
-            return Err(Error::Invalid(
-                "starter destination already exists; nothing changed".into(),
-            ));
+            return Err(Error::Invalid(format!(
+                "{kind} destination already exists; nothing changed"
+            )));
         }
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(supplier(error)),
     }
     let held_parent = ic_host_fs::Directory::open(&parent, 0)
         .map_err(supplier)?
-        .ok_or_else(|| Error::Invalid("starter parent disappeared".into()))?;
-    let (staging_name, held) = crate::staging_directory::allocate(&held_parent, ".canic-starter")?;
+        .ok_or_else(|| Error::Invalid(format!("{kind} parent disappeared")))?;
+    let (staging_name, held) =
+        crate::staging_directory::allocate(&held_parent, &format!(".canic-{kind}"))?;
     let staging = parent.join(&staging_name);
     let publish = || -> Result<()> {
-        for (path, bytes) in &files {
+        for (path, bytes) in files {
             let parents = path
                 .parent()
                 .unwrap_or_else(|| Path::new(""))
@@ -218,7 +229,7 @@ pub fn create_starter(destination: &Path, app: &str, source: &Path) -> Result<Pa
                 .map(|component| match component {
                     std::path::Component::Normal(name) => Ok(name),
                     _ => Err(Error::Invalid(
-                        "starter member needs relative normal components".into(),
+                        "generated member needs relative normal components".into(),
                     )),
                 })
                 .collect::<Result<Vec<_>>>()?;
@@ -227,14 +238,14 @@ pub fn create_starter(destination: &Path, app: &str, source: &Path) -> Result<Pa
                 .map_err(supplier)?;
             let name = path
                 .file_name()
-                .ok_or_else(|| Error::Invalid("starter member needs a filename".into()))?;
+                .ok_or_else(|| Error::Invalid("generated member needs a filename".into()))?;
             crate::store::put_in(&parent, name, bytes)?;
         }
-        for (file, bytes) in &files {
+        for (file, bytes) in files {
             if crate::store::read(&staging.join(file), bytes.len())? != *bytes {
-                return Err(Error::Invalid(
-                    "starter staging changed before publication".into(),
-                ));
+                return Err(Error::Invalid(format!(
+                    "{kind} staging changed before publication"
+                )));
             }
         }
         held_parent
@@ -244,10 +255,11 @@ pub fn create_starter(destination: &Path, app: &str, source: &Path) -> Result<Pa
     };
     publish().map_err(|source| {
         supplier(PublicationError {
+            kind: kind.into(),
             staging,
             destination: destination.clone(),
             source,
         })
     })?;
-    Ok(destination.join("canic.toml"))
+    Ok(destination)
 }

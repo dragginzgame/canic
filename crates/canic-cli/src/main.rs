@@ -75,6 +75,20 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
             }
             Ok(serde_json::json!({"canisters":built}))
         }
+        Commands::App(AppCommand::ExportWire { selection, out }) => {
+            let path = canic_host::export_wire(
+                &selection.config.path(selection.app.as_deref())?,
+                selection.app.as_deref(),
+                out,
+            )?;
+            if !cli.json {
+                return Ok(Output::Text(format!(
+                    "Generated TypeScript client in {}\n",
+                    ic_host_text::escape(&path.to_string_lossy())
+                )));
+            }
+            Ok(serde_json::json!({"directory":path}))
+        }
         Commands::App(AppCommand::CheckWire { selection }) => {
             let baseline = canic_host::check_wire(
                 &selection.config.path(selection.app.as_deref())?,

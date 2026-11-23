@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.264.0] - 2026-11-23
+
+- Generate an application's TypeScript client with `canic app export-wire`. From a Canic checkout with the matching CLI installed, this creates a greeting workspace and writes its IC Wire 0.28.1 service clients and codecs to a new directory. Pass a canister ID and your query/update transport to each client factory.
+
+```sh
+canic app init hello --source frontend-example --canic-source .
+cd frontend-example
+canic app export-wire --out generated
+```
+
 ## [0.263.0] - 2026-11-23
 
 - Durable shard assignment and move preparation now take a fallible authorization callback. Pass `|| auth.reauthorize()` and map `ReservationError::Authorization` to the application’s access error. The hub checks again when Root replies, before writing local capacity or routes. [Canic #88](https://github.com/dragginzgame/canic/issues/88)

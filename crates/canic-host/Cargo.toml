@@ -32,7 +32,7 @@ ic-platform-types.workspace = true
 ic-query-topology.workspace = true
 ic-testkit = { workspace = true, optional = true, features = ["managed-server"] }
 ic-wasm-store-protocol.workspace = true
-ic-wire.workspace = true
+ic-wire = { workspace = true, features = ["service-client"] }
 serde.workspace = true
 serde_json.workspace = true
 sha2.workspace = true
