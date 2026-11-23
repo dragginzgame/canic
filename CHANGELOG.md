@@ -6,6 +6,10 @@
 
 - The database status query now accepts only the `canic.db.status.v1` Wire ID. Rebuild the CLI and the receiver together. The request and reply payloads are unchanged from 0.260.0.
 
+### Changed
+
+- The optional database adapter and its installed qualification use IC DB 0.27.8.
+
 ### Added
 
 - Consume a Root reply with `placement.into_outcome()?` and match `PlacementOutcome::Assigned(allocation, canister)` to retain its generation and validated principal. [Canic #86](https://github.com/dragginzgame/canic/issues/86)

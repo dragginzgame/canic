@@ -1675,9 +1675,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.27.7"
+version = "0.27.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "628900dcfeaf8fe9fc75786367a6e94f40f5f602c3be5073b429710cd3ea7489"
+checksum = "1dd9e9506ded48cc2ce34b2f77bfcd0b9c15ed382aef7c6d4c8164d9f76ec9e1"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1697,9 +1697,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.27.7"
+version = "0.27.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd86b28d4d72456964f9412beb6eac97921282af666c92e385859f85a535dede"
+checksum = "f3f9b03837124f6a0301b470d4e662dc381f522bbaa440bf51665ce8996a10d5"
 dependencies = [
  "proc-macro2",
  "quote",
