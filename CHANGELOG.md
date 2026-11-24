@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.266.2] - 2026-11-24
+
+### 🔄 Changed
+
+- App builds show declared infrastructure roles as `[WASM_STORE]`, `[ROOT]` and `[COORDINATOR]` in the modules column. Managed fleet previews use the same Root and Store labels.
+
+```sh
+canic app build --config apps/examples/counter/canic.toml
+```
+
 ## [0.266.1] - 2026-11-23
 
 ### 🐛 Fixed

@@ -582,14 +582,18 @@ pub(crate) fn fleet_preview(
         .as_ref()
         .ok_or_else(|| Error::Invalid("missing Root slot".into()))?;
     let mut rows = vec![[
-        root.canister.clone(),
+        format!("{} {}", root.canister, crate::topology::ROOT_BADGE),
         "operator".into(),
         format!("{} debit ceiling", cycles(plan.root.creation_cycles())),
     ]];
     let mut modules = format!("Root module: {}\n", plan.root.artifact.sha256);
     if let Some(store) = &plan.store {
         rows.push([
-            format!("├─ {} [WASM STORE]", store.deployment.canister),
+            format!(
+                "├─ {} {}",
+                store.deployment.canister,
+                crate::topology::STORE_BADGE
+            ),
             format!("{}.result.canister", root.canister),
             format!("{} separate debit ceiling", cycles(store.creation_cycles)),
         ]);

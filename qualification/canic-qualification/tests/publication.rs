@@ -289,7 +289,8 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         .unwrap();
     assert!(human.status.success());
     let text = String::from_utf8(human.stdout).unwrap();
-    assert!(text.contains("store [WASM STORE]"));
+    assert!(text.contains("root [ROOT]"));
+    assert!(text.contains("store [WASM_STORE]"));
     assert!(text.contains("Total operator debit ceiling: 5T"));
     assert!(text.contains("Store release: app /"));
     let signer = repo.join(".tools/ic/bin/icp");

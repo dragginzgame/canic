@@ -5,6 +5,18 @@ mod tests;
 
 use std::collections::{BTreeMap, BTreeSet};
 
+pub(crate) const ROOT_BADGE: &str = "[ROOT]";
+pub(crate) const STORE_BADGE: &str = "[WASM_STORE]";
+
+pub(crate) fn infrastructure_badge(role: &str) -> Option<&'static str> {
+    match role {
+        "root" => Some(ROOT_BADGE),
+        "wasm-store" => Some(STORE_BADGE),
+        "coordinator" => Some("[COORDINATOR]"),
+        _ => None,
+    }
+}
+
 /// Order report records by declared parent, retaining context for filtered builds.
 pub(crate) fn labeled<'a, T>(
     records: &'a [T],

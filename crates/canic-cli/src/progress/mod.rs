@@ -67,8 +67,12 @@ pub(crate) fn next(
 
 fn build_row(label: String, item: &BuiltCanister) -> [String; 5] {
     let mut modules = item.modules.clone();
-    if item.role.as_deref() == Some("wasm-store") {
-        modules.insert(0, "[WS]");
+    if let Some(badge) = item
+        .role
+        .as_deref()
+        .and_then(crate::topology::infrastructure_badge)
+    {
+        modules.insert(0, badge);
     }
 
     [

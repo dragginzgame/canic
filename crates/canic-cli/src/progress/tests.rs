@@ -175,10 +175,14 @@ fn app_build_summary_marks_store_in_modules_and_keeps_codec_path_in_json() {
         build_ms: 0,
         client: None,
     };
-    assert!(!built(std::slice::from_ref(&store)).contains("[WS]"));
+    assert!(!built(std::slice::from_ref(&store)).contains("[WASM_STORE]"));
+    for (role, badge) in [("root", "[ROOT]"), ("coordinator", "[COORDINATOR]")] {
+        store.role = Some(role.into());
+        assert!(built(std::slice::from_ref(&store)).contains(badge));
+    }
     store.canister = "artifacts".into();
     store.role = Some("wasm-store".into());
-    assert!(built(std::slice::from_ref(&store)).contains("[WS]"));
+    assert!(built(std::slice::from_ref(&store)).contains("[WASM_STORE]"));
     assert_eq!(
         serde_json::to_value(&hub).unwrap()["client"],
         "artifacts/user_shard.codec"
@@ -188,7 +192,7 @@ fn app_build_summary_marks_store_in_modules_and_keeps_codec_path_in_json() {
         .lines()
         .find(|row| row.starts_with("├─ artifacts"))
         .unwrap();
-    assert!(row.find("KiB").unwrap() < row.find("[WS]").unwrap());
+    assert!(row.find("KiB").unwrap() < row.find("[WASM_STORE]").unwrap());
     assert!(table.find("user_hub").unwrap() < table.find("└─ user_shard").unwrap());
     assert!(!table.contains("COMMAND CODEC"));
     assert!(!table.contains("artifacts/user_shard.codec"));
