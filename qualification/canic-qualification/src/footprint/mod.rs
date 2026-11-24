@@ -16,7 +16,8 @@ pub struct Footprint {
     pub defined_functions: u32,
 }
 
-/// Measure a fixture under the direct-install 1.9 MB, 64-section/export and 32-custom-section budgets.
+/// Measure up to 1.9 MB, 64 exports, one signature section per export, and
+/// 64 other sections including up to 32 other custom sections.
 /// # Errors
 /// Refuses oversized, malformed, invalid or non-core Wasm instead of returning partial facts.
 pub fn measure(bytes: &[u8]) -> Result<Footprint, Box<dyn std::error::Error>> {
@@ -29,6 +30,8 @@ pub fn measure(bytes: &[u8]) -> Result<Footprint, Box<dyn std::error::Error>> {
     };
     let mut sections = 0;
     let mut custom = 0;
+    let mut signatures = 0;
+    let mut exports = 0;
     for payload in Parser::new(0).parse_all(&bytes) {
         let payload = payload?;
         if payload.as_section().is_some() {
@@ -43,15 +46,26 @@ pub fn measure(bytes: &[u8]) -> Result<Footprint, Box<dyn std::error::Error>> {
                 unchecked_range: range,
                 ..
             } => facts.code_section_bytes = usize::try_from(range.end - range.start)?,
-            Payload::ExportSection(reader) if reader.count() > 64 => {
-                return Err("fixture export budget exceeded".into());
+            Payload::ExportSection(reader) => {
+                exports = reader.count();
+                if exports > 64 {
+                    return Err("fixture export budget exceeded".into());
+                }
+            }
+            Payload::CustomSection(section)
+                if section.name().starts_with("canic:signature:v1:") =>
+            {
+                signatures += 1;
             }
             Payload::CustomSection(_) => custom += 1,
             _ => {}
         }
-        if sections > 64 || custom > 32 {
+        if sections - signatures > 64 || custom > 32 || signatures > 64 {
             return Err("fixture section budget exceeded".into());
         }
+    }
+    if signatures > exports {
+        return Err("fixture has more signature sections than exports".into());
     }
     wasmparser::Validator::new().validate_all(&bytes)?;
     Ok(facts)
