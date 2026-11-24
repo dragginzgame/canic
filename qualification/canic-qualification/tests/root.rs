@@ -29,15 +29,9 @@ fn repo() -> PathBuf {
 // Keep the retained inline-custody witnesses explicit. The publication runner
 // qualifies the generated default Root/Store/app topology through the CLI.
 fn inline_fixture(config: &std::path::Path, app: &str) {
-    let mut value: serde_json::Value =
-        toml::from_str(&std::fs::read_to_string(config).unwrap()).unwrap();
-    assert!(
-        value["apps"][app]["canisters"]
-            .as_object_mut()
-            .unwrap()
-            .remove("store")
-            .is_some()
-    );
+    let mut value = canic_host::load_config(config).unwrap();
+    let slots = &mut value.apps.get_mut(app).unwrap().canisters;
+    assert!(slots.remove("store").is_some());
     std::fs::write(config, toml::to_string(&value).unwrap()).unwrap();
 }
 

@@ -190,7 +190,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     assert_eq!(built["canisters"].as_array().unwrap().len(), 3);
     let lock = std::fs::read(dir.join("Cargo.lock")).unwrap();
     let mut config: Value =
-        toml::from_str(&std::fs::read_to_string(dir.join("canic.toml")).unwrap()).unwrap();
+        serde_json::to_value(canic_host::load_config(&dir.join("canic.toml")).unwrap()).unwrap();
     assert!(
         config["apps"]["demo"]["fleets"]["local"]["canisters"]
             .as_object()
