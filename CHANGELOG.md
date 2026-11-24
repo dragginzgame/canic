@@ -2,6 +2,8 @@
 
 ## [0.267.0] - 2026-11-24
 
+- Product and qualification crates use IC Wire 0.30.0. Role-proof signing reports an invalid generation length as a field limit.
+
 - Managed apps get Root and its native client automatically. Fleet declarations select Auth, placement and role verification support. Set `wasm_store = true` to include the separate Store. Adding a child updates the inferred build workspace. Source starters build Root and its client from the selected Canic checkout.
 
 ```sh

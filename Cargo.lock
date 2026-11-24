@@ -310,7 +310,7 @@ dependencies = [
  "ic-platform-types",
  "ic-storage",
  "ic-timers",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "inventory",
  "serde",
  "serde_json",
@@ -329,7 +329,7 @@ dependencies = [
  "ic-host-process",
  "ic-host-text",
  "ic-query-topology",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "serde_json",
  "time",
  "tiny_http",
@@ -368,7 +368,7 @@ dependencies = [
  "ic-testkit",
  "ic-wasm-store",
  "ic-wasm-store-protocol",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -407,7 +407,7 @@ dependencies = [
  "ic-storage",
  "ic-timers",
  "ic-wasm-store-protocol",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "serde",
  "sha2 0.11.1",
  "toko-tooling",
@@ -421,7 +421,7 @@ dependencies = [
  "ic-platform-protocol",
  "ic-platform-types",
  "ic-wasm-store-protocol",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "serde",
  "serde_bytes",
  "sha2 0.11.1",
@@ -438,7 +438,7 @@ dependencies = [
  "clap",
  "ic-platform-runtime",
  "ic-platform-types",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "serde",
  "serde_json",
  "toko-tooling",
@@ -934,7 +934,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "serde",
  "serde_json",
  "toko-tooling",
@@ -959,7 +959,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "serde",
  "serde_json",
  "toko-tooling",
@@ -972,7 +972,7 @@ dependencies = [
  "canic",
  "ic-platform-runtime",
  "ic-storage",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "serde",
  "sha2 0.11.1",
  "toko-tooling",
@@ -986,7 +986,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "serde",
  "toko-tooling",
 ]
@@ -1017,7 +1017,7 @@ version = "0.267.0"
 dependencies = [
  "canic",
  "ic-db",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "serde",
  "toko-tooling",
 ]
@@ -1341,9 +1341,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.12.0"
+version = "1.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c3e324da4c95177d6291d4c8730197c0d1822f8a9766814a4a44fa5ab797c9c"
+checksum = "229c6ff5584df4c6becbfe00567128bac768c8cd32ebc8a8366bd81ed072e8f3"
 dependencies = [
  "atomic-waker",
  "bytes",
@@ -1857,6 +1857,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-wire"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1bfe24cb5dd2d18765f59260fc93a9dca23d2514519d201c24a7cfe38f9f78ea"
+dependencies = [
+ "bytemuck",
+ "ic-platform-types",
+ "ic-wire-derive 0.30.0",
+ "postcard",
+ "serde",
+ "serde_bytes",
+ "serde_json",
+]
+
+[[package]]
 name = "ic-wire-derive"
 version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1872,6 +1887,17 @@ name = "ic-wire-derive"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1e0a7fc5b81cfbe570d392e4f3a8be3ac7df1b0513dafa0d7ce11d08056a6d3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.10",
+]
+
+[[package]]
+name = "ic-wire-derive"
+version = "0.30.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c751fa0116878f4a787bcbb39816a3fe0b934a24390d30a3535f76810ae1a8e"
 dependencies = [
  "proc-macro2",
  "quote",

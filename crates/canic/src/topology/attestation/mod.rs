@@ -48,7 +48,7 @@ impl Claim {
     /// Refuses an oversized claim or a malformed generation.
     pub fn signing_bytes(&self) -> Result<Vec<u8>, wire::Error> {
         if self.generation.as_slice().len() != 32 {
-            return Err(wire::Error::Limit);
+            return Err(wire::Error::Limit(wire::LimitKind::Field));
         }
         wire::encode(
             self,
