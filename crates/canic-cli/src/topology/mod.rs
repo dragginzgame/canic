@@ -21,18 +21,23 @@ pub(crate) fn infrastructure_badge(role: &str) -> Option<&'static str> {
 pub(crate) fn labeled<'a, T>(
     records: &'a [T],
     slot: impl Fn(&'a T) -> (&'a str, Option<&'a str>),
+    badge: impl Fn(&T) -> Option<&'static str>,
 ) -> Vec<(String, &'a T)> {
     let by_name: BTreeMap<_, _> = records.iter().map(|item| (slot(item).0, item)).collect();
     rows(records.iter().map(&slot))
         .into_iter()
         .map(|(name, prefix)| {
             let item = by_name[name];
-            let label = match slot(item).1 {
-                Some(parent) if !by_name.contains_key(parent) => {
-                    format!("{name} (parent: {parent})")
-                }
-                _ => format!("{prefix}{name}"),
-            };
+            let mut label = format!("{prefix}{name}");
+            if let Some(badge) = badge(item) {
+                label.push(' ');
+                label.push_str(badge);
+            }
+            if let Some(parent) = slot(item).1
+                && !by_name.contains_key(parent)
+            {
+                label.push_str(&format!(" (parent: {parent})"));
+            }
             (label, item)
         })
         .collect()

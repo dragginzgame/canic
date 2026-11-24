@@ -18,6 +18,11 @@ inspection = ["canic/inspection"]
 canic = { workspace = true, features = ["method", "readiness"] }
 serde.workspace = true
 
+# Locked artifact sources for managed builds.
+[target.'cfg(any())'.dependencies]
+canic-root.workspace = true
+ic-wasm-store.workspace = true
+
 [dev-dependencies]
 toko-tooling.workspace = true
 

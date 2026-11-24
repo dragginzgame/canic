@@ -6,10 +6,20 @@ Canic selects the same locked crates.io protocol in both Cargo workspaces and
 the matching runtime as a Host artifact input. `canic artifact build --package ic-wasm-store`
 builds that registry archive with its packaged lockfile. Both selections and the
 archive's protocol must match; Git/path overrides are refused. No sibling
-checkout is needed. Existing generated configurations must change only their Store
-`build.package` from `canic-wasm-store` to `ic-wasm-store`; keep `build.manifest`
-pointing at the Canic workspace. Existing artifacts, approvals and deployed canisters
-are unchanged. Rebuilding does not authorize installing the changed executable.
+checkout is needed.
+
+Select the separate Store on the app. Canic supplies its Root automatically.
+
+```toml
+[apps.toko]
+wasm_store = true
+```
+
+Application children refer to `parent = "root"`. The operator bootstraps Root.
+Root installs the separate `store` slot from `artifacts/wasm_store.wasm`.
+Each fleet binds its own principals. Older explicit infrastructure recipes remain
+readable. When removing them, ensure the application build workspace's Cargo.lock
+selects both supplier packages and the matching Store protocol.
 
 Fresh builds select Store 0.8.0 and its matching IC Wire 0.28 protocol. Install a fresh Store and rebuild artifact manifests for 1 MiB chunks. The supplier refuses upgrades from the 256 KiB format. The following evidence applies to Store 0.6.0.
 A local Root-managed upgrade from 0.5.2 preserved the populated Store’s stable

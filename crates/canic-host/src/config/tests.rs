@@ -1888,3 +1888,106 @@ project_registry = { id = "ryjl3-tyaaa-aaaaa-aaaba-cai" }
         assert!(load_config(&path).unwrap_err().to_string().contains(error));
     }
 }
+
+#[test]
+fn supplied_store_uses_declared_root_and_rejects_conflicting_slots() {
+    let source = r#"
+[apps.demo]
+wasm_store = true
+[apps.demo.canisters.manager]
+role = "root"
+wasm = "artifacts/custom-root.wasm"
+build = { manifest = "../../qualification/Cargo.toml", package = "canic-root", features = ["auth"] }
+"#;
+    let config: Config = toml::from_str(source).unwrap();
+    let store = &config.apps["demo"].canisters["store"];
+    assert_eq!(store.parent.as_deref(), Some("manager"));
+    let recipe = store.build.as_ref().unwrap();
+    assert_eq!(recipe.manifest, Path::new("../../qualification/Cargo.toml"));
+    assert!(recipe.features.is_empty());
+    assert!(recipe.client.is_none());
+    for (other, reason) in [
+        ("[apps.demo.canisters.store]", "conflicts"),
+        (
+            "[apps.demo.canisters.archive]\nrole = 'wasm-store'",
+            "conflicts",
+        ),
+        ("[apps.demo.canisters.other]\nrole = 'root'", "multiple"),
+    ] {
+        let error = toml::from_str::<Config>(&format!("{source}\n{other}"))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains("apps.demo.wasm_store = true") && error.contains(reason),
+            "{error}"
+        );
+    }
+    let disabled: Config = toml::from_str(&source.replace("true", "false")).unwrap();
+    assert!(!disabled.apps["demo"].canisters.contains_key("store"));
+}
+
+#[test]
+fn managed_root_needs_no_declaration_and_uses_the_app_build_workspace() {
+    let source = r#"
+[apps.demo.canisters.hub]
+parent = "root"
+build = { manifest = "../../Cargo.toml", package = "hub" }
+wasm = "artifacts/hub.wasm"
+"#;
+    let config: Config = toml::from_str(source).unwrap();
+    let slots = &config.apps["demo"].canisters;
+    let root = &slots["root"];
+    assert!(root.parent.is_none());
+    let recipe = root.build.as_ref().unwrap();
+    assert_eq!(recipe.manifest, Path::new("../../Cargo.toml"));
+    assert_eq!(recipe.features, ["child-metrics"]);
+    assert_eq!(recipe.client.as_deref(), Some("canic-root-client"));
+    assert!(!slots.contains_key("store"));
+    assert!(toml::from_str::<Config>("[apps.demo.root]").is_err());
+}
+
+#[test]
+fn adding_first_managed_child_recomputes_both_supplied_recipes() {
+    let temp = tempfile::tempdir().unwrap();
+    let path = temp.path().join("canic.toml");
+    std::fs::write(
+        &path,
+        "[apps.demo]\n# Managed infrastructure\nwasm_store = true\n",
+    )
+    .unwrap();
+    let config = add_app_canister(
+        &path,
+        "demo",
+        "hub",
+        CanisterDefinition {
+            parent: Some("root".into()),
+            wasm: Some("artifacts/hub.wasm".into()),
+            build: Some(BuildInput {
+                manifest: "../Cargo.toml".into(),
+                package: "hub".into(),
+                features: vec![],
+                client: None,
+            }),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(config, load_config(&path).unwrap());
+    for slot in ["root", "store"] {
+        assert_eq!(
+            config.apps["demo"].canisters[slot]
+                .build
+                .as_ref()
+                .unwrap()
+                .manifest,
+            Path::new("../Cargo.toml")
+        );
+    }
+    let text = std::fs::read_to_string(path).unwrap();
+    assert!(text.contains("# Managed infrastructure"));
+    let source: SourceConfig = toml::from_str(&text).unwrap();
+    assert_eq!(
+        source.apps["demo"].canisters.keys().collect::<Vec<_>>(),
+        ["hub"]
+    );
+}

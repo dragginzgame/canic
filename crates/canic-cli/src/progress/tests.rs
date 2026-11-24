@@ -125,7 +125,7 @@ fn planning_requires_exactly_one_controller_source() {
 }
 
 #[test]
-fn app_build_summary_marks_store_in_modules_and_keeps_codec_path_in_json() {
+fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_path_in_json() {
     let mut build = BuiltCanister {
         canister: "user_shard".into(),
         role: None,
@@ -178,11 +178,14 @@ fn app_build_summary_marks_store_in_modules_and_keeps_codec_path_in_json() {
     assert!(!built(std::slice::from_ref(&store)).contains("[WASM_STORE]"));
     for (role, badge) in [("root", "[ROOT]"), ("coordinator", "[COORDINATOR]")] {
         store.role = Some(role.into());
-        assert!(built(std::slice::from_ref(&store)).contains(badge));
+        assert!(
+            built(std::slice::from_ref(&store))
+                .contains(&format!("store {badge} (parent: user_hub)"))
+        );
     }
     store.canister = "artifacts".into();
     store.role = Some("wasm-store".into());
-    assert!(built(std::slice::from_ref(&store)).contains("[WASM_STORE]"));
+    store.modules = vec!["DB", "Auth"];
     assert_eq!(
         serde_json::to_value(&hub).unwrap()["client"],
         "artifacts/user_shard.codec"
@@ -192,7 +195,9 @@ fn app_build_summary_marks_store_in_modules_and_keeps_codec_path_in_json() {
         .lines()
         .find(|row| row.starts_with("├─ artifacts"))
         .unwrap();
-    assert!(row.find("KiB").unwrap() < row.find("[WASM_STORE]").unwrap());
+    assert!(row.starts_with("├─ artifacts [WASM_STORE]"));
+    assert!(row.find("KiB").unwrap() < row.find("DB, Auth").unwrap());
+    assert_eq!(row.matches("[WASM_STORE]").count(), 1);
     assert!(table.find("user_hub").unwrap() < table.find("└─ user_shard").unwrap());
     assert!(!table.contains("COMMAND CODEC"));
     assert!(!table.contains("artifacts/user_shard.codec"));

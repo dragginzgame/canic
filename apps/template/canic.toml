@@ -1,13 +1,5 @@
-[apps.ex-template.canisters.root]
-role = "root"
-wasm = "artifacts/root.wasm"
-build = { manifest = "../../Cargo.toml", package = "canic-root" }
-
-[apps.ex-template.canisters.store]
-role = "wasm-store"
-parent = "root"
-wasm = "artifacts/wasm_store.wasm"
-build = { manifest = "../../Cargo.toml", package = "ic-wasm-store" }
+[apps.ex-template]
+wasm_store = true
 
 [apps.ex-template.canisters.ex-template]
 role = "app"

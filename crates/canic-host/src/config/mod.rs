@@ -5,6 +5,8 @@ mod tests;
 
 mod discovery;
 mod funding;
+mod supplied;
+pub(super) use supplied::{SourceApp, SourceConfig};
 pub(crate) mod sharding;
 
 use crate::{Error, Network, Plan, PlanInput, Result, plan, store, supplier};
@@ -24,7 +26,7 @@ const MAX_CONFIG_BYTES: usize = 32 * 1024;
 
 /// Applications and their independently selected deployment fleets.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
+#[serde(try_from = "SourceConfig")]
 pub struct Config {
     /// Logical applications; each owns zero or more fleets.
     pub apps: BTreeMap<String, AppConfig>,
@@ -1041,15 +1043,19 @@ pub fn init_app(path: &Path, app: &str) -> Result<Config> {
         fleets: BTreeMap::new(),
     };
     match std::fs::symlink_metadata(path) {
-        Ok(_) => edit_config(path, |config| {
-            if config.apps.contains_key(app) {
-                return Err(Error::Invalid(
-                    "app already exists; use fleet init to add a fleet".into(),
-                ));
-            }
-            config.apps.insert(app.into(), definition);
-            Ok(config.clone())
-        }),
+        Ok(_) => edit_config(
+            path,
+            |config, _| {
+                if config.apps.contains_key(app) {
+                    return Err(Error::Invalid(
+                        "app already exists; use fleet init to add a fleet".into(),
+                    ));
+                }
+                config.apps.insert(app.into(), SourceApp::default());
+                Ok(())
+            },
+            Ok,
+        ),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
             let config = Config {
                 apps: BTreeMap::from([(app.into(), definition)]),
@@ -1074,35 +1080,41 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
     name(app)?;
     name(fleet)?;
     network.validate()?;
-    edit_config(path, |config| {
-        let definition = config.apps.get_mut(app).ok_or_else(|| {
-            Error::Invalid("app does not exist in this config; use app list to inspect it".into())
-        })?;
-        if definition.fleets.contains_key(fleet) {
-            return Err(Error::Invalid(
-                "fleet already exists; nothing changed".into(),
-            ));
-        }
-        definition.fleets.insert(
-            fleet.into(),
-            FleetDeclaration {
-                lifetime: None,
-                receiver_policy: None,
-                top_up_children: vec![],
-                role_receivers: vec![],
-                subnet_child_limit: None,
-                registry: None,
-                standby_pool: None,
-                worker_pools: Vec::new(),
-                shard_pools: Vec::new(),
-                auth: Vec::new(),
-                network: FleetNetwork::Bound(network),
-                journal: None,
-                canisters: BTreeMap::new(),
-            },
-        );
-        config.select(Some(app), Some(fleet))
-    })
+    edit_config(
+        path,
+        |config, _| {
+            let definition = config.apps.get_mut(app).ok_or_else(|| {
+                Error::Invalid(
+                    "app does not exist in this config; use app list to inspect it".into(),
+                )
+            })?;
+            if definition.fleets.contains_key(fleet) {
+                return Err(Error::Invalid(
+                    "fleet already exists; nothing changed".into(),
+                ));
+            }
+            definition.fleets.insert(
+                fleet.into(),
+                FleetDeclaration {
+                    lifetime: None,
+                    receiver_policy: None,
+                    top_up_children: vec![],
+                    role_receivers: vec![],
+                    subnet_child_limit: None,
+                    registry: None,
+                    standby_pool: None,
+                    worker_pools: Vec::new(),
+                    shard_pools: Vec::new(),
+                    auth: Vec::new(),
+                    network: FleetNetwork::Bound(network),
+                    journal: None,
+                    canisters: BTreeMap::new(),
+                },
+            );
+            Ok(())
+        },
+        |config| config.select(Some(app), Some(fleet)),
+    )
 }
 
 /// Add one reusable canister definition to an app and every fleet projection.
@@ -1120,19 +1132,23 @@ pub fn add_app_canister(
 ) -> Result<Config> {
     name(app)?;
     name(slot)?;
-    edit_config(path, |config| {
-        let owner = config
-            .apps
-            .get_mut(app)
-            .ok_or_else(|| Error::Invalid("app does not exist".into()))?;
-        if owner.canisters.contains_key(slot) {
-            return Err(Error::Invalid(
-                "app canister already exists; nothing changed".into(),
-            ));
-        }
-        owner.canisters.insert(slot.into(), definition);
-        Ok(config.clone())
-    })
+    edit_config(
+        path,
+        |config, current| {
+            let owner = config
+                .apps
+                .get_mut(app)
+                .ok_or_else(|| Error::Invalid("app does not exist".into()))?;
+            if current.apps[app].canisters.contains_key(slot) {
+                return Err(Error::Invalid(
+                    "app canister already exists; nothing changed".into(),
+                ));
+            }
+            owner.canisters.insert(slot.into(), definition);
+            Ok(())
+        },
+        Ok,
+    )
 }
 
 /// Bind an app canister to an existing identity in one fleet, for observation only.
@@ -1154,31 +1170,39 @@ pub fn bind_canister(
     name(fleet)?;
     name(slot)?;
     binding.id = crate::network::principal(&binding.id)?.to_text();
-    edit_config(path, |config| {
-        let owner = config
-            .apps
-            .get_mut(app)
-            .ok_or_else(|| Error::Invalid("app does not exist".into()))?;
-        if !owner.canisters.contains_key(slot) {
-            return Err(Error::Invalid(
-                "declare the canister with app canister add before binding it".into(),
-            ));
-        }
-        let deployment = owner
-            .fleets
-            .get_mut(fleet)
-            .ok_or_else(|| Error::Invalid("fleet does not exist".into()))?;
-        if deployment.canisters.contains_key(slot) {
-            return Err(Error::Invalid(
-                "canister identity is already bound; nothing changed".into(),
-            ));
-        }
-        deployment.canisters.insert(slot.into(), binding);
-        config.select(Some(app), Some(fleet))
-    })
+    edit_config(
+        path,
+        |config, current| {
+            let owner = config
+                .apps
+                .get_mut(app)
+                .ok_or_else(|| Error::Invalid("app does not exist".into()))?;
+            if !current.apps[app].canisters.contains_key(slot) {
+                return Err(Error::Invalid(
+                    "declare the canister with app canister add before binding it".into(),
+                ));
+            }
+            let deployment = owner
+                .fleets
+                .get_mut(fleet)
+                .ok_or_else(|| Error::Invalid("fleet does not exist".into()))?;
+            if deployment.canisters.contains_key(slot) {
+                return Err(Error::Invalid(
+                    "canister identity is already bound; nothing changed".into(),
+                ));
+            }
+            deployment.canisters.insert(slot.into(), binding);
+            Ok(())
+        },
+        |config| config.select(Some(app), Some(fleet)),
+    )
 }
 
-fn edit_config<T>(path: &Path, update: impl FnOnce(&mut Config) -> Result<T>) -> Result<T> {
+fn edit_config<T>(
+    path: &Path,
+    update: impl FnOnce(&mut SourceConfig, &Config) -> Result<()>,
+    project: impl FnOnce(Config) -> Result<T>,
+) -> Result<T> {
     // Refuse missing/invalid input before creating a sidecar; reload under lock.
     load_config(path)?;
     let _lock = crate::sidecar_lock::acquire(&lock_path(path)).map_err(|error| {
@@ -1190,12 +1214,12 @@ fn edit_config<T>(path: &Path, update: impl FnOnce(&mut Config) -> Result<T>) ->
     })?;
     let source = store::read(path, MAX_CONFIG_BYTES)?;
     let source = std::str::from_utf8(&source).map_err(supplier)?;
-    let mut config: Config = toml::from_str(source).map_err(supplier)?;
-    config.validate()?;
-    let result = update(&mut config)?;
-    config.validate()?;
+    let mut declarations: SourceConfig = toml::from_str(source).map_err(supplier)?;
+    let current = Config::try_from(declarations.clone())?;
+    current.validate()?;
+    update(&mut declarations, &current)?;
     let mut document = source.parse::<toml_edit::DocumentMut>().map_err(supplier)?;
-    let additions = toml::to_string(&config)
+    let additions = toml::to_string(&declarations)
         .map_err(supplier)?
         .parse::<toml_edit::DocumentMut>()
         .map_err(supplier)?;
@@ -1203,12 +1227,16 @@ fn edit_config<T>(path: &Path, update: impl FnOnce(&mut Config) -> Result<T>) ->
     let text = document.to_string();
     // All current edits add declarations. Refuse any future mutation this writer
     // cannot represent rather than silently dropping it or replacing comments.
-    if text.len() > MAX_CONFIG_BYTES || toml::from_str::<Config>(&text).map_err(supplier)? != config
+    if text.len() > MAX_CONFIG_BYTES
+        || toml::from_str::<SourceConfig>(&text).map_err(supplier)? != declarations
     {
         return Err(Error::Invalid(
             "config edit exceeds bounds or changes existing declarations".into(),
         ));
     }
+    let resolved = Config::try_from(declarations)?;
+    resolved.validate()?;
+    let result = project(resolved)?;
     let bytes = text.as_bytes();
     crate::output_publication::publish(
         path,

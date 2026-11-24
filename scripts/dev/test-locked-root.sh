@@ -22,10 +22,27 @@ edition = "2024"
 canic-root = "=0.253.0"
 TOML
 cat > canic.toml <<'TOML'
-[apps.consumer.canisters.root]
-role = "root"
-wasm = "artifacts/root.wasm"
-build = { manifest = "Cargo.toml", package = "canic-root", features = ["auth", "role-issuer"], client = "canic-root-client" }
+[apps.consumer]
+wasm_store = true
+[apps.consumer.canisters.hub]
+role = "hub"
+parent = "root"
+wasm = "artifacts/hub.wasm"
+build = { manifest = "Cargo.toml", package = "root-consumer" }
+[apps.consumer.fleets.local]
+network = { kind = "Local" }
+role_receivers = ["hub"]
+[apps.consumer.fleets.local.receiver_policy]
+# Choose on fresh install. Stable receivers require a Root refresh after upgrade.
+storage = "volatile"
+root = "root"
+roles = ["hub"]
+# Replace the local fixture issuer with the installed test issuer before planning.
+issuer = "rrkah-fqaaa-aaaaa-aaaaq-cai"
+role = "user"
+network_id = "1111111111111111111111111111111111111111111111111111111111111111"
+application_id = "2222222222222222222222222222222222222222222222222222222222222222"
+limits = { default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns = 60000000000 }
 TOML
 
 # Pin the reviewed archive in the input to Cargo's resolver. Cargo verifies its

@@ -2,21 +2,18 @@
 
 ## Build the published Root and its operator client
 
-Use the workspace manifest whose Cargo.lock selects `canic-root` from crates.io.
-Paths are relative to `canic.toml`. For example:
+A managed app gets `root` automatically when it selects the Store or declares
+a child with `parent = "root"`. Build it with `canic app build --canister root`.
+Canic writes `artifacts/root.wasm` and `artifacts/root.client` and enables the
+Root capabilities used by the app's fleet policies.
 
-```toml
-[apps.toko.canisters.root]
-role = "root"
-wasm = "artifacts/root.wasm"
-build = { manifest = "../../qualification/Cargo.toml", package = "canic-root", client = "canic-root-client", features = ["auth", "role-issuer"] }
-```
-
-`canic app build --canister root` builds both targets from the same selected
-registry archive with its packaged Cargo.lock and the recipe's features. This
-pins Root's source to the consumer selection. To qualify identical artifact bytes,
-use the Wasm produced by the recipe. Inside Canic's own workspace the recipe
-builds the workspace member with the workspace lockfile.
+Canic uses the common workspace manifest of the app's build recipes. When they
+span multiple workspaces, or the app has no recipes, it uses `Cargo.toml`
+beside `canic.toml`. That workspace must select `canic-root` in its lockfile.
+The published Root builds against its packaged Cargo.lock. In Canic's own
+workspace, the workspace member builds against the workspace lockfile. A starter
+generated with `--canic-source` builds Root and its client from that checkout
+using the checkout’s lockfile.
 
 The native Root build type-checks the same management mounts and engine as the
 installed canister. For example, `stage_child` checks the actual controller,

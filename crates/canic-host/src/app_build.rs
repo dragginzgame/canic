@@ -218,6 +218,9 @@ fn build_client(
         ])
         .arg(manifest)
         .args(["--package", package, "--bin", client]);
+    if package == "canic-root" && client == "canic-root-client" {
+        command.args(["--features", "operator-client"]);
+    }
     if package == "canic-root" && !manifest.starts_with(workspace) {
         command
             .arg("--target-dir")

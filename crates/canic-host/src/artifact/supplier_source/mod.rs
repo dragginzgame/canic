@@ -60,10 +60,23 @@ fn root_manifest(workspace_manifest: &Path, workspace: &Metadata) -> Result<Path
     if workspace.workspace_members.contains(&root.id) {
         return Ok(workspace_manifest.into());
     }
+    // A source starter selects both packages from the same Canic checkout.
+    // Build the selected Root under that checkout’s locked workspace.
+    if root.source.is_none() {
+        let runtime = package(workspace, "canic")?;
+        if runtime.source.is_none() && root.version == runtime.version {
+            let owner = metadata(&root.manifest_path)?;
+            if owner.workspace_members.contains(&root.id)
+                && owner.workspace_members.contains(&runtime.id)
+            {
+                return Ok(root.manifest_path.clone());
+            }
+        }
+    }
     if root.source.as_deref() != Some(REGISTRY)
         || !root.manifest_path.with_file_name("Cargo.lock").is_file()
     {
-        return Err(Error::Invalid("Root build requires a workspace member or a locked crates.io Root with its packaged Cargo.lock".into()));
+        return Err(Error::Invalid("Root build requires a workspace member, a Root from the selected local Canic workspace, or a locked crates.io Root with its packaged Cargo.lock".into()));
     }
     Ok(root.manifest_path.clone())
 }

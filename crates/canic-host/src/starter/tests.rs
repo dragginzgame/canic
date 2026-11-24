@@ -32,6 +32,22 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
     assert!(initial.apps["hello"].fleets.is_empty());
     assert!(!destination.join(".canic").exists());
     crate::init_fleet(&config, "hello", "mainnet", crate::Network::Mainnet).unwrap();
+    let declaration = manifest(&config).unwrap();
+    assert_eq!(
+        declaration["apps"]["hello"]["wasm_store"].as_bool(),
+        Some(true)
+    );
+    assert!(
+        declaration["apps"]["hello"]["canisters"]
+            .get("store")
+            .is_none()
+    );
+    assert!(
+        declaration["apps"]["hello"]["canisters"]
+            .get("root")
+            .is_none()
+    );
+    assert!(declaration["apps"]["hello"].get("root").is_none());
     let loaded = crate::load_config(&config).unwrap();
     let selected = loaded.select(None, None).unwrap();
     assert_eq!(selected.app, "hello");
@@ -43,7 +59,7 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
         .as_ref()
         .unwrap();
     assert_eq!(recipe.package, "ic-wasm-store");
-    assert_eq!(recipe.manifest, source().join("Cargo.toml"));
+    assert_eq!(recipe.manifest, Path::new("Cargo.toml"));
     assert_eq!(
         selected.wasm_path(&config, "store", None).unwrap(),
         destination.join("artifacts/wasm_store.wasm")
@@ -70,6 +86,10 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
     assert!(!selected.journal_path(&config).exists());
     assert!(!destination.join("Cargo.lock").exists());
     let workspace = manifest(&destination.join("Cargo.toml")).unwrap();
+    assert_eq!(
+        workspace["workspace"]["dependencies"]["canic-root"]["path"].as_str(),
+        source().join("crates/canic-root").to_str()
+    );
     let original = manifest(&source().join("Cargo.toml")).unwrap();
     assert_eq!(
         workspace["workspace"]["lints"],
@@ -190,7 +210,22 @@ fn app_build_preserves_config_and_cargo_inputs_including_unselected_recipes() {
     let parent = crate::tests::directory();
     let destination = parent.join("starter");
     let path = create_starter(&destination, "hello", &source()).unwrap();
-    let original = crate::load_config(&path).unwrap();
+    let mut original = crate::load_config(&path).unwrap();
+    // Include an independent workspace input on an unselected recipe.
+    let secondary = parent.join("secondary");
+    std::fs::create_dir(&secondary).unwrap();
+    std::fs::write(secondary.join("Cargo.toml"), "[workspace]\n").unwrap();
+    original
+        .apps
+        .get_mut("hello")
+        .unwrap()
+        .canisters
+        .get_mut("store")
+        .unwrap()
+        .build
+        .as_mut()
+        .unwrap()
+        .manifest = secondary.join("Cargo.toml");
     let manifest = destination.join("Cargo.toml");
     let manifest_bytes = std::fs::read(&manifest).unwrap();
     std::os::unix::fs::symlink(".", destination.join("alias")).unwrap();
@@ -201,8 +236,8 @@ fn app_build_preserves_config_and_cargo_inputs_including_unselected_recipes() {
         PathBuf::from("Cargo.lock"),
         PathBuf::from("alias/canic.toml"),
         PathBuf::from("lock-link"),
-        source().join("Cargo.toml"),
-        source().join("Cargo.lock"),
+        secondary.join("Cargo.toml"),
+        secondary.join("Cargo.lock"),
     ] {
         let mut config = original.clone();
         config

@@ -1,13 +1,5 @@
-[apps.ex-miner-pool.canisters.root]
-role = "root"
-wasm = "artifacts/root.wasm"
-build = { manifest = "../../../Cargo.toml", package = "canic-root", features = ["sharding"], client = "canic-root-client" }
-
-[apps.ex-miner-pool.canisters.store]
-role = "wasm-store"
-parent = "root"
-wasm = "artifacts/wasm_store.wasm"
-build = { manifest = "../../../Cargo.toml", package = "ic-wasm-store" }
+[apps.ex-miner-pool]
+wasm_store = true
 
 [apps.ex-miner-pool.canisters.pool]
 role = "pool"

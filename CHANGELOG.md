@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.267.0] - 2026-11-24
+
+- Managed apps get Root and its native client automatically. Fleet declarations select Auth, placement and role verification support. Set `wasm_store = true` to include the separate Store. Adding a child updates the inferred build workspace. Source starters build Root and its client from the selected Canic checkout.
+
+```sh
+canic app build --config apps/examples/counter/canic.toml --canister store
+```
+
+- App builds display infrastructure roles beside the configured canister name, leaving the modules column for mounted modules.
+
+```sh
+canic app build --config apps/examples/counter/canic.toml
+```
+
 ## [0.266.2] - 2026-11-24
 
 ### 🔄 Changed

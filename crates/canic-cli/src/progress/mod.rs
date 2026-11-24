@@ -66,15 +66,6 @@ pub(crate) fn next(
 }
 
 fn build_row(label: String, item: &BuiltCanister) -> [String; 5] {
-    let mut modules = item.modules.clone();
-    if let Some(badge) = item
-        .role
-        .as_deref()
-        .and_then(crate::topology::infrastructure_badge)
-    {
-        modules.insert(0, badge);
-    }
-
     [
         label,
         item.wasm.display().to_string(),
@@ -82,10 +73,10 @@ fn build_row(label: String, item: &BuiltCanister) -> [String; 5] {
             "{:.2} KiB",
             f64::from(u32::try_from(item.artifact.bytes).expect("bounded Wasm size")) / 1024.0
         ),
-        if modules.is_empty() {
+        if item.modules.is_empty() {
             "—".into()
         } else {
-            modules.join(", ")
+            item.modules.join(", ")
         },
         format!(
             "{}.{:02} s",
@@ -98,9 +89,15 @@ fn build_row(label: String, item: &BuiltCanister) -> [String; 5] {
 pub(crate) fn built(built: &[BuiltCanister]) -> String {
     use Alignment::{Left, Right};
 
-    let ordered = crate::topology::labeled(built, |item| {
-        (item.canister.as_str(), item.parent.as_deref())
-    });
+    let ordered = crate::topology::labeled(
+        built,
+        |item| (item.canister.as_str(), item.parent.as_deref()),
+        |item| {
+            item.role
+                .as_deref()
+                .and_then(crate::topology::infrastructure_badge)
+        },
+    );
     let rows: Vec<_> = ordered
         .into_iter()
         .map(|(label, item)| build_row(label, item))

@@ -29,9 +29,11 @@ fn render(report: &FleetPlacements) -> String {
         .count();
     let mut read = 0;
     let mut subnets = BTreeSet::new();
-    let rows: Vec<_> = crate::topology::labeled(&report.slots, |slot| {
-        (slot.name.as_str(), slot.parent.as_deref())
-    })
+    let rows: Vec<_> = crate::topology::labeled(
+        &report.slots,
+        |slot| (slot.name.as_str(), slot.parent.as_deref()),
+        |_| None,
+    )
     .into_iter()
     .map(|(label, slot)| {
         let outcome = slot

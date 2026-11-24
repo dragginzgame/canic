@@ -357,6 +357,11 @@ context, endpoint mounts and outbound calls. Sharing a library does not imply
 shared memory, a shared canister or permission to call another role. Select the
 library modules and supplier features each host actually needs. Root and Wasm
 Store remain supplied infrastructure; applications do not copy their implementations.
+Root is implicit when an app uses managed infrastructure. Selecting
+`wasm_store = true` or declaring a child of `root` supplies Root. Fleet policies
+select its Auth, placement and role issuer features. The separate Store uses
+Root’s locked build workspace. A future Coordinator belongs with supplied
+infrastructure if its global responsibility is admitted.
 This layout is a recommended composition, not another scaffold generator or a
 requirement to split a small single-purpose actor into extra packages.
 

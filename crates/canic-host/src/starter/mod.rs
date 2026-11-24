@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{AppConfig, CanisterDefinition, Config, Error, Result, supplier};
+use crate::{CanisterDefinition, Error, Result, supplier};
 use serde_json::json;
 use std::{
     collections::BTreeMap,
@@ -29,59 +29,33 @@ fn manifest(path: &Path) -> Result<toml::Value> {
 }
 
 fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
-    let config = Config {
+    let config = crate::config::SourceConfig {
         apps: BTreeMap::from([(
             app.into(),
-            AppConfig {
-                canisters: BTreeMap::from([
-                    (
-                        "root".into(),
-                        CanisterDefinition {
-                            role: Some("root".into()),
-                            wasm: Some("artifacts/root.wasm".into()),
-                            build: Some(crate::BuildInput {
-                                manifest: source.join("Cargo.toml"),
-                                package: "canic-root".into(),
-                                features: Vec::new(),
-                                client: None,
-                            }),
-                            ..Default::default()
-                        },
-                    ),
-                    (
-                        "store".into(),
-                        CanisterDefinition {
-                            role: Some("wasm-store".into()),
-                            parent: Some("root".into()),
-                            wasm: Some("artifacts/wasm_store.wasm".into()),
-                            build: Some(crate::BuildInput {
-                                manifest: source.join("Cargo.toml"),
-                                package: "ic-wasm-store".into(),
-                                features: Vec::new(),
-                                client: None,
-                            }),
-                        },
-                    ),
-                    (
-                        "app".into(),
-                        CanisterDefinition {
-                            role: Some("app".into()),
-                            parent: Some("root".into()),
-                            wasm: Some("artifacts/app.wasm".into()),
-                            build: Some(crate::BuildInput {
-                                manifest: "Cargo.toml".into(),
-                                package: "starter-app".into(),
-                                features: Vec::new(),
-                                client: None,
-                            }),
-                        },
-                    ),
-                ]),
+            crate::config::SourceApp {
+                wasm_store: true,
+                canisters: BTreeMap::from([(
+                    "app".into(),
+                    CanisterDefinition {
+                        role: Some("app".into()),
+                        parent: Some("root".into()),
+                        wasm: Some("artifacts/app.wasm".into()),
+                        build: Some(crate::BuildInput {
+                            manifest: "Cargo.toml".into(),
+                            package: "starter-app".into(),
+                            features: Vec::new(),
+                            client: None,
+                        }),
+                    },
+                )]),
                 fleets: BTreeMap::new(),
             },
         )]),
     };
-    let config_bytes = crate::config::encode_config(&config)?;
+    let config_bytes = toml::to_string_pretty(&config)
+        .map_err(supplier)?
+        .into_bytes();
+    crate::Config::try_from(config)?.validate()?;
     let root = manifest(&source.join("Cargo.toml"))?;
     let package = root
         .get("workspace")
@@ -119,6 +93,14 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
         );
     }
     selected.insert("canic".into(), json!({"path":source.join("crates/canic")}));
+    selected.insert(
+        "canic-root".into(),
+        json!({"path":source.join("crates/canic-root")}),
+    );
+    selected.insert(
+        "ic-wasm-store".into(),
+        serde_json::to_value(&dependencies["ic-wasm-store"]).map_err(supplier)?,
+    );
     let lints = workspace
         .get("lints")
         .filter(|value| value.is_table())
