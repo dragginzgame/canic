@@ -17,8 +17,7 @@ wasm_store = true
 
 Application children refer to `parent = "root"`. The operator bootstraps Root.
 Root installs the separate `store` slot from `artifacts/wasm_store.wasm`.
-Each fleet binds its own principals. Older explicit infrastructure recipes remain
-readable. When removing them, ensure the application build workspace's Cargo.lock
+Each fleet binds its own principals. Builds reject explicit Root, Store and Coordinator definitions. When removing them, ensure the application build workspace's Cargo.lock
 selects both supplier packages and the matching Store protocol.
 
 Fresh builds select Store 0.8.0 and its matching IC Wire 0.28 protocol. Install a fresh Store and rebuild artifact manifests for 1 MiB chunks. The supplier refuses upgrades from the 256 KiB format. The following evidence applies to Store 0.6.0.
@@ -36,7 +35,7 @@ exact signed attempts under the existing journal lock. New Root attempts use Sto
 `observe_preservation` (method 117): explicit active/removed entries ordered by name, active
 before removed, then version. The retained cursor includes that flag, and a
 separate digest domain commits to the entry kind. Pre-cut Roots retain their original scan contracts, digests and refusals.
-Deploy the 0.8 Store with a fresh Root. Existing pairs finish maintenance on their original executables. Fresh Roots use CUJE for the entire fleet. Old executables refuse the new journal format.
+Deploy the 0.8 Store with a fresh Root. Existing pairs finish maintenance on their original executables. Fresh Roots use CUJF for the entire fleet. Old executables refuse the new journal format.
 
 The historical 0.2.3 rollout upgraded Store under the old Root before
 upgrading Root. New attempts require the versioned supplier endpoint; no probing
@@ -267,7 +266,7 @@ For preservation inspection, Store's replicated `observe_custody` takes one exac
 release and returns its progress plus every retained pin on the shared artifact.
 Pins preserve their original owner, operation and release label, including former
 controllers and different labels sharing those bytes. Root mounts
-`observe_store_custody` under the same controller/target/deadline checks, so a
+the custody variant of `observe_store` under the same controller/target/deadline checks, so a
 Root-owned Store does not need to give the external operator direct access.
 The result is bounded by one manifest and 32 compact pin records, reads metadata
 only and creates no Root copy. It is not an atomic catalog snapshot, payload
@@ -294,7 +293,7 @@ control. Root retains each immutable approval and stop-request commitment outsid
 Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CUJE journal preserves current and completed attempts across supported Root
+The CUJF journal preserves current and completed attempts across supported Root
 upgrades, within the existing 16 KiB ceiling. A pre-cut Root keeps its original
 executable and evidence. Existing complete child-custody
 observations refuse any retained Store maintenance, including completion,
@@ -383,7 +382,7 @@ select the complete read; old child-only readers remain unchanged. After a secon
 Store attempt, `observe_root_history` includes every completed predecessor and
 the current operation. Root maintenance binds `StoreMaintenance.history` exactly.
 The former `observe_root_custody` refuses to omit predecessors. New Store plans
-bind the sequence and use `observe_store_attempt` to read the exact approval;
+bind the sequence and use `observe_store_maintenance(Some(approval))` to read the exact approval;
 historical first-upgrade plans retain their original bytes and read method.
 
 For a completed local Root/Store/app fleet, change only the configured Store Wasm

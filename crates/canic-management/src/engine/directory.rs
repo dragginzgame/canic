@@ -8,9 +8,7 @@ use ic_platform_types::Principal;
 use ic_timers::{Lifetime, Observation, OnceDemand, OnceNext, OnceResult};
 
 pub(super) fn named_service(slot: ChildId) -> Option<ServiceInstall> {
-    if !ChildId::ALL.contains(&slot) {
-        return None;
-    }
+    slot.service_index()?;
     STATE.with_borrow(
         |state| match &state.as_ref().expect("open engine").artifact.0[&slot] {
             Artifact::Application(_, lifecycle) => ServiceInstall::approved(
@@ -32,7 +30,7 @@ pub(super) fn named_service(slot: ChildId) -> Option<ServiceInstall> {
 /// Traps if the management engine has not opened.
 fn service_directory() -> Result<Directory, &'static str> {
     let mut services = Vec::new();
-    for slot in ChildId::ALL {
+    for slot in super::service_slots() {
         let status = snapshot(slot);
         if status.phase == canic_management_protocol::Phase::Ready
             && let Some(named) = named_service(slot)

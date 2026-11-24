@@ -77,25 +77,13 @@ impl<T: Wire + 'static> Describe for &&Type<T> {
     }
 }
 
-// Auth's published types implement the schema trait from its own pinned Wire version.
+// Auth owns the endpoint types and supplies their Wire schemas.
 #[cfg(feature = "auth")]
 #[doc(hidden)]
-pub fn auth_root<T: crate::auth::protocol::wire::typescript::Wire>(
-    _: &Schemas,
-) -> Result<Root, String> {
-    use crate::auth::protocol::wire::typescript::{SchemaLimits, SchemaRegistry};
-    let mut registry =
-        SchemaRegistry::new(SchemaLimits::default()).map_err(|e| format!("{e:?}"))?;
-    registry
-        .register::<T>("Root")
-        .map_err(|e| format!("{e:?}"))?;
-    let json = registry
-        .finish()
-        .and_then(|g| g.metadata_json())
-        .map_err(|e| format!("{e:?}"))?;
+pub fn auth_root<T: Wire>(_: &Schemas) -> Result<Root, String> {
     Ok(Root {
         rust: type_name::<T>(),
-        schema: serde_json::from_str(&json).map_err(|e| format!("{e:?}"))?,
+        schema: graph::<T>()?,
     })
 }
 

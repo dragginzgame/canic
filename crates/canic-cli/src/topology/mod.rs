@@ -28,11 +28,7 @@ pub(crate) fn labeled<'a, T>(
         .into_iter()
         .map(|(name, prefix)| {
             let item = by_name[name];
-            let mut label = format!("{prefix}{name}");
-            if let Some(badge) = badge(item) {
-                label.push(' ');
-                label.push_str(badge);
-            }
+            let mut label = format!("{prefix}{}", badge(item).unwrap_or(name));
             if let Some(parent) = slot(item).1
                 && !by_name.contains_key(parent)
             {

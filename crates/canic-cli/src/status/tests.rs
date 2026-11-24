@@ -166,7 +166,7 @@ fn state() -> serde_json::Value {
             network: Network::Mainnet,
             controller: "aaaaa-aa".into(),
             artifact: canic_host::Artifact { sha256: "b".repeat(64), bytes: 8 },
-            action: canic_host::PlanAction::Create {cycles: 1_000_000_000_000},
+            action: canic_host::PlanAction::Create {bootstrap: None, cycles: 1_000_000_000_000},
             created_at_ns: 1_000_000_000,
             expires_at_ns: 2_000_000_000,
             deployment: Some(canic_host::DeploymentName {

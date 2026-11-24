@@ -8,7 +8,7 @@ use ic_platform_runtime::system as api;
 
 pub(super) fn lifecycle(slot: ChildId) -> Option<application::Lifecycle> {
     STATE.with_borrow(
-        |state| match &state.as_ref().expect("open engine").artifact.0[&slot] {
+        |state| match state.as_ref().expect("open engine").artifact.0.get(&slot)? {
             Artifact::Application(_, value) => Some(value.clone()),
             _ => None,
         },
@@ -46,7 +46,7 @@ pub(super) fn require_legacy() {
     #[cfg(feature = "role-issuer")]
     super::role_issuer::require_unprepared();
     assert!(
-        ChildId::ALL
+        super::service_slots()
             .into_iter()
             .all(|slot| lifecycle(slot).is_none()),
         "application custody required"
@@ -129,7 +129,7 @@ pub fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Statu
         }
     }
     if let Ok(named) = ServiceInstall::approved(input.arguments.as_slice(), api::canister_self())
-        && ChildId::ALL
+        && super::service_slots()
             .into_iter()
             .filter_map(super::directory::named_service)
             .any(|other| other.name == named.name)
@@ -209,7 +209,7 @@ pub fn custody() -> application::Custody {
 pub fn child_evidence() -> application::Custody {
     application::Custody {
         root: super::stored_api::root_history_complete(),
-        applications: ChildId::ALL.map(lifecycle),
+        applications: super::service_slots().into_iter().map(lifecycle).collect(),
     }
 }
 

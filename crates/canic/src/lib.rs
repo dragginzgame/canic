@@ -137,7 +137,26 @@ macro_rules! __canic_inspect {
     };
 }
 
-#[cfg(not(all(feature = "inspection", not(target_arch = "wasm32"))))]
+// Keep display signatures with the exact Wasm exports, including stripped builds.
+#[cfg(target_arch = "wasm32")]
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_inspect {
+    ($source:ident, $name:expr, $mode:ident, $id:expr, $input:ty, $output:ty, $request:expr, $reply:expr) => {
+        const _: () = {
+            const TYPES: &str = concat!(stringify!($input), "\0", stringify!($output));
+            #[used]
+            #[allow(
+                unsafe_code,
+                reason = "Wasm custom section for local endpoint inspection"
+            )]
+            #[unsafe(link_section = concat!("canic:signature:v1:", stringify!($mode), ":", $name))]
+            static SIGNATURE: [u8; TYPES.len()] = *TYPES.as_bytes().first_chunk().unwrap();
+        };
+    };
+}
+
+#[cfg(all(not(feature = "inspection"), not(target_arch = "wasm32")))]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_inspect {

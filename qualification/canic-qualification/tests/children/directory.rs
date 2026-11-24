@@ -64,7 +64,7 @@ async fn directory_recipients_retain_the_installing_root() {
         .unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
-    let [first, ..] = read(pic, root).await;
+    let first = read(pic, root).await.into_iter().next().unwrap();
     assert_eq!(first.creation.phase, Phase::Ready);
     let hub = CanisterId::from_text(first.creation.worker.unwrap()).unwrap();
     assert_eq!(view(pic, hub).await, (root, None));
@@ -113,11 +113,14 @@ async fn directory_recipients_retain_the_installing_root() {
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_upgrade",
+            "stage_child_upgrade",
             ic_wire::encode(
-                &change,
+                &canic_management_protocol::children::Request {
+                    slot: canic_management_protocol::children::ChildId::FIRST,
+                    value: &change,
+                },
                 ic_wire::Encoding::Frame {
-                    method: upgrade::STAGE,
+                    method: canic_management_protocol::children::STAGE_UPGRADE,
                     direction: ic_wire::Direction::Request,
                 },
                 STAGE_LIMITS,
@@ -129,7 +132,7 @@ async fn directory_recipients_retain_the_installing_root() {
     ic_wire::decode::<Result<upgrade::Status, Refusal>>(
         &reply,
         ic_wire::Encoding::Frame {
-            method: upgrade::STAGE,
+            method: canic_management_protocol::children::STAGE_UPGRADE,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,

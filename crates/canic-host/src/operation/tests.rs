@@ -14,6 +14,7 @@ fn plan() -> Plan {
             bytes: 8,
         },
         action: crate::PlanAction::Create {
+            bootstrap: None,
             cycles: input.creation_cycles,
         },
         created_at_ns: 10,

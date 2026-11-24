@@ -24,6 +24,7 @@ fn named_creation() -> Plan {
         controller: crate::tests::input().controller,
         artifact: artifact::admit(WASM).unwrap(),
         action: PlanAction::Create {
+            bootstrap: None,
             cycles: 1_000_000_000_000,
         },
         created_at_ns: 100,

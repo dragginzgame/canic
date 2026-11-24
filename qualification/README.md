@@ -26,6 +26,7 @@ inputs. Each runner selects its own cases and features.
 `make miner-test` exercises the miner’s batch replay across an upgrade and the
 installed pool’s growth, parking and reuse under one Root. The Host planner
 binds the simulator identities to the example’s named `worker_pools` grant.
+The fixture also checks the built worker/reserve exports. A candidate Root without worker operations must refuse to reopen a retained worker grant. The original Root must still handle that grant after the failed upgrade.
 The witness checks production across hub and Root upgrades, outsider refusal
 and the four-worker ceiling. A qualification-only Root traps the uninstall callback
 after management applies it. The normal Root reopens the issued intent and
@@ -113,6 +114,13 @@ an enrolled owner's write and an unrelated account's refusal. A separate
 fresh Root reopens the populated allocation before enrollment and returns the
 same child for the original key. Run `bash scripts/dev/test-store.sh db-roles`.
 
+The same suite plans a requester-funded singleton from TOML and installs a
+DB-backed ledger under the paying project. After the payment acknowledgement
+is lost, retries with and without attached cycles recover the original ledger
+and receipt. The registry cannot provision the project’s ledger. An enrolled
+account reads its original row after upgrade and explicit receiver refresh.
+Toko owns the corresponding test with its project and ledger executables.
+
 ## Runtime shard placement
 
 The installed `canic-shard-hub` witness fills two shards while retaining routes
@@ -155,13 +163,12 @@ refused and checks the original generation against the argument-bound Store pin.
 The witness checks same-key concurrent signup, lost replies, separate shard
 principals and generations, pool exhaustion and replay after hub and Root upgrades.
 An independently installed copy of the hub calls the same Root for the same user.
-Root refuses both lookup and assignment, preserves its retained bytes, and
-continues returning the original assignment to the approved hub.
-A fresh sharding Root owns its claims in a named stable B-tree. The large-pool
-case submits 20,000 distinct signups through the installed hub and retries boundary
-accounts after Root reopen. For the hard-cut check, supply an inline-ledger Root
-as `CANIC_PREDECESSOR_SHARD_ROOT_WASM`. An upgrade of that populated Root
-must refuse and leave its original assignment usable.
+The copy sees an empty local route and cannot grow the original hub’s pool.
+The large-pool case places 20,000 distinct accounts through the installed
+hub, fills each shard while Root is stopped, and retries boundary accounts
+after both the hub and Root reopen. Root retains two ordinal
+allocations. The hub retains each account's shard. Sharding Roots using the
+old account index require a fresh install.
 The fixture adds a project registry with a `[registry]` placement declaration to the same fleet, reruns
 `canic fleet plan`, and checks that the original shard request is byte-identical.
 The controller submits the CLI-generated project request to `configure_instances`.
@@ -171,7 +178,7 @@ With both user slots full, one user submits two project keys through the project
 registry. The fixture discards the first reply, retries the key, and verifies two distinct
 ready children with the approved project registry as their database owner. The third
 key is refused. Reopening Root preserves both projects and the user's shard.
-The controller then raises both pool counts from two to six under one eight-child
+The controller then raises both pool counts from two to six under one nine-child
 subnet ceiling using the planned Wire requests. The hubs race for the final
 slot and replay their keys after Root reopens. Forged funding, extended expiry
 and stale count changes refuse. Cross-hub placement requests are refused in both directions. A separate case
@@ -252,8 +259,8 @@ incompatible budgets, missing or extra names, and out-of-prefix refusal.
 including byte-exact replies, caller rejection before decode, wrong direction
 and method, bounded requests, synchronous reply rollback and an async worker check.
 
-The Root journal uses CUJE at every fleet size. The installed `storage_reopen::`
-case injects the predecessor CUJD tag into the current named cell and checks the
+The installed children discovery test fills nine service slots, reopens Root, retries the ninth, discovers every principal from an empty Host journal, and refuses a tenth under a nine-child ceiling. The Root journal uses CUJF at every fleet size. The installed `storage_reopen::`
+case injects the predecessor CUJE tag into the current named cell and checks the
 journal-specific refusal, stable bytes, module hash and subnet canister count.
 The installed sharding journey grows a fresh Root through shared and dedicated
 child allocations and checks their identities after upgrade.
@@ -380,7 +387,7 @@ The separate native M0 harness has been removed; all tests now share the native
 qualification package. The two probe implementations remain intentionally
 isolated. Delete one only after product regressions cover its remaining cases.
 The [Root guide](../docs/demos/root.md) covers ordinary two-child deployments.
-The [runtime placement witness](#runtime-shard-placement) covers shared shards and dedicated projects under one eight-child subnet ceiling. Dated decisions and measured results
+The [runtime placement witness](#runtime-shard-placement) covers shared shards and dedicated projects under one nine-child subnet ceiling. Dated decisions and measured results
 live in [qualification history](../docs/qualification/history.md).
 
 ## Management-effect boundaries

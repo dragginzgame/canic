@@ -39,6 +39,21 @@ async fn growth_park_reuse_and_capacity() {
         "worker 0: Root call rejected"
     );
     configure(&root, &capacity, &workers).await;
+    let rejection = canic_qualification::upgrade_stopped(
+        pic,
+        root.id,
+        std::fs::read(artifacts().join("shard-only-root.wasm")).unwrap(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        rejection
+            .reject_message
+            .contains("retained Root approval requires worker-pool"),
+        "{rejection:?}"
+    );
     let mut changed = workers.approval.clone();
     let mut topology = canic::topology::Install::decode(changed.arguments.as_slice()).unwrap();
     let floor = canic::topology::worker::minimum_reuse_cycles(&topology.application).unwrap();

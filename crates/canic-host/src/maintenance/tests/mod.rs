@@ -112,23 +112,27 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
                 },
             ]
             .into_iter();
-            std::array::from_fn(|_| {
-                slots
-                    .next()
-                    .unwrap_or_else(|| canic_management_protocol::custody::Custody {
-                        creation: Default::default(),
-                        upgrades: vec![],
-                    })
-            })
+            (0..8)
+                .map(|_| {
+                    slots
+                        .next()
+                        .unwrap_or_else(|| canic_management_protocol::custody::Custody {
+                            creation: Default::default(),
+                            upgrades: vec![],
+                        })
+                })
+                .collect()
         },
-        sources: std::array::from_fn(|i| {
-            plan.maintenance_store()
-                .unwrap()
-                .sources
-                .get(i)
-                .cloned()
-                .flatten()
-        }),
+        sources: (0..8)
+            .map(|i| {
+                plan.maintenance_store()
+                    .unwrap()
+                    .sources
+                    .get(i)
+                    .cloned()
+                    .flatten()
+            })
+            .collect(),
     };
     let frame = |v: &wire::Custody| {
         ic_wire::encode(

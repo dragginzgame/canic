@@ -5,19 +5,22 @@ mod tests;
 
 use serde::{Deserialize, Serialize};
 
+/// Public query for the latest or an exact upgrade in one explicit slot.
+pub const UPGRADE_STATUS: u64 = ic_wire::method_id("child_upgrade_status");
+
 /// Stable numeric identity scoped to one management owner, never a canister principal.
 /// Admission order and configuration sorting cannot change it. The current protocol
 /// preserves the original two service identities and assigns separate slots for mixed-fleet growth.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
-pub struct ChildId(u8);
+pub struct ChildId(u32);
 
 impl ChildId {
     /// Original allocation, including journals migrated from one-child executables.
     pub const FIRST: Self = Self(0);
     /// Additional allocation with independent authority and evidence.
     pub const SECOND: Self = Self(1);
-    /// Slots addressable by ordinary management requests, in custody order.
-    pub const ALL: [Self; crate::stored::MAX_SUBNET_CHILDREN as usize] = [
+    /// Historical service slots, in custody order. Fresh Roots extend this prefix.
+    pub const HISTORICAL_SERVICES: [Self; 8] = [
         Self::FIRST,
         Self::SECOND,
         Self(16),
@@ -31,7 +34,23 @@ impl ChildId {
     /// Position in permanent-service custody. Placement-only identities have no position.
     #[must_use]
     pub fn service_index(self) -> Option<usize> {
-        Self::ALL.iter().position(|&slot| slot == self)
+        if self.index() >= Self::SLOT_COUNT {
+            Some(self.index() - Self::SLOT_COUNT + Self::HISTORICAL_SERVICES.len())
+        } else {
+            Self::HISTORICAL_SERVICES
+                .iter()
+                .position(|&slot| slot == self)
+        }
+    }
+
+    /// Map a permanent service ordinal into its own namespace, beyond the frozen placement IDs.
+    #[must_use]
+    pub fn service(index: usize) -> Option<Self> {
+        if let Some(id) = Self::HISTORICAL_SERVICES.get(index) {
+            return Some(*id);
+        }
+        let raw = index.checked_add(Self::SLOT_COUNT - Self::HISTORICAL_SERVICES.len())?;
+        Some(Self(u32::try_from(raw).ok()?))
     }
 
     /// Original dedicated children retained by the four-child Root format.
@@ -59,14 +78,14 @@ impl ChildId {
         Self(14),
         Self(15),
     ];
-    /// Number of distinct physical identities in the Root journal.
+    /// Size of the original mixed service and placement namespace.
     pub const SLOT_COUNT: usize = 24;
 
     /// Reopen a placement identity held in the Root journals.
     #[must_use]
     pub const fn placement(index: usize) -> Option<Self> {
         if index < Self::SLOT_COUNT {
-            Some(Self(index as u8))
+            Some(Self(index as u32))
         } else {
             None
         }
@@ -75,7 +94,8 @@ impl ChildId {
     /// Construct an ordinary management request identity; unsupported values refuse.
     #[must_use]
     pub fn new(value: usize) -> Option<Self> {
-        Self::ALL.into_iter().find(|slot| slot.index() == value)
+        let slot = Self(u32::try_from(value).ok()?);
+        slot.service_index().map(|_| slot)
     }
 
     /// Stable numeric identity, also its position in historical custody arrays.
@@ -94,6 +114,7 @@ enum RecordId {
     FirstProject,
     SecondProject,
     Placement(u8),
+    Service(u32),
 }
 
 impl Serialize for ChildId {
@@ -103,7 +124,8 @@ impl Serialize for ChildId {
             1 => RecordId::Second,
             2 => RecordId::FirstProject,
             3 => RecordId::SecondProject,
-            id => RecordId::Placement(id),
+            id if self.index() < Self::SLOT_COUNT => RecordId::Placement(id as u8),
+            id => RecordId::Service(id),
         };
         record.serialize(serializer)
     }
@@ -112,6 +134,10 @@ impl Serialize for ChildId {
 impl<'de> Deserialize<'de> for ChildId {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         Ok(match RecordId::deserialize(deserializer)? {
+            RecordId::Service(id) if id >= Self::SLOT_COUNT as u32 => Self(id),
+            RecordId::Service(_) => {
+                return Err(serde::de::Error::custom("overlapping service identity"));
+            }
             RecordId::First => Self::FIRST,
             RecordId::Second => Self::SECOND,
             RecordId::FirstProject => Self::PROJECT[0],
@@ -165,12 +191,12 @@ pub const CUSTODY: u64 = 37;
 /// Test-build-only interruption of one selected child.
 pub const INJECT: u64 = 38;
 /// Complete owner custody in stable slot order; includes both empty and occupied slots.
-pub type Custody = [super::custody::Custody; ChildId::ALL.len()];
+pub type Custody = Vec<super::custody::Custody>;
 /// Bounded observation of all permanent service histories.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: ChildId::ALL.len() * super::custody::LIMITS.bytes,
-    allocation: ChildId::ALL.len() * super::custody::LIMITS.allocation,
-    nodes: ChildId::ALL.len() * super::custody::LIMITS.nodes,
+    bytes: ChildId::HISTORICAL_SERVICES.len() * super::custody::LIMITS.bytes,
+    allocation: ChildId::HISTORICAL_SERVICES.len() * super::custody::LIMITS.allocation,
+    nodes: ChildId::HISTORICAL_SERVICES.len() * super::custody::LIMITS.nodes,
     depth: super::custody::LIMITS.depth + 1,
 };
 

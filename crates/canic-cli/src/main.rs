@@ -202,18 +202,27 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
                 output.as_deref()
             )?)),
             ArtifactCommand::Endpoints { wasm } => {
-                use std::fmt::Write;
                 let endpoints = canic_host::endpoints(wasm)?;
                 if !cli.json {
-                    let mut text = format!("{} endpoints\n", endpoints.len());
-                    for endpoint in &endpoints {
-                        writeln!(
-                            text,
-                            "{}  {}",
-                            endpoint.mode,
-                            ic_host_text::escape(&endpoint.name)
-                        )
-                        .expect("write to String");
+                    let rows: Vec<_> = endpoints
+                        .iter()
+                        .map(|e| {
+                            [
+                                e.name.as_str(),
+                                e.mode,
+                                e.argument.as_deref().unwrap_or("—"),
+                                e.reply.as_deref().unwrap_or("—"),
+                            ]
+                        })
+                        .collect();
+                    let table = ic_host_text::plain_table(
+                        &["ENDPOINT", "MODE", "ARGUMENT", "REPLY"],
+                        &rows,
+                        &[ic_host_text::Alignment::Left; 4],
+                    );
+                    let mut text = format!("{} endpoints\n\n{table}\n", endpoints.len());
+                    if endpoints.iter().any(|e| e.argument.is_none()) {
+                        text.push_str("\n— Signature unavailable in this Wasm.\n");
                     }
                     return Ok(Output::Text(text));
                 }

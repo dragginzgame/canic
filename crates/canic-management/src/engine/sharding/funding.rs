@@ -55,7 +55,7 @@ pub fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, String> {
     if !api::is_controller(&api::caller()) {
         return Err("controller required".into());
     }
-    let slot = ChildId::ALL
+    let slot = super::super::service_slots()
         .into_iter()
         .find(|&slot| installed(slot, &rule))
         .ok_or("funding requires the named direct child installed by this Root")?;
@@ -123,7 +123,7 @@ fn active(slot: ChildId) -> Option<ChildFunding> {
 }
 
 pub(in crate::engine) fn resume() {
-    for slot in ChildId::ALL {
+    for slot in super::super::service_slots() {
         if active(slot).is_some() {
             schedule(slot);
         }

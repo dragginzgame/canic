@@ -35,6 +35,7 @@ pub(crate) fn selected_fleet(
             top_up_children: vec![],
             role_receivers: vec![],
             subnet_child_limit: None,
+            allow_large_subnet: false,
             registry: None,
             standby_pool: None,
             worker_pools: Vec::new(),
@@ -106,7 +107,7 @@ fn plan_identity_admission_and_artifact_custody() {
     let reread: crate::Plan = serde_json::from_str(&json).unwrap();
     assert_eq!(reread.digest().unwrap(), id);
     let mut changed = plan;
-    let crate::PlanAction::Create { cycles } = &mut changed.action else {
+    let crate::PlanAction::Create { cycles, .. } = &mut changed.action else {
         panic!("creation")
     };
     *cycles += 1;
@@ -196,6 +197,8 @@ fn wire_comparison_excludes_only_the_exact_timer_update() {
     let method = |name: &str, mode| WasmEndpoint {
         name: name.into(),
         mode,
+        argument: None,
+        reply: None,
     };
     let timer = "__ic_scheduling_once";
     let mut declared =

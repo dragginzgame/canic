@@ -242,7 +242,7 @@ fn source_layout_requires_real_source_directory_and_regular_rust_files() {
 #[test]
 fn build_modules_read_custom_sections_from_the_artifact() {
     let mut wasm = b"\0asm\x01\0\0\0".to_vec();
-    assert!(compiled_modules(&wasm, false).unwrap().is_empty());
+    assert!(compiled_metadata(&wasm, false).unwrap() == (vec![], 0));
     for name in [
         "canic:module:auth",
         "canic:module:blob",
@@ -256,30 +256,33 @@ fn build_modules_read_custom_sections_from_the_artifact() {
         wasm.push(1);
     }
     assert_eq!(
-        compiled_modules(&wasm, false).unwrap(),
-        ["DB", "Auth", "Blob"]
+        compiled_metadata(&wasm, false).unwrap(),
+        (vec!["DB", "Auth", "Blob"], 0)
     );
     wasm.pop();
-    assert!(compiled_modules(&wasm, false).is_err());
+    assert!(compiled_metadata(&wasm, false).is_err());
 }
 
 // Only a configured, recording actor with the mounted query passes the enabled build.
 #[test]
 fn endpoint_metrics_requires_the_selected_module_and_query() {
     let mut wasm = b"\0asm\x01\0\0\0".to_vec();
-    assert!(compiled_modules(&wasm, true).is_err());
+    assert!(compiled_metadata(&wasm, true).is_err());
     let marker = "canic:module:endpoint-metrics";
     let len = u8::try_from(marker.len()).unwrap();
     wasm.extend([0, len + 2, len]);
     wasm.extend(marker.bytes());
     wasm.push(1);
-    assert!(compiled_modules(&wasm, false).is_err());
-    assert!(compiled_modules(&wasm, true).is_err());
+    assert!(compiled_metadata(&wasm, false).is_err());
+    assert!(compiled_metadata(&wasm, true).is_err());
     let name = b"canister_query metrics";
     let len = u8::try_from(name.len()).unwrap();
     wasm.extend([7, len + 4, 1, len]);
     wasm.extend(name);
     wasm.extend([0, 0]); // Function export at index zero.
-    assert_eq!(compiled_modules(&wasm, true).unwrap(), ["Endpoint Metrics"]);
-    assert!(compiled_modules(&wasm, false).is_err());
+    assert_eq!(
+        compiled_metadata(&wasm, true).unwrap(),
+        (vec!["Endpoint Metrics"], 1)
+    );
+    assert!(compiled_metadata(&wasm, false).is_err());
 }

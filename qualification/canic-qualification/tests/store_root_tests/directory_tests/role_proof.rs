@@ -515,14 +515,10 @@ pub(super) async fn exercise(
     let mut stale = target.clone();
     stale.allocation.generation[0] ^= 1;
     assert!(release(1u8, stale).await.is_err());
-    let raw = canic::sharding::ReleaseShard::encode_request(&([1; 32], target.clone())).unwrap();
-    let refused = pic
-        .update_call(issuer.id, owner, "release_shard", raw)
-        .await
-        .unwrap();
-    assert_eq!(
-        canic::sharding::ReleaseShard::decode_reply(&refused).unwrap(),
-        Err("assignment changed".into())
+    assert!(
+        pic.update_call(issuer.id, owner, "release_shard", vec![])
+            .await
+            .is_err()
     );
     assert_eq!(inspect().await["live_placements"], 2);
     assert_eq!(release(1u8, target.clone()).await, Ok(()));
@@ -546,6 +542,7 @@ pub(super) async fn exercise(
     assert_eq!(place(2u8).await, placed);
     assert_eq!(release(2u8, target.clone()).await, Ok(()));
     assert_eq!(inspect().await["live_placements"], 0);
+    assert_eq!(drain().await["live_placements"], 0);
     let close_request = vec![
         "close-role-issuance".into(),
         child.id.to_text(),

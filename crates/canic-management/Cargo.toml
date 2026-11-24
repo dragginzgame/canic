@@ -9,6 +9,7 @@ publish.workspace = true
 description = "Reusable bounded child management engine"
 
 [features]
+auth = ["canic/auth"]
 role-issuer = ["sharding", "canic/raw-rand", "dep:ic-platform"]
 backup = ["canic-management-protocol/backup"]
 sharding = [

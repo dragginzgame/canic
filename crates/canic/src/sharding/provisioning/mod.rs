@@ -35,15 +35,6 @@ impl AuthSubject {
 }
 
 #[cfg(feature = "provisioning")]
-fn matches_target(
-    observation: &super::Placement,
-    allocation: &super::Allocation,
-    shard: Principal,
-) -> bool {
-    observation.assigned_target().ok().flatten() == Some((allocation, shard))
-}
-
-#[cfg(feature = "provisioning")]
 fn placement_key<R: Resource>(account: AuthSubject) -> super::Key {
     use sha2::{Digest, Sha256};
     let mut digest = Sha256::new().chain_update(R::DOMAIN);

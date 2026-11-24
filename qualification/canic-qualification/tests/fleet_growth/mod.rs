@@ -155,7 +155,10 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         assert_eq!(
             addition["plan"]["management"]["slot"],
             if stored {
-                serde_json::to_value(canic_management_protocol::children::ChildId::ALL[2]).unwrap()
+                serde_json::to_value(
+                    canic_management_protocol::children::ChildId::HISTORICAL_SERVICES[2],
+                )
+                .unwrap()
             } else {
                 json!("Second")
             },

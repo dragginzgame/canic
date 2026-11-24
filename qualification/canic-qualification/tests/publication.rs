@@ -108,7 +108,7 @@ async fn maintain_root(
         .unwrap();
     assert_eq!(
         sources.len(),
-        canic_management_protocol::children::ChildId::ALL.len()
+        canic_management_protocol::children::ChildId::HISTORICAL_SERVICES.len()
     );
     assert!(
         sources[..2]
@@ -289,8 +289,8 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         .unwrap();
     assert!(human.status.success());
     let text = String::from_utf8(human.stdout).unwrap();
-    assert!(text.contains("root [ROOT]"));
-    assert!(text.contains("store [WASM_STORE]"));
+    assert!(text.lines().any(|row| row.starts_with("[ROOT]")));
+    assert!(text.lines().any(|row| row.starts_with("├─ [WASM_STORE]")));
     assert!(text.contains("Total operator debit ceiling: 5T"));
     assert!(text.contains("Store release: app /"));
     let signer = repo.join(".tools/ic/bin/icp");

@@ -99,11 +99,34 @@ fn endpoints_only_list_callable_function_exports() {
     let file = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(file.path(), &wasm).unwrap();
     let methods = crate::endpoints(file.path()).unwrap();
+    assert_eq!(
+        super::compiled_metadata(&wasm, false).unwrap().1,
+        methods.len()
+    );
     let actual: Vec<_> = methods.iter().map(|e| (e.mode, e.name.as_str())).collect();
     assert_eq!(
         actual,
         [("query", "a"), ("composite_query", "m"), ("update", "z")]
     );
+    assert!(
+        methods
+            .iter()
+            .all(|m| m.argument.is_none() && m.reply.is_none())
+    );
+    let section = b"canic:signature:v1:update:z";
+    let types = b"Option < u64 >\0Result < (), Error >";
+    let mut annotated = wasm.clone();
+    annotated.extend([
+        0,
+        (1 + section.len() + types.len()) as u8,
+        section.len() as u8,
+    ]);
+    annotated.extend(section);
+    annotated.extend(types);
+    let methods = crate::artifact::exported_methods(&annotated).unwrap();
+    assert_eq!(methods[2].argument.as_deref(), Some("Option<u64>"));
+    assert_eq!(methods[2].reply.as_deref(), Some("Result<(), Error>"));
+    assert!(methods[0].argument.is_none());
 
     wasm.truncate(wasm.len() - 7);
     std::fs::write(file.path(), wasm).unwrap();

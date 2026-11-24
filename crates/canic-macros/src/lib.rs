@@ -220,8 +220,8 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         )
     } else {
         (
-            input,
-            output,
+            input.clone(),
+            output.clone(),
             quote!(wire::method_id(#export)),
             limits.map_or_else(|| quote!(::canic::method::LIMITS), |value| quote!(#value)),
             reply_limits.map_or_else(|| quote!(__CANIC_REQUEST), |value| quote!(#value)),
@@ -299,11 +299,15 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         }
     });
     let input_type = parameter.map(|_| &request);
-    let admitted_type = if roles.is_some() {
-        quote!((::canic::topology::attestation::Proof,#request))
-    } else {
-        request.clone()
+    let admitted = |ty: &proc_macro2::TokenStream| {
+        if roles.is_some() {
+            quote!((::canic::topology::attestation::Proof, #ty))
+        } else {
+            ty.clone()
+        }
     };
+    let admitted_type = admitted(&request);
+    let inspected_input = admitted(&input);
     let return_type = if asynchronous.is_some() {
         quote!(_)
     } else {
@@ -351,7 +355,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
             const __CANIC_ID: u64 = #id;
             const __CANIC_REQUEST: wire::Limits = #request_budget;
             const __CANIC_REPLY: wire::Limits = #reply_budget;
-            ::canic::__canic_inspect!(wire, #export, #kind, __CANIC_ID, #admitted_type, #reply, __CANIC_REQUEST, __CANIC_REPLY);
+            ::canic::__canic_inspect!(wire, #export, #kind, __CANIC_ID, #inspected_input, #output, __CANIC_REQUEST, __CANIC_REPLY);
 
             fn __canic_decode(bytes: &[u8]) -> Result<#admitted_type, wire::Error> {
                 wire::decode(bytes, wire::Encoding::Frame { method: __CANIC_ID, direction: wire::Direction::Request }, __CANIC_REQUEST)

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct Record {
+struct HistoricalRecord {
     version: u32,
     root: crate::Plan,
     child: Child,
@@ -54,14 +54,40 @@ impl Child {
         }
     }
 }
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct ServiceRecord {
+    version: u32,
+    root: crate::Plan,
+    children: Vec<FleetChild>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    store: Option<super::FleetStore>,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum Record {
+    Services(Box<ServiceRecord>),
+    Historical(Box<HistoricalRecord>),
+}
+
 impl Serialize for FleetPlan {
     fn serialize<S: serde::Serializer>(
         &self,
         serializer: S,
     ) -> std::result::Result<S::Ok, S::Error> {
         self.validate().map_err(serde::ser::Error::custom)?;
+        if self.version == super::SERVICE_RECORD_VERSION {
+            return ServiceRecord {
+                version: self.version,
+                root: self.root.clone(),
+                children: self.children.clone(),
+                store: self.store.clone(),
+            }
+            .serialize(serializer);
+        }
         let mut children = self.children.iter().map(Child::from_child);
-        let record = Record {
+        let record = HistoricalRecord {
             version: self.version,
             root: self.root.clone(),
             child: children
@@ -78,48 +104,41 @@ impl<'de> Deserialize<'de> for FleetPlan {
     fn deserialize<D: serde::Deserializer<'de>>(
         deserializer: D,
     ) -> std::result::Result<Self, D::Error> {
-        let r = Record::deserialize(deserializer)?;
-        let mut children = vec![r.child.into_child(ChildId::FIRST)];
-        children.extend(r.sibling.map(|c| c.into_child(ChildId::SECOND)));
-        for child in r.additional {
-            let slot = ChildId::ALL
-                .get(children.len())
-                .ok_or_else(|| serde::de::Error::custom(invalid()))?;
-            children.push(child.into_child(*slot));
-        }
-        let value = Self {
-            version: r.version,
-            root: r.root,
-            children,
-            store: r.store,
+        let value = match Record::deserialize(deserializer)? {
+            Record::Services(r) if r.version == super::SERVICE_RECORD_VERSION => Self {
+                version: r.version,
+                root: r.root,
+                children: r.children,
+                store: r.store,
+            },
+            Record::Historical(r) if r.version < super::SERVICE_RECORD_VERSION => {
+                let mut children = vec![r.child.into_child(ChildId::FIRST)];
+                children.extend(r.sibling.map(|c| c.into_child(ChildId::SECOND)));
+                for child in r.additional {
+                    let slot = ChildId::HISTORICAL_SERVICES
+                        .get(children.len())
+                        .ok_or_else(|| serde::de::Error::custom(invalid()))?;
+                    children.push(child.into_child(*slot));
+                }
+                Self {
+                    version: r.version,
+                    root: r.root,
+                    children,
+                    store: r.store,
+                }
+            }
+            _ => return Err(serde::de::Error::custom(invalid())),
         };
         value.validate().map_err(serde::de::Error::custom)?;
         Ok(value)
     }
 }
 
-const LEAVES: [&str; ChildId::ALL.len()] = [
-    "child", "sibling", "child-3", "child-4", "child-5", "child-6", "child-7", "child-8",
-];
-
-// Existing journal paths never move, including records with retained signed attempts.
-pub(super) fn child_leaf(slot: ChildId) -> &'static str {
-    LEAVES[slot.service_index().expect("permanent child record")]
-}
-
-/// Every historical effect directory, including the optional second slot.
-pub(super) fn effect_directories()
--> impl Iterator<Item = (&'static str, &'static [&'static str], bool)> {
-    [
-        ("root", &["module.wasm", "plan.json"][..], true),
-        ("child", &["module.wasm"][..], true),
-        ("sibling", &["module.wasm"][..], false),
-        ("store", &["module.wasm"][..], false),
-    ]
-    .into_iter()
-    .chain(
-        LEAVES[2..]
-            .iter()
-            .map(|&leaf| (leaf, &["module.wasm"][..], false)),
-    )
+// Preserve the first two historical paths; later paths use the service ordinal.
+pub(super) fn child_leaf(slot: ChildId) -> String {
+    match slot.service_index().expect("permanent child record") {
+        0 => "child".into(),
+        1 => "sibling".into(),
+        index => format!("child-{}", index + 1),
+    }
 }

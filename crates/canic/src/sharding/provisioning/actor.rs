@@ -3,13 +3,13 @@ use super::{AuthSubject, Binding, Progress, Provision, Request, Resource, SendEr
 use crate::{
     auth::session::Authorization,
     guard, method, role,
-    sharding::{self, Allocation, Placement, PlacementOutcome},
+    sharding::{self, Placement, PlacementOutcome, ShardTarget},
 };
 use ic_platform_runtime::system as api;
 use ic_platform_types::Principal;
 use std::marker::PhantomData;
 
-fn target(placement: Placement, root: Principal) -> Result<(Allocation, Principal), Progress> {
+fn target(placement: Placement, root: Principal) -> Result<ShardTarget, Progress> {
     match placement
         .into_outcome()
         .map_err(|_| Progress::PlacementUnavailable)?
@@ -19,7 +19,7 @@ fn target(placement: Placement, root: Principal) -> Result<(Allocation, Principa
         PlacementOutcome::Assigned(allocation, shard)
             if shard != root && shard != api::canister_self() =>
         {
-            Ok((allocation, shard))
+            Ok(ShardTarget { allocation, shard })
         }
         _ => Err(Progress::PlacementUnavailable),
     }
@@ -32,11 +32,9 @@ fn admit(auth: &Authorization) {
 /// One verified allocation for this signup attempt. The application retains its own row.
 pub struct Assignment<'a, R> {
     auth: &'a Authorization,
-    root: Principal,
     pool: &'a str,
-    key: sharding::Key,
-    allocation: Allocation,
-    shard: Principal,
+    subject: Principal,
+    target: ShardTarget,
     resource: PhantomData<R>,
 }
 
@@ -54,26 +52,28 @@ pub async fn place<'a, R: Resource>(
     let account = AuthSubject::from(auth);
     assert!(account.valid(), "invalid provisioning account");
     let root = role::root().expect("installed provisioning hub");
-    let key = super::placement_key::<R>(account);
-    // Root's assign first looks up the original key in the same execution.
-    let result = if retained.is_some() {
-        sharding::lookup(root, pool, key).await
+    // This local index key includes the resource and issuer as well as the subject.
+    let subject = Principal::self_authenticating(super::placement_key::<R>(account));
+    let target = if retained.is_some() {
+        sharding::routes::get_shard(pool, subject).ok_or(Progress::PlacementUnavailable)?
     } else {
-        sharding::assign(root, pool, key).await
+        let placement = sharding::routes::assign_shard(pool, subject, || {
+            admit(auth);
+            Ok::<(), std::convert::Infallible>(())
+        })
+        .await
+        .map_err(|_| Progress::PlacementUnavailable)?;
+        target(placement, root)?
     };
-    admit(auth);
-    let (allocation, shard) = target(result.map_err(|_| Progress::PlacementUnavailable)?, root)?;
-    if retained.is_some_and(|p| p != shard) {
+    if retained.is_some_and(|p| p != target.shard) {
         return Err(Progress::PlacementUnavailable);
     }
 
     Ok(Assignment {
         auth,
-        root,
         pool,
-        key,
-        allocation,
-        shard,
+        subject,
+        target,
         resource: PhantomData,
     })
 }
@@ -82,7 +82,7 @@ impl<R: Resource> Assignment<'_, R> {
     /// Principal to persist when inserting a new reservation.
     #[must_use]
     pub fn shard(&self) -> Principal {
-        self.shard
+        self.target.shard
     }
 
     /// Send the application's retained request, then verify the reply and original allocation.
@@ -96,12 +96,12 @@ impl<R: Resource> Assignment<'_, R> {
         request: &Request<R::Id, R::Data>,
     ) -> Result<Binding<R::Id>, SendError<R::Refusal>> {
         let expected = &request.binding;
-        if expected.account != AuthSubject::from(self.auth) || expected.shard != self.shard {
+        if expected.account != AuthSubject::from(self.auth) || expected.shard != self.target.shard {
             return Err(SendError::Progress(Progress::PlacementUnavailable));
         }
         admit(self.auth);
-        self.verify().await.map_err(SendError::Progress)?;
-        let result = method::call::<Provision<R>>(self.shard, 10, request).await;
+        self.verify().map_err(SendError::Progress)?;
+        let result = method::call::<Provision<R>>(self.target.shard, 10, request).await;
         admit(self.auth);
         let receipt = match result {
             Ok(reply) => reply,
@@ -111,19 +111,27 @@ impl<R: Resource> Assignment<'_, R> {
         if let Ok(binding) = &receipt {
             binding.require_same(expected);
         }
-        self.verify().await.map_err(SendError::Progress)?;
+        self.verify().map_err(SendError::Progress)?;
 
         receipt.map_err(SendError::Refused)
     }
 
-    async fn verify(&self) -> Result<(), Progress> {
-        let observation = sharding::lookup(self.root, self.pool, self.key).await;
-        admit(self.auth);
-        if !observation.is_ok_and(|p| super::matches_target(&p, &self.allocation, self.shard)) {
-            return Err(Progress::PlacementUnavailable);
-        }
+    fn verify(&self) -> Result<(), Progress> {
+        verify_target(
+            sharding::routes::get_shard(self.pool, self.subject).as_ref(),
+            &self.target,
+        )
+    }
+}
 
+pub(super) fn verify_target(
+    current: Option<&ShardTarget>,
+    expected: &ShardTarget,
+) -> Result<(), Progress> {
+    if current == Some(expected) {
         Ok(())
+    } else {
+        Err(Progress::PlacementUnavailable)
     }
 }
 

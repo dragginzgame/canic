@@ -160,6 +160,21 @@ pub async fn remove(
     Ok(removed)
 }
 
+/// Dispatch one read-only Store operation as the actual Root controller.
+/// # Errors
+/// Propagates admission, transport and Store refusals.
+pub async fn observe(
+    input: canic_management_protocol::publication::ObservationRequest,
+) -> canic_management_protocol::publication::ObservationReply {
+    use canic_management_protocol::publication::{Observation, ObservationRequest};
+    match input {
+        ObservationRequest::Info(request) => observe_info(request).await.map(Observation::Info),
+        ObservationRequest::Custody(request) => {
+            observe_custody(request).await.map(Observation::Custody)
+        }
+    }
+}
+
 /// Read Store state after handover through the actual controller canister.
 /// This performs no storage write, timer registration or management effect.
 /// # Errors

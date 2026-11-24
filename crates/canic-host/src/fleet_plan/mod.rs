@@ -69,7 +69,7 @@ pub struct FleetStore {
     pub creation_cycles: u64,
 }
 
-/// Bounded fleet journey: one new Root, optional Store and up to eight permanent application children.
+/// Bounded fleet journey: one new Root, optional Store and permanent application children under its approved subnet limit.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FleetPlan {
     /// Fleet envelope format, independent of existing single-canister plan formats.
@@ -82,6 +82,9 @@ pub struct FleetPlan {
     pub store: Option<FleetStore>,
 }
 
+const SERVICE_RECORD_VERSION: u32 = 8;
+const CHILD_WINDOW_NS: u64 = 600_000_000_000;
+
 fn fleet_version(children: usize, receivers: bool) -> u32 {
     if children > 2 {
         if receivers { 6 } else { 5 }
@@ -91,6 +94,12 @@ fn fleet_version(children: usize, receivers: bool) -> u32 {
 }
 
 impl FleetPlan {
+    /// Earliest child dispatch under the shared fleet approval.
+    #[must_use]
+    pub fn dispatch_at_ns(&self) -> u64 {
+        self.root.expires_at_ns.saturating_sub(CHILD_WINDOW_NS)
+    }
+
     /// Total operator debit ceiling; child grants are already included in Root funding.
     #[must_use]
     pub fn creation_cycles(&self) -> u64 {
@@ -108,7 +117,7 @@ impl FleetPlan {
             ic_wire::Limits {
                 bytes: 65_536,
                 allocation: 1_048_576,
-                // Up to eight full chunk manifests.
+                // Bound one approval independently of its service count.
                 nodes: 65_536,
                 depth: 16,
             },
@@ -134,20 +143,28 @@ impl FleetPlan {
         self.root.validate()?;
         let root = self.root.deployment.as_ref().ok_or_else(invalid)?;
         if self.children.is_empty()
-            || self.children.len() > ChildId::ALL.len()
+            || (self.version < SERVICE_RECORD_VERSION
+                && self.children.len() > ChildId::HISTORICAL_SERVICES.len())
             || !self
                 .children
                 .iter()
                 .map(|child| child.slot)
-                .eq(ChildId::ALL[..self.children.len()].iter().copied())
-            || self.version
-                != fleet_version(
-                    self.children.len(),
-                    self.children.iter().any(|c| c.receiver_role.is_some()),
-                )
+                .eq((0..self.children.len()).filter_map(ChildId::service))
+            || (!matches!(self.version, 7 | SERVICE_RECORD_VERSION)
+                && self.version
+                    != fleet_version(
+                        self.children.len(),
+                        self.children.iter().any(|c| c.receiver_role.is_some()),
+                    ))
             || !matches!(self.root.action, crate::PlanAction::Create { .. })
+            || matches!(self.root.action, crate::PlanAction::Create {bootstrap: Some(policy), ..} if policy.services as usize != self.children.len())
             || self.root.version != 2
-            || self.root.creation_cycles() < (1 + self.children.len() as u64) * 1_000_000_000_000
+            || self.root.creation_cycles() / 1_000_000_000_000 <= self.children.len() as u64
+            || self
+                .root
+                .creation_cycles()
+                .checked_add(self.store.as_ref().map_or(0, |s| s.creation_cycles))
+                .is_none()
             || self
                 .children
                 .iter()
@@ -160,7 +177,11 @@ impl FleetPlan {
         }
         for (_, child) in self.children() {
             child.deployment.validate()?;
-            if (matches!(self.version, 3 | 4 | 6) && child.release.is_none())
+            if (self
+                .children
+                .iter()
+                .any(|child| child.receiver_role.is_some())
+                && child.release.is_none())
                 || child.deployment.app != root.app
                 || child.deployment.fleet != root.fleet
                 || child.deployment.canister == root.canister
@@ -169,8 +190,7 @@ impl FleetPlan {
                 || child.creation_cycles != canic_management_protocol::CREATION_CYCLES
                 || crate::unhex(&child.artifact.sha256)?.len() != 32
                 || child.execute_at_ns < self.root.created_at_ns
-                || child.execute_at_ns != self.children[0].execute_at_ns
-                || child.execute_at_ns.checked_add(600_000_000_000) != Some(self.root.expires_at_ns)
+                || child.execute_at_ns.checked_add(CHILD_WINDOW_NS) != Some(self.root.expires_at_ns)
                 || child.execute_at_ns - self.root.created_at_ns > 3_000_000_000_000
             {
                 return Err(invalid());
@@ -247,13 +267,13 @@ impl FleetPlan {
                 arguments: None,
                 blob_attempt: None,
                 source: self.source(receipt, store, slot)?,
-                slot: (self.children.len() > 1).then_some(slot),
+                slot: (self.version >= 7 || self.children.len() > 1).then_some(slot),
                 root: receipt.canister.clone(),
                 root_module: self.root.artifact.sha256.clone(),
                 execute_at_ns: child.execute_at_ns,
             }),
             created_at_ns: self.root.created_at_ns,
-            expires_at_ns: child.execute_at_ns + 600_000_000_000,
+            expires_at_ns: self.root.expires_at_ns,
             deployment: Some(child.deployment.clone()),
         };
         plan.validate()?;
@@ -268,7 +288,11 @@ impl FleetPlan {
         slot: ChildId,
     ) -> Result<Plan> {
         let mut plan = self.child_plan(receipt, store, slot)?;
-        if matches!(self.version, 3 | 4 | 6) {
+        if self
+            .children
+            .iter()
+            .any(|child| child.receiver_role.is_some())
+        {
             let definition = self.child(slot)?;
             plan.version = 8;
             if let crate::PlanAction::CreateChild(owner) = &mut plan.action {
@@ -296,6 +320,7 @@ impl FleetPlan {
         // The same Root receipt checks bind both kinds of dependent operation.
         self.verify_root_receipt(receipt)?;
         let plan = Plan {
+            version: if self.version >= 7 { 9 } else { 2 },
             artifact: store.artifact.clone(),
             action: crate::PlanAction::CreateStore {
                 cycles: store.creation_cycles,
@@ -445,11 +470,14 @@ pub fn plan_fleet(
             s.parent.as_ref() == Some(root_name) && s.role.as_deref() != Some("wasm-store")
         })
         .collect();
-    if children.is_empty() || children.len() > ChildId::ALL.len() {
+    let limit = selected
+        .config
+        .subnet_child_limit
+        .unwrap_or(canic_management_protocol::stored::DEFAULT_SUBNET_CHILD_LIMIT);
+    if children.is_empty() || children.len() > limit as usize {
         return Err(Error::Invalid(format!(
-            "fleet declares {} direct application children under {root_name}; this Root path supports 1 to {} (Wasm Store is separate)",
-            children.len(),
-            ChildId::ALL.len()
+            "fleet declares {} direct application children under {root_name}; supported range is 1..={limit} (Wasm Store is separate)",
+            children.len()
         )));
     }
     if children.len() + 1 + stores.len() != slots.len()
@@ -463,9 +491,9 @@ pub fn plan_fleet(
         &selected.wasm_path(config_path, root_name, None)?,
         artifact::MAX_WASM,
     )?;
-    if !selected.config.role_receivers.is_empty() {
-        let methods = artifact::exported_methods(&root_bytes)?;
-        if [
+    let methods = artifact::exported_methods(&root_bytes)?;
+    if !selected.config.role_receivers.is_empty()
+        && [
             "prepare_role_key",
             "issue_role",
             "close_role_issuance",
@@ -476,11 +504,11 @@ pub fn plan_fleet(
             !methods
                 .iter()
                 .any(|m| m.mode == "update" && m.name == *required)
-        }) {
-            return Err(Error::Invalid(
-                "build the selected Root with role-issuer before planning role receivers".into(),
-            ));
-        }
+        })
+    {
+        return Err(Error::Invalid(
+            "build the selected Root with role-issuer before planning role receivers".into(),
+        ));
     }
     let mut child_bytes: Vec<_> = children
         .iter()
@@ -520,18 +548,29 @@ pub fn plan_fleet(
         controller: controller.into(),
         artifact: artifact::admit(&root_bytes)?,
         action: crate::PlanAction::Create {
+            bootstrap: (selected.config.subnet_child_limit.is_some() || children.len() > 3)
+                .then_some(canic_management_protocol::stored::RootBootstrap {
+                    services: u32::try_from(children.len()).map_err(|_| invalid())?,
+                    max_children: limit,
+                    allow_large_subnet: selected.config.allow_large_subnet,
+                }),
             cycles: cycles
-                .unwrap_or((children.len() as u64 + 2) * 1_000_000_000_000 + store_cycles)
+                .or_else(|| {
+                    (children.len() as u64 + 2)
+                        .checked_mul(1_000_000_000_000)?
+                        .checked_add(store_cycles)
+                })
+                .ok_or_else(invalid)?
                 .checked_sub(store_cycles)
                 .ok_or_else(invalid)?,
         },
         created_at_ns: now,
-        expires_at_ns: dispatch.checked_add(600_000_000_000).ok_or_else(invalid)?,
+        expires_at_ns: dispatch.checked_add(CHILD_WINDOW_NS).ok_or_else(invalid)?,
         deployment: Some(name(root_name)),
     };
     let definition = |index: usize| -> Result<FleetChild> {
         Ok(FleetChild {
-            slot: *ChildId::ALL.get(index).ok_or_else(invalid)?,
+            slot: ChildId::service(index).ok_or_else(invalid)?,
             deployment: name(children[index].0),
             parent: CreatedCanister {
                 operation: String::new(),
@@ -564,7 +603,15 @@ pub fn plan_fleet(
         })
     };
     let mut value = FleetPlan {
-        version: fleet_version(children.len(), !selected.config.role_receivers.is_empty()),
+        version: if crate::maintenance::implicit_child_root(&root.artifact.sha256)
+            || methods
+                .iter()
+                .any(|m| m.mode == "update" && m.name == "observe_store_custody")
+        {
+            fleet_version(children.len(), !selected.config.role_receivers.is_empty())
+        } else {
+            SERVICE_RECORD_VERSION
+        },
         children: (0..children.len()).map(definition).collect::<Result<_>>()?,
         root,
         store: stores
@@ -673,7 +720,7 @@ pub fn plan_fleet(
         });
         (value.children, child_bytes) = definitions.into_iter().unzip();
         for (index, child) in value.children.iter_mut().enumerate() {
-            child.slot = *ChildId::ALL.get(index).ok_or_else(invalid)?;
+            child.slot = ChildId::service(index).ok_or_else(invalid)?;
         }
         // Existing approvals keep their delivery contract; a Store alone never migrates inline custody.
         for (child, retained) in value.children.iter_mut().zip(&old.children) {
@@ -728,7 +775,7 @@ pub fn plan_fleet(
     let child_directories = value
         .children()
         .map(|(slot, _)| {
-            held.prepare_directories(&[std::ffi::OsStr::new(record::child_leaf(slot))], 0o700, 0)
+            held.prepare_directories(&[std::ffi::OsStr::new(&record::child_leaf(slot))], 0o700, 0)
                 .map_err(supplier)
         })
         .collect::<Result<Vec<_>>>()?;
@@ -787,7 +834,7 @@ pub(crate) async fn apply(
     if crate::now()?
         >= plan::admission_deadline(
             value.root.created_at_ns,
-            value.children[0].execute_at_ns,
+            value.dispatch_at_ns(),
             value.root.expires_at_ns,
         )
         && !dir
@@ -833,7 +880,11 @@ pub(crate) async fn apply(
         None
     };
     releases::apply(dir, &value, &root, store.as_ref(), identity, icp).await?;
-    if matches!(value.version, 3 | 4 | 6) {
+    if value
+        .children
+        .iter()
+        .any(|child| child.receiver_role.is_some())
+    {
         role_key::prepare(dir, &value, &root, identity, icp).await?;
     }
     let mut outcomes = Vec::new();

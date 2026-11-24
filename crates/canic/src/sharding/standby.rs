@@ -99,7 +99,7 @@ impl Contract for RefillStandby {
 pub struct InspectStandby;
 impl Contract for InspectStandby {
     const NAME: &'static str = "inspect_standby";
-    const ID: u64 = ic_wire::method_id("canic.inspect_standby.v3");
+    const ID: u64 = ic_wire::method_id("canic.placement.inspect_standby.v1");
     const REPLY: ic_wire::Limits = ic_wire::Limits {
         bytes: 16384,
         allocation: 524288,

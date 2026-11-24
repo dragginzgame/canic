@@ -8,18 +8,21 @@ use canic_management_protocol::Failure;
 use ic_platform_runtime as runtime;
 
 // init
-// Create the Root management journal and initialize selected enrollment state.
+// Create the Root journal with the approved fleet ceiling and initialize enrollment.
 // guard  : lifecycle_guard (IC lifecycle)
-// limits : empty request and no reply
+// limits : up to 64 install bytes and no reply
 #[runtime::init(
     runtime = runtime,
     guard = lifecycle_guard,
-    decode = lifecycle_decode,
-    max_bytes = 0,
+    decode = bootstrap_decode,
+    max_bytes = 64,
     on_error = endpoint_error,
 )]
-fn init((): ()) {
+fn init(policy: Option<canic_management_protocol::stored::RootBootstrap>) {
     management::open(true, readiness());
+    if let Some(policy) = policy {
+        management::bootstrap(policy);
+    }
     canic::logging::record(canic::logging::Level::Info, "root", "installed");
     #[cfg(feature = "auth")]
     crate::auth::fresh();
@@ -38,6 +41,24 @@ fn init((): ()) {
 )]
 fn post_upgrade((): ()) {
     management::open(false, readiness());
+    #[cfg(feature = "sharding")]
+    for (family, retained) in management::sharding::retained_mounts() {
+        const MOUNTS: &[&str] = &[
+            #[cfg(feature = "shard-pool")]
+            "shard-pool",
+            #[cfg(feature = "registry")]
+            "registry",
+            #[cfg(feature = "worker-pool")]
+            "worker-pool",
+            #[cfg(feature = "reserve-pool")]
+            "reserve-pool",
+            #[cfg(feature = "child-funding")]
+            "child-funding",
+        ];
+        if retained && !MOUNTS.contains(&family) {
+            runtime::system::trap(&format!("retained Root approval requires {family}"));
+        }
+    }
     canic::logging::record(
         canic::logging::Level::Info,
         "root",
@@ -46,11 +67,10 @@ fn post_upgrade((): ()) {
 }
 
 management::mount_endpoints! {
-    store_publication, observe_store, observe_store_custody, store_admission, store_removal,
+    store_publication, observe_store, store_admission, store_removal,
     stage_store_maintenance, advance_store_maintenance, observe_store_maintenance,
     install_store_maintenance, activate_store_maintenance, store_maintenance_status, recover_store_maintenance,
-    status, observe, observe_custody, observe_root_custody, observe_root_history, observe_store_attempt, stage, reconcile,
-    stage_upgrade, upgrade_status, observe_upgrade, reconcile_upgrade,
+    observe_custody, observe_root_custody, observe_root_history,
     observe_stored_children, stage_stored_child, reconcile_stored_child,
     observe_application_children, stage_application_child, reconcile_application_child,
     stage_stored_upgrade, reconcile_stored_upgrade,
@@ -161,6 +181,20 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
 /// The IC admits lifecycle calls. The declared argument budget still applies.
 fn lifecycle_guard() -> Result<(), std::convert::Infallible> {
     Ok(())
+}
+
+fn bootstrap_decode(
+    bytes: &[u8],
+) -> Result<Option<canic_management_protocol::stored::RootBootstrap>, ic_wire::Error> {
+    if bytes.is_empty() {
+        return Ok(None);
+    }
+    ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Payload,
+        canic_management_protocol::LIMITS,
+    )
+    .map(Some)
 }
 
 fn lifecycle_decode(_bytes: &[u8]) -> Result<(), std::convert::Infallible> {

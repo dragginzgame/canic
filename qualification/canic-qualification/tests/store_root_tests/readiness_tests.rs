@@ -33,8 +33,18 @@ async fn request(root: &Client<'_>, supplier: &Client<'_>) -> publication::InfoR
 }
 
 async fn observe(root: &Client<'_>, request: &publication::InfoRequest) -> publication::InfoReply {
-    root.update("observe_store", publication::INFO, request, STORE_LIMITS)
-        .await
+    match root
+        .update::<_, publication::ObservationReply>(
+            "observe_store",
+            publication::OBSERVATION,
+            &publication::ObservationRequest::Info(request.clone()),
+            STORE_LIMITS,
+        )
+        .await?
+    {
+        publication::Observation::Info(info) => Ok(info),
+        _ => panic!("expected Store info"),
+    }
 }
 
 async fn handover(root: &Client<'_>, supplier: &Client<'_>) {
@@ -164,13 +174,18 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
         root: &Client<'_>,
         input: publication::CustodyRequest,
     ) -> publication::CustodyReply {
-        root.update(
-            "observe_store_custody",
-            publication::CUSTODY,
-            &input,
-            STORE_LIMITS,
-        )
-        .await
+        match root
+            .update::<_, publication::ObservationReply>(
+                "observe_store",
+                publication::OBSERVATION,
+                &publication::ObservationRequest::Custody(input),
+                STORE_LIMITS,
+            )
+            .await?
+        {
+            publication::Observation::Custody(custody) => Ok(custody),
+            _ => panic!("expected Store custody"),
+        }
     }
     let root_bytes = pic.get_stable_memory(root.id).await;
     let store_bytes = pic.get_stable_memory(supplier.id).await;
@@ -201,9 +216,9 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
         expected.pins
     );
     let frame = ic_wire::encode(
-        &input,
+        &publication::ObservationRequest::Custody(input.clone()),
         ic_wire::Encoding::Frame {
-            method: publication::CUSTODY,
+            method: publication::OBSERVATION,
             direction: ic_wire::Direction::Request,
         },
         STORE_LIMITS,
@@ -213,7 +228,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
         pic.update_call(
             root.id,
             CanisterId::anonymous(),
-            "observe_store_custody",
+            "observe_store",
             frame.clone()
         )
         .await
@@ -241,14 +256,14 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
         pic.update_call(
             root.id,
             root.operator,
-            "observe_store_custody",
+            "observe_store",
             vec![0; STORE_LIMITS.bytes + 1]
         )
         .await
         .is_err()
     );
     assert!(
-        pic.update_call(root.id, root.operator, "observe_store_custody", vec![0, 1])
+        pic.update_call(root.id, root.operator, "observe_store", vec![0, 1])
             .await
             .is_err()
     );
@@ -290,7 +305,7 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
     );
     inject(&root, 12).await;
     assert!(
-        pic.update_call(root.id, root.operator, "observe_store_custody", frame)
+        pic.update_call(root.id, root.operator, "observe_store", frame)
             .await
             .is_err()
     );
@@ -365,9 +380,9 @@ async fn store_readiness_follows_handover_without_reserving_an_application_slot(
             root.operator,
             "observe_store",
             ic_wire::encode(
-                &input,
+                &publication::ObservationRequest::Info(input.clone()),
                 ic_wire::Encoding::Frame {
-                    method: publication::INFO,
+                    method: publication::OBSERVATION,
                     direction: ic_wire::Direction::Request
                 },
                 STORE_LIMITS
@@ -408,9 +423,9 @@ async fn store_readiness_refusals_never_turn_missing_authority_into_ready() {
     let store_bytes = pic.get_stable_memory(supplier.id).await;
     let input = request(&root, &supplier).await;
     let frame = ic_wire::encode(
-        &input,
+        &publication::ObservationRequest::Info(input.clone()),
         ic_wire::Encoding::Frame {
-            method: publication::INFO,
+            method: publication::OBSERVATION,
             direction: ic_wire::Direction::Request,
         },
         STORE_LIMITS,
@@ -486,9 +501,9 @@ async fn store_readiness_refusals_never_turn_missing_authority_into_ready() {
         )
         .unwrap(),
         ic_wire::encode(
-            &input,
+            &publication::ObservationRequest::Info(input.clone()),
             ic_wire::Encoding::Frame {
-                method: publication::INFO,
+                method: publication::OBSERVATION,
                 direction: ic_wire::Direction::Response,
             },
             STORE_LIMITS,

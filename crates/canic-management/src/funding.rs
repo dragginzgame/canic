@@ -16,6 +16,7 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
     nodes: 16_384,
     depth: 16,
 };
+const MAX_FUNDED_CHILDREN: usize = 8;
 const CHECK_NS: u64 = 60_000_000_000;
 const BOOK: ic_wire::Encoding = ic_wire::Encoding::Frame {
     method: ic_wire::method_id("canic.application_child_funding.v1"),
@@ -157,9 +158,7 @@ pub async fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, String>
                 Err("child funding approval differs")
             };
         }
-        if b.children.len() >= usize::from(canic_management_protocol::stored::MAX_SUBNET_CHILDREN)
-            || system::time() >= rule.expires_at_ns
-        {
+        if b.children.len() >= MAX_FUNDED_CHILDREN || system::time() >= rule.expires_at_ns {
             return Err("child funding grant expired or ledger full");
         }
         b.children.insert(

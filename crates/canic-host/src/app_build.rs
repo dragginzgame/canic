@@ -10,6 +10,8 @@ use std::{
 /// A replaceable build output, not retained deployment evidence.
 #[derive(Debug, Serialize)]
 pub struct BuiltCanister {
+    /// Version of the Cargo package that produced this Wasm.
+    pub version: String,
     /// Shared app definition name.
     pub canister: String,
     /// Role declared by the application for this slot.
@@ -22,6 +24,8 @@ pub struct BuiltCanister {
     /// App-declared parent slot, if any.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parent: Option<String>,
+    /// Number of callable query, composite query and update exports.
+    pub endpoint_count: usize,
     /// Mounts declared by the built Wasm.
     pub modules: Vec<&'static str>,
     /// Elapsed time for the canister recipe, including any native codec.
@@ -41,7 +45,7 @@ pub fn build_app(
     app: Option<&str>,
     canister: Option<&str>,
 ) -> Result<Vec<BuiltCanister>> {
-    let config = crate::load_config(path)?;
+    let config = crate::config::load_build_config(path, app)?;
     let (app_name, app) = config.select_app(app)?;
     if app.canisters.is_empty() {
         return Err(Error::Invalid("app has no canister build recipes".into()));
@@ -153,16 +157,20 @@ pub fn build_app(
             .map(|(name, _)| name.as_str())
             .collect::<Vec<_>>()
             .join(" ");
-        let source = crate::artifact::build_manifest(&manifest, &recipe.package)?;
+        let mut features = recipe.features.clone();
+        let source =
+            crate::artifact::build_manifest(&manifest, &recipe.package, Some(&mut features))?;
         let crate::artifact::BuildReport {
+            version,
             wasm,
             artifact,
+            endpoint_count,
             modules,
         } = crate::artifact::build_for_role(
             &manifest,
             &source,
             &recipe.package,
-            &recipe.features,
+            &features,
             Some(&output),
             definition.role.as_deref(),
             Some(&children),
@@ -176,16 +184,18 @@ pub fn build_app(
                     &source,
                     &recipe.package,
                     client,
-                    &recipe.features,
+                    &features,
                     &children,
                     &crate::application::codec::output(&wasm),
                 )
             })
             .transpose()?;
         built.push(BuiltCanister {
+            version,
             canister: name.clone(),
             parent: definition.parent.clone(),
             role: definition.role.clone(),
+            endpoint_count,
             modules,
             build_ms: started.elapsed().as_millis(),
             artifact,

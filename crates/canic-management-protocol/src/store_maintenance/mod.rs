@@ -24,6 +24,8 @@ pub const STATUS: u64 = 55;
 pub const RECOVER: u64 = 56;
 /// Read one exact retained approval, including completed historical attempts.
 pub const OBSERVE_ATTEMPT: u64 = 59;
+/// Read the latest attempt (None) or one exact retained approval (Some).
+pub const READ_ATTEMPT: u64 = ic_wire::method_id("observe_store_maintenance");
 /// Retained Store upgrades, including the current attempt. History is never evicted.
 pub const MAX_UPGRADES: usize = 8;
 /// Two bounded metadata commitments and issued-effect evidence; child observations keep their budget.

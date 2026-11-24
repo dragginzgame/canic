@@ -153,6 +153,7 @@ async fn installed_roles(journey: Journey) {
         "configure_capacity",
         stored::CONFIGURE_CAPACITY,
         &stored::SubnetCapacity {
+            allow_large_subnet: false,
             root: root.id.to_text(),
             max_children: 4,
         },

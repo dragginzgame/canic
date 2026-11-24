@@ -111,6 +111,10 @@ bytes, recovery boundaries and qualified predecessor paths:
   reset consumed authority. Unsupported old executables must refuse newer records.
 - Reports, watchers and listings project existing owners. They grant no completion,
   readiness or permission and never sign, reconcile or publish receipts.
+- Before Canic 1.0, use `.v1` for versioned Canic-owned Wire contract names.
+  Hard-cut superseded contracts. If an old approval could decode under a changed
+  contract, give the new contract a distinct domain and test refusal of the old frame.
+  Stable allocation keys and supplier-owned protocol versions have their own contracts.
 - Canic composes endpoints; Platform owns generic IC entrypoint macros, Wire owns
   codecs and Storage owns checked allocation. Passive protocols remain Host-safe.
   Mounting endpoints never implicitly boots storage, timers or services.

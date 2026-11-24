@@ -15,6 +15,8 @@ pub(super) struct PlanRecord {
     target: Option<String>,
     previous_module: Option<String>,
     creation_cycles: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    bootstrap: Option<canic_management_protocol::stored::RootBootstrap>,
     created_at_ns: u64,
     expires_at_ns: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -61,6 +63,7 @@ impl TryFrom<PlanRecord> for Plan {
             target,
             previous_module,
             creation_cycles,
+            bootstrap,
             created_at_ns,
             expires_at_ns,
             deployment,
@@ -81,10 +84,7 @@ impl TryFrom<PlanRecord> for Plan {
             return Err(invalid());
         }
         if !maintenance_additional.is_empty()
-            && (maintenance.is_none()
-                || maintenance_sibling.is_none()
-                || maintenance_additional.len()
-                    > canic_management_protocol::children::ChildId::ALL.len() - 2)
+            && (maintenance.is_none() || maintenance_sibling.is_none())
         {
             return Err(invalid());
         }
@@ -117,7 +117,7 @@ impl TryFrom<PlanRecord> for Plan {
             }
             PlanAction::Remove(value)
         } else if let Some(root) = store_upgrade_root {
-            if version != 2
+            if !matches!(version, 2 | 9)
                 || creation_cycles != 0
                 || store_root.is_some()
                 || management.is_some()
@@ -137,7 +137,7 @@ impl TryFrom<PlanRecord> for Plan {
                 sequence: store_upgrade_sequence,
             }
         } else if let Some(root) = store_root {
-            if version != 2
+            if !matches!(version, 2 | 9)
                 || target.is_some()
                 || previous_module.is_some()
                 || management.is_some()
@@ -171,6 +171,7 @@ impl TryFrom<PlanRecord> for Plan {
                 maintenance_sibling,
             ) {
                 (None, None, None, None, None) => PlanAction::Create {
+                    bootstrap,
                     cycles: creation_cycles,
                 },
                 (None, None, Some(owner), None, None)
@@ -202,6 +203,9 @@ impl TryFrom<PlanRecord> for Plan {
                 _ => return Err(invalid()),
             }
         };
+        if bootstrap.is_some() && !matches!(action, PlanAction::Create { .. }) {
+            return Err(invalid());
+        }
         Ok(Self {
             version,
             network,
@@ -221,6 +225,10 @@ impl TryFrom<Plan> for PlanRecord {
         let target = plan.target().cloned();
         let previous_module = plan.previous_module().cloned();
         let creation_cycles = plan.creation_cycles();
+        let bootstrap = match plan.action {
+            PlanAction::Create { bootstrap, .. } => bootstrap,
+            _ => None,
+        };
         let management = plan.management().cloned();
         let publication = plan.publication().cloned();
         let removal = plan.removal().cloned();
@@ -242,6 +250,7 @@ impl TryFrom<Plan> for PlanRecord {
             target,
             previous_module,
             creation_cycles,
+            bootstrap,
             created_at_ns: plan.created_at_ns,
             expires_at_ns: plan.expires_at_ns,
             deployment: plan.deployment,

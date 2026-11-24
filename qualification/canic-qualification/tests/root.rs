@@ -29,9 +29,14 @@ fn repo() -> PathBuf {
 // Keep the retained inline-custody witnesses explicit. The publication runner
 // qualifies the generated default Root/Store/app topology through the CLI.
 fn inline_fixture(config: &std::path::Path, app: &str) {
-    let mut value = canic_host::load_config(config).unwrap();
-    let slots = &mut value.apps.get_mut(app).unwrap().canisters;
-    assert!(slots.remove("store").is_some());
+    let mut value: toml::Table = std::fs::read_to_string(config).unwrap().parse().unwrap();
+    assert_eq!(
+        value["apps"][app]
+            .as_table_mut()
+            .unwrap()
+            .remove("wasm_store"),
+        Some(toml::Value::Boolean(true))
+    );
     std::fs::write(config, toml::to_string(&value).unwrap()).unwrap();
 }
 
@@ -40,11 +45,11 @@ async fn status(pic: &PocketIc, root: CanisterId) -> Status {
         .query_call(
             root,
             CanisterId::anonymous(),
-            "status",
+            "child_status",
             ic_wire::encode(
-                &(),
+                &canic_management_protocol::children::ChildId::FIRST,
                 ic_wire::Encoding::Frame {
-                    method: STATUS,
+                    method: canic_management_protocol::children::STATUS,
                     direction: ic_wire::Direction::Request,
                 },
                 LIMITS,
@@ -56,7 +61,7 @@ async fn status(pic: &PocketIc, root: CanisterId) -> Status {
     ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: STATUS,
+            method: canic_management_protocol::children::STATUS,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,
@@ -69,11 +74,14 @@ async fn stage(pic: &PocketIc, root: CanisterId, input: &Stage) -> Result<Status
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage",
+            "stage_child",
             ic_wire::encode(
-                input,
+                &canic_management_protocol::children::Request {
+                    slot: canic_management_protocol::children::ChildId::FIRST,
+                    value: input,
+                },
                 ic_wire::Encoding::Frame {
-                    method: STAGE,
+                    method: canic_management_protocol::children::STAGE,
                     direction: ic_wire::Direction::Request,
                 },
                 STAGE_LIMITS,
@@ -85,7 +93,7 @@ async fn stage(pic: &PocketIc, root: CanisterId, input: &Stage) -> Result<Status
     ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: STAGE,
+            method: canic_management_protocol::children::STAGE,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,
@@ -148,11 +156,14 @@ async fn qualify(
         pic.update_call(
             root,
             outsider,
-            "stage",
+            "stage_child",
             ic_wire::encode(
-                &input,
+                &canic_management_protocol::children::Request {
+                    slot: canic_management_protocol::children::ChildId::FIRST,
+                    value: &input
+                },
                 ic_wire::Encoding::Frame {
-                    method: STAGE,
+                    method: canic_management_protocol::children::STAGE,
                     direction: ic_wire::Direction::Request
                 },
                 STAGE_LIMITS
@@ -1525,11 +1536,14 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             .update_call(
                 identities[0].0,
                 CanisterId::anonymous(),
-                "stage_upgrade",
+                "stage_child_upgrade",
                 ic_wire::encode(
-                    &input,
+                    &canic_management_protocol::children::Request {
+                        slot: canic_management_protocol::children::ChildId::FIRST,
+                        value: &input,
+                    },
                     ic_wire::Encoding::Frame {
-                        method: canic_management_protocol::upgrade::STAGE,
+                        method: canic_management_protocol::children::STAGE_UPGRADE,
                         direction: ic_wire::Direction::Request,
                     },
                     STAGE_LIMITS,
@@ -1542,7 +1556,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             ic_wire::decode(
                 &response,
                 ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::upgrade::STAGE,
+                    method: canic_management_protocol::children::STAGE_UPGRADE,
                     direction: ic_wire::Direction::Response,
                 },
                 LIMITS,

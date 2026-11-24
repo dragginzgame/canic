@@ -13,6 +13,13 @@ use std::{
     time::Duration,
 };
 
+fn placement_mount(feature: &str) -> bool {
+    matches!(
+        feature,
+        "shard-pool" | "registry" | "worker-pool" | "reserve-pool" | "child-funding"
+    )
+}
+
 // Leave at least 190 KiB for Candid/envelope overhead below the IC's 2 MiB ingress limit.
 // This is Host direct installation, independent of Root's retained inline-child quota.
 pub(crate) const MAX_WASM: usize = 1_900_000;
@@ -125,6 +132,12 @@ pub struct WasmEndpoint {
     pub name: String,
     /// One of query, composite_query or update.
     pub mode: &'static str,
+    /// Declared Wire request type when included by the build.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub argument: Option<String>,
+    /// Declared Wire response type when included by the build.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply: Option<String>,
 }
 
 /// Read callable function exports in name order without executing the module.
@@ -135,38 +148,85 @@ pub fn endpoints(path: &Path) -> Result<Vec<WasmEndpoint>> {
     exported_methods(&bytes)
 }
 
+fn callable_export(export: wasmparser::Export<'_>) -> Option<(&'static str, &str)> {
+    if export.kind != wasmparser::ExternalKind::Func {
+        return None;
+    }
+    let (prefix, name) = export.name.split_once(' ')?;
+    let mode = match prefix {
+        "canister_query" => "query",
+        "canister_update" => "update",
+        "canister_composite_query" => "composite_query",
+        _ => return None,
+    };
+    (!name.is_empty()).then_some((mode, name))
+}
+
 pub(crate) fn exported_methods(bytes: &[u8]) -> Result<Vec<WasmEndpoint>> {
-    use wasmparser::{ExternalKind, Parser, Payload};
+    use wasmparser::{Parser, Payload};
     admit_bounded(bytes, MAX_ARTIFACT_BYTES)?;
     let mut methods = Vec::new();
+    let mut signatures = std::collections::BTreeMap::new();
     for payload in Parser::new(0).parse_all(bytes) {
-        let Payload::ExportSection(exports) = payload.map_err(supplier)? else {
+        let payload = payload.map_err(supplier)?;
+        if let Payload::CustomSection(section) = &payload
+            && let Some(key) = section
+                .name()
+                .strip_prefix("canic:signature:v1:")
+                .and_then(|s| s.split_once(':'))
+        {
+            let signature = std::str::from_utf8(section.data())
+                .ok()
+                .and_then(|s| s.split_once('\0'))
+                .filter(|(input, output)| {
+                    !input.is_empty() && !output.is_empty() && !output.contains('\0')
+                })
+                .ok_or_else(|| {
+                    Error::Invalid(format!("invalid endpoint signature for {}", section.name()))
+                })?;
+            if signatures.insert(key, signature).is_some() {
+                return Err(Error::Invalid(format!(
+                    "duplicate endpoint signature for {}",
+                    section.name()
+                )));
+            }
+        }
+        let Payload::ExportSection(exports) = payload else {
             continue;
         };
         for export in exports {
-            let export = export.map_err(supplier)?;
-            if export.kind != ExternalKind::Func {
-                continue;
-            }
-            let Some((prefix, name)) = export.name.split_once(' ') else {
-                continue;
-            };
-            let mode = match prefix {
-                "canister_query" => "query",
-                "canister_update" => "update",
-                "canister_composite_query" => "composite_query",
-                _ => continue,
-            };
-            if !name.is_empty() {
+            if let Some((mode, name)) = callable_export(export.map_err(supplier)?) {
                 methods.push(WasmEndpoint {
                     name: name.to_owned(),
                     mode,
+                    argument: None,
+                    reply: None,
                 });
             }
         }
     }
+    for method in &mut methods {
+        if let Some((input, output)) = signatures.get(&(method.mode, method.name.as_str())) {
+            method.argument = Some(display_type(input));
+            method.reply = Some(display_type(output));
+        }
+    }
     methods.sort_by(|a, b| (&a.name, a.mode).cmp(&(&b.name, b.mode)));
     Ok(methods)
+}
+
+// Macro-expanded Rust paths may carry spaces, line breaks and the mount's internal prefix.
+fn display_type(ty: &str) -> String {
+    ty.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .replace(" ::", "::")
+        .replace(":: ", "::")
+        .replace("$crate::endpoint::protocol::", "")
+        .replace(" <", "<")
+        .replace("< ", "<")
+        .replace(" >", ">")
+        .replace(" ,", ",")
 }
 
 /// Build one explicit Cargo package and select its Wasm from artifact records.
@@ -187,10 +247,14 @@ pub fn build(
 /// Published path and identity of the exact bytes from this Cargo invocation.
 #[derive(Debug, Serialize)]
 pub struct BuildReport {
+    /// Resolved Cargo package version of the built Wasm.
+    pub version: String,
     /// Content-addressed default path or the caller's replaceable destination.
     pub wasm: PathBuf,
     /// Digest and size measured before atomic publication.
     pub artifact: Artifact,
+    #[serde(skip)]
+    pub(crate) endpoint_count: usize,
     #[serde(skip)]
     pub(crate) modules: Vec<&'static str>,
 }
@@ -204,7 +268,7 @@ pub fn build_report(
     features: &[String],
     destination: Option<&Path>,
 ) -> Result<BuildReport> {
-    let source = build_manifest(manifest, package)?;
+    let source = build_manifest(manifest, package, None)?;
     build_for_role(
         manifest,
         &source,
@@ -247,6 +311,13 @@ pub(crate) fn build_for_role(
             "Cargo package identity is not one line".into(),
         ));
     }
+    // Cargo's resolved ID ends in either #version or #package@version.
+    let (_, fragment) = package_id.rsplit_once('#').ok_or_else(|| {
+        Error::Invalid(format!(
+            "missing version in resolved Cargo package ID {package_id}"
+        ))
+    })?;
+    let version = fragment.rsplit('@').next().unwrap_or(fragment).to_owned();
     // Cargo's package/feature-specific intermediates remain cached. Its final
     // cdylib filename is shared across variants, so isolate only the final links.
     #[derive(Deserialize)]
@@ -315,7 +386,9 @@ pub(crate) fn build_for_role(
     // Strip large Root builds before hashing for direct install. Other Roots retain
     // symbolized traps for diagnosing refused stable-layout transitions.
     if package == "canic-root"
-        && (features.iter().any(|f| f == "blob" || f == "role-issuer")
+        && (features
+            .iter()
+            .any(|f| f == "blob" || f == "role-issuer" || placement_mount(f))
             || (features.iter().any(|f| f == "auth") && features.iter().any(|f| f == "sharding")))
     {
         command.args([
@@ -352,7 +425,7 @@ pub(crate) fn build_for_role(
     let path = selected_wasm(&output, package_id)?;
     let bytes = crate::store::read(&path, MAX_ARTIFACT_BYTES)?;
     let artifact = admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
-    let modules = compiled_modules(
+    let (modules, endpoint_count) = compiled_metadata(
         &bytes,
         features
             .iter()
@@ -373,21 +446,24 @@ pub(crate) fn build_for_role(
         0o600,
     )?;
     Ok(BuildReport {
+        version,
         wasm,
         artifact,
         modules,
+        endpoint_count,
     })
 }
 
 // Verify the selected metrics build before publishing the exact bytes we inspected.
-fn compiled_modules(bytes: &[u8], endpoint_metrics: bool) -> Result<Vec<&'static str>> {
-    use wasmparser::{ExternalKind, Parser, Payload};
+fn compiled_metadata(bytes: &[u8], endpoint_metrics: bool) -> Result<(Vec<&'static str>, usize)> {
+    use wasmparser::{Parser, Payload};
 
     let mut has_db = false;
     let mut has_auth = false;
     let mut has_blob = false;
     let mut mount = false;
     let mut query = false;
+    let mut endpoint_count = 0;
     for payload in Parser::new(0).parse_all(bytes) {
         match payload.map_err(supplier)? {
             Payload::CustomSection(section) => match section.name() {
@@ -399,9 +475,10 @@ fn compiled_modules(bytes: &[u8], endpoint_metrics: bool) -> Result<Vec<&'static
             },
             Payload::ExportSection(exports) => {
                 for export in exports {
-                    let export = export.map_err(supplier)?;
-                    query |= export.kind == ExternalKind::Func
-                        && export.name == "canister_query metrics";
+                    if let Some(method) = callable_export(export.map_err(supplier)?) {
+                        endpoint_count += 1;
+                        query |= method == ("query", "metrics");
+                    }
                 }
             }
             _ => {}
@@ -413,15 +490,18 @@ fn compiled_modules(bytes: &[u8], endpoint_metrics: bool) -> Result<Vec<&'static
     if !endpoint_metrics && mount {
         return Err(Error::Invalid("endpoint metrics compiled without an explicit selection; select canic/endpoint-metrics in the build recipe or remove the dependency feature".into()));
     }
-    Ok([
-        ("DB", has_db),
-        ("Auth", has_auth),
-        ("Blob", has_blob),
-        ("Endpoint Metrics", mount),
-    ]
-    .into_iter()
-    .filter_map(|(name, present)| present.then_some(name))
-    .collect())
+    Ok((
+        [
+            ("DB", has_db),
+            ("Auth", has_auth),
+            ("Blob", has_blob),
+            ("Endpoint Metrics", mount),
+        ]
+        .into_iter()
+        .filter_map(|(name, present)| present.then_some(name))
+        .collect(),
+        endpoint_count,
+    ))
 }
 
 fn selected_wasm(output: &[u8], package_id: &str) -> Result<PathBuf> {

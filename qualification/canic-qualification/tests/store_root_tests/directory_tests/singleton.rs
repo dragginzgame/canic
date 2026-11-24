@@ -14,6 +14,7 @@ pub(super) async fn exercise(
     let second = capacity::ready_project(root, project, 2).await;
     assert_ne!(first, second);
     let grant = stored::SingletonGrant {
+        receiver: None,
         registry: project.to_text(),
         role: "project_ledger".into(),
         maximum: 2,

@@ -23,11 +23,11 @@ pub const ACTIVATE: u64 = 66;
 /// Complete custody with at most two bounded application argument histories.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: crate::custody::ROOT_HISTORY_LIMITS.bytes
-        + crate::children::ChildId::ALL.len()
+        + crate::children::ChildId::HISTORICAL_SERVICES.len()
             * (1 + crate::upgrade::MAX_UPGRADES)
             * (3 * MAX_ARGUMENT_BYTES + 512),
     allocation: crate::custody::ROOT_HISTORY_LIMITS.allocation
-        + crate::children::ChildId::ALL.len()
+        + crate::children::ChildId::HISTORICAL_SERVICES.len()
             * (1 + crate::upgrade::MAX_UPGRADES)
             * (3 * MAX_ARGUMENT_BYTES + 512)
             * 9,
@@ -170,5 +170,5 @@ pub struct Custody {
     /// Existing complete Root evidence.
     pub root: crate::custody::RootHistory,
     /// Lifecycle arguments for each permanent slot, absent for legacy children.
-    pub applications: [Option<Lifecycle>; crate::children::ChildId::ALL.len()],
+    pub applications: Vec<Option<Lifecycle>>,
 }

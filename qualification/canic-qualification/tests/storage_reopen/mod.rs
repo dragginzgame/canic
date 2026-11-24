@@ -48,10 +48,10 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
             children::artifact("app.wasm"),
             pic.get_time().await.as_nanos_since_unix_epoch(),
         );
-        stage(pic, root, &input).await.unwrap();
+        historical_stage(pic, root, &input).await.unwrap();
         pic.advance_time(Duration::from_secs(11)).await;
         settle(pic).await;
-        let retained = status(pic, root).await;
+        let retained = historical_status(pic, root).await;
         assert_eq!(retained.phase, Phase::Ready);
         let stable = pic.get_stable_memory(root).await;
         assert!(
@@ -60,7 +60,7 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
                 .is_err()
         );
         assert_eq!(pic.get_stable_memory(root).await, stable);
-        assert_eq!(status(pic, root).await, retained);
+        assert_eq!(historical_status(pic, root).await, retained);
         assert_eq!(
             pic.canister_status(root, None).await.unwrap().module_hash,
             Some(digest(&old).to_vec())
@@ -101,11 +101,14 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
         .update_call(
             fresh,
             CanisterId::anonymous(),
-            "stage",
+            "stage_child",
             ic_wire::encode(
-                &input,
+                &canic_management_protocol::children::Request {
+                    slot: canic_management_protocol::children::ChildId::FIRST,
+                    value: &input,
+                },
                 ic_wire::Encoding::Frame {
-                    method: STAGE,
+                    method: canic_management_protocol::children::STAGE,
                     direction: ic_wire::Direction::Request,
                 },
                 STAGE_LIMITS,
@@ -136,8 +139,8 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
     assert_eq!(status(pic, fresh).await.phase, Phase::Empty);
     // The prior Store maintenance layout is refused before its payload can be opened.
     let mut old = stable.clone();
-    let offset = old.windows(4).position(|tag| tag == b"CUJE").unwrap();
-    old[offset..offset + 4].copy_from_slice(b"CUJD");
+    let offset = old.windows(4).position(|tag| tag == b"CUJF").unwrap();
+    old[offset..offset + 4].copy_from_slice(b"CUJE");
     pic.set_stable_memory(fresh, old.clone(), BlobCompression::NoCompression)
         .await;
     let refusal = canic_qualification::upgrade_stopped(
@@ -194,4 +197,66 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
         ic_testkit::server::Deletion::Attempted
     );
     assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+pub(super) async fn historical_status(pic: &PocketIc, root: CanisterId) -> Status {
+    let reply = pic
+        .query_call(
+            root,
+            CanisterId::anonymous(),
+            "status",
+            ic_wire::encode(
+                &(),
+                ic_wire::Encoding::Frame {
+                    method: STATUS,
+                    direction: ic_wire::Direction::Request,
+                },
+                LIMITS,
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: STATUS,
+            direction: ic_wire::Direction::Response,
+        },
+        LIMITS,
+    )
+    .unwrap()
+}
+
+pub(super) async fn historical_stage(
+    pic: &PocketIc,
+    root: CanisterId,
+    input: &Stage,
+) -> Result<Status, Refusal> {
+    let reply = pic
+        .update_call(
+            root,
+            CanisterId::anonymous(),
+            "stage",
+            ic_wire::encode(
+                input,
+                ic_wire::Encoding::Frame {
+                    method: STAGE,
+                    direction: ic_wire::Direction::Request,
+                },
+                STAGE_LIMITS,
+            )
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: STAGE,
+            direction: ic_wire::Direction::Response,
+        },
+        LIMITS,
+    )
+    .unwrap()
 }

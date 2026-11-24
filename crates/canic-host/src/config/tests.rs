@@ -250,6 +250,7 @@ fn declaration(selected: &SelectedFleet) -> Config {
                         top_up_children: vec![],
                         role_receivers: vec![],
                         subnet_child_limit: None,
+                        allow_large_subnet: false,
                         registry: None,
                         standby_pool: None,
                         worker_pools: Vec::new(),
@@ -792,8 +793,17 @@ async fn existing_id_adoption_preserves_legacy_evidence_and_blocks_creation() {
     assert_eq!(snapshot.canisters.len(), 1);
     assert_eq!(snapshot.canisters[0].canister, "aaaaa-aa");
     assert!(snapshot.canisters[0].observation_error.is_some());
-    assert_eq!(snapshot.managers.len(), 1); // Explicit and configured selections deduplicate.
-    assert!(snapshot.managers[0].observation_error.is_some());
+    assert!(snapshot.managers.is_empty());
+    // An unreachable owner cannot establish occupancy. Duplicate selections
+    // must still result in just one observation of each permanent slot.
+    assert_eq!(
+        snapshot
+            .issues
+            .iter()
+            .filter(|issue| issue.contains("permanent service slot"))
+            .count(),
+        canic_management_protocol::children::ChildId::HISTORICAL_SERVICES.len()
+    );
     assert!(
         !serde_json::to_string(&snapshot)
             .unwrap()
@@ -1223,7 +1233,7 @@ expires_at_ns = 1800000000000000000
     for invalid in [
         source.replace("store = { id", "typo = { id"),
         source.replace("ryjl3-tyaaa-aaaaa-aaaba-cai", "rrkah-fqaaa-aaaaa-aaaaq-cai"),
-        source.replace("max_shards = 2", "max_shards = 3"),
+        source.replace("max_shards = 2", "max_shards = 9"),
     ] {
         assert!(
             toml::from_str::<Config>(&invalid)
@@ -1279,16 +1289,6 @@ creation_budget = 2000000000000
             "keys_per_shard = 1\nexpires_at_ns = 0",
             "shard_pool.expires_at_ns = 0 must be a positive Unix timestamp",
         ),
-        (
-            "max_shards = 2",
-            "max_shards = 3",
-            "shard_pool.max_shards = 3 exceeds the default subnet child limit of 2",
-        ),
-        (
-            "max_shards = 2",
-            "max_shards = 2\nincrease_from = 1",
-            "shard_pool.increase_from = 1 requires an explicit subnet_child_limit",
-        ),
     ] {
         let error = toml::from_str::<Config>(&source.replace(setting, value))
             .unwrap()
@@ -1307,14 +1307,20 @@ creation_budget = 2000000000000
             .validate()
             .unwrap();
     }
+    toml::from_str::<Config>(
+        &expanded.replace("subnet_child_limit = 8", "subnet_child_limit = 20010"),
+    )
+    .unwrap()
+    .validate()
+    .unwrap();
     for invalid in [
         expanded.replace("increase_from = 2", "increase_from = 0"),
         expanded.replace("increase_from = 2", "increase_from = 3"),
         expanded.replace("subnet_child_limit = 8", "subnet_child_limit = 2"),
-        expanded.replace("subnet_child_limit = 8", "subnet_child_limit = 9"),
+        expanded.replace("subnet_child_limit = 8", "subnet_child_limit = 0"),
         source.replace("keys_per_shard = 1", "keys_per_shard = 0"),
         source.replace("keys_per_shard = 1", "keys_per_shard = 100001"),
-        source.replace("max_shards = 2", "max_shards = 3"),
+        source.replace("max_shards = 2", "max_shards = 9"),
         source.replace("kind = \"Local\"", "kind = \"Local\", url = \"http://localhost:8000\""),
         source.replace("[[apps.toko.fleets.local.shard_pools]]", "[apps.toko.fleets.local.canisters]\nhub = { id = \"aaaaa-aa\" }\n[[apps.toko.fleets.local.shard_pools]]"),
     ] {
@@ -1343,7 +1349,7 @@ creation_budget = 2000000000000
     assert!(config.select_app(Some("toko")).is_ok());
     assert!(config.select(Some("toko"), Some("local")).is_err());
     for invalid in [
-        source.replace("max_instances = 2", "max_instances = 3"),
+        source.replace("max_instances = 2", "max_instances = 9"),
         source.replace("parent = \"project_hub\"", ""),
         source.replace("max_instances = 2", "max_instances = 2\nkeys_per_shard = 1"),
     ] {
@@ -1408,6 +1414,43 @@ principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai", "r7inp-6aaaa-aaaaa-aaabq-cai"]
         panic!("reserve approval")
     };
     assert_eq!(grant.approval.root, capacity.approval.root);
+    for (setting, limit, opted_in) in [
+        ("", 40_000, false),
+        ("subnet_child_limit = 40000", 40_000, false),
+        (
+            "subnet_child_limit = 40001\nallow_large_subnet = true",
+            40_001,
+            true,
+        ),
+        ("allow_large_subnet = true", 40_000, true),
+    ] {
+        let config: Config =
+            toml::from_str(&source.replace("subnet_child_limit = 4", setting)).unwrap();
+        let selected = config.select(None, None).unwrap();
+        let crate::FleetPlanning::PlacementPools {
+            capacity: Some(capacity),
+            ..
+        } = sharding::preview(
+            Path::new("canic.toml"),
+            &selected,
+            "r7inp-6aaaa-aaaaa-aaabq-cai",
+        )
+        .unwrap()
+        else {
+            panic!("missing capacity approval")
+        };
+        assert_eq!(capacity.approval.max_children, limit);
+        assert_eq!(capacity.approval.allow_large_subnet, opted_in);
+    }
+    let over: Config =
+        toml::from_str(&source.replace("subnet_child_limit = 4", "subnet_child_limit = 40001"))
+            .unwrap();
+    assert!(
+        over.validate()
+            .unwrap_err()
+            .to_string()
+            .contains("allow_large_subnet = true")
+    );
     let decoded: stored::StandbyPolicy = ic_wire::decode(
         &grant.request,
         ic_wire::Encoding::Frame {
@@ -1748,6 +1791,7 @@ creation_budget = 2000000000000
     );
     assert_eq!(child.approval.registry, project.approval.hub);
     assert_eq!(child.approval.role, "project_ledger");
+    assert!(child.approval.receiver.is_none());
     assert_eq!(fleet.config.top_up_children.len(), 1);
     assert_eq!(fleet.config.top_up_children[0].child(), "ledger");
     std::fs::remove_dir_all(dir).unwrap();
@@ -1989,5 +2033,37 @@ fn adding_first_managed_child_recomputes_both_supplied_recipes() {
     assert_eq!(
         source.apps["demo"].canisters.keys().collect::<Vec<_>>(),
         ["hub"]
+    );
+}
+
+#[test]
+fn root_build_unions_pool_mounts_across_fleets() {
+    let miner = include_str!("../../../../apps/examples/miner-pool/canic.toml");
+    let directory = include_str!("../../../../apps/examples/user-directory/canic.toml");
+    let mut source: SourceConfig = toml::from_str(miner).unwrap();
+    let mut other: SourceConfig = toml::from_str(directory).unwrap();
+    let other = other
+        .apps
+        .remove("ex-user-directory")
+        .unwrap()
+        .fleets
+        .remove("local")
+        .unwrap();
+    let app = source.apps.get_mut("ex-miner-pool").unwrap();
+    app.fleets.insert("second".into(), other);
+    let config = Config::try_from(source).unwrap();
+    assert_eq!(
+        config.apps["ex-miner-pool"].canisters["root"]
+            .build
+            .as_ref()
+            .unwrap()
+            .features,
+        [
+            "auth",
+            "child-metrics",
+            "reserve-pool",
+            "shard-pool",
+            "worker-pool"
+        ]
     );
 }

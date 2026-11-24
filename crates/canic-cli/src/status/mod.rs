@@ -582,18 +582,14 @@ pub(crate) fn fleet_preview(
         .as_ref()
         .ok_or_else(|| Error::Invalid("missing Root slot".into()))?;
     let mut rows = vec![[
-        format!("{} {}", root.canister, crate::topology::ROOT_BADGE),
+        crate::topology::ROOT_BADGE.into(),
         "operator".into(),
         format!("{} debit ceiling", cycles(plan.root.creation_cycles())),
     ]];
     let mut modules = format!("Root module: {}\n", plan.root.artifact.sha256);
     if let Some(store) = &plan.store {
         rows.push([
-            format!(
-                "├─ {} {}",
-                store.deployment.canister,
-                crate::topology::STORE_BADGE
-            ),
+            format!("├─ {}", crate::topology::STORE_BADGE),
             format!("{}.result.canister", root.canister),
             format!("{} separate debit ceiling", cycles(store.creation_cycles)),
         ]);
@@ -611,6 +607,23 @@ pub(crate) fn fleet_preview(
         cycles(plan.creation_cycles())
     )
     .expect("String write");
+    if let canic_host::PlanAction::Create {
+        bootstrap: Some(policy),
+        ..
+    } = plan.root.action
+    {
+        writeln!(
+            modules,
+            "Subnet child limit: {}{}",
+            policy.max_children,
+            if policy.allow_large_subnet {
+                " (large subnet approved)"
+            } else {
+                ""
+            }
+        )
+        .expect("String write");
+    }
     for (index, child) in plan.children.iter().enumerate() {
         let branch = if index + 1 < plan.children.len() {
             "├─"
@@ -663,8 +676,8 @@ pub(crate) fn fleet_preview(
             &[Alignment::Left; 3]
         ),
         modules,
-        dispatch(plan.root.created_at_ns, plan.children[0].execute_at_ns),
-        deadline(plan.children[0].execute_at_ns + 600_000_000_000)
+        dispatch(plan.root.created_at_ns, plan.dispatch_at_ns()),
+        deadline(plan.root.expires_at_ns)
     ))
 }
 

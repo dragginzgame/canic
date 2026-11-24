@@ -19,7 +19,7 @@ pub use actor::{attach_parent, parent, role};
 /// In a worker grant, request the exact allocation generation as the inner install payload.
 pub const WORKER_GENERATION: &[u8] = b"canic.worker_generation.v1";
 
-const INSTALL_ID: u64 = ic_wire::method_id("canic.shard_install.v2");
+const INSTALL_ID: u64 = ic_wire::method_id("canic.topology.shard_install.v1");
 const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
     method: INSTALL_ID,
     direction: ic_wire::Direction::Request,

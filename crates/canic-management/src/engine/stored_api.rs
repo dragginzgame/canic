@@ -166,7 +166,10 @@ fn stored_journals() -> stored::Custody {
     let children: children::Custody = super::journals();
     let sources = STATE.with_borrow(|state| {
         let artifacts = &state.as_ref().expect("open engine").artifact.0;
-        ChildId::ALL.map(|slot| artifacts[&slot].sources().cloned())
+        super::service_slots()
+            .into_iter()
+            .map(|slot| artifacts[&slot].sources().cloned())
+            .collect()
     });
     stored::Custody { children, sources }
 }

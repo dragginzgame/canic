@@ -12,7 +12,10 @@ thread_local! {
     static TIMER: RefCell<Option<Once>> = const { RefCell::new(None) };
 }
 
-pub(in crate::engine) fn validate(p: &StandbyPolicy, cap: u8) -> Result<(), String> {
+pub(in crate::engine) fn validate(p: &StandbyPolicy, cap: u32) -> Result<(), String> {
+    let cap = cap.min(u32::from(
+        canic_management_protocol::stored::MAX_RESERVE_ENTRIES,
+    )) as u8;
     if p.root != api::canister_self().to_text()
         || p.minimum_available > cap
         || p.maximum_creations > cap
@@ -84,7 +87,7 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), String> {
         } else {
             policy.imports.as_slice()
         };
-        if pools.occupied_slots() + added.len() > usize::from(cap) {
+        if pools.occupied_slots() + added.len() > cap as usize {
             return Err("imports exceed remaining physical capacity".into());
         }
         if !added.is_empty()

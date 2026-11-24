@@ -18,7 +18,6 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         || store.store.module != store.store.module.to_ascii_lowercase()
         || (store.operation.is_none() && store.sources.iter().all(Option::is_none))
         || store.sources.len() < children.len()
-        || store.sources.len() > ChildId::ALL.len()
         || store.sources[children.len()..].iter().any(Option::is_some)
         || store.history.len() >= canic_management_protocol::store_maintenance::MAX_UPGRADES
         || (!store.history.is_empty() && store.operation.is_none())
@@ -32,7 +31,7 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         if sources.upgrades.len() != child.upgrades.len() {
             return Err(invalid());
         }
-        let slot = ChildId::ALL[index];
+        let slot = ChildId::service(index).ok_or_else(invalid)?;
         let approval = child.creation.approval.as_ref().ok_or_else(invalid)?;
         delivery(
             &store.store.canister,
@@ -153,17 +152,21 @@ fn delivery<A: serde::Serialize>(
 fn expected(plan: &Plan) -> Result<wire::Custody> {
     let children = plan.maintenance().ok_or_else(invalid)?;
     Ok(wire::Custody {
-        children: std::array::from_fn(|i| {
-            children.get(i).cloned().unwrap_or_else(|| {
-                canic_management_protocol::custody::Custody {
-                    creation: canic_management_protocol::Status::default(),
-                    upgrades: Vec::new(),
-                }
+        children: (0..children.len().max(ChildId::HISTORICAL_SERVICES.len()))
+            .map(|i| {
+                children.get(i).cloned().unwrap_or_else(|| {
+                    canic_management_protocol::custody::Custody {
+                        creation: canic_management_protocol::Status::default(),
+                        upgrades: Vec::new(),
+                    }
+                })
             })
-        }),
+            .collect(),
         sources: {
             let sources = &plan.maintenance_store().ok_or_else(invalid)?.sources;
-            std::array::from_fn(|i| sources.get(i).cloned().flatten())
+            (0..children.len().max(ChildId::HISTORICAL_SERVICES.len()))
+                .map(|i| sources.get(i).cloned().flatten())
+                .collect()
         },
     })
 }

@@ -39,14 +39,28 @@ impl super::Pools {
 }
 
 fn arguments(grant: &stored::SingletonGrant, parent: Principal) -> Result<Arguments, Refusal> {
-    let bytes = canic::topology::Install {
+    let binding = canic::topology::Install {
         root: api::canister_self(),
         parent,
         role: grant.role.clone(),
         application: grant.application.as_slice().to_vec(),
-    }
-    .encode()
-    .map_err(|_| Refusal::Binding)?;
+    };
+    let bytes = binding.encode().map_err(|_| Refusal::Binding)?;
+    let bytes = match &grant.receiver {
+        None => bytes,
+        #[cfg(feature = "auth")]
+        Some(template) => {
+            let mut receiver = canic::auth::install::Install::decode(template.as_slice())
+                .map_err(|_| Refusal::Binding)?;
+            if receiver.root != binding.root || !receiver.application.is_empty() {
+                return Err(Refusal::Binding);
+            }
+            receiver.application = bytes;
+            receiver.encode().map_err(|_| Refusal::Binding)?
+        }
+        #[cfg(not(feature = "auth"))]
+        Some(_) => return Err(Refusal::Binding),
+    };
     Arguments::new(bytes).map_err(|_| Refusal::Binding)
 }
 
@@ -155,16 +169,21 @@ pub(super) fn request(role: &str, paid: Option<payment::Settlement>) -> Placemen
                 journal,
             ));
         }
-        if r.children.len() >= usize::from(r.grant.maximum) {
+        if r.children.len() >= r.grant.maximum as usize {
             return Err(Placement::Full);
         }
         if api::time() >= r.grant.expires_at_ns {
             return Err(Placement::GrowthRefused);
         }
-        let slot = ChildId::ALL
-            .into_iter()
+        let slot = state
+            .journal
+            .0
+            .keys()
+            .copied()
+            .filter(|s| s.service_index().is_some())
             .rev()
             .find(|s| state.journal.0[s].0.phase == Phase::Empty)
+            .or_else(|| ChildId::service(super::super::service_slots().len()))
             .ok_or(Placement::Full)?;
         let origin = pools.admit_growth(
             r.slots(),
@@ -193,7 +212,7 @@ pub(super) fn request(role: &str, paid: Option<payment::Settlement>) -> Placemen
     };
     STATE.with_borrow_mut(|cell| {
         let state = cell.as_mut().unwrap();
-        state.pools.permanent[slot.service_index().unwrap()] = true;
+        state.pools.permanent.insert(slot);
         assert!(
             state
                 .pools
@@ -220,7 +239,7 @@ pub(super) fn validate(state: &State) {
         r.grant.registry,
         state.pools.instances.as_ref().expect("registry grant").hub
     );
-    assert!(r.children.len() <= usize::from(r.grant.maximum));
+    assert!(r.children.len() <= r.grant.maximum as usize);
     assert!(state.pools.creation_debit(r.slots()) <= r.grant.creation_budget);
     let mut slots = std::collections::BTreeSet::new();
     for (parent, &(slot, generation)) in &r.children {
@@ -231,7 +250,7 @@ pub(super) fn validate(state: &State) {
             .find(|p| p.generation == *parent)
             .and_then(|p| p.principal.as_deref())
             .expect("installed project");
-        assert!(slots.insert(slot) && state.pools.permanent[slot.service_index().unwrap()]);
+        assert!(slots.insert(slot) && state.pools.permanent.contains(&slot));
         let artifact = &state.artifact.0[&slot];
         let source = &artifact.sources().expect("singleton release").creation;
         assert_eq!(source.operation, generation);

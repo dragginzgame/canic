@@ -2,6 +2,7 @@ use super::*;
 
 fn package(name: &str, source: Option<&str>, version: &str) -> Package {
     Package {
+        features: Default::default(),
         id: format!("{name}@{version}"),
         name: name.into(),
         version: version.into(),

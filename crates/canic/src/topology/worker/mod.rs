@@ -3,7 +3,7 @@ use ic_wire::{Direction, Encoding, Limits};
 use std::num::NonZeroU64;
 
 const FRAME: Encoding = Encoding::Frame {
-    method: ic_wire::method_id("canic.worker_install.v2"),
+    method: ic_wire::method_id("canic.topology.worker_install.v1"),
     direction: Direction::Request,
 };
 const LIMITS: Limits = Limits {

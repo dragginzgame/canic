@@ -32,13 +32,15 @@ impl Snapshot {
 // Historical array positions become explicit identities only at the codec boundary.
 // Empty slots remain present; they are evidence, not missing observations.
 pub(crate) fn children(value: stored::Custody) -> Result<BTreeMap<ChildId, Child>> {
-    if value.children.len() != ChildId::ALL.len() || value.sources.len() != ChildId::ALL.len() {
+    if value.children.len() < ChildId::HISTORICAL_SERVICES.len()
+        || value.children.len() != value.sources.len()
+    {
         return Err(Error::Invalid(
             "historical Root custody cannot represent the admitted child identities".into(),
         ));
     }
-    Ok(ChildId::ALL
-        .into_iter()
+    Ok((0..value.children.len())
+        .map(|index| ChildId::service(index).expect("bounded custody"))
         .zip(value.children.into_iter().zip(value.sources))
         .map(|(id, (journal, sources))| (id, Child { journal, sources }))
         .collect())

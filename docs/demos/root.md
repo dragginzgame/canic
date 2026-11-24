@@ -15,6 +15,13 @@ workspace, the workspace member builds against the workspace lockfile. A starter
 generated with `--canic-source` builds Root and its client from that checkout
 using the checkout’s lockfile.
 
+Fresh Root builds address each child by its slot, including the first. The public
+`child_upgrade_status` query takes the slot and an optional approval. Omit the
+approval to read the latest upgrade or supply it to retrieve the exact retained
+outcome. Controller updates stage and reconcile an explicit slot. Root keeps
+custody reads separate from application observations. Host retains the original
+method names and frames for historical plans with an implicit first slot.
+
 The native Root build type-checks the same management mounts and engine as the
 installed canister. For example, `stage_child` checks the actual controller,
 decodes its request and stages the child in the engine. Scheduled creation
@@ -31,9 +38,8 @@ See the [executor contract](../design/canic-system-design.md#backup-signing-and-
 The installed local witness is `bash scripts/dev/test-root.sh snapshot::` after simulator
 preparation. This is not yet a Backup CLI workflow or an upgrade for existing fleets.
 
-Ordinary fleet plans can deploy up to eight permanent services per fresh Root. A Root built with
-`sharding` can approve a backstop of up to eight children across direct creation,
-shard pools and project pools. The fleet owner sets `subnet_child_limit` and approves the shared ceiling
+Ordinary fleet plans add permanent services under the fleet ceiling. A Root built with
+`sharding` accepts a positive 32-bit fleet backstop. Its placement lists currently hold eight shared shards and eight dedicated instances or workers. The fleet owner sets `subnet_child_limit` and approves the shared ceiling
 on Root before raising either pool above two. Existing fleets keep their grants
 until the controller explicitly raises them. Root-created infrastructure consumes a child slot. The starter’s Store is created
 by the operator and subsequently handed to Root, so it consumes no Root creation slot.
@@ -247,8 +253,10 @@ support downgrading to the pre-migration Root.
 The initial approval fixes its names and permanent slots. A completed one-child
 fleet can add its second child under a separate approval, as described above;
 renaming or removing retained children is refused. This walkthrough does not
-change the existing mainnet starter. Arbitrary tree depth, ordinary whole-fleet plans beyond two
-named children and subtree cascades remain future qualification work.
+change the existing mainnet starter. Fresh Roots allocate permanent service slots on demand.
+The installed discovery witness admits nine services, retries the ninth after a Root upgrade, and observes them
+from an empty Host journal. The fleet view checks every permanent slot within
+its observation budget and reports unavailable observations.
 
 ## Inspect the starter inputs
 
@@ -336,16 +344,14 @@ child to its declared slot or create a completion receipt. These reads consume
 none of the 32 retained signed observation attempts. Root reports and reported
 child identity remain labelled separately from authenticated deployment evidence.
 
-Each selected Root is queried for its original two slots and additional slots in the journal. The original two can include children
-created through another operator's journal. A configured Root can be selected
-explicitly with `canic fleet show --manager ROOT_PRINCIPAL`; its identity must
-already have an exact configured network binding. Confirmed empty additional
-slots are omitted, while unavailable endpoints produce an inventory issue.
-Discovery neither names an undeclared child nor grants custody, and currently
-uses the selected Root’s child journals.
-Terminal and browser reports label each physical slot (`slot 1` or `slot 2`),
-alongside an unambiguous local child name or its reported principal. The slot
-label is diagnostic context, not a new app definition or an inferred tree edge.
+Host queries permanent service slots through the end of the allocated roster on each selected current Root.
+This includes services created through another operator’s journal. Select a
+configured Root with `canic fleet show --manager ROOT_PRINCIPAL`; its principal
+must already have an exact configured network binding. Confirmed empty slots
+are omitted unless a local operation references them. An unavailable observation
+appears in the report. Terminal and browser views label occupied slots with
+their service position and an unambiguous local name or reported principal.
+Application parentage and completion evidence come from their respective owners.
 
 The read-only replicated observation can recover a lost staging response without
 re-signing admission. Its fresh signing authority cannot invoke management
@@ -586,8 +592,9 @@ owns up to 8 MiB per artifact and the derived management cache.
 ## Remaining work
 
 The generated starter qualifies Root, a separate Store and one application
-through one CLI approval, with a separate two-application witness. It does
-not yet admit larger trees, active-work Root maintenance, unbounded upgrade history,
-cascading discovery or subtree operations. Root maintenance preserves
+through one CLI approval. Separate witnesses cover multiple permanent services,
+directory delivery and adding a third service to a fleet with live pools.
+The starter leaves active-work Root maintenance and general subtree operations
+to their own qualification paths. Root maintenance preserves
 its authority and child identity; the stateless greeting makes no application
 data-preservation claim. Existing mainnet profile canisters are unchanged.

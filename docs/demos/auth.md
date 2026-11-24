@@ -667,9 +667,9 @@ not another shipped adapter package or default Canic dependency.
 
 ## Inputs and limits
 
-Both lockfiles select registry engine `ic-auth` 0.49.0, `ic-auth-wire` 0.48.0 and
+Both lockfiles select registry engine `ic-auth` 0.49.3, `ic-auth-wire` 0.49.0 and
 `ic-auth-protocol-types` 0.44.0. The private browser client is packed from the
-same supplier revision, `d5382b197ec794b9f30943a3beb978cbaffe8321`. Session
+independently qualified supplier revision `d5382b197ec794b9f30943a3beb978cbaffe8321`. Session
 admission and read replies carry the verified optional `ext` field (up to
 4096 bytes). In a scoped endpoint, `auth.user_id()` returns these verified bytes
 as `Option<&[u8]>`. Pre-registration sessions may have no binding. Toko can

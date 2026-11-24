@@ -8,21 +8,22 @@ use canic_management_protocol::{
     LIMITS, MAX_WASM, Status, children::ChildId, store_maintenance, upgrade,
 };
 
-use ic_wire::{Bytes, BytesRef, List};
+use ic_wire::{Bytes, BytesRef};
 use serde::{Deserialize, Serialize};
 use std::{borrow::Cow, collections::BTreeMap};
 
 // Persist identities explicitly. The protocol remains the admission ceiling;
 // accepting a new record shape never creates capacity or drops unknown entries.
-type Records<T> = List<(u8, T), { ChildId::SLOT_COUNT }>;
+type Records<T> = Vec<(u32, T)>;
 
 // Older formats require every historical slot. Expanded records retain sorted
 // identities explicitly and need no placeholder for an unallocated child.
 fn identified<T>(entries: Records<T>) -> Result<BTreeMap<ChildId, T>, &'static str> {
-    let entries = entries.into_vec();
     let mut map = BTreeMap::new();
     for (id, value) in entries {
-        let slot = ChildId::placement(usize::from(id)).ok_or("child identity bound")?;
+        let slot = ChildId::placement(id as usize)
+            .or_else(|| ChildId::new(id as usize))
+            .ok_or("child identity bound")?;
         if map.last_key_value().is_some_and(|(last, _)| *last >= slot) {
             return Err("child identity order");
         }
@@ -41,7 +42,14 @@ fn expanded<T>(entries: &BTreeMap<ChildId, T>) -> bool {
 }
 
 fn complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
-    ChildId::ALL.iter().all(|id| entries.contains_key(id))
+    entries
+        .keys()
+        .filter_map(|id| id.service_index())
+        .enumerate()
+        .all(|(expected, actual)| expected == actual)
+        && ChildId::HISTORICAL_SERVICES
+            .iter()
+            .all(|id| entries.contains_key(id))
         && entries.contains_key(&ChildId::PROJECT[0]) == entries.contains_key(&ChildId::PROJECT[1])
 }
 
@@ -53,7 +61,7 @@ fn historical_or_complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
             .eq([ChildId::FIRST, ChildId::SECOND])
 }
 
-const JOURNAL_TAG: &[u8; 4] = b"CUJE";
+const JOURNAL_TAG: &[u8; 4] = b"CUJF";
 const ARTIFACT_TAG: &[u8] = b"CUA2";
 pub(super) const JOURNAL_BYTES: usize = 65_536;
 // Each extra empty record encodes its slot, inline variant and two empty byte vectors.
@@ -64,7 +72,7 @@ pub(super) const ARTIFACT_KEY: &str = "manager.artifacts.v1";
 #[cfg(feature = "sharding")]
 pub(super) const SHARDS_KEY: &str = "manager.shards.v2";
 #[cfg(feature = "sharding")]
-pub(super) const CLAIMS_KEY: &str = "manager.shard_claims.v2";
+pub(super) const PROJECT_INDEX_KEY: &str = "manager.project_index.v1";
 #[cfg(feature = "sharding")]
 pub(super) const WORKER_HISTORY_KEY: &str = "manager.worker_history.v1";
 pub(super) const KEYS: &[&str] = &[
@@ -75,18 +83,17 @@ pub(super) const KEYS: &[&str] = &[
     #[cfg(feature = "sharding")]
     SHARDS_KEY,
     #[cfg(feature = "sharding")]
-    CLAIMS_KEY,
-    #[cfg(feature = "sharding")]
     WORKER_HISTORY_KEY,
+    #[cfg(feature = "sharding")]
+    PROJECT_INDEX_KEY,
     #[cfg(feature = "backup")]
     "manager.snapshot.v1",
 ];
 const JOURNAL_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: JOURNAL_BYTES - 4,
-    allocation: ChildId::ALL.len() * (1 + upgrade::MAX_UPGRADES) * LIMITS.allocation
-        + store_maintenance::MAX_UPGRADES * store_maintenance::LIMITS.allocation,
-    nodes: ChildId::ALL.len() * (1 + upgrade::MAX_UPGRADES) * LIMITS.nodes
-        + store_maintenance::MAX_UPGRADES * store_maintenance::LIMITS.nodes,
+    // Wire charges visits to decoded Rust values in addition to encoded bytes.
+    allocation: JOURNAL_BYTES * 1024,
+    nodes: JOURNAL_BYTES * 8,
     depth: LIMITS.depth + 5,
 };
 const ARTIFACT_LIMITS: ic_wire::Limits = ic_wire::Limits {
@@ -230,22 +237,24 @@ pub(super) struct Journals(
     pub BTreeMap<ChildId, Journal>,
     pub Option<store_maintenance::Status>,
     pub Vec<store_maintenance::Status>,
+    pub Option<canic_management_protocol::stored::RootBootstrap>,
 );
 impl Default for Journals {
     fn default() -> Self {
         Self(
-            ChildId::ALL
+            ChildId::HISTORICAL_SERVICES
                 .into_iter()
                 .map(|id| (id, Journal::default()))
                 .collect(),
             None,
             vec![],
+            None,
         )
     }
 }
 impl Journals {
     fn validate(&self) -> Result<(), &'static str> {
-        if !complete(&self.0) {
+        if self.3.is_some_and(|policy| !policy.valid()) || !complete(&self.0) {
             return Err("child journal identities");
         }
         if self
@@ -267,10 +276,10 @@ impl Journals {
         let entries: Vec<_> = self
             .0
             .iter()
-            .map(|(slot, value)| (slot.index() as u8, value))
+            .map(|(slot, value)| (slot.index() as u32, value))
             .collect();
         let payload = ic_wire::encode(
-            &(entries, &self.1, &self.2),
+            &(entries, &self.1, &self.2, self.3),
             ic_wire::Encoding::Payload,
             JOURNAL_LIMITS,
         )
@@ -284,10 +293,10 @@ impl Journals {
         let payload = bytes
             .strip_prefix(JOURNAL_TAG)
             .ok_or("unsupported Root journal format")?;
-        let (entries, maintenance, history): (Records<Journal>, _, _) =
+        let (entries, maintenance, history, bootstrap): (Records<Journal>, _, _, _) =
             ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
                 .map_err(|_| "identified child journals")?;
-        let value = Self(identified(entries)?, maintenance, history);
+        let value = Self(identified(entries)?, maintenance, history, bootstrap);
         value.validate()?;
         Ok(value)
     }
@@ -297,7 +306,7 @@ pub(super) struct Artifacts(pub BTreeMap<ChildId, Artifact>);
 impl Default for Artifacts {
     fn default() -> Self {
         Self(
-            ChildId::ALL
+            ChildId::HISTORICAL_SERVICES
                 .into_iter()
                 .map(|id| (id, Artifact::default()))
                 .collect(),
@@ -327,7 +336,7 @@ impl Artifacts {
         })
     }
 
-    fn entries(&self) -> Result<Vec<(u8, &Artifact)>, &'static str> {
+    fn entries(&self) -> Result<Vec<(u32, &Artifact)>, &'static str> {
         let inline_bytes: usize = self
             .0
             .values()
@@ -357,7 +366,7 @@ impl Artifacts {
         Ok(self
             .0
             .iter()
-            .map(|(slot, artifact)| (slot.index() as u8, artifact))
+            .map(|(slot, artifact)| (slot.index() as u32, artifact))
             .collect())
     }
 }

@@ -199,7 +199,7 @@ pub(super) enum ArtifactCommand {
         #[arg(long, value_name = "WASM_FILE")]
         output: Option<PathBuf>,
     },
-    /// List query, composite query and update exports from a local Wasm file.
+    /// List callable Wasm exports with their embedded argument and reply types.
     Endpoints {
         #[arg(value_name = "WASM_FILE")]
         wasm: PathBuf,

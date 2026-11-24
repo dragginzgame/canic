@@ -18,7 +18,13 @@ use serde::{Serialize, de::DeserializeOwned};
 
 pub(super) fn source(slot: ChildId, upgrade: bool) -> Option<stored::Delivery> {
     STATE.with_borrow(|state| {
-        let sources = state.as_ref().expect("open engine").artifact.0[&slot].sources()?;
+        let sources = state
+            .as_ref()
+            .expect("open engine")
+            .artifact
+            .0
+            .get(&slot)?
+            .sources()?;
         if upgrade {
             sources.upgrades.last()
         } else {

@@ -285,27 +285,22 @@ fn provisioning_requires_both_an_identified_issuer_and_subject() {
 
 #[test]
 fn an_identical_principal_cannot_confirm_a_replacement_generation() {
-    use crate::sharding::{Allocation, Placement};
-    let shard = Principal::from_slice(&[42, 1]);
-    let allocation = Allocation {
-        slot: 0,
-        generation: [8; 32],
+    use crate::sharding::{Allocation, ShardTarget};
+    let target = ShardTarget {
+        shard: Principal::from_slice(&[42, 1]),
+        allocation: Allocation {
+            slot: 0,
+            generation: [8; 32],
+        },
     };
-    let next = Allocation {
-        generation: [9; 32],
-        ..allocation
-    };
-    assert!(matches_target(
-        &Placement::Assigned(allocation.clone(), shard.to_text()),
-        &allocation,
-        shard
-    ));
-    for stale in [
-        Placement::Assigned(next, shard.to_text()),
-        Placement::Unavailable(allocation.clone(), Some(shard.to_text())),
-        Placement::Unknown,
-    ] {
-        assert!(!matches_target(&stale, &allocation, shard));
+    let mut replacement = target.clone();
+    replacement.allocation.generation[0] ^= 1;
+    assert_eq!(actor::verify_target(Some(&target), &target), Ok(()));
+    for current in [None, Some(&replacement)] {
+        assert_eq!(
+            actor::verify_target(current, &target),
+            Err(Progress::PlacementUnavailable)
+        );
     }
 }
 

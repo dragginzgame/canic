@@ -1,5 +1,112 @@
 # Changelog
 
+## [0.268.0] - 2026-11-24
+
+### 🔄 Changed
+
+- The database adapter and installed DB qualification now select IC DB 0.30.2.
+
+- Canic-owned placement and topology Wire contracts use v1. Rebuild the CLI,
+  Root and participating applications together and generate fresh approvals.
+  Hubs and directory recipients using the previous persisted Wire frames
+  require fresh installations. The exported endpoint names are unchanged.
+
+- A project can fund its singleton ledger and install it with the fleet's stable
+  Auth receiver policy. Include the ledger role in `receiver_policy.roles` and
+  keep the DB nonce in `registry.singleton.install_args`. Rebuild Root and its
+  command codec together for the new `configure_singleton` Wire request.
+
+```sh
+# Review the receiver policy and payer on a bound registry fleet.
+canic fleet plan --app toko --fleet local --controller "$CONTROLLER" --json
+```
+
+- Shared shard assignment, lookup and account release now run in the hub.
+  Root approves pool growth by ordinal and retains installation evidence.
+  This requires a fresh sharding Root and fresh routes for hubs that previously
+  used Root-owned account claims. Requester-funded placements use the new
+  `canic.placement.fund_placement.v1` Wire ID.
+
+```sh
+canic app build --config apps/examples/user-directory/canic.toml
+canic artifact endpoints apps/examples/user-directory/artifacts/root.wasm
+```
+
+- Supplied Root and its command codec select placement endpoints from the app’s
+  declared fleets. Worker and reserve operations ship for Miner Pool. User
+  Directory selects shard placement and Auth. Pinned older Roots retain their
+  original export surface.
+
+```sh
+canic app build --config apps/examples/miner-pool/canic.toml --canister root
+canic artifact endpoints apps/examples/miner-pool/artifacts/root.wasm
+```
+
+- `canic app build` shows each Wasm package’s resolved Cargo version and filename. JSON includes the version and full output path.
+
+```sh
+# Build the template and compare the app, Root and Wasm Store versions.
+canic app build --config apps/template/canic.toml
+# Read the paths for scripts.
+canic app build --config apps/template/canic.toml --json
+```
+
+- Fresh Roots can admit a ninth permanent service and retain its identity across upgrades. A service-only fleet can set the same optional ceiling as a placement fleet. The new journal requires a fresh Root.
+- Managed fleets default `subnet_child_limit` to 40,000. To propose a larger
+  ceiling, set both `allow_large_subnet = true` and an exact `subnet_child_limit`
+  in the fleet table. The controller must submit the resulting Root approval.
+
+```sh
+# Inspect the capacity request for a bound placement fleet before signing.
+canic fleet plan --app toko --fleet local --controller "$CONTROLLER" --json
+```
+
+- Fresh fleet plans list services under `children`, each with an explicit slot.
+  Fleet inspection checks all permanent slots, including services installed by
+  another operator. It reports slots that it cannot observe.
+
+```sh
+# With a configured Root, inspect permanent services without signing.
+canic fleet show
+# Inspect a fresh approval before applying it.
+canic fleet plan --json
+```
+
+- Fresh Roots take an explicit child slot, including the first child. The template now exports 36 endpoints. `child_upgrade_status` selects the latest or an exact approval. Controller reads use `observe_store` for Store info or custody and `observe_store_maintenance` for the current or an exact retained attempt. Rebuild Root and use the matching CLI for new plans.
+
+```sh
+make canic
+canic app build --config apps/template/canic.toml --canister root
+canic artifact endpoints apps/template/artifacts/root.wasm
+```
+
+- `canic artifact endpoints` shows a method table with argument and reply types embedded by current Canic mounts. A dash means the Wasm omitted the signature. Rebuild a local actor to include the metadata.
+
+```sh
+canic app build --config apps/template/canic.toml --canister root
+canic artifact endpoints apps/template/artifacts/root.wasm
+```
+
+- `canic app build` shows the callable endpoint count for each Wasm in the `EPS` column and as `endpoint_count` in JSON.
+
+- Build and fleet plan trees show supplied infrastructure by its badge alone, such as `[ROOT]` and `[WASM_STORE]`.
+
+- Fresh sharding Roots accept a fleet backstop above eight across the existing child slot lists. Set `subnet_child_limit` in the fleet table. Individual slot lists still hold eight each. Project retries use a stable key index. This placement layout requires a fresh sharding Root.
+
+```sh
+# Review a bound fleet’s configured capacity and pool approvals locally.
+canic fleet plan --app toko --fleet local --controller "$CONTROLLER"
+```
+
+- App builds reject explicit Root, Wasm Store and Coordinator canister definitions, including reserved roles on differently named slots. Managed children use `parent = "root"` and apps select Store with `wasm_store = true`.
+
+- The optional Blob and Auth adapters use `ic-blob-storage` 0.110.0 and `ic-auth-wire` 0.49.0. Both now share Canic’s IC Wire 0.30 types, including Blob’s request and reply limits.
+
+```sh
+# Build the asset-library example locally.
+canic app build --config apps/examples/asset-library/canic.toml
+```
+
 ## [0.267.1] - 2026-11-24
 
 - The database adapter now mounts IC DB 0.30.0 schemas. The installed two-store actor also exports a Wire 0.30.0 query accepting and returning IC DB’s `Ulid`. [Canic #91](https://github.com/dragginzgame/canic/issues/91)

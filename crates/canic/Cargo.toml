@@ -70,7 +70,12 @@ metrics = [
 ]
 raw-rand = ["dep:ic-platform-runtime", "ic-platform-runtime/raw-rand"]
 recovery = []
-provisioning = ["sharding", "stateful-role", "method"]
+provisioning = [
+    "ic-platform-types/principal-self-authenticating",
+    "sharding",
+    "stateful-role",
+    "method",
+]
 readiness = ["dep:ic-platform-runtime"]
 role-attestation = ["role-verification", "storage"]
 role-verification = ["topology", "method", "dep:ic-platform"]

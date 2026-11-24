@@ -451,14 +451,14 @@ async fn observe_upgrade(
             let (method, id, bytes) = if let Some(slot) = slot {
                 (
                     "child_upgrade_status",
-                    children::OBSERVE_UPGRADE,
+                    children::UPGRADE_STATUS,
                     ic_wire::encode(
                         &children::Request {
                             slot,
-                            value: approval,
+                            value: Some(approval),
                         },
                         ic_wire::Encoding::Frame {
-                            method: children::OBSERVE_UPGRADE,
+                            method: children::UPGRADE_STATUS,
                             direction: ic_wire::Direction::Request,
                         },
                         canic_management_protocol::LIMITS,
@@ -716,18 +716,28 @@ pub async fn fleet_with_config(
             })
             .map(|op| op.slot)
             .collect();
-        // None is the historical first-slot endpoint, not a third child. Keep
-        // its query for old owners while discovering both current physical slots.
-        let first = retained_slots
-            .contains(&Some(ChildId::FIRST))
-            .then_some(ChildId::FIRST);
-        for slot in [first, Some(ChildId::SECOND)].into_iter().chain(
-            ChildId::ALL[2..]
-                .iter()
-                .copied()
-                .map(Some)
-                .filter(|slot| retained_slots.contains(slot)),
-        ) {
+        // With no journal, identify a single-slot predecessor by its certified
+        // module hash. An unavailable hash gives no reason to use its old ABI.
+        let known_single_slot = retained_slots.is_empty()
+            && tokio::time::timeout_at(owner_deadline, async {
+                operation::module(&network.client()?, network::principal(&manager)?).await
+            })
+            .await
+            .is_ok_and(|result| {
+                result.is_ok_and(|hash| crate::maintenance::implicit_child_root(&hash))
+            });
+        let implicit_first = known_single_slot
+            || (retained_slots.contains(&None) && !retained_slots.contains(&Some(ChildId::FIRST)));
+        for (index, id) in (0..).map_while(ChildId::service).enumerate() {
+            if known_single_slot && id != ChildId::FIRST {
+                issues.push(format!("{manager} on {network_id}: historical Root exposes only its original service; other slots cannot be observed"));
+                break;
+            }
+            let slot = if implicit_first && id == ChildId::FIRST {
+                None
+            } else {
+                Some(id)
+            };
             let budget = owner_deadline
                 .saturating_duration_since(tokio::time::Instant::now())
                 .min(Duration::from_secs(5));
@@ -778,14 +788,28 @@ pub async fn fleet_with_config(
             .await
             .map_err(|_| Error::Blocked("manager observation timed out".into()))
             .and_then(|value| value);
-            if slot == Some(ChildId::SECOND) && !retained_slots.contains(&slot) {
+            if slot.is_some() && !retained_slots.contains(&slot) {
                 match &report {
+                    Ok(report)
+                        if empty_report(report) && index >= ChildId::HISTORICAL_SERVICES.len() =>
+                    {
+                        break;
+                    }
                     Ok(report) if empty_report(report) => continue,
                     Err(error) => {
                         issues.push(format!(
-                            "{manager} on {network_id}: second child slot unknown: {}",
+                            "{manager} on {network_id}: permanent service slot {} unknown: {}",
+                            index + 1,
                             error.to_string().chars().take(500).collect::<String>()
                         ));
+                        if index + 1 >= ChildId::HISTORICAL_SERVICES.len()
+                            && retained_slots
+                                .iter()
+                                .flatten()
+                                .all(|id| id.service_index().is_none_or(|i| i <= index))
+                        {
+                            break;
+                        }
                         continue;
                     }
                     Ok(_) => {}

@@ -37,8 +37,9 @@ pub(super) async fn approve(root: &Client<'_>, max_children: u8) {
         "configure_capacity",
         stored::CONFIGURE_CAPACITY,
         &stored::SubnetCapacity {
+            allow_large_subnet: false,
             root: root.id.to_text(),
-            max_children,
+            max_children: u32::from(max_children),
         },
         stored::LIMITS,
     )
@@ -219,6 +220,7 @@ pub(super) async fn exercise(
     } else {
         let users = place(false, 1).await;
         settle(root.pic).await;
+        assert!(matches!(place(false, 1).await, Placement::Assigned(..)));
         if shard.keys_per_shard == 1 {
             assert_eq!(place(false, 2).await, Placement::Full);
         } else {
@@ -288,21 +290,21 @@ pub(super) async fn exercise(
         )
         .await
         .unwrap();
-        use canic::sharding::{AssignShard, LookupShard};
-        let request = ("profiles".to_string(), [1u8; 32]);
-        let assign = AssignShard::encode_request(&request).unwrap();
+        use canic::sharding::GrowShard;
+        let request = ("profiles".to_string(), 0);
+        let assign = GrowShard::encode_request(&request).unwrap();
         assert!(
             root.pic
-                .update_call(root.id, project, AssignShard::NAME, assign.clone())
+                .update_call(root.id, project, GrowShard::NAME, assign.clone())
                 .await
                 .is_err()
         );
         let bytes = root
             .pic
-            .update_call(root.id, hub, AssignShard::NAME, assign)
+            .update_call(root.id, hub, GrowShard::NAME, assign)
             .await
             .unwrap();
-        let Placement::Pending(new) = AssignShard::decode_reply(&bytes).unwrap() else {
+        let Placement::Pending(new) = GrowShard::decode_reply(&bytes).unwrap().0 else {
             panic!("second pool should reserve its own shard")
         };
         settle(root.pic).await;
@@ -320,12 +322,12 @@ pub(super) async fn exercise(
             .update_call(
                 root.id,
                 hub,
-                LookupShard::NAME,
-                LookupShard::encode_request(&request).unwrap(),
+                GrowShard::NAME,
+                GrowShard::encode_request(&request).unwrap(),
             )
             .await
             .unwrap();
-        let Placement::Assigned(reopened, id) = LookupShard::decode_reply(&bytes).unwrap() else {
+        let Placement::Assigned(reopened, id) = GrowShard::decode_reply(&bytes).unwrap().0 else {
             panic!("missing second pool assignment")
         };
         assert_eq!(new, reopened);
@@ -344,7 +346,7 @@ pub(super) async fn separate_hub_pools(
     users: CanisterId,
     discovery: CanisterId,
 ) {
-    use canic::sharding::{AssignShard, GrowShard, LookupShard, ReleaseShard, ShardTarget};
+    use canic::sharding::GrowShard;
     let mut children = std::collections::BTreeSet::new();
     for (pool, parent, other) in [
         ("user_shard", users, discovery),
@@ -388,26 +390,12 @@ pub(super) async fn separate_hub_pools(
             .unwrap();
         assert_eq!(
             assign().await,
-            Err("placement reply unavailable".to_owned())
+            Err("shard capacity reply unavailable".to_owned())
         );
         root.pic
             .start_canister(root.id, Some(root.operator))
             .await
             .unwrap();
-        let reply = root
-            .pic
-            .update_call(
-                root.id,
-                parent,
-                LookupShard::NAME,
-                LookupShard::encode_request(&(pool.to_owned(), [42; 32])).unwrap(),
-            )
-            .await
-            .unwrap();
-        assert_eq!(
-            LookupShard::decode_reply(&reply).unwrap(),
-            Placement::Unknown
-        );
         let Placement::Pending(original) = assign().await.unwrap() else {
             panic!("expected first allocation")
         };
@@ -417,42 +405,16 @@ pub(super) async fn separate_hub_pools(
         };
         assert_eq!(allocation, original);
         // The sibling is an installed hub; on the second pass it also owns another pool.
-        let account = (pool.to_owned(), [42; 32]);
-        for (method, request) in [
-            (
-                LookupShard::NAME,
-                LookupShard::encode_request(&account).unwrap(),
-            ),
-            (
-                AssignShard::NAME,
-                AssignShard::encode_request(&account).unwrap(),
-            ),
-            (
-                GrowShard::NAME,
-                GrowShard::encode_request(&(pool.to_owned(), 0)).unwrap(),
-            ),
-        ] {
-            assert!(
-                root.pic
-                    .update_call(root.id, other, method, request)
-                    .await
-                    .is_err(),
-                "{method} admitted the wrong hub"
-            );
-        }
-        let target = ShardTarget {
-            allocation,
-            shard: id.parse().unwrap(),
-        };
-        let release = ReleaseShard::encode_request(&([42; 32], target)).unwrap();
-        let refused = root
-            .pic
-            .update_call(root.id, other, ReleaseShard::NAME, release)
-            .await
-            .unwrap();
-        assert_eq!(
-            ReleaseShard::decode_reply(&refused).unwrap(),
-            Err("assignment changed".into())
+        assert!(
+            root.pic
+                .update_call(
+                    root.id,
+                    other,
+                    GrowShard::NAME,
+                    GrowShard::encode_request(&(pool.to_owned(), 0)).unwrap()
+                )
+                .await
+                .is_err()
         );
         let id = CanisterId::from_text(id).unwrap();
         assert!(children.insert(id));

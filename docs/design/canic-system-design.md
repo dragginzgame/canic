@@ -259,7 +259,7 @@ roles. Root and Wasm Store remain separate deployed owners; optional coordinatio
 does not turn application canisters into a prescribed Canic base class. Managed
 operations still require the explicit readiness and preservation contracts below.
 
-The experimental `canic-root` now supports up to eight permanent services on a fresh Root,
+The experimental `canic-root` assigns permanent services stable ordinals on a fresh Root,
 using the same bounded management engine as the profile manager. Its controller
 is the external operator; its created application's sole controller is Root.
 Lifecycle mounting and application readiness remain explicit in each canister.
@@ -318,7 +318,7 @@ The CLI now generates a standalone greeting workspace whose artifact passes that
 same installed qualification. Managed-child CLI plan/apply now pins Root code,
 retains exact admission attempts and recovers completion through replicated
 observations. One child upgrade is now locally qualified, including persistent
-application state and interrupted callbacks. The runtime now provides eight permanent child slots, each with a bounded history
+application state and interrupted callbacks. The runtime assigns permanent child slots on demand, each with a bounded history
 for eight serial upgrades and independent continuations. Both share finite cycle
 and artifact custody budgets. The installed CLI qualifies both children through
 creation, independent upgrades, recovery and fleet views. Root maintenance
@@ -338,6 +338,9 @@ only the manager's autonomous worker is controlled by that manager. This is not 
 fleet-wide executor or a general Root. Its artifact bytes are retained in the
 manager; those deployments predate the separate Store decision. Moving their
 custody requires the qualified transition below, not an automatic migration.
+
+A supplied Root builds the union of endpoint families needed by the app’s declared fleets.
+Shard pools, dedicated registries, worker pools, reserve management and ongoing child funding select their own mounts. A worker pool approved for return to reserve also needs reserve operations. On upgrade, retained pool approvals require their corresponding mounts. Funding cancellation remains available on placement Roots because an application parent can hold the payment grant. Compiling a mount grants no spending or caller authority. Root continues to own installation, capacity reservations and effect evidence. Each hub owns its durable account routes. Root accepts growth requests for a named pool and ordinal from its approved hub.
 
 ### Repository and workspace boundary
 
@@ -936,22 +939,10 @@ allocation returns unavailable with the original identity and generation.
 The hard backstop is 100,000 live placement keys per shard. Toko's intended
 fleet policy is 10,000 keys per shard with two shards. Rollover at 10,001
 and refusal at 20,001 must preserve lookup and retry for existing assignments.
-Fresh sharding Roots index each 32-byte key with the immutable namespace allocated to its pool in a stable B-tree. Each insert
-or release commits with its slot count in the same message. Reopen checks index
-cardinality against retained counts without scanning every key. The old
-inline-ledger storage layout refuses this upgrade. No route is reset or migrated.
-
-Use the frozen legacy highest-random-weight (HRW) selector for **new** keys.
-Its two rankings serve different purposes. Among ready shards with spare
-capacity, score the partition-key bytes followed by the raw shard principal
-bytes. When growth is authorized, score each free slot with the pool name's
-UTF-8 bytes, byte `0xff`, partition-key bytes and the little-endian `u32` slot
-number. Both take the first eight SHA-256 digest bytes as a big-endian `u64`
-and choose the highest score, retaining the first candidate on a tie. Present
-candidates in deterministic order. Reuse identical key bytes on retry.
-Read the retained binding or pending operation before ranking, and recheck
-capacity when committing. This selects placement without rebalancing accounts
-when a new shard appears.
+The hub retains its account index and occupancy in the same Storage bootstrap.
+Root retains one slot and installation generation per capacity ordinal. The
+PLS9 layout requires a fresh sharding Root and excludes account claims. Use
+fresh hub state when switching from a system that retained those claims at Root.
 
 Shard assignments are durable from the first reservation. Directory delivery
 records acknowledged membership of each named pool and withdrawn generations.
@@ -965,16 +956,14 @@ indexed account assignments and per-shard occupancy, including pending writes.
 The application supplies the authenticated subject and owns its business records. Under the same named grant it requests
 the next zero-based capacity ordinal only when all local capacity is reserved.
 Root owns one allocation per ordinal and returns the grant’s keys-per-shard
-limit. Existing accounts keep their routes across growth. A grant that has
-started either form of placement cannot mix Root-owned keys and hub-local
-occupancy. Legacy `377fbce` in `domain/policy/pure/placement/sharding` retains
+limit. Existing accounts keep their routes across growth. Legacy `377fbce` in `domain/policy/pure/placement/sharding` retains
 assignments before ranking new candidates. Canic reuses that rule locally and
 keeps creation and reserve custody at Root. Applications call
 `sharding::routes::assign_shard(pool, subject, authorize)` on registration and
 `sharding::routes::get_shard(pool, subject)` on reads. Canic requests and recovers
 the original growth ordinal internally. The application can distinguish a reserved
-route from a completed business write through its own admission or provisioning state. Root persists this mode in the placement ledger.
-Account counts for this mode belong to the hub. A capacity ordinal retained at
+route from a completed business write through its own admission or provisioning state.
+Account counts belong to the hub. A capacity ordinal retained at
 Root identifies an installed shard. Releasing an account must never remove that
 ordinal. Managed retirement of hub-local routes requires the hub to acknowledge
 evacuation of the exact allocation.
@@ -989,8 +978,7 @@ acknowledges zero occupancy for that generation and withdrawal completes. The
 hub reserves destination capacity with `routes::prepare_move` and commits the
 exact source/destination with `routes::confirm_move` after application confirmation.
 Both reservations count while the copy is pending. If the pool cannot admit
-a destination, the source route stays intact. Fresh hubs use the v2 route
-frame. Root retains the hub’s zero acknowledgement in the placement ledger alongside the original
+a destination, the source route stays intact. Fresh hubs use the `canic.placement.hub_routes.v1` frame. Root retains the hub’s zero acknowledgement in the placement ledger alongside the original
 capacity claim. Repeating the operator drain recovers a missing acknowledgement.
 Legacy `377fbce` tests in `ops/storage/placement/sharding/tests` cover
 release decrementing occupancy and concurrent assignment retaining the first
@@ -1012,7 +1000,7 @@ The shard checks its installed parent and target before synchronously inserting 
 acknowledging the immutable identity. Mutable profile fields do not identify a
 reservation. These ordinary application branches replace the row mapping traits.
 The optional bounded IC DB account lookup remains independent of this protocol.
-This reuses the frozen HRW and capacity evidence above.
+The hub fills available seats in roster order. Root ranks free physical slots for new capacity using the existing ordinal HRW inputs.
 
 Root already retains the immutable allocation generation for each placement key
 and reports a replaced generation as unavailable. For a pending predecessor row,
@@ -1063,23 +1051,21 @@ journal and binds them to the generation and Store pin. An empty argument
 uses the existing Store-only path. Replaying the exact grant is idempotent.
 One Root can authorize several named shard pools, named worker pools and a registry. Multiple shard pools share an explicit subnet child limit. Each
 shard admits 1–100,000 live keys. Without an explicit subnet ceiling each pool
-is limited to two children. A controller-approved subnet ceiling allows up to eight
+is limited to two children. A controller-approved subnet ceiling counts all addressable
 children in total, including permanent children created by that Root. Each creation reserves the engine's fixed creation attachment.
 The deadline restricts new child effects. Existing capacity and lookup persist.
 
-After Toko authenticates a user and derives a stable 32-byte key, its hub can call:
+After authenticating a user, the hub can reserve the same route on retry:
 
 ```rust
-let placement = canic::sharding::assign(root, account_key).await?;
+let placement = canic::sharding::routes::assign_shard(pool, subject, authorize).await?;
+let existing = canic::sharding::routes::get_shard(pool, subject);
 ```
 
-Only `Assigned` supplies a usable shard. Persist the allocation generation and
-principal in the application reservation. After a lost reply or `Pending`, use
-`canic::sharding::lookup(root, account_key)`. `Unknown` means Root has no such
-claim. `Busy` reserves nothing for the new key, `Full` exhausts lifetime capacity,
-and `GrowthRefused` denies new creation. `Unavailable` preserves the original
-allocation and its known principal. The configured hub alone can read these
-private results. A controller can observe a child or reconcile its exact
+A local lookup yields a target only after the hub has committed the route.
+A pending growth request reserves an ordinal. Repeat assignment for the same
+subject to finish it. Root keeps the original growth effect recoverable.
+A controller can observe a child or reconcile its exact
 Store-bound approval; older custody endpoints refuse once pool work is admitted.
 Compatible Root upgrades reopen the pool lease. Existing Root images need a
 separately qualified migration before enabling this feature.
@@ -1125,8 +1111,7 @@ Shared tenancy is a first-class qualification workload. Do not equate one logica
 ### Delivery and upgrade qualification
 
 The four patterns are the intended product scope; their implementations enter
-incrementally with a named consumer and bounded fixture. Fresh Roots support up to
-eight permanent services. The controller’s subnet ceiling bounds the combined
+incrementally with a named consumer and bounded fixture. Fresh Roots append permanent service identities as needed. The controller’s subnet ceiling bounds the combined
 reservations of those services and their placement pools.
 
 For [Canic #75](https://github.com/dragginzgame/canic/issues/75), service names
@@ -1139,7 +1124,13 @@ This follows legacy revision `377fbce`, whose
 [activation regression](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-control-plane/src/ops/component_registry/tests/activation_children/mod.rs)
 retains an unfinished child operation under its original owner.
 
-The CUJE journal is a fresh-layout hard cut. A Root using CUJD or earlier keeps its
+Fresh fleet approvals encode permanent services as one collection with explicit slot
+IDs. The dispatch window belongs to the fleet approval. Unsigned fleet discovery
+examines every permanent service slot under its observation budget, including
+when Host has no local journal. Placement pools keep their own inventories.
+Historical approvals retain their original positional encoding and digest. Fresh service-only fleets may set the same optional ceiling. Host binds the ceiling and bootstrap service count into the Root creation approval and install bytes. An exact retry of an admitted service consumes no new slot. The 40,000 default is an admission backstop. Aggregate journal, custody and directory budgets remain independent constraints.
+
+The CUJF journal is a fresh-layout hard cut. A Root using CUJE or earlier keeps its
 original executable. On a fresh Root, adding a service preserves the existing
 canister principals, signed attempts, funding approvals and upgrade targets.
 
@@ -1556,7 +1547,7 @@ the receiver envelope; both Root bindings must agree. The installing Root is
 the management caller for this flow. Fresh shards persist the parent and role together and reopen both on upgrade.
 The hub reopens its existing routing Root. Parent admission compares the actual
 caller before argument copying. Topology grants no controller or Auth authority.
-Planning an unselected pool preserves its application argument bytes. Topology-enabled pools require a fresh approval with the v2 install frame.
+Planning an unselected pool preserves its application argument bytes. Topology-enabled pools require a fresh approval with the `canic.topology.shard_install.v1` frame.
 This preserves the immediate-parent check from the frozen legacy user hub/shard
 journey at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` without its role catalogue.
 
@@ -1625,11 +1616,15 @@ The `placement_pools` result carries `instances.request` for
 `configure_instances` and, when configured, `shards.request` for
 `configure_shards`. Planning is local. Root checks the submitting controller.
 
-For one Root serving one managed subnet, set `subnet_child_limit` in the fleet
-table (1–8). Set `max_shards` or `max_instances` in each pool. A fresh fleet
-submits the planned `capacity.request` to `configure_capacity` before its pool
-grants. The subnet ceiling is fixed once admitted. Each pool still consumes its
-own approved cycle budget and observes its own deadline.
+One Root owns its fleet's managed-child ceiling on one subnet. Permanent-service and placement plans
+default to 40,000 when `subnet_child_limit` is absent. A smaller explicit limit
+takes precedence. A larger limit requires both a finite `subnet_child_limit`
+and `allow_large_subnet = true` in the fleet table. The controller submits the
+exact Root-bound capacity request. A flag alone leaves the default in force;
+approval of a count changes no pool grant, funding or deadline. This is the
+operator's explicit exception for a large subnet, not proof of subnet ownership.
+An installed ceiling can be raised above 40,000 by a new explicit large-subnet
+approval. Exact retries preserve the ceiling; replaying a lower approval refuses.
 
 For a fleet combining permanent canisters and elastic placement, the approved
 `subnet_child_limit` is the absolute backstop for every child this Root creates
@@ -1641,6 +1636,15 @@ local commit as the creation intent. An unresolved create keeps its reservation.
 Returning an existing assignment or placing another key on an existing shard
 consumes no additional child capacity. A pool count increase cannot raise the
 subnet backstop.
+
+The fresh sharding Root indexes project keys in stable storage. Resolve an exact
+retry through that index before reserving a slot. On reopen, check every project
+claim against its indexed position and refuse a missing or inconsistent index.
+The previous sharding Root layout requires its original executable.
+Fresh placement Roots use the PLS9 ledger and the `canic.placement.configure_capacity.v1` frame, which retains the explicit large-subnet opt-in. Roots with PLS8 or earlier ledgers require their original executable. The subnet ceiling is separate from the capacities of permanent services,
+shared shards and registry instances. A project and its singleton ledger each
+consume one reservation. The current slot representation still bounds each
+family separately; larger registries need indexed child journals and Store custody.
 
 Root counts ordinary reservations already present when the ceiling is admitted.
 Its mixed-fleet ledger records which ordinary slots belong to permanent children.
@@ -2059,6 +2063,12 @@ Legacy `377fbce` distinguished per-project singleton ledgers from globally index
 Root services in `docs/design/archive/0.64-service-singleton-topology/0.64-design.md`.
 The descendant's logical parent determines its singleton scope; publication binds
 the common Root and Store independently of the depth of that parent.
+For a singleton selected by the fleet receiver policy, the grant retains the
+Auth install template and the original application bytes. Root binds the
+requesting project's principal inside the topology frame at allocation, then
+wraps that frame in the approved receiver policy. Unselected ledgers use the
+plain topology frame. Both paths share the same parent-generation reservation
+and payment receipt. Receiver enrollment and post-upgrade refresh remain explicit.
 
 A fleet with an approved child ceiling can upgrade an ordinary Store-backed
 permanent service in its existing slot. New Host plans use the child-deployment
@@ -2176,7 +2186,7 @@ callback faults qualify recovery through observation without repeating stop.
 Root replacement preserves that record. Stopped status under the approved old
 code and sole Root control establishes the drain boundary, even when observed
 after the dispatch deadline. This does not rely on canister-version arithmetic.
-The CUJE journal retains current and completed attempts in the original checked
+The CUJF journal retains current and completed attempts in the original checked
 allocation. Existing child-only reads refuse Store custody; after a second
 attempt, full-history observation is required so Root maintenance cannot omit any
 predecessor. Older executables reject the new journal rather than losing history.
@@ -2198,7 +2208,7 @@ first page; its cursor retains the removed flag, and its digest has a separate
 domain including the entry kind. Historical attempts retain method 113, their
 original digest and name/version ordering, including an existing refusal. Their
 Wire discriminants and Host JSON encodings stay exact. Versioned evidence uses a
-new discriminant rejected by historical readers; CUJE preserves that evidence across supported Root
+new discriminant rejected by historical readers; CUJF preserves that evidence across supported Root
 upgrades. Fresh attempts require method 117; missing support blocks before
 stop without falling back.
 

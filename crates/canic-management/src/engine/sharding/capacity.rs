@@ -4,12 +4,12 @@ use canic_management_protocol::{Refusal, stored};
 
 pub(super) fn valid_capacity(capacity: &stored::SubnetCapacity) -> bool {
     capacity.root == api::canister_self().to_text()
-        && (1..=stored::MAX_SUBNET_CHILDREN).contains(&capacity.max_children)
+        && stored::SubnetCapacity::permits_limit(capacity.max_children, capacity.allow_large_subnet)
 }
 
 /// Approve one shared lifetime ceiling for this subnet owner.
 /// # Errors
-/// Refuses another ceiling, existing conflicting management custody, or a limit below usage.
+/// Refuses conflicting grants, except a controller-approved increase above the default backstop.
 /// # Panics
 /// Requires controller authority and valid Root state.
 pub fn configure_capacity(capacity: stored::SubnetCapacity) -> Result<(), Refusal> {
@@ -21,27 +21,48 @@ pub fn configure_capacity(capacity: stored::SubnetCapacity) -> Result<(), Refusa
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
         if let Some(old) = &state.pools.capacity {
-            return if old == &capacity {
-                Ok(())
-            } else {
-                Err(Refusal::Occupied)
-            };
+            if old == &capacity {
+                return Ok(());
+            }
+            if !capacity.allow_large_subnet
+                || capacity.max_children <= stored::DEFAULT_SUBNET_CHILD_LIMIT
+                || capacity.max_children <= old.max_children
+            {
+                return Err(Refusal::Occupied);
+            }
+            state.pools.capacity = Some(capacity);
+            state.pool.set(state.pools.encode());
+            return Ok(());
         }
-        let permanent = canic_management_protocol::children::ChildId::ALL.map(|slot| {
-            state.journal.0[&slot].0.approval.is_some() && state.pools.shard_at(slot).is_none()
-        });
-        if state.pools.used() + permanent.iter().filter(|&&used| used).count()
-            > usize::from(capacity.max_children)
+        if let Some(initial) = state.journal.3
+            && capacity.max_children > initial.max_children
+            && !(capacity.allow_large_subnet
+                && capacity.max_children > stored::DEFAULT_SUBNET_CHILD_LIMIT)
+        {
+            return Err(Refusal::Occupied);
+        }
+        let permanent: std::collections::BTreeSet<_> = state
+            .journal
+            .0
+            .keys()
+            .copied()
+            .filter(|slot| {
+                slot.service_index().is_some()
+                    && state.journal.0[slot].0.approval.is_some()
+                    && state.pools.shard_at(*slot).is_none()
+            })
+            .collect();
+        if state.pools.used() + permanent.len() > capacity.max_children as usize
             || state
                 .pools
                 .shards
                 .values()
-                .any(|l| l.approval.max_shards > capacity.max_children)
+                .any(|l| u32::from(l.approval.max_shards) > capacity.max_children)
             || state
                 .pools
                 .instances
                 .as_ref()
-                .is_some_and(|p| p.max_instances > capacity.max_children)
+                .is_some_and(|p| u32::from(p.max_instances) > capacity.max_children)
         {
             return Err(Refusal::Occupied);
         }
@@ -67,7 +88,7 @@ pub fn increase_pool(change: stored::IncreasePool) -> Result<(), Refusal> {
             .as_ref()
             .ok_or(Refusal::Binding)?
             .max_children;
-        let (initial, previous, next, history, deadline) = match change {
+        let (initial, previous, next, history, deadline, family_limit) = match change {
             stored::IncreasePool::Shards(mut old, next) => {
                 let ledger = state
                     .pools
@@ -85,6 +106,7 @@ pub fn increase_pool(change: stored::IncreasePool) -> Result<(), Refusal> {
                     next,
                     &mut ledger.increases,
                     initial.expires_at_ns,
+                    stored::MAX_SHARDS,
                 )
             }
             stored::IncreasePool::Instances(mut old, next) => {
@@ -99,10 +121,11 @@ pub fn increase_pool(change: stored::IncreasePool) -> Result<(), Refusal> {
                     next,
                     &mut state.pools.instance_increases,
                     initial.expires_at_ns,
+                    stored::MAX_INSTANCES,
                 )
             }
         };
-        if next <= previous || next > cap {
+        if next <= previous || u32::from(next) > cap || next > family_limit {
             return Err(Refusal::Binding);
         }
         let mut current = initial;

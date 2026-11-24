@@ -127,18 +127,21 @@ async fn root_removal_keeps_pins_labels_and_exact_identity_before_expired_author
         publish(&root, &supplier, Command::Observe(removed.release.clone())).await,
         Err(Error::Store(store::Error::NotFound))
     );
-    let info: store::Info = root
-        .update::<_, wire::InfoReply>(
+    let wire::Observation::Info(info) = root
+        .update::<_, wire::ObservationReply>(
             "observe_store",
-            wire::INFO,
-            &wire::InfoRequest {
+            wire::OBSERVATION,
+            &wire::ObservationRequest::Info(wire::InfoRequest {
                 store: supplier.id.to_text(),
                 expires_at_ns: input.expires_at_ns,
-            },
+            }),
             STORE_LIMITS,
         )
         .await
-        .unwrap();
+        .unwrap()
+    else {
+        panic!("expected Store info")
+    };
     assert_eq!(info.releases, 3); // Removed labels still consume quota.
     maintain(&root).await;
     assert_eq!(pic.get_stable_memory(root.id).await, root_before);

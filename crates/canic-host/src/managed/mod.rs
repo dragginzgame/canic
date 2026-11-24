@@ -194,7 +194,7 @@ pub fn create_managed_plan(
             fleet: selection.fleet.clone(),
             canister: canister.into(),
         };
-        slot = permanent_slot(&children, &deployment, role_service, reservations)?;
+        slot = permanent_slot(&children, &deployment, reservations)?;
     }
     let arguments = if input.target.is_none() && selection.config.receiver_selected(canister) {
         if selection
@@ -241,7 +241,12 @@ pub fn create_managed_plan(
         .transpose()?;
     let now = crate::now()?;
     let execute_at_ns = execute_at_ns.unwrap_or(now);
-    let pool_child_evidence = source.is_some() && selection.config.subnet_child_limit.is_some();
+    let fleet = &selection.config;
+    let pool_child_evidence = source.is_some()
+        && (!fleet.shard_pools.is_empty()
+            || fleet.registry.is_some()
+            || !fleet.worker_pools.is_empty()
+            || fleet.standby_pool.is_some());
     let (mut plan, bytes) = plan::prepare(
         wasm,
         input,
@@ -272,7 +277,6 @@ pub fn create_managed_plan(
 fn permanent_slot<'a>(
     children: &[&str],
     deployment: &DeploymentName,
-    explicit: bool,
     reservations: impl Iterator<Item = (Option<ChildId>, Option<&'a DeploymentName>)>,
 ) -> Result<Option<ChildId>> {
     let mut occupied = std::collections::BTreeSet::new();
@@ -300,17 +304,15 @@ fn permanent_slot<'a>(
             ));
         }
     }
-    let mut available = ChildId::ALL.into_iter().filter(|s| !occupied.contains(s));
+    let mut available = (0..)
+        .map_while(ChildId::service)
+        .filter(|s| !occupied.contains(s));
     for &name in children.iter().filter(|name| !retained.contains(**name)) {
         let slot = available.next().ok_or_else(|| {
-            Error::Invalid(format!(
-                "no permanent slot available for {name}: Root supports {} permanent services",
-                ChildId::ALL.len()
-            ))
+            Error::Invalid(format!("permanent service identity exhausted for {name}"))
         })?;
         if name == deployment.canister {
-            selected =
-                Some((explicit || children.len() > 1 || slot != ChildId::FIRST).then_some(slot));
+            selected = Some(Some(slot));
         }
     }
     selected.ok_or_else(|| Error::Invalid("child missing from permanent slots".into()))

@@ -157,7 +157,7 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     .unwrap();
     let journal = PathBuf::from(creation["state_dir"].as_str().unwrap());
     let creation_bytes = std::fs::read(journal.join(creation_id).join("fleet.json")).unwrap();
-    let before = status(owner.client(), root).await;
+    let before = storage_reopen::historical_status(owner.client(), root).await;
     let child_code = std::fs::read(artifacts.join("app-v2.wasm")).unwrap();
     let mut old_upgrade_record = None;
     if completed {
@@ -343,7 +343,10 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     }
     // Explicit fixture recovery restarts the retained old executable, not a replacement.
     owner.client().start_canister(root, None).await.unwrap();
-    assert_eq!(status(owner.client(), root).await, before);
+    assert_eq!(
+        storage_reopen::historical_status(owner.client(), root).await,
+        before
+    );
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

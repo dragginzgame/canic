@@ -49,7 +49,7 @@ fn only_the_current_journal_format_is_admitted() {
     let current = Journals::default().to_bytes().unwrap().into_owned();
     for tag in [
         b"CUJ2", b"CUJ3", b"CUJ4", b"CUJ5", b"CUJ6", b"CUJ7", b"CUJ8", b"CUJ9", b"CUJA", b"CUJB",
-        b"CUJC", b"CUJD",
+        b"CUJC", b"CUJD", b"CUJE",
     ] {
         let mut bytes = current.clone();
         bytes[..4].copy_from_slice(tag);
@@ -72,7 +72,7 @@ fn only_the_current_journal_format_is_admitted() {
 fn identified_journal_refuses_missing_duplicate_reordered_and_unknown_ids() {
     for ids in [
         vec![],
-        vec![0_u8],
+        vec![0_u32],
         vec![0, 0],
         vec![1, 0],
         vec![0, 2],
@@ -86,6 +86,7 @@ fn identified_journal_refuses_missing_duplicate_reordered_and_unknown_ids() {
                 entries,
                 None::<store_maintenance::Status>,
                 Vec::<store_maintenance::Status>::new(),
+                None::<canic_management_protocol::stored::RootBootstrap>,
             ),
             JOURNAL_LIMITS,
         );
@@ -99,9 +100,10 @@ fn identified_journal_refuses_missing_duplicate_reordered_and_unknown_ids() {
     let bytes = encoded(
         JOURNAL_TAG,
         &(
-            vec![(0_u8, &journal), (1, &journal)],
+            vec![(0_u32, &journal), (1, &journal)],
             None::<store_maintenance::Status>,
             Vec::<store_maintenance::Status>::new(),
+            None::<canic_management_protocol::stored::RootBootstrap>,
         ),
         JOURNAL_LIMITS,
     );
@@ -141,7 +143,7 @@ fn artifact_collection_refuses_partial_ambiguous_and_truncated_records() {
     let payload = Artifact::default();
     for ids in [
         vec![],
-        vec![0_u8],
+        vec![0_u32],
         vec![0, 0],
         vec![1, 0],
         vec![0, 2],
@@ -293,7 +295,7 @@ fn growth_preserves_child_and_store_evidence_in_one_format() {
             activation_request: None,
         }),
     };
-    let mut journals = Journals(Journals::default().0, Some(record.clone()), vec![]);
+    let mut journals = Journals(Journals::default().0, Some(record.clone()), vec![], None);
     journals.0.insert(ChildId::FIRST, journal("first"));
     for additions in [
         &[][..],
@@ -304,7 +306,7 @@ fn growth_preserves_child_and_store_evidence_in_one_format() {
             journals.0.insert(*slot, journal("added"));
         }
         let bytes = journals.to_bytes().unwrap().into_owned();
-        assert!(bytes.starts_with(b"CUJE"));
+        assert!(bytes.starts_with(b"CUJF"));
         journals = Journals::from_bytes(&bytes).unwrap();
         assert_eq!(
             journals.0[&ChildId::FIRST].0.worker.as_deref(),
@@ -324,10 +326,10 @@ fn project_custody_requires_paired_ordered_records() {
         artifacts.0.insert(slot, Artifact::default());
     }
     let mut bytes = journals.to_bytes().unwrap().into_owned();
-    assert!(bytes.starts_with(b"CUJE"));
+    assert!(bytes.starts_with(b"CUJF"));
     assert_eq!(
         Journals::from_bytes(&bytes).unwrap().0.len(),
-        ChildId::ALL.len() + 2
+        ChildId::HISTORICAL_SERVICES.len() + 2
     );
     bytes[..4].copy_from_slice(b"CUJ9");
     assert!(Journals::from_bytes(&bytes).is_err());
@@ -339,7 +341,7 @@ fn project_custody_requires_paired_ordered_records() {
             .unwrap()
             .0
             .len(),
-        ChildId::ALL.len() + 2
+        ChildId::HISTORICAL_SERVICES.len() + 2
     );
     bytes[..4].copy_from_slice(b"CUA5");
     assert!(Artifacts::from_bytes(bytes.into()).is_err());
@@ -364,7 +366,7 @@ fn extended_custody_round_trips_sparse_placement_identities() {
     artifacts.0.insert(slot, Artifact::default());
     let encoded_journals = journals.to_bytes().unwrap();
     let encoded_artifacts = artifacts.to_bytes().unwrap();
-    assert!(encoded_journals.starts_with(b"CUJE"));
+    assert!(encoded_journals.starts_with(b"CUJF"));
     assert!(encoded_artifacts.starts_with(b"CUA7"));
     assert_eq!(
         Journals::from_bytes(&encoded_journals)
@@ -386,5 +388,28 @@ fn extended_custody_round_trips_sparse_placement_identities() {
         let entries = ids.map(|id| (id, Artifact::default())).to_vec();
         let bytes = encoded(b"CUA7", &entries, ARTIFACT_LIMITS);
         assert!(Artifacts::from_bytes(bytes.into()).is_err());
+    }
+}
+
+#[test]
+fn service_identities_beyond_one_byte_reopen_without_aliasing() {
+    let mut journals = Journals::default();
+    let mut artifacts = Artifacts::default();
+    for ordinal in ChildId::HISTORICAL_SERVICES.len()..=256 {
+        let slot = ChildId::service(ordinal).unwrap();
+        journals
+            .0
+            .insert(slot, journal(&format!("service-{ordinal}")));
+        artifacts.0.insert(slot, Artifact::default());
+    }
+    let loaded = Journals::from_bytes(&journals.to_bytes().unwrap()).unwrap();
+    let reopened = Artifacts::from_bytes(artifacts.to_bytes().unwrap()).unwrap();
+    assert!(loaded.0.keys().eq(reopened.0.keys()));
+    for ordinal in ChildId::HISTORICAL_SERVICES.len()..=256 {
+        let slot = ChildId::service(ordinal).unwrap();
+        assert_eq!(
+            loaded.0[&slot].0.worker.as_ref().unwrap(),
+            &format!("service-{ordinal}")
+        );
     }
 }

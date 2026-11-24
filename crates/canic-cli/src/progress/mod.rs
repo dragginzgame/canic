@@ -65,14 +65,20 @@ pub(crate) fn next(
     format!("\nNext:\n{}\n", escape(&parts.join(" ")))
 }
 
-fn build_row(label: String, item: &BuiltCanister) -> [String; 5] {
+fn build_row(label: String, item: &BuiltCanister) -> [String; 7] {
     [
         label,
-        item.wasm.display().to_string(),
+        item.version.clone(),
+        item.wasm
+            .file_name()
+            .expect("built Wasm filename")
+            .to_string_lossy()
+            .into_owned(),
         format!(
             "{:.2} KiB",
             f64::from(u32::try_from(item.artifact.bytes).expect("bounded Wasm size")) / 1024.0
         ),
+        item.endpoint_count.to_string(),
         if item.modules.is_empty() {
             "—".into()
         } else {
@@ -103,9 +109,17 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
         .map(|(label, item)| build_row(label, item))
         .collect();
     let table = plain_table(
-        &["CANISTER", "WASM", "SIZE", "MODULES", "BUILD TIME"],
+        &[
+            "CANISTER",
+            "VERSION",
+            "WASM",
+            "SIZE",
+            "EPS",
+            "MODULES",
+            "BUILD TIME",
+        ],
         &rows,
-        &[Left, Left, Right, Left, Right],
+        &[Left, Left, Left, Right, Right, Left, Right],
     );
     format!("Built app canisters\n\n{table}\n\nNothing deployed.\n")
 }

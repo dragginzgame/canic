@@ -132,18 +132,17 @@ pub(crate) fn preview(
         .or_else(|| standby.as_ref().map(|g| &g.approval.root))
         .or_else(|| shards.first().map(|g| &g.approval.root))
         .ok_or_else(|| Error::Invalid("no placement pools".into()))?;
-    let capacity = fleet
+    let max_children = fleet
         .subnet_child_limit
-        .map(|max_children| {
-            grant(
-                stored::SubnetCapacity {
-                    root: root.clone(),
-                    max_children,
-                },
-                stored::CONFIGURE_CAPACITY,
-            )
-        })
-        .transpose()?;
+        .unwrap_or(stored::DEFAULT_SUBNET_CHILD_LIMIT);
+    let capacity = Some(grant(
+        stored::SubnetCapacity {
+            root: root.clone(),
+            max_children,
+            allow_large_subnet: fleet.allow_large_subnet,
+        },
+        stored::CONFIGURE_CAPACITY,
+    )?);
 
     if instances.is_none() && workers.is_empty() && standby.is_none() && shards.len() == 1 {
         let PoolGrant { approval, request } = shards.remove(0);
@@ -161,16 +160,20 @@ pub(crate) fn preview(
             approval: Box::new(approval),
         });
     }
-    let singleton = if let (Some(rule), Some(registry)) = (
-        fleet.registry.as_ref().and_then(|r| r.singleton.as_ref()),
-        instances.as_ref(),
-    ) {
-        if fleet.receiver_selected(&rule.component) {
-            return Err(Error::Invalid(format!(
-                "registry.singleton.component = {:?}: Auth-wrapped singleton installations require a qualified receiver policy",
-                rule.component
-            )));
-        }
+    let singleton = if let (Some(policy), Some(registry)) = (&fleet.registry, &instances)
+        && let Some(rule) = &policy.singleton
+    {
+        let receiver = fleet
+            .receiver_selected(&rule.component)
+            .then(|| {
+                fleet.pool_receiver_arguments(
+                    &rule.component,
+                    &policy.root,
+                    &registry.approval.root,
+                    Arguments::new(Vec::new()).map_err(supplier)?,
+                )
+            })
+            .transpose()?;
         let role = fleet.canisters[&rule.component]
             .role
             .clone()
@@ -180,12 +183,10 @@ pub(crate) fn preview(
                     rule.component
                 ))
             })?;
-        let cap = fleet.subnet_child_limit.ok_or_else(|| {
-            Error::Invalid("registry.singleton requires subnet_child_limit".into())
-        })?;
-        super::super::positive_count("registry.singleton.maximum", rule.maximum, cap)?;
+        super::super::positive_count("registry.singleton.maximum", rule.maximum, max_children)?;
         Some(Box::new(grant(
             stored::SingletonGrant {
+                receiver,
                 registry: registry.approval.hub.clone(),
                 role,
                 reference: stored::Reference {

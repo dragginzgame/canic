@@ -80,7 +80,7 @@ fn owned_outcomes_preserve_each_unassigned_state() {
 }
 
 #[test]
-fn keyed_methods_scope_only_shared_shard_requests_by_pool() {
+fn registry_contracts_preserve_keyed_request_and_reply_frames() {
     use crate::method::Contract;
     use ic_wire::{Direction, Encoding};
 
@@ -116,8 +116,6 @@ fn keyed_methods_scope_only_shared_shard_requests_by_pool() {
         assert_eq!(M::decode_reply(&reply).unwrap(), placement);
     }
 
-    check::<AssignShard>("assign_shard", 91, &("users".into(), [0xa5; 32]));
-    check::<LookupShard>("lookup_shard", 92, &("users".into(), [0xa5; 32]));
     check::<AssignInstance>(
         "assign_instance",
         ic_wire::method_id("canic.assign_instance.v1"),
@@ -199,4 +197,21 @@ fn standby_inspection_covers_claimed_assets_and_retained_transfer_history() {
         let reply = InspectStandby::encode_reply(&rows).unwrap();
         assert_eq!(InspectStandby::decode_reply(&reply).unwrap(), rows);
     }
+}
+
+#[test]
+fn previous_payment_frame_cannot_settle_an_allocation_after_the_cut() {
+    use crate::method::Contract;
+    use payment::{Demand, FundPlacement};
+
+    let old = ic_wire::encode(
+        &(Demand::Instance([1; 32]), 10_u128),
+        ic_wire::Encoding::Frame {
+            method: ic_wire::method_id("fund_placement"),
+            direction: ic_wire::Direction::Request,
+        },
+        FundPlacement::REQUEST,
+    )
+    .unwrap();
+    assert!(FundPlacement::decode_request(&old).is_err());
 }

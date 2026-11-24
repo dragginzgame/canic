@@ -215,23 +215,31 @@ async fn place(request: (Option<String>, u8)) -> Result<canic::sharding::Placeme
     let root = DIRECTORY.with_borrow(|index| index.as_ref().expect("open hub").publisher());
     let (pool, key) = request;
     match pool {
-        Some(pool) => canic::sharding::assign(root, &pool, [key; 32])
-            .await
-            .map_err(str::to_owned),
+        Some(pool) => canic::sharding::routes::assign_shard(
+            &pool,
+            Principal::self_authenticating([key; 32]),
+            || Ok::<_, std::convert::Infallible>(()),
+        )
+        .await
+        .map_err(|err| match err {
+            canic::sharding::routes::ReservationError::Placement(e) => e.to_owned(),
+            canic::sharding::routes::ReservationError::Authorization(never) => match never {},
+        }),
         None => canic::sharding::assign_instance(root, [key; 32])
             .await
             .map_err(|error| format!("{error:?}")),
     }
 }
 
-/// Have the installed hub release one qualified route using its retained Root.
+// release_route
+// Release the fixture account from its exact draining allocation.
+// guard  : actual hub controller
+// limits : shard Wire frame
 #[cfg(feature = "placement")]
-#[canic::update(limits = canic::sharding::LIMITS)]
-async fn release_route(
-    input: (canic::sharding::Key, canic::sharding::ShardTarget),
+#[canic::update(limits = canic::sharding::LIMITS, guard = canic::guard::require_controller)]
+fn release_route(
+    (key, target): (canic::sharding::Key, canic::sharding::ShardTarget),
 ) -> Result<(), String> {
-    let root = DIRECTORY.with_borrow(|index| index.as_ref().expect("open hub").publisher());
-    canic::method::call::<canic::sharding::ReleaseShard>(root, 5, &input)
-        .await
-        .expect("release transport")
+    canic::sharding::routes::release("users", Principal::self_authenticating(key), &target)
+        .map_err(str::to_owned)
 }

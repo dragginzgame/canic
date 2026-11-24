@@ -104,7 +104,7 @@ fn compatible(pools: &Pools, grant: &stored::InstancePool) -> bool {
     pools
         .capacity
         .as_ref()
-        .is_some_and(|c| grant.max_instances <= c.max_children)
+        .is_some_and(|c| u32::from(grant.max_instances) <= c.max_children)
         && pools
             .workers
             .values()
@@ -120,10 +120,9 @@ fn compatible(pools: &Pools, grant: &stored::InstancePool) -> bool {
 }
 
 fn installed_hub(state: &super::super::State, hub: &str) -> bool {
-    ChildId::ALL.into_iter().any(|slot| {
+    state.pools.permanent.iter().copied().any(|slot| {
         let child = &state.journal.0[&slot].0;
-        state.pools.permanent[slot.service_index().expect("permanent slot")]
-            && child.phase == canic_management_protocol::Phase::Ready
+        child.phase == canic_management_protocol::Phase::Ready
             && child.worker.as_deref() == Some(hub)
     })
 }
@@ -145,7 +144,7 @@ pub fn configure_workers(grant: stored::InstancePool) -> Result<(), Refusal> {
                 Err(Refusal::Occupied)
             });
         }
-        if pools.workers.len() >= usize::from(pools.pool_limit()) {
+        if pools.workers.len() >= usize::from(pools.pool_limit().min(stored::MAX_INSTANCES)) {
             return Some(Err(Refusal::Binding));
         }
         (!installed_hub(state, &grant.hub) || !compatible(pools, &grant))

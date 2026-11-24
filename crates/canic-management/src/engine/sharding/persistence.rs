@@ -22,24 +22,14 @@ impl Pools {
             ..LIMITS
         };
         let payload = ic_wire::encode(self, ic_wire::Encoding::Payload, limits);
-        let mut bytes = b"PLS5".to_vec();
+        let mut bytes = b"PLS9".to_vec();
         bytes.extend(payload.expect("bounded placement ledger"));
         bytes
     }
 }
 
-pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
+pub(in crate::engine) fn open(bytes: &[u8]) -> Pools {
     let pools = decode(bytes);
-    assert_eq!(
-        claim_count,
-        pools
-            .shards
-            .values()
-            .flat_map(|l| l.counts)
-            .map(u64::from)
-            .sum::<u64>(),
-        "placement index count"
-    );
     for (&slot, generation) in &pools.draining {
         let ledger = pools.shard_at(slot).expect("draining pool");
         assert!(
@@ -48,7 +38,7 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
                 && ledger.principals[slot.index()].is_some()
         );
     }
-    if pools.permanent.contains(&true) {
+    if !pools.permanent.is_empty() {
         pools
             .capacity
             .as_ref()
@@ -57,19 +47,21 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
     if let Some(capacity) = &pools.capacity {
         assert!(
             capacity::valid_capacity(capacity)
-                && pools.occupied_slots() <= usize::from(capacity.max_children)
+                && pools.occupied_slots() <= capacity.max_children as usize
         );
     }
-    for (initial, increases) in std::iter::once((
+    for (initial, increases, family_limit) in std::iter::once((
         pools.instances.as_ref().map(|a| a.max_instances),
         &pools.instance_increases,
+        stored::MAX_INSTANCES,
     ))
-    .chain(
-        pools
-            .shards
-            .values()
-            .map(|l| (Some(l.approval.max_shards), &l.increases)),
-    ) {
+    .chain(pools.shards.values().map(|l| {
+        (
+            Some(l.approval.max_shards),
+            &l.increases,
+            stored::MAX_SHARDS,
+        )
+    })) {
         if !increases.is_empty() {
             let cap = pools
                 .capacity
@@ -80,7 +72,9 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
             assert!(
                 original < increases[0]
                     && increases.windows(2).all(|w| w[0] < w[1])
-                    && increases.last() <= Some(&cap)
+                    && increases
+                        .last()
+                        .is_some_and(|&count| count <= family_limit && u32::from(count) <= cap)
             );
         }
     }
@@ -103,9 +97,14 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
         }
     }
     let mut owned = std::collections::BTreeSet::new();
-    let mut namespaces = std::collections::BTreeSet::new();
     for (name, l) in &pools.shards {
-        assert!(usize::from(l.namespace) < pools.shards.len() && namespaces.insert(l.namespace));
+        let ordinals = l
+            .ordinals
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(ordinals.len(), l.ordinals.len());
+        assert_eq!(ordinals, l.allocated_slots().collect());
         assert_eq!(name, &l.approval.pool);
         for slot in l.allocated_slots() {
             assert!(owned.insert(slot));
@@ -113,14 +112,8 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
         assert!(valid_limits(&l.approval) && l.approval.max_shards <= pools.pool_limit());
         check_shard_topology(&l.approval).expect("retained shard topology");
         assert!(pools.creation_debit(l.allocated_slots()) <= l.approval.creation_budget);
-        for (index, count) in l.counts.iter().copied().enumerate() {
-            assert!(count <= l.approval.keys_per_shard);
-            assert!(count == 0 || ChildId::SHARDS.iter().any(|slot| slot.index() == index));
-            let occupied = count > 0
-                || (l.generations[index].is_some()
-                    && pools.draining.keys().any(|slot| slot.index() == index));
-            assert!(l.principals[index].is_none() || occupied);
-            assert_eq!(occupied, l.generations[index].is_some());
+        for (index, principal) in l.principals.iter().enumerate() {
+            assert!(principal.is_none() || l.generations[index].is_some());
         }
     }
     pools
@@ -128,22 +121,16 @@ pub(in crate::engine) fn open(bytes: &[u8], claim_count: u64) -> Pools {
 
 fn decode(bytes: &[u8]) -> Pools {
     let payload = bytes
-        .strip_prefix(b"PLS5")
+        .strip_prefix(b"PLS9")
         .expect("placement custody requires its original Root");
     let pools: Pools =
         ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("placement custody");
     assert!(
         pools
-            .local_routes
+            .evacuated
             .iter()
-            .all(|pool| pools.shards.contains_key(pool))
+            .all(|slot| pools.draining.contains_key(slot) && pools.shard_at(*slot).is_some())
     );
-    assert!(pools.evacuated.iter().all(|slot| {
-        pools.draining.contains_key(slot)
-            && pools
-                .shard_at(*slot)
-                .is_some_and(|ledger| pools.local_routes.contains(&ledger.approval.pool))
-    }));
     validate_inventory(&pools);
     super::payment::validate(&pools);
     for (slot, grant) in &pools.funding {
@@ -196,7 +183,7 @@ fn validate_inventory(pools: &Pools) {
         );
     }
     // Each acquisition origin has its own lifetime bound. Exported rows remain receipts.
-    assert!(standby.len() <= 5 * usize::from(stored::MAX_SUBNET_CHILDREN));
+    assert!(standby.len() <= 5 * usize::from(stored::MAX_RESERVE_ENTRIES));
     let mut refill_sequence = 0;
     let mut principals = std::collections::BTreeSet::new();
     let mut slots = std::collections::BTreeSet::new();
@@ -245,7 +232,9 @@ fn validate_inventory(pools: &Pools) {
             Asset::Claimed(id, allocation)
             | Asset::Released(id, allocation)
             | Asset::Reset(id, allocation, ..) => {
-                let slot = ChildId::placement(allocation.slot as usize).expect("standby slot");
+                let slot = ChildId::placement(allocation.slot as usize)
+                    .or_else(|| ChildId::new(allocation.slot as usize))
+                    .expect("standby slot");
                 assert!(slots.insert(slot));
                 if matches!(asset, Asset::Released(..) | Asset::Reset(..)) {
                     let (_, claim) = pools.worker_at(slot).expect("released worker claim");
@@ -351,7 +340,7 @@ fn validate_inventory(pools: &Pools) {
                 && pools.draining.get(&slot) == Some(&target.allocation.generation)
                 && ledger.principals[slot.index()].as_deref()
                     == Some(r.input.approval.shard.as_str())
-                && pools.remaining(slot, ledger) == 0
+                && pools.evacuated.contains(&slot)
                 && r.input.approval.root == api::canister_self().to_text()
                 && r.input.reference.store == ledger.approval.reference.store
                 && r.input.reference.manifest.valid()

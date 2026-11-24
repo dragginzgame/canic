@@ -127,6 +127,7 @@ fn planning_requires_exactly_one_controller_source() {
 #[test]
 fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_path_in_json() {
     let mut build = BuiltCanister {
+        version: "0.7.1".into(),
         canister: "user_shard".into(),
         role: None,
         wasm: "artifacts/user_shard.wasm".into(),
@@ -135,6 +136,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
             sha256: "fixture digest".into(),
         },
         parent: Some("user_hub".into()),
+        endpoint_count: 7,
         modules: vec!["DB", "Auth"],
         build_ms: 2_340,
         client: None,
@@ -142,12 +144,19 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
     let table = built(std::slice::from_ref(&build));
     assert!(!table.contains("PARENT"));
     assert!(table.contains("user_shard (parent: user_hub)"));
+    assert!(table.contains("EPS"));
+    assert!(table.contains("VERSION"));
+    assert!(table.contains("user_shard.wasm"));
+    assert!(!table.contains("artifacts/"));
     assert!(table.contains("934.27 KiB"));
     assert!(table.contains("DB, Auth"));
     assert!(table.contains("2.34 s"));
     assert!(!table.contains("COMMAND CODEC"));
 
     let json = serde_json::to_value(&build).unwrap();
+    assert_eq!(json["endpoint_count"], 7);
+    assert_eq!(json["wasm"], "artifacts/user_shard.wasm");
+    assert_eq!(json["version"], "0.7.1");
     assert_eq!(json["artifact"]["bytes"], 956_693);
     assert_eq!(json["artifact"]["sha256"], "fixture digest");
 
@@ -156,21 +165,25 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
     hub.canister = "user_hub".into();
     hub.parent = None;
     let shard = BuiltCanister {
+        version: "0.7.1".into(),
         canister: "user_shard".into(),
         role: None,
         parent: Some("user_hub".into()),
         wasm: "shard.wasm".into(),
         artifact: hub.artifact.clone(),
+        endpoint_count: 7,
         modules: vec![],
         build_ms: 0,
         client: None,
     };
     let mut store = BuiltCanister {
+        version: "0.8.0".into(),
         canister: "store".into(),
         role: None,
         parent: Some("user_hub".into()),
         wasm: "artifacts/wasm_store.wasm".into(),
         artifact: hub.artifact.clone(),
+        endpoint_count: 7,
         modules: vec![],
         build_ms: 0,
         client: None,
@@ -180,7 +193,8 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
         store.role = Some(role.into());
         assert!(
             built(std::slice::from_ref(&store))
-                .contains(&format!("store {badge} (parent: user_hub)"))
+                .lines()
+                .any(|row| row.starts_with(&format!("{badge} (parent: user_hub)")))
         );
     }
     store.canister = "artifacts".into();
@@ -193,10 +207,11 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
     let table = built(&[shard, hub, store]);
     let row = table
         .lines()
-        .find(|row| row.starts_with("├─ artifacts"))
+        .find(|row| row.starts_with("├─ [WASM_STORE]"))
         .unwrap();
-    assert!(row.starts_with("├─ artifacts [WASM_STORE]"));
     assert!(row.find("KiB").unwrap() < row.find("DB, Auth").unwrap());
+    assert!(row.contains("0.8.0"));
+    assert!(row.contains("wasm_store.wasm"));
     assert_eq!(row.matches("[WASM_STORE]").count(), 1);
     assert!(table.find("user_hub").unwrap() < table.find("└─ user_shard").unwrap());
     assert!(!table.contains("COMMAND CODEC"));

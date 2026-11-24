@@ -2,7 +2,7 @@
 
 use canic::method::Contract;
 use canic::metrics::{ChildMetrics, Request};
-#[cfg(feature = "sharding")]
+#[cfg(feature = "shard-pool")]
 use canic::sharding::{Allocation, BeginShardDrain, InspectShard, ShardTarget};
 #[cfg(feature = "role-issuer")]
 use canic::topology::attestation::CloseRoleIssuance;
@@ -10,7 +10,7 @@ use clap::{Parser, Subcommand};
 #[cfg(feature = "sharding")]
 use ic_platform_types::Principal;
 use serde_json::{Value, json};
-#[cfg(feature = "sharding")]
+#[cfg(feature = "shard-pool")]
 use std::fmt::Write as _;
 use std::io::Read as _;
 
@@ -53,7 +53,7 @@ enum Command {
     #[cfg(feature = "role-issuer")]
     RetireShard { approval: String },
     /// Stop new placements on the exact allocation returned by inspect-shard.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "shard-pool")]
     DrainShard {
         shard: Principal,
         slot: u32,
@@ -64,10 +64,10 @@ enum Command {
     #[cfg(feature = "sharding")]
     ConfigureCapacity { approval: String },
     /// Approve one singleton role for this registry.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "registry")]
     ConfigureSingleton { approval: String },
     /// Approve recurring top-ups or inspect the original approval.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "child-funding")]
     ConfigureChildFunding { approval: String },
     /// Stop future deposits to the named child.
     #[cfg(feature = "sharding")]
@@ -77,29 +77,29 @@ enum Command {
         parent: Option<Principal>,
     },
     /// Approve the reserve policy from the reviewed fleet plan.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     ConfigureStandby { approval: String },
     /// Hand a claimable spare to the exact destination Root.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     ExportStandby {
         principal: Principal,
         destination: Principal,
         expires_at_ns: u64,
     },
     /// Observe an exact external handoff and verify its proof quarantine.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     ImportStandby { principal: Principal },
     /// Observe the standby inventory and the exact worker allocation holding each spare.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     InspectStandby,
     /// Confirm the hub release of this exact worker target (JSON).
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "worker-pool")]
     ConfirmWorkerRelease { target: String },
     /// Stop and uninstall an exact released worker. Resume with the original deadline.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "worker-pool")]
     ResetWorker { target: String, expires_at_ns: u64 },
     /// Authorize one new empty canister. Repeat the exact request to inspect its result.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     RefillStandby {
         root: Principal,
         sequence: u8,
@@ -107,7 +107,7 @@ enum Command {
         expires_at_ns: u64,
     },
     /// Report the allocation, drain state and live placement count.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "shard-pool")]
     InspectShard { shard: Principal },
 }
 
@@ -121,7 +121,7 @@ enum Source {
     Endpoints { after: Option<String> },
 }
 
-#[cfg(feature = "sharding")]
+#[cfg(any(feature = "role-issuer", feature = "shard-pool"))]
 fn generation(value: &str) -> Result<[u8; 32], String> {
     if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("generation must contain 64 hex digits".into());
@@ -176,11 +176,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Source::Endpoints { after } => Request::Endpoints(after),
             },
         ))?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "shard-pool")]
         Action::Encode {
             command: Command::InspectShard { shard },
         } => request::<InspectShard>(&shard)?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "shard-pool")]
         Action::Encode {
             command:
                 Command::DrainShard {
@@ -192,11 +192,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             shard,
             allocation: Allocation { slot, generation },
         })?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "worker-pool")]
         Action::Encode {
             command: Command::ConfirmWorkerRelease { target },
         } => request::<canic::sharding::standby::ConfirmRelease>(&serde_json::from_str(&target)?)?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "worker-pool")]
         Action::Encode {
             command:
                 Command::ResetWorker {
@@ -213,13 +213,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => request::<canic_management_protocol::stored::ConfigureCapacity>(
             &serde_json::from_str(&approval)?,
         )?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "registry")]
         Action::Encode {
             command: Command::ConfigureSingleton { approval },
         } => request::<canic_management_protocol::stored::ConfigureSingleton>(
             &serde_json::from_str(&approval)?,
         )?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "child-funding")]
         Action::Encode {
             command: Command::ConfigureChildFunding { approval },
         } => request::<canic_management_protocol::stored::ConfigureChildFunding>(
@@ -243,13 +243,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => request::<canic_management_protocol::stored::StopApplicationChildFunding>(&(
             parent, child,
         ))?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "reserve-pool")]
         Action::Encode {
             command: Command::ConfigureStandby { approval },
         } => request::<canic_management_protocol::stored::ConfigureStandby>(
             &serde_json::from_str(&approval)?,
         )?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "reserve-pool")]
         Action::Encode {
             command:
                 Command::ExportStandby {
@@ -262,15 +262,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             destination,
             expires_at_ns,
         ))?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "reserve-pool")]
         Action::Encode {
             command: Command::ImportStandby { principal },
         } => request::<canic::sharding::standby::ImportStandby>(&principal)?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "reserve-pool")]
         Action::Encode {
             command: Command::InspectStandby,
         } => request::<canic::sharding::standby::InspectStandby>(&())?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "reserve-pool")]
         Action::Encode {
             command:
                 Command::RefillStandby {
@@ -305,7 +305,7 @@ fn reply_limit() -> usize {
     let limit = ChildMetrics::REPLY
         .bytes
         .max(canic::logging::Logs::REPLY.bytes);
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     let limit = canic::sharding::standby::InspectStandby::REPLY
         .bytes
         .max(canic::sharding::LIMITS.bytes)
@@ -328,7 +328,7 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     if let Ok(reply) = CloseRoleIssuance::decode_reply(bytes) {
         return Ok(json!({"proof_deadline_ns": reply?.to_string()}));
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "shard-pool")]
     if let Ok(reply) = InspectShard::decode_reply(bytes) {
         let status = reply?;
         let mut generation = String::with_capacity(64);
@@ -344,7 +344,7 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
             "live_placements": status.live_placements,
         }));
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "shard-pool")]
     if let Ok(reply) = BeginShardDrain::decode_reply(bytes) {
         return Ok(json!({"draining": true, "live_placements": reply?}));
     }
@@ -353,12 +353,12 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
         reply.map_err(|e| format!("capacity: {e:?}"))?;
         return Ok(json!({"approved":true}));
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "registry")]
     if let Ok(reply) = canic_management_protocol::stored::ConfigureSingleton::decode_reply(bytes) {
         reply.map_err(|e| format!("singleton: {e:?}"))?;
         return Ok(json!({"approved":true}));
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "child-funding")]
     if let Ok(reply) = canic_management_protocol::stored::ConfigureChildFunding::decode_reply(bytes)
     {
         return Ok(serde_json::to_value(reply?)?);
@@ -373,33 +373,33 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     if let Ok(reply) = canic_management_protocol::stored::ConfigureStandby::decode_reply(bytes) {
         reply?;
         return Ok(json!({"approved":true}));
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     if let Ok(reply) = canic::sharding::standby::ExportStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     if let Ok(reply) = canic::sharding::standby::ImportStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     if let Ok(reply) = canic::sharding::standby::InspectStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply)?);
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "reserve-pool")]
     if let Ok(reply) = canic::sharding::standby::RefillStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "worker-pool")]
     if let Ok(reply) = canic::sharding::standby::ConfirmRelease::decode_reply(bytes) {
         reply?;
         return Ok(json!({"released": true}));
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "worker-pool")]
     if let Ok(reply) = canic::sharding::standby::ResetWorker::decode_reply(bytes) {
         return Ok(json!({"reset": reply?}));
     }

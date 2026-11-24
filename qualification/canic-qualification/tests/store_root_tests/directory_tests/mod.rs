@@ -521,7 +521,7 @@ async fn installed_publication(scenario: Scenario) {
             application: vec![],
         };
         assert_eq!(
-            stage(ChildId::ALL[2], duplicate.encode().unwrap()).await,
+            stage(ChildId::HISTORICAL_SERVICES[2], duplicate.encode().unwrap()).await,
             Err(management::Refusal::Binding)
         );
         assert_eq!(
@@ -541,7 +541,7 @@ async fn installed_publication(scenario: Scenario) {
         return;
     }
     if matches!(scenario, Scenario::ThreeServices) {
-        let third = ChildId::ALL[2];
+        let third = ChildId::HISTORICAL_SERVICES[2];
         stage(third, named("discovery_hub")).await.unwrap();
         let discovery = ready(third).await;
         for (slot, name, original) in [

@@ -46,29 +46,31 @@ fn supply_root(app: &mut AppConfig, store: bool) {
         .filter(|first| manifests.all(|other| other == *first))
         .cloned()
         .unwrap_or_else(|| PathBuf::from("Cargo.toml"));
-    let mut features = vec!["child-metrics".into()];
-    if app
-        .fleets
-        .values()
-        .any(|fleet| !fleet.auth.is_empty() || fleet.receiver_policy.is_some())
-    {
-        features.push("auth".into());
-    }
-    if app
-        .fleets
-        .values()
-        .any(|fleet| !fleet.role_receivers.is_empty())
-    {
-        features.push("role-issuer".into());
-    } else if app.fleets.values().any(|fleet| {
-        !fleet.shard_pools.is_empty()
-            || !fleet.worker_pools.is_empty()
-            || fleet.registry.is_some()
-            || fleet.standby_pool.is_some()
-            || !fleet.top_up_children.is_empty()
-            || fleet.subnet_child_limit.is_some()
-    }) {
-        features.push("sharding".into());
+    let mut features = std::collections::BTreeSet::from(["child-metrics"]);
+    for fleet in app.fleets.values() {
+        for (family, selected) in [
+            (
+                "auth",
+                !fleet.auth.is_empty() || fleet.receiver_policy.is_some(),
+            ),
+            ("role-issuer", !fleet.role_receivers.is_empty()),
+            ("child-funding", !fleet.top_up_children.is_empty()),
+            ("registry", fleet.registry.is_some()),
+            ("shard-pool", !fleet.shard_pools.is_empty()),
+            ("worker-pool", !fleet.worker_pools.is_empty()),
+            (
+                "reserve-pool",
+                fleet.standby_pool.is_some()
+                    || fleet
+                        .worker_pools
+                        .iter()
+                        .any(|pool| pool.minimum_reuse_cycles.is_some()),
+            ),
+        ] {
+            if selected {
+                features.insert(family);
+            }
+        }
     }
     slots.insert(
         "root".into(),
@@ -79,7 +81,7 @@ fn supply_root(app: &mut AppConfig, store: bool) {
             build: Some(BuildInput {
                 manifest,
                 package: "canic-root".into(),
-                features,
+                features: features.into_iter().map(str::to_owned).collect(),
                 client: Some("canic-root-client".into()),
             }),
         },

@@ -172,20 +172,23 @@ async fn session(
     ));
     std::fs::create_dir(&directory)?;
     let example = repo.join("apps/examples").join(name);
-    let mut config = canic_host::load_config(&example.join("canic.toml"))?;
-    let app = config
-        .apps
-        .get_mut(slot)
-        .ok_or("missing selected example")?;
-    app.fleets.clear();
-    for canister in app.canisters.values_mut() {
-        let recipe = canister
-            .build
-            .as_mut()
-            .ok_or("example component needs a build recipe")?;
-        recipe.manifest = example.join(&recipe.manifest).canonicalize()?;
+    let mut config: toml::Table = std::fs::read_to_string(example.join("canic.toml"))?.parse()?;
+    let app = config["apps"][slot]
+        .as_table_mut()
+        .ok_or("missing example app")?;
+    app.remove("fleets");
+    for (_, canister) in app["canisters"]
+        .as_table_mut()
+        .ok_or("missing example components")?
+        .iter_mut()
+    {
+        let manifest = &mut canister["build"]["manifest"];
+        let absolute = example
+            .join(manifest.as_str().ok_or("missing example manifest")?)
+            .canonicalize()?;
+        *manifest = toml::Value::try_from(absolute)?;
     }
-    canic_host::init_config(&directory.join("canic.toml"), &config)?;
+    std::fs::write(directory.join("canic.toml"), toml::to_string(&config)?)?;
     cli(
         &directory,
         &[

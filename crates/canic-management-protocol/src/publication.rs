@@ -82,6 +82,27 @@ pub struct CustodyRequest {
 /// One replicated metadata observation, not a certificate of installed code or full catalog.
 pub type CustodyReply = Result<store::Custody, Error>;
 
+/// Read-only Root proxy for Store metadata and release custody.
+pub const OBSERVATION: u64 = ic_wire::method_id("observe_store");
+/// Select one Store and its original dispatch deadline.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum ObservationRequest {
+    /// Inspect initialized Store quotas and usage.
+    Info(InfoRequest),
+    /// Inspect the named release and all pins on its artifact.
+    Custody(CustodyRequest),
+}
+/// Evidence returned by the selected read.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Observation {
+    /// Initialized Store report.
+    Info(store::Info),
+    /// Release status and retention obligations.
+    Custody(store::Custody),
+}
+/// Successful typed evidence or a bounded Store failure.
+pub type ObservationReply = Result<Observation, Error>;
+
 /// Explicit Store-local admission transition through its controller; never installs code.
 pub const ADMISSION: u64 = 49;
 /// Root forwards only Store's fixed close/observe/activate contract.

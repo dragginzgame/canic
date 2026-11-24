@@ -19,7 +19,7 @@ struct OldRequest {
 fn numeric_identities_preserve_deployed_wire_and_request_bytes() {
     for (index, old) in [Slot::First, Slot::Second].into_iter().enumerate() {
         let current = ChildId::new(index).unwrap();
-        assert_eq!(current, ChildId::ALL[index]);
+        assert_eq!(current, ChildId::HISTORICAL_SERVICES[index]);
         assert_eq!(current.index(), index);
         let limits = crate::LIMITS;
         let payload = ic_wire::encode(&old, ic_wire::Encoding::Payload, limits).unwrap();
@@ -86,7 +86,7 @@ fn numeric_identities_preserve_deployed_wire_and_request_bytes() {
 
 #[test]
 fn unsupported_identities_cannot_enter_runtime_or_retained_authority() {
-    for value in [4, 255, 256, usize::MAX] {
+    for value in [4, 10, 22, 23] {
         assert_eq!(ChildId::new(value), None);
         let bytes = ic_wire::encode(&value, ic_wire::Encoding::Payload, crate::LIMITS).unwrap();
         assert!(

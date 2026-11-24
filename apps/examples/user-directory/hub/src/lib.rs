@@ -10,7 +10,7 @@ use user_directory_schema::{ProvisionRefusal, Users, model::user_hub::Route};
 canic::mount_db!(schema = user_directory_schema::model::user_hub::Hub);
 
 canic::mount_receiver_lifecycle! {
-    config_key = "directory.hub.config.v1",
+    config_key = "directory.hub.config.v2",
     authority = "directory",
     pages = 65536,
     auth_read = "read",

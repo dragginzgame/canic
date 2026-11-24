@@ -1,6 +1,6 @@
 # User directory
 
-A returning account must reach its original private row even after a lost signup reply. The hub owns the user's ID and route, Root assigns the verified account key to a bounded pool, and each shard accepts provisioning only from its configured parent. Each receiver checks its own Auth session.
+A returning account must reach its original private row even after a lost signup reply. The hub owns the user's ID and route, Canic assigns each verified account locally in the hub and asks Root for another shard when the pool needs capacity, and each shard accepts provisioning only from its configured parent. Each receiver checks its own Auth session.
 
 The [runnable fleet](README.md) places two accounts on separate shards and refuses a third with `PoolFull`. Each shard admits one key. Root may create at most two shards. Retry the first signup and verify the same user ID and shard. Signing in to the hub alone must leave shard access closed.
 

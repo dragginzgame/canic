@@ -25,6 +25,76 @@ async fn project(
 }
 
 #[tokio::test(flavor = "current_thread")]
+async fn large_subnet_requires_exact_controller_opt_in() {
+    let (_, binary) = support::inputs();
+    let (mut server, owner) = support::instance(&binary).await;
+    let pic = owner.client();
+    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let (root, _) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
+    let grant = |max_children, allow_large_subnet| stored::SubnetCapacity {
+        root: root.id.to_text(),
+        max_children,
+        allow_large_subnet,
+    };
+    let large = grant(40_001, true);
+    let request = ic_wire::encode(
+        &large,
+        ic_wire::Encoding::Frame {
+            method: stored::CONFIGURE_CAPACITY,
+            direction: ic_wire::Direction::Request,
+        },
+        stored::LIMITS,
+    )
+    .unwrap();
+    assert!(
+        pic.update_call(
+            root.id,
+            pic.create_canister().await,
+            "configure_capacity",
+            request
+        )
+        .await
+        .is_err()
+    );
+    for (approval, expected) in [
+        (grant(40_000, false), Ok(())),
+        (grant(40_001, false), Err(management::Refusal::Binding)),
+        (large.clone(), Ok(())),
+        (large, Ok(())),
+        (grant(40_000, false), Err(management::Refusal::Occupied)),
+    ] {
+        assert_eq!(
+            root.update::<_, Result<(), management::Refusal>>(
+                "configure_capacity",
+                stored::CONFIGURE_CAPACITY,
+                &approval,
+                stored::LIMITS
+            )
+            .await,
+            expected
+        );
+    }
+    pic.upgrade_canister(root.id, wasm, vec![], Some(root.operator))
+        .await
+        .unwrap();
+    assert_eq!(
+        root.update::<_, Result<(), management::Refusal>>(
+            "configure_capacity",
+            stored::CONFIGURE_CAPACITY,
+            &grant(40_000, false),
+            stored::LIMITS,
+        )
+        .await,
+        Err(management::Refusal::Occupied)
+    );
+    assert_eq!(
+        owner.close(std::time::Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+#[tokio::test(flavor = "current_thread")]
 async fn signup_retains_the_first_shard_across_reply_loss_growth_and_hub_upgrade() {
     exercise_pool(None, None).await;
     if let Some(old) = std::env::var_os("CANIC_PREDECESSOR_SHARD_ROOT_WASM") {
@@ -187,25 +257,6 @@ expires_at_ns={}
     let alice = CanisterId::self_authenticating(b"alice");
     let bob = CanisterId::self_authenticating(b"bob");
     let eve = CanisterId::self_authenticating(b"eve");
-    // Even a Root controller cannot use the hub's account assignment method.
-    assert!(
-        pic.update_call(
-            root.id,
-            root.operator,
-            "assign_shard",
-            ic_wire::encode(
-                &("user_shard", [0_u8; 32]),
-                ic_wire::Encoding::Frame {
-                    method: sharding::ASSIGN,
-                    direction: ic_wire::Direction::Request
-                },
-                sharding::LIMITS
-            )
-            .unwrap()
-        )
-        .await
-        .is_err()
-    );
     assert_eq!(user(pic, hub, alice, "lookup").await, Placement::Unknown);
     let first = pic.submit_call(hub, alice, "signup", vec![]).await.unwrap();
     let second = pic.submit_call(hub, alice, "signup", vec![]).await.unwrap();
@@ -219,15 +270,23 @@ expires_at_ns={}
     // Lose the first reply at the caller. The original request is never reissued to management.
     let _lost = first;
     settle(pic).await;
-    let original = user(pic, hub, alice, "lookup").await;
+    let original = user(pic, hub, alice, "signup").await;
     let Placement::Assigned(a, first_pid) = &original else {
         panic!("{original:?}")
     };
     assert_eq!(*a, allocation);
     if inline.is_some() {
-        canic_qualification::upgrade_stopped(pic, root.id, root_wasm, vec![], Some(root.operator))
-            .await
-            .unwrap_err();
+        let refusal = canic_qualification::upgrade_stopped(
+            pic,
+            root.id,
+            root_wasm,
+            vec![],
+            Some(root.operator),
+        )
+        .await
+        .unwrap_err();
+        assert!(refusal.reject_message.contains("trapped"), "{refusal:?}");
+        configure(&root, &approval).await.unwrap();
         assert_eq!(user(pic, hub, alice, "signup").await, original);
         assert_eq!(
             owner.close(Duration::from_secs(10)).await,
@@ -235,6 +294,13 @@ expires_at_ns={}
         );
         assert!(server.stop().unwrap().process.cleanup.is_empty());
         return;
+    }
+    for removed in ["assign_shard", "lookup_shard", "release_shard"] {
+        assert!(
+            pic.update_call(root.id, hub, removed, vec![])
+                .await
+                .is_err()
+        );
     }
     // The same hub code, Root address, operator and account key confer no pool authority.
     let unrelated = pic
@@ -248,7 +314,12 @@ expires_at_ns={}
     )
     .await;
     let retained = pic.get_stable_memory(root.id).await;
-    for method in ["lookup", "signup"] {
+    assert_eq!(
+        user(pic, unrelated, alice, "lookup").await,
+        Placement::Unknown
+    );
+    {
+        let method = "signup";
         let refusal = pic
             .update_call(unrelated, alice, method, vec![])
             .await
@@ -256,7 +327,7 @@ expires_at_ns={}
         assert!(
             refusal
                 .reject_message
-                .contains("placement reply unavailable"),
+                .contains("shard capacity reply unavailable"),
             "{refusal:?}"
         );
     }
@@ -286,18 +357,13 @@ expires_at_ns={}
         )
         .await;
     assert_eq!(recovered, journal);
-    assert_eq!(
-        slot,
-        ChildId::SHARDS[1],
-        "legacy HRW vector for alice and the user_shard pool"
-    );
     let _discarded = pic.submit_call(hub, alice, "signup", vec![]).await.unwrap();
     assert!(matches!(
         user(pic, hub, bob, "signup").await,
         Placement::Pending(_)
     ));
     settle(pic).await;
-    let Placement::Assigned(b, second_pid) = user(pic, hub, bob, "lookup").await else {
+    let Placement::Assigned(b, second_pid) = user(pic, hub, bob, "signup").await else {
         panic!("second shard")
     };
     assert_ne!(b.slot, a.slot);
@@ -483,17 +549,6 @@ expires_at_ns = {}
         project(pic, unrelated, alice, "project", 3).await,
         Placement::Full
     );
-    if let Some(path) = std::env::var_os("CANIC_PREDECESSOR_SHARD_ROOT_WASM") {
-        canic_qualification::upgrade_stopped(
-            pic,
-            root.id,
-            std::fs::read(path).unwrap(),
-            vec![],
-            Some(root.operator),
-        )
-        .await
-        .unwrap_err();
-    }
     canic_qualification::upgrade_stopped(
         pic,
         root.id,
@@ -535,7 +590,7 @@ expires_at_ns = {}
         .unwrap()
         .replace(
             "[apps.toko.fleets.demo]",
-            "[apps.toko.fleets.demo]\nsubnet_child_limit = 8",
+            "[apps.toko.fleets.demo]\nsubnet_child_limit = 9",
         )
         .replace("max_shards=2", "max_shards=6\nincrease_from=2")
         .replace("max_instances = 2", "max_instances = 6\nincrease_from=2");
@@ -543,7 +598,7 @@ expires_at_ns = {}
     let expanded: serde_json::Value = serde_json::from_slice(&plan(true)).unwrap();
     let cap: stored::SubnetCapacity =
         serde_json::from_value(expanded["capacity"]["approval"].clone()).unwrap();
-    assert_eq!(cap.max_children, 8);
+    assert_eq!(cap.max_children, 9);
     let changes = expanded["increases"].as_array().unwrap();
     assert_eq!(changes.len(), 2);
     for (item, endpoint, method) in std::iter::once((
@@ -608,6 +663,20 @@ expires_at_ns = {}
         )
         .await;
     assert_eq!(stale, Err(management::Refusal::Occupied));
+    for change in [
+        stored::IncreasePool::Instances(projects.clone(), 9),
+        stored::IncreasePool::Shards(approval.clone(), 9),
+    ] {
+        let result: Result<(), management::Refusal> = root
+            .update(
+                "increase_pool",
+                stored::INCREASE_POOL,
+                &change,
+                stored::LIMITS,
+            )
+            .await;
+        assert_eq!(result, Err(management::Refusal::Binding));
+    }
     pic.add_cycles(root.id, 12_000_000_000_000).await;
     assert!(matches!(
         user(pic, hub, eve, "signup").await,
@@ -618,7 +687,7 @@ expires_at_ns = {}
         Placement::Pending(_)
     ));
     settle(pic).await;
-    let third_shard = user(pic, hub, eve, "lookup").await;
+    let third_shard = user(pic, hub, eve, "signup").await;
     let third_project = project(pic, unrelated, alice, "lookup_project", 3).await;
     assert!(matches!(third_shard, Placement::Assigned(..)));
     assert!(matches!(third_project, Placement::Assigned(..)));
@@ -628,14 +697,19 @@ expires_at_ns = {}
     ));
     settle(pic).await;
 
-    // Two hubs contend for the eighth slot. Drop both responses and resolve by their original keys.
+    assert!(matches!(
+        project(pic, unrelated, alice, "project", 5).await,
+        Placement::Pending(_)
+    ));
+    settle(pic).await;
+    // Two hubs contend for the ninth slot. Drop both responses and resolve by their original keys.
     let fourth_user = CanisterId::self_authenticating(b"fourth");
     let _shard_call = pic
         .submit_call(hub, fourth_user, "signup", vec![])
         .await
         .unwrap();
     let _project_call = pic
-        .submit_call(unrelated, alice, "project", vec![5; 32])
+        .submit_call(unrelated, alice, "project", vec![6; 32])
         .await
         .unwrap();
     settle(pic).await;
@@ -643,7 +717,7 @@ expires_at_ns = {}
         .await
         .unwrap();
     let shard = user(pic, hub, fourth_user, "signup").await;
-    let project_retry = project(pic, unrelated, alice, "project", 5).await;
+    let project_retry = project(pic, unrelated, alice, "project", 6).await;
     assert!(
         matches!(
             (&shard, &project_retry),
@@ -663,6 +737,22 @@ expires_at_ns = {}
     );
     configure(&root, &approval).await.unwrap();
     configure_project(&root, &projects).await.unwrap();
+    if let Some(path) = std::env::var_os("CANIC_PREDECESSOR_SHARD_ROOT_WASM") {
+        pic.advance_time(Duration::from_secs(600)).await;
+        pic.tick().await;
+        let refusal = canic_qualification::upgrade_stopped(
+            pic,
+            root.id,
+            std::fs::read(path).unwrap(),
+            vec![],
+            Some(root.operator),
+        )
+        .await
+        .unwrap_err();
+        assert!(refusal.reject_message.contains("trapped"), "{refusal:?}");
+        configure_project(&root, &projects).await.unwrap();
+    }
+
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted
@@ -779,12 +869,12 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
         .await,
         Err(management::Refusal::Binding)
     );
-    // A shared pool cannot acquire future project capacity via a larger grant.
+    // The subnet backstop does not increase the addressable shard family.
     assert_eq!(
         configure(
             &root,
             &stored::ShardPool {
-                max_shards: 3,
+                max_shards: stored::MAX_SHARDS + 1,
                 ..approval.clone()
             }
         )
@@ -792,6 +882,19 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
         Err(management::Refusal::Binding)
     );
     configure(&root, &approval).await.unwrap();
+    // A large backstop alone cannot authorize spending on either pool.
+    root.update::<_, Result<(), management::Refusal>>(
+        "configure_capacity",
+        stored::CONFIGURE_CAPACITY,
+        &stored::SubnetCapacity {
+            allow_large_subnet: false,
+            root: root.id.to_text(),
+            max_children: 20_010,
+        },
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         user(pic, hub, caller, "signup").await,
         Placement::GrowthRefused
@@ -808,7 +911,7 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
         .await,
         Err(management::Refusal::Occupied)
     );
-    for slot in ChildId::ALL {
+    for slot in ChildId::HISTORICAL_SERVICES {
         let journal: management::Status = root
             .update("observe_child", children::STATUS, &slot, management::LIMITS)
             .await;
@@ -908,6 +1011,7 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
         .await;
     }
     let ceiling = stored::SubnetCapacity {
+        allow_large_subnet: false,
         root: root.id.to_text(),
         max_children: 2,
     };
@@ -948,7 +1052,10 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
         user(pic, hub, alice, "signup").await,
         Placement::Pending(original.clone())
     );
-    assert_eq!(user(pic, hub, bob, "signup").await, Placement::Busy);
+    assert_eq!(
+        user(pic, hub, bob, "signup").await,
+        Placement::Pending(original.clone())
+    );
     {
         let slot = ChildId::placement(original.slot as usize).unwrap();
         let journal: management::Status = root
@@ -1014,6 +1121,7 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
         "configure_capacity",
         stored::CONFIGURE_CAPACITY,
         &stored::SubnetCapacity {
+            allow_large_subnet: false,
             root: root.id.to_text(),
             max_children: 1,
         },
@@ -1160,11 +1268,8 @@ async fn grant_with_child(
 
 // Call Root directly as the approved hub, before any application provisioning.
 #[tokio::test(flavor = "current_thread")]
-async fn approved_hub_retries_first_key_in_fresh_named_pool() {
-    use canic::{
-        method::Contract,
-        sharding::{AssignShard, LookupShard},
-    };
+async fn approved_hub_recovers_its_first_growth_ordinal() {
+    use canic::{method::Contract, sharding::GrowShard};
 
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
@@ -1177,6 +1282,7 @@ async fn approved_hub_retries_first_key_in_fresh_named_pool() {
         "configure_capacity",
         stored::CONFIGURE_CAPACITY,
         &stored::SubnetCapacity {
+            allow_large_subnet: false,
             root: root.id.to_text(),
             max_children: 1,
         },
@@ -1186,28 +1292,59 @@ async fn approved_hub_retries_first_key_in_fresh_named_pool() {
     .unwrap();
     configure(&root, &grant).await.unwrap();
 
-    let input = ("user_shard".to_owned(), [0xa5; 32]);
-    let request = AssignShard::encode_request(&input).unwrap();
-    let assign = async || {
-        let reply = pic
-            .update_call(root.id, hub, AssignShard::NAME, request.clone())
-            .await
-            .expect("approved hub assignment");
-        AssignShard::decode_reply(&reply).unwrap()
-    };
-    let lookup = async || {
-        let reply = pic
-            .update_call(
-                root.id,
-                hub,
-                LookupShard::NAME,
-                LookupShard::encode_request(&input).unwrap(),
+    // Occupied pools admit both read-only Store variants, but only for the controller.
+    use management::publication::{self, Observation, ObservationRequest};
+    for request in [
+        ObservationRequest::Info(publication::InfoRequest {
+            store: store.id.to_text(),
+            expires_at_ns: grant.expires_at_ns - 400_000_000_000,
+        }),
+        ObservationRequest::Custody(publication::CustodyRequest {
+            store: store.id.to_text(),
+            expires_at_ns: grant.expires_at_ns - 400_000_000_000,
+            release: grant.reference.manifest.release.clone(),
+        }),
+    ] {
+        let args = ic_wire::encode(
+            &request,
+            ic_wire::Encoding::Frame {
+                method: publication::OBSERVATION,
+                direction: ic_wire::Direction::Request,
+            },
+            management::LIMITS,
+        )
+        .unwrap();
+        assert!(
+            pic.update_call(root.id, hub, "observe_store", args)
+                .await
+                .is_err()
+        );
+        let evidence = root
+            .update::<_, publication::ObservationReply>(
+                "observe_store",
+                publication::OBSERVATION,
+                &request,
+                publication::RESPONSE_LIMITS,
             )
             .await
             .unwrap();
-        LookupShard::decode_reply(&reply).unwrap()
+        match (request, evidence) {
+            (ObservationRequest::Info(_), Observation::Info(info)) => assert_eq!(info.releases, 1),
+            (ObservationRequest::Custody(_), Observation::Custody(custody)) => {
+                assert_eq!(custody.status.manifest, grant.reference.manifest)
+            }
+            _ => panic!("unexpected Store evidence"),
+        }
+    }
+
+    let request = GrowShard::encode_request(&("user_shard".into(), 0)).unwrap();
+    let assign = async || {
+        let reply = pic
+            .update_call(root.id, hub, GrowShard::NAME, request.clone())
+            .await
+            .unwrap();
+        GrowShard::decode_reply(&reply).unwrap().0
     };
-    assert_eq!(lookup().await, Placement::Unknown);
     let Placement::Pending(original) = assign().await else {
         panic!("first key must reserve a shard")
     };
@@ -1219,7 +1356,6 @@ async fn approved_hub_retries_first_key_in_fresh_named_pool() {
     let custody = pic.get_stable_memory(root.id).await;
     publication_tests::publish_shard_successor(&root, &store).await;
     assert_eq!(pic.get_stable_memory(root.id).await, custody);
-    assert_eq!(lookup().await, assigned);
     assert_eq!(assign().await, assigned);
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
@@ -1229,7 +1365,7 @@ async fn approved_hub_retries_first_key_in_fresh_named_pool() {
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn ten_thousand_keys_per_shard_survive_rollover_and_root_reopen() {
+async fn ten_thousand_keys_per_shard_survive_rollover_and_hub_reopen() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance_with_lifetime(
         &binary,
@@ -1256,8 +1392,11 @@ async fn ten_thousand_keys_per_shard_survive_rollover_and_root_reopen() {
             Placement::Pending(_)
         ));
         settle(pic).await;
-        let assigned = user(pic, hub, account(first), "lookup").await;
+        let assigned = user(pic, hub, account(first), "signup").await;
         assert!(matches!(assigned, Placement::Assigned(..)));
+        pic.stop_canister(root.id, Some(root.operator))
+            .await
+            .unwrap();
         for start in (first + 1..first + 10_000).step_by(100) {
             let mut requests = Vec::new();
             for key in start..(start + 100).min(first + 10_000) {
@@ -1274,6 +1413,9 @@ async fn ten_thousand_keys_per_shard_survive_rollover_and_root_reopen() {
                 assert_eq!(result, assigned);
             }
         }
+        pic.start_canister(root.id, Some(root.operator))
+            .await
+            .unwrap();
         assignments.push(assigned);
     }
     assert_ne!(assignments[0], assignments[1]);
@@ -1284,6 +1426,15 @@ async fn ten_thousand_keys_per_shard_survive_rollover_and_root_reopen() {
     canic_qualification::upgrade_stopped(pic, root.id, wasm, vec![], Some(root.operator))
         .await
         .unwrap();
+    canic_qualification::upgrade_stopped(
+        pic,
+        hub,
+        std::fs::read(artifacts().join("hub.wasm")).unwrap(),
+        vec![],
+        None,
+    )
+    .await
+    .unwrap();
     for (key, expected) in [(1, 0), (10_000, 0), (10_001, 1), (20_000, 1)] {
         for method in ["lookup", "signup"] {
             assert_eq!(
@@ -1325,6 +1476,7 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
         "configure_capacity",
         stored::CONFIGURE_CAPACITY,
         &stored::SubnetCapacity {
+            allow_large_subnet: false,
             root: root.id.to_text(),
             max_children: 3,
         },
@@ -1547,6 +1699,7 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
         "configure_capacity",
         stored::CONFIGURE_CAPACITY,
         &stored::SubnetCapacity {
+            allow_large_subnet: false,
             root: root.id.to_text(),
             max_children: 2,
         },
@@ -1643,24 +1796,6 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
     assert_eq!(first, original);
     let first_id = first.assigned_target().unwrap().unwrap().1;
     assert_eq!(first_id, spare);
-    // The first capacity ordinal has the same bytes as an all-zero account key.
-    let target = sharding::ShardTarget {
-        allocation: first.assigned_target().unwrap().unwrap().0.clone(),
-        shard: first_id,
-    };
-    let released = pic
-        .update_call(
-            root.id,
-            hub,
-            sharding::ReleaseShard::NAME,
-            sharding::ReleaseShard::encode_request(&([0; 32], target)).unwrap(),
-        )
-        .await
-        .unwrap();
-    assert_eq!(
-        sharding::ReleaseShard::decode_reply(&released).unwrap(),
-        Err("account releases belong to the hub for this pool".into())
-    );
     pic.stop_canister(root.id, Some(root.operator))
         .await
         .unwrap();

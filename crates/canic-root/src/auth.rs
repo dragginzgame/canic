@@ -133,7 +133,11 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
 }
 
 /// Check that this worker has no retained receiver authority before recycling it.
-#[cfg(feature = "sharding")]
+#[cfg(any(
+    feature = "role-issuer",
+    feature = "worker-pool",
+    feature = "reserve-pool"
+))]
 pub(crate) fn require_no_worker_grant(worker: Principal) -> Result<(), String> {
     STATE.with_borrow(|s| match s {
         Some(grants) if !grants.contains_key(&worker) => Ok(()),

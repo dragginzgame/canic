@@ -14,14 +14,29 @@ pub struct Cancellation {
 }
 
 fn pristine(dir: &Path) -> Result<()> {
-    for (leaf, expected, required) in super::record::effect_directories() {
-        if !required && !dir.join(leaf).try_exists().map_err(supplier)? {
+    // These original anchors exist in every retained fleet approval.
+    for name in ["root", "child"] {
+        if !std::fs::symlink_metadata(dir.join(name))
+            .map_err(supplier)?
+            .is_dir()
+        {
+            return Err(Error::Blocked("missing fleet effect directory".into()));
+        }
+    }
+    for entry in std::fs::read_dir(dir).map_err(supplier)? {
+        let entry = entry.map_err(supplier)?;
+        let kind = entry.file_type().map_err(supplier)?;
+        if kind.is_file() {
             continue;
         }
-        for entry in std::fs::read_dir(dir.join(leaf)).map_err(supplier)? {
-            let entry = entry.map_err(supplier)?;
-            if !entry.file_type().map_err(supplier)?.is_file()
-                || !expected.iter().any(|name| entry.file_name() == *name)
+        if !kind.is_dir() {
+            return Err(Error::Blocked("unexpected entry in fleet journal".into()));
+        }
+        let root = entry.file_name() == "root";
+        for file in std::fs::read_dir(entry.path()).map_err(supplier)? {
+            let file = file.map_err(supplier)?;
+            if !file.file_type().map_err(supplier)?.is_file()
+                || !(file.file_name() == "module.wasm" || root && file.file_name() == "plan.json")
             {
                 return Err(Error::Blocked(
                     "effect preparation already began; preserve this operation and resume or inspect it, do not replace it".into(),

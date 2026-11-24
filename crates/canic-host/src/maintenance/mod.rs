@@ -8,7 +8,6 @@ mod stored;
 use crate::{Error, Plan, Result, network::principal, operation, signed, store, supplier};
 use canic_management_protocol::{
     LIMITS, Phase, STATUS, Status,
-    children::ChildId,
     custody::{self, Custody},
     upgrade,
 };
@@ -83,8 +82,16 @@ pub(crate) async fn runtime(
 
 // The retained pre-0.204 Root has exactly one non-resettable upgrade slot and
 // controller-only replicated unit observations. See the pinned qualification fixture.
-const SINGLE_UPGRADE_ROOT: &str =
+pub(crate) const SINGLE_UPGRADE_ROOT: &str =
     "e4a4127abd525f59378503dcdb98fcb13f8eb9895673d4d8a4dea41d85e24296";
+
+/// Frozen one-child Roots that predate the explicit slot protocol.
+pub(crate) fn implicit_child_root(module: &str) -> bool {
+    matches!(
+        module,
+        SINGLE_UPGRADE_ROOT | "3de14eb8422bb99c57f9c63870523460fb9d7b3d4c5f0ef5f7a75cc0c1333c3a"
+    )
+}
 
 fn single_upgrade_root(plan: &Plan) -> bool {
     plan.previous_module().map(String::as_str) == Some(SINGLE_UPGRADE_ROOT)
@@ -213,7 +220,6 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
         return Err(invalid());
     };
     if expected.is_empty()
-        || expected.len() > ChildId::ALL.len()
         || (single_upgrade_root(plan) && expected.len() != 1)
         || expected
             .iter()

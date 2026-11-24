@@ -57,15 +57,7 @@ pub fn open_service<M: Memory>(
 }
 
 /// Request and reply budgets defined by the Blob protocol.
-pub const RPC_LIMITS: ic_wire::Limits = {
-    let limits = supplier::protocol::RPC_LIMITS;
-    ic_wire::Limits {
-        bytes: limits.bytes,
-        allocation: limits.allocation,
-        nodes: limits.nodes,
-        depth: limits.depth,
-    }
-};
+pub use supplier::protocol::RPC_LIMITS;
 
 /// Wire identity for the captured-caller mutation endpoint.
 pub const UPDATE: u64 = ic_wire::method_id("blob_update");

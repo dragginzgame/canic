@@ -28,8 +28,8 @@ pub(super) async fn approval(root: &Client<'_>, supplier: &Client<'_>) -> Approv
 async fn observe(root: &Client<'_>) -> Option<Status> {
     root.update(
         "observe_store_maintenance",
-        wire::OBSERVE,
-        &(),
+        wire::READ_ATTEMPT,
+        &None::<wire::Approval>,
         wire::LIMITS,
     )
     .await
@@ -49,19 +49,22 @@ pub(super) async fn child_stage(
     root: &Client<'_>,
 ) -> Result<management::Status, management::Refusal> {
     root.update(
-        "stage",
-        management::STAGE,
-        &management::Stage {
-            approval: management::Approval {
-                manager: root.id.to_text(),
-                module_hash: management::digest(b"\0asm\x01\0\0\0"),
-                creation_cycles: management::CREATION_CYCLES,
-                execute_at_ns: root.pic.get_time().await.as_nanos_since_unix_epoch()
-                    + 120_000_000_000,
-                expires_at_ns: root.pic.get_time().await.as_nanos_since_unix_epoch()
-                    + 240_000_000_000,
+        "stage_child",
+        management::children::STAGE,
+        &management::children::Request {
+            slot: management::children::ChildId::FIRST,
+            value: management::Stage {
+                approval: management::Approval {
+                    manager: root.id.to_text(),
+                    module_hash: management::digest(b"\0asm\x01\0\0\0"),
+                    creation_cycles: management::CREATION_CYCLES,
+                    execute_at_ns: root.pic.get_time().await.as_nanos_since_unix_epoch()
+                        + 120_000_000_000,
+                    expires_at_ns: root.pic.get_time().await.as_nanos_since_unix_epoch()
+                        + 240_000_000_000,
+                },
+                wasm: b"\0asm\x01\0\0\0".to_vec(),
             },
-            wasm: b"\0asm\x01\0\0\0".to_vec(),
         },
         management::STAGE_LIMITS,
     )

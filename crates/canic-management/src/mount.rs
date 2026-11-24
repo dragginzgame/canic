@@ -12,7 +12,7 @@
 /// `reconcile_stored_child`, `stage_stored_upgrade` and `reconcile_stored_upgrade`.
 /// `store_publication` mounts a separate, controller-only bounded publication call.
 /// `observe_store` reads initialized Store state through Root without claiming deployment.
-/// `observe_store_custody` reads one release and all pins on its shared artifact.
+/// Its custody variant reads one release and all pins on its shared artifact.
 /// `store_admission` forwards an exact Store close/observe/activate command, not an upgrade.
 /// `store_removal` forwards one exact deletion/cancellation; the caller owns settlement custody.
 /// `stage_store_maintenance`, `advance_store_maintenance` and `observe_store_maintenance`
@@ -23,7 +23,7 @@
 /// `recover_store_maintenance` retains observed outcomes without issuing fresh maintenance effects.
 /// `observe_root_custody` reads children, artifact references and a single Store operation.
 /// `observe_root_history` includes all completed Store predecessors; older reads refuse omission.
-/// `observe_store_attempt` reads an exact current or historical approval without effects.
+/// Pass an approval to `observe_store_maintenance` to read its exact retained outcome.
 /// Duplicate selections fail compilation. Unknown names have no expansion.
 /// This mounts no lifecycle hooks, storage, timers or readiness policy.
 ///
@@ -39,11 +39,6 @@ macro_rules! mount_endpoints {
         $crate::mount_endpoints!(@method observe_root_history, "observe_root_history", update, true, custody::ROOT_HISTORY, LIMITS,
             [] () -> $crate::endpoint::protocol::custody::RootHistory,
             $crate::stored::root_history());
-    };
-    (@select observe_store_attempt) => {
-        $crate::mount_endpoints!(@method observe_store_attempt, "observe_store_attempt", update, true, store_maintenance::OBSERVE_ATTEMPT, LIMITS,
-            [] (input: $crate::endpoint::protocol::store_maintenance::Approval) -> Option<$crate::endpoint::protocol::store_maintenance::Status>,
-            $crate::store_maintenance::observe_attempt(&input));
     };
     (@select observe_root_custody) => {
         $crate::mount_endpoints!(@method observe_root_custody, "observe_root_custody", update, true, custody::ROOT, LIMITS,
@@ -72,9 +67,9 @@ macro_rules! mount_endpoints {
             $crate::store_maintenance::advance(input).await);
     };
     (@select observe_store_maintenance) => {
-        $crate::mount_endpoints!(@method observe_store_maintenance, "observe_store_maintenance", update, true, store_maintenance::OBSERVE, LIMITS,
-            [] () -> Option<$crate::endpoint::protocol::store_maintenance::Status>,
-            $crate::store_maintenance::observe());
+        $crate::mount_endpoints!(@method observe_store_maintenance, "observe_store_maintenance", update, true, store_maintenance::READ_ATTEMPT, LIMITS,
+            [] (approval: Option<$crate::endpoint::protocol::store_maintenance::Approval>) -> Option<$crate::endpoint::protocol::store_maintenance::Status>,
+            match approval { Some(approval) => $crate::store_maintenance::observe_attempt(&approval), None => $crate::store_maintenance::observe() });
     };
     (@select recover_store_maintenance) => {
         $crate::mount_endpoints!(@method recover_store_maintenance, "recover_store_maintenance", update, true, store_maintenance::RECOVER, LIMITS,
@@ -96,15 +91,10 @@ macro_rules! mount_endpoints {
             [async] (input: $crate::endpoint::protocol::publication::AdmissionRequest) -> $crate::endpoint::protocol::publication::AdmissionReply,
             $crate::publication::admission(input).await);
     };
-    (@select observe_store_custody) => {
-        $crate::mount_endpoints!(@method observe_store_custody, "observe_store_custody", update, true, publication::CUSTODY, LIMITS,
-            [async] (input: $crate::endpoint::protocol::publication::CustodyRequest) -> $crate::endpoint::protocol::publication::CustodyReply,
-            $crate::publication::observe_custody(input).await);
-    };
     (@select observe_store) => {
-        $crate::mount_endpoints!(@method observe_store, "observe_store", update, true, publication::INFO, LIMITS,
-            [async] (input: $crate::endpoint::protocol::publication::InfoRequest) -> $crate::endpoint::protocol::publication::InfoReply,
-            $crate::publication::observe_info(input).await);
+        $crate::mount_endpoints!(@method observe_store, "observe_store", update, true, publication::OBSERVATION, LIMITS,
+            [async] (input: $crate::endpoint::protocol::publication::ObservationRequest) -> $crate::endpoint::protocol::publication::ObservationReply,
+            $crate::publication::observe(input).await);
     };
     (@select store_publication) => {
         $crate::mount_endpoints!(@method store_publication, "store_publication", update, true, publication::EXECUTE, PUBLICATION_LIMITS,
@@ -207,9 +197,9 @@ macro_rules! mount_endpoints {
             $crate::children::observe_upgrade(input.slot, &input.value));
     };
     (@select child_upgrade_status) => {
-        $crate::mount_endpoints!(@method child_upgrade_status, "child_upgrade_status", query, false, children::OBSERVE_UPGRADE, LIMITS,
-            [] (input: $crate::endpoint::protocol::children::Request<$crate::endpoint::protocol::upgrade::Approval>) -> $crate::endpoint::protocol::upgrade::Status,
-            $crate::children::observe_upgrade(input.slot, &input.value));
+        $crate::mount_endpoints!(@method child_upgrade_status, "child_upgrade_status", query, false, children::UPGRADE_STATUS, LIMITS,
+            [] (input: $crate::endpoint::protocol::children::Request<Option<$crate::endpoint::protocol::upgrade::Approval>>) -> $crate::endpoint::protocol::upgrade::Status,
+            match input.value { Some(approval) => $crate::children::observe_upgrade(input.slot, &approval), None => $crate::children::upgrade_status(input.slot) });
     };
     (@select reconcile_child_upgrade) => {
         $crate::mount_endpoints!(@method reconcile_child_upgrade, "reconcile_child_upgrade", update, true, children::RECONCILE_UPGRADE, LIMITS,
@@ -282,7 +272,8 @@ macro_rules! mount_endpoints {
         mod $name {
             use $crate::endpoint::{runtime, protocol, wire};
             type Reply = $reply;
-            $crate::endpoint::inspect!(wire, $export, $kind, protocol::$($id)::+, ($($request)?), Reply);
+            $crate::endpoint::inspect!(wire, $export, $kind, protocol::$($id)::+, ($($request)?), $reply,
+                protocol::$($limits)::+, $crate::endpoint::declared_response_limits(protocol::$($id)::+));
 
             fn admit() -> Result<(), String> {
                 $crate::endpoint::admit(protocol::$($limits)::+.bytes, $private, protocol::$($id)::+)

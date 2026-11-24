@@ -276,35 +276,30 @@ async fn directory(revoke: bool, stable: bool) {
         if stable {
             assert_eq!(register().await, Ok(Progress::Ready));
         } else if device == 9 {
-            // Observe through the actual hub's Root lookup. Derive the public key independently.
-            use sha2::{Digest, Sha256};
-            let mut digest = Sha256::new().chain_update(b"example.user-directory.account.v1");
-            for pid in [install.issuer, Principal::from_slice(&[device, 2])] {
-                digest.update([u8::try_from(pid.as_slice().len()).unwrap()]);
-                digest.update(pid.as_slice());
-            }
-            let observation: canic::sharding::Placement = Client {
-                operator: hub,
-                ..root
-            }
-            .update(
-                "lookup_shard",
-                canic::sharding::LOOKUP,
-                &(
-                    "ex-user-directory-shard",
-                    canic::sharding::Key::from(digest.finalize()),
-                ),
-                canic::sharding::LIMITS,
-            )
-            .await;
-            let shard = observation.assigned_target().unwrap().unwrap().1;
+            use canic::{method::Contract, sharding::GrowShard};
+            let raw = pic
+                .update_call(
+                    root.id,
+                    hub,
+                    GrowShard::NAME,
+                    GrowShard::encode_request(&("ex-user-directory-shard".into(), 0)).unwrap(),
+                )
+                .await
+                .unwrap();
+            let shard = GrowShard::decode_reply(&raw)
+                .unwrap()
+                .0
+                .assigned_target()
+                .unwrap()
+                .unwrap()
+                .1;
             let shard = CanisterId::from_slice(shard.as_slice());
             pic.stop_canister(shard, Some(root.id)).await.unwrap();
             assert_eq!(register().await, Ok(Progress::ProvisionPending));
             pic.stop_canister(root.id, Some(root.operator))
                 .await
                 .unwrap();
-            assert_eq!(register().await, Ok(Progress::PlacementUnavailable));
+            assert_eq!(register().await, Ok(Progress::ProvisionPending));
             pic.start_canister(root.id, Some(root.operator))
                 .await
                 .unwrap();

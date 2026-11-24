@@ -323,7 +323,7 @@ pub(super) fn load(
             let name = value.deployment.as_ref().ok_or_else(invalid)?;
             if owner.root != root
                 || owner.root_module != root_module
-                || owner.slot != ChildId::ALL.get(children.len()).copied()
+                || owner.slot != ChildId::service(children.len())
                 || !fleet.reserves(name)
                 || value.deployment == fleet.root.deployment
                 || fleet.store.as_ref().is_some_and(|s| s.deployment == *name)
@@ -493,10 +493,8 @@ pub(super) fn store_custody(
         operation: operation.cloned(),
         history: history.to_vec(),
         store: binding.ok_or_else(invalid)?.clone(),
-        sources: ChildId::ALL
-            .iter()
-            .enumerate()
-            .map(|(i, _)| children.get(i).and_then(|c| c.sources.clone()))
+        sources: (0..children.len().max(ChildId::HISTORICAL_SERVICES.len()))
+            .map(|i| children.get(i).and_then(|c| c.sources.clone()))
             .collect(),
     }))
 }

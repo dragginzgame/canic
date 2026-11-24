@@ -85,7 +85,7 @@ pub struct SingletonConfig {
     /// Optional application initialization bytes.
     pub install_args: Option<PathBuf>,
     /// Maximum registry-wide allocations under this approval.
-    pub maximum: u8,
+    pub maximum: u32,
     /// Lifetime creation attachment budget.
     pub creation_budget: u64,
     /// Explicit payer, independent of the parent instance's own creation.
@@ -191,11 +191,12 @@ pub struct WorkerPoolConfig {
 }
 
 impl WorkerPoolConfig {
-    fn validate(&self, slots: &BTreeMap<String, CanisterConfig>, cap: Option<u8>) -> Result<()> {
-        let cap = cap.ok_or_else(|| {
-            Error::Invalid("worker_pool requires an explicit subnet_child_limit".into())
-        })?;
-        super::positive_count("worker_pool.max_workers", self.max_workers, cap)?;
+    fn validate(&self, slots: &BTreeMap<String, CanisterConfig>, cap: u32) -> Result<()> {
+        super::positive_count(
+            "worker_pool.max_workers",
+            self.max_workers,
+            cap.min(u32::from(stored::MAX_INSTANCES)) as u8,
+        )?;
         validate_deadline("worker_pool", self.expires_at_ns)?;
         validate_pool(
             slots,
@@ -220,12 +221,21 @@ pub struct PoolGrant<T> {
 
 pub(super) fn validate_pools(
     slots: &BTreeMap<String, CanisterConfig>,
-    limit: Option<u8>,
+    limit: Option<u32>,
+    allow_large_subnet: bool,
     shards: &[ShardPoolConfig],
     instances: Option<&RegistryConfig>,
     workers: &[WorkerPoolConfig],
     standby: Option<&stored::StandbyPolicy>,
 ) -> Result<()> {
+    let cap = limit.unwrap_or(stored::DEFAULT_SUBNET_CHILD_LIMIT);
+    super::positive_count("subnet_child_limit", cap, u32::MAX)?;
+    if !stored::SubnetCapacity::permits_limit(cap, allow_large_subnet) {
+        return Err(Error::Invalid(format!(
+            "subnet_child_limit = {cap} exceeds {}; set allow_large_subnet = true to approve this higher ceiling",
+            stored::DEFAULT_SUBNET_CHILD_LIMIT
+        )));
+    }
     validate_capacity(limit, shards, instances, workers, standby)?;
     for pool in shards {
         pool.validate(slots)?;
@@ -240,18 +250,28 @@ pub(super) fn validate_pools(
         )?;
     }
     for pool in workers {
-        pool.validate(slots, limit)?;
+        pool.validate(slots, limit.unwrap_or(stored::DEFAULT_SUBNET_CHILD_LIMIT))?;
     }
     Ok(())
 }
 
 fn validate_capacity(
-    limit: Option<u8>,
+    limit: Option<u32>,
     shards: &[ShardPoolConfig],
     instances: Option<&RegistryConfig>,
     workers: &[WorkerPoolConfig],
     standby: Option<&stored::StandbyPolicy>,
 ) -> Result<()> {
+    for (field, count, maximum) in [
+        ("shard_pools", shards.len(), stored::MAX_SHARDS),
+        ("worker_pools", workers.len(), stored::MAX_INSTANCES),
+    ] {
+        if count > usize::from(maximum) {
+            return Err(Error::Invalid(format!(
+                "{field} declares {count} pools; maximum is {maximum}"
+            )));
+        }
+    }
     let mut components = std::collections::BTreeSet::new();
     let mut placement = None;
     for (component, root, store) in shards
@@ -278,36 +298,28 @@ fn validate_capacity(
             }
         }
     }
-    if let Some(cap) = limit {
-        if shards.len() > usize::from(cap) {
+    let cap = limit.unwrap_or(stored::DEFAULT_SUBNET_CHILD_LIMIT);
+    for (kind, count) in [("shard", shards.len()), ("worker", workers.len())] {
+        if count > cap as usize {
             return Err(Error::Invalid(format!(
-                "{} shard pools exceed subnet_child_limit = {cap}",
-                shards.len()
+                "{count} {kind} pools exceed subnet_child_limit = {cap}"
             )));
         }
-    } else if shards.len() > 1 {
-        return Err(Error::Invalid(
-            "multiple shard pools require subnet_child_limit".into(),
-        ));
-    }
-    if let Some(cap) = limit
-        && workers.len() > usize::from(cap)
-    {
-        return Err(Error::Invalid(format!(
-            "{} worker pools exceed subnet_child_limit = {cap}",
-            workers.len()
-        )));
     }
     if let Some(p) = standby {
-        let cap = limit
-            .ok_or_else(|| Error::Invalid("standby_pool requires subnet_child_limit".into()))?;
+        let reserve_limit = cap.min(u32::from(stored::MAX_RESERVE_ENTRIES));
         name(&p.root)?;
         for (label, count) in [
             ("min_available_spares", usize::from(p.minimum_available)),
             ("maximum_creations", usize::from(p.maximum_creations)),
             ("imports", p.imports.len()),
         ] {
-            if count > usize::from(cap) {
+            if count > reserve_limit as usize && count <= cap as usize {
+                return Err(Error::Invalid(format!(
+                    "standby_pool.{label} = {count} exceeds the reserve ledger limit of {reserve_limit}"
+                )));
+            }
+            if count > cap as usize {
                 return Err(Error::Invalid(format!(
                     "standby_pool.{label} = {count} exceeds subnet_child_limit = {cap}"
                 )));
@@ -342,14 +354,6 @@ fn validate_capacity(
             }
         }
     }
-    if let Some(n) = limit {
-        super::positive_count("subnet_child_limit", n, stored::MAX_SUBNET_CHILDREN)?;
-        if shards.is_empty() && instances.is_none() && workers.is_empty() && standby.is_none() {
-            return Err(Error::Invalid(format!(
-                "subnet_child_limit = {n} requires a shard_pool, registry, worker_pool or standby_pool"
-            )));
-        }
-    }
     for (pool, field, count, previous) in shards
         .iter()
         .map(|p| ("shard_pool", "max_shards", p.max_shards, p.increase_from))
@@ -362,28 +366,17 @@ fn validate_capacity(
             )
         }))
     {
-        let ceiling = limit.unwrap_or(2);
-        if count > ceiling {
-            let source = if limit.is_some() {
-                "subnet_child_limit"
-            } else {
-                "the default subnet child limit"
-            };
+        if u32::from(count) > cap {
             return Err(Error::Invalid(format!(
-                "{pool}.{field} = {count} exceeds {source} of {ceiling}"
+                "{pool}.{field} = {count} exceeds subnet_child_limit of {cap}"
             )));
         }
-        if let Some(old) = previous {
-            if limit.is_none() {
-                return Err(Error::Invalid(format!(
-                    "{pool}.increase_from = {old} requires an explicit subnet_child_limit"
-                )));
-            }
-            if old == 0 || old >= count {
-                return Err(Error::Invalid(format!(
-                    "{pool}.increase_from = {old} must be positive and less than {field} = {count}"
-                )));
-            }
+        if let Some(old) = previous
+            && (old == 0 || old >= count)
+        {
+            return Err(Error::Invalid(format!(
+                "{pool}.increase_from = {old} must be positive and less than {field} = {count}"
+            )));
         }
     }
     Ok(())
@@ -414,11 +407,7 @@ impl ShardPoolConfig {
             &self.release,
             self.install_args.as_deref(),
         )?;
-        super::positive_count(
-            "shard_pool.max_shards",
-            self.max_shards,
-            stored::MAX_SUBNET_CHILDREN,
-        )?;
+        super::positive_count("shard_pool.max_shards", self.max_shards, stored::MAX_SHARDS)?;
         super::positive_count(
             "shard_pool.keys_per_shard",
             self.keys_per_shard,
@@ -616,11 +605,7 @@ impl RegistryConfig {
                     child.component, self.component
                 )));
             }
-            super::positive_count(
-                "registry.singleton.maximum",
-                child.maximum,
-                stored::MAX_SUBNET_CHILDREN,
-            )?;
+            super::positive_count("registry.singleton.maximum", child.maximum, u32::MAX)?;
         }
         for component in other_components {
             if parent(slots, component)? == hub {

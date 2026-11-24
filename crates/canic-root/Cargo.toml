@@ -24,6 +24,11 @@ role-issuer = [
     "canic-management/role-issuer",
     "canic-management-protocol/retirement",
 ]
+shard-pool = ["sharding"]
+worker-pool = ["sharding"]
+registry = ["sharding"]
+reserve-pool = ["sharding"]
+child-funding = ["sharding"]
 backup = ["canic-management/backup", "dep:serde"]
 sharding = [
     "canic-management-protocol/standby",
@@ -34,7 +39,7 @@ sharding = [
     "dep:serde",
 ]
 blob = ["canic-management/blob"]
-auth = ["canic/auth-enrollment"]
+auth = ["canic/auth-enrollment", "canic-management/auth"]
 fault-injection = ["canic-management/fault-injection"]
 maintenance-candidate = ["canic-management/maintenance-candidate"]
 

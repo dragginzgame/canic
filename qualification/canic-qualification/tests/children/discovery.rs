@@ -2,7 +2,7 @@
 use super::*;
 
 #[tokio::test(flavor = "current_thread")]
-async fn discovers_both_children_without_local_deployment_records() {
+async fn discovers_nine_children_without_local_deployment_records() {
     let mut server = Server::start(
         PreparedServer::check(&canic_qualification::server_directory()).unwrap(),
         Limits {
@@ -25,9 +25,23 @@ async fn discovers_both_children_without_local_deployment_records() {
     let root = owner.client().create_canister().await;
     owner
         .client()
-        .install_canister(root, artifact("root.wasm"), vec![], None)
+        .install_canister(
+            root,
+            artifact("root.wasm"),
+            ic_wire::encode(
+                &canic_management_protocol::stored::RootBootstrap {
+                    services: 9,
+                    max_children: 9,
+                    allow_large_subnet: false,
+                },
+                ic_wire::Encoding::Payload,
+                LIMITS,
+            )
+            .unwrap(),
+            None,
+        )
         .await;
-    owner.client().add_cycles(root, 10_000_000_000_000).await;
+    owner.client().add_cycles(root, 20_000_000_000_000).await;
     let url = owner.client_mut().make_live(None).await.to_string();
     let pic = owner.client();
     let key: String = pic
@@ -64,37 +78,52 @@ async fn discovers_both_children_without_local_deployment_records() {
     let stable = pic.get_stable_memory(root).await;
     let empty = show(&directory.join("empty.html"));
     assert_eq!(empty["canisters"].as_array().unwrap().len(), 1);
-    assert_eq!(empty["managers"].as_array().unwrap().len(), 1);
+    assert_eq!(empty["managers"].as_array().unwrap().len(), 0);
     assert_eq!(empty["issues"], serde_json::json!([]));
     assert_eq!(pic.get_stable_memory(root).await, stable);
 
-    // Admit remotely, in reverse order, without giving Host either child's ID.
+    // Admit remotely, starting out of order, without giving Host any child IDs.
     let mut discovered = Vec::new();
-    for slot in [ChildId::SECOND, ChildId::FIRST] {
+    for index in [2, 1, 0, 3, 4, 5, 6, 7, 8] {
+        let slot = ChildId::service(index).unwrap();
         pic.stop_progress().await;
         let stage = input(
             root,
             artifact("app.wasm"),
             pic.get_time().await.as_nanos_since_unix_epoch(),
         );
-        admit(pic, root, slot, stage).await.unwrap();
+        admit(pic, root, slot, stage.clone()).await.unwrap();
         pic.advance_time(Duration::from_secs(11)).await;
         settle(pic).await;
+        if index == 8 {
+            let original = read(pic, root).await[index].creation.clone();
+            assert_eq!(original.phase, Phase::Ready);
+            pic.upgrade_canister(root, artifact("root.wasm"), vec![], None)
+                .await
+                .unwrap();
+            let retried = admit(pic, root, slot, stage).await.unwrap();
+            assert_eq!(retried.phase, Phase::Ready);
+            assert_eq!(retried.worker, original.worker);
+            assert_eq!(retried.attempts, original.attempts);
+        }
         let custody = read(pic, root).await;
-        let status = &custody[slot.index()].creation;
+        let status = &custody[slot.service_index().unwrap()].creation;
         assert_eq!(status.phase, Phase::Ready);
-        discovered.push(status.worker.clone().unwrap());
+        discovered.push((index + 1, status.worker.clone().unwrap()));
         let stable = pic.get_stable_memory(root).await;
         pic.auto_progress().await;
         let report = directory.join(format!("after-slot-{}.html", slot.index() + 1));
         let observed = show(&report);
         assert_eq!(observed["operations"], serde_json::json!([]));
         assert_eq!(observed["issues"], serde_json::json!([]));
-        assert_eq!(observed["managers"].as_array().unwrap().len(), 2);
+        assert_eq!(
+            observed["managers"].as_array().unwrap().len(),
+            discovered.len()
+        );
         assert_eq!(observed["metrics"].as_array().unwrap().len(), 1);
         let canisters = observed["canisters"].as_array().unwrap();
         assert_eq!(canisters.len(), discovered.len() + 1);
-        for child in &discovered {
+        for (_, child) in &discovered {
             let row = canisters
                 .iter()
                 .find(|row| row["canister"] == *child)
@@ -103,15 +132,21 @@ async fn discovers_both_children_without_local_deployment_records() {
             assert!(row["observation_error"].is_null());
         }
         let html = std::fs::read_to_string(&report).unwrap();
-        for (index, child) in discovered.iter().enumerate() {
-            assert!(html.contains(&format!(
-                "Child: <strong>slot {} · {child}</strong>",
-                2 - index
-            )));
+        for (ordinal, child) in &discovered {
+            assert!(html.contains(&format!("Child: <strong>slot {ordinal} · {child}</strong>")));
         }
         assert_eq!(pic.get_stable_memory(root).await, stable);
     }
     let stable = pic.get_stable_memory(root).await;
+    let tenth = input(
+        root,
+        artifact("app.wasm"),
+        pic.get_time().await.as_nanos_since_unix_epoch(),
+    );
+    assert_eq!(
+        admit(pic, root, ChildId::service(9).unwrap(), tenth).await,
+        Err(Refusal::Occupied)
+    );
     let output = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["fleet", "show", "--color", "never", "--config"])
         .arg(&config)
@@ -123,12 +158,9 @@ async fn discovers_both_children_without_local_deployment_records() {
         String::from_utf8_lossy(&output.stderr)
     );
     let text = String::from_utf8(output.stdout).unwrap();
-    for (index, child) in discovered.iter().enumerate() {
+    for (ordinal, child) in &discovered {
         assert!(
-            text.contains(&format!(
-                "root / slot {} · {child} — creation Ready",
-                2 - index
-            )),
+            text.contains(&format!("root / slot {ordinal} · {child} — creation Ready")),
             "{text}"
         );
     }
@@ -161,7 +193,7 @@ async fn discovers_both_children_without_local_deployment_records() {
         issues[0]
             .as_str()
             .unwrap()
-            .contains("second child slot unknown")
+            .contains("other slots cannot be observed")
     );
     assert_eq!(pic.get_stable_memory(old).await, stable);
     assert!(!directory.join("journal").exists());

@@ -282,7 +282,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
 
 #[test]
 fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority() {
-    use canic_management_protocol::{LIMITS, Phase, STATUS, Status};
+    use canic_management_protocol::{LIMITS, Phase, Status, children::STATUS};
     let (dir, selected) = fixture();
     let (id, fleet) = create(&dir, &selected).unwrap();
     let journal = dir.join("journal");
@@ -497,8 +497,9 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
 #[test]
 fn fleet_child_bound_is_explicit_before_artifact_reads_or_journal_creation() {
     for with_store in [false, true] {
-        for count in [0, ChildId::ALL.len() + 1] {
+        for count in [0, ChildId::HISTORICAL_SERVICES.len() + 1] {
             let (dir, mut selected) = fixture();
+            selected.config.subnet_child_limit = Some(8);
             let child = selected.config.canisters.remove("app").unwrap();
             for index in 0..count {
                 selected
@@ -525,8 +526,8 @@ fn fleet_child_bound_is_explicit_before_artifact_reads_or_journal_creation() {
             assert_eq!(
                 message,
                 format!(
-                    "fleet declares {count} direct application children under root; this Root path supports 1 to {} (Wasm Store is separate)",
-                    ChildId::ALL.len()
+                    "fleet declares {count} direct application children under root; supported range is 1..={} (Wasm Store is separate)",
+                    ChildId::HISTORICAL_SERVICES.len()
                 )
             );
             assert!(!dir.join("journal").exists());
@@ -683,7 +684,7 @@ fn two_child_approval_retains_slot_mapping_and_cancels_only_before_preparation()
     sibling.wasm = Some("app.wasm".into());
     selected.config.canisters.insert("worker".into(), sibling);
     let (id, fleet) = create(&dir, &selected).unwrap();
-    assert_eq!(fleet.version, 2);
+    assert_eq!(fleet.version, 8);
     assert_eq!(fleet.children[0].deployment.canister, "app");
     assert_eq!(fleet.children[1].deployment.canister, "worker");
     assert_eq!(create(&dir, &selected).unwrap().0, id);
@@ -747,10 +748,20 @@ fn retained_two_child_approval_preserves_digest_and_rejects_slot_reassignment() 
 }
 
 #[test]
-fn whole_fleet_keeps_three_service_approvals_and_journal_paths() {
+fn whole_fleet_keeps_nine_service_approvals_and_journal_paths() {
     let (dir, mut selected) = fixture();
     let service = selected.config.canisters.remove("app").unwrap();
-    for name in ["user_hub", "project_registry", "discovery_hub"] {
+    for name in [
+        "user_hub",
+        "project_registry",
+        "discovery_hub",
+        "a",
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+    ] {
         selected
             .config
             .canisters
@@ -777,9 +788,19 @@ fn whole_fleet_keeps_three_service_approvals_and_journal_paths() {
     };
     let retained = journal.join(&operation);
     assert_eq!(load(&retained, &operation).unwrap(), fleet_plan);
-    assert_eq!(fleet_plan.children.len(), 3);
+    assert_eq!(fleet_plan.children.len(), 9);
+    let mut record = serde_json::to_value(&fleet_plan).unwrap();
+    assert!(record.get("child").is_none());
+    assert!(record.get("sibling").is_none());
+    assert!(record.get("additional").is_none());
+    assert_eq!(
+        record["children"][2]["slot"],
+        serde_json::json!(ChildId::HISTORICAL_SERVICES[2])
+    );
+    record["children"][2]["slot"] = serde_json::json!(ChildId::FIRST);
+    assert!(serde_json::from_value::<FleetPlan>(record).is_err());
     for (index, child) in fleet_plan.children.iter().enumerate() {
-        assert_eq!(child.slot, ChildId::ALL[index]);
+        assert_eq!(child.slot, ChildId::service(index).unwrap());
         assert!(
             retained
                 .join(record::child_leaf(child.slot))
@@ -788,7 +809,9 @@ fn whole_fleet_keeps_three_service_approvals_and_journal_paths() {
         );
     }
     assert!(matches!(plan(), FleetPlanning::Create { operation: id, .. } if id == operation));
-    std::fs::create_dir(retained.join("child-3/stage")).unwrap();
+    // Evidence anywhere in the operation blocks cancellation, even when
+    // this reader does not recognize the service directory.
+    std::fs::create_dir_all(retained.join("child-9/stage")).unwrap();
     assert!(matches!(
         cancel_fleet_plan(&journal, &operation),
         Err(Error::Blocked(_))

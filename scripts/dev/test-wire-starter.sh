@@ -40,7 +40,10 @@ RS
 cargo metadata --offline --format-version 1 >/dev/null
 check
 cli app export-wire --out generated
-cli artifact endpoints artifacts/app.wasm --json | jq -e 'any(.endpoints[]; .name == "__ic_scheduling_once" and .mode == "update")' >/dev/null
+cli artifact endpoints artifacts/app.wasm --json | jq -e '
+  any(.endpoints[]; .name == "__ic_scheduling_once" and .mode == "update" and .argument == null) and
+  any(.endpoints[]; .name == "greet" and .argument == "String" and .reply == "Greeting")
+' >/dev/null
 grep -F 'transport.query(canisterId, "greet"' generated/service-0.ts >/dev/null
 if grep -Fq '__ic_scheduling_once' generated/*.ts; then
     echo "Timer executor leaked into the generated client" >&2

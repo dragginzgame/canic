@@ -15,8 +15,8 @@ pub(super) async fn observe(root: &Client<'_>) -> Status {
     let retained = root
         .update::<_, Option<Status>>(
             "observe_store_maintenance",
-            wire::OBSERVE,
-            &(),
+            wire::READ_ATTEMPT,
+            &None::<wire::Approval>,
             wire::LIMITS,
         )
         .await
@@ -52,6 +52,18 @@ pub(super) async fn observe(root: &Client<'_>) -> Status {
         Some(retained.clone())
     );
     retained
+}
+
+// The pinned predecessor executables accept the original unit request and method 52.
+pub(super) async fn predecessor_observation(root: &Client<'_>) -> Status {
+    root.update::<_, Option<Status>>(
+        "observe_store_maintenance",
+        wire::OBSERVE,
+        &(),
+        wire::LIMITS,
+    )
+    .await
+    .unwrap()
 }
 
 // The frozen Roots have a two-child Wire tuple. Decode their exact installed shape.
@@ -292,7 +304,14 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     let replacement = std::fs::read(artifacts().join("candidate.wasm")).unwrap();
     let approval = stopped(&root, &supplier, &replacement).await;
     assert_eq!(approval.previous_module, previous_module);
-    let closed = observe(&root).await;
+    let read = async || {
+        if historical_scan {
+            predecessor_observation(&root).await
+        } else {
+            observe(&root).await
+        }
+    };
+    let closed = read().await;
     assert_eq!(recover_store(&root, &approval).await, closed);
     let before_store = pic.get_stable_memory(supplier.id).await;
     let before_root = pic.get_stable_memory(root.id).await.len();
@@ -321,11 +340,11 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
         .is_err()
     );
     inject(&root, 0).await;
-    assert_eq!(observe(&root).await.phase, Phase::UploadIssued);
-    let pending_upload = observe(&root).await;
+    assert_eq!(read().await.phase, Phase::UploadIssued);
+    let pending_upload = read().await;
     if historical_scan {
         super::refuse_old_backing(&root).await;
-        assert_eq!(observe(&root).await, pending_upload);
+        assert_eq!(predecessor_observation(&root).await, pending_upload);
         check_predecessor_custody(&root, &pending_upload).await;
         assert_eq!(pic.get_stable_memory(supplier.id).await, before_store);
         assert_eq!(
@@ -576,9 +595,9 @@ async fn store_install_refuses_wrong_bytes_callers_frames_and_expired_dispatch()
             CanisterId::anonymous(),
             "observe_store_maintenance",
             ic_wire::encode(
-                &(),
+                &None::<wire::Approval>,
                 ic_wire::Encoding::Frame {
-                    method: wire::OBSERVE,
+                    method: wire::READ_ATTEMPT,
                     direction: ic_wire::Direction::Request
                 },
                 wire::LIMITS

@@ -133,7 +133,10 @@ pub struct FleetDeclaration {
     pub role_receivers: Vec<String>,
     /// Fleet-wide limit on occupied child and reserve slots on this managed subnet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub subnet_child_limit: Option<u8>,
+    pub subnet_child_limit: Option<u32>,
+    /// Explicit opt-in for a numbered ceiling above the default subnet backstop.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_large_subnet: bool,
     /// Registry assigning one dedicated child per application key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registry: Option<RegistryConfig>,
@@ -178,7 +181,10 @@ pub struct FleetConfig {
     pub role_receivers: Vec<String>,
     /// Fleet-wide limit on occupied child and reserve slots on this managed subnet.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub subnet_child_limit: Option<u8>,
+    pub subnet_child_limit: Option<u32>,
+    /// Explicit opt-in for a numbered ceiling above the default subnet backstop.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub allow_large_subnet: bool,
     /// Registry assigning one dedicated child per application key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registry: Option<RegistryConfig>,
@@ -365,6 +371,7 @@ impl Config {
                     sharding::validate_pools(
                         &slots,
                         config.subnet_child_limit,
+                        config.allow_large_subnet,
                         &config.shard_pools,
                         config.registry.as_ref(),
                         &config.worker_pools,
@@ -478,6 +485,7 @@ impl AppConfig {
             top_up_children: fleet.top_up_children.clone(),
             role_receivers: fleet.role_receivers.clone(),
             subnet_child_limit: fleet.subnet_child_limit,
+            allow_large_subnet: fleet.allow_large_subnet,
             registry: fleet.registry.clone(),
             standby_pool: fleet.standby_policy()?,
             worker_pools: fleet.worker_pools.clone(),
@@ -617,6 +625,7 @@ impl FleetConfig {
         sharding::validate_pools(
             &self.canisters,
             self.subnet_child_limit,
+            self.allow_large_subnet,
             &self.shard_pools,
             self.registry.as_ref(),
             &self.worker_pools,
@@ -1101,6 +1110,7 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
                     top_up_children: vec![],
                     role_receivers: vec![],
                     subnet_child_limit: None,
+                    allow_large_subnet: false,
                     registry: None,
                     standby_pool: None,
                     worker_pools: Vec::new(),
@@ -1270,11 +1280,44 @@ fn append_declarations(target: &mut dyn toml_edit::TableLike, source: &toml_edit
 /// # Errors
 /// Refuses missing, malformed, unsupported or oversized configuration files.
 pub fn load_config(path: &Path) -> Result<Config> {
-    let bytes = store::read(path, MAX_CONFIG_BYTES)?;
-    let config: Config =
-        toml::from_str(std::str::from_utf8(&bytes).map_err(supplier)?).map_err(supplier)?;
+    let config = Config::try_from(read_source(path)?)?;
     config.validate()?;
     Ok(config)
+}
+
+fn read_source(path: &Path) -> Result<SourceConfig> {
+    let bytes = store::read(path, MAX_CONFIG_BYTES)?;
+    toml::from_str(std::str::from_utf8(&bytes).map_err(supplier)?).map_err(supplier)
+}
+
+pub(super) fn load_build_config(path: &Path, app: Option<&str>) -> Result<Config> {
+    let source = read_source(path)?;
+    let (name, app) = select(&source.apps, app, "app")?;
+    for (slot, definition) in &app.canisters {
+        for (field, value) in [
+            ("", Some(slot.as_str())),
+            (".role", definition.role.as_deref()),
+        ] {
+            let Some(value) = value else { continue };
+            let advice = match value {
+                "root" => {
+                    "Root is supplied automatically; use parent = \"root\" on managed children"
+                }
+                "wasm_store" | "wasm-store" => {
+                    "select the supplied Wasm Store with wasm_store = true on the app"
+                }
+                "store" if field.is_empty() => {
+                    "store is the supplied Wasm Store slot; set wasm_store = true on the app"
+                }
+                "coordinator" => "coordinator is reserved for Canic infrastructure",
+                _ => continue,
+            };
+            return Err(Error::Invalid(format!(
+                "apps.{name}.canisters.{slot}{field} declares reserved infrastructure {value:?}; remove the explicit definition. {advice}"
+            )));
+        }
+    }
+    source.try_into()
 }
 
 /// Plan the first deployment of a named slot, retaining its original operation on repetition.

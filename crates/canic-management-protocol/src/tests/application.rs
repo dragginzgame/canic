@@ -22,17 +22,19 @@ fn maximum_application_history_fits_and_incomplete_effect_custody_refuses() {
         root: custody::RootHistory {
             current: custody::Root {
                 stored: stored::Custody {
-                    children: std::array::from_fn(|_| custody::Custody {
-                        creation: Default::default(),
-                        upgrades: vec![],
-                    }),
-                    sources: Default::default(),
+                    children: (0..8)
+                        .map(|_| custody::Custody {
+                            creation: Default::default(),
+                            upgrades: vec![],
+                        })
+                        .collect(),
+                    sources: vec![None; 8],
                 },
                 store_operation: None,
             },
             store_history: vec![],
         },
-        applications: std::array::from_fn(|_| Some(lifecycle.clone())),
+        applications: (0..8).map(|_| Some(lifecycle.clone())).collect(),
     };
     let encoding = ic_wire::Encoding::Frame {
         method: CUSTODY,

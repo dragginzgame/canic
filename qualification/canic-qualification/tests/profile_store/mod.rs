@@ -157,11 +157,14 @@ async fn upgrade_status(pic: &PocketIc, root: CanisterId) -> upgrade::Status {
         .query_call(
             root,
             CanisterId::anonymous(),
-            "upgrade_status",
+            "child_upgrade_status",
             ic_wire::encode(
-                &(),
+                &canic_management_protocol::children::Request {
+                    slot: canic_management_protocol::children::ChildId::FIRST,
+                    value: None::<upgrade::Approval>,
+                },
                 ic_wire::Encoding::Frame {
-                    method: upgrade::STATUS,
+                    method: canic_management_protocol::children::UPGRADE_STATUS,
                     direction: ic_wire::Direction::Request,
                 },
                 canic_management_protocol::LIMITS,
@@ -173,7 +176,7 @@ async fn upgrade_status(pic: &PocketIc, root: CanisterId) -> upgrade::Status {
     ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: upgrade::STATUS,
+            method: canic_management_protocol::children::UPGRADE_STATUS,
             direction: ic_wire::Direction::Response,
         },
         canic_management_protocol::LIMITS,

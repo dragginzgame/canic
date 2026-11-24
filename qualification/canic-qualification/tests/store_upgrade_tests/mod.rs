@@ -47,9 +47,9 @@ async fn retained(
             operator,
             "observe_store_maintenance",
             ic_wire::encode(
-                &(),
+                &None::<wire::Approval>,
                 ic_wire::Encoding::Frame {
-                    method: wire::OBSERVE,
+                    method: wire::READ_ATTEMPT,
                     direction: ic_wire::Direction::Request,
                 },
                 wire::LIMITS,
@@ -61,7 +61,7 @@ async fn retained(
     ic_wire::decode::<Option<wire::Status>>(
         &reply,
         ic_wire::Encoding::Frame {
-            method: wire::OBSERVE,
+            method: wire::READ_ATTEMPT,
             direction: ic_wire::Direction::Response,
         },
         wire::LIMITS,
@@ -186,6 +186,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         "{}",
         String::from_utf8_lossy(&initialized.stderr)
     );
+    let build_source = std::fs::read(dir.join("canic.toml")).unwrap();
     let mut built = cli(&dir, &["app", "build"]);
     assert_eq!(built["canisters"].as_array().unwrap().len(), 3);
     let lock = std::fs::read(dir.join("Cargo.lock")).unwrap();
@@ -208,7 +209,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         3_000_000_000_000_u64
     );
     assert_eq!(
-        initial["fleet_plan"]["child"]["execute_at_ns"],
+        initial["fleet_plan"]["children"][0]["execute_at_ns"],
         initial["fleet_plan"]["root"]["created_at_ns"]
     );
     let creation = initial["operation"].as_str().unwrap();
@@ -239,7 +240,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     );
     assert_eq!(
         entries[0]["artifact"]["sha256"],
-        initial["fleet_plan"]["child"]["artifact"]["sha256"]
+        initial["fleet_plan"]["children"][0]["artifact"]["sha256"]
     );
     assert_eq!(entries[0]["publication_retained"], true);
     println!(
@@ -551,7 +552,9 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     let changed = original.replace("Hello from Canic", "Hello from rebuilt starter");
     assert_ne!(changed, original);
     std::fs::write(&source, changed).unwrap();
+    std::fs::write(dir.join("canic.toml"), build_source).unwrap();
     let rebuilt = cli(&dir, &["app", "build", "--canister", "app"]);
+    write_config(&dir, &config);
     let selected = rebuilt["canisters"].as_array().unwrap();
     assert_eq!(selected.len(), 1);
     let replacement = &selected[0];

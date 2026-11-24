@@ -444,6 +444,7 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
             top_up_children: vec![],
             role_receivers: vec![],
             subnet_child_limit: None,
+            allow_large_subnet: false,
             registry: None,
             standby_pool: None,
             worker_pools: Vec::new(),

@@ -14,7 +14,7 @@ fn open(initial: Option<Principal>) {
         fresh,
         "hub",
         &[KEY, super::routes::KEY, "hub.shards.v1", "hub.owners.v1"],
-        8,
+        256,
     );
     sharding::routes::open(&storage, "hub.shards.v1", "hub.owners.v1", initial);
     super::routes::open(&storage, fresh);
@@ -40,7 +40,7 @@ fn reopen() {
     open(None);
 }
 
-/// Assign the authenticated caller's key through the configured Root.
+/// Assign the authenticated caller's key in the installed hub.
 #[runtime::update(
     runtime = runtime,
     name = "signup",
@@ -51,7 +51,7 @@ fn reopen() {
     on_error = fail,
 )]
 async fn signup((): ()) -> Placement {
-    sharding::assign(ROOT.get().unwrap(), "user_shard", key())
+    sharding::routes::assign_shard("user_shard", runtime::system::caller(), user)
         .await
         .unwrap_or_else(|reason| fail(reason))
 }
@@ -66,10 +66,11 @@ async fn signup((): ()) -> Placement {
     max_bytes = 0,
     on_error = fail,
 )]
-async fn lookup((): ()) -> Placement {
-    sharding::lookup(ROOT.get().unwrap(), "user_shard", key())
-        .await
-        .unwrap_or_else(|reason| fail(reason))
+fn lookup((): ()) -> Placement {
+    sharding::routes::get_shard("user_shard", runtime::system::caller())
+        .map_or(Placement::Unknown, |t| {
+            Placement::Assigned(t.allocation, t.shard.to_text())
+        })
 }
 
 /// Assign one authenticated user's project key through the configured Root.

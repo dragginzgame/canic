@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
-    method: ic_wire::method_id("canic.hub_routes.v2"),
+    method: ic_wire::method_id("canic.placement.hub_routes.v1"),
     direction: ic_wire::Direction::Response,
 };
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
@@ -358,6 +358,42 @@ pub fn confirm_move(
         );
         shards[from].occupied -= 1;
         i.cell.set(i.roster.encode());
+        Ok(())
+    })
+}
+
+/// Release an account after the application has removed its data from a draining shard.
+/// # Errors
+/// Refuses a changed generation, active shard, different route or unfinished move.
+/// # Panics
+/// Requires an opened route index.
+pub fn release(pool: &str, subject: Principal, target: &ShardTarget) -> Result<(), &'static str> {
+    INDEX.with_borrow_mut(|index| {
+        let i = index.as_mut().expect("open routes");
+        let n = i.roster.pool(pool).ok_or("unknown pool")?;
+        let shards = &mut i.roster.pools[n].shards;
+        let slot = shards
+            .iter()
+            .position(|s| &s.target == target)
+            .ok_or("assignment changed")?;
+        if !shards[slot].draining {
+            return Err("shard is not draining");
+        }
+        let namespace = u8::try_from(n).expect("pool namespace");
+        if i.owners
+            .contains_key(&(namespace, reservation_key(subject, true)))
+        {
+            return Err("move pending");
+        }
+        let key = (namespace, subject_key(subject));
+        if let Some((current, _)) = i.owners.get(&key) {
+            if usize::from(current) != slot {
+                return Err("assignment changed");
+            }
+            i.owners.remove(&key);
+            shards[slot].occupied -= 1;
+            i.cell.set(i.roster.encode());
+        }
         Ok(())
     })
 }

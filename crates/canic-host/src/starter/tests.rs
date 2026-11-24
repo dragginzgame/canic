@@ -127,16 +127,56 @@ fn invalid_names_or_source_are_refused_before_any_staging() {
     std::fs::remove_dir_all(parent).unwrap();
 }
 
+fn app_build_fixture(path: &Path) -> crate::config::SourceConfig {
+    let mut source: crate::config::SourceConfig =
+        toml::from_str(&std::fs::read_to_string(path).unwrap()).unwrap();
+    let slots = &mut source.apps.get_mut("hello").unwrap().canisters;
+    let mut other = slots["app"].clone();
+    other.wasm = Some("artifacts/other.wasm".into());
+    other.build.as_mut().unwrap().client = None;
+    slots.insert("other".into(), other);
+    source
+}
+
+#[test]
+fn app_build_refuses_explicit_infrastructure_before_running_recipes() {
+    let directory = crate::tests::directory();
+    let path = directory.join("canic.toml");
+    for (slot, role) in [
+        ("root", "custom"),
+        ("wasm-store", "custom"),
+        ("wasm_store", "custom"),
+        ("store", "custom"),
+        ("coordinator", "custom"),
+        ("custom", "root"),
+        ("custom", "wasm-store"),
+        ("custom", "coordinator"),
+    ] {
+        std::fs::write(&path, format!(
+            "[apps.demo.canisters.app]\nparent = \"root\"\n[apps.demo.canisters.{slot}]\nrole = {role:?}\n"
+        )).unwrap();
+        let error = crate::build_app(&path, None, Some("app"))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            error.contains(&format!("apps.demo.canisters.{slot}"))
+                && error.contains("reserved infrastructure"),
+            "{error}"
+        );
+    }
+    std::fs::remove_dir_all(directory).unwrap();
+}
+
 #[test]
 fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
     let parent = crate::tests::directory();
     let destination = parent.join("starter");
     let path = create_starter(&destination, "hello", &source()).unwrap();
-    let original = crate::load_config(&path).unwrap();
+    let original = app_build_fixture(&path);
     for case in 0..11 {
         let mut config = original.clone();
         let canisters = &mut config.apps.get_mut("hello").unwrap().canisters;
-        let root = canisters.get_mut("root").unwrap();
+        let root = canisters.get_mut("other").unwrap();
         match case {
             0 => root.build = None,
             1 => root.build.as_mut().unwrap().manifest = "starter-app/Cargo.toml".into(),
@@ -150,14 +190,14 @@ fn app_build_admits_all_recipes_before_creating_a_lock_or_output() {
             9 => root.wasm = Some("Cargo.toml/child.wasm".into()),
             _ => root.wasm = Some("wire-baseline/hello/contracts.json".into()),
         }
-        std::fs::write(&path, crate::config::encode_config(&config).unwrap()).unwrap();
+        std::fs::write(&path, toml::to_string(&config).unwrap().into_bytes()).unwrap();
         assert!(crate::build_app(&path, None, None).is_err());
         assert!(crate::build_app(&path, None, Some("app")).is_err());
         assert!(!destination.join("Cargo.lock").exists());
         assert!(!destination.join("artifacts").exists());
         assert!(!destination.join(".canic").exists());
     }
-    std::fs::write(&path, crate::config::encode_config(&original).unwrap()).unwrap();
+    std::fs::write(&path, toml::to_string(&original).unwrap()).unwrap();
     assert!(matches!(
         crate::build_app(&path, None, Some("missing")),
         Err(Error::Invalid(_))
@@ -174,17 +214,18 @@ fn app_build_refuses_output_aliases_before_creating_a_lock_or_output() {
     let path = create_starter(&destination, "hello", &source()).unwrap();
     std::os::unix::fs::symlink(".", destination.join("alias")).unwrap();
     std::os::unix::fs::symlink("artifacts/app.wasm", destination.join("app-link.wasm")).unwrap();
+    let original = app_build_fixture(&path);
     for alias in ["alias/artifacts/app.wasm", "app-link.wasm"] {
-        let mut config = crate::load_config(&path).unwrap();
+        let mut config = original.clone();
         config
             .apps
             .get_mut("hello")
             .unwrap()
             .canisters
-            .get_mut("root")
+            .get_mut("other")
             .unwrap()
             .wasm = Some(alias.into());
-        std::fs::write(&path, crate::config::encode_config(&config).unwrap()).unwrap();
+        std::fs::write(&path, toml::to_string(&config).unwrap().into_bytes()).unwrap();
         for selected in [None, Some("app")] {
             assert!(matches!(
                 crate::build_app(&path, None, selected),
@@ -210,7 +251,7 @@ fn app_build_preserves_config_and_cargo_inputs_including_unselected_recipes() {
     let parent = crate::tests::directory();
     let destination = parent.join("starter");
     let path = create_starter(&destination, "hello", &source()).unwrap();
-    let mut original = crate::load_config(&path).unwrap();
+    let mut original = app_build_fixture(&path);
     // Include an independent workspace input on an unselected recipe.
     let secondary = parent.join("secondary");
     std::fs::create_dir(&secondary).unwrap();
@@ -220,7 +261,7 @@ fn app_build_preserves_config_and_cargo_inputs_including_unselected_recipes() {
         .get_mut("hello")
         .unwrap()
         .canisters
-        .get_mut("store")
+        .get_mut("other")
         .unwrap()
         .build
         .as_mut()
@@ -248,7 +289,7 @@ fn app_build_preserves_config_and_cargo_inputs_including_unselected_recipes() {
             .get_mut("app")
             .unwrap()
             .wasm = Some(output);
-        let bytes = crate::config::encode_config(&config).unwrap();
+        let bytes = toml::to_string(&config).unwrap().into_bytes();
         std::fs::write(&path, &bytes).unwrap();
         for selected in [None, Some("app"), Some("root")] {
             let error = crate::build_app(&path, None, selected).unwrap_err();

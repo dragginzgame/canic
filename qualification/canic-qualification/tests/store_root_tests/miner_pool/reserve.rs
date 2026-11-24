@@ -349,6 +349,7 @@ async fn two_roots_hold_spare_until_destination_confirms_custody() {
                 "configure_capacity",
                 stored::CONFIGURE_CAPACITY,
                 &stored::SubnetCapacity {
+                    allow_large_subnet: false,
                     root: id.to_text(),
                     max_children: 1,
                 },

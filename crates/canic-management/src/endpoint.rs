@@ -34,8 +34,7 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
             && matches!(
                 _method,
                 protocol::publication::EXECUTE
-                    | protocol::publication::INFO
-                    | protocol::publication::CUSTODY
+                    | protocol::publication::OBSERVATION
                     | protocol::application::CHILD_EVIDENCE
                     | protocol::stored::STAGE_UPGRADE
                     | protocol::stored::RECONCILE_UPGRADE
@@ -60,6 +59,20 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
 #[doc(hidden)]
 #[must_use]
 pub fn response_limits(method: u64) -> wire::Limits {
+    #[cfg(feature = "fault-injection")]
+    if crate::engine::reply_fault(method) {
+        return wire::Limits {
+            bytes: 0,
+            ..protocol::LIMITS
+        };
+    }
+    declared_response_limits(method)
+}
+
+/// Wire budget advertised by the mounted contract.
+#[doc(hidden)]
+#[must_use]
+pub const fn declared_response_limits(method: u64) -> wire::Limits {
     if matches!(
         method,
         protocol::application::CUSTODY
@@ -78,27 +91,18 @@ pub fn response_limits(method: u64) -> wire::Limits {
         method,
         protocol::store_maintenance::STAGE
             | protocol::store_maintenance::ADVANCE
-            | protocol::store_maintenance::OBSERVE
+            | protocol::store_maintenance::READ_ATTEMPT
             | protocol::store_maintenance::INSTALL
             | protocol::store_maintenance::ACTIVATE
             | protocol::store_maintenance::STATUS
             | protocol::store_maintenance::RECOVER
-            | protocol::store_maintenance::OBSERVE_ATTEMPT
     ) {
         return protocol::store_maintenance::LIMITS;
-    }
-    #[cfg(feature = "fault-injection")]
-    if crate::engine::reply_fault(method) {
-        return wire::Limits {
-            bytes: 0,
-            ..protocol::LIMITS
-        };
     }
     if matches!(
         method,
         protocol::publication::EXECUTE
-            | protocol::publication::INFO
-            | protocol::publication::CUSTODY
+            | protocol::publication::OBSERVATION
             | protocol::publication::ADMISSION
             | protocol::publication::REMOVE
     ) {
@@ -113,8 +117,6 @@ pub fn response_limits(method: u64) -> wire::Limits {
     if method == protocol::custody::OBSERVE {
         return protocol::custody::LIMITS;
     }
-    #[cfg(not(feature = "fault-injection"))]
-    let _ = method;
     protocol::LIMITS
 }
 

@@ -68,26 +68,56 @@ pub fn owner_custody() -> children::Custody {
         "Store maintenance custody required"
     );
     assert!(
-        !ChildId::ALL.into_iter().any(delivery::is_stored),
+        !service_slots().into_iter().any(delivery::is_stored),
         "Store-aware custody required"
     );
     journals()
 }
 
+pub(crate) fn service_slots() -> Vec<ChildId> {
+    STATE.with_borrow(|state| {
+        state
+            .as_ref()
+            .expect("open engine")
+            .journal
+            .0
+            .keys()
+            .copied()
+            .filter(|id| id.service_index().is_some())
+            .collect()
+    })
+}
+
+/// Retain the fleet ceiling during a fresh Root installation.
+/// # Panics
+/// Traps if the engine is closed, the policy is invalid or bootstrap already ran.
+pub fn bootstrap(policy: canic_management_protocol::stored::RootBootstrap) {
+    assert!(policy.valid(), "invalid Root bootstrap policy");
+    STATE.with_borrow_mut(|s| {
+        let state = s.as_mut().expect("initialized Root");
+        let mut journals = state.journal.clone();
+        assert!(journals.3.replace(policy).is_none(), "already bootstrapped");
+        state.set_journal(journals);
+    });
+}
+
 fn journals() -> children::Custody {
     STATE.with_borrow(|state| {
         let journals = &state.as_ref().expect("open engine").journal.0;
-        ChildId::ALL.map(|slot| {
-            let journal = &journals[&slot];
-            let mut upgrades = journal.2.clone();
-            if journal.1.approval.is_some() {
-                upgrades.push(journal.1.clone());
-            }
-            canic_management_protocol::custody::Custody {
-                creation: journal.0.clone(),
-                upgrades,
-            }
-        })
+        service_slots()
+            .into_iter()
+            .map(|slot| {
+                let journal = &journals[&slot];
+                let mut upgrades = journal.2.clone();
+                if journal.1.approval.is_some() {
+                    upgrades.push(journal.1.clone());
+                }
+                canic_management_protocol::custody::Custody {
+                    creation: journal.0.clone(),
+                    upgrades,
+                }
+            })
+            .collect()
     })
 }
 
@@ -113,9 +143,9 @@ pub(crate) struct State {
     #[cfg(feature = "sharding")]
     pools: sharding::Pools,
     #[cfg(feature = "sharding")]
-    worker_history: ic_storage::adapter::StableBTreeMap<[u8; 32], Vec<u8>>,
+    project_index: ic_storage::adapter::StableBTreeMap<canic::sharding::Key, u32>,
     #[cfg(feature = "sharding")]
-    claims: ic_storage::adapter::StableBTreeMap<(u8, canic::sharding::Key), u8>,
+    worker_history: ic_storage::adapter::StableBTreeMap<[u8; 32], Vec<u8>>,
     #[cfg(feature = "role-issuer")]
     role_key: StableCell<Vec<u8>>,
     readiness: Readiness,
@@ -157,7 +187,7 @@ thread_local! {
 /// # Panics
 /// Traps if storage is missing/corrupt on upgrade, admission fails, or timers cannot open.
 pub fn open(fresh: bool, readiness: Readiness) {
-    // Sharding Roots admit up to eight shards of 100,000 keys across the shard slots.
+    // Placement Roots also retain the registry index and worker history.
     let pages = if cfg!(feature = "sharding") {
         4096
     } else {
@@ -203,10 +233,10 @@ pub fn open(fresh: bool, readiness: Readiness) {
         fresh.then(|| sharding::Pools::default().encode()),
     );
     #[cfg(feature = "sharding")]
-    let claims = {
+    let project_index = {
         let lease = runtime
-            .open_memory(&ic_storage::StableKey::parse(crate::storage::CLAIMS_KEY).unwrap())
-            .expect("placement index lease");
+            .open_memory(&ic_storage::StableKey::parse(crate::storage::PROJECT_INDEX_KEY).unwrap())
+            .expect("project claim index lease");
         if fresh {
             ic_storage::adapter::StableBTreeMap::create(lease)
         } else {
@@ -232,11 +262,12 @@ pub fn open(fresh: bool, readiness: Readiness) {
         role_key: role_issuer::open(&runtime, fresh),
         journal_cell,
         #[cfg(feature = "sharding")]
-        pools: sharding::open(pool.get(), claims.len()),
-        #[cfg(feature = "sharding")]
-        claims,
+        pools: sharding::open(pool.get()),
+
         #[cfg(feature = "sharding")]
         worker_history,
+        #[cfg(feature = "sharding")]
+        project_index,
         #[cfg(feature = "sharding")]
         pool,
         artifact_cell,
@@ -254,9 +285,8 @@ pub fn open(fresh: bool, readiness: Readiness) {
     #[cfg(feature = "sharding")]
     sharding::validate_claims(&state);
     #[cfg(not(feature = "sharding"))]
-    assert_eq!(
-        slots.len(),
-        ChildId::ALL.len(),
+    assert!(
+        slots.iter().all(|s| s.service_index().is_some()),
         "project placement required"
     );
     for &slot in &slots {
@@ -368,9 +398,14 @@ fn validate(state: &State, slot: ChildId) {
 
 fn snapshot(slot: ChildId) -> Status {
     STATE.with_borrow(|state| {
-        state.as_ref().expect("initialized manager").journal.0[&slot]
+        state
+            .as_ref()
+            .expect("initialized manager")
+            .journal
             .0
-            .clone()
+            .get(&slot)
+            .map(|j| j.0.clone())
+            .unwrap_or_default()
     })
 }
 
@@ -538,8 +573,34 @@ fn admit(
     approval: Approval,
     artifact: Artifact,
 ) -> Result<Status, Refusal> {
-    if origin == Origin::Permanent && !ChildId::ALL.contains(&slot) {
+    if origin == Origin::Permanent
+        && slot
+            .service_index()
+            .is_none_or(|index| index > service_slots().len())
+    {
         return Err(Refusal::Binding);
+    }
+    if origin == Origin::Permanent
+        && STATE.with_borrow(|s| {
+            let state = s.as_ref().expect("open Root");
+            #[cfg(feature = "sharding")]
+            if state.pools.capacity_approved() {
+                return false;
+            }
+            let maximum = state.journal.3.map_or(
+                canic_management_protocol::stored::DEFAULT_SUBNET_CHILD_LIMIT,
+                |policy| policy.max_children,
+            );
+            state
+                .journal
+                .0
+                .values()
+                .filter(|entry| entry.0.approval.is_some())
+                .count()
+                >= maximum as usize
+        })
+    {
+        return Err(Refusal::Occupied);
     }
     #[cfg(not(feature = "sharding"))]
     let attachment = u128::from(CREATION_CYCLES);
@@ -636,11 +697,17 @@ pub(crate) fn reply_fault(method: u64) -> bool {
             FAULT.with_borrow(|faults| faults.get(&ChildId::FIRST).copied()),
             method
         ),
-        (Some(9), canic_management_protocol::STAGE)
-            | (Some(10), canic_management_protocol::RECONCILE)
-            | (Some(12), canic_management_protocol::publication::EXECUTE)
-            | (Some(12), canic_management_protocol::publication::INFO)
-            | (Some(12), canic_management_protocol::publication::CUSTODY)
+        (
+            Some(9),
+            canic_management_protocol::STAGE | canic_management_protocol::children::STAGE
+        ) | (
+            Some(10),
+            canic_management_protocol::RECONCILE | canic_management_protocol::children::RECONCILE
+        ) | (Some(12), canic_management_protocol::publication::EXECUTE)
+            | (
+                Some(12),
+                canic_management_protocol::publication::OBSERVATION
+            )
             | (Some(12), canic_management_protocol::publication::ADMISSION)
             | (Some(12), canic_management_protocol::publication::REMOVE)
     )

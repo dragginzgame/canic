@@ -23,6 +23,7 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
                 top_up_children: vec![],
                 role_receivers: vec![],
                 subnet_child_limit: None,
+                allow_large_subnet: false,
                 registry: None,
                 standby_pool: None,
                 worker_pools: Vec::new(),

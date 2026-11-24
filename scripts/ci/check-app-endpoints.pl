@@ -8,7 +8,7 @@ use RustSource qw(code_mask);
 
 my $failed = 0;
 open my $files, '-|', 'git', 'ls-files', '-z', '--cached', '--others', '--exclude-standard',
-    '--', 'apps/examples', 'apps/template' or die $!;
+    '--', 'crates', 'apps/examples', 'apps/template' or die $!;
 {
     local $/ = "\0";
     while (my $path = <$files>) {
@@ -18,6 +18,14 @@ open my $files, '-|', 'git', 'ls-files', '-z', '--cached', '--others', '--exclud
         my $source = do { local $/; <$file> };
         close $file or die "$path: $!";
         my $code = code_mask($source);
+        while ($source =~ /\bmethod_id\s*\(\s*"canic\.[\w.-]+\.v(\d+)"/g) {
+            my ($version, $offset) = ($1, $-[0]);
+            next if $version eq '1' || substr($code, $offset, 9) ne 'method_id';
+            my $line = 1 + (substr($code, 0, $offset) =~ tr/\n/\n/);
+            warn "$path:$line: use v1 for a versioned pre-1.0 Canic Wire contract\n";
+            $failed = 1;
+        }
+        next unless $path =~ m{^apps/};
         # Balance square brackets so nested arrays cannot end the attribute early.
         while ($code =~ /\#\s* (\[ (?: [^\[\]]++ | (?1) )* \]) /gx) {
             my ($attribute, $offset) = ($1, $-[1]);

@@ -19,7 +19,10 @@ async fn pin_delivery_resumes_before_stage() {
     std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     let plan = cli(&dir, &["fleet", "plan", "--controller", "2vxsx-fae"]);
     let id = plan["operation"].as_str().unwrap();
-    assert_eq!(plan["fleet_plan"]["child"]["receiver_role"], "accounts");
+    assert_eq!(
+        plan["fleet_plan"]["children"][0]["receiver_role"],
+        "accounts"
+    );
     let path = dir.join("journal").join(id);
     let signer = assets.ancestors().nth(2).unwrap().join(".tools/ic/bin/icp");
     let pause = dir.join("pause-stage");

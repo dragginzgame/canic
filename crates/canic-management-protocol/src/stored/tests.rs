@@ -87,8 +87,8 @@ fn complete_store_custody_fits_and_operation_identity_binds_source_slot_and_acti
         ],
     };
     let custody = Custody {
-        children: std::array::from_fn(|_| journal.clone()),
-        sources: std::array::from_fn(|_| Some(sources.clone())),
+        children: (0..8).map(|_| journal.clone()).collect(),
+        sources: (0..8).map(|_| Some(sources.clone())).collect(),
     };
     let bytes = ic_wire::encode(
         &custody,

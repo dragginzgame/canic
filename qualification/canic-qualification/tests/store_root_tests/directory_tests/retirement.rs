@@ -311,7 +311,11 @@ pub(super) async fn exercise(
             Ok(0)
         );
     } else {
-        hub.update::<_, Result<(), String>>(
+        Client {
+            operator: root.id,
+            ..hub
+        }
+        .update::<_, Result<(), String>>(
             "release_route",
             ic_wire::method_id("release_route"),
             &([1u8; 32], &target),
@@ -320,6 +324,16 @@ pub(super) async fn exercise(
         .await
         .unwrap();
     }
+    assert_eq!(
+        root.update::<_, Result<u32, String>>(
+            BeginShardDrain::NAME,
+            BeginShardDrain::ID,
+            &target,
+            canic::sharding::LIMITS
+        )
+        .await,
+        Ok(0)
+    );
     let deadline = root
         .update::<_, Result<u64, String>>(
             CloseRoleIssuance::NAME,

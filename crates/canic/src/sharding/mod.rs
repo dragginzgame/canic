@@ -14,15 +14,11 @@ pub mod standby;
 pub mod provisioning;
 
 pub use client::{
-    AssignInstance, AssignShard, GrowShard, LookupInstance, LookupShard, RequestSingleton, assign,
-    assign_instance, grow_shard, lookup, lookup_instance,
+    AssignInstance, GrowShard, LookupInstance, RequestSingleton, assign_instance, grow_shard,
+    lookup_instance,
 };
 use serde::{Deserialize, Serialize};
 
-/// Assign a key to an admitted shard or reserve its first allocation.
-pub const ASSIGN: u64 = 91;
-/// Observe the original allocation without reserving capacity.
-pub const LOOKUP: u64 = 92;
 /// Reserve a child exclusively for one project key.
 pub const ASSIGN_INSTANCE: u64 = ic_wire::method_id("canic.assign_instance.v1");
 /// Observe a project key at the originally selected Root.
@@ -33,14 +29,14 @@ pub struct AssignWorker;
 pub struct LookupWorker;
 impl crate::method::Contract for AssignWorker {
     const NAME: &'static str = "assign_worker";
-    const ID: u64 = ic_wire::method_id("canic.assign_worker.v2");
+    const ID: u64 = ic_wire::method_id("canic.placement.assign_worker.v1");
     const REPLY: ic_wire::Limits = LIMITS;
     type Input = (String, u8);
     type Output = Placement;
 }
 impl crate::method::Contract for LookupWorker {
     const NAME: &'static str = "lookup_worker";
-    const ID: u64 = ic_wire::method_id("canic.lookup_worker.v2");
+    const ID: u64 = ic_wire::method_id("canic.placement.lookup_worker.v1");
     const REPLY: ic_wire::Limits = LIMITS;
     type Input = (String, u8);
     type Output = Placement;
@@ -111,19 +107,6 @@ impl crate::method::Contract for BeginShardDrain {
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = ShardTarget;
     type Output = Result<u32, String>;
-}
-
-/// Release one route after the hub has durably retired its application binding.
-#[cfg(feature = "method")]
-pub struct ReleaseShard;
-
-#[cfg(feature = "method")]
-impl crate::method::Contract for ReleaseShard {
-    const NAME: &'static str = "release_shard";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
-    const REQUEST: ic_wire::Limits = LIMITS;
-    type Input = (Key, ShardTarget);
-    type Output = Result<(), String>;
 }
 
 /// Lookup and assignment use the same explicit outcomes.

@@ -3,7 +3,6 @@ use crate::engine::{self, STATE};
 use canic_management_protocol::{
     Phase,
     backup::{Binding, Effect, Error, Outcome, Record, Request},
-    children::ChildId,
     upgrade,
 };
 use ic_platform_runtime::{
@@ -75,7 +74,7 @@ pub async fn execute(request: Request) -> Result<Record, Error> {
         return Err(Error::Invalid);
     }
     let mut found = false;
-    for child in ChildId::ALL {
+    for child in crate::engine::service_slots() {
         let creation = engine::status(child);
         let u = engine::upgrade::status(child);
         if !matches!(creation.phase, Phase::Empty | Phase::Ready)

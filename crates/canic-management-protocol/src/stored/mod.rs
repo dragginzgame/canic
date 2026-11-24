@@ -104,7 +104,7 @@ pub struct Custody {
     /// Complete creation and upgrade journals.
     pub children: children::Custody,
     /// None denotes an inline child; no raw bytes are exported.
-    pub sources: [Option<Sources>; crate::children::ChildId::ALL.len()],
+    pub sources: Vec<Option<Sources>>,
 }
 
 /// Source of the initial fee and operating balance for a new allocation.
@@ -144,7 +144,7 @@ pub struct ShardPool {
     pub reference: Reference,
 }
 /// Controller approval frame for a fresh shard pool.
-pub const CONFIGURE_SHARDS: u64 = ic_wire::method_id("canic.configure_shards.v2");
+pub const CONFIGURE_SHARDS: u64 = ic_wire::method_id("canic.placement.configure_shards.v1");
 
 /// Controller approval for dedicated instances owned by one project hub.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -183,23 +183,28 @@ pub struct SingletonGrant {
     /// Economic payer for the initial allocation.
     pub creation_payer: CreationPayer,
     /// Maximum admitted children across the registry.
-    pub maximum: u8,
+    pub maximum: u32,
     /// Lifetime creation attachment ceiling.
     pub creation_budget: u64,
     /// Deadline for new claims.
     pub expires_at_ns: u64,
+    /// Approved Auth install frame with an empty payload, filled after the parent is known.
+    #[serde(default)]
+    pub receiver: Option<crate::application::Arguments>,
 }
 /// Configure one registry-wide singleton rule.
-pub const CONFIGURE_SINGLETON: u64 = ic_wire::method_id("configure_singleton");
+pub const CONFIGURE_SINGLETON: u64 = ic_wire::method_id("canic.placement.configure_singleton.v1");
 
 /// Approve a dedicated instance pool independently of the shared shard grant.
-pub const CONFIGURE_INSTANCES: u64 = ic_wire::method_id("canic.configure_instances.v2");
+pub const CONFIGURE_INSTANCES: u64 = ic_wire::method_id("canic.placement.configure_instances.v1");
 /// Approve the bounded worker allowance for one other hub.
-pub const CONFIGURE_WORKERS: u64 = ic_wire::method_id("canic.configure_workers.v2");
-/// Maximum managed children across all pools of the single subnet owner.
-pub const MAX_SUBNET_CHILDREN: u8 = 8;
+pub const CONFIGURE_WORKERS: u64 = ic_wire::method_id("canic.placement.configure_workers.v1");
+/// Maximum reserve entries in each acquisition source of the bounded reserve ledger.
+pub const MAX_RESERVE_ENTRIES: u8 = 8;
 /// Dedicated instances also consume the shared subnet allowance.
-pub const MAX_INSTANCES: u8 = MAX_SUBNET_CHILDREN;
+pub const MAX_INSTANCES: u8 = crate::children::ChildId::INSTANCES.len() as u8;
+/// Addressable shared shard slots.
+pub const MAX_SHARDS: u8 = crate::children::ChildId::SHARDS.len() as u8;
 
 /// Aggregate fleet reserve observation, without principals or handoff records.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -278,13 +283,25 @@ pub struct StandbyPolicy {
     pub imports: Vec<StandbyImport>,
 }
 
-/// Controller's immutable child ceiling for this subnet owner.
+/// Default managed-child backstop for one Root on its subnet.
+pub const DEFAULT_SUBNET_CHILD_LIMIT: u32 = 40_000;
+
+/// Controller-approved child ceiling for this subnet owner.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SubnetCapacity {
     /// Addressed management owner.
     pub root: String,
     /// Lifetime allocation limit across both pools.
-    pub max_children: u8,
+    pub max_children: u32,
+    /// Permit this exact approved limit to exceed the default subnet backstop.
+    pub allow_large_subnet: bool,
+}
+impl SubnetCapacity {
+    /// Validate both the count and the explicit opt-in above the ordinary backstop.
+    #[must_use]
+    pub const fn permits_limit(max_children: u32, allow_large_subnet: bool) -> bool {
+        max_children > 0 && (max_children <= DEFAULT_SUBNET_CHILD_LIMIT || allow_large_subnet)
+    }
 }
 /// Approve the fleet reserve target and paid creation allowance.
 pub const CONFIGURE_STANDBY: u64 = ic_wire::method_id("configure_standby");
@@ -326,7 +343,7 @@ impl canic::method::Contract for ConfigureSingleton {
 }
 
 /// Admit the shared ceiling before configuring larger pools.
-pub const CONFIGURE_CAPACITY: u64 = ic_wire::method_id("canic.configure_capacity.v1");
+pub const CONFIGURE_CAPACITY: u64 = ic_wire::method_id("canic.placement.configure_capacity.v1");
 
 /// Count-only change bound to the complete previous grant.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -337,7 +354,7 @@ pub enum IncreasePool {
     Instances(InstancePool, u8),
 }
 /// Increase one pool count without renewing funding or time.
-pub const INCREASE_POOL: u64 = ic_wire::method_id("canic.increase_pool.v2");
+pub const INCREASE_POOL: u64 = ic_wire::method_id("canic.placement.increase_pool.v1");
 
 /// Absolute backstop for any single shared shard. Fleets approve their own lower limit.
 pub const MAX_KEYS_PER_SHARD: u32 = 100_000;
@@ -485,4 +502,25 @@ impl canic::method::Contract for StopApplicationChildFunding {
     const ID: u64 = ic_wire::method_id(Self::NAME);
     type Input = (ic_platform_types::Principal, ic_platform_types::Principal);
     type Output = Result<ChildFundingStatus, String>;
+}
+
+/// Operator-approved settings for a fresh Root installation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct RootBootstrap {
+    /// Permanent children included in the initial funding calculation.
+    pub services: u32,
+    /// Maximum managed children for this Root.
+    pub max_children: u32,
+    /// Explicit operator exception to the standard subnet ceiling.
+    pub allow_large_subnet: bool,
+}
+
+impl RootBootstrap {
+    /// Check the bootstrap count and the exceptional subnet declaration.
+    #[must_use]
+    pub fn valid(self) -> bool {
+        self.services > 0
+            && self.services <= self.max_children
+            && SubnetCapacity::permits_limit(self.max_children, self.allow_large_subnet)
+    }
 }

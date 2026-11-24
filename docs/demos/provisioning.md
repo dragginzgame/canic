@@ -2,7 +2,7 @@
 
 The current checkout names the provisioning identity `AuthSubject { issuer, subject }`.
 Canic 0.244.0 and earlier expose it as `Account`. Updating the Rust type name
-preserves the published provisioning frame and the account’s shard placement key.
+preserves the published provisioning frame. The current User Directory adapter derives its hub-local routing key from the resource domain, issuer and subject. A fresh hub is required when moving from Root-owned account claims. Toko’s existing direct hub routing API keeps its subject key.
 
 ## Durable hub routes in Canic 0.263.0
 
@@ -90,13 +90,13 @@ pub fn account_row<E: Entity>(database: &impl QuerySession<E>, account: AuthSubj
 1. Validate the name synchronously, including on retries. An already-ready row
    can return locally under the endpoint's write scope. Pass `&auth` to
    `place`; it retains the scope declared on the endpoint. Supply the original shard for a pending row. That selects lookup
-   only. On a miss, Root's assign first looks for an existing claim for that key.
+   only. On a miss, the hub reserves a route locally, requesting capacity from Root only when needed.
 2. After placement, reuse the original row or reload the winner before inserting.
    Generate `Ulid::generate_prand()` only in the missing-row branch. The unique
    account lookup, insert and construction of the request execute without an
    await. Send the stored ID, shard and initial name, even when the retry has
    supplied a different name.
-3. `send` verifies the account and destination, checks Root's original slot,
+3. `send` verifies the account and destination, checks the hub's retained slot,
    generation and principal before dispatch and after the receipt, and rechecks
    the session after suspension. Its successful result has already matched the
    original request. Reload the local reservation, call `receipt.require_same`
@@ -144,7 +144,7 @@ bash scripts/dev/test-store.sh sharding
 
 The installed User Directory test runs a real Root, hub and two managed shards.
 It checks overlapping registrations, bounded capacity, independent Auth, a
-stopped shard, an unavailable Root and replay with a pending hub and a populated
+stopped shard, retry while Root is stopped and replay with a pending hub and a populated
 shard. The replay leaves the shard's stable memory byte-for-byte unchanged.
 A conflicting row on the real shard returns the typed refusal through the hub and preserves both stores. A controlled responder at the disposable shard then returns a wrong ID and,
 separately, the correct ID after logout. Neither response changes the pending

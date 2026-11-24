@@ -108,8 +108,8 @@ fn complete_root_custody_fits_combined_budget() {
     };
     let value = custody::Root {
         stored: stored::Custody {
-            children: std::array::from_fn(|_| child.clone()),
-            sources: std::array::from_fn(|_| Some(sources.clone())),
+            children: (0..8).map(|_| child.clone()).collect(),
+            sources: (0..8).map(|_| Some(sources.clone())).collect(),
         },
         store_operation: Some(operation.clone()),
     };

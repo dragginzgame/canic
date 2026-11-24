@@ -22,7 +22,7 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
     let target = plan.target().ok_or_else(invalid)?;
     let root_id = principal(&root.canister)?;
     let target_id = principal(target)?;
-    if plan.version != 2
+    if !matches!(plan.version, 2 | 9)
         || !(1..=wire::MAX_UPGRADES as u64).contains(&plan.store_upgrade_sequence().unwrap_or(1))
         || plan.controller == "2vxsx-fae"
         || root_id.to_text() != root.canister
@@ -92,6 +92,15 @@ fn call<T: serde::Serialize>(
 
 pub(crate) fn observation(plan: &Plan) -> Result<signed::Call<'static>> {
     validate(plan)?;
+    if plan.version == 9 {
+        return call(
+            plan,
+            "observe_store_maintenance",
+            wire::READ_ATTEMPT,
+            &Some(approval(plan)?),
+            wire::LIMITS,
+        );
+    }
     if plan.store_upgrade_sequence().is_some() {
         return call(
             plan,
@@ -131,7 +140,9 @@ fn decode(plan: &Plan, bytes: &[u8]) -> Result<Option<Status>> {
     let value: Option<Status> = ic_wire::decode(
         bytes,
         ic_wire::Encoding::Frame {
-            method: if plan.store_upgrade_sequence().is_some() {
+            method: if plan.version == 9 {
+                wire::READ_ATTEMPT
+            } else if plan.store_upgrade_sequence().is_some() {
                 wire::OBSERVE_ATTEMPT
             } else {
                 wire::OBSERVE

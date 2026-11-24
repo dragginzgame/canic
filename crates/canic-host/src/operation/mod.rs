@@ -485,7 +485,18 @@ fn install_call(plan: &Plan, wasm: &[u8], canister: Principal) -> Result<Call<'s
         },
         canister_id: canister,
         wasm_module: wasm.to_vec(),
-        arg: vec![],
+        arg: match plan.action {
+            crate::PlanAction::Create {
+                bootstrap: Some(policy),
+                ..
+            } => ic_wire::encode(
+                &policy,
+                ic_wire::Encoding::Payload,
+                canic_management_protocol::LIMITS,
+            )
+            .map_err(crate::supplier)?,
+            _ => Vec::new(),
+        },
         sender_canister_version: None,
     };
     Ok(Call {

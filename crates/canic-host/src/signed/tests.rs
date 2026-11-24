@@ -24,6 +24,7 @@ fn fixture_expiry(expired: bool) -> (Vec<u8>, Plan, Call<'static>) {
             bytes: 8,
         },
         action: crate::PlanAction::Create {
+            bootstrap: None,
             cycles: 1_000_000_000_000,
         },
         created_at_ns: time,

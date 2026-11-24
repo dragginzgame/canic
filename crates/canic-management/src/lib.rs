@@ -23,7 +23,7 @@ mod storage;
 #[cfg(feature = "sharding")]
 mod placement;
 
-pub use engine::{custody, open};
+pub use engine::{bootstrap, custody, open};
 #[cfg(feature = "fault-injection")]
 pub use single::inject_fault;
 
@@ -44,6 +44,7 @@ pub mod children {
         owner_custody as custody, reconcile, stage, status,
         upgrade::{
             observe as observe_upgrade, reconcile as reconcile_upgrade, stage as stage_upgrade,
+            status as upgrade_status,
         },
     };
 }

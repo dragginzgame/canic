@@ -42,6 +42,8 @@ pub enum PlanAction {
     Remove(crate::PublicationRemoval),
     /// Direct creation and installation, funded by the operator.
     Create {
+        /// Bound install and funding policy for a fresh fleet Root.
+        bootstrap: Option<canic_management_protocol::stored::RootBootstrap>,
         /// Exact creation debit ceiling.
         cycles: u64,
     },
@@ -179,7 +181,7 @@ impl super::Plan {
     #[must_use]
     pub fn creation_cycles(&self) -> u64 {
         match self.action {
-            PlanAction::Create { cycles } | PlanAction::CreateStore { cycles, .. } => cycles,
+            PlanAction::Create { cycles, .. } | PlanAction::CreateStore { cycles, .. } => cycles,
             PlanAction::CreateChild(_) => canic_management_protocol::CREATION_CYCLES,
             _ => 0,
         }

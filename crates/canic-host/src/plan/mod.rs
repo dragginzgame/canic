@@ -102,7 +102,11 @@ impl Plan {
                 | (6, true)
                 | (7, true)
                 | (8, true)
-        ) || (self.version == 3) != self.publication().is_some()
+                | (9, true)
+        ) || (self.version == 9
+            && self.store_root().is_none()
+            && self.store_upgrade_root().is_none())
+            || (self.version == 3) != self.publication().is_some()
             || (self.version == 4) != self.removal().is_some()
             || (self.version == 5) != self.auth().is_some()
             || (self.version != 8
@@ -129,7 +133,7 @@ impl Plan {
         }
         if let Some(root) = self.store_root() {
             let id = principal(&root.canister)?;
-            if self.version != 2
+            if !matches!(self.version, 2 | 9)
                 || id.to_text() != root.canister
                 || id == principal("aaaaa-aa")?
                 || id == principal("2vxsx-fae")?
@@ -190,7 +194,28 @@ impl Plan {
             PlanAction::Auth(value) => crate::auth::validate(self, value)?,
             PlanAction::Publish(value) => crate::publication::validate(self, value)?,
             PlanAction::Remove(value) => crate::publication::removal::validate(self, value)?,
-            PlanAction::Create { cycles } | PlanAction::CreateStore { cycles, .. }
+            PlanAction::Create {
+                cycles,
+                bootstrap: Some(policy),
+            } => {
+                let maximum = (u64::from(policy.services) + 2)
+                    .saturating_mul(1_000_000_000_000)
+                    .max(5_000_000_000_000);
+                if self.version != 2
+                    || !policy.valid()
+                    || !(500_000_000_000..=maximum).contains(cycles)
+                {
+                    return Err(Error::Invalid(format!(
+                        "Root creation budget {cycles} exceeds the approved range for {} services, or the subnet policy is invalid",
+                        policy.services
+                    )));
+                }
+            }
+            PlanAction::Create {
+                cycles,
+                bootstrap: None,
+            }
+            | PlanAction::CreateStore { cycles, .. }
                 if !(500_000_000_000..=5_000_000_000_000).contains(cycles) =>
             {
                 return Err(Error::Invalid("creation needs 0.5T–5T cycles".into()));
@@ -291,6 +316,7 @@ pub(crate) fn prepare(
         })?;
     let action = match (input.target, input.previous_module, management) {
         (None, None, None) => PlanAction::Create {
+            bootstrap: None,
             cycles: input.creation_cycles,
         },
         (None, None, Some(owner))

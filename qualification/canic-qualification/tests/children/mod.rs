@@ -144,11 +144,14 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             .update_call(
                 root,
                 CanisterId::anonymous(),
-                "stage_upgrade",
+                "stage_child_upgrade",
                 ic_wire::encode(
-                    &change,
+                    &canic_management_protocol::children::Request {
+                        slot: canic_management_protocol::children::ChildId::FIRST,
+                        value: &change,
+                    },
                     ic_wire::Encoding::Frame {
-                        method: upgrade::STAGE,
+                        method: canic_management_protocol::children::STAGE_UPGRADE,
                         direction: ic_wire::Direction::Request,
                     },
                     STAGE_LIMITS,
@@ -160,7 +163,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         let admitted: Result<upgrade::Status, Refusal> = ic_wire::decode(
             &reply,
             ic_wire::Encoding::Frame {
-                method: upgrade::STAGE,
+                method: canic_management_protocol::children::STAGE_UPGRADE,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -198,6 +201,36 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     )
     .unwrap();
     assert_eq!(old_custody.upgrades.len(), 2);
+    // Latest and historical reads must still distinguish two completed approvals.
+    for (selector, expected) in [
+        (None, &old_custody.upgrades[1]),
+        (
+            old_custody.upgrades[0].approval.as_ref(),
+            &old_custody.upgrades[0],
+        ),
+    ] {
+        let frame = |direction| ic_wire::Encoding::Frame {
+            method: children::UPGRADE_STATUS,
+            direction,
+        };
+        let args = ic_wire::encode(
+            &Request {
+                slot: ChildId::FIRST,
+                value: selector,
+            },
+            frame(ic_wire::Direction::Request),
+            LIMITS,
+        )
+        .unwrap();
+        let bytes = pic
+            .query_call(root, CanisterId::anonymous(), "child_upgrade_status", args)
+            .await
+            .unwrap();
+        let status: upgrade::Status =
+            ic_wire::decode(&bytes, frame(ic_wire::Direction::Response), LIMITS).unwrap();
+        assert_eq!(&status, expected);
+    }
+
     canic_qualification::upgrade_stopped(pic, root, artifact("root.wasm"), vec![], None)
         .await
         .unwrap();

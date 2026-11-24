@@ -1,6 +1,6 @@
 //! Placement-only drain and exact releases by the approved hub.
 use super::{ChildId, Ledger, STATE, api};
-use canic::sharding::{Key, ShardTarget};
+use canic::sharding::ShardTarget;
 
 impl Ledger {
     fn target_slot(&self, target: &ShardTarget) -> Result<ChildId, String> {
@@ -30,7 +30,7 @@ pub async fn inspect_shard(
         return Err("controller required".into());
     }
     let principal = shard.to_text();
-    let (status, local) = STATE.with_borrow(|s| {
+    let (target, hub, pool) = STATE.with_borrow(|s| {
         let pools = &s.as_ref().expect("open Root").pools;
         let (slot, ledger) = ChildId::SHARDS
             .into_iter()
@@ -42,47 +42,19 @@ pub async fn inspect_shard(
             })
             .ok_or("unknown shard")?;
         Ok::<_, String>((
-            canic::sharding::ShardStatus {
-                target: ShardTarget {
-                    shard,
-                    allocation: canic::sharding::Allocation {
-                        slot: slot.index() as u32,
-                        generation: ledger.generations[slot.index()]
-                            .expect("installed shard allocation"),
-                    },
+            ShardTarget {
+                shard,
+                allocation: canic::sharding::Allocation {
+                    slot: slot.index() as u32,
+                    generation: ledger.generations[slot.index()]
+                        .expect("installed shard allocation"),
                 },
-                draining: pools.draining.contains_key(&slot),
-                live_placements: pools.remaining(slot, ledger),
             },
-            hub_binding(pools, ledger),
-        ))
-    })?;
-    if let Some((hub, pool)) = local {
-        return hub_status(hub, pool, &status.target, false).await;
-    }
-    Ok(status)
-}
-
-impl super::Pools {
-    pub(super) fn remaining(&self, slot: ChildId, ledger: &Ledger) -> u32 {
-        if self.evacuated.contains(&slot) {
-            0
-        } else {
-            ledger.counts[slot.index()]
-        }
-    }
-}
-
-fn hub_binding(
-    pools: &super::Pools,
-    ledger: &Ledger,
-) -> Option<(ic_platform_types::Principal, String)> {
-    pools.local_routes.contains(&ledger.approval.pool).then(|| {
-        (
             ledger.approval.hub.parse().expect("approved hub"),
             ledger.approval.pool.clone(),
-        )
-    })
+        ))
+    })?;
+    hub_status(hub, pool, &target, false).await
 }
 
 async fn hub_status(
@@ -114,7 +86,7 @@ pub async fn begin_shard_drain(target: &ShardTarget) -> Result<u32, String> {
     if !api::is_controller(&controller) {
         return Err("controller required".into());
     }
-    let (count, local) = STATE.with_borrow_mut(|s| {
+    let (hub, pool) = STATE.with_borrow_mut(|s| {
         let state = s.as_mut().expect("open Root");
         let (ledger, slot) = state
             .pools
@@ -122,18 +94,17 @@ pub async fn begin_shard_drain(target: &ShardTarget) -> Result<u32, String> {
             .values()
             .find_map(|ledger| Some((ledger, ledger.target_slot(target).ok()?)))
             .ok_or("assignment changed")?;
-        let local = hub_binding(&state.pools, ledger);
-        let count = ledger.counts[slot.index()];
+        let binding = (
+            ledger.approval.hub.parse().expect("approved hub"),
+            ledger.approval.pool.clone(),
+        );
         if let std::collections::btree_map::Entry::Vacant(entry) = state.pools.draining.entry(slot)
         {
             entry.insert(target.allocation.generation);
             state.pool.set(state.pools.encode());
         }
-        Ok::<_, String>((count, local))
+        Ok::<_, String>(binding)
     })?;
-    let Some((hub, pool)) = local else {
-        return Ok(count);
-    };
     let status = hub_status(hub, pool.clone(), target, true).await?;
     if !api::is_controller(&controller) {
         return Err("controller changed".into());
@@ -154,47 +125,6 @@ pub async fn begin_shard_drain(target: &ShardTarget) -> Result<u32, String> {
     })
 }
 
-/// Ensure this key no longer belongs to the exact draining allocation.
-/// # Errors
-/// Requires the configured hub. Refuses a different allocation or an active shard.
-/// # Panics
-/// Requires a consistent opened placement ledger.
-pub fn release_shard(key: &Key, target: &ShardTarget) -> Result<(), String> {
-    let caller = api::caller().to_text();
-    STATE.with_borrow_mut(|s| {
-        let state = s.as_mut().expect("open Root");
-        let (ledger, slot) = state
-            .pools
-            .shards
-            .values_mut()
-            .filter(|ledger| ledger.approval.hub == caller)
-            .find_map(|ledger| {
-                let slot = ledger.target_slot(target).ok()?;
-                Some((ledger, slot))
-            })
-            .ok_or("assignment changed")?;
-        if state.pools.local_routes.contains(&ledger.approval.pool) {
-            return Err("account releases belong to the hub for this pool".into());
-        }
-        if state.pools.draining.get(&slot) != Some(&target.allocation.generation) {
-            return Err("shard is not draining".into());
-        }
-        let key = (ledger.namespace, *key);
-        match state.claims.get(&key) {
-            None => Ok(()),
-            Some(current) if usize::from(current) != slot.index() => {
-                Err("key assigned elsewhere".into())
-            }
-            Some(_) => {
-                state.claims.remove(&key);
-                ledger.counts[slot.index()] -= 1;
-                state.pool.set(state.pools.encode());
-                Ok(())
-            }
-        }
-    })
-}
-
 #[cfg(feature = "role-issuer")]
 pub(super) fn closed_assignment(
     pools: &super::Pools,
@@ -207,7 +137,7 @@ pub(super) fn closed_assignment(
             return false;
         };
         expected == generation
-            && pools.remaining(*slot, ledger) == 0
+            && pools.evacuated.contains(slot)
             && ledger.principals[slot.index()].as_deref() == Some(principal.as_str())
     })
 }

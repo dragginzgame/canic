@@ -5,7 +5,7 @@ use canic::sharding::{
     Allocation,
     standby::{Asset, Refill, Source},
 };
-use canic_management_protocol::{CREATION_CYCLES, children::ChildId, stored::MAX_SUBNET_CHILDREN};
+use canic_management_protocol::{CREATION_CYCLES, children::ChildId, stored::MAX_RESERVE_ENTRIES};
 use ic_platform_protocol::management as mgmt;
 use ic_platform_types::Principal;
 
@@ -116,7 +116,7 @@ pub async fn refill(input: Refill) -> Result<Asset, String> {
             .filter(|(source, _)| matches!(source, Source::Refill(_)))
             .count()
             != usize::from(input.sequence)
-            || input.sequence >= MAX_SUBNET_CHILDREN
+            || input.sequence >= MAX_RESERVE_ENTRIES
         {
             return Err("refill sequence outside retained capacity");
         }

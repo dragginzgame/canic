@@ -3,7 +3,7 @@ use crate::{
     CanisterConfig, Network,
     tests::{directory, input},
 };
-use canic_management_protocol::{STAGE, STATUS};
+use canic_management_protocol::{STAGE, children::STATUS};
 use std::collections::BTreeMap;
 
 fn selection() -> SelectedFleet {
@@ -56,23 +56,25 @@ async fn recovery_requires_retained_admission_and_never_bootstraps_work() {
     assert!(!dir.join(&id).join("stage").exists());
     assert_eq!(plan::load(&dir.join(&id), &id).unwrap().0, before);
     let call = recovery::call(&plan).unwrap();
-    assert_eq!(call.method, "reconcile");
+    assert_eq!(call.method, "reconcile_child");
     assert_eq!(
         call.canister,
         principal(plan.application_controller()).unwrap()
     );
-    let bound: Approval = ic_wire::decode(
+    let bound: canic_management_protocol::children::Request<Approval> = ic_wire::decode(
         &call.args,
         ic_wire::Encoding::Frame {
-            method: canic_management_protocol::RECONCILE,
+            method: canic_management_protocol::children::RECONCILE,
             direction: ic_wire::Direction::Request,
         },
         LIMITS,
     )
     .unwrap();
-    assert_eq!(bound, approval(&plan).unwrap());
+    assert_eq!(bound.slot, ChildId::FIRST);
+    assert_eq!(bound.value, approval(&plan).unwrap());
     let mut unmanaged = plan;
     unmanaged.action = crate::PlanAction::Create {
+        bootstrap: None,
         cycles: unmanaged.creation_cycles(),
     };
     assert!(recovery::call(&unmanaged).is_err());
@@ -114,7 +116,7 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
         &ic_wire::encode(
             &retained,
             ic_wire::Encoding::Frame {
-                method: canic_management_protocol::RECONCILE,
+                method: canic_management_protocol::children::RECONCILE,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -341,7 +343,7 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
     let mut selected = selection();
     let root_hash = "01".repeat(32);
-    let (created_id, created) = if slot.is_some() {
+    let (created_id, created) = {
         let now = crate::now().unwrap();
         plan::retain(
             &dir,
@@ -362,19 +364,6 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
                 source: None,
             }),
             now,
-        )
-    } else {
-        create_managed_plan(
-            &dir,
-            &wasm,
-            input(),
-            &selected,
-            "app",
-            &root_hash,
-            None,
-            None,
-            None,
-            None,
         )
     }
     .unwrap();
@@ -588,7 +577,7 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
         ic_wire::encode(
             &Ok::<_, Refusal>(&installed),
             ic_wire::Encoding::Frame {
-                method: wire::STAGE,
+                method: canic_management_protocol::children::STAGE_UPGRADE,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -652,7 +641,7 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
             ic_wire::encode(
                 &invalid,
                 ic_wire::Encoding::Frame {
-                    method: wire::STATUS,
+                    method: canic_management_protocol::children::OBSERVE_UPGRADE,
                     direction: ic_wire::Direction::Response,
                 },
                 LIMITS,
@@ -670,7 +659,7 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
         ic_wire::encode(
             &ready,
             ic_wire::Encoding::Frame {
-                method: wire::STATUS,
+                method: canic_management_protocol::children::OBSERVE_UPGRADE,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -689,7 +678,7 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
         ic_wire::encode(
             &installed,
             ic_wire::Encoding::Frame {
-                method: wire::STATUS,
+                method: canic_management_protocol::children::OBSERVE_UPGRADE,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -796,14 +785,16 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
                 },
             ]
             .into_iter();
-            std::array::from_fn(|_| {
-                slots
-                    .next()
-                    .unwrap_or_else(|| canic_management_protocol::custody::Custody {
-                        creation: Default::default(),
-                        upgrades: vec![],
-                    })
-            })
+            (0..8)
+                .map(|_| {
+                    slots
+                        .next()
+                        .unwrap_or_else(|| canic_management_protocol::custody::Custody {
+                            creation: Default::default(),
+                            upgrades: vec![],
+                        })
+                })
+                .collect()
         },
         sources: {
             let mut slots = [
@@ -814,7 +805,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
                 None,
             ]
             .into_iter();
-            std::array::from_fn(|_| slots.next().flatten())
+            (0..8).map(|_| slots.next().flatten()).collect()
         },
     };
     let encode = |value: &wire::Custody| {
@@ -1052,7 +1043,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
             },
             store_history: Vec::new(),
         },
-        applications: Default::default(),
+        applications: vec![None; custody.children.len()],
     };
     let frame = ic_wire::encode(
         &child_evidence,
@@ -1147,7 +1138,7 @@ fn assert_application_arguments(
                 None,
             ]
             .into_iter();
-            std::array::from_fn(|_| slots.next().flatten())
+            (0..8).map(|_| slots.next().flatten()).collect()
         },
     };
     value.root.current.stored.sources[0]
@@ -1360,7 +1351,10 @@ fn adding_discovery_preserves_two_earlier_named_creation_approvals() {
         .canisters
         .insert("discovery_hub".into(), service);
     let (_, discovery) = plan(&fleet, "discovery_hub");
-    assert_eq!(discovery.management().unwrap().slot, Some(ChildId::ALL[2]));
+    assert_eq!(
+        discovery.management().unwrap().slot,
+        Some(ChildId::HISTORICAL_SERVICES[2])
+    );
     assert_eq!(plan(&fleet, "user_hub").0, user);
     assert_eq!(plan(&fleet, "project_registry").0, registry);
 }

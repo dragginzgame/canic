@@ -177,7 +177,7 @@ pub struct ReceiveDirectory;
 #[cfg(feature = "method")]
 impl crate::method::Contract for ReceiveDirectory {
     const NAME: &'static str = "receive_directory";
-    const ID: u64 = ic_wire::method_id("canic.receive_directory.v2");
+    const ID: u64 = ic_wire::method_id("canic.topology.receive_directory.v1");
     const REQUEST: ic_wire::Limits = DIRECTORY_LIMITS;
     const REPLY: ic_wire::Limits = crate::method::LIMITS;
     type Input = Delivery;
@@ -258,7 +258,7 @@ pub mod retained {
 
     // Keep old index bytes distinguishable even when neither layout contains children.
     const INDEX_FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
-        method: ic_wire::method_id("canic.directory_index.v3"),
+        method: ic_wire::method_id("canic.topology.directory_index.v1"),
         direction: ic_wire::Direction::Response,
     };
 

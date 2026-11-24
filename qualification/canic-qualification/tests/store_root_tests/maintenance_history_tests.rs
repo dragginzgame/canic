@@ -74,7 +74,7 @@ async fn refused_root_upgrade_preserves_the_original_issued_store_install() {
     assert_eq!(issued.phase, wire::Phase::InstallIssued);
     assert!(issued.installation.as_ref().unwrap().request.is_some());
     super::refuse_old_backing(&root).await;
-    assert_eq!(first::observe(&root).await, issued);
+    assert_eq!(first::predecessor_observation(&root).await, issued);
     first::check_predecessor_custody(&root, &issued).await;
     let ready = finish(&root, &approval, wasm).await;
     assert_eq!(ready.approval, issued.approval);
@@ -174,9 +174,9 @@ async fn root_retains_store_successors_across_upgrade_and_refuses_stale_authorit
         assert_eq!(recover_store(&root, &approval).await, old);
         assert_eq!(
             root.update::<_, Option<wire::Status>>(
-                "observe_store_attempt",
-                wire::OBSERVE_ATTEMPT,
-                &approval,
+                "observe_store_maintenance",
+                wire::READ_ATTEMPT,
+                &Some(&approval),
                 wire::LIMITS
             )
             .await,

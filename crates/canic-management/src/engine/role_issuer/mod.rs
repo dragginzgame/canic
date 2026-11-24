@@ -195,11 +195,11 @@ pub fn close(subject: Principal, generation: &Bytes<32>) -> Result<u64, String> 
         return Ok(deadline);
     }
     let assignment = sharding::assigned_role(subject)?;
-    let (live, draining) = assignment.shard.ok_or("shared shard required")?;
+    let evacuated = assignment.evacuated_shard.ok_or("shared shard required")?;
     if assignment.generation != generation {
         return Err("assignment changed".into());
     }
-    if !draining || live != 0 {
+    if !evacuated {
         return Err("empty draining shard required".into());
     }
     let deadline = api::time()
@@ -242,7 +242,7 @@ pub fn retirement_status(subject: Principal, generation: &Bytes<32>) -> Result<(
         return Ok((deadline, 0));
     }
     let assignment = sharding::assigned_role(subject)?;
-    assignment.shard.ok_or("shared shard required")?;
+    assignment.evacuated_shard.ok_or("shared shard required")?;
     let actual = assignment.generation;
     if generation != actual {
         return Err("assignment changed".into());

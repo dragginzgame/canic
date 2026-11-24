@@ -7,8 +7,6 @@ use serde::{Deserialize, Serialize};
 /// Original logical allocation selected by the application.
 #[derive(Clone, Debug, Serialize, Deserialize, Eq, PartialEq, Ord, PartialOrd)]
 pub enum Demand {
-    /// Shared pool and its application key.
-    Shard(String, Key),
     /// Dedicated project key under the caller's registry.
     Instance(Key),
     /// Named worker pool and ordinal.
@@ -43,7 +41,7 @@ pub enum Payment {
 pub struct FundPlacement;
 impl Contract for FundPlacement {
     const NAME: &'static str = "fund_placement";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const ID: u64 = ic_wire::method_id("canic.placement.fund_placement.v1");
     const REQUEST: ic_wire::Limits = super::LIMITS;
     type Input = (Demand, u128);
     type Output = Result<Payment, String>;

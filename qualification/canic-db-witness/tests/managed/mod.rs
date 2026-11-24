@@ -34,15 +34,22 @@ async fn status(pic: &PocketIc, root: Principal) -> upgrade::Status {
         .query_call(
             root,
             Principal::anonymous(),
-            "upgrade_status",
-            frame(upgrade::STATUS, &(), ic_wire::Direction::Request),
+            "child_upgrade_status",
+            frame(
+                children::UPGRADE_STATUS,
+                &children::Request {
+                    slot: children::ChildId::FIRST,
+                    value: None::<upgrade::Approval>,
+                },
+                ic_wire::Direction::Request,
+            ),
         )
         .await
         .unwrap();
     ic_wire::decode(
         &bytes,
         ic_wire::Encoding::Frame {
-            method: upgrade::STATUS,
+            method: children::UPGRADE_STATUS,
             direction: ic_wire::Direction::Response,
         },
         canic_management_protocol::LIMITS,

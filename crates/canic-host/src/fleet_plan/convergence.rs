@@ -289,6 +289,7 @@ pub(super) fn plan(
         }
         let selected = desired.store.as_ref().ok_or_else(invalid)?;
         let upgrade = Plan {
+            version: if desired.version >= 7 { 9 } else { 2 },
             artifact: selected.artifact.clone(),
             deployment: Some(selected.deployment.clone()),
             action: PlanAction::UpgradeStore {

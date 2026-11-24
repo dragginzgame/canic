@@ -71,6 +71,7 @@ fn store_bootstrap_retains_distinct_authority_and_original_approval() {
     // A direct install cannot reuse the Store approval just because its bytes/budget match.
     let mut direct = plan.clone();
     direct.action = PlanAction::Create {
+        bootstrap: None,
         cycles: plan.creation_cycles(),
     };
     assert!(
