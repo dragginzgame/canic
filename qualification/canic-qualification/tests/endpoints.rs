@@ -1,7 +1,7 @@
 //! Installed management adapter contracts and reply-failure transaction boundaries.
 use canic_management_protocol::{
     Approval, CREATION_CYCLES, INJECT, LIMITS, Phase, RECONCILE, Refusal, STAGE, STAGE_LIMITS,
-    STATUS, Stage, Status, digest, upgrade,
+    STATUS, Stage, Status, children, digest, upgrade,
 };
 use ic_testkit::{
     pocket_ic::{CanisterId, PocketIcBuilder, RejectCode, RejectResponse, nonblocking::PocketIc},
@@ -144,27 +144,89 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
             None,
         )
         .await;
-        let initial = status(pic, target).await;
+        let root_status = async |slot: children::ChildId| {
+            let encoding = |direction| ic_wire::Encoding::Frame {
+                method: children::STATUS,
+                direction,
+            };
+            let request =
+                ic_wire::encode(&slot, encoding(ic_wire::Direction::Request), LIMITS).unwrap();
+            let reply = pic
+                .query_call(target, outsider, "child_status", request)
+                .await
+                .unwrap();
+            ic_wire::decode::<Status>(&reply, encoding(ic_wire::Direction::Response), LIMITS)
+                .unwrap()
+        };
+        let initial = if variant == "root" {
+            root_status(children::ChildId::FIRST).await
+        } else {
+            status(pic, target).await
+        };
         assert_eq!(initial.phase, Phase::Empty);
         // Export name, mode, access, frame ID and request policy are deliberately
         // specified independently here: this tests the mounted public contract.
-        let mut methods = vec![
-            ("status", true, false, STATUS, LIMITS),
-            ("observe", false, true, STATUS, LIMITS),
-            (
-                "observe_custody",
-                false,
-                true,
-                canic_management_protocol::custody::OBSERVE,
-                LIMITS,
-            ),
-            ("stage", false, true, STAGE, STAGE_LIMITS),
-            ("reconcile", false, true, RECONCILE, LIMITS),
-            ("stage_upgrade", false, true, upgrade::STAGE, STAGE_LIMITS),
-            ("upgrade_status", true, false, upgrade::STATUS, LIMITS),
-            ("observe_upgrade", false, true, upgrade::OBSERVE, LIMITS),
-            ("reconcile_upgrade", false, true, upgrade::RECONCILE, LIMITS),
-        ];
+        let mut methods = if variant == "root" {
+            vec![
+                ("child_status", true, false, children::STATUS, LIMITS),
+                ("observe_child", false, true, children::STATUS, LIMITS),
+                (
+                    "observe_custody",
+                    false,
+                    true,
+                    canic_management_protocol::custody::OBSERVE,
+                    LIMITS,
+                ),
+                ("stage_child", false, true, children::STAGE, STAGE_LIMITS),
+                ("reconcile_child", false, true, children::RECONCILE, LIMITS),
+                (
+                    "stage_child_upgrade",
+                    false,
+                    true,
+                    children::STAGE_UPGRADE,
+                    STAGE_LIMITS,
+                ),
+                (
+                    "child_upgrade_status",
+                    true,
+                    false,
+                    children::UPGRADE_STATUS,
+                    LIMITS,
+                ),
+                (
+                    "observe_child_upgrade",
+                    false,
+                    true,
+                    children::OBSERVE_UPGRADE,
+                    LIMITS,
+                ),
+                (
+                    "reconcile_child_upgrade",
+                    false,
+                    true,
+                    children::RECONCILE_UPGRADE,
+                    LIMITS,
+                ),
+            ]
+        } else {
+            vec![
+                ("status", true, false, STATUS, LIMITS),
+                ("observe", false, true, STATUS, LIMITS),
+                (
+                    "observe_custody",
+                    false,
+                    true,
+                    canic_management_protocol::custody::OBSERVE,
+                    LIMITS,
+                ),
+                ("stage", false, true, STAGE, STAGE_LIMITS),
+                ("reconcile", false, true, RECONCILE, LIMITS),
+                ("stage_upgrade", false, true, upgrade::STAGE, STAGE_LIMITS),
+                ("upgrade_status", true, false, upgrade::STATUS, LIMITS),
+                ("observe_upgrade", false, true, upgrade::OBSERVE, LIMITS),
+                ("reconcile_upgrade", false, true, upgrade::RECONCILE, LIMITS),
+            ]
+        };
         if variant == "faults" {
             methods.push(("inject_fault", false, true, INJECT, LIMITS));
             fault_target = Some(target);
@@ -391,6 +453,14 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                     .is_err()
                 );
             }
+        }
+        if variant == "root" {
+            // Root requires an explicit slot. The children suite exercises staging,
+            // reconciliation and matching approvals across multiple installed slots.
+            for slot in [children::ChildId::FIRST, children::ChildId::SECOND] {
+                assert_eq!(root_status(slot).await, initial);
+            }
+            continue;
         }
         assert_eq!(status(pic, target).await, initial);
         let now = pic.get_time().await.as_nanos_since_unix_epoch();
