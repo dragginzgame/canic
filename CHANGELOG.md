@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.267.1] - 2026-11-24
+
+- The database adapter now mounts IC DB 0.30.0 schemas. The installed two-store actor also exports a Wire 0.30.0 query accepting and returning IC DB’s `Ulid`. [Canic #91](https://github.com/dragginzgame/canic/issues/91)
+
+```sh
+# Build the DB-backed example hub and check the reviewed Wire declarations.
+canic app build --config apps/examples/user-directory/canic.toml --canister ex-user-directory-hub
+canic app check-wire --config apps/examples/user-directory/canic.toml
+```
+
 ## [0.267.0] - 2026-11-24
 
 - Product and qualification crates use IC Wire 0.30.0. Role-proof signing reports an invalid generation length as a field limit.

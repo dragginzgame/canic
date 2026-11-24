@@ -44,6 +44,13 @@ if [[ "$scope" == miner ]]; then
 fi
 if [[ "$scope" == all || "$scope" == db-roles ]]; then
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-schema-role --output target/store/db-role-schema.wasm --json > target/store/db-role-schema.json
+    cargo run --quiet --locked --manifest-path qualification/Cargo.toml -p canic-schema-role \
+        --features inspection --example canic-schema-role-wire > target/store/db-role-wire.json
+    jq -e '.echo_id | .mode == "query" and .request == .reply and
+        (.request.rust | endswith("::Ulid")) and
+        any(.request.schema[]; .k == "array" and .max == 16)' target/store/db-role-wire.json >/dev/null
+    "$cli" --json artifact endpoints target/store/db-role-schema.wasm |
+        jq -e 'any(.endpoints[]; .name == "echo_id" and .mode == "query")' >/dev/null
     build db-role-root canic-root --features auth,role-issuer
     build db-role-hub ex-user-directory-hub --features role-service
     build db-role-shard ex-user-directory-shard --features role-service

@@ -178,6 +178,12 @@ records a deletion attempt, not independent remote deletion proof. Retire probes
 only when their failure cases have a qualified product owner. Exact supplier
 versions and current witnesses belong in manifests, locks and qualification notes.
 
+When updating Wire or preparing a release, check the latest published IC DB
+for the optional database adapter. Adopt the compatible release in both
+workspaces whenever possible. Record the concrete blocker if it cannot be
+adopted. Qualify the schema mount and Wire inspection of a DB-owned type
+together through `bash scripts/dev/test-store.sh db-roles`.
+
 ### Supplier composition boundaries
 
 Read the [Blob witness](docs/demos/blob.md) and [Auth contract](docs/demos/auth.md)

@@ -77,3 +77,11 @@ fn values() -> (u64, u64) {
         db!().get::<Project>(1_u64).unwrap().unwrap().value,
     )
 }
+
+// echo_id
+// Round-trip the supplier's identifier across the mounted actor's Wire boundary.
+// limits : default
+#[canic::query]
+fn echo_id(id: ic_db::Ulid) -> ic_db::Ulid {
+    id
+}

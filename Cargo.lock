@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "canic-host",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "canic-dormant"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -350,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -385,7 +385,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -430,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "canic-management",
@@ -927,7 +927,7 @@ dependencies = [
 
 [[package]]
 name = "ex-counter"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "clap",
@@ -942,7 +942,7 @@ dependencies = [
 
 [[package]]
 name = "ex-metrics"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "clap",
@@ -952,7 +952,7 @@ dependencies = [
 
 [[package]]
 name = "ex-miner-pool-hub"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "clap",
@@ -967,7 +967,7 @@ dependencies = [
 
 [[package]]
 name = "ex-miner-pool-miner"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -980,7 +980,7 @@ dependencies = [
 
 [[package]]
 name = "ex-notebook"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -993,7 +993,7 @@ dependencies = [
 
 [[package]]
 name = "ex-template"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "serde",
@@ -1002,7 +1002,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-hub"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1013,7 +1013,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-schema"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "ic-db",
@@ -1024,7 +1024,7 @@ dependencies = [
 
 [[package]]
 name = "ex-user-directory-shard"
-version = "0.267.0"
+version = "0.267.1"
 dependencies = [
  "canic",
  "ex-user-directory-schema",
@@ -1483,9 +1483,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e94ef809a4bf014faa25cc772f3520f7fa54788e6660235f8b752f9ff507158"
+checksum = "2933d197a600d4ede054c32ab27bbf218b1f55378ab37ee12d5a61cdd68f2cf3"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1496,7 +1496,7 @@ dependencies = [
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
- "ic-wire 0.29.0",
+ "ic-wire 0.30.0",
  "memchr",
  "serde",
  "sha2 0.11.1",
@@ -1505,9 +1505,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.29.0"
+version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b2a6e6d4026a5a34aa4718b9a2cb42be593ca10f57939047b64eaf0c69fb208"
+checksum = "85ea45dc0801d91fe94577b84a2286455512b2147e7b7c5c5610d9373915e3e1"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1843,21 +1843,6 @@ dependencies = [
 
 [[package]]
 name = "ic-wire"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "810028f243e972d78f408766d419e10215f1b24357fe2cea65f46cd0e1b16092"
-dependencies = [
- "bytemuck",
- "ic-platform-types",
- "ic-wire-derive 0.29.0",
- "postcard",
- "serde",
- "serde_bytes",
- "serde_json",
-]
-
-[[package]]
-name = "ic-wire"
 version = "0.30.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1bfe24cb5dd2d18765f59260fc93a9dca23d2514519d201c24a7cfe38f9f78ea"
@@ -1876,17 +1861,6 @@ name = "ic-wire-derive"
 version = "0.28.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "618f7176d3e77f80c159eac5de3752703276020b075d6ea968a203c57e73ac46"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 3.0.10",
-]
-
-[[package]]
-name = "ic-wire-derive"
-version = "0.29.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a1e0a7fc5b81cfbe570d392e4f3a8be3ac7df1b0513dafa0d7ce11d08056a6d3"
 dependencies = [
  "proc-macro2",
  "quote",

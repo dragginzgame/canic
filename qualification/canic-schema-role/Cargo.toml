@@ -11,7 +11,10 @@ description = "Installed multi-store role qualification"
 category = "tests"
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "rlib"]
+
+[features]
+inspection = ["canic/inspection"]
 
 [dependencies]
 canic = { workspace = true, features = ["db-store", "lifecycle", "method"] }
@@ -23,6 +26,11 @@ ic-db = { workspace = true, features = ["build"] }
 
 [dev-dependencies]
 toko-tooling.workspace = true
+
+[[example]]
+name = "canic-schema-role-wire"
+path = "examples/wire.rs"
+required-features = ["inspection"]
 
 [lints]
 workspace = true
