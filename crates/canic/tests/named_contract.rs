@@ -46,10 +46,20 @@ impl Contract for Example {
 #[test]
 fn borrowed_preflight_matches_request_encoding_on_the_host() {
     fn check<M: Contract<Input = String>>(text: &String) {
-        assert_eq!(
-            M::request_len(text.as_str()),
-            M::encode_request(text).map(|frame| frame.len())
-        );
+        let encoded = M::encode_request(text).map(|frame| frame.len());
+        assert_eq!(M::request_len(text), encoded);
+        let borrowed = M::request_len(text.as_str());
+        if text.len() == 16_384 {
+            // Wire meters the inline size of str during traversal. String holds a
+            // fixed-size header, so its traversal reaches the frame byte check.
+            assert_eq!(
+                borrowed,
+                Err(wire::Error::Limit(wire::LimitKind::Allocation))
+            );
+            assert_eq!(encoded, Err(wire::Error::Limit(wire::LimitKind::Bytes)));
+        } else {
+            assert_eq!(borrowed, encoded);
+        }
     }
 
     for size in [1, 64, 16_384] {

@@ -48,6 +48,8 @@ pub trait Contract {
 
     /// Measure the complete request frame without allocating output or issuing a call.
     /// A borrowed representation must serialize identically to `Self::Input`.
+    /// Wire meters the Rust representation being traversed. Use the actual input
+    /// type for identical allocation checks and refusal reasons.
     /// # Errors
     /// Propagates the Wire codec refusal.
     fn request_len<T: serde::Serialize + ?Sized>(value: &T) -> Result<usize, wire::Error> {
