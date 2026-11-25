@@ -1,8 +1,9 @@
 //! Same-principal handover from a proof-bearing shared shard to a worker.
 use super::*;
+use canic::sharding::standby::ReserveError;
 use canic::sharding::{
-    Allocation, AssignWorker, BeginShardDrain, Placement, ShardTarget,
-    standby::{Asset, InspectStandby, Source},
+    Allocation, BeginShardDrain, Placement, ShardTarget,
+    standby::{Asset, ObserveStandby, Source},
 };
 use canic::topology::attestation::{CloseRoleIssuance, Proof};
 use canic_management_protocol::stored::RetirementPhase as P;
@@ -48,7 +49,7 @@ pub(super) async fn exercise(
     if from_spare {
         use canic::sharding::standby::RefillStandby;
         let asset = root
-            .update::<_, Result<Asset, String>>(
+            .update::<_, Result<Asset, ReserveError>>(
                 RefillStandby::NAME,
                 RefillStandby::ID,
                 &refill,
@@ -58,22 +59,23 @@ pub(super) async fn exercise(
             .unwrap();
         assert!(matches!(asset, Asset::Empty(_)));
     }
+    crate::store_root_tests::configure_routes(root, user, "users", if from_spare { 2 } else { 1 })
+        .await
+        .unwrap();
     let shard_pool = stored::ShardPool {
         arguments: args(user, "user_shard", vec![]),
         root: root.id.to_text(),
         hub: user.to_text(),
         pool: "users".into(),
         max_shards: if from_spare { 2 } else { 1 },
-        keys_per_shard: if from_spare { 2 } else { 1 },
-        creation_payer: Default::default(),
-        creation_budget: management::CREATION_CYCLES,
+        creation_budget: 3 * management::CREATION_CYCLES,
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
     };
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_shards",
-        stored::CONFIGURE_SHARDS,
-        &shard_pool,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Shared(shard_pool.clone()),
         stored::LIMITS,
     )
     .await
@@ -95,7 +97,12 @@ pub(super) async fn exercise(
     let alice = CanisterId::self_authenticating(b"alice");
     let place = async || {
         if from_spare {
-            return local_place(alice).await;
+            let result = local_place(alice).await;
+            return if result == Placement::Busy {
+                local_place(alice).await
+            } else {
+                result
+            };
         }
         super::capacity::place(&hub, Some("users"), 1)
             .await
@@ -126,7 +133,7 @@ pub(super) async fn exercise(
         .unwrap();
     assert_eq!(
         WithdrawChild::decode_reply(&reply).unwrap(),
-        Err("unexpected topology sender".into())
+        Err(canic::topology::directory::DirectoryError::Unauthorized)
     );
     assert_eq!(members().await, [child.id]);
     let expiry = child
@@ -176,7 +183,12 @@ pub(super) async fn exercise(
         .await
     };
     assert_eq!(
-        root.update::<_, Result<u32, String>>(
+        Client {
+            pic,
+            id: user,
+            operator: root.operator
+        }
+        .update::<_, Result<u32, canic::sharding::ShardError>>(
             BeginShardDrain::NAME,
             BeginShardDrain::ID,
             &target,
@@ -207,7 +219,7 @@ pub(super) async fn exercise(
         };
         write(42).await.unwrap();
         assert!(
-            root.update::<_, Result<u64, String>>(
+            root.update::<_, Result<u64, canic::topology::attestation::RoleError>>(
                 CloseRoleIssuance::NAME,
                 CloseRoleIssuance::ID,
                 &(child.id, proof.0.generation.clone()),
@@ -301,7 +313,12 @@ pub(super) async fn exercise(
         assert_eq!(write(43).await, Err("account fenced".into()));
         assert_eq!(place().await, bob_route);
         assert_eq!(
-            root.update::<_, Result<u32, String>>(
+            Client {
+                pic,
+                id: user,
+                operator: root.operator
+            }
+            .update::<_, Result<u32, canic::sharding::ShardError>>(
                 BeginShardDrain::NAME,
                 BeginShardDrain::ID,
                 &target,
@@ -325,7 +342,12 @@ pub(super) async fn exercise(
         .unwrap();
     }
     assert_eq!(
-        root.update::<_, Result<u32, String>>(
+        Client {
+            pic,
+            id: user,
+            operator: root.operator
+        }
+        .update::<_, Result<u32, canic::sharding::ShardError>>(
             BeginShardDrain::NAME,
             BeginShardDrain::ID,
             &target,
@@ -335,7 +357,7 @@ pub(super) async fn exercise(
         Ok(0)
     );
     let deadline = root
-        .update::<_, Result<u64, String>>(
+        .update::<_, Result<u64, canic::topology::attestation::RoleError>>(
             CloseRoleIssuance::NAME,
             CloseRoleIssuance::ID,
             &(child.id, proof.0.generation.clone()),
@@ -347,19 +369,19 @@ pub(super) async fn exercise(
     let expires = deadline + 300_000_000_000;
     let input = stored::Stage {
         reference: reference(dormant),
-        approval: stored::ShardRetirement {
+        approval: stored::ChildRetirement {
             root: root.id.to_text(),
-            shard: id,
+            child: id,
             slot: allocation.slot,
             generation: allocation.generation,
             minimum_reuse_cycles: 1_000_000_u64.try_into().unwrap(),
             expires_at_ns: expires,
         },
     };
-    let advance = async |approval: &stored::Stage<stored::ShardRetirement>| {
-        root.update::<_, Result<P, String>>(
-            "retire_shard",
-            ic_wire::method_id("retire_shard"),
+    let advance = async |approval: &stored::Stage<stored::ChildRetirement>| {
+        root.update::<_, Result<P, ReserveError>>(
+            "retire_released_child",
+            ic_wire::method_id("canic.root.retire_released_child.v1"),
             approval,
             stored::LIMITS,
         )
@@ -377,17 +399,17 @@ pub(super) async fn exercise(
         .unwrap_or_else(|error| panic!("Root reopen at {phase}: {error:?}"))
     };
     let inventory = async || {
-        root.update::<_, <InspectStandby as Contract>::Output>(
-            InspectStandby::NAME,
-            InspectStandby::ID,
+        root.update::<_, <ObserveStandby as Contract>::Output>(
+            ObserveStandby::NAME,
+            ObserveStandby::ID,
             &(),
-            InspectStandby::REPLY,
+            ObserveStandby::REPLY,
         )
         .await
     };
     let codec = artifacts().join("role-root.client");
     let command = [
-        "retire-shard".into(),
+        "retire-released-child".into(),
         serde_json::to_string(&input).unwrap(),
     ];
     let request = canic_host::application::codec::encode(&codec, &command).unwrap();
@@ -406,20 +428,18 @@ pub(super) async fn exercise(
     );
     let mut changed = input.clone();
     changed.approval.minimum_reuse_cycles = 1u64.try_into().unwrap();
-    assert_eq!(
+    assert!(matches!(
         advance(&changed).await.unwrap_err(),
-        "retirement approval differs"
-    );
+        ReserveError::ApprovalConflict(_)
+    ));
     for phase in [P::CacheIssued, P::Cached] {
         assert_eq!(advance(&input).await, Ok(phase));
     }
     pic.stop_canister(user, Some(root.id)).await.unwrap();
-    assert!(
-        advance(&input)
-            .await
-            .unwrap_err()
-            .contains("hub withdrawal unconfirmed")
-    );
+    assert!(matches!(
+        advance(&input).await,
+        Err(ReserveError::AwaitingConfirmation(_))
+    ));
     pic.start_canister(user, Some(root.id)).await.unwrap();
     assert!(members().await.contains(&child.id));
     for phase in [P::InstallIssued, P::Dormant] {
@@ -436,10 +456,10 @@ pub(super) async fn exercise(
         assert!(inventory().await.is_empty());
         Source::Shard(target.clone())
     };
-    assert_eq!(
+    assert!(matches!(
         advance(&input).await.unwrap_err(),
-        "original role proof window remains open"
-    );
+        ReserveError::ProofOutstanding(_)
+    ));
     // Exercise both independent hubs and co-owned worker and shard grants.
     let pool = if from_spare { user } else { pool };
     let worker_pool = stored::InstancePool {
@@ -447,16 +467,15 @@ pub(super) async fn exercise(
         hub: pool.to_text(),
         component: "miner".into(),
         max_instances: 1,
-        creation_payer: Default::default(),
-        creation_budget: 0,
+        creation_budget: 5 * management::CREATION_CYCLES,
         expires_at_ns: expires,
         reference: reference(miner),
         arguments: args(pool, "miner", canic::topology::WORKER_GENERATION.to_vec()),
     };
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_workers",
-        stored::CONFIGURE_WORKERS,
-        &worker_pool,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Worker(worker_pool.clone()),
         stored::LIMITS,
     )
     .await
@@ -473,44 +492,44 @@ pub(super) async fn exercise(
             ..worker_pool.clone()
         };
         root.update::<_, Result<(), management::Refusal>>(
-            "configure_workers",
-            stored::CONFIGURE_WORKERS,
-            &auxiliary,
+            "approve_child_creation",
+            stored::APPROVE_CHILD_CREATION,
+            &stored::ChildCreationGrant::Worker(auxiliary.clone()),
             stored::LIMITS,
         )
         .await
         .unwrap();
         let input = ("miner".to_string(), 0u8);
-        use canic::sharding::LookupWorker;
+        use canic::sharding::LookupPlacement;
         for (method, request) in [
             (
-                AssignWorker::NAME,
-                AssignWorker::encode_request(&input).unwrap(),
+                canic::sharding::payment::AcquirePlacement::NAME,
+                crate::store_root_tests::placement_request(
+                    canic::sharding::payment::Demand::Worker(input.0.clone(), input.1),
+                ),
             ),
             (
-                LookupWorker::NAME,
-                LookupWorker::encode_request(&input).unwrap(),
+                LookupPlacement::NAME,
+                LookupPlacement::encode_request(&canic::sharding::Lookup::Worker(
+                    input.0.clone(),
+                    input.1,
+                ))
+                .unwrap(),
             ),
         ] {
-            assert!(
-                pic.update_call(root.id, user, method, request)
-                    .await
-                    .is_err(),
-                "{method} admitted another pool's hub"
-            );
+            let result = pic.update_call(root.id, user, method, request).await;
+            if method == LookupPlacement::NAME {
+                assert!(result.is_err(), "lookup admitted another pool's hub");
+            } else {
+                crate::store_root_tests::assert_unauthorized(&result.unwrap());
+            }
         }
     }
     let worker = async || {
-        Client {
-            pic,
-            id: root.id,
-            operator: pool,
-        }
-        .update::<_, Placement>(
-            AssignWorker::NAME,
-            AssignWorker::ID,
-            &("miner".to_string(), 0u8),
-            canic::sharding::LIMITS,
+        acquire_fixture(
+            root,
+            pool,
+            canic::sharding::payment::Demand::Worker("miner".into(), 0),
         )
         .await
     };
@@ -566,21 +585,26 @@ pub(super) async fn exercise(
     assert_eq!(use_proof().await, Err("role refused".into()));
     reopen("reassigned").await;
     if from_spare {
-        use canic::sharding::GrowShard;
         let original = Client {
             pic,
             id: root.id,
             operator: user,
         }
-        .update::<_, (Placement, u32)>(
-            GrowShard::NAME,
-            GrowShard::ID,
-            &("users", 0_u8),
-            GrowShard::REPLY,
+        .update::<_, Result<canic::sharding::payment::Payment, canic::sharding::payment::Refusal>>(
+            canic::sharding::payment::AcquirePlacement::NAME,
+            canic::sharding::payment::AcquirePlacement::ID,
+            &(
+                canic::sharding::payment::Demand::ShardCapacity("users".into(), 0),
+                canic::sharding::ACQUISITION_CYCLES,
+            ),
+            canic::sharding::payment::AcquirePlacement::REPLY,
         )
         .await;
         assert_eq!(
-            original.0,
+            match original.unwrap() {
+                canic::sharding::payment::Payment::Placed(p, _) => p,
+                other => panic!("{other:?}"),
+            },
             Placement::Unavailable(target.allocation.clone(), Some(target.shard.to_text()))
         );
     }

@@ -1,5 +1,5 @@
 //! Full Store custody comparison on both sides of the existing Root upgrade effect.
-use super::{invalid, single_upgrade_root};
+use super::invalid;
 use crate::{Plan, Result, managed, network::principal, supplier};
 use canic_management_protocol::{children::ChildId, stored as wire};
 
@@ -9,8 +9,7 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
     };
     let children = plan.maintenance().ok_or_else(invalid)?;
     let id = principal(&store.store.canister)?;
-    if single_upgrade_root(plan)
-        || id.to_text() != store.store.canister
+    if id.to_text() != store.store.canister
         || id == principal("aaaaa-aa")?
         || id == principal("2vxsx-fae")?
         || plan.target() == Some(&store.store.canister)
@@ -149,7 +148,7 @@ fn delivery<A: serde::Serialize>(
     )
 }
 
-fn expected(plan: &Plan) -> Result<wire::Custody> {
+pub(super) fn expected(plan: &Plan) -> Result<wire::Custody> {
     let children = plan.maintenance().ok_or_else(invalid)?;
     Ok(wire::Custody {
         children: (0..children.len().max(ChildId::HISTORICAL_SERVICES.len()))
@@ -163,29 +162,12 @@ fn expected(plan: &Plan) -> Result<wire::Custody> {
             })
             .collect(),
         sources: {
-            let sources = &plan.maintenance_store().ok_or_else(invalid)?.sources;
+            let sources = plan
+                .maintenance_store()
+                .map_or(&[][..], |s| s.sources.as_slice());
             (0..children.len().max(ChildId::HISTORICAL_SERVICES.len()))
                 .map(|i| sources.get(i).cloned().flatten())
                 .collect()
         },
     })
-}
-
-pub(super) fn matches(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
-    if method != super::observations(plan, false)[0].1 {
-        return Err(invalid());
-    }
-    let contract = match method {
-        "observe_root_history" => canic_management_protocol::custody::ROOT_HISTORY,
-        "observe_root_custody" => canic_management_protocol::custody::ROOT,
-        "observe_stored_children" => wire::CUSTODY,
-        _ => return Err(invalid()),
-    };
-    let actual = crate::root_custody::decode(contract, bytes)?;
-    let store = plan.maintenance_store().ok_or_else(invalid)?;
-    Ok(
-        actual.children == crate::root_custody::children(expected(plan)?)?
-            && actual.store_operation == store.operation
-            && actual.store_history == store.history,
-    )
 }

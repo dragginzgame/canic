@@ -157,9 +157,8 @@ pub fn build_app(
             .map(|(name, _)| name.as_str())
             .collect::<Vec<_>>()
             .join(" ");
-        let mut features = recipe.features.clone();
-        let source =
-            crate::artifact::build_manifest(&manifest, &recipe.package, Some(&mut features))?;
+        let features = &recipe.features;
+        let source = crate::artifact::build_manifest(&manifest, &recipe.package)?;
         let crate::artifact::BuildReport {
             version,
             wasm,
@@ -170,7 +169,7 @@ pub fn build_app(
             &manifest,
             &source,
             &recipe.package,
-            &features,
+            features,
             Some(&output),
             definition.role.as_deref(),
             Some(&children),
@@ -184,7 +183,7 @@ pub fn build_app(
                     &source,
                     &recipe.package,
                     client,
-                    &features,
+                    features,
                     &children,
                     &crate::application::codec::output(&wasm),
                 )

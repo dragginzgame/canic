@@ -23,7 +23,7 @@ custody reads separate from application observations. Host retains the original
 method names and frames for historical plans with an implicit first slot.
 
 The native Root build type-checks the same management mounts and engine as the
-installed canister. For example, `stage_child` checks the actual controller,
+installed canister. For example, `stage_inline_child_creation` checks the actual controller,
 decodes its request and stages the child in the engine. Scheduled creation
 reaches `management_completion("create_canister", …)` and awaits Platform’s
 `Call::execute`. Outside a canister, polling that call yields
@@ -502,7 +502,7 @@ changed executable, rejected upgrade, callback loss and owner maintenance.
 
 For Store-backed children, the same workflow retains every artifact reference,
 pin, cache deadline and historical upgrade source. Both executables must support
-the complete `observe_stored_children` contract. The preview identifies the Store
+the complete `observe_root_custody` contract. The preview identifies the Store
 and pin count; `--json` exposes the full approved custody. Store code, sole Root
 control and subnet placement are checked before and after installation alongside
 the child checks. An interrupted completion check resumes the original installation

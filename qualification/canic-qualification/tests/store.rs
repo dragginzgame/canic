@@ -14,45 +14,61 @@ mod miner_pool_fixture;
 use local_store::Client;
 
 impl Client<'_> {
-    async fn info(&self) -> store::Info {
+    async fn inspect(&self, request: &store::Inspect) -> store::Inspection {
+        let encoding = |direction| ic_wire::Encoding::Frame {
+            method: store::INSPECT,
+            direction,
+        };
+        let bytes =
+            ic_wire::encode(request, encoding(ic_wire::Direction::Request), STORE_LIMITS).unwrap();
         let reply = self
             .pic
-            .query_call(
-                self.id,
-                self.operator,
-                "info",
-                ic_wire::encode(
-                    &(),
-                    ic_wire::Encoding::Frame {
-                        method: store::INFO,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    STORE_LIMITS,
-                )
-                .unwrap(),
-            )
+            .query_call(self.id, self.operator, "inspect", bytes)
             .await
             .unwrap();
-        ic_wire::decode(
+        ic_wire::decode::<Result<store::Inspection, store::Error>>(
             &reply,
-            ic_wire::Encoding::Frame {
-                method: store::INFO,
-                direction: ic_wire::Direction::Response,
-            },
+            encoding(ic_wire::Direction::Response),
             STORE_LIMITS,
         )
+        .unwrap()
         .unwrap()
     }
 
+    async fn info(&self) -> store::Info {
+        let store::Inspection::Info(info) = self.inspect(&store::Inspect::Info).await else {
+            panic!("expected Store info")
+        };
+        info
+    }
+
+    async fn observe(&self, request: &store::Observe) -> Result<store::Observation, store::Error> {
+        self.update("observe", store::OBSERVE, request, STORE_LIMITS)
+            .await
+    }
+
     async fn status(&self, release: &store::Release) -> store::Status {
-        self.update::<_, Result<store::Status, store::Error>>(
-            "observe",
-            store::STATUS,
-            release,
-            STORE_LIMITS,
-        )
-        .await
-        .unwrap()
+        let store::Observation::Status(status) = self
+            .observe(&store::Observe::Status(release.clone()))
+            .await
+            .unwrap()
+        else {
+            panic!("expected release status")
+        };
+        status
+    }
+
+    async fn release_custody(
+        &self,
+        release: &store::Release,
+    ) -> Result<store::Custody, store::Error> {
+        let store::Observation::Custody(custody) = self
+            .observe(&store::Observe::Custody(release.clone()))
+            .await?
+        else {
+            panic!("expected release custody")
+        };
+        Ok(custody)
     }
 
     async fn publish_bytes(&self, version: &str, bytes: &[u8]) -> store::Manifest {
@@ -183,10 +199,13 @@ async fn pins_survive_maintenance_and_cache_reconstruction_supports_install_and_
         .await
         .unwrap();
     pic.start_canister(id, Some(operator)).await.unwrap();
-    let observed: Result<store::PinReceipt, store::Error> = client
-        .update("observe_pin", store::OBSERVE_PIN, &pin, STORE_LIMITS)
-        .await;
-    assert_eq!(observed.unwrap(), receipt);
+    assert_eq!(
+        client
+            .observe(&store::Observe::Pin(pin.clone()))
+            .await
+            .unwrap(),
+        store::Observation::Pin(receipt.clone())
+    );
     assert_eq!(
         client.cache(&pin).await.uploaded as usize,
         pin.manifest.chunks.len()

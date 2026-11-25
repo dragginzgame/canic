@@ -8,10 +8,10 @@ pub(super) const KEY: &str = "hub.funding.v1";
 // Approve a finite budget for one directory child.
 // guard  : controller
 // limits : default Wire limits
-#[canic::update(contract = stored::ConfigureChildFunding, guard = canic::guard::require_controller)]
+#[canic::update(contract = stored::ConfigureChildFunding)]
 async fn configure_child_funding(
     rule: stored::ChildFunding,
-) -> Result<stored::ChildFundingStatus, String> {
+) -> Result<stored::ChildFundingStatus, stored::FundingError> {
     funding::configure(rule).await
 }
 
@@ -19,10 +19,10 @@ async fn configure_child_funding(
 // Close the child's payment edge.
 // guard  : controller
 // limits : default Wire limits
-#[canic::update(contract = stored::StopChildFunding, guard = canic::guard::require_controller)]
+#[canic::update(contract = stored::StopChildFunding)]
 fn stop_child_funding(
     child: ic_platform_types::Principal,
-) -> Result<stored::ChildFundingStatus, String> {
+) -> Result<stored::ChildFundingStatus, stored::FundingError> {
     funding::stop(child)
 }
 
@@ -31,7 +31,7 @@ fn stop_child_funding(
 // guard  : retained directory parent checked by watch
 // limits : default Wire limits
 #[canic::update(contract = funding::Watch)]
-fn watch_child_balance(terms: (u64, u64)) -> Result<(), String> {
+fn watch_child_balance(terms: (u64, u64)) -> Result<(), stored::FundingError> {
     funding::watch(terms)
 }
 
@@ -40,7 +40,7 @@ fn watch_child_balance(terms: (u64, u64)) -> Result<(), String> {
 // guard  : exact configured direct child checked by request
 // limits : default Wire limits
 #[canic::update(contract = funding::Request)]
-async fn request_child_funding(request: (u64, u128)) -> Result<u64, String> {
+async fn request_child_funding(request: (u64, u128)) -> Result<u64, stored::FundingError> {
     funding::request(request).await
 }
 
@@ -49,12 +49,27 @@ async fn request_child_funding(request: (u64, u128)) -> Result<u64, String> {
 // guard  : installing Root (sole controller)
 // limits : sharding::LIMITS
 #[canic::update(guard = canic::guard::require_controller, limits = canic::sharding::LIMITS)]
-async fn fund_ledger(terms: (u128, u128)) -> Result<canic::sharding::payment::Payment, String> {
-    canic::sharding::payment::fund(
+async fn fund_ledger(
+    terms: (u128, u128),
+) -> Result<canic::sharding::payment::Payment, canic::sharding::payment::Refusal> {
+    canic::sharding::payment::acquire_placement(
         ic_platform_runtime::system::caller(),
         canic::sharding::payment::Demand::Singleton("project_ledger".into()),
         terms.0,
         terms.1,
     )
     .await
+    .map_err(|error| match error {
+        canic::sharding::payment::AcquireError::Refused(reason) => reason,
+        other => panic!("funded placement call failed: {other:?}"),
+    })
+}
+
+// ledger
+// Read the project's sole acknowledged ledger.
+// guard  : public
+// limits : default Wire limits
+#[canic::query]
+fn ledger() -> Result<ic_platform_types::Principal, canic::topology::SingletonLookupError> {
+    canic::topology::acknowledged_singleton("project_ledger")
 }

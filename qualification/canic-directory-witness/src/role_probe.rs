@@ -47,7 +47,8 @@ pub(super) fn open(
 async fn renew_role((issuer, receiver): (Principal, Principal)) -> Result<u64, String> {
     let proof = call::<Issue>(issuer, 5, &receiver)
         .await
-        .map_err(|_| "issuer unavailable")??;
+        .map_err(|_| "issuer unavailable")?
+        .map_err(|e| e.to_string())?;
     let expiry = proof.0.expiry()?;
     PROOF.set(Some(proof));
     Ok(expiry)

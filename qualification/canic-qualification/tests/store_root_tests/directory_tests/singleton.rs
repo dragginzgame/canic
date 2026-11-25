@@ -19,16 +19,15 @@ pub(super) async fn exercise(
         role: "project_ledger".into(),
         maximum: 2,
         creation_budget: 2 * management::CREATION_CYCLES,
-        creation_payer: stored::CreationPayer::Requester,
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
         application: management::application::Arguments::new(vec![]).unwrap(),
     };
     let approve = async |g: &stored::SingletonGrant| {
         root.update::<_, Result<(), management::Refusal>>(
-            "configure_singleton",
-            stored::CONFIGURE_SINGLETON,
-            g,
+            "approve_child_creation",
+            stored::APPROVE_CHILD_CREATION,
+            &stored::ChildCreationGrant::PerParent(g.clone()),
             stored::LIMITS,
         )
         .await
@@ -36,27 +35,28 @@ pub(super) async fn exercise(
     approve(&grant).await.unwrap();
     approve(&grant).await.unwrap();
     let mut changed = grant.clone();
-    changed.creation_payer = stored::CreationPayer::Root;
+    changed.maximum = 1;
     assert_eq!(approve(&changed).await, Err(management::Refusal::Occupied));
-    let fund = async |parent, attached: u128| -> Result<Payment, String> {
-        Client {
-            pic,
-            id: parent,
-            operator: root.id,
-        }
-        .update(
-            "fund_ledger",
-            ic_wire::method_id("fund_ledger"),
-            &(2_000_000_000_000_u128, attached),
-            canic::sharding::LIMITS,
-        )
-        .await
-    };
+    let fund =
+        async |parent, attached: u128| -> Result<Payment, canic::sharding::payment::Refusal> {
+            Client {
+                pic,
+                id: parent,
+                operator: root.id,
+            }
+            .update(
+                "fund_ledger",
+                ic_wire::method_id("fund_ledger"),
+                &(2_000_000_000_000_u128, attached),
+                canic::sharding::LIMITS,
+            )
+            .await
+        };
     assert!(fund(project, 0).await.is_err());
     for parent in [first, second] {
         pic.add_cycles(parent, 4_000_000_000_000).await;
     }
-    let unapproved: Result<u64, String> = Client {
+    let unapproved: Result<u64, stored::FundingError> = Client {
         pic,
         id: project,
         operator: first,
@@ -72,7 +72,14 @@ pub(super) async fn exercise(
     for parent in [first, second] {
         assert!(matches!(fund(parent, 0).await.unwrap(), Payment::Quoted(_)));
     }
+    let ledger = async |parent| -> Result<CanisterId, canic::topology::SingletonLookupError> {
+        query_service(pic, parent, "ledger", ()).await
+    };
     let install = async |parent| {
+        assert_eq!(
+            ledger(parent).await,
+            Err(canic::topology::SingletonLookupError::NotFound)
+        );
         let Payment::Quoted(quote) = fund(parent, 0).await.unwrap() else {
             panic!("expected project quote")
         };
@@ -104,6 +111,7 @@ pub(super) async fn exercise(
         let status = async |child| -> (String, Option<Option<u64>>) {
             query_service(pic, parent, "topology_status", child).await
         };
+        assert_eq!(ledger(parent).await, Ok(own));
         assert_eq!(status(own).await, ("project".into(), Some(Some(2))));
         assert_eq!(status(other).await, ("project".into(), None));
     }

@@ -50,11 +50,15 @@ async fn settle(pic: &PocketIc) {
 }
 
 async fn custody(root: &Client<'_>) -> stored::Custody {
+    root_custody(root).await.root.current.stored
+}
+
+async fn root_custody(root: &Client<'_>) -> management::application::Custody {
     root.update(
-        "observe_stored_children",
-        stored::CUSTODY,
+        "observe_root_custody",
+        management::application::CUSTODY,
         &(),
-        stored::LIMITS,
+        management::application::LIMITS,
     )
     .await
 }
@@ -245,11 +249,11 @@ async fn stage(
     input: &stored::Stage<management::Approval>,
 ) -> Result<management::Status, management::Refusal> {
     root.update(
-        "stage_stored_child",
-        stored::STAGE,
+        "stage_child_creation",
+        canic_management_protocol::application::STAGE_CHILD_CREATION,
         &Request {
             slot: ChildId::FIRST,
-            value: input,
+            value: canic_management_protocol::application::Deployment::<_, ()>::Stored(input),
         },
         stored::LIMITS,
     )
@@ -261,11 +265,11 @@ async fn reconcile(
     input: &stored::Stage<management::Approval>,
 ) -> management::Status {
     root.update(
-        "reconcile_stored_child",
-        stored::RECONCILE,
+        "reconcile_child_creation",
+        canic_management_protocol::application::RECONCILE_CHILD_CREATION,
         &Request {
             slot: ChildId::FIRST,
-            value: input,
+            value: canic_management_protocol::application::Deployment::<_, ()>::Stored(input),
         },
         stored::LIMITS,
     )
@@ -351,7 +355,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
         pic.update_call(
             root.id,
             root.operator,
-            "reconcile_child",
+            "reconcile_inline_child_creation",
             ic_wire::encode(
                 &Request {
                     slot: ChildId::FIRST,
@@ -386,11 +390,11 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
     // Lose the cache completion callback, retaining only its original dispatch intent.
     inject(&root, 6).await;
     root.update::<_, Result<upgrade::Status, management::Refusal>>(
-        "stage_stored_upgrade",
-        stored::STAGE_UPGRADE,
+        "stage_child_upgrade",
+        canic_management_protocol::application::STAGE_CHILD_UPGRADE,
         &Request {
             slot: ChildId::FIRST,
-            value: &upgrade,
+            value: canic_management_protocol::application::Deployment::<_, ()>::Stored(&upgrade),
         },
         stored::LIMITS,
     )
@@ -406,11 +410,11 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
     maintain(&root).await;
     assert_eq!(custody(&root).await, interrupted);
     root.update::<_, upgrade::Status>(
-        "reconcile_stored_upgrade",
-        stored::RECONCILE_UPGRADE,
+        "reconcile_child_upgrade",
+        canic_management_protocol::application::RECONCILE_CHILD_UPGRADE,
         &Request {
             slot: ChildId::FIRST,
-            value: &upgrade,
+            value: canic_management_protocol::application::Deployment::<_, ()>::Stored(&upgrade),
         },
         stored::LIMITS,
     )
@@ -455,11 +459,11 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
         reference: input.reference.clone(),
     };
     root.update::<_, Result<upgrade::Status, management::Refusal>>(
-        "stage_stored_upgrade",
-        stored::STAGE_UPGRADE,
+        "stage_child_upgrade",
+        canic_management_protocol::application::STAGE_CHILD_UPGRADE,
         &Request {
             slot: ChildId::FIRST,
-            value: &successor,
+            value: canic_management_protocol::application::Deployment::<_, ()>::Stored(&successor),
         },
         stored::LIMITS,
     )
@@ -476,7 +480,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
         wasm,
     };
     root.update::<_, Result<management::Status, management::Refusal>>(
-        "stage_child",
+        "stage_inline_child_creation",
         children::STAGE,
         &Request {
             slot: ChildId::SECOND,
@@ -503,11 +507,13 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
     assert!(history.sources[1].is_none());
     let old = root
         .update::<_, Result<upgrade::Status, management::Refusal>>(
-            "stage_stored_upgrade",
-            stored::STAGE_UPGRADE,
+            "stage_child_upgrade",
+            canic_management_protocol::application::STAGE_CHILD_UPGRADE,
             &Request {
                 slot: ChildId::FIRST,
-                value: &upgrade,
+                value: canic_management_protocol::application::Deployment::<_, ()>::Stored(
+                    &upgrade,
+                ),
             },
             stored::LIMITS,
         )
@@ -643,4 +649,90 @@ async fn unpublished_reference_cannot_authorize_child_creation() {
     );
     let stopped = server.stop().unwrap();
     assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
+}
+
+async fn acquire_fixture(
+    root: &Client<'_>,
+    payer: CanisterId,
+    demand: canic::sharding::payment::Demand,
+) -> canic::sharding::Placement {
+    let maximum = fixture_maximum(&demand);
+    let controller = root.pic.get_controllers(payer).await[0];
+    Client {
+        pic: root.pic,
+        id: payer,
+        operator: controller,
+    }
+    .update(
+        "acquire_fixture",
+        ic_wire::method_id("acquire_fixture"),
+        &(root.id, demand, maximum),
+        canic::sharding::LIMITS,
+    )
+    .await
+}
+
+fn placement_request(demand: canic::sharding::payment::Demand) -> Vec<u8> {
+    use canic::{method::Contract, sharding::payment::AcquirePlacement};
+    let maximum = fixture_maximum(&demand);
+    AcquirePlacement::encode_request(&(demand, maximum)).unwrap()
+}
+
+async fn configure_routes(
+    root: &Client<'_>,
+    hub: CanisterId,
+    pool: &str,
+    limit: u32,
+) -> Result<(), canic::sharding::ShardError> {
+    use canic::{method::Contract, sharding::ConfigureShardRoutes};
+    Client {
+        pic: root.pic,
+        id: hub,
+        operator: root.operator,
+    }
+    .update(
+        ConfigureShardRoutes::NAME,
+        ConfigureShardRoutes::ID,
+        &(pool, limit),
+        ConfigureShardRoutes::REPLY,
+    )
+    .await
+}
+
+fn hub_args(root: &Client<'_>) -> Vec<u8> {
+    ic_wire::encode(
+        &(root.id, root.operator),
+        ic_wire::Encoding::Payload,
+        canic::sharding::LIMITS,
+    )
+    .unwrap()
+}
+
+fn placed(bytes: &[u8]) -> canic::sharding::Placement {
+    use canic::{
+        method::Contract,
+        sharding::payment::{AcquirePlacement, Payment},
+    };
+    match AcquirePlacement::decode_reply(bytes).unwrap().unwrap() {
+        Payment::Placed(placement, _) => placement,
+        Payment::Quoted(_) => panic!("expected a placement"),
+    }
+}
+
+fn assert_unauthorized(bytes: &[u8]) {
+    use canic::{
+        method::Contract,
+        sharding::payment::{AcquirePlacement, Refusal},
+    };
+    assert_eq!(
+        AcquirePlacement::decode_reply(bytes).unwrap(),
+        Err(Refusal::Unauthorized)
+    );
+}
+
+fn fixture_maximum(demand: &canic::sharding::payment::Demand) -> u128 {
+    match demand {
+        canic::sharding::payment::Demand::ShardCapacity(..) => canic::sharding::ACQUISITION_CYCLES,
+        _ => 5_000_000_000_000,
+    }
 }

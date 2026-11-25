@@ -1585,7 +1585,6 @@ fn registry_and_workers_share_infrastructure_but_require_separate_parents() {
         store: worker.store.clone(),
         release: worker.release.clone(),
         max_instances: 1,
-        creation_payer: worker.creation_payer,
         creation_budget: worker.creation_budget,
         expires_at_ns: worker.expires_at_ns,
         increase_from: None,
@@ -1662,7 +1661,6 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
             release: fleet.worker_pools[0].release.clone(),
             max_shards: 1,
             keys_per_shard: 3,
-            creation_payer: Default::default(),
             creation_budget: 0,
             expires_at_ns: Some(u64::MAX),
             install_args: None,
@@ -1738,7 +1736,6 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
 
 #[test]
 fn registry_plans_project_paid_singletons_without_funding_projects() {
-    use canic_management_protocol::stored;
     let source = r#"
 [apps.projects.canisters]
 root = { role = "root" }
@@ -1760,16 +1757,21 @@ root = "root"
 store = "store"
 release = { name = "project", version = "1" }
 max_instances = 2
-creation_payer = "root"
 creation_budget = 2000000000000
 expires_at_ns = 9000000000000000000
 [apps.projects.fleets.local.registry.singleton]
 component = "ledger"
 release = { name = "ledger", version = "1" }
-creation_payer = "requester"
 maximum = 2
 creation_budget = 2000000000000
 "#;
+    assert!(
+        toml::from_str::<SourceConfig>(&source.replace(
+            "max_instances = 2",
+            "max_instances = 2\ncreation_payer = \"root\""
+        ))
+        .is_err()
+    );
     let config: Config = toml::from_str(source).unwrap();
     let fleet = config.select(None, None).unwrap();
     let dir = directory();
@@ -1784,11 +1786,6 @@ creation_budget = 2000000000000
     else {
         panic!("expected project and ledger approvals")
     };
-    assert_eq!(project.approval.creation_payer, stored::CreationPayer::Root);
-    assert_eq!(
-        child.approval.creation_payer,
-        stored::CreationPayer::Requester
-    );
     assert_eq!(child.approval.registry, project.approval.hub);
     assert_eq!(child.approval.role, "project_ledger");
     assert!(child.approval.receiver.is_none());
@@ -2058,12 +2055,6 @@ fn root_build_unions_pool_mounts_across_fleets() {
             .as_ref()
             .unwrap()
             .features,
-        [
-            "auth",
-            "child-metrics",
-            "reserve-pool",
-            "shard-pool",
-            "worker-pool"
-        ]
+        ["auth", "child-creation", "child-metrics", "reserve-pool"]
     );
 }

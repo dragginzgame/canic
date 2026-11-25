@@ -35,11 +35,8 @@ pub struct ShardPoolConfig {
     /// Previous approved pool count when planning an increase on an existing Root.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub increase_from: Option<u8>,
-    /// Total authorized creation attachments in cycles.
+    /// Lifetime ceiling on requester charges for fresh and reserve acquisitions.
     pub creation_budget: u64,
-    /// Economic payer for new children under this grant.
-    #[serde(default)]
-    pub creation_payer: stored::CreationPayer,
     /// Final deadline for dispatching new creation work, in IC nanoseconds.
     pub expires_at_ns: Option<u64>,
 }
@@ -65,11 +62,8 @@ pub struct RegistryConfig {
     /// Previous approved pool count when planning an increase on an existing Root.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub increase_from: Option<u8>,
-    /// Total authorized creation attachments in cycles.
+    /// Lifetime ceiling on requester charges for fresh and reserve acquisitions.
     pub creation_budget: u64,
-    /// Economic payer for new children under this grant.
-    #[serde(default)]
-    pub creation_payer: stored::CreationPayer,
     /// Deadline for new work, required when planning.
     pub expires_at_ns: Option<u64>,
 }
@@ -86,10 +80,8 @@ pub struct SingletonConfig {
     pub install_args: Option<PathBuf>,
     /// Maximum registry-wide allocations under this approval.
     pub maximum: u32,
-    /// Lifetime creation attachment budget.
+    /// Lifetime ceiling on requester charges for fresh and reserve acquisitions.
     pub creation_budget: u64,
-    /// Explicit payer, independent of the parent instance's own creation.
-    pub creation_payer: stored::CreationPayer,
 }
 
 /// Named surplus canisters on one network with the same release authority.
@@ -181,11 +173,8 @@ pub struct WorkerPoolConfig {
     pub minimum_reuse_cycles: Option<std::num::NonZeroU64>,
     /// Worker ceiling, including parked allocations.
     pub max_workers: u8,
-    /// Lifetime creation debit ceiling.
+    /// Lifetime ceiling on requester charges for fresh and reserve acquisitions.
     pub creation_budget: u64,
-    /// Economic payer for new children under this grant.
-    #[serde(default)]
-    pub creation_payer: stored::CreationPayer,
     /// Last authorized creation time.
     pub expires_at_ns: Option<u64>,
 }
@@ -411,7 +400,7 @@ impl ShardPoolConfig {
         super::positive_count(
             "shard_pool.keys_per_shard",
             self.keys_per_shard,
-            stored::MAX_KEYS_PER_SHARD,
+            canic::sharding::MAX_KEYS_PER_SHARD,
         )?;
         validate_deadline("shard_pool", self.expires_at_ns)?;
         Ok(())
@@ -465,8 +454,6 @@ impl FleetConfig {
             root,
             hub,
             max_shards: policy.max_shards,
-            keys_per_shard: policy.keys_per_shard,
-            creation_payer: policy.creation_payer,
             creation_budget: policy.creation_budget,
             expires_at_ns: policy.deadline()?,
             reference: stored::Reference { store, manifest },

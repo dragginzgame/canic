@@ -225,14 +225,29 @@ pub fn create_managed_plan(
                 &root,
                 &arguments.unwrap_or_default(),
                 pin,
+                &input.controller,
             )?)
         } else {
-            Some(selection.config.receiver_install_args(
+            let application = selection.config.bind_hub_operator(
                 canister,
-                &root,
+                &input.controller,
                 arguments.unwrap_or_default(),
-            )?)
+            )?;
+            Some(
+                selection
+                    .config
+                    .receiver_install_args(canister, &root, application)?,
+            )
         }
+    } else if input.target.is_none()
+        && (selection.config.route_operator_role(canister).is_some()
+            || selection.config.funding_operator_role(canister).is_some())
+    {
+        Some(selection.config.bind_hub_operator(
+            canister,
+            &input.controller,
+            arguments.unwrap_or_default(),
+        )?)
     } else {
         arguments
     };
@@ -479,10 +494,7 @@ pub(crate) fn evidence_with_source(
             let method = method.id(plan);
             let (status, source) = if matches!(
                 method,
-                canic_management_protocol::stored::CUSTODY
-                    | canic_management_protocol::custody::ROOT
-                    | canic_management_protocol::custody::ROOT_HISTORY
-                    | canic_management_protocol::application::CHILD_EVIDENCE
+                canic_management_protocol::application::CHILD_EVIDENCE
                     | canic_management_protocol::application::CUSTODY
             ) {
                 stored::creation_evidence(plan, bytes)?
@@ -635,10 +647,7 @@ async fn complete(
 fn decode_observation(plan: &Plan, method: u64, bytes: &[u8]) -> Result<Status> {
     if matches!(
         method,
-        canic_management_protocol::stored::CUSTODY
-            | canic_management_protocol::custody::ROOT
-            | canic_management_protocol::custody::ROOT_HISTORY
-            | canic_management_protocol::application::CHILD_EVIDENCE
+        canic_management_protocol::application::CHILD_EVIDENCE
             | canic_management_protocol::application::CUSTODY
     ) {
         stored::creation(plan, bytes)

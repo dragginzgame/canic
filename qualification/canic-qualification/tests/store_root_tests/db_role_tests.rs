@@ -94,7 +94,7 @@ async fn installed_roles(journey: Journey) {
     let deadline = now + 600_000_000_000;
     local.shard_pools.first_mut().unwrap().expires_at_ns = Some(deadline);
     let mut fleet = config.select(None, None).unwrap().config;
-    let pin: Result<ic_wire::Bytes<32>, String> = root
+    let pin: Result<ic_wire::Bytes<32>, canic::topology::attestation::RoleError> = root
         .update(
             PrepareRoleKey::NAME,
             PrepareRoleKey::ID,
@@ -105,32 +105,40 @@ async fn installed_roles(journey: Journey) {
     let pin = pin.unwrap().into_vec().try_into().unwrap();
     let args = |name, pin| {
         fleet
-            .db_service_install_args(name, &root.id.to_text(), &[5; 16], pin)
+            .db_service_install_args(
+                name,
+                &root.id.to_text(),
+                &[5; 16],
+                pin,
+                &root.operator.to_text(),
+            )
             .unwrap()
     };
     let policy = canic::auth::install::Install::decode(&args(HUB, pin)).unwrap();
     let stage = async |slot, bytes| -> Result<management::Status, management::Refusal> {
         root.update(
-            "stage_application_child",
-            management::application::STAGE,
+            "stage_child_creation",
+            canic_management_protocol::application::STAGE_CHILD_CREATION,
             &Request {
                 slot,
-                value: management::application::Stage {
-                    source: stored::Stage {
-                        approval: management::Approval {
-                            manager: root.id.to_text(),
-                            module_hash: hubs.hash,
-                            creation_cycles: management::CREATION_CYCLES,
-                            execute_at_ns: now,
-                            expires_at_ns: deadline,
+                value: canic_management_protocol::application::Deployment::<(), _>::Application(
+                    management::application::Stage {
+                        source: stored::Stage {
+                            approval: management::Approval {
+                                manager: root.id.to_text(),
+                                module_hash: hubs.hash,
+                                creation_cycles: management::CREATION_CYCLES,
+                                execute_at_ns: now,
+                                expires_at_ns: deadline,
+                            },
+                            reference: stored::Reference {
+                                store: store.id.to_text(),
+                                manifest: hubs.clone(),
+                            },
                         },
-                        reference: stored::Reference {
-                            store: store.id.to_text(),
-                            manifest: hubs.clone(),
-                        },
+                        arguments: management::application::Arguments::new(bytes).unwrap(),
                     },
-                    arguments: management::application::Arguments::new(bytes).unwrap(),
-                },
+                ),
             },
             stored::LIMITS,
         )
@@ -174,6 +182,8 @@ async fn installed_roles(journey: Journey) {
     };
     let hub = ready(ChildId::FIRST).await;
     let project = ready(ChildId::SECOND).await;
+    pic.add_cycles(hub, 10_000_000_000_000).await;
+    pic.add_cycles(project, 10_000_000_000_000).await;
     fleet.canisters.get_mut(HUB).unwrap().id = Some(hub.to_text());
     let pool = fleet
         .shard_pool_approval(
@@ -183,13 +193,16 @@ async fn installed_roles(journey: Journey) {
         )
         .unwrap();
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_shards",
-        stored::CONFIGURE_SHARDS,
-        &pool,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Shared(pool.clone()),
         stored::LIMITS,
     )
     .await
     .unwrap();
+    super::configure_routes(&root, hub, &pool.pool, 1)
+        .await
+        .unwrap();
     let grant = enrollment::Grant {
         receiver: ic_auth_protocol_types::Principal::from_slice(hub.as_slice()),
         issuer: policy.issuer,
@@ -471,7 +484,7 @@ async fn dedicated_receiver(
     reopen: bool,
 ) {
     use canic::sharding::{
-        AssignInstance, Placement,
+        Placement,
         provisioning::{AuthSubject, Binding, Provision, Request},
     };
     use ic_auth_protocol_types::Principal;
@@ -496,7 +509,6 @@ async fn dedicated_receiver(
         install_args: Some("db-role-nonce.bin".into()),
         max_instances: 1,
         increase_from: None,
-        creation_payer: Default::default(),
         creation_budget: management::CREATION_CYCLES,
         expires_at_ns: Some(grant.expires_at_ns),
     });
@@ -530,9 +542,9 @@ async fn dedicated_receiver(
     assert_eq!(topology.application, b"local-shard-v001");
     let configure = async |approval: &stored::InstancePool| {
         root.update::<_, Result<(), management::Refusal>>(
-            "configure_instances",
-            stored::CONFIGURE_INSTANCES,
-            approval,
+            "approve_child_creation",
+            stored::APPROVE_CHILD_CREATION,
+            &stored::ChildCreationGrant::Dedicated(approval.clone()),
             stored::LIMITS,
         )
         .await
@@ -558,19 +570,13 @@ async fn dedicated_receiver(
         configure(&invalid).await,
         Err(management::Refusal::Occupied)
     );
-    let parent = Client {
-        operator: registry,
-        ..*root
-    };
     let assign = async || {
-        parent
-            .update::<_, Placement>(
-                AssignInstance::NAME,
-                AssignInstance::ID,
-                &[3_u8; 32],
-                AssignInstance::REPLY,
-            )
-            .await
+        acquire_fixture(
+            root,
+            registry,
+            canic::sharding::payment::Demand::Instance([3; 32]),
+        )
+        .await
     };
     assert!(matches!(assign().await, Placement::Pending(_)));
     settle(pic).await;

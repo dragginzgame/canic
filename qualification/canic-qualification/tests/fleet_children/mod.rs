@@ -505,7 +505,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_child_upgrade",
+            "stage_inline_child_upgrade",
             ic_wire::encode(
                 &canic_management_protocol::children::Request {
                     slot: canic_management_protocol::children::ChildId::SECOND,

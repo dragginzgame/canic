@@ -61,7 +61,7 @@ fn historical_or_complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
             .eq([ChildId::FIRST, ChildId::SECOND])
 }
 
-const JOURNAL_TAG: &[u8; 4] = b"CUJF";
+const JOURNAL_TAG: &[u8; 4] = b"CUJG";
 const ARTIFACT_TAG: &[u8] = b"CUA2";
 pub(super) const JOURNAL_BYTES: usize = 65_536;
 // Each extra empty record encodes its slot, inline variant and two empty byte vectors.
@@ -71,8 +71,6 @@ pub(super) const JOURNAL_KEY: &str = "manager.journal.v2";
 pub(super) const ARTIFACT_KEY: &str = "manager.artifacts.v1";
 #[cfg(feature = "sharding")]
 pub(super) const SHARDS_KEY: &str = "manager.shards.v2";
-#[cfg(feature = "sharding")]
-pub(super) const PROJECT_INDEX_KEY: &str = "manager.project_index.v1";
 #[cfg(feature = "sharding")]
 pub(super) const WORKER_HISTORY_KEY: &str = "manager.worker_history.v1";
 pub(super) const KEYS: &[&str] = &[
@@ -84,8 +82,6 @@ pub(super) const KEYS: &[&str] = &[
     SHARDS_KEY,
     #[cfg(feature = "sharding")]
     WORKER_HISTORY_KEY,
-    #[cfg(feature = "sharding")]
-    PROJECT_INDEX_KEY,
     #[cfg(feature = "backup")]
     "manager.snapshot.v1",
 ];

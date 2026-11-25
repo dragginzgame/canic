@@ -27,30 +27,14 @@ struct Package {
     version: String,
     source: Option<String>,
     manifest_path: PathBuf,
-    features: std::collections::BTreeMap<String, Vec<String>>,
 }
 
-pub(crate) fn manifest(
-    workspace_manifest: &Path,
-    name: &str,
-    app_features: Option<&mut Vec<String>>,
-) -> Result<PathBuf> {
+pub(crate) fn manifest(workspace_manifest: &Path, name: &str) -> Result<PathBuf> {
     if !matches!(name, "canic-root" | "ic-wasm-store") {
         return Ok(workspace_manifest.into());
     }
     let workspace = metadata(workspace_manifest)?;
     if name == "canic-root" {
-        if let Some(features) = app_features {
-            let root = package(&workspace, name)?;
-            // Pinned releases before split mounts expose all placement through sharding.
-            if root.features.contains_key("sharding") && !root.features.contains_key("shard-pool") {
-                let original_len = features.len();
-                features.retain(|f| !super::placement_mount(f));
-                if features.len() != original_len && !features.iter().any(|f| f == "sharding") {
-                    features.push("sharding".into());
-                }
-            }
-        }
         return root_manifest(workspace_manifest, &workspace);
     }
     let runtime = selected(&workspace)?;

@@ -16,6 +16,36 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "storage")]
 pub use actor::{attach_parent, parent, role};
 
+/// Local lookup of an acknowledged child by role.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+pub enum SingletonLookupError {
+    /// The application has not opened its directory.
+    DirectoryUnavailable,
+    /// No direct child of this role has acknowledged a delivery.
+    NotFound,
+    /// Multiple acknowledged children have the requested role.
+    Ambiguous,
+}
+
+/// Read the sole acknowledged direct child of this role from the local directory.
+/// # Errors
+/// Distinguishes a closed directory, an absent acknowledgement and an ambiguous role.
+#[cfg(feature = "storage")]
+pub fn acknowledged_singleton(role: &str) -> Result<Principal, SingletonLookupError> {
+    directory::retained::DIRECTORY.with_borrow(|directory| {
+        let index = directory
+            .as_ref()
+            .ok_or(SingletonLookupError::DirectoryUnavailable)?;
+        let mut children = index.acknowledged_children(role);
+        let child = children.next().ok_or(SingletonLookupError::NotFound)?;
+        if children.next().is_some() {
+            return Err(SingletonLookupError::Ambiguous);
+        }
+        Ok(child)
+    })
+}
+
 /// In a worker grant, request the exact allocation generation as the inner install payload.
 pub const WORKER_GENERATION: &[u8] = b"canic.worker_generation.v1";
 

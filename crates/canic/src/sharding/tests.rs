@@ -2,7 +2,7 @@ use super::*;
 use ic_platform_types::Principal;
 
 #[test]
-fn instance_clients_preserve_local_dispatch_failure() {
+fn placement_clients_preserve_local_refusal_and_dispatch_failure() {
     use crate::method::CallError;
     use std::{
         future::Future,
@@ -14,12 +14,25 @@ fn instance_clients_preserve_local_dispatch_failure() {
     let key = [42; 32];
     let mut context = Context::from_waker(Waker::noop());
     assert!(matches!(
-        pin!(assign_instance(root, key)).poll(&mut context),
-        Poll::Ready(Err(CallError::Dispatch(_)))
+        pin!(client::acquire_instance(root, key)).poll(&mut context),
+        Poll::Ready(Err(payment::AcquireError::Call(CallError::Dispatch(_))))
     ));
     assert!(matches!(
-        pin!(lookup_instance(root, key)).poll(&mut context),
+        pin!(client::observe_instance(root, key)).poll(&mut context),
         Poll::Ready(Err(CallError::Dispatch(_)))
+    ));
+    let fund = |demand, attached| payment::acquire_placement(root, demand, 1, attached);
+    assert!(matches!(
+        pin!(fund(payment::Demand::Instance(key), 2)).poll(&mut context),
+        Poll::Ready(Err(payment::AcquireError::AttachmentExceedsMaximum))
+    ));
+    assert!(matches!(
+        pin!(fund(payment::Demand::Instance(key), 0)).poll(&mut context),
+        Poll::Ready(Err(payment::AcquireError::Call(CallError::Dispatch(_))))
+    ));
+    assert!(matches!(
+        pin!(fund(payment::Demand::Singleton("x".repeat(2048)), 0)).poll(&mut context),
+        Poll::Ready(Err(payment::AcquireError::Call(CallError::Request(_))))
     ));
 }
 
@@ -80,57 +93,18 @@ fn owned_outcomes_preserve_each_unassigned_state() {
 }
 
 #[test]
-fn registry_contracts_preserve_keyed_request_and_reply_frames() {
+fn lookup_placement_round_trips_a_registry_claim() {
     use crate::method::Contract;
-    use ic_wire::{Direction, Encoding};
-
-    fn check<M: Contract<Output = Placement>>(name: &str, id: u64, key: &M::Input)
-    where
-        M::Input: PartialEq + std::fmt::Debug,
-    {
-        assert_eq!(M::NAME, name);
-        for budget in [M::REQUEST, M::REPLY] {
-            assert_eq!(
-                (budget.bytes, budget.allocation, budget.nodes, budget.depth),
-                (1024, 32768, 1024, 12)
-            );
-        }
-        let previously_encoded = |direction| Encoding::Frame {
-            method: id,
-            direction,
-        };
-        let request = ic_wire::encode(key, previously_encoded(Direction::Request), LIMITS).unwrap();
-        assert_eq!(M::encode_request(key).unwrap(), request);
-        assert_eq!(M::decode_request(&request).unwrap(), *key);
-
-        let placement = Placement::Assigned(
-            Allocation {
-                slot: 3,
-                generation: [0xf0; 32],
-            },
-            Principal::from_slice(&[4, 1]).to_text(),
-        );
-        let reply =
-            ic_wire::encode(&placement, previously_encoded(Direction::Response), LIMITS).unwrap();
-        assert_eq!(M::encode_reply(&placement).unwrap(), reply);
-        assert_eq!(M::decode_reply(&reply).unwrap(), placement);
-    }
-
-    check::<AssignInstance>(
-        "assign_instance",
-        ic_wire::method_id("canic.assign_instance.v1"),
-        &[0xa5; 32],
-    );
-    check::<LookupInstance>(
-        "lookup_instance",
-        ic_wire::method_id("canic.lookup_instance.v1"),
-        &[0xa5; 32],
+    let key = Lookup::Instance([0xa5; 32]);
+    assert_eq!(
+        LookupPlacement::decode_request(&LookupPlacement::encode_request(&key).unwrap()).unwrap(),
+        key
     );
 }
 
 #[test]
 fn standby_inspection_covers_claimed_assets_and_retained_transfer_history() {
-    use super::standby::{Asset, InspectStandby, Refill};
+    use super::standby::{Asset, ObserveStandby, Refill};
     use crate::method::Contract;
     use ic_platform_types::Principal;
     let root = Principal::from_slice(&[255; 29]);
@@ -194,24 +168,24 @@ fn standby_inspection_covers_claimed_assets_and_retained_transfer_history() {
         })
         .collect();
     for rows in [history, retired, exported] {
-        let reply = InspectStandby::encode_reply(&rows).unwrap();
-        assert_eq!(InspectStandby::decode_reply(&reply).unwrap(), rows);
+        let reply = ObserveStandby::encode_reply(&rows).unwrap();
+        assert_eq!(ObserveStandby::decode_reply(&reply).unwrap(), rows);
     }
 }
 
 #[test]
 fn previous_payment_frame_cannot_settle_an_allocation_after_the_cut() {
     use crate::method::Contract;
-    use payment::{Demand, FundPlacement};
+    use payment::{AcquirePlacement, Demand};
 
     let old = ic_wire::encode(
         &(Demand::Instance([1; 32]), 10_u128),
         ic_wire::Encoding::Frame {
-            method: ic_wire::method_id("fund_placement"),
+            method: ic_wire::method_id("canic.placement.fund_placement.v1"),
             direction: ic_wire::Direction::Request,
         },
-        FundPlacement::REQUEST,
+        AcquirePlacement::REQUEST,
     )
     .unwrap();
-    assert!(FundPlacement::decode_request(&old).is_err());
+    assert!(AcquirePlacement::decode_request(&old).is_err());
 }

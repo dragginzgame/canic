@@ -6,41 +6,48 @@ mod tests;
 mod client;
 pub mod payment;
 #[cfg(feature = "storage")]
+pub mod registry;
+#[cfg(feature = "storage")]
 pub mod routes;
 pub mod standby;
+
+/// Refusal or unresolved outcome of shard inspection and drain
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+pub enum ShardError {
+    /// Shard operation requires its authorized caller.
+    Unauthorized,
+    /// Unknown shard or pool.
+    UnknownShard,
+    /// Shard allocation changed.
+    GenerationChanged,
+    /// Invalid policy or incompatible with an already configured pool.
+    InvalidPolicy,
+    /// Root has not confirmed the child release.
+    ReleaseUnconfirmed,
+}
+
+impl std::fmt::Display for ShardError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Unauthorized => "Shard operation requires its authorized caller",
+            Self::UnknownShard => "Unknown shard or pool",
+            Self::GenerationChanged => "Shard allocation changed",
+            Self::InvalidPolicy => "Invalid or conflicting hub routing policy",
+            Self::ReleaseUnconfirmed => "Root has not confirmed the child release",
+        })
+    }
+}
+
+impl std::error::Error for ShardError {}
 
 /// Optional hub and shard composition for an issuer-qualified account.
 #[cfg(feature = "method")]
 pub mod provisioning;
 
-pub use client::{
-    AssignInstance, GrowShard, LookupInstance, RequestSingleton, assign_instance, grow_shard,
-    lookup_instance,
-};
+pub use client::{ACQUISITION_CYCLES, Lookup, LookupPlacement, grow_shard};
 use serde::{Deserialize, Serialize};
 
-/// Reserve a child exclusively for one project key.
-pub const ASSIGN_INSTANCE: u64 = ic_wire::method_id("canic.assign_instance.v1");
-/// Observe a project key at the originally selected Root.
-pub const LOOKUP_INSTANCE: u64 = ic_wire::method_id("canic.lookup_instance.v1");
-/// Reserve the next ordinal under the calling hub’s worker grant.
-pub struct AssignWorker;
-/// Observe an ordinal without issuing new work.
-pub struct LookupWorker;
-impl crate::method::Contract for AssignWorker {
-    const NAME: &'static str = "assign_worker";
-    const ID: u64 = ic_wire::method_id("canic.placement.assign_worker.v1");
-    const REPLY: ic_wire::Limits = LIMITS;
-    type Input = (String, u8);
-    type Output = Placement;
-}
-impl crate::method::Contract for LookupWorker {
-    const NAME: &'static str = "lookup_worker";
-    const ID: u64 = ic_wire::method_id("canic.placement.lookup_worker.v1");
-    const REPLY: ic_wire::Limits = LIMITS;
-    type Input = (String, u8);
-    type Output = Placement;
-}
 /// An application-owned stable key, independent of the current login session.
 pub type Key = [u8; 32];
 /// Small request and reply frames for the hub.
@@ -83,17 +90,30 @@ pub struct ShardStatus {
     pub live_placements: u32,
 }
 
-/// Observe a shard by principal under the selected Root.
+/// Largest supported live occupancy of an individual shard.
+pub const MAX_KEYS_PER_SHARD: u32 = 100_000;
+
+/// Install an immutable routing policy at the owning hub.
+pub struct ConfigureShardRoutes;
+impl crate::method::Contract for ConfigureShardRoutes {
+    const NAME: &'static str = "configure_shard_routes";
+    const ID: u64 = ic_wire::method_id("canic.hub.configure_shard_routes.v1");
+    const REQUEST: ic_wire::Limits = LIMITS;
+    type Input = (String, u32);
+    type Output = Result<(), ShardError>;
+}
+
+/// Observe a shard by principal in the addressed hub.
 #[cfg(feature = "method")]
-pub struct InspectShard;
+pub struct ObserveShard;
 
 #[cfg(feature = "method")]
-impl crate::method::Contract for InspectShard {
-    const NAME: &'static str = "inspect_shard";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+impl crate::method::Contract for ObserveShard {
+    const NAME: &'static str = "observe_shard";
+    const ID: u64 = ic_wire::method_id("canic.hub.observe_shard.v1");
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = ic_platform_types::Principal;
-    type Output = Result<ShardStatus, String>;
+    type Output = Result<ShardStatus, ShardError>;
 }
 
 /// Approve drain for an exact installed shard allocation.
@@ -103,10 +123,10 @@ pub struct BeginShardDrain;
 #[cfg(feature = "method")]
 impl crate::method::Contract for BeginShardDrain {
     const NAME: &'static str = "begin_shard_drain";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const ID: u64 = ic_wire::method_id("canic.hub.begin_shard_drain.v1");
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = ShardTarget;
-    type Output = Result<u32, String>;
+    type Output = Result<u32, ShardError>;
 }
 
 /// Lookup and assignment use the same explicit outcomes.
@@ -191,12 +211,22 @@ impl Placement {
     }
 }
 
-/// Root reads or fences an exact shard in the named hub's durable route roster.
-pub struct HubShardStatus;
-impl crate::method::Contract for HubShardStatus {
-    const NAME: &'static str = "hub_shard_status";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+/// A parent reports that it has released this exact child generation.
+pub struct ReleaseChildAllocation;
+impl crate::method::Contract for ReleaseChildAllocation {
+    const NAME: &'static str = "release_child_allocation";
+    const ID: u64 = ic_wire::method_id("canic.root.release_child_allocation.v1");
     const REQUEST: ic_wire::Limits = LIMITS;
-    type Input = (String, ShardTarget, bool);
-    type Output = Result<ShardStatus, String>;
+    type Input = (ic_platform_types::Principal, Allocation);
+    type Output = Result<(), ReleaseError>;
+}
+
+/// Refusal to record a parent's release.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+pub enum ReleaseError {
+    /// Child or generation differs from Root's retained creation.
+    UnknownAllocation,
+    /// Only the approved parent may release the child.
+    Unauthorized,
 }

@@ -62,7 +62,7 @@ fn published_bindings_survive_growth_reopen_and_late_delivery() {
     index.apply(&after, [7; 32], None).unwrap();
     assert_eq!(
         index.apply(&after, [8; 32], None),
-        Err("conflicting receiver installation")
+        Err(DirectoryError::GenerationChanged)
     );
     assert!(index.apply(&before, [7; 32], None).is_err());
     for services in [
@@ -83,7 +83,7 @@ fn published_bindings_survive_growth_reopen_and_late_delivery() {
                 [7; 32],
                 None
             ),
-            Err("published service binding changed")
+            Err(DirectoryError::RevisionConflict)
         );
     }
     assert_eq!(index.current(), Some(&after));
@@ -306,6 +306,16 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
         [expected[2]]
     );
     assert_eq!(index.acknowledged_shards("shard").count(), 0);
+    use crate::topology::{SingletonLookupError as Error, acknowledged_singleton};
+    assert_eq!(
+        acknowledged_singleton("worker"),
+        Err(Error::DirectoryUnavailable)
+    );
+    retained::DIRECTORY.set(Some(index));
+    assert_eq!(acknowledged_singleton("worker"), Ok(children[3].canister));
+    assert_eq!(acknowledged_singleton("shard"), Err(Error::Ambiguous));
+    assert_eq!(acknowledged_singleton("hub"), Err(Error::NotFound));
+    retained::DIRECTORY.set(None);
 }
 
 #[cfg(all(feature = "storage", feature = "method"))]

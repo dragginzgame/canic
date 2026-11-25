@@ -57,7 +57,15 @@ pub(super) async fn approve_projects(
         root: root.id.to_text().parse().unwrap(),
         parent: hub.to_text().parse().unwrap(),
         role: "project".into(),
-        application: vec![],
+        application: ServiceInstall {
+            name: "project".into(),
+            role: "project".into(),
+            application: vec![],
+            hub_operator: None,
+            funding_operator: Some(root.operator.to_text().parse().unwrap()),
+        }
+        .encode()
+        .unwrap(),
     };
     let grant = stored::InstancePool {
         arguments: management::application::Arguments::new(install.encode().unwrap()).unwrap(),
@@ -65,15 +73,14 @@ pub(super) async fn approve_projects(
         hub: hub.to_text(),
         component: "project".into(),
         max_instances,
-        creation_payer: Default::default(),
         creation_budget: management::CREATION_CYCLES * u64::from(max_instances),
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
     };
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_instances",
-        stored::CONFIGURE_INSTANCES,
-        &grant,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Dedicated(grant.clone()),
         stored::LIMITS,
     )
     .await
@@ -121,20 +128,17 @@ pub(super) async fn exercise(
         )
         .unwrap()
     };
-    let from_reserve = limit == 4 && module == "pool-root.wasm";
+    let key_limit = if module == "role-root.wasm" { 3 } else { 1 };
+    crate::store_root_tests::configure_routes(root, hub, "users", key_limit)
+        .await
+        .unwrap();
     let shard = stored::ShardPool {
         arguments: args(hub),
         root: root.id.to_text(),
         hub: hub.to_text(),
         pool: "users".into(),
         max_shards: 1,
-        keys_per_shard: if module == "role-root.wasm" { 3 } else { 1 },
-        creation_payer: Default::default(),
-        creation_budget: if from_reserve {
-            0
-        } else {
-            management::CREATION_CYCLES
-        },
+        creation_budget: management::CREATION_CYCLES,
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
     };
@@ -144,12 +148,7 @@ pub(super) async fn exercise(
         hub: project.to_text(),
         component: "project".into(),
         max_instances: 2,
-        creation_payer: Default::default(),
-        creation_budget: if from_reserve {
-            0
-        } else {
-            2 * management::CREATION_CYCLES
-        },
+        creation_budget: 2 * management::CREATION_CYCLES,
         expires_at_ns: source.approval.expires_at_ns,
         reference: source.reference.clone(),
     };
@@ -166,9 +165,9 @@ pub(super) async fn exercise(
             management::application::Arguments::new(wrong.encode().unwrap()).unwrap();
         assert_eq!(
             root.update::<_, Result<(), management::Refusal>>(
-                "configure_shards",
-                stored::CONFIGURE_SHARDS,
-                &mismatched,
+                "approve_child_creation",
+                stored::APPROVE_CHILD_CREATION,
+                &stored::ChildCreationGrant::Shared(mismatched.clone()),
                 stored::LIMITS
             )
             .await,
@@ -181,26 +180,26 @@ pub(super) async fn exercise(
         management::application::Arguments::new(bytes[..bytes.len() - 1].to_vec()).unwrap();
     assert_eq!(
         root.update::<_, Result<(), management::Refusal>>(
-            "configure_shards",
-            stored::CONFIGURE_SHARDS,
-            &truncated,
+            "approve_child_creation",
+            stored::APPROVE_CHILD_CREATION,
+            &stored::ChildCreationGrant::Shared(truncated.clone()),
             stored::LIMITS
         )
         .await,
         Err(management::Refusal::Binding)
     );
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_shards",
-        stored::CONFIGURE_SHARDS,
-        &shard,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Shared(shard.clone()),
         stored::LIMITS,
     )
     .await
     .unwrap();
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_instances",
-        stored::CONFIGURE_INSTANCES,
-        &instances,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Dedicated(instances.clone()),
         stored::LIMITS,
     )
     .await
@@ -211,9 +210,13 @@ pub(super) async fn exercise(
             id: if dedicated { project } else { hub },
             operator: root.operator,
         };
-        self::place(&caller, (!dedicated).then_some("users"), key)
-            .await
-            .unwrap()
+        let pool = (!dedicated).then_some("users");
+        let result = self::place(&caller, pool, key).await.unwrap();
+        if result == Placement::Busy {
+            self::place(&caller, pool, key).await.unwrap()
+        } else {
+            result
+        }
     };
     let (users, projects) = if limit == 3 {
         tokio::join!(place(false, 1), place(true, 1))
@@ -221,7 +224,7 @@ pub(super) async fn exercise(
         let users = place(false, 1).await;
         settle(root.pic).await;
         assert!(matches!(place(false, 1).await, Placement::Assigned(..)));
-        if shard.keys_per_shard == 1 {
+        if key_limit == 1 {
             assert_eq!(place(false, 2).await, Placement::Full);
         } else {
             assert!(matches!(place(false, 2).await, Placement::Assigned(..)));
@@ -278,33 +281,44 @@ pub(super) async fn exercise(
         }
     }
     if limit == 5 {
+        crate::store_root_tests::configure_routes(root, hub, "profiles", key_limit)
+            .await
+            .unwrap();
         let second = stored::ShardPool {
             pool: "profiles".into(),
             ..shard
         };
         root.update::<_, Result<(), management::Refusal>>(
-            "configure_shards",
-            stored::CONFIGURE_SHARDS,
-            &second,
+            "approve_child_creation",
+            stored::APPROVE_CHILD_CREATION,
+            &stored::ChildCreationGrant::Shared(second.clone()),
             stored::LIMITS,
         )
         .await
         .unwrap();
-        use canic::sharding::GrowShard;
         let request = ("profiles".to_string(), 0);
-        let assign = GrowShard::encode_request(&request).unwrap();
-        assert!(
-            root.pic
-                .update_call(root.id, project, GrowShard::NAME, assign.clone())
-                .await
-                .is_err()
+        let assign = crate::store_root_tests::placement_request(
+            canic::sharding::payment::Demand::ShardCapacity(request.0.clone(), request.1),
         );
-        let bytes = root
-            .pic
-            .update_call(root.id, hub, GrowShard::NAME, assign)
-            .await
-            .unwrap();
-        let Placement::Pending(new) = GrowShard::decode_reply(&bytes).unwrap().0 else {
+        crate::store_root_tests::assert_unauthorized(
+            &root
+                .pic
+                .update_call(
+                    root.id,
+                    project,
+                    canic::sharding::payment::AcquirePlacement::NAME,
+                    assign.clone(),
+                )
+                .await
+                .unwrap(),
+        );
+        let Placement::Pending(new) = acquire_fixture(
+            root,
+            hub,
+            canic::sharding::payment::Demand::ShardCapacity(request.0.clone(), 0),
+        )
+        .await
+        else {
             panic!("second pool should reserve its own shard")
         };
         settle(root.pic).await;
@@ -322,12 +336,14 @@ pub(super) async fn exercise(
             .update_call(
                 root.id,
                 hub,
-                GrowShard::NAME,
-                GrowShard::encode_request(&request).unwrap(),
+                canic::sharding::payment::AcquirePlacement::NAME,
+                crate::store_root_tests::placement_request(
+                    canic::sharding::payment::Demand::ShardCapacity(request.0.clone(), request.1),
+                ),
             )
             .await
             .unwrap();
-        let Placement::Assigned(reopened, id) = GrowShard::decode_reply(&bytes).unwrap().0 else {
+        let Placement::Assigned(reopened, id) = crate::store_root_tests::placed(&bytes) else {
             panic!("missing second pool assignment")
         };
         assert_eq!(new, reopened);
@@ -346,7 +362,6 @@ pub(super) async fn separate_hub_pools(
     users: CanisterId,
     discovery: CanisterId,
 ) {
-    use canic::sharding::GrowShard;
     let mut children = std::collections::BTreeSet::new();
     for (pool, parent, other) in [
         ("user_shard", users, discovery),
@@ -358,22 +373,23 @@ pub(super) async fn separate_hub_pools(
             role: pool.into(),
             application: vec![],
         };
+        crate::store_root_tests::configure_routes(root, parent, pool, 1)
+            .await
+            .unwrap();
         let grant = stored::ShardPool {
             root: root.id.to_text(),
             hub: parent.to_text(),
             pool: pool.into(),
             arguments: management::application::Arguments::new(install.encode().unwrap()).unwrap(),
-            keys_per_shard: 1,
             max_shards: 1,
-            creation_payer: Default::default(),
             creation_budget: management::CREATION_CYCLES,
             expires_at_ns: source.approval.expires_at_ns,
             reference: source.reference.clone(),
         };
         root.update::<_, Result<(), management::Refusal>>(
-            "configure_shards",
-            stored::CONFIGURE_SHARDS,
-            &grant,
+            "approve_child_creation",
+            stored::APPROVE_CHILD_CREATION,
+            &stored::ChildCreationGrant::Shared(grant.clone()),
             stored::LIMITS,
         )
         .await
@@ -405,16 +421,19 @@ pub(super) async fn separate_hub_pools(
         };
         assert_eq!(allocation, original);
         // The sibling is an installed hub; on the second pass it also owns another pool.
-        assert!(
-            root.pic
+        crate::store_root_tests::assert_unauthorized(
+            &root
+                .pic
                 .update_call(
                     root.id,
                     other,
-                    GrowShard::NAME,
-                    GrowShard::encode_request(&(pool.to_owned(), 0)).unwrap()
+                    canic::sharding::payment::AcquirePlacement::NAME,
+                    crate::store_root_tests::placement_request(
+                        canic::sharding::payment::Demand::ShardCapacity(pool.to_owned(), 0),
+                    ),
                 )
                 .await
-                .is_err()
+                .unwrap(),
         );
         let id = CanisterId::from_text(id).unwrap();
         assert!(children.insert(id));

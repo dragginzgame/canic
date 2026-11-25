@@ -264,3 +264,77 @@ pub async fn reconcile_upgrade(
     );
     super::upgrade::reconcile_bound(slot, input.source.source.approval).await
 }
+
+/// Stage the selected creation under its original custody owner.
+/// # Errors
+/// Staging refuses a changed or inadmissible operation.
+/// # Panics
+/// Requires an admitted controller and the configured custody owner.
+pub fn stage_child_creation(
+    slot: ChildId,
+    input: application::Creation,
+) -> Result<canic_management_protocol::Status, canic_management_protocol::Refusal> {
+    match input {
+        application::Deployment::Stored(value) => super::stored_api::stage(slot, value),
+        application::Deployment::Application(value) => stage(slot, value),
+    }
+}
+
+/// Reconcile the selected creation under its original custody owner.
+/// # Panics
+/// Requires an admitted controller and the configured custody owner.
+pub async fn reconcile_child_creation(
+    slot: ChildId,
+    input: application::Creation,
+) -> canic_management_protocol::Status {
+    match input {
+        application::Deployment::Stored(value) => super::stored_api::reconcile(slot, value).await,
+        application::Deployment::Application(value) => reconcile(slot, value).await,
+    }
+}
+
+/// Stage the selected replacement under its original custody owner.
+/// # Errors
+/// Staging refuses a changed or inadmissible operation.
+/// # Panics
+/// Requires an admitted controller and the configured custody owner.
+pub fn stage_child_upgrade(
+    slot: ChildId,
+    input: application::Replacement,
+) -> Result<canic_management_protocol::upgrade::Status, canic_management_protocol::Refusal> {
+    match input {
+        application::Deployment::Stored(value) => super::stored_api::stage_upgrade(slot, value),
+        #[cfg(feature = "blob")]
+        application::Deployment::Application(value) => {
+            #[cfg(feature = "sharding")]
+            assert!(!super::sharding::occupied(), "shard pool custody required");
+            stage_upgrade(slot, value)
+        }
+        #[cfg(not(feature = "blob"))]
+        application::Deployment::Application(_) => Err(Refusal::Binding),
+    }
+}
+
+/// Reconcile the selected replacement under its original custody owner.
+/// # Panics
+/// Requires an admitted controller and the configured custody owner.
+pub async fn reconcile_child_upgrade(
+    slot: ChildId,
+    input: application::Replacement,
+) -> canic_management_protocol::upgrade::Status {
+    match input {
+        application::Deployment::Stored(value) => {
+            super::stored_api::reconcile_upgrade(slot, value).await
+        }
+        #[cfg(feature = "blob")]
+        application::Deployment::Application(value) => {
+            #[cfg(feature = "sharding")]
+            assert!(!super::sharding::occupied(), "shard pool custody required");
+            reconcile_upgrade(slot, value).await
+        }
+        #[cfg(not(feature = "blob"))]
+        application::Deployment::Application(_) => {
+            ic_platform_runtime::system::trap("application upgrade requires Blob")
+        }
+    }
+}

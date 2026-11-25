@@ -14,13 +14,37 @@ async fn request(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> 
     }
 }
 
+pub(super) async fn observe_release(
+    root: &Client<'_>,
+    supplier: &Client<'_>,
+    release: store::Release,
+) -> Reply {
+    let value: publication::ObservationReply = root
+        .update(
+            "observe_store",
+            publication::OBSERVATION,
+            &publication::ObservationRequest::ReleaseStatus(publication::CustodyRequest {
+                store: supplier.id.to_text(),
+                expires_at_ns: root.pic.get_time().await.as_nanos_since_unix_epoch()
+                    + 240_000_000_000,
+                release,
+            }),
+            publication::RESPONSE_LIMITS,
+        )
+        .await;
+    match value? {
+        publication::Observation::ReleaseStatus(status) => Ok(status),
+        _ => panic!("expected release status"),
+    }
+}
+
 async fn send(root: &Client<'_>, input: &Request) -> Reply {
     let bytes = root
         .pic
         .update_call(
             root.id,
             root.operator,
-            "store_publication",
+            "publish_store_artifact",
             ic_wire::encode(
                 input,
                 ic_wire::Encoding::Frame {
@@ -151,8 +175,12 @@ async fn publication_after_handover_resumes_across_root_maintenance_without_a_ro
     assert!(!progress.missing.is_empty());
     assert_eq!(pic.get_stable_memory(root.id).await, root_before);
     maintain(&root).await;
-    let observe = request(&root, &supplier, Command::Observe(manifest.release.clone())).await;
-    assert_eq!(send(&root, &observe).await.unwrap(), progress);
+    assert_eq!(
+        observe_release(&root, &supplier, manifest.release.clone())
+            .await
+            .unwrap(),
+        progress
+    );
     // Replaying an exact command observes retained work, not another reservation.
     let supplier_before = pic.get_stable_memory(supplier.id).await;
     assert_eq!(send(&root, &prepare).await.unwrap(), progress);
@@ -182,17 +210,9 @@ async fn publication_after_handover_resumes_across_root_maintenance_without_a_ro
     let supplier_before = pic.get_stable_memory(supplier.id).await;
     assert_eq!(send(&root, &publish).await.unwrap(), published);
     assert_eq!(pic.get_stable_memory(supplier.id).await, supplier_before);
-    let prior = send(
-        &root,
-        &request(
-            &root,
-            &supplier,
-            Command::Observe(existing.reference.manifest.release),
-        )
-        .await,
-    )
-    .await
-    .unwrap();
+    let prior = observe_release(&root, &supplier, existing.reference.manifest.release)
+        .await
+        .unwrap();
     assert!(prior.published); // A new version never replaces older release history.
     let custody_after = custody(&root).await;
     assert_eq!(custody_after.sources, custody_before.sources);
@@ -236,7 +256,7 @@ async fn publication_refusals_preserve_state_and_lost_replies_recover_from_store
         pic.update_call(
             root.id,
             CanisterId::anonymous(),
-            "store_publication",
+            "publish_store_artifact",
             frame.clone()
         )
         .await
@@ -271,7 +291,7 @@ async fn publication_refusals_preserve_state_and_lost_replies_recover_from_store
         vec![0; publication::REQUEST_LIMITS.bytes + 1],
     ] {
         assert!(
-            pic.update_call(root.id, root.operator, "store_publication", bytes)
+            pic.update_call(root.id, root.operator, "publish_store_artifact", bytes)
                 .await
                 .is_err()
         );
@@ -310,7 +330,7 @@ async fn publication_refusals_preserve_state_and_lost_replies_recover_from_store
             pic.update_call(
                 root.id,
                 root.operator,
-                "store_publication",
+                "publish_store_artifact",
                 ic_wire::encode(
                     &input,
                     ic_wire::Encoding::Frame {
@@ -325,25 +345,19 @@ async fn publication_refusals_preserve_state_and_lost_replies_recover_from_store
             .is_err()
         );
         inject(&root, 0).await;
-        let retained = send(
-            &root,
-            &request(&root, &supplier, Command::Observe(manifest.release.clone())).await,
-        )
-        .await
-        .unwrap();
+        let retained = observe_release(&root, &supplier, manifest.release.clone())
+            .await
+            .unwrap();
         let store_before = pic.get_stable_memory(supplier.id).await;
         assert_eq!(send(&root, &input).await.unwrap(), retained);
         assert_eq!(pic.get_stable_memory(supplier.id).await, store_before);
         assert_eq!(pic.get_stable_memory(root.id).await, root_before);
     }
     assert!(
-        send(
-            &root,
-            &request(&root, &supplier, Command::Observe(manifest.release)).await
-        )
-        .await
-        .unwrap()
-        .published
+        observe_release(&root, &supplier, manifest.release)
+            .await
+            .unwrap()
+            .published
     );
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,

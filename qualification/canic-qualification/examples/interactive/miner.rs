@@ -50,8 +50,8 @@ pub(super) async fn session(owner: &mut Instance, artifacts: &Path, seconds: u64
             &fleet.capacity.request,
         ),
         (
-            "configure_workers",
-            stored::CONFIGURE_WORKERS,
+            "approve_child_creation",
+            stored::APPROVE_CHILD_CREATION,
             &fleet.workers.request,
         ),
     ] {

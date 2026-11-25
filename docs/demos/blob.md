@@ -6,7 +6,7 @@ is [canic-asset-catalog](../../qualification/canic-asset-catalog/src/lib.rs), in
 qualification workspace. It is a finite local catalog example, not a provider
 client or a production deployment recipe.
 
-The published 0.110.0 Service accepts the application’s Storage 0.78 lease.
+The published 0.111.0 Service accepts the application’s Storage 0.80 lease.
 Use `canic::blob::open_service` on install and reopen to attach the selected
 Canic metrics store and log sink. Custom lifecycle hooks call
 `canic::lifecycle::initialize_diagnostics()` first when logging is enabled.
@@ -272,7 +272,7 @@ processes. Both users, shared references and a pending declaration survive. Chan
 authority/arguments, malformed frames and stale activation refuse. Existing local
 transaction rollback cases remain separate.
 
-The predecessor test requires Storage 0.78 to refuse the populated 0.100.6 directory and preserve its bytes and maintenance admission. See its [binary provenance](../../qualification/canic-qualification/fixtures/README.md).
+The predecessor test requires Storage 0.80 to refuse the populated 0.100.6 directory and preserve its bytes and maintenance admission. See its [binary provenance](../../qualification/canic-qualification/fixtures/README.md).
 The named CLI journey retains its existing one-successor bound; repeated Root
 admission is separately exercised for stale-attempt refusal. Whole-fleet configured
 arguments and Host-driven Root/Store preservation of these records remain

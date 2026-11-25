@@ -31,14 +31,13 @@ The witness checks production across hub and Root upgrades, outsider refusal
 and the four-worker ceiling. A qualification-only Root traps the uninstall callback
 after management applies it. The normal Root reopens the issued intent and
 the controller resumes the same reset to recover exactly one available spare.
-A second installed fleet has two physical slots, one hub and a separately funded spare. Its worker grant permits one live worker. Its zero creation budget refuses growth
-until the spare exists. Requests for distinct worker ordinals compete for that
+A second installed fleet has two physical slots, one hub and a separately funded spare. Its worker grant permits one live worker. Its requester pays for the spare from the grant’s acquisition budget. Requests for distinct worker ordinals compete for that
 spare. Only the next ordinal gets an allocation. The other stays unassigned
 until the worker returns through stop, uninstall, an observed
 balance refusal, manual top-up and restart. Concurrent hub calls recover the same
 principal and management slot at a fresh generation. Root archives the completed journal and the original ordinal stays unavailable. Root reopens before and after reassignment,
 the miner rejects an old batch, and the new generation completes work.
-The same journey also starts with a worker paid for by its hub grant. Root reopens after release, returns the principal to the fleet reserve, and reuses it. A third allocation is refused despite room under the subnet cap because the original creation spent the grant.
+The same journey also starts with a worker paid for by its hub grant. Root reopens after release, returns the principal to the fleet reserve, and reuses it. The live worker limit remains in force across reuse.
 
 The reserve case plans an exact fleet policy, fills the initial deficit, claims
 a worker, replenishes and exhausts the lifetime allowance. It exercises a named
@@ -139,7 +138,7 @@ The installed directory participant contributes one stable key to its existing
 bootstrap, initializes IC Timers and opens `canic_management::funding`. The
 parent mounts configure, stop and request. The child mounts the balance watcher.
 Root forwards the operator's exact grant to the managed parent. Use the Root
-client's `stop-child-funding CHILD --parent PARENT` for revocation.
+client's `stop-child-funding CHILD --parent PARENT` for revocation. The directory suite checks the built funding exports and codec for placement with and without ongoing top-ups. Installed upgrades must preserve cancellation for a parent-held grant.
 
 `bash scripts/dev/test-store.sh directory` exercises Root availability with two
 installed hubs. Each hub requests its first shard while Root is stopped. After
@@ -171,13 +170,13 @@ allocations. The hub retains each account's shard. Sharding Roots using the
 old account index require a fresh install.
 The fixture adds a project registry with a `[registry]` placement declaration to the same fleet, reruns
 `canic fleet plan`, and checks that the original shard request is byte-identical.
-The controller submits the CLI-generated project request to `configure_instances`.
+The controller submits the CLI-generated project creation grant to Root’s `approve_child_creation`. The hub receives its routing limit directly through `configure_shard_routes`.
 The fixture checks the topology frame, conflicting grants, unauthorized calls,
 upgrade with both grants and refusal to downgrade to the selected predecessor.
 With both user slots full, one user submits two project keys through the project
 registry. The fixture discards the first reply, retries the key, and verifies two distinct
 ready children with the approved project registry as their database owner. The third
-key is refused. Reopening Root preserves both projects and the user's shard.
+key is refused. After the registry reopens with Root stopped, it resolves both completed projects locally. Reopening Root preserves their creation receipts and the user's shard.
 The controller then raises both pool counts from two to six under one nine-child
 subnet ceiling using the planned Wire requests. The hubs race for the final
 slot and replay their keys after Root reopens. Forged funding, extended expiry
@@ -249,7 +248,13 @@ The separate Backup integration below exercises the public Host consumer. Canic 
 mainnet work or existing-Root layout migration is qualified. The ordinary Root
 build keeps its existing two-record layout; `backup` adds a third bounded record.
 
-## Storage 0.78 adoption
+## Storage 0.80 adoption
+
+Both workspaces select Storage 0.80.0. Auth 0.50.0, Blob Storage 0.111.0
+and DB 0.31.0 consume leases from the same application bootstrap. The
+separate Wasm Store 0.10.0 uses the same Storage release. Stable Auth
+receivers and the qualification issuer pass the IC canister version to
+the supplier when sealing and reopening their checkpoints.
 
 `cargo test --locked -p canic --features storage storage::tests` creates a
 directory with lower-level Storage admission and reopens it with Canic under
@@ -259,7 +264,7 @@ incompatible budgets, missing or extra names, and out-of-prefix refusal.
 including byte-exact replies, caller rejection before decode, wrong direction
 and method, bounded requests, synchronous reply rollback and an async worker check.
 
-The installed children discovery test fills nine service slots, reopens Root, retries the ninth, discovers every principal from an empty Host journal, and refuses a tenth under a nine-child ceiling. The Root journal uses CUJF at every fleet size. The installed `storage_reopen::`
+The installed children discovery test fills nine service slots, reopens Root, retries the ninth, discovers every principal from an empty Host journal, and refuses a tenth under a nine-child ceiling. The Root journal uses CUJG at every fleet size. The installed `storage_reopen::`
 case injects the predecessor CUJE tag into the current named cell and checks the
 journal-specific refusal, stable bytes, module hash and subnet canister count.
 The installed sharding journey grows a fresh Root through shared and dedicated
@@ -276,7 +281,7 @@ report and surviving asset. [Storage decision](https://github.com/dragginzgame/i
 
 ## Backup integration boundary
 
-The optional `canic-host/backup` adapter connects IC Backup 0.105.6 to
+The optional `canic-host/backup` adapter connects IC Backup 0.106.0 to
 Tooling's published `ic-host-sign` 0.1.0. It passes the original management
 arguments or status request ID, sender, effective target, exact expiry, deadline
 and spending limits. Backup commits to the adapter version, provider, identity and

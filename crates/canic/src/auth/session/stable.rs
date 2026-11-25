@@ -109,7 +109,7 @@ pub fn open_with_login_limit(
         let engine = if install.is_some() {
             StableReceiver::new_fresh(lease, config, now)
         } else {
-            StableReceiver::reopen(lease, config, now)
+            StableReceiver::reopen(lease, config, now, api::canister_version())
         };
         Engine::Stable(engine.unwrap_or_else(|error| {
             api::trap(&format!("open Auth receiver checkpoint: {error:?}"))
@@ -139,7 +139,9 @@ pub fn seal() {
         let Engine::Stable(engine) = &mut state.receiver else {
             panic!("expected stable receiver")
         };
-        engine.seal().expect("seal Auth receiver");
+        engine
+            .seal(api::canister_version())
+            .expect("seal Auth receiver");
         HOST.with_borrow_mut(|slot| {
             let host = slot.as_mut().expect("Auth host checkpoint");
             let (input, _) = decode_host(host.get());

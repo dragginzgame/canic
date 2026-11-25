@@ -6,13 +6,7 @@ use super::{
 use canic_management_protocol::{Refusal, custody, publication, store_maintenance as wire};
 
 async fn history(root: &Client<'_>) -> custody::RootHistory {
-    root.update(
-        "observe_root_history",
-        custody::ROOT_HISTORY,
-        &(),
-        custody::ROOT_HISTORY_LIMITS,
-    )
-    .await
+    super::root_custody(root).await.root
 }
 
 async fn stage(root: &Client<'_>, approval: &wire::Approval) -> Result<wire::Status, Refusal> {
@@ -317,7 +311,7 @@ async fn root_retains_store_successors_across_upgrade_and_refuses_stale_authorit
     assert_eq!(history(&root).await, before);
     // Publication and child admission still work once the final operation has activated.
     root.update::<_, publication::Reply>(
-        "store_publication",
+        "publish_store_artifact",
         publication::EXECUTE,
         &publication::Request {
             store: supplier.id.to_text(),

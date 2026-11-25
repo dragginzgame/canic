@@ -39,6 +39,8 @@ impl<M: RoleMethod> Contract for Attested<M> {
 pub enum RoleCallError {
     /// Root request failed before the application call.
     Renewal(CallError),
+    /// Root returned a verified refusal to renew.
+    Refused(super::RoleError),
     /// Root refused the claim or it did not match the call.
     Proof(String),
     /// The application withdrew permission before dispatch.
@@ -121,7 +123,7 @@ impl RoleCalls {
             let proof = call::<Issue>(self.root, seconds, &receiver)
                 .await
                 .map_err(RoleCallError::Renewal)?
-                .map_err(RoleCallError::Proof)?;
+                .map_err(RoleCallError::Refused)?;
             if !self.matches::<M>(&proof, receiver) {
                 return Err(RoleCallError::Proof(
                     "issuer returned a different or expired claim".into(),

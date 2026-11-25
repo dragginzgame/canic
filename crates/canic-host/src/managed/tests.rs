@@ -56,7 +56,7 @@ async fn recovery_requires_retained_admission_and_never_bootstraps_work() {
     assert!(!dir.join(&id).join("stage").exists());
     assert_eq!(plan::load(&dir.join(&id), &id).unwrap().0, before);
     let call = recovery::call(&plan).unwrap();
-    assert_eq!(call.method, "reconcile_child");
+    assert_eq!(call.method, "reconcile_inline_child_creation");
     assert_eq!(
         call.canister,
         principal(plan.application_controller()).unwrap()
@@ -734,33 +734,59 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     plan.validate().unwrap();
     let digest = plan.digest().unwrap();
     let call = stage_call(&plan, bytes).unwrap();
-    assert_eq!(call.method, "stage_stored_child");
-    let request: children::Request<wire::Stage<Approval>> = ic_wire::decode(
-        &call.args,
-        ic_wire::Encoding::Frame {
-            method: wire::STAGE,
-            direction: ic_wire::Direction::Request,
-        },
-        wire::LIMITS,
-    )
-    .unwrap();
+    assert_eq!(call.method, "stage_child_creation");
+    let request: children::Request<canic_management_protocol::application::Creation> =
+        ic_wire::decode(
+            &call.args,
+            ic_wire::Encoding::Frame {
+                method: canic_management_protocol::application::STAGE_CHILD_CREATION,
+                direction: ic_wire::Direction::Request,
+            },
+            wire::LIMITS,
+        )
+        .unwrap();
+    let canic_management_protocol::application::Deployment::Stored(value) = request.value else {
+        panic!("expected Stored input")
+    };
+    let request = canic_management_protocol::children::Request {
+        slot: request.slot,
+        value,
+    };
     assert_eq!(request.slot, children::ChildId::FIRST);
+    let request_frame = |method| ic_wire::Encoding::Frame {
+        method,
+        direction: ic_wire::Direction::Request,
+    };
+    let old_frame = ic_wire::encode(&request, request_frame(wire::STAGE), wire::LIMITS).unwrap();
+    assert!(
+        ic_wire::decode::<children::Request<canic_management_protocol::application::Creation>>(
+            &old_frame,
+            request_frame(canic_management_protocol::application::STAGE_CHILD_CREATION),
+            wire::LIMITS,
+        )
+        .is_err()
+    );
     assert_eq!(request.value.reference.manifest, source.manifest);
     let recovery = recovery::call(&plan).unwrap();
-    let recovered: children::Request<wire::Stage<Approval>> = ic_wire::decode(
-        &recovery.args,
-        ic_wire::Encoding::Frame {
-            method: wire::RECONCILE,
-            direction: ic_wire::Direction::Request,
-        },
-        wire::LIMITS,
-    )
-    .unwrap();
+    let recovered: children::Request<canic_management_protocol::application::Creation> =
+        ic_wire::decode(
+            &recovery.args,
+            ic_wire::Encoding::Frame {
+                method: canic_management_protocol::application::RECONCILE_CHILD_CREATION,
+                direction: ic_wire::Direction::Request,
+            },
+            wire::LIMITS,
+        )
+        .unwrap();
+    let canic_management_protocol::application::Deployment::Stored(value) = recovered.value else {
+        panic!("expected Stored input")
+    };
+    let recovered = canic_management_protocol::children::Request {
+        slot: recovered.slot,
+        value,
+    };
     assert_eq!(recovered.value, request.value);
-    assert_eq!(
-        observation(&plan).unwrap().method,
-        "observe_stored_children"
-    );
+    assert_eq!(observation(&plan).unwrap().method, "observe_root_custody");
     let status = Status {
         approval: Some(approval(&plan).unwrap()),
         phase: Phase::Scheduled,
@@ -809,15 +835,13 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         },
     };
     let encode = |value: &wire::Custody| {
-        ic_wire::encode(
-            value,
-            ic_wire::Encoding::Frame {
-                method: wire::CUSTODY,
-                direction: ic_wire::Direction::Response,
+        crate::root_custody::frame(
+            canic_management_protocol::custody::Root {
+                stored: value.clone(),
+                store_operation: None,
             },
-            wire::LIMITS,
+            vec![],
         )
-        .unwrap()
     };
     assert_eq!(stored::creation(&plan, &encode(&custody)).unwrap(), status);
     assert_application_arguments(&plan, &custody);
@@ -921,17 +945,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
             stored: custody.clone(),
             store_operation: Some(operation),
         };
-        let frame = |value: &full::Root| {
-            ic_wire::encode(
-                value,
-                ic_wire::Encoding::Frame {
-                    method: full::ROOT,
-                    direction: ic_wire::Direction::Response,
-                },
-                full::ROOT_LIMITS,
-            )
-            .unwrap()
-        };
+        let frame = |value: &full::Root| crate::root_custody::frame(value.clone(), vec![]);
         assert_eq!(
             stored::creation(&successor, &frame(&full_custody)).unwrap(),
             status
@@ -998,16 +1012,23 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     };
     plan.validate().unwrap();
     let call = Method::StageUpgrade.call(&plan, &(), LIMITS).unwrap();
-    let expected: children::Request<wire::Stage<canic_management_protocol::upgrade::Approval>> =
+    let expected: children::Request<canic_management_protocol::application::Replacement> =
         ic_wire::decode(
             &call.args,
             ic_wire::Encoding::Frame {
-                method: wire::STAGE_UPGRADE,
+                method: canic_management_protocol::application::STAGE_CHILD_UPGRADE,
                 direction: ic_wire::Direction::Request,
             },
             wire::LIMITS,
         )
         .unwrap();
+    let canic_management_protocol::application::Deployment::Stored(value) = expected.value else {
+        panic!("expected Stored input")
+    };
+    let expected = canic_management_protocol::children::Request {
+        slot: expected.slot,
+        value,
+    };
     let upgraded = canic_management_protocol::upgrade::Status {
         approval: Some(expected.value.approval.clone()),
         phase: canic_management_protocol::upgrade::Phase::Scheduled,
@@ -1034,7 +1055,10 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     let mut mixed = plan.clone();
     mixed.version = 8;
     mixed.validate().unwrap();
-    assert_eq!(observation(&mixed).unwrap().method, "observe_role_children");
+    assert_eq!(
+        observation(&mixed).unwrap().method,
+        "observe_child_deployments"
+    );
     let child_evidence = canic_management_protocol::application::Custody {
         root: canic_management_protocol::custody::RootHistory {
             current: canic_management_protocol::custody::Root {
@@ -1093,6 +1117,8 @@ fn assert_application_arguments(
     };
     let named = |key| {
         canic::topology::directory::ServiceInstall {
+            funding_operator: None,
+            hub_operator: None,
             name: "accounts_hub".into(),
             role: "hub".into(),
             application: vec![key; 32],
@@ -1110,16 +1136,24 @@ fn assert_application_arguments(
         plan
     );
     let call = stage_call(&plan, &[]).unwrap();
-    assert_eq!(call.method, "stage_application_child");
-    let request: Request<application::Stage<Approval>> = ic_wire::decode(
+    assert_eq!(call.method, "stage_child_creation");
+    let request: Request<canic_management_protocol::application::Creation> = ic_wire::decode(
         &call.args,
         ic_wire::Encoding::Frame {
-            method: application::STAGE,
+            method: canic_management_protocol::application::STAGE_CHILD_CREATION,
             direction: ic_wire::Direction::Request,
         },
         application::LIMITS,
     )
     .unwrap();
+    let canic_management_protocol::application::Deployment::Application(value) = request.value
+    else {
+        panic!("expected Application input")
+    };
+    let request = canic_management_protocol::children::Request {
+        slot: request.slot,
+        value,
+    };
     assert_eq!(request.value.arguments.as_slice(), approved_args);
     let mut value = application::Custody {
         root: RootHistory {
@@ -1207,15 +1241,13 @@ fn assert_delivery_history(plan: &Plan, mut custody: canic_management_protocol::
     let write = |index: usize, value: &wire::Custody| {
         let path = dir.join(format!("observe/{index}/reply.bin"));
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let bytes = ic_wire::encode(
-            value,
-            ic_wire::Encoding::Frame {
-                method: wire::CUSTODY,
-                direction: ic_wire::Direction::Response,
+        let bytes = crate::root_custody::frame(
+            canic_management_protocol::custody::Root {
+                stored: value.clone(),
+                store_operation: None,
             },
-            wire::LIMITS,
-        )
-        .unwrap();
+            vec![],
+        );
         std::fs::write(path, bytes).unwrap();
     };
     let read = || crate::operation::status_loaded(&dir, &plan.digest().unwrap(), plan.clone(), &[]);
@@ -1258,7 +1290,7 @@ fn assert_delivery_history(plan: &Plan, mut custody: canic_management_protocol::
         ic_wire::encode(
             status,
             ic_wire::Encoding::Frame {
-                method: wire::RECONCILE_UPGRADE,
+                method: canic_management_protocol::application::RECONCILE_CHILD_UPGRADE,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -1273,7 +1305,7 @@ fn assert_delivery_history(plan: &Plan, mut custody: canic_management_protocol::
         ic_wire::encode(
             status,
             ic_wire::Encoding::Frame {
-                method: wire::RECONCILE,
+                method: canic_management_protocol::application::RECONCILE_CHILD_CREATION,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,

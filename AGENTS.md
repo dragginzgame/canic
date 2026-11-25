@@ -109,6 +109,10 @@ bytes, recovery boundaries and qualified predecessor paths:
   children. Support upgrades between executables using the new format.
 - Reopen state and preserve leases/formats; never initialize after load failure or
   reset consumed authority. Unsupported old executables must refuse newer records.
+- Public operation APIs expose typed refusals when callers need to decide what to
+  do next. Preserve the original call error across client wrappers so callers can
+  distinguish a request that never left from an uncertain remote effect. Format
+  errors for people at the CLI or diagnostic boundary.
 - Reports, watchers and listings project existing owners. They grant no completion,
   readiness or permission and never sign, reconcile or publish receipts.
 - Before Canic 1.0, use `.v1` for versioned Canic-owned Wire contract names.
@@ -134,7 +138,7 @@ apply this allowance for the application.
 
 Fresh counter and Root installations use Storage named leases. Existing retained
 images require an explicitly qualified transition. Read the
-[current qualification](qualification/README.md#storage-078-adoption) before
+[current qualification](qualification/README.md#storage-080-adoption) before
 persistent-actor work.
 
 Keep the root virtual Cargo workspace, products under `crates/`, fleet components

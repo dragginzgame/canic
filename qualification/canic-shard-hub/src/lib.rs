@@ -3,3 +3,5 @@ mod actor;
 mod routes;
 
 canic::mount_hub_routes!();
+
+mod paid_fixture;

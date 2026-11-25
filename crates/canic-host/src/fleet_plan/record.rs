@@ -36,6 +36,8 @@ impl Child {
             parent: self.parent,
             artifact: self.artifact,
             release: self.release,
+            route_operator_role: None,
+            funding_operator_role: None,
             receiver_role: self.receiver_role,
             creation_cycles: self.creation_cycles,
             execute_at_ns: self.execute_at_ns,

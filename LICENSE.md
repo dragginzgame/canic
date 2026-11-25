@@ -1,43 +1,27 @@
 # TOKO STUDIOS NETWORK LICENCE
-## Version 1.0
+## Version 1.1
 
 ### Plain-language summary — non-binding
 
-This summary explains the main points; it is not part of the licence and does
-not grant rights or change any obligation. The full terms below control.
+The full terms control.
 
-- **You can build a business with this software.** You can read, modify and
-  distribute it, and build commercial applications, subject to the full terms.
-  Compliant use does not require paying Toko a licence fee or a share of revenue.
-- **Production use is for the actual public Internet Computer.** The public
-  licence does not permit production on private IC networks, forks, other
-  blockchains or substitute platforms, even if they burn ICP. Separate written
-  permission is needed for those uses.
-- **Actual network charges must use verifiable ICP-origin funding.** All cycles
-  or other credits used to pay those charges must come from recognised ICP
-  conversion on the public IC. You must keep evidence of that funding. There is
-  no extra infrastructure-value payment or additional burn for free queries.
-- **Changes to the covered software must be shared when distributed or used in
-  production.** Publish their corresponding source and build instructions under
-  this licence. Your independently written application can remain proprietary;
-  copying or adapting covered implementation code does not make it independent.
-  Distributing unchanged binaries also requires continued access to their exact
-  corresponding source. Preserve the licence and required notices.
-- **Local development and genuine support tools are allowed.** Isolated testing
-  and development can run outside the IC. Build tools, clients, administration,
-  monitoring and backups may also run elsewhere to support an authorised IC
-  deployment. This does not permit moving the live application runtime or
-  database off the authorised network.
-- **Toko Studios retains broader rights.** Within the rights granted to it, Toko
-  can keep modifications private, offer different licence terms and move the
-  software to another blockchain or platform. Covered modifications published
-  or required to be published under this licence grant Toko those rights too.
-  Other users do not automatically receive the same exceptions.
-- **Other rights and responsibilities still matter.** Third-party dependencies
-  keep their own terms, and earlier licence grants remain valid. This is a
-  source-available licence with restrictions, not an OSI-approved open-source
-  licence. The software comes without warranties; the full terms explain
-  liability limits, compliance, correction periods and termination.
+- You may inspect, modify and distribute the software and build commercial
+  applications. Compliant use carries no licence fee or revenue share payable
+  to Toko under this Licence.
+- Run the covered production runtime on the canonical public Internet Computer.
+  Off-chain front ends, ordinary integrations, monitoring and backups can
+  support that deployment. Keep its covered execution and authoritative state
+  on the canonical network. Genuine isolated development and testing may run elsewhere.
+- Pay actual ordinary protocol charges with verifiable ICP-origin funding.
+  A production Cloud Engine covered by Section 7.2 must settle the full
+  applicable fee through the engine mechanism and verifiably burn native ICP
+  worth at least 20% of the unsubsidised engine price. A sponsor may pay the bill.
+- Publish the exact Corresponding Source of covered modifications when
+  distributed or operated in production. Distribute unmodified binaries with
+  access to their exact source. Independent application code may stay private.
+- Toko may separately license or migrate material within the scope of its
+  rights. Third-party terms and earlier licence grants remain in effect. This
+  is a source-available licence with production restrictions.
 
 ---
 
@@ -53,19 +37,26 @@ not grant rights or change any obligation. The full terms below control.
 
 **Licence notice email:** legal@toko.ltd
 
-**Status:** Adopted unified source-available software licence, effective
-10 November 2026.
+**Version date:** 25 November 2026. This version applies only to material expressly
+offered under it by an authorised Copyright Holder.
 
-**Licence identifier:** TSNL-1.0
+**Licence identifier:** TSNL-1.1
 
 **Intended scope:** Software and associated materials expressly designated by
-their applicable Copyright Holders as licensed under TSNL-1.0.
+their applicable Copyright Holders as licensed under TSNL-1.1.
 
 ---
 
 ## 1. Purpose, application and nature
 
 ### 1.1 Purpose
+
+Toko Studios develops software for the Internet Computer and invests in ICP.
+It offers this software on terms that tie production demand for computing
+capacity to verifiable destruction of native ICP. For Cloud Engines, that
+commitment applies equally to public- and private-sector workloads. Section
+7.2 sets the economic condition and Section 9 sets the evidence required to
+show that it was met.
 
 This Licence permits access to, development of and commercial use of Covered
 Software while preserving:
@@ -88,7 +79,7 @@ platform.
 
 This Licence applies only to source code, documentation, tools, libraries,
 generated materials, WebAssembly modules and other copyrightable material
-expressly identified as distributed under TSNL-1.0 ("Licensed Material").
+expressly identified as distributed under TSNL-1.1 ("Licensed Material").
 
 It applies regardless of programming language, compilation target,
 distribution format, package structure or execution environment.
@@ -193,9 +184,11 @@ implementation material.
 ### 2.7 Canonical Internet Computer
 
 "Canonical Internet Computer" means the continuously operating public Internet
-Computer mainnet identified at first publication of this Licence, governed
+Computer mainnet identified at first publication of TSNL-1.0, governed
 through its Network Nervous System, preserving continuity of its public state
-history and using native ICP-based economic resource funding.
+history and using native ICP-based economic resource funding. The release notice should
+identify the mainnet reference records used to establish continuity, including
+the NNS subnet and native ICP ledger principal identifiers.
 
 Ordinary governance-approved upgrades, system-canister replacements and
 technical improvements do not create a new network while that public state,
@@ -249,7 +242,8 @@ validation permitted by Section 4.
 
 "Qualifying ICP Burn" means actual, irreversible destruction of native ICP
 through the Canonical Internet Computer's recognised ICP-to-cycles conversion
-mechanism.
+mechanism for ordinary cycle funding. An Engine Fee Burn is separately defined
+in Section 7.2 and does not create qualifying cycle funding by itself.
 
 It must be independently verifiable using appropriate canonical ICP ledger,
 cycles-minting and supporting protocol records.
@@ -310,6 +304,15 @@ arrangement.
 common control with a Licensee, or acting as its nominee, agent or coordinated
 operator in relation to Covered Software.
 
+### 2.13 Cloud Engine
+
+A "Cloud Engine" is a dedicated Internet Computer subnet provisioned for a
+customer or operator under the canonical protocol's engine provisioning and
+rental mechanism, including a renamed or successor form of that mechanism.
+Exclusive tenancy or restricted access to applications on such a subnet is
+consistent with Section 5 if the subnet remains part of the Canonical Internet
+Computer under Section 2.7. A separate network remains subject to Section 2.10.
+
 ## 3. General grant
 
 Subject to this Licence, each Copyright Holder grants You a worldwide,
@@ -352,20 +355,53 @@ An environment is not excluded merely because it is called a test, staging,
 research, preview or experimental environment. Genuine internal or third-party
 operational workloads constitute Production Operation.
 
-### 4.3 Ancillary host tools and clients
+### 4.3 Ancillary use and independent integrations
 
-Covered Software may execute outside its authorised production network where
-reasonably necessary to build, deploy, administer, monitor, secure, back up,
-restore or interact with an authorised deployment on the Canonical Internet Computer.
-This includes workstations, CI systems, administrative servers, browsers and
-supporting clients.
+Covered Software may execute off-chain as reasonably necessary to build,
+deploy, access, administer, secure, monitor, back up or restore an authorised
+canonical deployment, subject to the limits below. Off-chain includes any
+environment outside the Canonical Internet Computer.
 
-Ancillary host costs do not independently require ICP burn merely because of
-that use.
+Permitted uses include:
 
-This exception does not authorise a competing runtime, live off-network
-application database, substitute production platform or alternative blockchain.
-Isolated recovery tests remain permitted by Section 4.1.
+a. browsers, wallets, mobile and desktop clients, and web front ends that
+   display data, collect inputs or submit requests to the canonical deployment;
+
+b. CDNs, caches, read-only search indexes and analytics mirrors whose data is
+   derived from and can be reconciled to the canonical deployment;
+
+c. build and release tooling, orchestration that submits deployment or
+   management requests, monitoring, logging, alerting and security tooling;
+
+d. off-site backups and isolated recovery drills, and restoration to an
+   authorised canonical deployment; and
+
+e. ordinary integrations with independently operated services, which may
+   maintain authoritative records of their own distinct functions, such as
+   payment processor settlement records, identity provider records or
+   fulfilment records.
+
+The canonical deployment must execute the covered production logic and remain
+the final authority for the operational state that logic creates, validates or
+changes. An off-chain component may prepare, cache, display or propose data
+and relay requests. It may not take over the execution of covered logic, make
+the operative decision in its place, or control the authoritative state of
+that covered workload. Posting a hash, result or periodic copy to the
+canonical network does not make an off-chain runtime or database canonical.
+
+For example, an off-chain payment processor can report whether it received
+payment and a canonical canister can apply the application's entitlement
+rules. An off-chain service may not apply covered entitlement rules or hold
+the authoritative entitlement ledger while the canister simply publishes the
+results. A backup promoted to serve genuine operational workloads is subject
+to Section 5 from the start of that operation.
+
+Independent Applications remain subject to Section 2.6. An independently
+written component does not become Covered Software merely because its use
+makes a particular deployment ineligible for this public grant. Ancillary
+hosting charges do not independently require an ICP burn. Section 7.2 applies
+when a host tool materially provisions, administers or operates a production
+Cloud Engine.
 
 ## 5. Production network authorisation
 
@@ -379,8 +415,10 @@ requires a written permission under Section 11.
 
 ### 5.2 No private-network permission
 
-Private, sovereign, government, enterprise, permissioned and disconnected
-IC-based deployments are not authorised by the public grant. Technical
+Separate private, sovereign, government, enterprise, permissioned and
+disconnected IC-based networks are not authorised by the public grant.
+Government use of a canonical Cloud Engine is subject to the same Section 7.2
+conditions as any other customer's use. Technical
 compatibility, equivalent resource funding or burning ICP does not change
 that restriction. Section 11 preserves the Organisation's separate authority.
 
@@ -468,12 +506,15 @@ later burns do not retrospectively qualify earlier use of non-qualifying credits
 
 ## 7. Funding scope
 
-The funding requirement applies to actual protocol charges, not imputed resource
+### 7.1 Ordinary protocol charges
+
+Except for the engine fee in Section 7.2, the funding requirement applies to
+actual protocol charges, not imputed resource
 value, infrastructure cost, application revenue, business profits or turnover.
 No supplemental burn, cycle retirement, equivalent-resource valuation or monthly
-resource reconciliation is required by this Licence.
+resource reconciliation is required for those ordinary charges.
 
-Where the canonical protocol makes a resource free or subsidises its charge,
+For charges governed by Section 7.1, where the canonical protocol makes a resource free or subsidises its charge,
 only the actual remaining protocol charge, if any, is subject to Section 6.
 Free queries and other zero-charge operations incur no additional burn
 requirement under this Licence. Charges that are actually imposed remain
@@ -482,6 +523,89 @@ subject to Section 6 even when a provider or another party pays them.
 This Section does not permit Production Operation on a private network, fork
 or other blockchain. The network restriction in Section 5 and the Organisation's
 separate authority under Section 11 remain unchanged.
+
+### 7.2 Cloud Engine fee and minimum native ICP burn
+
+This Section applies to every Cloud Engine on which You run Covered Software
+in Production Operation or which You materially provision, administer or
+operate in production using Covered Software, wherever that software runs.
+This includes creating an engine or node set, changing production capacity,
+renewing its rental or controlling its operation through an intermediary.
+Ordinary client calls, compiling code and passive monitoring alone do not
+trigger this Section.
+
+For each applicable billing period, the full generally applicable engine fee
+must be settled through the canonical engine-fee mechanism when due. In
+addition, an Engine Fee Burn attributable to that engine and period must
+irreversibly destroy native ICP with a value of at least twenty percent (20%)
+of the unsubsidised price of the entire engine for that period. The same
+settlement may satisfy both requirements. The 20% minimum includes the fee in
+the price base and excludes separately itemised taxes. Governance or fee-rate
+changes do not lower the minimum under this version.
+
+An "Engine Fee Burn" is actual irreversible destruction of native ICP through
+the canonical engine-fee mechanism or its recognised successor, attributable
+to settlement of the engine fee. The payer may use any payment method that
+mechanism accepts, including payment through a sponsor or reseller. A
+conversion to cycles, transfer to a settlement account or payment to a node
+provider does not by itself establish an Engine Fee Burn. The same native ICP
+destruction must not be counted twice under this Licence.
+
+Determine the price in this order:
+
+a. Use the dated unsubsidised public price for the same engine, including node
+   class, count, location, capacity, service commitments and term. Published
+   discounts earned under the same objective criteria available to every
+   customer reduce the benchmark equally whether applied at invoice or paid
+   later as a rebate. Discounts tied to customer identity, affiliation or
+   public-sector status do not reduce the benchmark.
+
+b. If no usable price exists, use independently verifiable arm's-length
+   offers or transactions for comparable unsubsidised capacity at the relevant
+   date. Document adjustments for differences in the factors in paragraph (a).
+   An independent reviewer may verify confidential transactions under
+   Section 9.3.
+
+c. Include the fair value of engine-related consideration across connected
+   agreements to the extent necessary to reflect the unsubsidised price,
+   including mandatory support or reservations, sponsor or reseller
+   compensation and non-cash consideration for supplying the engine. Count
+   each element once and exclude independently priced unrelated services.
+   Apart from a discount qualifying under paragraph (a), subsidies, rebates,
+   side payments, credits and waivers do not reduce the benchmark. A subsidised engine class cannot serve as its own comparator.
+
+Use the price at purchase or renewal for the billing period. Where capacity
+or the service commitment materially changes during that period, apply the
+relevant dated benchmark to each affected interval using the documented
+billing units. Determine the value of burned ICP in the benchmark currency
+using the settlement mechanism's independently verifiable rate at settlement
+or, where it supplies none, a documented independent market reference fixed
+before the billing period. Use the same method consistently.
+
+The burn must occur by the fee due date, except where the ordinary mechanism
+settles in a published batch cycle. In that case the amount must be committed
+to settlement when due and burned by the applicable batch settlement deadline.
+A batch qualifies only to the extent its records establish the actual
+irreversible burn and the allocation to each engine and period without double
+counting. Section 9 governs evidence. One qualifying settlement and allocated
+burn covers all Covered Software on the engine for that period.
+
+For example, suppose the published monthly price including the fee is USD 1,000
+before tax. An earned USD 100 public volume rebate under paragraph (a) gives
+a benchmark of USD 900 and a minimum burn worth USD 180. A USD 100 subsidy
+specific to that customer would leave the benchmark at USD 1,000 and the
+minimum at USD 200. In the volume-rebate example, at a qualifying settlement
+rate of USD 5 per ICP, the records must show timely payment of the full fee
+and at least 36 native ICP irreversibly burned and allocated to that engine
+and month by the applicable deadline. A receipt showing only cycles burned
+leaves the native ICP amount and its allocation unverified.
+
+If the benchmark cannot be independently verified, the mechanism cannot meet
+the 20% floor, or the transaction and burn cannot be reconciled, this Licence
+does not authorise the affected operation. Ordinary metered charges, including
+chargeable calls handled by a proxy for the deployment, are subject to
+Sections 6 and 7.1. This Section does not impose a separate charge on
+application revenue, ordinary free queries or isolated development.
 
 ## 8. Reciprocal source obligations
 
@@ -509,7 +633,14 @@ distributed.
 
 Corresponding Source must remain available throughout Production Operation and
 for at least three years after the last distribution or operation of that
-version. Material changes and deployed versions must be clearly identifiable.
+version. Material changes and deployed versions must be clearly identifiable. Publish a
+versioned source manifest linking each released or deployed covered build to
+its exact source revision and covered build inputs. Identify the covered
+executable by a digest or equivalent independently verifiable build identifier.
+For combined builds, identify the deployed build and the corresponding
+covered component without disclosing Independent Application source. Each
+release manifest must identify material covered by this Licence and distinguish
+third-party or earlier-licensed material where different terms apply.
 
 ### 8.3 Independent Applications
 
@@ -535,7 +666,10 @@ is restored.
 ### 8.5 Network-service notice
 
 An operator using Covered Modifications as a service must provide a reasonably
-discoverable public notice identifying their source location and version.
+discoverable public notice linking the service or deployment identifier to its
+source location, version and build identifier. An internal service can publish
+that notice externally without exposing its private endpoints, credentials or
+customer data.
 
 ## 9. Evidence and records
 
@@ -556,11 +690,26 @@ summary alone does not establish qualifying origin.
 Records must identify the relevant deployment, qualifying ICP conversion
 references, resulting credit quantities, material transfers and pool allocations,
 and consumption and balances sufficient to demonstrate Section 6 compliance.
+Before relying on pooled funding, the operator must secure access to a
+reconciled pool record or a right to independent verification under Section
+9.3. Records must tie allocations to identifiable deployments and periods,
+show qualifying inflows and remaining qualifying balances, and enable a
+reviewer to test allocations across the pool for double counting.
 Stable canonical records may be referenced rather than copied. The same credits
 must not be counted as available for more than one expenditure or allocation.
 
-No resource-equivalence measurements, imputed query charges, cycle-retirement
-proofs or monthly resource reports are required. A zero-charge operation does
+For Section 7.2, retain each engine identifier and period, the applicable dated
+public terms, any comparator and adjustments, and the amounts and purpose of
+any separate provider compensation, credits or rebates relevant to the price.
+Keep the benchmark and fee calculation, exchange-rate source and timestamp,
+engine settlement references, canonical ICP burn references and any batch
+allocation records. The records must reconcile the fee paid, the benchmark,
+the applicable due dates and actual native ICP destroyed. A provider may supply these records under Section 9.3. Evidence of ICP
+conversion alone does not establish engine-fee settlement.
+
+For ordinary charges under Section 7.1, no resource-equivalence measurements,
+imputed query charges, cycle-retirement proofs or monthly resource reports are
+required. A zero-charge operation under that section does
 not require evidence of a burn for a charge that the protocol did not impose.
 
 ### 9.3 Retention, privacy and corrections
@@ -597,12 +746,11 @@ service boundary, artificial allocation or accounting arrangement.
 Technical, operational and economic substance prevails over labels and formal
 ownership.
 
-Production Operation includes every coordinated
-component that materially performs, stores or supports the operational workload,
-including an authoritative off-chain database or index, hosted execution engine,
-sidecar holding canonical state, relay performing substantive business logic,
-or backup promoted to live service. The ancillary-use exception in Section 4.3
-does not apply to such a substitute production component.
+In determining whether a deployment is authorised, consider coordinated
+components that perform covered production logic or control authoritative
+state for the covered workload. Apply Section 4.3 to those components,
+including databases, execution engines, sidecars, relays and backups
+promoted to live service.
 
 Funding records must account for coordinated deployments and Related Parties
 where they share credits or funding pools. Splitting a service among entities,
@@ -659,8 +807,9 @@ f. keep the Organisation's modifications private; and
 g. offer it under proprietary, commercial, source-available, open-source or
 other terms selected by the Organisation.
 
-This is a separate grant to the Organisation and is not conditional on the
-Organisation satisfying Sections 5 through 9.
+This is a separate grant to the Organisation. Subject to Section 11.5 for
+third-party Cloud Engine operations, it is not conditional on the Organisation
+satisfying Sections 5 through 9.
 
 ### 11.2 Covered Modification grant
 
@@ -694,6 +843,16 @@ The Organisation may issue a separate written licence authorising identified
 parties, software, networks and uses, including exceptions to public-licence
 conditions. An alternative-network permission must be express and signed by the
 Organisation acting with sufficient authority from relevant rights holders.
+
+No third party obtains an exception to Section 7.2 through a delegation,
+sublicence or separate permission issued under this version, including under
+Sections 11.1, 11.5, 11.6 or 17.6. This limitation applies equally to an engine operated on behalf of a third
+party. In exercising rights obtained under this Licence to enter a separate
+agreement for third-party Cloud Engine operation, the Organisation must
+include a binding condition preserving Section 7.2 and must not grant or
+delegate authority to waive it. A separate grant relying entirely on
+independently held rights must identify its separate authority expressly. The
+Organisation retains its own development and migration rights.
 
 Informal statements, investments, token or equity arrangements, burns,
 technical compatibility and commercial relationships are not authorisation.
@@ -740,7 +899,13 @@ identified prominently.
 A contribution is covered only where its contributor has authority and
 expressly offers it under this Licence or a separate agreement sufficient for
 the Organisation's intended use. Employment, repository membership and pull
-request submission alone do not prove authority.
+request submission alone do not prove authority. Before the Organisation
+incorporates a contribution intended for separate licensing or migration,
+it must obtain a signed assignment or signed contributor agreement from the
+actual rights holder, or confirm that an existing signed instrument already
+covers the contribution and grants the required rights. A contributor acting
+for an employer or client must establish authority from that rights holder.
+The Organisation should retain the agreement and contribution records.
 
 ### 12.4 Third-party material and earlier grants
 
@@ -817,9 +982,14 @@ unqualified deployment.
 
 Subject to Section 14.3 for eligible documentary defects, permission for affected
 Production Operation is suspended when non-qualifying credits are used to pay
-actual protocol charges or the required funding evidence is absent. Operation
+actual protocol charges, a Section 7.2 fee is underpaid when due, an engine
+burn is insufficient or missing at the applicable deadline, or the required
+funding or settlement evidence is absent. During an eligible batch settlement
+interval, evidence that the full required amount was committed on time
+satisfies the interim evidence requirement. Evidence of the allocated
+irreversible burn is required at the batch deadline. Operation
 may resume prospectively after correction if no other condition remains unmet
-and permissions have not separately terminated.
+and permissions have not separately terminated. Later payment or burning cannot authorise operation during a shortfall.
 
 Reconstructed records may establish that qualifying funding already existed
 when charges were paid. Later burns cannot retrospectively qualify actual use
@@ -831,7 +1001,8 @@ supplemental burn, valuation or retirement that Sections 6 and 7 do not require.
 An inadvertent documentary or source-publication defect may be corrected within
 thirty days after discovery or written notice if the use was otherwise
 authorised apart from that eligible defect itself, required qualifying funding
-existed when actual protocol charges were paid, the breach was not deliberate
+existed when actual protocol charges were paid, every applicable engine-fee payment and burn was completed in full by its
+respective deadline under Section 7.2, the breach was not deliberate
 and the Licensee acts promptly and in good faith.
 
 Timely complete correction prevents suspension, termination or claims based
@@ -844,9 +1015,13 @@ Further executable distribution during a known source outage remains prohibited.
 Deliberate evasion, deliberate concealment or destruction of required evidence,
 material evidence falsification, intentional source withholding, attempted
 appropriation contrary to Section 10.3, interference with the Organisation's
-granted rights, or repeated material breach may
-terminate the responsible Licensee's permissions for the affected use and
-material.
+granted rights, or repeated material breach permits the Organisation, for rights it owns or
+is authorised to enforce, or the relevant Copyright Holder, to terminate the
+responsible Licensee's permissions for the affected use and material. Such
+termination takes effect upon receipt of written notice identifying the
+affected permissions and the grounds. Operation outside the grant under
+Section 14.1 and automatic suspension under Section 14.2 take effect under
+those Sections independently of notice. Section 14.3 controls eligible defects.
 
 Reinstatement requires express written authorisation from relevant Copyright
 Holders.
@@ -914,31 +1089,41 @@ later version for the applicable material.
 
 ### 17.4 Governing law and forum
 
-This Licence is governed by the laws of the Principality of Monaco, excluding
+Subject to mandatory applicable law, this Licence is governed by the laws of the Principality of Monaco, excluding
 conflict-of-laws rules to the extent permitted.
 
 The competent courts of the Principality of Monaco have exclusive jurisdiction
-over disputes arising out of or relating to this Licence, subject to mandatory
-applicable law.
+over disputes arising out of or relating to this Licence where the forum
+agreement is valid and enforceable, subject to mandatory applicable law.
+Where it is ineffective, jurisdiction is determined under applicable law.
+
+For managed deployments and separate written licences, the Organisation
+must record affirmative acceptance by an authorised representative of the
+applicable entity before enabling the deployment or granting permission. The
+record must identify the entity, the representative, the date and the exact
+licence text and version accepted, and capture acceptance of the forum clause.
+This procedure does not impose a registration requirement on other users of
+the public grant.
 
 ### 17.5 Notices
 
 Formal notices to the Organisation under this Licence must be sent to Bayside
 Executive Park, Building 3, West Bay Street and Blake Road, Nassau, Bahamas,
-and legal@toko.ltd, or a replacement address published by the
-Organisation in a durable public record.
+and legal@toko.ltd, or to replacement contacts published by the Organisation
+in a durable public record. A notice of termination to a Licensee must be
+delivered to its designated legal contact or otherwise by a means that
+provides evidence of receipt.
 
 ### 17.6 Entire public permission
 
 This Licence states the public permissions for Covered Software. A separate
 written agreement issued by parties with sufficient authority may grant
-additional permissions to its identified recipient.
+additional permissions to its identified recipient subject to Section 11.5 for
+permissions derived from this version.
 
 ---
 
-**End of Toko Studios Network Licence — Version 1.0**
-
-**Adopted by Toko Studios Limited on 10 November 2026.**
+**End of Toko Studios Network Licence — Version 1.1**
 
 Copyright © the respective Copyright Holders identified in the applicable
 Licensed Material. All rights not expressly granted are reserved.

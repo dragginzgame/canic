@@ -119,15 +119,17 @@ async fn root_maintenance_preserves_store_operation() {
     for side in ["custody-before", "custody-after"] {
         let reply = std::fs::read(path.join(side).join("reply.bin")).unwrap();
         assert_eq!(
-            ic_wire::decode::<custody::Root>(
+            ic_wire::decode::<canic_management_protocol::application::Custody>(
                 &reply,
                 ic_wire::Encoding::Frame {
-                    method: custody::ROOT,
+                    method: canic_management_protocol::application::CUSTODY,
                     direction: ic_wire::Direction::Response
                 },
-                custody::ROOT_LIMITS
+                canic_management_protocol::application::LIMITS
             )
-            .unwrap(),
+            .unwrap()
+            .root
+            .current,
             input.expected
         );
     }

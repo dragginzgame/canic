@@ -290,7 +290,7 @@ The application may keep its independent greeting endpoint; Root calls only
 The demo counter allows public increments; capture, restore and reopening
 remain explicitly operator-controlled. Both greeting and counter actors use the
 readiness mount. The counter's local installed persistence and fencing rehearsal
-uses published Storage 0.78.0. The installed fleet CLI now qualifies Root/Store
+uses published Storage 0.80.0. The installed fleet CLI now qualifies Root/Store
 creation, value-preserving upgrade and fenced readiness refusal for the counter.
 No new lifecycle engine is required.
 
@@ -340,7 +340,7 @@ manager; those deployments predate the separate Store decision. Moving their
 custody requires the qualified transition below, not an automatic migration.
 
 A supplied Root builds the union of endpoint families needed by the app’s declared fleets.
-Shard pools, dedicated registries, worker pools, reserve management and ongoing child funding select their own mounts. A worker pool approved for return to reserve also needs reserve operations. On upgrade, retained pool approvals require their corresponding mounts. Funding cancellation remains available on placement Roots because an application parent can hold the payment grant. Compiling a mount grants no spending or caller authority. Root continues to own installation, capacity reservations and effect evidence. Each hub owns its durable account routes. Root accepts growth requests for a named pool and ordinal from its approved hub.
+A shard pool, registry or worker pool selects Root’s child-creation mount. A pool that returns workers to reserve also selects reserve operations. Each payer owns its funding approval, debit journal and revocation. Operators call the payer directly. Root’s funding mount serves its own payments. Each hub owns its routing policy, durable account routes and occupancy. It requests a new child under its creation grant when local capacity runs out.
 
 ### Repository and workspace boundary
 
@@ -855,7 +855,7 @@ For a project's singleton ledger, Root supplies the canister and remains its sol
 IC controller. Only Root can install or replace its Wasm. The project requests
 its own ledger and manages its application operations. The operator approves
 code changes through Root and has no direct controller entry on the ledger.
-One registry-wide approval pins the singleton role, Store release, payer, count, creation budget and deadline. The requesting project is identified by its ready registry allocation. For project-funded ledgers it settles its own Root quote. Operating top-ups are a separate direct edge from project to ledger. The registry owes no payment on that edge.
+One registry-wide approval pins the singleton role, Store release, count, creation budget and deadline. Root identifies the requesting project by its ready registry allocation. The project pays for its ledger. A fleet can separately enable ongoing top-ups from the project to its ledger.
 The installed `root_installs_separate_ledgers_for_two_registry_projects` witness
 has two real projects quote, pay for and recover their own ledgers. Each project
 sees its own ledger in its direct children. A separate exact child-funding approval
@@ -941,7 +941,7 @@ fleet policy is 10,000 keys per shard with two shards. Rollover at 10,001
 and refusal at 20,001 must preserve lookup and retry for existing assignments.
 The hub retains its account index and occupancy in the same Storage bootstrap.
 Root retains one slot and installation generation per capacity ordinal. The
-PLS9 layout requires a fresh sharding Root and excludes account claims. Use
+PL12 layout requires a fresh sharding Root and excludes account claims. Use
 fresh hub state when switching from a system that retained those claims at Root.
 
 Shard assignments are durable from the first reservation. Directory delivery
@@ -955,8 +955,7 @@ For hub-local routing, the Canic library installed in the parent owns the
 indexed account assignments and per-shard occupancy, including pending writes.
 The application supplies the authenticated subject and owns its business records. Under the same named grant it requests
 the next zero-based capacity ordinal only when all local capacity is reserved.
-Root owns one allocation per ordinal and returns the grant’s keys-per-shard
-limit. Existing accounts keep their routes across growth. Legacy `377fbce` in `domain/policy/pure/placement/sharding` retains
+Root retains one creation receipt per ordinal. The hub enforces the keys-per-shard limit approved directly on its own roster. Existing accounts keep their routes across growth. Legacy `377fbce` in `domain/policy/pure/placement/sharding` retains
 assignments before ranking new candidates. Canic reuses that rule locally and
 keeps creation and reserve custody at Root. Applications call
 `sharding::routes::assign_shard(pool, subject, authorize)` on registration and
@@ -1041,10 +1040,9 @@ unbound. Whole-fleet `canic fleet plan` previews the exact pool grant offline,
 hashing the declared Wasm and reading the optional binary init argument relative
 to the config. It does not create an apply operation or verify publication.
 Choose a real deadline and immutable shard release for each approval. The
-operator obtains a `stored::ShardPool` through
-`FleetConfig::shard_pool_approval(component, manifest, arguments)` and sends it once to the bound
-Root's controller-only `configure_shards` update. Encode the request with
-`stored::CONFIGURE_SHARDS`, Wire request framing and `stored::LIMITS`.
+operator submits the typed creation grant to Root’s controller-only
+`approve_child_creation` endpoint and the separate `configure_shard_routes`
+request to the hub. The fleet plan includes the exact frames for both recipients.
 The application supplies its bounded installation bytes, for example an encoded
 trusted hub principal. Root retains them in its existing application creation
 journal and binds them to the generation and Store pin. An empty argument
@@ -1130,7 +1128,7 @@ examines every permanent service slot under its observation budget, including
 when Host has no local journal. Placement pools keep their own inventories.
 Historical approvals retain their original positional encoding and digest. Fresh service-only fleets may set the same optional ceiling. Host binds the ceiling and bootstrap service count into the Root creation approval and install bytes. An exact retry of an admitted service consumes no new slot. The 40,000 default is an admission backstop. Aggregate journal, custody and directory budgets remain independent constraints.
 
-The CUJF journal is a fresh-layout hard cut. A Root using CUJE or earlier keeps its
+The CUJG journal is a fresh-layout hard cut. A Root using CUJF or earlier keeps its
 original executable. On a fresh Root, adding a service preserves the existing
 canister principals, signed attempts, funding approvals and upgrade targets.
 
@@ -1318,7 +1316,7 @@ records source/history evidence and the differences needing new qualification.
 
 Memory ownership uses IC Storage allocations and stable names, not copied hardcoded IDs. Compile and validate one allocation manifest. Optional roles do not open unused stores during startup, diagnostics or sampling. Measure fresh physical allocation as well as logical usage. Reopening state must validate its schema, allocation owner and bounds before granting access.
 
-Storage 0.78 supplies named allocations and stable cells for fresh counter and
+Storage 0.80 supplies named allocations and stable cells for fresh counter and
 Root installations; the requirements above concern ownership
 and admission, not compatibility with 0.74 type names or directory geometry.
 [Storage #5](https://github.com/dragginzgame/ic-storage/issues/5) records broader
@@ -1585,7 +1583,7 @@ frame names itself as installer and the approved project registry as parent.
 The first project approval changes the placement record format in the existing
 lease. Shared-only fleets retain the predecessor encoding. An exact approval
 retry acknowledges the original terms, including the original deadline.
-The project registry calls `canic::sharding::assign_instance(root, key)` with a stable
+The project registry calls `canic::sharding::registry::assign_instance(key)` with a stable
 application request key. `lookup_instance(root, key)` observes the same claim
 after a lost reply. First admission retains the key and Store-backed creation
 together. The initial two dedicated child identities (2 and 3) share the engine's existing
@@ -1612,9 +1610,7 @@ creation_budget = 2000000000000
 
 For a bound fleet with built artifacts, `canic --json fleet plan` with
 `--controller PRINCIPAL` returns each decoded approval and Wire request.
-The `placement_pools` result carries `instances.request` for
-`configure_instances` and, when configured, `shards.request` for
-`configure_shards`. Planning is local. Root checks the submitting controller.
+The `placement_pools` result carries creation grants for Root’s `approve_child_creation` endpoint and routing requests for the owning hubs. Planning is local. Root checks the submitting controller.
 
 One Root owns its fleet's managed-child ceiling on one subnet. Permanent-service and placement plans
 default to 40,000 when `subnet_child_limit` is absent. A smaller explicit limit
@@ -1637,11 +1633,11 @@ Returning an existing assignment or placing another key on an existing shard
 consumes no additional child capacity. A pool count increase cannot raise the
 subnet backstop.
 
-The fresh sharding Root indexes project keys in stable storage. Resolve an exact
+The registry retains completed project keys on its own Storage lease. Root authenticates the registry and retains the opaque creation request and its installation evidence. Resolve an exact
 retry through that index before reserving a slot. On reopen, check every project
 claim against its indexed position and refuse a missing or inconsistent index.
 The previous sharding Root layout requires its original executable.
-Fresh placement Roots use the PLS9 ledger and the `canic.placement.configure_capacity.v1` frame, which retains the explicit large-subnet opt-in. Roots with PLS8 or earlier ledgers require their original executable. The subnet ceiling is separate from the capacities of permanent services,
+Fresh placement Roots use the PL12 ledger and the `canic.placement.configure_capacity.v1` frame, which retains the explicit large-subnet opt-in. PL12 retains Root’s own funding approvals. Each application payer retains its operator and revocation path. Roots with earlier placement ledgers require their original executable. The subnet ceiling is separate from the capacities of permanent services,
 shared shards and registry instances. A project and its singleton ledger each
 consume one reservation. The current slot representation still bounds each
 family separately; larger registries need indexed child journals and Store custody.
@@ -1773,16 +1769,11 @@ creation generation and retains a conservative two-hour deadline. Replaying
 closure returns that deadline. A signature committed before closure keeps its
 original expiration. Older custody endpoints refuse a prepared issuer until
 Host can verify its complete maintenance evidence.
-The controller uses the supplied Root command codec with `fleet call`.
-`inspect-shard PRINCIPAL` reads the slot, generation and live placements in a
-signed replicated call. `drain-shard PRINCIPAL SLOT GENERATION` starts drain
-for the reviewed allocation. This fences new
-placements while allowing the shard to renew proofs for its existing accounts.
-For a pool with Root-owned routes, after committing a route migration or
-removal the approved hub may release one exact key, principal and allocation
-generation. A hub with local routes instead commits the exact move locally.
-The controller repeats the drain so Root retains the hub’s zero acknowledgement. Repeating that release
-leaves other keys and generations untouched. Managed closure of role issuance
+The operator calls the hub directly with its command codec. `observe-shard PRINCIPAL`
+reads the allocation generation, drain state and local occupancy. `drain-shard PRINCIPAL SLOT GENERATION`
+fences new routes on that allocation. Existing accounts can still use their shard while the
+hub migrates them. Repeating drain after the last move sends the exact generation release
+from the hub to Root. Managed closure of role issuance
 requires the drained generation to have zero live placements. The role-enabled
 Root command codec exposes `close-role-issuance PRINCIPAL GENERATION` and
 returns the original proof deadline in nanoseconds as a decimal string.
@@ -1879,6 +1870,48 @@ that exact `parent_storage_key`. The approved install context supplies the
 parent principal and role. Upgrades between role-aware executables strictly reopen the same cell.
 
 ### Endpoint ownership and actor composition
+
+### Placement ownership on fresh fleets
+
+The operator calls each hub directly under the operator grant bound in its installation. The hub authorizes its own administration and carries out its local routing work. Root is the sole creator and installer of managed children. A hub owns its
+pool configuration, growth ordinals, keys per shard, routes, occupancy and
+drain decisions. A registry owns keyed claims and singleton selection. These
+records must survive upgrades of the hub or registry that admitted the work.
+
+Root's creation authority binds the requesting canister, approved child role
+and artifact, an opaque request identity, payment ceiling and deadline. Root
+retains the charge, child identity, installation evidence and uncertain effects.
+The requester binds its logical claim to that request before dispatch and
+recovers the same request after interruption. Releasing a route cannot
+authorize Root to reset a child. Controller-changing and destructive effects
+retain their own exact approvals and generation checks.
+
+The hub takes its immutable keys-per-shard policy through a direct operator call. Completed project lookups use the registry’s local index. Root retains the per-role creation allowances, paid request identities and singleton creation records. The ownership cut moves those to their application owners on fresh fleets.
+The earlier placement and retirement evidence at `377fbce` above applies to
+both halves of this change.
+
+The Root endpoint cut is for fresh fleets. Existing installations and Host journals
+are disposable and have no migration path into this contract. Within the fresh
+generation, upgrades reopen retained state and recovery remains bound to the
+original approvals, effects and signed bytes. Deployment evidence is distinct
+from maintenance custody. Lookup of a placement cannot reserve or charge cycles.
+An acquisition carries the original demand and maximum and may settle on its
+first call when cycles are attached. Zero attached cycles can request a quote;
+a spare that needs remote inspection can return a quote for later settlement.
+Root retains the payer and charge, the hub owns routes, and per-family grants
+remain explicit. This keeps the caller and allocation distinctions covered by
+the legacy placement index regressions at `377fbce` while consolidating the
+new Root's public methods.
+
+Root's controller calls `redeliver_directory_revision` to repeat delivery for an existing
+service and revision. Revision changes, unknown recipients, invalid or unavailable directories,
+and unconfirmed deliveries have distinct Wire replies. The payment owner and child together
+identify a `stop_child_funding` request on Root. Root handles its own approvals locally and
+verifies the retained application parent before forwarding a stop to that owner.
+The controller's shard and standby observations and the former Root's standby handoff
+observation are replicated calls. Snapshot lookup retains the installed Backup consumer's
+method name and frame for recovery of signed operations.
+
 
 A hub without a database can mount the retained role and Auth receiver lifecycle
 directly. Canic restores the topology and receiver before optional application
@@ -2186,7 +2219,7 @@ callback faults qualify recovery through observation without repeating stop.
 Root replacement preserves that record. Stopped status under the approved old
 code and sole Root control establishes the drain boundary, even when observed
 after the dispatch deadline. This does not rely on canister-version arithmetic.
-The CUJF journal retains current and completed attempts in the original checked
+The CUJG journal retains current and completed attempts in the original checked
 allocation. Existing child-only reads refuse Store custody; after a second
 attempt, full-history observation is required so Root maintenance cannot omit any
 predecessor. Older executables reject the new journal rather than losing history.
@@ -2208,7 +2241,7 @@ first page; its cursor retains the removed flag, and its digest has a separate
 domain including the entry kind. Historical attempts retain method 113, their
 original digest and name/version ordering, including an existing refusal. Their
 Wire discriminants and Host JSON encodings stay exact. Versioned evidence uses a
-new discriminant rejected by historical readers; CUJF preserves that evidence across supported Root
+new discriminant rejected by historical readers; CUJG preserves that evidence across supported Root
 upgrades. Fresh attempts require method 117; missing support blocks before
 stop without falling back.
 
@@ -2428,7 +2461,7 @@ original operation when the result is uncertain. The installed DB witness qualif
 with IC DB. Its managed fleet additionally qualifies the lost install callback
 through CLI, Root and Store. See the [qualification guide](../../qualification/README.md).
 
-Fresh counter and Root fixtures use the Storage 0.78 directory and collection
+Fresh counter and Root fixtures use the Storage 0.80 directory and collection
 format. Existing Storage 0.76 records have a different physical layout. Moving an existing deployment requires
 an explicit migration that preserves application state, every child journal,
 artifact custody and any admitted snapshot ledger. A failed open must trap.
@@ -2635,10 +2668,9 @@ use install mode. Store prepares its IC chunk cache and Root passes hashes to
 `install_chunked_code`. Root retains the approval and receipt without copying
 Store-backed Wasm through its journal.
 
-[Canic #78](https://github.com/dragginzgame/canic/issues/78) determines
-who pays. Root attaches the creation cycles. Requester-funded work must cover
-its approved cost before Root spends or releases a spare. For a requester-funded
-spare, retain the current same-subnet creation fee with the allocation and
+[Canic #78](https://github.com/dragginzgame/canic/issues/78) covers child funding.
+The requester pays before Root issues a create or releases a spare. On a reserve
+hit, retain the current same-subnet creation fee with the allocation and
 recover the same payment on retry. Account separately for the spare's operating
 balance. A requester's attached cycles set a maximum debit. For example, a
 5T attachment authorizes a debit up to 5T. Root must bind the payer, ceiling,
@@ -2655,18 +2687,28 @@ the creation fee or delivered a funded spare, retain the charge and principal
 with that allocation for recovery. Any refund requires separate operator
 approval. An install retry cannot charge for a second principal.
 
-New grants default to Root-sponsored work. Set `creation_payer = "requester"` on the pool to require reimbursement. The PLS5 ledger requires a fresh Root. Platform Runtime 0.23.25 supplies
+Every dynamic allocation charges its requester. The pool’s lifetime creation budget covers the sum of accepted charges on reserve hits and misses. Platform Runtime 0.23.25 supplies
 `cost_create_canister`, `msg_cycles_available` and `msg_cycles_accept` for
 requester-funded admission. Root currently records a fresh spare's principal
 without observing its working balance. A reimbursement quote requires an actual
 balance observation. The retained zero creation attachment on a reserve hit
 measures the cost of Root’s create dispatch alone.
-The operator chooses one creation payer per pool grant. All allocations under
-that grant are either Root-sponsored or requester-funded. For a requester-funded
-reserve hit, Root reserves the exact spare for the original request before
+On a reserve hit, Root reserves the exact spare for the original request before
 observing its balance. The hub settles the quote with an unbounded-wait call to
 its retained Root. Retain the attachment and refund against the same request.
 A bounded-wait call can lose unaccepted cycles on `SYS_UNKNOWN`. [IC message execution properties 10 and 11](https://docs.internetcomputer.org/references/message-execution-properties/#property-10)
+
+The funded placement client distinguishes an excessive local attachment, the original
+transport or codec error, and a decoded Root refusal. After a lost settlement reply,
+query the same demand and ceiling with zero attached cycles to recover its receipt.
+A project reads its acknowledged singleton locally by role. A closed directory, no
+acknowledged match and multiple matches are distinct lookup failures.
+
+Reserve handoff and refill errors distinguish an issued effect from a policy refusal.
+Inspect the retained phase on a lost reply. For ongoing funding, the parent reports
+a fully refunded deposit separately from an outstanding debit. The child retains
+the same payment sequence until the parent confirms it. Directory, shard-drain and
+role-issuance callers use the declared error variants to interpret remote replies.
 
 At the grant deadline an unpaid reservation releases the spare and refuses late
 settlement. A charged allocation retains its principal and receipt for recovery.
@@ -2685,7 +2727,7 @@ payer and allocation source have no bearing on later top-ups. Name-only entries
 from older configs declare eligibility without specifying an automated payment.
 Root can pay its directly installed named services. The operator binds the
 configured amounts, child principal, lifetime budget and deadline with
-`fleet canister plan-funding`, then submits that approval to Root. An exact
+`fleet canister plan-funding`, then submits that approval directly to the named payer. An exact
 retry preserves spent budget. Uncertain deposits close the grant and retain
 their exposure. For an application parent the approved path follows legacy
 `377fbce` (`workflow/runtime/cycles` and `workflow/rpc/request/handler/nonroot_cycles.rs`).
@@ -2697,7 +2739,7 @@ the edge requires revoking the live grant. An unresolved deposit retains its
 debit. Each parent retains at most the supported subnet child count in immutable
 grants. A new configuration file alone cannot replace a live budget. The
 installed witness checks payment replay, parent and child upgrades, external
-funding above the threshold, and revocation through Root.
+funding above the threshold, and revocation directly on the payer.
 [Funding qualification](../../qualification/canic-qualification/tests/store_root_tests/directory_tests/funding.rs)
 
 Keep Root as the management owner unless measured dispatch delay across
@@ -2743,7 +2785,7 @@ installs and checks readiness. Extend acquisition there: record whether the
 target came from creation or inventory and use the same subsequent installation.
 Keep the archived source allocation and debit evidence distinct from the new
 one. Reserve physical capacity on creation; reusing a held principal still
-requires a role grant but consumes no second physical slot or creation debit.
+requires a role grant and charges the requester for acquisition while occupying the existing physical slot.
 
 A worker can return to the reserve whether its original installation claimed an
 empty canister or spent the hub’s creation allowance. A directly created worker
@@ -2762,7 +2804,7 @@ The installed Miner Pool journey uses one fleet, one Root, one Store and one spa
 Claim it for a worker, install the approved release, drain and release it, then
 install another approved release on the same principal with a fresh generation.
 Root reopens before and after reuse. Two concurrent calls for the same
-growth request resolve the fresh generation under a zero creation budget.
+growth request resolve the fresh generation under the same bounded acquisition grant.
 A protected snapshot blocks reset. The installed reset fixture traps Root’s
 uninstall callback, observes the empty module and reopens Root with the
 original issued intent. Finishing and replaying reset leaves one available
@@ -2785,7 +2827,7 @@ Count claimable entries against that target. An issued creation reserves its
 debit and slot, and covers one outstanding deficit until its outcome is known.
 The subnet limit still counts held, allocated and uncertain capacity together.
 Declaring a target alone cannot spend cycles. Exact imported principals and
-returned assets can satisfy demand without a creation debit.
+returned assets supply capacity without a new management create. The requester still pays Root when it acquires one.
 
 Legacy `377fbce` retained Root and sequence for every creation and tested that
 an unresolved expiry never authorizes a retry

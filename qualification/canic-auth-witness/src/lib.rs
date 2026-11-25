@@ -10,6 +10,9 @@ mod profile;
 mod stable;
 
 pub use canic::auth::{enrollment, protocol};
+/// Open the profile backing used by the installed witness and its offline recovery check.
+#[cfg(feature = "profile")]
+pub use canic_profile_worker::storage::open as open_profiles;
 use ic_auth_protocol_types::{AudienceId, CanonicalId};
 use serde::{Deserialize, Serialize};
 

@@ -17,18 +17,14 @@ inspection = [
     "canic/inspection",
     "canic/role-verification",
     "ex-user-directory-schema/inspection",
-    "dep:ex-user-directory-hub",
-    "dep:ex-user-directory-shard",
 ]
 backup = ["canic-host/backup", "dep:ic-backup", "dep:ic-host-sign"]
-profile-state = ["dep:canic-profile-worker", "dep:ic-storage"]
+profile-state = ["canic-auth-witness/profile", "dep:canic-profile-worker", "dep:ic-storage"]
 
 [dependencies]
 canic = { workspace = true, features = ["method"] }
 canic-profile-worker = { workspace = true, optional = true }
 ex-counter.workspace = true
-ex-user-directory-hub = { workspace = true, optional = true }
-ex-user-directory-shard = { workspace = true, optional = true }
 ic-backup = { workspace = true, optional = true }
 ic-host-artifacts.workspace = true
 ic-host-sign = { workspace = true, optional = true }
@@ -49,7 +45,9 @@ canic-management-protocol = { workspace = true, features = ["backup"] }
 canic-profile-protocol.workspace = true
 clap.workspace = true
 ex-miner-pool-hub.workspace = true
+ex-user-directory-hub.workspace = true
 ex-user-directory-schema.workspace = true
+ex-user-directory-shard.workspace = true
 ic-auth.workspace = true
 ic-auth-protocol-types.workspace = true
 ic-host-process.workspace = true

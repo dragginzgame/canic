@@ -13,7 +13,7 @@ use canic::{
 use std::time::Duration;
 
 pub(super) async fn prepare(root: &Client<'_>) -> Vec<u8> {
-    root.update::<_, Result<ic_wire::Bytes<32>, String>>(
+    root.update::<_, Result<ic_wire::Bytes<32>, canic::topology::attestation::RoleError>>(
         "prepare_role_key",
         ic_wire::method_id("prepare_role_key"),
         &(),
@@ -218,7 +218,7 @@ pub(super) async fn exercise(
                 &ic_platform_crypto::ed25519::Signature::from_slice(signature.as_slice()).unwrap(),
             )
             .unwrap();
-        let closed: Result<u64, String> = issuer
+        let closed: Result<u64, canic::topology::attestation::RoleError> = issuer
             .update(
                 "close_role_issuance",
                 id("close_role_issuance"),
@@ -226,7 +226,10 @@ pub(super) async fn exercise(
                 limits,
             )
             .await;
-        assert_eq!(closed, Err("shared shard required".into()));
+        assert_eq!(
+            closed,
+            Err(canic::topology::attestation::RoleError::NotShard)
+        );
         // The sender reopens with an empty volatile cache and renews for the same generation.
         canic_qualification::upgrade_stopped(
             pic,
@@ -305,14 +308,17 @@ pub(super) async fn exercise(
         .unwrap_err();
     assert!(refusal.to_string().contains("role refused"), "{refusal}");
     let unrelated = pic.create_canister().await;
-    let denied: Result<Proof, String> = Client {
+    let denied: Result<Proof, canic::topology::attestation::RoleError> = Client {
         pic,
         id: issuer.id,
         operator: unrelated,
     }
     .update("issue_role", id("issue_role"), &receiver.id, limits)
     .await;
-    assert_eq!(denied.err().as_deref(), Some("unassigned caller"));
+    assert_eq!(
+        denied.err().unwrap(),
+        canic::topology::attestation::RoleError::Unassigned
+    );
     child
         .update::<_, Result<u64, String>>(
             "renew_role",
@@ -382,7 +388,7 @@ pub(super) async fn exercise(
     let copy = retained(child.id).await;
     let close = async |generation| {
         issuer
-            .update::<_, Result<u64, String>>(
+            .update::<_, Result<u64, canic::topology::attestation::RoleError>>(
                 "close_role_issuance",
                 id("close_role_issuance"),
                 &(child.id, generation),
@@ -392,7 +398,7 @@ pub(super) async fn exercise(
     };
     assert_eq!(
         close(ic_wire::Bytes::<32>::new(vec![0; 32]).unwrap()).await,
-        Err("assignment changed".into())
+        Err(canic::topology::attestation::RoleError::GenerationChanged)
     );
     let request = |method, input: &(CanisterId, ic_wire::Bytes<32>)| {
         ic_wire::encode(
@@ -425,7 +431,7 @@ pub(super) async fn exercise(
     )
     .unwrap();
     assert!(
-        pic.update_call(issuer.id, owner, "observe_application_children", custody)
+        pic.update_call(issuer.id, owner, "observe_root_custody", custody)
             .await
             .is_err()
     );
@@ -433,17 +439,84 @@ pub(super) async fn exercise(
         allocation: allocation.clone(),
         shard: copy.0.subject,
     };
-    let codec = artifacts().join("role-root.client");
-    let command = async |args: Vec<String>| {
+    let command = async |target: CanisterId, codec: &str, args: Vec<String>| {
+        let codec = artifacts().join(codec);
         let request = canic_host::application::codec::encode(&codec, &args).unwrap();
         let bytes = pic
-            .update_call(issuer.id, owner, &request.method, request.arguments)
+            .update_call(target, owner, &request.method, request.arguments)
             .await
             .unwrap();
 
         canic_host::application::codec::decode(&codec, &bytes).unwrap()
     };
-    let inspect = async || command(vec!["inspect-shard".into(), child.id.to_text()]).await;
+    let inspect = async || {
+        command(
+            hub,
+            "hub.client",
+            vec!["observe-shard".into(), child.id.to_text()],
+        )
+        .await
+    };
+    use canic::sharding::{
+        BeginShardDrain, ObserveShard, ReleaseChildAllocation, ReleaseError, ShardError,
+    };
+    for caller in [project, issuer.id] {
+        let reply = pic
+            .update_call(
+                hub,
+                caller,
+                ObserveShard::NAME,
+                ObserveShard::encode_request(&target.shard).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            ObserveShard::decode_reply(&reply).unwrap(),
+            Err(ShardError::Unauthorized)
+        );
+        let reply = pic
+            .update_call(
+                hub,
+                caller,
+                BeginShardDrain::NAME,
+                BeginShardDrain::encode_request(&target).unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            BeginShardDrain::decode_reply(&reply).unwrap(),
+            Err(ShardError::Unauthorized)
+        );
+    }
+    let reply = pic
+        .update_call(
+            issuer.id,
+            project,
+            ReleaseChildAllocation::NAME,
+            ReleaseChildAllocation::encode_request(&(target.shard, target.allocation.clone()))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        ReleaseChildAllocation::decode_reply(&reply).unwrap(),
+        Err(ReleaseError::Unauthorized)
+    );
+    let mut stale = target.allocation.clone();
+    stale.generation[0] ^= 1;
+    let reply = pic
+        .update_call(
+            issuer.id,
+            hub,
+            ReleaseChildAllocation::NAME,
+            ReleaseChildAllocation::encode_request(&(target.shard, stale)).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        ReleaseChildAllocation::decode_reply(&reply).unwrap(),
+        Err(ReleaseError::UnknownAllocation)
+    );
     let observed = inspect().await;
     assert_eq!(observed["draining"], false);
     assert_eq!(observed["live_placements"], 2);
@@ -454,7 +527,7 @@ pub(super) async fn exercise(
         observed["slot"].to_string(),
         observed["generation"].as_str().unwrap().into(),
     ];
-    let drain = async || command(drain_request.clone()).await;
+    let drain = async || command(hub, "hub.client", drain_request.clone()).await;
     let release = async |key: u8, target: canic::sharding::ShardTarget| {
         receiver
             .update::<_, Result<(), String>>(
@@ -473,7 +546,7 @@ pub(super) async fn exercise(
     assert_eq!(inspect().await["draining"], true);
     assert_eq!(
         close(copy.0.generation.clone()).await,
-        Err("empty draining shard required".into())
+        Err(canic::topology::attestation::RoleError::NotDrained)
     );
     let place = async |key| {
         super::capacity::place(&receiver, Some("users"), key)
@@ -495,7 +568,7 @@ pub(super) async fn exercise(
             )
             .await
             .unwrap();
-        ic_wire::decode::<Result<(u64, u32), String>>(
+        ic_wire::decode::<Result<(u64, u32), canic::topology::attestation::RoleError>>(
             &bytes,
             ic_wire::Encoding::Frame {
                 method: id("retirement_status"),
@@ -507,7 +580,7 @@ pub(super) async fn exercise(
     };
     assert_eq!(
         retirement_status().await,
-        Err("role issuance remains open".into())
+        Err(canic::topology::attestation::RoleError::Open)
     );
     pic.advance_time(Duration::from_secs(7201)).await;
     pic.tick().await;
@@ -548,7 +621,7 @@ pub(super) async fn exercise(
         child.id.to_text(),
         observed["generation"].as_str().unwrap().into(),
     ];
-    let closed = command(close_request.clone()).await;
+    let closed = command(issuer.id, "role-root.client", close_request.clone()).await;
     let deadline: u64 = closed["proof_deadline_ns"]
         .as_str()
         .unwrap()
@@ -564,7 +637,10 @@ pub(super) async fn exercise(
     )
     .await
     .unwrap();
-    assert_eq!(command(close_request).await, closed);
+    assert_eq!(
+        command(issuer.id, "role-root.client", close_request).await,
+        closed
+    );
     assert_eq!(renew(&child).await, Err("role issuance closed".into()));
     assert_eq!(retirement_status().await, Ok((deadline, 0)));
     assert_eq!(place(1u8).await, Placement::Full);
@@ -614,13 +690,13 @@ pub(super) async fn exercise(
     assert_eq!(observe().await, binding);
     // Neither a dormant receipt nor restarting its Root releases this principal.
     let standby = async || {
-        use canic::sharding::standby::InspectStandby;
+        use canic::sharding::standby::ObserveStandby;
         issuer
-            .update::<_, <InspectStandby as Contract>::Output>(
-                InspectStandby::NAME,
-                InspectStandby::ID,
+            .update::<_, <ObserveStandby as Contract>::Output>(
+                ObserveStandby::NAME,
+                ObserveStandby::ID,
                 &(),
-                InspectStandby::REPLY,
+                ObserveStandby::REPLY,
             )
             .await
     };
@@ -639,7 +715,7 @@ pub(super) async fn exercise(
     assert!(standby().await.is_empty());
     use canic::sharding::standby::ResetWorker;
     let dispatch_until = pic.get_time().await.as_nanos_since_unix_epoch() + 60_000_000_000;
-    let worker_reset: Result<_, String> = issuer
+    let worker_reset = issuer
         .update::<_, <ResetWorker as Contract>::Output>(
             ResetWorker::NAME,
             ResetWorker::ID,
@@ -647,10 +723,10 @@ pub(super) async fn exercise(
             ResetWorker::REQUEST,
         )
         .await;
-    assert_eq!(
-        worker_reset.unwrap_err(),
-        "released worker allocation required"
-    );
+    assert!(matches!(
+        worker_reset,
+        Err(canic::sharding::standby::ReserveError::WrongAsset(_))
+    ));
     canic_qualification::upgrade_stopped(pic, child.id, wasm, vec![], Some(issuer.id))
         .await
         .unwrap();
@@ -667,6 +743,8 @@ pub(super) async fn exercise(
         .await
         .unwrap();
     let install = ServiceInstall {
+        funding_operator: None,
+        hub_operator: None,
         name: "replacement".into(),
         role: "worker".into(),
         application: vec![],

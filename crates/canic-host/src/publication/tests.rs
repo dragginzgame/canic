@@ -264,23 +264,22 @@ fn publication_rejects_conflicting_authority_and_retains_an_exact_read_contract(
     assert!(old.digest().is_err());
     let deadline = crate::now().unwrap() + wire::MAX_WINDOW_NS;
     let read = observation(&plan, deadline).unwrap();
-    let request: wire::Request = ic_wire::decode(
+    assert_eq!(read.method, "observe_store");
+    let wire::ObservationRequest::ReleaseStatus(request) = ic_wire::decode(
         &read.args,
         ic_wire::Encoding::Frame {
-            method: wire::EXECUTE,
+            method: wire::OBSERVATION,
             direction: ic_wire::Direction::Request,
         },
-        wire::REQUEST_LIMITS,
+        canic_management_protocol::LIMITS,
     )
-    .unwrap();
-    assert_eq!(
-        read.canister.to_text(),
-        plan.publication().unwrap().root.canister
-    );
-    assert_eq!(request.store, plan.publication().unwrap().store.canister);
-    assert!(
-        matches!(request.command, Command::Observe(release) if release == plan.publication().unwrap().release)
-    );
+    .unwrap() else {
+        panic!("expected release status")
+    };
+    let publication = plan.publication().unwrap();
+    assert_eq!(read.canister.to_text(), publication.root.canister);
+    assert_eq!(request.store, publication.store.canister);
+    assert_eq!(request.release, publication.release);
     let step = dir.join(&id).join("publication/prepare");
     let first = step_deadline(&step, &plan).unwrap();
     assert_eq!(step_deadline(&step, &plan).unwrap(), first);

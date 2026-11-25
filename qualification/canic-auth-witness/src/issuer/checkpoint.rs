@@ -27,7 +27,7 @@ pub(crate) fn open(runtime: &MemoryRuntime<DefaultMemoryImpl>, fresh: bool) {
     let engine = if fresh {
         Engine::new_fresh(lease, config(), now)
     } else {
-        Engine::reopen(lease, config(), now)
+        Engine::reopen(lease, config(), now, api::canister_version())
     }
     .expect("open qualification issuer");
     initialize(engine);
@@ -61,7 +61,7 @@ pub(crate) fn seal() {
     STATE.with_borrow_mut(|slot| {
         let s = slot.as_mut().expect("stable issuer must be open to seal");
         s.engine
-            .seal()
+            .seal(api::canister_version())
             .unwrap_or_else(|err| api::trap(&format!("issuer checkpoint: {err:?}")));
         let bytes = ic_wire::encode(
             &(s.account, s.authority, s.allowed, s.signatures),

@@ -14,6 +14,8 @@ use serde::Serialize;
 pub enum FleetPlanning {
     /// Offline review of a pool grant for supplied infrastructure. Creates no journal operation.
     ShardPool {
+        /// Exact configure_shard_routes request to the hub in the creation approval.
+        routes: crate::PoolGrant<(String, u32)>,
         /// Shared ceiling to approve before pool growth.
         #[serde(skip_serializing_if = "Option::is_none")]
         capacity: Option<crate::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
@@ -26,13 +28,15 @@ pub enum FleetPlanning {
         network: crate::Network,
         /// Proposed controller, without verification of on-chain authority.
         controller: String,
-        /// Complete input to the bound Root's configure_shards endpoint.
+        /// Complete input to the bound Root’s approve_child_creation endpoint.
         approval: Box<canic_management_protocol::stored::ShardPool>,
         /// Exact Wire request bytes for the bound Root, ready for local qualification.
         request: Vec<u8>,
     },
     /// Independent pool approvals for a fleet with dedicated instances.
     PlacementPools {
+        /// Direct hub configuration indexed by the creation grant’s pool.
+        routes: std::collections::BTreeMap<String, crate::PoolGrant<(String, u32)>>,
         /// Shared ceiling to approve before pool growth.
         #[serde(skip_serializing_if = "Option::is_none")]
         capacity: Option<crate::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
@@ -222,11 +226,18 @@ pub(super) fn plan(
                 })
             })
             .transpose()?;
+        let arguments = selected.service_install(&desired.root.controller, Vec::new())?;
+        let version = if arguments.is_some() {
+            if source.is_some() { 8 } else { 6 }
+        } else {
+            desired.root.version
+        };
         let addition = Plan {
+            version,
             artifact: selected.artifact.clone(),
             deployment: Some(selected.deployment.clone()),
             action: PlanAction::CreateChild(crate::ManagedOwner {
-                arguments: None,
+                arguments,
                 blob_attempt: None,
                 root,
                 root_module,

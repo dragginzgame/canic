@@ -54,10 +54,18 @@ fn supply_root(app: &mut AppConfig, store: bool) {
                 !fleet.auth.is_empty() || fleet.receiver_policy.is_some(),
             ),
             ("role-issuer", !fleet.role_receivers.is_empty()),
-            ("child-funding", !fleet.top_up_children.is_empty()),
-            ("registry", fleet.registry.is_some()),
-            ("shard-pool", !fleet.shard_pools.is_empty()),
-            ("worker-pool", !fleet.worker_pools.is_empty()),
+            (
+                "child-funding",
+                fleet.top_up_children.iter().any(|edge| {
+                    slots.get(edge.child()).and_then(|c| c.parent.as_deref()) == Some("root")
+                }),
+            ),
+            (
+                "child-creation",
+                fleet.registry.is_some()
+                    || !fleet.shard_pools.is_empty()
+                    || !fleet.worker_pools.is_empty(),
+            ),
             (
                 "reserve-pool",
                 fleet.standby_pool.is_some()

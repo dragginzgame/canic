@@ -348,7 +348,7 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
         "fresh enrollment cannot revive lost Auth state"
     );
     let backing = VectorMemory::new(std::cell::RefCell::new(after));
-    let state = canic_profile_worker::storage::open(backing, false);
+    let state = canic_auth_witness::open_profiles(backing, false);
     assert_eq!(state.get(key(8).as_slice(), 1), Ok(profile(8, 1, "Alice")));
     assert_eq!(
         state.get(key(10).as_slice(), 2),

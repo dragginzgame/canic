@@ -28,7 +28,7 @@ async fn remove(root: &Client<'_>, input: &RemovalRequest) -> wire::RemovalReply
 
 async fn publish(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> wire::Reply {
     root.update(
-        "store_publication",
+        "publish_store_artifact",
         wire::EXECUTE,
         &wire::Request {
             store: supplier.id.to_text(),
@@ -117,14 +117,14 @@ async fn root_removal_keeps_pins_labels_and_exact_identity_before_expired_author
     let settled = remove(&root, &input).await.unwrap();
     assert_eq!(settled, removed);
     assert_eq!(
-        publish(&root, &supplier, Command::Observe(shared.release.clone()))
+        super::publication_tests::observe_release(&root, &supplier, shared.release.clone())
             .await
             .unwrap()
             .manifest,
         shared
     );
     assert_eq!(
-        publish(&root, &supplier, Command::Observe(removed.release.clone())).await,
+        super::publication_tests::observe_release(&root, &supplier, removed.release.clone()).await,
         Err(Error::Store(store::Error::NotFound))
     );
     let wire::Observation::Info(info) = root
@@ -155,7 +155,7 @@ async fn root_removal_keeps_pins_labels_and_exact_identity_before_expired_author
     assert!(restored.published); // Shared live alias retained the verified bytes.
     assert_eq!(remove(&root, &input).await, Err(Error::Expired));
     assert_eq!(
-        publish(&root, &supplier, Command::Observe(removed.release.clone()))
+        super::publication_tests::observe_release(&root, &supplier, removed.release.clone())
             .await
             .unwrap(),
         restored
@@ -243,7 +243,7 @@ async fn root_cancellation_preserves_tombstone_and_lost_reply_never_becomes_a_re
     // Store committed, but no successful removal reply was retained. Do not restore
     // or dispatch a replacement removal merely because this observation says absent.
     assert_eq!(
-        publish(&root, &supplier, Command::Observe(input.manifest.release)).await,
+        super::publication_tests::observe_release(&root, &supplier, input.manifest.release).await,
         Err(Error::Store(store::Error::NotFound))
     );
     assert_eq!(

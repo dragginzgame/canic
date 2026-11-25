@@ -4,7 +4,7 @@ wasm_store = true
 [apps.ex-user-directory.canisters.ex-user-directory-hub]
 role = "user_hub"
 wasm = "artifacts/user_hub.wasm"
-build = { manifest = "../../../Cargo.toml", package = "ex-user-directory-hub" }
+build = { manifest = "../../../Cargo.toml", package = "ex-user-directory-hub", features = ["operator-client"], client = "ex-user-directory-hub-client" }
 
 [apps.ex-user-directory.canisters.ex-user-directory-shard]
 role = "user_shard"

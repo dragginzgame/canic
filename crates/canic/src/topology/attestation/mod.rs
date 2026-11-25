@@ -3,6 +3,66 @@ use crate::method::{Contract, wire};
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
+/// Root role issuance or retirement refusal
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+pub enum RoleError {
+    /// Controller permission required.
+    Unauthorized,
+    /// IC entropy unavailable.
+    EntropyUnavailable,
+    /// Canister receiver required.
+    InvalidReceiver,
+    /// Caller has no ready role assignment.
+    Unassigned,
+    /// The original installation is currently unavailable.
+    Unavailable,
+    /// The retained grant and installation disagree.
+    InvalidBinding,
+    /// Issuance is still open for this generation.
+    Open,
+    /// Invalid role claim.
+    InvalidClaim,
+    /// Role issuance closed.
+    Closed,
+    /// Role key unavailable.
+    KeyUnavailable,
+    /// Invalid installation generation.
+    InvalidGeneration,
+    /// Shared shard required.
+    NotShard,
+    /// Assignment changed.
+    GenerationChanged,
+    /// Empty draining shard required.
+    NotDrained,
+    /// Retirement capacity exhausted.
+    Capacity,
+}
+
+impl std::fmt::Display for RoleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Unauthorized => "Controller permission required",
+            Self::EntropyUnavailable => "IC entropy unavailable",
+            Self::InvalidReceiver => "Canister receiver required",
+            Self::Unassigned => "Caller has no ready role assignment",
+            Self::Unavailable => "assignment unavailable",
+            Self::InvalidBinding => "invalid placement binding",
+            Self::Open => "role issuance remains open",
+            Self::InvalidClaim => "Invalid role claim",
+            Self::Closed => "role issuance closed",
+            Self::KeyUnavailable => "Role key unavailable",
+            Self::InvalidGeneration => "Invalid installation generation",
+            Self::NotShard => "Shared shard required",
+            Self::GenerationChanged => "Assignment changed",
+            Self::NotDrained => "Empty draining shard required",
+            Self::Capacity => "Retirement capacity exhausted",
+        })
+    }
+}
+
+impl std::error::Error for RoleError {}
+
 /// Maximum lifetime and default retirement waiting period, in nanoseconds.
 pub const LIFETIME_NS: u64 = 7_200_000_000_000;
 
@@ -81,7 +141,7 @@ impl Contract for CloseRoleIssuance {
     const ID: u64 = wire::method_id(Self::NAME);
     type Input = (Principal, wire::Bytes<32>);
     /// Original proof expiry ceiling in IC nanoseconds.
-    type Output = Result<u64, String>;
+    type Output = Result<u64, RoleError>;
 }
 
 /// Recover the installing Root's stable Ed25519 public key.
@@ -90,7 +150,7 @@ impl Contract for PrepareRoleKey {
     const NAME: &'static str = "prepare_role_key";
     const ID: u64 = wire::method_id(Self::NAME);
     type Input = ();
-    type Output = Result<wire::Bytes<32>, String>;
+    type Output = Result<wire::Bytes<32>, RoleError>;
 }
 
 /// One replicated request by the actual shard for a proof addressed to a receiver.
@@ -99,7 +159,7 @@ impl Contract for Issue {
     const NAME: &'static str = "issue_role";
     const ID: u64 = wire::method_id(Self::NAME);
     type Input = Principal;
-    type Output = Result<Proof, String>;
+    type Output = Result<Proof, RoleError>;
 }
 
 /// A receiver's trusted installing Root and its approved Ed25519 verifying key.

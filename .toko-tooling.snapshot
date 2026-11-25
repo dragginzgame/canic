@@ -1,9 +1,9 @@
 # Toko Tooling snapshot v1
-# version	0.46.3
+# version	0.46.4
 # layout	vendor
 format	1
 source	https://crates.io/crates/toko-tooling
-revision	3f6d677af6c5ed88e3ba9ccf4d7b0c2eaad5f0fc49f0ad5b697e412ea4be600e
+revision	d3889bff0f8ff6dc8c80b161c908f4b598125b55bf55f18146471f9ac3294cff
 # entrypoint	TOKO-TOOLING.md
 # entrypoint	vendor/toko-tooling/make/consumer.mk
 # entrypoint	vendor/toko-tooling/make/cargo-dependencies.mk
@@ -18,7 +18,7 @@ revision	3f6d677af6c5ed88e3ba9ccf4d7b0c2eaad5f0fc49f0ad5b697e412ea4be600e
 # entrypoint	vendor/toko-tooling/scripts/ci/run-validation-stage.pl
 # entrypoint	vendor/toko-tooling/scripts/ci/SetupDiagnostics.pm
 # entrypoint	vendor/toko-tooling/scripts/ci/check-api-baseline.sh
-file	74a31e560650f34b70e1d8f40131c78c9bc7f9c39e2e36bf6bcbcfdec06e38ae	-	TOKO-TOOLING.md
+file	500328533f1ebd35729fca7dc4fa7ecfbf7a1b96d507f433edc9477c0d95e7ce	-	TOKO-TOOLING.md
 file	e5be6f538ee619be119aef9b3fca9d156f35c08732d9775e4e2efd698db8cbd7	-	vendor/toko-tooling/make/consumer.mk
 file	07b59f8cc784c79c648d379561f2493e40bac5b7c2809e8eda960cba661fae7d	-	vendor/toko-tooling/make/cargo-dependencies.mk
 file	1085e5521dfacb38aed065b70f905aab666ab73ef49dd5a25270c2ec2cf63710	x	vendor/toko-tooling/.githooks/pre-commit
@@ -27,7 +27,7 @@ file	6b93b0a15bed59a00eb3bdace46b76ee360c396872702bb4182ad12b9bb4a29c	-	vendor/t
 file	31c47b675fba90850681c6fac0d685def34b08a68e7e05bc55ae0403419fdf82	x	vendor/toko-tooling/scripts/dev/prepare-rust-toolchain.sh
 file	e0f1b194ddbe5e5ae35864edc67727993511e093cff07506b4ffa503681edd52	x	vendor/toko-tooling/scripts/ci/install-ci-tool.sh
 file	9b6997e3549c9a45220e6aa7d0a34082e3898acbc95811f01da88a58511251c5	x	vendor/toko-tooling/scripts/ci/check-dependency-pins.sh
-file	3f2971bfefccf71cf4929cabd1fa000e0c7b3d4002b9a08ca58821ccb048c123	-	LICENSE.md
+file	63d84bafd72c8e09a4f63e53f3da8b90c59c240e95a7e6cf2804f65fa2fceab2	-	LICENSE.md
 file	f83e4bd3143a04e954f77eb23d38b1924658aa298b0c1d3486748197861d696d	-	vendor/toko-tooling/make/cargo-publication.mk
 file	33c006822ca31a883ace2f59659a4d172f44210d1e28a008912278eaa37c52be	x	vendor/toko-tooling/scripts/ci/run-validation-stage.pl
 file	5c4b137ef1c611246d62a033b5f3f35acdf377ca1a5153c595d28fe4b0db644a	-	vendor/toko-tooling/scripts/ci/SetupDiagnostics.pm

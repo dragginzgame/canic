@@ -135,6 +135,65 @@ impl FleetConfig {
             })
     }
 
+    pub(crate) fn route_operator_role(&self, name: &str) -> Option<&str> {
+        self.shard_pools
+            .iter()
+            .any(|pool| {
+                self.canisters
+                    .get(&pool.component)
+                    .and_then(|c| c.parent.as_deref())
+                    == Some(name)
+            })
+            .then(|| self.canisters.get(name)?.role.as_deref())
+            .flatten()
+    }
+
+    pub(crate) fn funding_operator_role(&self, name: &str) -> Option<&str> {
+        self.top_up_children
+            .iter()
+            .any(|edge| {
+                self.canisters
+                    .get(edge.child())
+                    .and_then(|c| c.parent.as_deref())
+                    == Some(name)
+            })
+            .then(|| self.canisters.get(name)?.role.as_deref())
+            .flatten()
+    }
+
+    /// Bind route and payment administration to the operator named by this fresh installation.
+    /// Returns the application payload directly for a component without a shard pool.
+    /// # Errors
+    /// Refuses an invalid operator or a service declaration exceeding the install budget.
+    pub fn bind_hub_operator(
+        &self,
+        name: &str,
+        operator: &str,
+        application: Vec<u8>,
+    ) -> Result<Vec<u8>> {
+        let Some(role) = self
+            .route_operator_role(name)
+            .or_else(|| self.funding_operator_role(name))
+        else {
+            return Ok(application);
+        };
+        canic::topology::directory::ServiceInstall {
+            hub_operator: self
+                .route_operator_role(name)
+                .map(|_| crate::network::principal(operator))
+                .transpose()?,
+            funding_operator: self
+                .funding_operator_role(name)
+                .map(|_| crate::network::principal(operator))
+                .transpose()?,
+            name: name.into(),
+            role: role.into(),
+            application,
+        }
+        .encode()
+        .map_err(invalid)
+    }
+
     /// Bind the DB incarnation and verified issuer independently inside the Auth install.
     /// # Errors
     /// Refuses an unselected service, invalid nonce, invalid Root or Auth policy.
@@ -144,6 +203,7 @@ impl FleetConfig {
         root: &str,
         nonce: &[u8],
         issuer_key: [u8; 32],
+        operator: &str,
     ) -> Result<Vec<u8>> {
         use canic::topology::directory::{DbService, ServiceInstall};
         if !self.role_receivers.iter().any(|service| service == name) {
@@ -159,6 +219,14 @@ impl FleetConfig {
             .map_err(|_| invalid("DB service needs a 16-byte installation nonce"))?;
         let application = DbService { nonce, issuer_key }.encode().map_err(invalid)?;
         let service = ServiceInstall {
+            funding_operator: self
+                .funding_operator_role(name)
+                .map(|_| crate::network::principal(operator))
+                .transpose()?,
+            hub_operator: self
+                .route_operator_role(name)
+                .map(|_| crate::network::principal(operator))
+                .transpose()?,
             name: name.into(),
             role,
             application,

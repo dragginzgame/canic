@@ -394,7 +394,10 @@ This section supersedes older linked guidance permitting new maintained imports.
   `private: true`. Retain the canonical contribution policy. An unpublished
   helper in a licensed repository still inherits that repository's licence;
   publication flags alone do not determine licence coverage or confidentiality.
-- Do not retain nested licence files, alternate licences, `licenses/` trees or
+- Toko Tooling keeps issued historical versions unchanged under `licenses/`
+  to identify earlier grants. Only the root licence applies to newly designated
+  material. Consumers select the root licence from their reviewed release.
+- Apart from that producer archive, do not retain nested licence files, alternate licences, `licenses/` trees or
   duplicate contribution policies in tracked source, including vendored tooling
   snapshots. Package metadata points to the root licence; a standalone package
   archive may include the canonical licence where its packaging requires it,
@@ -407,7 +410,7 @@ This section supersedes older linked guidance permitting new maintained imports.
   `"../LICENSE.md"`, pointing to the same repository-root file. Resolve the path
   from the owning workspace, never by repeating member-relative paths or adding
   nested licence copies. Use `license-file`, not a separate `license` expression.
-- Apart from these canonical files, required notices and factual metadata or
+- Apart from these canonical files, the producer archive, required notices and factual metadata or
   links to them, do not retain legal material in repository files. This includes
   legal audits, opinions, exposure assessments, drafting history, superseded
   drafts, signed agreements and legal commentary in docs, source comments,
@@ -783,6 +786,9 @@ These rules apply to handwritten and generated Rust.
   adjacent methods, tests and test helpers. Keep comments and attributes attached
   to their item. Give each named argument its own line in multi-argument endpoint
   mounts and attributes. Document each mount’s role and each guard’s access policy.
+- Omit comments that merely announce an inherited default or narrate an obvious
+  operation. Explain a choice when its reason or caller-visible effect is hard
+  to infer from the code.
 - In longer function bodies, separate distinct steps with one blank line.
   Keep closely related statements together. When a comment introduces the next
   step, put the blank line above the comment and keep the code directly below it.
@@ -805,11 +811,10 @@ These rules apply to handwritten and generated Rust.
   `//` comment block. Put the exact Rust function name alone on the first line
   and its caller-visible behavior on the second. Include `// scope  :` only
   when a session scope is required and `// guard  :` only when an explicit
-  admission guard applies. If both apply, list the scope first. Always end
-  the header with `// limits :` for the request and reply budgets.
-  Write `default` when both use the framework defaults. For overrides, name
-  the configured limits or contract and distinguish request from reply when
-  they differ. Describe any caller-visible work bound or handler-level
+  admission guard applies. If both apply, list the scope first. Include a final
+  `// limits :` line only when the endpoint overrides a framework request or
+  reply budget. Identify the affected direction and its configured limit or
+  contract. Describe any caller-visible work bound or handler-level
   authorization in the behavior line. A guard can restrict an unscoped
   endpoint, and a scoped endpoint can also require a guard.
   Generate the same comments in endpoint templates.

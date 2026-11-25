@@ -107,14 +107,8 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
         })
         .await;
     }
-    let expected: Result<store::Custody, store::Error> = supplier
-        .update(
-            "observe_custody",
-            store::CUSTODY,
-            &first.release,
-            STORE_LIMITS,
-        )
-        .await;
+    let expected: Result<store::Custody, store::Error> =
+        supplier.release_custody(&first.release).await;
     let expected = expected.unwrap();
     assert_eq!(expected.pins.len(), 2);
     assert_eq!(expected.pins[0].owner, root.operator.as_slice());
@@ -134,14 +128,8 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
         )
         .await
         .unwrap();
-    let staged: Result<store::Custody, store::Error> = supplier
-        .update(
-            "observe_custody",
-            store::CUSTODY,
-            &pending.release,
-            STORE_LIMITS,
-        )
-        .await;
+    let staged: Result<store::Custody, store::Error> =
+        supplier.release_custody(&pending.release).await;
     let staged = staged.unwrap();
     assert!(!staged.status.published);
     assert_eq!(staged.status.missing, vec![0]);
@@ -238,11 +226,11 @@ async fn store_custody_observation_preserves_all_owners_without_root_copies() {
         pic.update_call(
             supplier.id,
             root.operator,
-            "observe_custody",
+            "observe",
             ic_wire::encode(
-                &first.release,
+                &store::Observe::Custody(first.release.clone()),
                 ic_wire::Encoding::Frame {
-                    method: store::CUSTODY,
+                    method: store::OBSERVE,
                     direction: ic_wire::Direction::Request
                 },
                 STORE_LIMITS
@@ -329,9 +317,10 @@ async fn store_readiness_follows_handover_without_reserving_an_application_slot(
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
     let (root, supplier) = fixture(pic).await;
-    let expected: store::Info = supplier
-        .update("observe_info", store::INFO, &(), STORE_LIMITS)
-        .await;
+    let store::Observation::Info(expected) = supplier.observe(&store::Observe::Info).await.unwrap()
+    else {
+        panic!("expected Store info")
+    };
     assert_eq!(expected.releases, 0);
     assert_eq!(expected.reserved_bytes, 0);
     let input = request(&root, &supplier).await;
@@ -357,11 +346,11 @@ async fn store_readiness_follows_handover_without_reserving_an_application_slot(
         pic.update_call(
             supplier.id,
             root.operator,
-            "observe_info",
+            "observe",
             ic_wire::encode(
-                &(),
+                &store::Observe::Info,
                 ic_wire::Encoding::Frame {
-                    method: store::INFO,
+                    method: store::OBSERVE,
                     direction: ic_wire::Direction::Request
                 },
                 STORE_LIMITS

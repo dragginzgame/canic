@@ -11,7 +11,7 @@ fn pending_allocations_stop_growth_at_the_default_ceiling() {
         key[..4].copy_from_slice(&ordinal.to_be_bytes());
         assert!(matches!(pools.acquisition(), Ok(Acquisition::Create)));
         pools.projects.push(ProjectClaim {
-            key,
+            request: key,
             generation: key,
             principal: None,
         });

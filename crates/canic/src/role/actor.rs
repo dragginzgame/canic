@@ -10,6 +10,7 @@ use std::cell::Cell;
 #[doc(hidden)]
 #[derive(Serialize, Deserialize)]
 pub struct HubConfig {
+    operator: Option<Principal>,
     nonce: [u8; 16],
     root: Principal,
     issuer: Principal,
@@ -89,9 +90,21 @@ pub fn decode_hub(input: &Install) -> Result<HubConfig, &'static str> {
         let bindings = topology::directory::DbService::decode(&service.application)?;
         (service, bindings)
     };
+    #[cfg(not(feature = "role-attestation"))]
+    let (operator, nonce) = if input.application.len() == 16 {
+        (None, nonce(&input.application)?)
+    } else {
+        crate::guard::require_sender(input.root)?;
+        let service = topology::directory::ServiceInstall::decode(&input.application)?;
+        (service.hub_operator, nonce(&service.application)?)
+    };
     let config = HubConfig {
+        #[cfg(feature = "role-attestation")]
+        operator: service.hub_operator,
         #[cfg(not(feature = "role-attestation"))]
-        nonce: nonce(&input.application)?,
+        operator,
+        #[cfg(not(feature = "role-attestation"))]
+        nonce,
         #[cfg(feature = "role-attestation")]
         nonce: bindings.nonce,
         #[cfg(feature = "role-attestation")]
@@ -164,7 +177,12 @@ pub fn open_hub(
             .expect("retained service trust");
         topology::attach_role_calls(config.root);
     }
-    crate::sharding::routes::open(&host, &roster, &owners, initial.as_ref().map(|c| c.root));
+    crate::sharding::routes::open(
+        &host,
+        &roster,
+        &owners,
+        initial.as_ref().map(|c| (c.root, c.operator)),
+    );
     ROOT.set(Some(config.root));
     (host, initial.map(|c| c.nonce))
 }

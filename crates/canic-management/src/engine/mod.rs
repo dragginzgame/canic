@@ -143,8 +143,6 @@ pub(crate) struct State {
     #[cfg(feature = "sharding")]
     pools: sharding::Pools,
     #[cfg(feature = "sharding")]
-    project_index: ic_storage::adapter::StableBTreeMap<canic::sharding::Key, u32>,
-    #[cfg(feature = "sharding")]
     worker_history: ic_storage::adapter::StableBTreeMap<[u8; 32], Vec<u8>>,
     #[cfg(feature = "role-issuer")]
     role_key: StableCell<Vec<u8>>,
@@ -233,17 +231,6 @@ pub fn open(fresh: bool, readiness: Readiness) {
         fresh.then(|| sharding::Pools::default().encode()),
     );
     #[cfg(feature = "sharding")]
-    let project_index = {
-        let lease = runtime
-            .open_memory(&ic_storage::StableKey::parse(crate::storage::PROJECT_INDEX_KEY).unwrap())
-            .expect("project claim index lease");
-        if fresh {
-            ic_storage::adapter::StableBTreeMap::create(lease)
-        } else {
-            ic_storage::adapter::StableBTreeMap::load(lease)
-        }
-    };
-    #[cfg(feature = "sharding")]
     let worker_history = {
         let lease = runtime
             .open_memory(&ic_storage::StableKey::parse(crate::storage::WORKER_HISTORY_KEY).unwrap())
@@ -266,8 +253,6 @@ pub fn open(fresh: bool, readiness: Readiness) {
 
         #[cfg(feature = "sharding")]
         worker_history,
-        #[cfg(feature = "sharding")]
-        project_index,
         #[cfg(feature = "sharding")]
         pool,
         artifact_cell,
@@ -562,8 +547,6 @@ pub fn stage(slot: ChildId, input: Stage) -> Result<Status, Refusal> {
 enum Origin {
     Permanent,
     #[cfg(feature = "sharding")]
-    Placement(sharding::Acquisition),
-    #[cfg(feature = "sharding")]
     Paid(sharding::Acquisition, u128),
 }
 
@@ -614,7 +597,7 @@ fn admit(
                 .acquisition()
                 .map_err(|_| Refusal::Occupied)
         })?,
-        Origin::Placement(acquisition) | Origin::Paid(acquisition, _) => acquisition,
+        Origin::Paid(acquisition, _) => acquisition,
     };
     #[cfg(feature = "sharding")]
     let attachment = u128::from(selected.attachment());

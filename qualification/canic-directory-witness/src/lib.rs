@@ -11,6 +11,9 @@ use ic_storage::DefaultMemoryImpl;
 mod evacuation;
 #[cfg(feature = "funding")]
 mod funding;
+#[cfg(feature = "funding")]
+#[path = "../../canic-shard-hub/src/paid_fixture.rs"]
+mod paid_fixture;
 mod peer;
 #[cfg(feature = "role-probe")]
 mod role_probe;
@@ -35,6 +38,8 @@ fn open(installation: Option<Installation>) {
             evacuation::KEYS[1],
             #[cfg(feature = "placement")]
             evacuation::KEYS[2],
+            #[cfg(feature = "placement")]
+            "hub.projects.v1",
             #[cfg(feature = "funding")]
             funding::KEY,
             #[cfg(feature = "role-probe")]
@@ -46,14 +51,32 @@ fn open(installation: Option<Installation>) {
     evacuation::open(
         &runtime,
         installation.as_ref().map(|i| match i {
-            Installation::Child(child) => child.root,
-            Installation::Service(_) => ic_platform_runtime::system::caller(),
+            Installation::Child(child) => (child.root, None),
+            Installation::Service(service) => {
+                (ic_platform_runtime::system::caller(), service.hub_operator)
+            }
         }),
+    );
+    #[cfg(feature = "placement")]
+    canic::sharding::registry::open(
+        &runtime,
+        "hub.projects.v1",
+        canic::sharding::routes::root(),
+        installation.is_some(),
     );
     #[cfg(feature = "funding")]
     {
         ic_timers::initialize().expect("timer runtime");
-        canic_management::funding::open(&runtime, funding::KEY, installation.is_some());
+        canic_management::funding::open(
+            &runtime,
+            funding::KEY,
+            installation.as_ref().map(|i| match i {
+                Installation::Service(service) => service.funding_operator,
+                Installation::Child(child) => ServiceInstall::decode(&child.application)
+                    .ok()
+                    .and_then(|s| s.funding_operator),
+            }),
+        );
     }
     #[cfg(feature = "role-probe")]
     let pin = installation.as_ref().map(|i| match i {
@@ -76,17 +99,21 @@ fn install_args(bytes: &[u8]) -> Result<Installation, &'static str> {
     // The inline fixture has one compiled role; Store-backed installs declare it.
     if bytes.is_empty() {
         return Ok(Installation::Service(ServiceInstall {
+            funding_operator: None,
+            hub_operator: None,
             name: "hub".into(),
             role: "hub".into(),
             application: vec![],
         }));
     }
     if let Ok(child) = Install::decode(bytes) {
-        return child
-            .application
-            .is_empty()
-            .then_some(Installation::Child(child))
-            .ok_or("expected empty witness payload");
+        if !child.application.is_empty() {
+            let binding = ServiceInstall::decode(&child.application)?;
+            if binding.role != child.role || !binding.application.is_empty() {
+                return Err("invalid witness child binding");
+            }
+        }
+        return Ok(Installation::Child(child));
     }
     let named = ServiceInstall::decode(bytes)?;
     if !(named.application.is_empty()
@@ -203,7 +230,7 @@ async fn attempt_delivery() -> Principal {
     )
     .await;
     match result {
-        Ok(Err(reason)) if reason == "unexpected topology sender" => target,
+        Ok(Err(canic::topology::directory::DirectoryError::Unauthorized)) => target,
         other => panic!("unexpected directory outcome: {other:?}"),
     }
 }
@@ -212,7 +239,6 @@ async fn attempt_delivery() -> Principal {
 #[cfg(feature = "placement")]
 #[canic::update(reply_limits = canic::sharding::LIMITS)]
 async fn place(request: (Option<String>, u8)) -> Result<canic::sharding::Placement, String> {
-    let root = DIRECTORY.with_borrow(|index| index.as_ref().expect("open hub").publisher());
     let (pool, key) = request;
     match pool {
         Some(pool) => canic::sharding::routes::assign_shard(
@@ -225,7 +251,7 @@ async fn place(request: (Option<String>, u8)) -> Result<canic::sharding::Placeme
             canic::sharding::routes::ReservationError::Placement(e) => e.to_owned(),
             canic::sharding::routes::ReservationError::Authorization(never) => match never {},
         }),
-        None => canic::sharding::assign_instance(root, [key; 32])
+        None => canic::sharding::registry::assign_instance([key; 32])
             .await
             .map_err(|error| format!("{error:?}")),
     }

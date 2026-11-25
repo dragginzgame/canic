@@ -16,13 +16,7 @@ fn hex(bytes: &[u8]) -> String {
 }
 
 async fn complete(root: &Client<'_>) -> custody::Root {
-    root.update(
-        "observe_root_custody",
-        custody::ROOT,
-        &(),
-        custody::ROOT_LIMITS,
-    )
-    .await
+    super::root_custody(root).await.root.current
 }
 
 #[tokio::test(flavor = "current_thread")]

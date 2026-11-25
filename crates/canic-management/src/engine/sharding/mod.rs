@@ -5,22 +5,22 @@ pub mod funding;
 pub mod payment;
 mod persistence;
 mod singleton;
-pub use singleton::{configure_singleton, request_singleton};
+pub use singleton::configure_singleton;
 pub mod standby;
 #[cfg(test)]
 mod tests;
 mod workers;
 pub use capacity::{configure_capacity, increase_pool};
-pub use drain::{begin_shard_drain, inspect_shard};
+pub use drain::release_child_allocation;
 pub(super) use persistence::{BYTES, open};
-pub use workers::{configure_workers, worker};
+pub use workers::{configure_workers, lookup_worker};
 
 use super::{STATE, api, delivery, snapshot};
 use crate::{
     placement::{self, score, select},
     storage::Artifact,
 };
-use canic::sharding::{Allocation, Key, Placement};
+use canic::sharding::{Allocation, Placement};
 use canic_management_protocol::{
     Approval, CREATION_CYCLES, Phase, Refusal,
     children::ChildId,
@@ -72,7 +72,7 @@ pub(super) struct Pools {
 
 #[derive(Serialize, Deserialize)]
 struct ProjectClaim {
-    key: Key,
+    request: [u8; 32],
     generation: [u8; 32],
     principal: Option<String>,
 }
@@ -88,14 +88,6 @@ impl Acquisition {
         match self {
             Self::Reserve { .. } => 0,
             Self::Create => CREATION_CYCLES,
-        }
-    }
-
-    fn approve(self, remaining_budget: u64) -> Result<super::Origin, Placement> {
-        if self.attachment() > remaining_budget {
-            Err(Placement::GrowthRefused)
-        } else {
-            Ok(super::Origin::Placement(self))
         }
     }
 }
@@ -136,23 +128,6 @@ impl Pools {
         self.quotes
             .values()
             .any(|q| q.index == Some(index) && api::time() < q.deadline)
-    }
-
-    fn source(
-        &self,
-        payer: stored::CreationPayer,
-        paid: Option<payment::Settlement>,
-        budget: u64,
-    ) -> Result<super::Origin, Placement> {
-        match (payer, paid) {
-            (stored::CreationPayer::Root, None) => self.acquisition()?.approve(budget),
-            (stored::CreationPayer::Requester, Some(settlement))
-                if settlement.source.attachment() <= budget =>
-            {
-                Ok(super::Origin::Paid(settlement.source, settlement.charge))
-            }
-            _ => Err(Placement::GrowthRefused),
-        }
     }
 
     fn pool_limit(&self) -> u8 {
@@ -271,27 +246,6 @@ impl Pools {
             })
     }
 
-    fn creation_debit(&self, slots: impl Iterator<Item = ChildId>) -> u64 {
-        slots
-            .filter(|slot| self.standby_claim(*slot).is_none())
-            .count() as u64
-            * CREATION_CYCLES
-    }
-
-    fn admit_growth(
-        &self,
-        slots: impl Iterator<Item = ChildId>,
-        budget: u64,
-        payer: stored::CreationPayer,
-        paid: Option<payment::Settlement>,
-    ) -> Result<super::Origin, Placement> {
-        self.source(
-            payer,
-            paid,
-            budget.saturating_sub(self.creation_debit(slots)),
-        )
-    }
-
     pub(super) fn capacity_approved(&self) -> bool {
         self.capacity.is_some()
     }
@@ -302,10 +256,7 @@ impl Pools {
 }
 
 fn valid_limits(a: &ShardPool) -> bool {
-    (1..=stored::MAX_SHARDS).contains(&a.max_shards)
-        && (1..=stored::MAX_KEYS_PER_SHARD).contains(&a.keys_per_shard)
-        && !a.pool.is_empty()
-        && a.pool.len() <= 64
+    (1..=stored::MAX_SHARDS).contains(&a.max_shards) && !a.pool.is_empty() && a.pool.len() <= 64
 }
 
 // The approved parent and Root must agree through every recognized envelope.
@@ -323,17 +274,18 @@ fn check_shard_topology(grant: &ShardPool) -> Result<(), Refusal> {
 /// # Panics
 /// Requires an opened Root.
 #[must_use]
-pub fn retained_mounts() -> [(&'static str, bool); 5] {
+pub fn retained_mounts() -> [(&'static str, bool); 3] {
     use canic::sharding::standby::{Asset, Source};
     STATE.with_borrow(|state| {
         let pools = &state.as_ref().expect("open Root").pools;
         [
-            ("shard-pool", !pools.shards.is_empty()),
             (
-                "registry",
-                pools.instances.is_some() || pools.singleton.is_some(),
+                "child-creation",
+                !pools.shards.is_empty()
+                    || pools.instances.is_some()
+                    || pools.singleton.is_some()
+                    || !pools.workers.is_empty(),
             ),
-            ("worker-pool", !pools.workers.is_empty()),
             ("child-funding", !pools.funding.is_empty()),
             (
                 "reserve-pool",
@@ -639,20 +591,6 @@ pub(super) fn bind_ready(slot: ChildId, pid: &str) {
     });
 }
 
-/// Request the next whole shard, retaining one generation per ordinal.
-/// # Panics
-/// Refuses calls outside the named hub grant.
-#[must_use]
-pub fn grow_shard(pool: &str, ordinal: u8) -> (Placement, u32) {
-    let placed = allocate_shard(pool, ordinal, None);
-    let limit = STATE.with_borrow(|s| {
-        s.as_ref().unwrap().pools.shards[pool]
-            .approval
-            .keys_per_shard
-    });
-    (placed, limit)
-}
-
 fn allocate_shard(pool: &str, ordinal: u8, paid: Option<payment::Settlement>) -> Placement {
     let candidate = STATE.with_borrow(|s| {
         let state = s.as_ref().expect("open Root");
@@ -708,12 +646,7 @@ fn allocate_shard(pool: &str, ordinal: u8, paid: Option<payment::Settlement>) ->
         let pools = &s.as_ref().unwrap().pools;
         let ledger = &pools.shards[pool];
         let approval = &ledger.approval;
-        let origin = pools.admit_growth(
-            ledger.allocated_slots(),
-            approval.creation_budget,
-            approval.creation_payer,
-            paid,
-        )?;
+        let origin = paid.ok_or(Placement::GrowthRefused)?.origin();
         if now >= approval.expires_at_ns {
             return Err(Placement::GrowthRefused);
         }
@@ -811,9 +744,13 @@ pub(super) fn validate_claims(state: &super::State) {
     singleton::validate(state);
     let claims = &state.pools.projects;
     assert_eq!(
-        state.project_index.len(),
-        claims.len() as u64,
-        "project claim index count"
+        claims
+            .iter()
+            .map(|claim| claim.request)
+            .collect::<std::collections::BTreeSet<_>>()
+            .len(),
+        claims.len(),
+        "duplicate creation request"
     );
     let pools = &state.pools;
     for (_, asset) in &pools.standby {
@@ -915,11 +852,6 @@ pub(super) fn validate_claims(state: &super::State) {
         };
         let source = state.artifact.0[&slot].sources();
         let (grant, generation, principal) = if let Some(claim) = claims.get(index) {
-            assert_eq!(
-                state.project_index.get(&claim.key),
-                Some(index as u32),
-                "project claim index"
-            );
             (
                 pools.instances.as_ref().expect("project grant"),
                 claim.generation,
@@ -983,7 +915,7 @@ fn validate_allocation(
 /// # Panics
 /// Requires the approved project hub.
 #[must_use]
-pub fn lookup_instance(key: &Key) -> Placement {
+pub fn lookup_instance(request: &[u8; 32]) -> Placement {
     STATE.with_borrow(|s| {
         let state = s.as_ref().unwrap();
         let caller = api::caller().to_text();
@@ -995,11 +927,16 @@ pub fn lookup_instance(key: &Key) -> Placement {
                 .is_some_and(|grant| grant.hub == caller),
             "configured instance grant required"
         );
-        let Some(index) = state.project_index.get(key) else {
+        let Some(index) = state
+            .pools
+            .projects
+            .iter()
+            .position(|claim| &claim.request == request)
+        else {
             return Placement::Unknown;
         };
-        let claim = &state.pools.projects[index as usize];
-        let slot = ChildId::INSTANCES[index as usize];
+        let claim = &state.pools.projects[index];
+        let slot = ChildId::INSTANCES[index];
         placement::resolve(
             Allocation {
                 slot: slot.index() as u32,
@@ -1014,16 +951,8 @@ pub fn lookup_instance(key: &Key) -> Placement {
     })
 }
 
-/// Reserve one dedicated child and retain its original creation in the same message.
-/// # Panics
-/// Requires the approved project hub and valid retained custody.
-#[must_use]
-pub fn assign_instance(key: Key) -> Placement {
-    instance(key, None)
-}
-
-fn instance(key: Key, paid: Option<payment::Settlement>) -> Placement {
-    let previous = lookup_instance(&key);
+fn instance(request: [u8; 32], paid: Option<payment::Settlement>) -> Placement {
+    let previous = lookup_instance(&request);
     if previous != Placement::Unknown {
         return previous;
     }
@@ -1036,12 +965,7 @@ fn instance(key: Key, paid: Option<payment::Settlement>) -> Placement {
             .get(count)
             .filter(|slot| pools.worker_at(**slot).is_none())
             .ok_or(Placement::Full)?;
-        let origin = pools.admit_growth(
-            slots[..count].iter().copied(),
-            grant.creation_budget,
-            grant.creation_payer,
-            paid,
-        )?;
+        let origin = paid.ok_or(Placement::GrowthRefused)?.origin();
         Ok((grant.clone(), slot, origin))
     });
     let (grant, slot, origin) = match selection {
@@ -1064,20 +988,14 @@ fn instance(key: Key, paid: Option<payment::Settlement>) -> Placement {
     };
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
-        assert!(
-            state
-                .project_index
-                .insert(key, state.pools.projects.len() as u32)
-                .is_none()
-        );
         state.pools.projects.push(ProjectClaim {
-            key,
+            request,
             generation,
             principal: None,
         });
         state.pool.set(state.pools.encode());
     });
-    lookup_instance(&key)
+    lookup_instance(&request)
 }
 
 #[cfg(feature = "role-issuer")]
@@ -1089,7 +1007,10 @@ pub(super) struct AssignedRole {
 }
 
 #[cfg(feature = "role-issuer")]
-pub(super) fn assigned_role(subject: Principal) -> Result<AssignedRole, &'static str> {
+pub(super) fn assigned_role(
+    subject: Principal,
+) -> Result<AssignedRole, canic::topology::attestation::RoleError> {
+    use canic::topology::attestation::RoleError;
     let caller = subject.to_text();
     STATE.with_borrow(|s| {
         let state = s.as_ref().expect("open Root");
@@ -1101,12 +1022,12 @@ pub(super) fn assigned_role(subject: Principal) -> Result<AssignedRole, &'static
                 !state.pools.withdrawn(**slot)
                     && journal.0.worker.as_deref() == Some(caller.as_str())
             })
-            .ok_or("unassigned caller")?;
+            .ok_or(RoleError::Unassigned)?;
         if !journal.ready_for_role() {
-            return Err("assignment unavailable");
+            return Err(RoleError::Unavailable);
         }
         let Artifact::Application(sources, app) = &state.artifact.0[&slot] else {
-            return Err("unassigned caller");
+            return Err(RoleError::Unassigned);
         };
         let generation = sources.creation.operation;
         if slot.service_index().is_some()
@@ -1120,12 +1041,16 @@ pub(super) fn assigned_role(subject: Principal) -> Result<AssignedRole, &'static
         }
         let (original, principal, args, reference, hub, shard) =
             if let Some(index) = ChildId::INSTANCES.iter().position(|id| *id == slot) {
-                let claim = state.pools.projects.get(index).ok_or("unassigned caller")?;
+                let claim = state
+                    .pools
+                    .projects
+                    .get(index)
+                    .ok_or(RoleError::Unassigned)?;
                 let grant = state
                     .pools
                     .instances
                     .as_ref()
-                    .ok_or("missing instance grant")?;
+                    .ok_or(RoleError::InvalidBinding)?;
                 (
                     Some(claim.generation),
                     &claim.principal,
@@ -1135,7 +1060,7 @@ pub(super) fn assigned_role(subject: Principal) -> Result<AssignedRole, &'static
                     None,
                 )
             } else {
-                let ledger = state.pools.shard_at(slot).ok_or("unassigned caller")?;
+                let ledger = state.pools.shard_at(slot).ok_or(RoleError::Unassigned)?;
                 let index = slot.index();
                 (
                     ledger.generations[index],
@@ -1151,12 +1076,13 @@ pub(super) fn assigned_role(subject: Principal) -> Result<AssignedRole, &'static
             || app.creation != *args
             || sources.creation.reference != *reference
         {
-            return Err("assignment changed");
+            return Err(RoleError::GenerationChanged);
         }
-        let install = canic::topology::Install::approved(args.as_slice())?
-            .ok_or("missing placement topology")?;
+        let install = canic::topology::Install::approved(args.as_slice())
+            .map_err(|_| RoleError::InvalidBinding)?
+            .ok_or(RoleError::InvalidBinding)?;
         if install.root != api::canister_self() || install.parent.to_text() != *hub {
-            return Err("placement topology mismatch");
+            return Err(RoleError::InvalidBinding);
         }
         Ok(AssignedRole {
             role: install.role,

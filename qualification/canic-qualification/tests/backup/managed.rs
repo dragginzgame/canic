@@ -1,7 +1,7 @@
 //! The operator controls Root. Only Root controls the admitted counter.
 use super::*;
 use canic_management_protocol::{
-    Approval, CREATION_CYCLES, LIMITS, Phase, STAGE, STAGE_LIMITS, STATUS, Stage, Status, digest,
+    Approval, CREATION_CYCLES, LIMITS, Phase, STAGE_LIMITS, Stage, Status, children, digest,
 };
 use ic_testkit::pocket_ic::nonblocking::PocketIc;
 
@@ -37,8 +37,16 @@ pub(super) async fn install(
     pic.update_call(
         root,
         caller,
-        "stage",
-        ic_wire::encode(&stage, request(STAGE), STAGE_LIMITS).unwrap(),
+        "stage_inline_child_creation",
+        ic_wire::encode(
+            &children::Request {
+                slot: children::ChildId::FIRST,
+                value: stage,
+            },
+            request(children::STAGE),
+            STAGE_LIMITS,
+        )
+        .unwrap(),
     )
     .await
     .unwrap();
@@ -50,15 +58,15 @@ pub(super) async fn install(
         .query_call(
             root,
             caller,
-            "status",
-            ic_wire::encode(&(), request(STATUS), LIMITS).unwrap(),
+            "child_status",
+            ic_wire::encode(&children::ChildId::FIRST, request(children::STATUS), LIMITS).unwrap(),
         )
         .await
         .unwrap();
     let status: Status = ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: STATUS,
+            method: children::STATUS,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,

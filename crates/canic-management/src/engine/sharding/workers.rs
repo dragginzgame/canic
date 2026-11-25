@@ -67,11 +67,6 @@ impl Workers {
         self.claims.iter().filter(|claim| !claim.returned).count()
     }
 
-    pub(super) fn debit(&self) -> u64 {
-        self.claims.iter().filter(|claim| claim.created).count() as u64
-            * canic_management_protocol::CREATION_CYCLES
-    }
-
     pub fn minimum_reuse_cycles(&self) -> Result<std::num::NonZeroU64, &'static str> {
         let install = canic::topology::Install::decode(self.grant.arguments.as_slice())?;
         canic::topology::worker::minimum_reuse_cycles(&install.application)
@@ -82,7 +77,6 @@ impl Workers {
         validate_worker(&self.grant).expect("retained worker grant");
         assert!(compatible(pools, &self.grant));
         assert!(self.live() <= usize::from(self.grant.max_instances));
-        assert!(self.debit() <= self.grant.creation_budget);
         assert!(self.live() + pools.projects.len() <= ChildId::INSTANCES.len());
     }
 }
@@ -171,12 +165,12 @@ pub fn configure_workers(grant: stored::InstancePool) -> Result<(), Refusal> {
     Ok(())
 }
 
-/// Resolve a worker ordinal, optionally reserving the next one.
+/// Observe a worker ordinal under the original hub grant.
 /// # Panics
 /// Requires the approved hub and intact allocation custody.
 #[must_use]
-pub fn worker(component: &str, ordinal: u8, reserve: bool) -> Placement {
-    resolve_worker(component, ordinal, reserve, None)
+pub fn lookup_worker(component: &str, ordinal: u8) -> Placement {
+    resolve_worker(component, ordinal, false, None)
 }
 
 pub(super) fn resolve_worker(
@@ -222,14 +216,7 @@ pub(super) fn resolve_worker(
         if index != workers.claims.len() {
             return Err(Placement::Busy);
         }
-        let origin = state.pools.source(
-            workers.grant.creation_payer,
-            paid,
-            workers
-                .grant
-                .creation_budget
-                .saturating_sub(workers.debit()),
-        )?;
+        let origin = paid.ok_or(Placement::GrowthRefused)?.origin();
         let slot = ChildId::INSTANCES
             .iter()
             .skip(state.pools.projects.len())

@@ -20,11 +20,11 @@ Root installs the separate `store` slot from `artifacts/wasm_store.wasm`.
 Each fleet binds its own principals. Builds reject explicit Root, Store and Coordinator definitions. When removing them, ensure the application build workspace's Cargo.lock
 selects both supplier packages and the matching Store protocol.
 
-Fresh builds select Store 0.8.0 and its matching IC Wire 0.28 protocol. Install a fresh Store and rebuild artifact manifests for 1 MiB chunks. The supplier refuses upgrades from the 256 KiB format. The following evidence applies to Store 0.6.0.
+Both Canic workspaces select the published Store 0.10.0 runtime and protocol. The protocol uses IC Wire 0.30.2. Install a fresh Store and rebuild artifact manifests for 1 MiB chunks. The supplier refuses upgrades from the 256 KiB format. The following evidence applies to Store 0.6.0.
 A local Root-managed upgrade from 0.5.2 preserved the populated Store’s stable
 memory. [Qualification record](../qualification/history.md#wasm-store-052-to-060--2026-11-21)
 
-Store uses Storage 0.78 for its four named allocations. A fleet with the 0.3.3
+Store 0.6.0 used Storage 0.78 for its four named allocations. A fleet with the 0.3.3
 Store on Storage 0.74.1 must retain its qualified executable. Installing 0.4.0 over that directory traps during upgrade.
 The endpoint identities and Store record encodings are preserved, but the
 underlying directory format changed.
@@ -35,7 +35,7 @@ exact signed attempts under the existing journal lock. New Root attempts use Sto
 `observe_preservation` (method 117): explicit active/removed entries ordered by name, active
 before removed, then version. The retained cursor includes that flag, and a
 separate digest domain commits to the entry kind. Pre-cut Roots retain their original scan contracts, digests and refusals.
-Deploy the 0.8 Store with a fresh Root. Existing pairs finish maintenance on their original executables. Fresh Roots use CUJF for the entire fleet. Old executables refuse the new journal format.
+Deploy the 0.8 Store with a fresh Root. Existing pairs finish maintenance on their original executables. Fresh Roots use CUJG for the entire fleet. Old executables refuse the new journal format.
 
 The historical 0.2.3 rollout upgraded Store under the old Root before
 upgrading Root. New attempts require the versioned supplier endpoint; no probing
@@ -223,17 +223,19 @@ The supplier repository owns Store runtime/protocol checks and standalone instal
 qualification. Run installed build suites sequentially: their feature variants
 share Cargo output paths.
 
-All Store endpoints require the current IC controller. `prepare`, `put` and
-`publish` are idempotent for exact retained commitments. `status`/`observe` expose
-query/replicated progress; `read`/`read_chunk` expose query/replicated published
-bytes. `list` returns at most four metadata entries after an exclusive release
+Store management requires the current IC controller. The controller can query published
+chunks with `read` or use `grant_read` to authorize a named installer to fetch chunks
+for an exact pin through the `read_granted` update. `prepare`, `put` and
+`publish` are idempotent for exact retained commitments. `inspect(Status)` queries
+release progress and `observe(Status)` returns it through a replicated call.
+`inspect(List)` returns at most four metadata entries after an exclusive release
 cursor. These transport distinctions do not grant fresh installation authority.
-`configure` changes admission quotas without reinstalling; `info`/`observe_info`
+`configure` changes admission quotas without reinstalling; `inspect(Info)`/`observe(Info)`
 report their usage through query/replicated reads. Root controls the Store during
 autonomous work. Root's controller-only
-`store_publication` endpoint now accepts four fixed commands from
+`publish_store_artifact` endpoint accepts three commands from
 `canic-management-protocol::publication`: prepare an immutable manifest, supply
-one chunk, publish, or observe retained progress. Each request binds a canonical
+one chunk, or publish. Read retained progress with `observe_store(ReleaseStatus)`. Each request binds a canonical
 Store principal and a dispatch deadline within five minutes. Root performs one
 call with a five-second bounded wait and no cycle attachment, storage write,
 background retry, deployment or cache preparation. Store independently checks
@@ -251,7 +253,7 @@ not remote rollback. Call/decode/binding failures return uncertainty; a lost rep
 is never evidence of no effect. The calling Host must retain exact commands and
 source/code authority before using this route in fleet operations.
 
-Root also explicitly mounts `observe_store`: one replicated `observe_info` call
+Root also explicitly mounts `observe_store`: one replicated `observe(Info)` call
 under the same controller, target and deadline checks. It returns Store's bounded
 initialized-state report, without a release label, application slot or storage
 write. `make store-readiness-test` proves refusal before controller handover,
@@ -262,7 +264,7 @@ bootstrap; it does not certify module identity, sole control or sufficient quota
 for future work. Host binds certified code/controller evidence separately in
 named Store bootstrap.
 
-For preservation inspection, Store's replicated `observe_custody` takes one exact
+For preservation inspection, Store's replicated `observe(Custody)` takes one exact
 release and returns its progress plus every retained pin on the shared artifact.
 Pins preserve their original owner, operation and release label, including former
 controllers and different labels sharing those bytes. Root mounts
@@ -293,7 +295,7 @@ control. Root retains each immutable approval and stop-request commitment outsid
 Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CUJF journal preserves current and completed attempts across supported Root
+The CUJG journal preserves current and completed attempts across supported Root
 upgrades, within the existing 16 KiB ceiling. A pre-cut Root keeps its original
 executable and evidence. Existing complete child-custody
 observations refuse any retained Store maintenance, including completion,
@@ -369,27 +371,16 @@ still be observed. Generic `advance_store_maintenance` can dispatch new effects
 and must not be used as observation-only recovery. The existing fleet commands
 use these explicit contracts for bounded repeat Store replacements.
 
-Root maintenance has a separate preservation boundary: `observe_root_custody`
-reads both child journals, all artifact references and the retained Store operation
-in one synchronous controller-only call. The Host `StoreMaintenance.operation`
-field binds that exact operation and selects the complete read before and after
-the existing signed Root installation. A changed or missing field blocks completion;
-older child-only approvals still refuse to omit a Store operation. Root replacement
-does not activate Store or renew its original authority. After authenticated Store
-completion, whole-fleet planning includes this operation automatically in later
-Root maintenance. Subsequent child plans bind the completed Store attempt and
-select the complete read; old child-only readers remain unchanged. After a second
-Store attempt, `observe_root_history` includes every completed predecessor and
-the current operation. Root maintenance binds `StoreMaintenance.history` exactly.
-The former `observe_root_custody` refuses to omit predecessors. New Store plans
-bind the sequence and use `observe_store_maintenance(Some(approval))` to read the exact approval;
-historical first-upgrade plans retain their original bytes and read method.
+Before and after a signed Root installation, Host calls `observe_root_custody`
+as the controller. The reply contains every service child journal, its artifact
+and lifecycle evidence, the current Store operation and its completed predecessors.
+Host compares the reply with the approved maintenance plan on both sides of the
+installation. Any unapproved evidence blocks completion. Store plans bind the
+sequence and read the exact approval with `observe_store_maintenance(Some(approval))`.
 
-For a completed local Root/Store/app fleet, change only the configured Store Wasm
-input to a reviewed compatible replacement. First install the current Root through
-its separately approved maintenance workflow if it predates these history-aware
-endpoints; there is no endpoint probing or fallback. The operator identity must
-already control Root. From that app directory:
+For a completed local fleet created on this Root generation, change the Store
+Wasm input to the reviewed replacement. Run these commands from the app directory
+with an identity that controls Root.
 
 ```sh
 canic fleet plan --fleet local --identity canic-local
@@ -425,7 +416,7 @@ unrecoverable effect remains blocked with its original evidence.
 To create a Store, use the existing named `fleet plan` workflow. The selected
 fleet must have a bound top-level `root` and an unbound `wasm-store` child with a
 Wasm input. The reviewed Root executable must mount `observe_store` and
-`store_publication`. Planning retains exact Store bytes, Root identity/code,
+`publish_store_artifact`. Planning retains exact Store bytes, Root identity/code,
 operator, network and creation budget; it creates nothing.
 
 From the app's config directory, after installing this CLI with `make canic`,
@@ -522,7 +513,7 @@ upgraded application and proves replay creates no extra canisters.
 
 `pin` retains an exact published manifest for the authenticated caller's operation.
 The identity is caller, operation digest and artifact hash; an operation can pin
-several artifacts, but cannot change an existing pin's release label. `observe_pin`
+several artifacts, but cannot change an existing pin's release label. `observe(Pin)`
 returns replicated retention evidence. At most 32 pins per artifact are retained;
 exhaustion refuses new obligations without evicting old ones. Pins do not expire
 or authorize installation. Persistent pin formats and migrations are owned by the
@@ -537,10 +528,11 @@ observation at that moment, not a guarantee against subsequent cache clearing.
 Repeating a request observes current cache contents before repair. This does not
 grant Root permission to replay an uncertain installation.
 
-Root's explicit methods are `stage_stored_child`, `reconcile_stored_child`,
-`stage_stored_upgrade`, `reconcile_stored_upgrade` and
-`observe_stored_children`. Their passive contracts live in
-`canic-management-protocol::stored`. Existing effect approvals retain their old
+Root stages and reconciles Store-backed creation through `stage_child_creation`
+and `reconcile_child_creation`. Code upgrades use `stage_child_upgrade`
+and `reconcile_child_upgrade`. Both operations bind the exact lifecycle
+inputs when supplied. `observe_root_custody` returns the complete maintenance
+record. These contracts live in `canic-management-protocol::application`. Existing effect approvals retain their old
 encoding; each new request binds that approval, child slot and exact Store
 reference into a domain-separated operation digest. Store pins are acquired before
 child creation or upgrade preparation. The pin callback commits before subsequent

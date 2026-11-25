@@ -1,6 +1,7 @@
 //! Keep paid refill outcomes outside the disposable canister.
 use super::super::{MANAGEMENT_LIMITS, create_args, management, reserved_cycles};
 use super::{STATE, api};
+use canic::sharding::standby::ReserveError;
 use canic::sharding::{
     Allocation,
     standby::{Asset, Refill, Source},
@@ -46,11 +47,13 @@ pub fn permits_enrollment(receiver: Principal) -> bool {
 }
 
 // Check the original operator again when a custody observation resumes.
-fn authorize_change(controller: Principal) -> Result<(), String> {
+fn authorize_change(controller: Principal) -> Result<(), ReserveError> {
     if !api::is_controller(&controller) {
-        return Err("Root controller required".into());
+        return Err(ReserveError::Unauthorized(
+            "Root controller required".into(),
+        ));
     }
-    super::admit_pool_change(false).map_err(|e| format!("{e:?}"))
+    super::admit_pool_change(false).map_err(|e| ReserveError::CustodyOccupied(format!("{e:?}")))
 }
 
 /// Observe retained approvals without changing the pool.
@@ -67,10 +70,12 @@ pub fn inspect() -> Vec<(Source, Asset)> {
 /// Refuses changed or out-of-sequence authority, insufficient funding or exhausted capacity.
 /// # Panics
 /// Requires the Root controller and opened placement state.
-pub async fn refill(input: Refill) -> Result<Asset, String> {
+pub async fn refill(input: Refill) -> Result<Asset, ReserveError> {
     assert!(api::is_controller(&api::caller()));
     if input.root != api::canister_self() || input.cycles != CREATION_CYCLES {
-        return Err("wrong Root or creation debit".into());
+        return Err(ReserveError::InvalidApproval(
+            "wrong Root or creation debit".into(),
+        ));
     }
     let original = STATE.with_borrow(|s| {
         s.as_ref()
@@ -86,7 +91,9 @@ pub async fn refill(input: Refill) -> Result<Asset, String> {
                     if approval == &input {
                         Ok(asset.clone())
                     } else {
-                        Err("refill approval differs".into())
+                        Err(ReserveError::ApprovalConflict(
+                            "refill approval differs".into(),
+                        ))
                     }
                 })
             })
@@ -94,20 +101,24 @@ pub async fn refill(input: Refill) -> Result<Asset, String> {
     if let Some(result) = original {
         return result;
     }
-    super::admit_pool_change(false).map_err(|e| format!("{e:?}"))?;
+    super::admit_pool_change(false).map_err(|e| ReserveError::CustodyOccupied(format!("{e:?}")))?;
     let now = api::time();
     if input.expires_at_ns <= now || input.expires_at_ns - now > 600_000_000_000 {
-        return Err("refill requires a deadline within ten minutes".into());
+        return Err(ReserveError::Deadline(
+            "refill requires a deadline within ten minutes".into(),
+        ));
     }
     if ic_platform_runtime::raw::liquid_cycle_balance()
         < reserved_cycles() + u128::from(input.cycles)
     {
-        return Err("insufficient Root reserve".into());
+        return Err(ReserveError::InsufficientCycles(
+            "insufficient Root reserve".into(),
+        ));
     }
     let index = STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
         if state.pools.capacity.is_none() || state.pools.full() {
-            return Err("no approved subnet capacity");
+            return Err(ReserveError::Capacity("no approved subnet capacity".into()));
         }
         if state
             .pools
@@ -118,7 +129,9 @@ pub async fn refill(input: Refill) -> Result<Asset, String> {
             != usize::from(input.sequence)
             || input.sequence >= MAX_RESERVE_ENTRIES
         {
-            return Err("refill sequence outside retained capacity");
+            return Err(ReserveError::Capacity(
+                "refill sequence outside retained capacity".into(),
+            ));
         }
         let index = state.pools.standby.len();
         state
@@ -132,15 +145,15 @@ pub async fn refill(input: Refill) -> Result<Asset, String> {
 }
 
 // Dispatch only after the exact debit and inventory slot have been retained.
-async fn create_issued(index: usize, source: Source) -> Result<Asset, String> {
+async fn create_issued(index: usize, source: Source) -> Result<Asset, ReserveError> {
     let (Source::Refill(input) | Source::Automatic(input)) = &source else {
         unreachable!()
     };
     let bytes = management("create_canister", create_args(), u128::from(input.cycles))
         .await
-        .map_err(|e| format!("refill issued: {e:?}"))?;
+        .map_err(|e| ReserveError::RefillIssued(format!("refill issued: {e:?}")))?;
     let id = mgmt::decode_created(&bytes, MANAGEMENT_LIMITS)
-        .map_err(|_| "refill issued: unreadable principal")?
+        .map_err(|_| ReserveError::RefillIssued("refill issued: unreadable principal".into()))?
         .canister_id;
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
@@ -238,14 +251,17 @@ pub(super) fn released_binding(asset: &Asset) -> Option<(Principal, &Allocation)
 /// Requires an exact live claim and an affirmative reply from the recorded worker hub.
 /// # Panics
 /// Requires Root's controller and opened custody.
-pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(), String> {
+pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(), ReserveError> {
     let controller = api::caller();
     assert!(api::is_controller(&controller));
     let claimed = Asset::Claimed(target.shard, target.allocation.clone());
     let released = Asset::Released(target.shard, target.allocation.clone());
-    let slot = ChildId::placement(target.allocation.slot as usize).ok_or("unknown worker slot")?;
+    let slot = ChildId::placement(target.allocation.slot as usize)
+        .ok_or_else(|| ReserveError::InvalidApproval("unknown worker slot".into()))?;
     if !ChildId::INSTANCES.contains(&slot) {
-        return Err("released worker allocation required".into());
+        return Err(ReserveError::WrongAsset(
+            "released worker allocation required".into(),
+        ));
     }
     let already_released = |pools: &super::Pools| {
         pools.returns.iter().any(|r| r.target == target)
@@ -262,12 +278,16 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
         let (workers, actual) = state
             .pools
             .worker_at(slot)
-            .ok_or("missing worker allowance")?;
-        workers.minimum_reuse_cycles()?;
+            .ok_or_else(|| ReserveError::NotConfigured("missing worker allowance".into()))?;
+        workers
+            .minimum_reuse_cycles()
+            .map_err(|e| ReserveError::NotConfigured(e.into()))?;
         if actual.generation != target.allocation.generation
             || actual.principal.as_deref() != Some(&target.shard.to_text())
         {
-            return Err("worker binding changed");
+            return Err(ReserveError::ApprovalConflict(
+                "worker binding changed".into(),
+            ));
         }
         Ok(Some(
             Principal::from_text(&workers.grant.hub).expect("approved worker hub"),
@@ -278,9 +298,13 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
     };
     if !canic::method::call::<canic::sharding::standby::WorkerReleased>(hub, 10, &target)
         .await
-        .map_err(|e| format!("hub release unconfirmed: {e:?}"))?
+        .map_err(|e| {
+            ReserveError::AwaitingConfirmation(format!("hub release unconfirmed: {e:?}"))
+        })?
     {
-        return Err("hub still owns worker".into());
+        return Err(ReserveError::AwaitingConfirmation(
+            "hub still owns worker".into(),
+        ));
     }
     authorize_change(controller)?;
     STATE.with_borrow_mut(|s| {
@@ -295,13 +319,15 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
                 .journal
                 .0
                 .get(&slot)
-                .ok_or("missing worker journal")?
+                .ok_or_else(|| ReserveError::WrongAsset("missing worker journal".into()))?
                 .0;
             if status.phase != canic_management_protocol::Phase::Ready
                 || status.attempts[0] != 1
                 || status.worker.as_deref() != Some(target.shard.to_text().as_str())
             {
-                return Err("missing original paid worker creation".into());
+                return Err(ReserveError::WrongAsset(
+                    "missing original paid worker creation".into(),
+                ));
             }
             state
                 .pools

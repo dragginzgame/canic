@@ -113,7 +113,7 @@ Set `IDENTITY` to the controller signer name and run these commands from the con
 canic --json fleet plan --identity "$IDENTITY" > reserve-plan.json
 canic fleet call --canister root --identity "$IDENTITY" configure-capacity "$(jq -c '.capacity.approval' reserve-plan.json)"
 canic fleet call --canister root --identity "$IDENTITY" configure-standby "$(jq -c '.standby.approval' reserve-plan.json)"
-canic fleet call --canister root --identity "$IDENTITY" inspect-standby
+canic fleet call --canister root --identity "$IDENTITY" observe-standby
 ```
 
 The target counts ready spares once across the whole subnet fleet. Permanent

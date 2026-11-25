@@ -7,7 +7,7 @@ use canic::{
     },
     method::Contract,
     sharding::{
-        AssignInstance, Placement,
+        Placement,
         payment::Payment,
         provisioning::{AuthSubject, Binding, Provision, Request as ProvisionRequest},
     },
@@ -40,6 +40,14 @@ async fn paid_singleton_reopens_its_parent_bound_receiver() {
         .await
         .unwrap();
     let registry = pic.create_canister().await;
+    pic.add_cycles(registry, 10_000_000_000_000).await;
+    pic.install_canister(
+        registry,
+        std::fs::read(dir.join("hub.wasm")).unwrap(),
+        crate::store_root_tests::hub_args(&root),
+        None,
+    )
+    .await;
     let deadline = pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000;
     let root_key = pic
         .root_key()
@@ -76,7 +84,6 @@ expires_at_ns = {deadline}
 component = "ledger"
 release = {{ name = "ledger", version = "1" }}
 install_args = "db-role-nonce.bin"
-creation_payer = "requester"
 maximum = 1
 creation_budget = 1_000_000_000_000
 [apps.projects.fleets.local.receiver_policy]
@@ -122,18 +129,18 @@ limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns
     .await
     .unwrap();
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_instances",
-        stored::CONFIGURE_INSTANCES,
-        &project.approval,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Dedicated(project.approval.clone()),
         stored::LIMITS,
     )
     .await
     .unwrap();
     let approve = async |grant: &stored::SingletonGrant| {
         root.update::<_, Result<(), management::Refusal>>(
-            "configure_singleton",
-            stored::CONFIGURE_SINGLETON,
-            grant,
+            "approve_child_creation",
+            stored::APPROVE_CHILD_CREATION,
+            &stored::ChildCreationGrant::PerParent(grant.clone()),
             stored::LIMITS,
         )
         .await
@@ -150,7 +157,7 @@ limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns
         )
         .unwrap();
         assert!(
-            pic.update_call(root.id, root.operator, "configure_singleton", request)
+            pic.update_call(root.id, root.operator, "approve_child_creation", request)
                 .await
                 .is_err()
         );
@@ -162,19 +169,13 @@ limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns
         Some(management::application::Arguments::new(policy.encode().unwrap()).unwrap());
     assert_eq!(approve(&wrong).await, Err(management::Refusal::Binding));
     approve(&ledger.approval).await.unwrap();
-    let parent = Client {
-        operator: registry,
-        ..root
-    };
     let place = async || {
-        parent
-            .update::<_, Placement>(
-                AssignInstance::NAME,
-                AssignInstance::ID,
-                &[3_u8; 32],
-                AssignInstance::REPLY,
-            )
-            .await
+        acquire_fixture(
+            &root,
+            registry,
+            canic::sharding::payment::Demand::Instance([3; 32]),
+        )
+        .await
     };
     assert!(matches!(place().await, Placement::Pending(_)));
     settle(pic).await;
@@ -190,7 +191,7 @@ limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns
     };
     let fund = async |attached: u128| {
         payer
-            .update::<_, Result<Payment, String>>(
+            .update::<_, Result<Payment, canic::sharding::payment::Refusal>>(
                 "fund_ledger",
                 ic_wire::method_id("fund_ledger"),
                 &(2_000_000_000_000_u128, attached),
@@ -228,7 +229,7 @@ limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns
     let ledger = CanisterId::from_text(ledger).unwrap();
     let custody: management::application::Custody = root
         .update(
-            "observe_role_children",
+            "observe_child_deployments",
             management::application::CHILD_EVIDENCE,
             &(),
             stored::LIMITS,

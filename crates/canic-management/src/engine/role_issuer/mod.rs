@@ -1,5 +1,6 @@
 //! Opt-in Root role issuer; its private seed never leaves the named lease.
 use super::{STATE, api, sharding};
+use canic::topology::attestation::RoleError;
 use canic::topology::attestation::{Claim, Proof};
 use canic_management_protocol::children::ChildId;
 use ic_platform::ed25519::{Signer, SigningKey};
@@ -117,19 +118,19 @@ pub(super) fn retained_public() -> Option<Bytes<32>> {
 /// Refuses unauthorized callers or unsuccessful entropy acquisition.
 /// # Panics
 /// Requires an open, intact Root key lease.
-pub async fn prepare() -> Result<Bytes<32>, String> {
+pub async fn prepare() -> Result<Bytes<32>, RoleError> {
     let controller = api::caller();
     if !api::is_controller(&controller) {
-        return Err("controller required".into());
+        return Err(RoleError::Unauthorized);
     }
     if let Some(key) = retained_public() {
         return Ok(key);
     }
     let fresh = canic::entropy::fresh(5)
         .await
-        .map_err(|_| "IC entropy unavailable")?;
+        .map_err(|_| RoleError::EntropyUnavailable)?;
     if !api::is_controller(&controller) {
-        return Err("controller changed".into());
+        return Err(RoleError::Unauthorized);
     }
     STATE.with_borrow_mut(|s| {
         let cell = &mut s.as_mut().expect("open Root").role_key;
@@ -148,9 +149,9 @@ pub async fn prepare() -> Result<Bytes<32>, String> {
 /// Requires an initialized signer, a canister audience and a verified role-bearing installation.
 /// # Panics
 /// Requires an open, intact Root key lease.
-pub fn issue(receiver: Principal) -> Result<Proof, String> {
+pub fn issue(receiver: Principal) -> Result<Proof, RoleError> {
     if receiver.as_slice().last() != Some(&1) {
-        return Err("canister receiver required".into());
+        return Err(RoleError::InvalidReceiver);
     }
     let assignment = sharding::assigned_role(api::caller())?;
     let generation = assignment.generation;
@@ -162,14 +163,14 @@ pub fn issue(receiver: Principal) -> Result<Proof, String> {
         generation: Bytes::new(generation.to_vec()).expect("generation size"),
         issued_at_ns: api::time(),
     };
-    claim.expiry()?;
-    let message = claim.signing_bytes().map_err(|_| "invalid claim")?;
+    claim.expiry().map_err(|_| RoleError::InvalidClaim)?;
+    let message = claim.signing_bytes().map_err(|_| RoleError::InvalidClaim)?;
     STATE.with_borrow(|s| {
         let issuer = Issuer::load(&s.as_ref().expect("open Root").role_key);
         if issuer.deadline(claim.subject, &generation).is_some() {
-            return Err("role issuance closed".into());
+            return Err(RoleError::Closed);
         }
-        let seed = issuer.seed.as_ref().ok_or("role key unavailable")?;
+        let seed = issuer.seed.as_ref().ok_or(RoleError::KeyUnavailable)?;
         let signature = SigningKey::from_bytes(seed).sign(&message);
         Ok((
             claim,
@@ -183,37 +184,37 @@ pub fn issue(receiver: Principal) -> Result<Proof, String> {
 /// Refuses unauthorized or stale requests and exhausted retirement capacity.
 /// # Panics
 /// Requires an open Root issuer lease.
-pub fn close(subject: Principal, generation: &Bytes<32>) -> Result<u64, String> {
+pub fn close(subject: Principal, generation: &Bytes<32>) -> Result<u64, RoleError> {
     if !api::is_controller(&api::caller()) {
-        return Err("controller required".into());
+        return Err(RoleError::Unauthorized);
     }
     let generation: [u8; 32] = generation
         .as_slice()
         .try_into()
-        .map_err(|_| "invalid generation")?;
+        .map_err(|_| RoleError::InvalidGeneration)?;
     if let Some(deadline) = deadline(subject, &generation) {
         return Ok(deadline);
     }
     let assignment = sharding::assigned_role(subject)?;
-    let evacuated = assignment.evacuated_shard.ok_or("shared shard required")?;
+    let evacuated = assignment.evacuated_shard.ok_or(RoleError::NotShard)?;
     if assignment.generation != generation {
-        return Err("assignment changed".into());
+        return Err(RoleError::GenerationChanged);
     }
     if !evacuated {
-        return Err("empty draining shard required".into());
+        return Err(RoleError::NotDrained);
     }
     let deadline = api::time()
         .checked_add(canic::topology::attestation::LIFETIME_NS)
-        .ok_or("deadline overflow")?;
+        .ok_or(RoleError::InvalidClaim)?;
     STATE.with_borrow_mut(|s| {
         let cell = &mut s.as_mut().expect("open Root").role_key;
         let mut issuer = Issuer::load(cell);
         if issuer.seed.is_none() {
-            return Err("role key unavailable".into());
+            return Err(RoleError::KeyUnavailable);
         }
         let mut entries = issuer.closed.into_vec();
         entries.push((subject, generation, deadline));
-        issuer.closed = List::new(entries).map_err(|_| "retirement capacity")?;
+        issuer.closed = List::new(entries).map_err(|_| RoleError::Capacity)?;
         cell.set(issuer.bytes());
         Ok(deadline)
     })
@@ -232,20 +233,23 @@ pub(super) fn deadline(subject: Principal, generation: &[u8; 32]) -> Option<u64>
 /// Neither observation authorizes a wipe or a handover.
 /// # Errors
 /// Refuses an open issuer or a stale generation.
-pub fn retirement_status(subject: Principal, generation: &Bytes<32>) -> Result<(u64, u32), String> {
+pub fn retirement_status(
+    subject: Principal,
+    generation: &Bytes<32>,
+) -> Result<(u64, u32), RoleError> {
     let generation: [u8; 32] = generation
         .as_slice()
         .try_into()
-        .map_err(|_| "invalid generation")?;
+        .map_err(|_| RoleError::InvalidGeneration)?;
     if let Some(deadline) = deadline(subject, &generation) {
         // A closure is admitted only at zero and the draining generation cannot grow.
         return Ok((deadline, 0));
     }
     let assignment = sharding::assigned_role(subject)?;
-    assignment.evacuated_shard.ok_or("shared shard required")?;
+    assignment.evacuated_shard.ok_or(RoleError::NotShard)?;
     let actual = assignment.generation;
     if generation != actual {
-        return Err("assignment changed".into());
+        return Err(RoleError::GenerationChanged);
     }
-    Err("role issuance remains open".into())
+    Err(RoleError::Open)
 }

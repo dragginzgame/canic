@@ -82,14 +82,7 @@ pub(super) async fn check_predecessor_custody(root: &Client<'_>, expected: &Stat
 }
 
 async fn check_current_custody(root: &Client<'_>, expected: &Status) {
-    let complete: management::custody::Root = root
-        .update(
-            "observe_root_custody",
-            management::custody::ROOT,
-            &(),
-            management::custody::ROOT_LIMITS,
-        )
-        .await;
+    let complete = super::root_custody(root).await.root.current;
     assert_eq!(complete.store_operation.as_ref(), Some(expected));
 }
 
@@ -454,7 +447,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
         publication::Command::Publish(pending.release),
     ] {
         root.update::<_, publication::Reply>(
-            "store_publication",
+            "publish_store_artifact",
             publication::EXECUTE,
             &publication::Request {
                 store: supplier.id.to_text(),

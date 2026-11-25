@@ -120,21 +120,25 @@ async fn observe(
     supplier: CanisterId,
     version: &str,
 ) -> wire::Reply {
-    update(
+    let value: wire::ObservationReply = update(
         pic,
         root,
-        "store_publication",
-        wire::EXECUTE,
-        &wire::Request {
+        "observe_store",
+        wire::OBSERVATION,
+        &wire::ObservationRequest::ReleaseStatus(wire::CustodyRequest {
             store: supplier.to_text(),
             expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
-            command: wire::Command::Observe(store::Release {
+            release: store::Release {
                 name: "app".into(),
                 version: version.into(),
-            }),
-        },
+            },
+        }),
     )
-    .await
+    .await;
+    match value? {
+        wire::Observation::ReleaseStatus(status) => Ok(status),
+        _ => panic!("expected release status"),
+    }
 }
 
 async fn fault(pic: &PocketIc, root: CanisterId, value: u8) {
@@ -402,7 +406,7 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
         let prepared: wire::Reply = update(
             pic,
             root,
-            "store_publication",
+            "publish_store_artifact",
             wire::EXECUTE,
             &wire::Request {
                 store: supplier.to_text(),

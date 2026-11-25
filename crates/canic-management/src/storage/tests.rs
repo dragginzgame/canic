@@ -49,7 +49,7 @@ fn only_the_current_journal_format_is_admitted() {
     let current = Journals::default().to_bytes().unwrap().into_owned();
     for tag in [
         b"CUJ2", b"CUJ3", b"CUJ4", b"CUJ5", b"CUJ6", b"CUJ7", b"CUJ8", b"CUJ9", b"CUJA", b"CUJB",
-        b"CUJC", b"CUJD", b"CUJE",
+        b"CUJC", b"CUJD", b"CUJE", b"CUJF",
     ] {
         let mut bytes = current.clone();
         bytes[..4].copy_from_slice(tag);
@@ -306,7 +306,7 @@ fn growth_preserves_child_and_store_evidence_in_one_format() {
             journals.0.insert(*slot, journal("added"));
         }
         let bytes = journals.to_bytes().unwrap().into_owned();
-        assert!(bytes.starts_with(b"CUJF"));
+        assert!(bytes.starts_with(b"CUJG"));
         journals = Journals::from_bytes(&bytes).unwrap();
         assert_eq!(
             journals.0[&ChildId::FIRST].0.worker.as_deref(),
@@ -326,12 +326,12 @@ fn project_custody_requires_paired_ordered_records() {
         artifacts.0.insert(slot, Artifact::default());
     }
     let mut bytes = journals.to_bytes().unwrap().into_owned();
-    assert!(bytes.starts_with(b"CUJF"));
+    assert!(bytes.starts_with(b"CUJG"));
     assert_eq!(
         Journals::from_bytes(&bytes).unwrap().0.len(),
         ChildId::HISTORICAL_SERVICES.len() + 2
     );
-    bytes[..4].copy_from_slice(b"CUJ9");
+    bytes[..4].copy_from_slice(b"CUJF");
     assert!(Journals::from_bytes(&bytes).is_err());
 
     let mut bytes = artifacts.to_bytes().unwrap().into_owned();
@@ -366,7 +366,7 @@ fn extended_custody_round_trips_sparse_placement_identities() {
     artifacts.0.insert(slot, Artifact::default());
     let encoded_journals = journals.to_bytes().unwrap();
     let encoded_artifacts = artifacts.to_bytes().unwrap();
-    assert!(encoded_journals.starts_with(b"CUJF"));
+    assert!(encoded_journals.starts_with(b"CUJG"));
     assert!(encoded_artifacts.starts_with(b"CUA7"));
     assert_eq!(
         Journals::from_bytes(&encoded_journals)

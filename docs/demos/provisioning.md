@@ -205,7 +205,7 @@ selected lockfiles, actual predecessor Wasms and private account assertions.
 ### Project-funded singleton ledgers
 
 Declare the ledger's application parent as `project`. Under the existing fleet
-registry that allocates projects, select its singleton release and payer.
+registry that allocates projects, select its singleton release and budget.
 
 ```toml
 [apps.toko.fleets.local.registry.singleton]
@@ -213,15 +213,14 @@ component = "project_ledger"
 release = { name = "project_ledger", version = "1" }
 maximum = 2
 creation_budget = 2000000000000
-creation_payer = "requester"
 ```
 
 Host uses the registry's Store and deadline. Publish the ledger release first.
-After capacity and registry approval, pass the planned singleton approval JSON
-to Root's `configure-singleton` command. This path currently accepts a plain
+After capacity and registry approval, submit the planned per-parent request to Root’s
+`approve_child_creation` endpoint. This path currently accepts a plain
 topology install. Host refuses a selected Auth receiver policy for the ledger.
 
-The project calls `canic::sharding::payment::fund` with the installed Root,
+The project calls `canic::sharding::payment::acquire_placement` with the installed Root,
 `Demand::Singleton("project_ledger".into())`, its maximum debit and zero cycles.
 On a quote it calls again with the same maximum and the quoted sum of creation
 fee and working cycles. Recover a pending or lost reply with the same request

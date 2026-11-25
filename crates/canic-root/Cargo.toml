@@ -20,17 +20,15 @@ required-features = ["operator-client"]
 operator-client = ["dep:clap", "dep:serde_json"]
 child-metrics = ["operator-client"]
 role-issuer = [
-    "sharding",
+    "child-management",
     "canic-management/role-issuer",
     "canic-management-protocol/retirement",
 ]
-shard-pool = ["sharding"]
-worker-pool = ["sharding"]
-registry = ["sharding"]
-reserve-pool = ["sharding"]
-child-funding = ["sharding"]
+child-creation = ["child-management"]
+reserve-pool = ["child-management"]
+child-funding = ["child-management"]
 backup = ["canic-management/backup", "dep:serde"]
-sharding = [
+child-management = [
     "canic-management-protocol/standby",
     "canic/sharding",
     "canic-management/sharding",

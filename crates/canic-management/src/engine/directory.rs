@@ -1,7 +1,7 @@
 //! Publish the directory derived from permanent ready application slots.
 use super::{Artifact, STATE, snapshot};
 use canic::topology::directory::{
-    Delivery, Directory, Hop, ReceiveDirectory, Service, ServiceInstall,
+    Delivery, Directory, Hop, ReceiveDirectory, RedeliveryError, Service, ServiceInstall,
 };
 use canic_management_protocol::children::ChildId;
 use ic_platform_types::Principal;
@@ -28,7 +28,7 @@ pub(super) fn named_service(slot: ChildId) -> Option<ServiceInstall> {
 /// Refuses empty directories and placement-only owners.
 /// # Panics
 /// Traps if the management engine has not opened.
-fn service_directory() -> Result<Directory, &'static str> {
+fn service_directory() -> Result<Directory, RedeliveryError> {
     let mut services = Vec::new();
     for slot in super::service_slots() {
         let status = snapshot(slot);
@@ -43,14 +43,16 @@ fn service_directory() -> Result<Directory, &'static str> {
         }
     }
     if services.is_empty() {
-        return Err("no ready named services");
+        return Err(RedeliveryError::NoReadyServices);
     }
     services.sort_by(|a, b| a.name.cmp(&b.name));
     let directory = Directory {
         revision: services.len() as u64,
         services,
     };
-    directory.validate()?;
+    directory
+        .validate()
+        .map_err(|_| RedeliveryError::InvalidDirectory)?;
     Ok(directory)
 }
 
@@ -117,16 +119,19 @@ fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
 /// Retry one service's delivery under its original revision.
 /// # Errors
 /// Refuses an unknown recipient, superseded revision or unconfirmed delivery.
-pub async fn publish_directory(name: &str, revision: u64) -> Result<u64, &'static str> {
+pub async fn redeliver_directory_revision(
+    name: &str,
+    revision: u64,
+) -> Result<u64, RedeliveryError> {
     let directory = service_directory()?;
     if directory.revision != revision {
-        return Err("directory revision changed");
+        return Err(RedeliveryError::RevisionChanged);
     }
     let recipient = directory
         .services
         .iter()
         .find(|s| s.name == name)
-        .ok_or("unknown service")?;
+        .ok_or(RedeliveryError::UnknownService)?;
     publish_branch(&directory, recipient, None).await?;
     Ok(revision)
 }
@@ -137,7 +142,7 @@ async fn publish_branch(
     directory: &Directory,
     recipient: &Service,
     child: Option<Principal>,
-) -> Result<bool, &'static str> {
+) -> Result<bool, RedeliveryError> {
     let mut delivered = false;
     let mut result = Ok(());
     for path in paths(recipient) {
@@ -145,7 +150,7 @@ async fn publish_branch(
             continue;
         }
         if service_directory()?.ne(directory) {
-            return Err("directory revision changed");
+            return Err(RedeliveryError::RevisionChanged);
         }
         let delivery = Delivery {
             directory: directory.clone(),
@@ -157,7 +162,7 @@ async fn publish_branch(
         ) {
             delivered = true;
         } else {
-            result = Err("directory delivery unconfirmed");
+            result = Err(RedeliveryError::DeliveryUnconfirmed);
         }
     }
     result.map(|()| delivered)

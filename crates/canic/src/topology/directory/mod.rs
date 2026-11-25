@@ -22,6 +22,10 @@ pub(super) fn check_name(name: &str) -> Result<(), &'static str> {
 /// approval retains these exact bytes; the principal is learned from Root's install result.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ServiceInstall {
+    /// Principal explicitly authorized to administer this hub’s routes.
+    pub hub_operator: Option<Principal>,
+    /// Operator authorized to administer direct-child payments on this actor.
+    pub funding_operator: Option<Principal>,
     /// Stable service name.
     pub name: String,
     /// Role used in local lookup.
@@ -32,7 +36,7 @@ pub struct ServiceInstall {
 
 impl ServiceInstall {
     const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
-        method: ic_wire::method_id("canic.service_install.v1"),
+        method: ic_wire::method_id("canic.managed_service_install.v1"),
         direction: ic_wire::Direction::Request,
     };
 
@@ -53,12 +57,24 @@ impl ServiceInstall {
         Self::decode(bytes)
     }
 
+    fn validate(&self) -> Result<(), &'static str> {
+        check_name(&self.name)?;
+        check_name(&self.role)?;
+        if [self.hub_operator, self.funding_operator]
+            .into_iter()
+            .flatten()
+            .any(|p| p == Principal::anonymous() || p == Principal::management_canister())
+        {
+            return Err("invalid hub operator");
+        }
+        Ok(())
+    }
+
     /// Encode the service declaration into an existing bounded install approval.
     /// # Errors
     /// Refuses invalid names or excessive arguments.
     pub fn encode(&self) -> Result<Vec<u8>, &'static str> {
-        check_name(&self.name)?;
-        check_name(&self.role)?;
+        self.validate()?;
         ic_wire::encode(self, Self::FRAME, super::LIMITS).map_err(|_| "service install frame")
     }
 
@@ -68,8 +84,7 @@ impl ServiceInstall {
     pub fn decode(bytes: &[u8]) -> Result<Self, &'static str> {
         let service: Self = ic_wire::decode(bytes, Self::FRAME, super::LIMITS)
             .map_err(|_| "service install frame")?;
-        check_name(&service.name)?;
-        check_name(&service.role)?;
+        service.validate()?;
         Ok(service)
     }
 }
@@ -148,6 +163,45 @@ impl Directory {
     }
 }
 
+/// Failure to accept or acknowledge a local topology update
+#[derive(Clone, Copy, Debug, Eq, PartialEq, serde::Serialize, serde::Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+pub enum DirectoryError {
+    /// Unexpected topology sender.
+    Unauthorized,
+    /// Invalid topology delivery.
+    InvalidDelivery,
+    /// Installation generation changed.
+    GenerationChanged,
+    /// Directory revision conflicts with retained state.
+    RevisionConflict,
+    /// Child installation was withdrawn.
+    Withdrawn,
+    /// Directory storage budget exhausted.
+    Capacity,
+    /// Directory has not been opened.
+    Unavailable,
+    /// Child directory delivery unconfirmed.
+    ChildUnconfirmed,
+}
+
+impl std::fmt::Display for DirectoryError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Unauthorized => "Unexpected topology sender",
+            Self::InvalidDelivery => "Invalid topology delivery",
+            Self::GenerationChanged => "Installation generation changed",
+            Self::RevisionConflict => "Directory revision conflicts with retained state",
+            Self::Withdrawn => "Child installation was withdrawn",
+            Self::Capacity => "Directory storage budget exhausted",
+            Self::Unavailable => "Directory has not been opened",
+            Self::ChildUnconfirmed => "Child directory delivery unconfirmed",
+        })
+    }
+}
+
+impl std::error::Error for DirectoryError {}
+
 /// One addressed installation on the remaining path, in parent-to-child order.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Hop {
@@ -170,6 +224,34 @@ pub struct Delivery {
     pub path: Vec<Hop>,
 }
 
+/// Root's outcome when replaying a retained directory revision to a named service.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+pub enum RedeliveryError {
+    /// Root has no ready named services.
+    NoReadyServices,
+    /// Retained services failed directory validation.
+    InvalidDirectory,
+    /// Root's directory changed before or during delivery.
+    RevisionChanged,
+    /// The requested service is absent from this revision.
+    UnknownService,
+    /// At least one path lacked a successful acknowledgement.
+    DeliveryUnconfirmed,
+}
+
+/// Deliver a named service's original directory revision again.
+#[cfg(feature = "method")]
+pub struct RedeliverDirectoryRevision;
+
+#[cfg(feature = "method")]
+impl crate::method::Contract for RedeliverDirectoryRevision {
+    const NAME: &'static str = "redeliver_directory_revision";
+    const ID: u64 = ic_wire::method_id("canic.topology.redeliver_directory_revision.v1");
+    type Input = (String, u64);
+    type Output = Result<u64, RedeliveryError>;
+}
+
 /// Directional Wire contract for a full service directory delivery.
 #[cfg(feature = "method")]
 pub struct ReceiveDirectory;
@@ -181,7 +263,7 @@ impl crate::method::Contract for ReceiveDirectory {
     const REQUEST: ic_wire::Limits = DIRECTORY_LIMITS;
     const REPLY: ic_wire::Limits = crate::method::LIMITS;
     type Input = Delivery;
-    type Output = Result<(), String>;
+    type Output = Result<(), DirectoryError>;
 }
 
 /// Withdraw one exact child installation before its principal can be recycled.
@@ -194,7 +276,7 @@ impl crate::method::Contract for WithdrawChild {
     const ID: u64 = ic_wire::method_id("canic.withdraw_child.v1");
     const REQUEST: ic_wire::Limits = DIRECTORY_LIMITS;
     type Input = (Principal, [u8; 32]);
-    type Output = Result<(), String>;
+    type Output = Result<(), DirectoryError>;
 }
 
 /// Mount delivery into the actor’s retained service directory. Install or reopen the
@@ -206,7 +288,7 @@ macro_rules! mount_service_directory {
         #[$crate::update(contract = $crate::topology::directory::ReceiveDirectory)]
         async fn receive_directory(
             update: $crate::topology::directory::Delivery,
-        ) -> Result<(), String> {
+        ) -> Result<(), $crate::topology::directory::DirectoryError> {
             use $crate::topology::directory::retained::{self, DIRECTORY};
             retained::receive(&DIRECTORY, update).await
         }
@@ -214,7 +296,7 @@ macro_rules! mount_service_directory {
         #[$crate::update(contract = $crate::topology::directory::WithdrawChild)]
         fn withdraw_child(
             child: <$crate::topology::directory::WithdrawChild as $crate::method::Contract>::Input,
-        ) -> Result<(), String> {
+        ) -> Result<(), $crate::topology::directory::DirectoryError> {
             $crate::topology::directory::retained::withdraw(child)
         }
     };
@@ -231,6 +313,7 @@ pub const DIRECTORY_LIMITS: ic_wire::Limits = ic_wire::Limits {
 /// Recipient-local persistence under the application's existing Storage bootstrap.
 #[cfg(feature = "storage")]
 pub mod retained {
+    use super::DirectoryError;
     use super::{DIRECTORY_LIMITS, Delivery, Directory, Hop, Principal, check_name};
     use ic_storage::{MemoryBacking, MemoryRuntime, adapter::StableCell};
 
@@ -410,31 +493,32 @@ pub mod retained {
         /// Validate the IC caller and branch against this receiver, then commit its local projection.
         /// # Errors
         /// Refuses an invalid publisher, target, role, path or superseded directory.
-        pub fn accept(&mut self, update: &Delivery) -> Result<(), &'static str> {
+        pub fn accept(&mut self, update: &Delivery) -> Result<(), DirectoryError> {
             let receiver = ic_platform_runtime::system::canister_self();
-            crate::guard::require_sender(self.publisher())?;
-            let first = update.path.first().ok_or("empty topology path")?;
+            crate::guard::require_sender(self.publisher())
+                .map_err(|_| DirectoryError::Unauthorized)?;
+            let first = update.path.first().ok_or(DirectoryError::InvalidDelivery)?;
             if first.canister != receiver || first.role != self.role() {
-                return Err("unexpected topology receiver or role");
+                return Err(DirectoryError::InvalidDelivery);
             }
             let mut seen = std::collections::BTreeSet::from([self.publisher()]);
             for hop in &update.path {
-                check_name(&hop.role)?;
+                check_name(&hop.role).map_err(|_| DirectoryError::InvalidDelivery)?;
                 if hop
                     .shard_pool
                     .as_ref()
                     .is_some_and(|pool| pool.is_empty() || pool.len() > 64)
                 {
-                    return Err("invalid shard pool name");
+                    return Err(DirectoryError::InvalidDelivery);
                 }
                 if update.directory.services.iter().any(|row| {
                     row.canister == hop.canister
                         && (row.role != hop.role || hop.shard_pool.is_some())
                 }) {
-                    return Err("conflicting published role");
+                    return Err(DirectoryError::InvalidDelivery);
                 }
                 if hop.canister.as_slice().last() != Some(&1) || !seen.insert(hop.canister) {
-                    return Err("invalid topology path");
+                    return Err(DirectoryError::InvalidDelivery);
                 }
             }
             self.apply(&update.directory, first.generation, update.path.get(1))
@@ -445,17 +529,17 @@ pub mod retained {
             &mut self,
             directory: &Directory,
             child: &Hop,
-        ) -> Result<(), &'static str> {
+        ) -> Result<(), DirectoryError> {
             let rev = directory.revision;
             if self.current() != Some(directory) {
-                return Err("directory revision changed");
+                return Err(DirectoryError::RevisionConflict);
             }
             let mut record = self.record.clone();
             let entry = record
                 .children
                 .iter_mut()
                 .find(|entry| &entry.hop == child)
-                .ok_or("child installation changed")?;
+                .ok_or(DirectoryError::GenerationChanged)?;
             if entry.acknowledged != Some(rev) {
                 entry.acknowledged = Some(rev);
                 self.save(record)?;
@@ -466,7 +550,7 @@ pub mod retained {
         pub(super) fn withdraw(
             &mut self,
             target: (Principal, [u8; 32]),
-        ) -> Result<(), &'static str> {
+        ) -> Result<(), DirectoryError> {
             if self.record.withdrawn.contains(&target) {
                 return Ok(());
             }
@@ -478,9 +562,9 @@ pub mod retained {
             self.save(record)
         }
 
-        fn save(&mut self, record: Record) -> Result<(), &'static str> {
+        fn save(&mut self, record: Record) -> Result<(), DirectoryError> {
             let bytes = ic_wire::encode(&record, INDEX_FRAME, DIRECTORY_LIMITS)
-                .map_err(|_| "service directory exceeds its storage budget")?;
+                .map_err(|_| DirectoryError::Capacity)?;
             self.cell.set(bytes);
             self.record = record;
             Ok(())
@@ -491,20 +575,21 @@ pub mod retained {
             next: &Directory,
             generation: [u8; 32],
             child: Option<&Hop>,
-        ) -> Result<(), &'static str> {
-            next.validate()?;
+        ) -> Result<(), DirectoryError> {
+            next.validate()
+                .map_err(|_| DirectoryError::InvalidDelivery)?;
             if let Some(current) = self.current()
                 && current != next
                 && current.revision >= next.revision
             {
-                return Err("stale or conflicting service directory");
+                return Err(DirectoryError::RevisionConflict);
             }
             if self
                 .record
                 .generation
                 .is_some_and(|current| current != generation)
             {
-                return Err("conflicting receiver installation");
+                return Err(DirectoryError::GenerationChanged);
             }
             if let Some(current) = self.current()
                 && current.revision < next.revision
@@ -513,7 +598,7 @@ pub mod retained {
                     .iter()
                     .all(|service| next.services.contains(service))
             {
-                return Err("published service binding changed");
+                return Err(DirectoryError::RevisionConflict);
             }
             let mut record = self.record.clone();
             record.generation = Some(generation);
@@ -522,15 +607,15 @@ pub mod retained {
                     .withdrawn
                     .contains(&(child.canister, child.generation))
                 {
-                    return Err("child installation withdrawn");
+                    return Err(DirectoryError::Withdrawn);
                 }
                 if let Some((stored, _)) = self.child_delivery(child.canister) {
                     if stored != child {
-                        return Err("conflicting child installation");
+                        return Err(DirectoryError::GenerationChanged);
                     }
                 } else {
                     if record.children.len() >= 16 {
-                        return Err("too many direct children");
+                        return Err(DirectoryError::Capacity);
                     }
                     record.children.push(Child {
                         hop: child.clone(),
@@ -555,11 +640,12 @@ pub mod retained {
     /// Durably refuse future deliveries for the exact installation.
     /// # Errors
     /// Requires the retained publisher and sufficient index space.
-    pub fn withdraw(target: (Principal, [u8; 32])) -> Result<(), String> {
+    pub fn withdraw(target: (Principal, [u8; 32])) -> Result<(), DirectoryError> {
         DIRECTORY.with_borrow_mut(|cell| {
-            let index = cell.as_mut().ok_or("directory unavailable")?;
-            crate::guard::require_sender(index.publisher())?;
-            Ok(index.withdraw(target)?)
+            let index = cell.as_mut().ok_or(DirectoryError::Unavailable)?;
+            crate::guard::require_sender(index.publisher())
+                .map_err(|_| DirectoryError::Unauthorized)?;
+            index.withdraw(target)
         })
     }
 
@@ -572,7 +658,7 @@ pub mod retained {
     pub async fn receive<M: MemoryBacking + 'static>(
         index: &'static std::thread::LocalKey<std::cell::RefCell<Option<Index<M>>>>,
         mut update: Delivery,
-    ) -> Result<(), String> {
+    ) -> Result<(), DirectoryError> {
         index.with_borrow_mut(|slot| slot.as_mut().expect("open service index").accept(&update))?;
         update.path.remove(0);
         let Some(child) = update.path.first().cloned() else {
@@ -580,12 +666,10 @@ pub mod retained {
         };
         crate::method::call::<super::ReceiveDirectory>(child.canister, 5, &update)
             .await
-            .map_err(|_| "child directory delivery unconfirmed")??;
+            .map_err(|_| DirectoryError::ChildUnconfirmed)??;
         index.with_borrow_mut(|slot| {
             let index = slot.as_mut().expect("open service index");
-            index
-                .acknowledge(&update.directory, &child)
-                .map_err(String::from)
+            index.acknowledge(&update.directory, &child)
         })
     }
 }
@@ -615,7 +699,7 @@ impl DbService {
                 .map_err(|_| "malformed receiver installation")?;
             if receiver.application.first_chunk().is_some_and(|header| {
                 ic_wire::validate_request_header(
-                    ic_wire::method_id("canic.service_install.v1"),
+                    ic_wire::method_id("canic.managed_service_install.v1"),
                     header,
                 )
                 .is_ok()

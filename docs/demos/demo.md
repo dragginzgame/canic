@@ -35,7 +35,7 @@ the profile app as the hands-on consumer. Capture and restore will be explicit
 operator maintenance operations; restoration keeps writes fenced until the
 operator explicitly accepts and reopens the application. The Backup signer exercise below qualifies this path locally.
 
-The counter stores a bounded 256-byte payload in a named Storage 0.78 cell.
+The counter stores a bounded 256-byte payload in a named Storage 0.80 cell.
 Its installed local witness checks an eight-page backing limit. The app lives in `apps/examples/counter`; it owns its protocol, value,
 installation authority and maintenance attempts. No temporary raw memory
 implementation or fallback Storage owner is added. The profile packages

@@ -6,11 +6,7 @@ mod tests;
 mod stored;
 
 use crate::{Error, Plan, Result, network::principal, operation, signed, store, supplier};
-use canic_management_protocol::{
-    LIMITS, Phase, STATUS, Status,
-    custody::{self, Custody},
-    upgrade,
-};
+use canic_management_protocol::{Phase, application, custody, upgrade};
 use ic_platform::native::ReadClient;
 use std::path::Path;
 
@@ -93,119 +89,26 @@ pub(crate) fn implicit_child_root(module: &str) -> bool {
     )
 }
 
-fn single_upgrade_root(plan: &Plan) -> bool {
-    plan.previous_module().map(String::as_str) == Some(SINGLE_UPGRADE_ROOT)
-}
-
-// Execution and status share the exact retained-read locations for this predecessor.
-pub(crate) fn observations(plan: &Plan, after: bool) -> &'static [(&'static str, &'static str)] {
-    if plan
-        .maintenance_store()
-        .is_some_and(|s| !s.history.is_empty())
-    {
-        return if after {
-            &[("custody-after", "observe_root_history")]
-        } else {
-            &[("custody-before", "observe_root_history")]
-        };
-    }
-    if plan
-        .maintenance_store()
-        .is_some_and(|s| s.operation.is_some())
-    {
-        return if after {
-            &[("custody-after", "observe_root_custody")]
-        } else {
-            &[("custody-before", "observe_root_custody")]
-        };
-    }
-    if plan.maintenance_store().is_some() {
-        return if after {
-            &[("custody-after", "observe_stored_children")]
-        } else {
-            &[("custody-before", "observe_stored_children")]
-        };
-    }
-    if plan
-        .maintenance()
-        .is_some_and(|children| children.len() > 1)
-    {
-        return if after {
-            &[("custody-after", "observe_children")]
-        } else {
-            &[("custody-before", "observe_children")]
-        };
-    }
+pub(crate) fn observations(_: &Plan, after: bool) -> &'static [(&'static str, &'static str)] {
     if after {
-        &[("custody-after", "observe_custody")]
-    } else if single_upgrade_root(plan) {
-        &[
-            ("custody-before-creation", "observe"),
-            ("custody-before-upgrade", "observe_upgrade"),
-        ]
+        &[("custody-after", "observe_root_custody")]
     } else {
-        &[("custody-before", "observe_custody")]
+        &[("custody-before", "observe_root_custody")]
     }
 }
 
-/// Exact read authority derived from the approved predecessor, never endpoint probing.
 pub(crate) fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
     validate(plan)?;
-    if plan.maintenance_store().is_some() {
-        if method != observations(plan, false)[0].1 {
-            return Err(invalid());
-        }
-        if matches!(method, "observe_root_custody" | "observe_root_history") {
-            return ic_wire::encode(
-                &(),
-                ic_wire::Encoding::Frame {
-                    method: if method == "observe_root_history" {
-                        custody::ROOT_HISTORY
-                    } else {
-                        custody::ROOT
-                    },
-                    direction: ic_wire::Direction::Request,
-                },
-                custody::ROOT_HISTORY_LIMITS,
-            )
-            .map_err(supplier);
-        }
-        return ic_wire::encode(
-            &(),
-            ic_wire::Encoding::Frame {
-                method: canic_management_protocol::stored::CUSTODY,
-                direction: ic_wire::Direction::Request,
-            },
-            canic_management_protocol::stored::LIMITS,
-        )
-        .map_err(supplier);
+    if method != "observe_root_custody" {
+        return Err(invalid());
     }
-    let (id, limits) = match method {
-        "observe_children"
-            if plan
-                .maintenance()
-                .is_some_and(|children| children.len() > 1) =>
-        {
-            (canic_management_protocol::children::CUSTODY, LIMITS)
-        }
-        "observe_custody"
-            if plan
-                .maintenance()
-                .is_some_and(|children| children.len() == 1) =>
-        {
-            (custody::OBSERVE, custody::LIMITS)
-        }
-        "observe" if single_upgrade_root(plan) => (STATUS, LIMITS),
-        "observe_upgrade" if single_upgrade_root(plan) => (upgrade::STATUS, LIMITS),
-        _ => return Err(invalid()),
-    };
     ic_wire::encode(
         &(),
         ic_wire::Encoding::Frame {
-            method: id,
+            method: application::CUSTODY,
             direction: ic_wire::Direction::Request,
         },
-        limits,
+        application::LIMITS,
     )
     .map_err(supplier)
 }
@@ -220,7 +123,9 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
         return Err(invalid());
     };
     if expected.is_empty()
-        || (single_upgrade_root(plan) && expected.len() != 1)
+        || plan
+            .previous_module()
+            .is_some_and(|module| implicit_child_root(module))
         || expected
             .iter()
             .map(|c| &c.creation.worker)
@@ -241,7 +146,6 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
             || expected.creation.stable_pages != 0
             || expected.creation.maintenance_candidate
             || expected.upgrades.len() > upgrade::MAX_UPGRADES
-            || (single_upgrade_root(plan) && expected.upgrades.len() > 1)
             || expected.upgrades.iter().any(|s| {
                 s.phase != upgrade::Phase::Ready
                     || s.failure.is_some()
@@ -287,19 +191,7 @@ fn retained_at(dir: &Path, plan: &Plan, after: bool) -> Result<bool> {
         if !matches_plan(
             plan,
             method,
-            &store::read(
-                &path,
-                if plan
-                    .maintenance_store()
-                    .is_some_and(|s| s.operation.is_some())
-                {
-                    custody::ROOT_HISTORY_LIMITS.bytes
-                } else if plan.maintenance_store().is_some() {
-                    canic_management_protocol::stored::LIMITS.bytes
-                } else {
-                    canic_management_protocol::children::LIMITS.bytes
-                },
-            )?,
+            &store::read(&path, application::LIMITS.bytes)?,
         )? {
             return Err(invalid());
         }
@@ -308,74 +200,16 @@ fn retained_at(dir: &Path, plan: &Plan, after: bool) -> Result<bool> {
 }
 
 fn matches_plan(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
-    let expected = plan.maintenance().ok_or_else(invalid)?;
-    if plan.maintenance_store().is_some() {
-        return stored::matches(plan, method, bytes);
+    if method != "observe_root_custody" {
+        return Err(invalid());
     }
-    if method == "observe_children" {
-        let observed: canic_management_protocol::children::Custody = ic_wire::decode(
-            bytes,
-            ic_wire::Encoding::Frame {
-                method: canic_management_protocol::children::CUSTODY,
-                direction: ic_wire::Direction::Response,
-            },
-            canic_management_protocol::children::LIMITS,
-        )
-        .map_err(supplier)?;
-        Ok(observed.starts_with(expected)
-            && observed[expected.len()..]
-                .iter()
-                .all(|c| c.creation == Status::default() && c.upgrades.is_empty()))
-    } else {
-        let [child] = expected else {
-            return Err(invalid());
-        };
-        matches(child, method, bytes)
-    }
-}
-
-fn matches(expected: &Custody, method: &str, bytes: &[u8]) -> Result<bool> {
-    match method {
-        "observe" => {
-            let mut observed: Status = ic_wire::decode(
-                bytes,
-                ic_wire::Encoding::Frame {
-                    method: STATUS,
-                    direction: ic_wire::Direction::Response,
-                },
-                LIMITS,
-            )
-            .map_err(supplier)?;
-            observed.stable_pages = 0;
-            observed.maintenance_candidate = false;
-            Ok(observed == expected.creation)
-        }
-        "observe_upgrade" => {
-            let observed: upgrade::Status = ic_wire::decode(
-                bytes,
-                ic_wire::Encoding::Frame {
-                    method: upgrade::STATUS,
-                    direction: ic_wire::Direction::Response,
-                },
-                LIMITS,
-            )
-            .map_err(supplier)?;
-            Ok(observed == expected.upgrades.first().cloned().unwrap_or_default())
-        }
-        "observe_custody" => {
-            let observed: Custody = ic_wire::decode(
-                bytes,
-                ic_wire::Encoding::Frame {
-                    method: custody::OBSERVE,
-                    direction: ic_wire::Direction::Response,
-                },
-                custody::LIMITS,
-            )
-            .map_err(supplier)?;
-            Ok(&observed == expected)
-        }
-        _ => Err(invalid()),
-    }
+    let actual = crate::root_custody::decode(application::CUSTODY, bytes)?;
+    let expected = stored::expected(plan)?;
+    let store = plan.maintenance_store();
+    Ok(actual.applications.iter().all(Option::is_none)
+        && actual.root.current.stored == expected
+        && actual.root.current.store_operation.as_ref() == store.and_then(|s| s.operation.as_ref())
+        && actual.root.store_history.as_slice() == store.map_or(&[][..], |s| s.history.as_slice()))
 }
 
 pub(crate) fn require_before(dir: &Path, plan: &Plan) -> Result<()> {

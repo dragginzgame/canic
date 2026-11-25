@@ -17,6 +17,7 @@ fn reserve_preview_uses_the_prepared_principals_and_terms() {
         }],
     };
     let plan = canic_host::FleetPlanning::PlacementPools {
+        routes: Default::default(),
         app: "miners".into(),
         fleet: "demo".into(),
         network: Network::Mainnet,

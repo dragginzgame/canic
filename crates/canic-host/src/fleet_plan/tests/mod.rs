@@ -684,7 +684,7 @@ fn two_child_approval_retains_slot_mapping_and_cancels_only_before_preparation()
     sibling.wasm = Some("app.wasm".into());
     selected.config.canisters.insert("worker".into(), sibling);
     let (id, fleet) = create(&dir, &selected).unwrap();
-    assert_eq!(fleet.version, 8);
+    assert_eq!(fleet.version, 9);
     assert_eq!(fleet.children[0].deployment.canister, "app");
     assert_eq!(fleet.children[1].deployment.canister, "worker");
     assert_eq!(create(&dir, &selected).unwrap().0, id);

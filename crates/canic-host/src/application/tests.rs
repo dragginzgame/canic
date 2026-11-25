@@ -313,7 +313,7 @@ fn resolved_issuer_requires_the_completed_call_for_this_root_and_fleet() {
         &call(&plan, &bytes).unwrap(),
         crate::now().unwrap() - 1,
     );
-    let response: std::result::Result<ic_wire::Bytes<32>, String> =
+    let response: std::result::Result<ic_wire::Bytes<32>, canic::topology::attestation::RoleError> =
         Ok(ic_wire::Bytes::new(vec![9; 32]).unwrap());
     std::fs::write(
         path.join("reply.bin"),

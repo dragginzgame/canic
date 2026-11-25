@@ -16,7 +16,7 @@ pub(super) async fn exercise(root: &Client<'_>, target: CanisterId, sibling: Can
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
     };
     let configure = async |r: &ChildFunding| {
-        root.update::<_, Result<ChildFundingStatus, String>>(
+        root.update::<_, Result<ChildFundingStatus, stored::FundingError>>(
             ConfigureChildFunding::NAME,
             ConfigureChildFunding::ID,
             r,
@@ -68,8 +68,9 @@ pub(super) async fn exercise(root: &Client<'_>, target: CanisterId, sibling: Can
         (2, rule.budget_cycles)
     );
     assert!(!spent.issued);
+    assert_funding_upgrade_refused(root, "without-topups.wasm", "child-funding").await;
     let closed = root
-        .update::<_, Result<ChildFundingStatus, String>>(
+        .update::<_, Result<ChildFundingStatus, stored::FundingError>>(
             StopChildFunding::NAME,
             StopChildFunding::ID,
             &rule.child,
@@ -98,14 +99,20 @@ pub(super) async fn application_parent(
         budget_cycles: amount * 3,
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
     };
+    let payer = Client {
+        pic,
+        id: parent,
+        operator: root.operator,
+    };
     let configure = async |r: &ChildFunding| {
-        root.update::<_, Result<ChildFundingStatus, String>>(
-            ConfigureChildFunding::NAME,
-            ConfigureChildFunding::ID,
-            r,
-            ConfigureChildFunding::REPLY,
-        )
-        .await
+        payer
+            .update::<_, Result<ChildFundingStatus, stored::FundingError>>(
+                ConfigureChildFunding::NAME,
+                ConfigureChildFunding::ID,
+                r,
+                ConfigureChildFunding::REPLY,
+            )
+            .await
     };
     let mut wrong = rule.clone();
     wrong.child = root.id.to_text().parse().unwrap();
@@ -117,7 +124,7 @@ pub(super) async fn application_parent(
     };
     let request = async |client: &Client<'_>, seq: u64| {
         client
-            .update::<_, Result<u64, String>>(
+            .update::<_, Result<u64, stored::FundingError>>(
                 "request_child_funding",
                 ic_wire::method_id("request_child_funding"),
                 &(seq, 1_u128),
@@ -125,12 +132,31 @@ pub(super) async fn application_parent(
             )
             .await
     };
-    assert!(request(&outsider, 1).await.is_err());
+    assert_eq!(
+        request(&outsider, 1).await,
+        Err(stored::FundingError::UnknownChild)
+    );
     let before = pic.cycle_balance(child).await;
     let parent_before = pic.cycle_balance(parent).await;
     assert_eq!(
         configure(&rule).await.unwrap(),
         ChildFundingStatus::default()
+    );
+    let unauthorized = Client {
+        pic,
+        id: parent,
+        operator: root.id,
+    };
+    assert_eq!(
+        unauthorized
+            .update::<_, Result<ChildFundingStatus, stored::FundingError>>(
+                ConfigureChildFunding::NAME,
+                ConfigureChildFunding::ID,
+                &rule,
+                ConfigureChildFunding::REPLY
+            )
+            .await,
+        Err(stored::FundingError::Unauthorized)
     );
     let advance = async || {
         pic.advance_time(Duration::from_secs(61)).await;
@@ -168,17 +194,18 @@ pub(super) async fn application_parent(
     pic.add_cycles(child, u128::from(8 * amount)).await;
     advance().await;
     assert_eq!(configure(&rule).await.unwrap(), second);
-    let closed = root
-        .update::<_, Result<ChildFundingStatus, String>>(
-            stored::StopApplicationChildFunding::NAME,
-            stored::StopApplicationChildFunding::ID,
-            &(rule.parent, rule.child),
-            stored::StopApplicationChildFunding::REPLY,
+    let closed = payer
+        .update::<_, Result<ChildFundingStatus, stored::FundingError>>(
+            StopChildFunding::NAME,
+            StopChildFunding::ID,
+            &rule.child,
+            StopChildFunding::REPLY,
         )
         .await
         .unwrap();
     advance().await;
     assert!(closed.closed);
+    assert_eq!(request(&client, 3).await, Err(stored::FundingError::Closed));
     assert_eq!(configure(&rule).await.unwrap(), closed);
     assert!(request(&client, 3).await.is_err());
 }

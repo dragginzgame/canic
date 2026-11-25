@@ -49,10 +49,45 @@ pub struct FleetChild {
     /// Resolve this service role and Root public key into the approved install.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_role: Option<String>,
+    /// Include a route administration grant for the fleet operator in the hub installation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub route_operator_role: Option<String>,
+    /// Bind the operator for payment administration on this service.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub funding_operator_role: Option<String>,
     /// Child attachment drawn from Root's funded budget, not another host debit.
     pub creation_cycles: u64,
     /// Earliest autonomous dispatch; admission must precede this time.
     pub execute_at_ns: u64,
+}
+
+impl FleetChild {
+    fn service_install(&self, controller: &str, application: Vec<u8>) -> Result<Option<Vec<u8>>> {
+        let mut roles = [
+            &self.receiver_role,
+            &self.route_operator_role,
+            &self.funding_operator_role,
+        ]
+        .into_iter()
+        .flatten();
+        let Some(role) = roles.next() else {
+            return Ok(None);
+        };
+        if roles.any(|other| other != role) {
+            return Err(invalid());
+        }
+        let controller = crate::network::principal(controller)?;
+        canic::topology::directory::ServiceInstall {
+            funding_operator: self.funding_operator_role.as_ref().map(|_| controller),
+            hub_operator: self.route_operator_role.as_ref().map(|_| controller),
+            name: self.deployment.canister.clone(),
+            role: role.clone(),
+            application,
+        }
+        .encode()
+        .map(Some)
+        .map_err(|e| Error::Invalid(e.into()))
+    }
 }
 
 /// Infrastructure installation bound to the approved Root creation output.
@@ -82,7 +117,7 @@ pub struct FleetPlan {
     pub store: Option<FleetStore>,
 }
 
-const SERVICE_RECORD_VERSION: u32 = 8;
+const SERVICE_RECORD_VERSION: u32 = 9;
 const CHILD_WINDOW_NS: u64 = 600_000_000_000;
 
 fn fleet_version(children: usize, receivers: bool) -> u32 {
@@ -143,6 +178,11 @@ impl FleetPlan {
         self.root.validate()?;
         let root = self.root.deployment.as_ref().ok_or_else(invalid)?;
         if self.children.is_empty()
+            || (self.version < SERVICE_RECORD_VERSION
+                && self
+                    .children
+                    .iter()
+                    .any(|c| c.route_operator_role.is_some() || c.funding_operator_role.is_some()))
             || (self.version < SERVICE_RECORD_VERSION
                 && self.children.len() > ChildId::HISTORICAL_SERVICES.len())
             || !self
@@ -293,23 +333,20 @@ impl FleetPlan {
             .iter()
             .any(|child| child.receiver_role.is_some())
         {
-            let definition = self.child(slot)?;
             plan.version = 8;
-            if let crate::PlanAction::CreateChild(owner) = &mut plan.action {
-                owner.arguments = definition
-                    .receiver_role
-                    .as_ref()
-                    .map(|role| {
-                        canic::topology::directory::ServiceInstall {
-                            name: definition.deployment.canister.clone(),
-                            role: role.clone(),
-                            application: role_key::retained(dir, self, receipt)?,
-                        }
-                        .encode()
-                        .map_err(|e| Error::Invalid(e.into()))
-                    })
-                    .transpose()?;
-            }
+            plan.validate()?;
+        }
+        let definition = self.child(slot)?;
+        let application = if definition.receiver_role.is_some() {
+            role_key::retained(dir, self, receipt)?
+        } else {
+            Vec::new()
+        };
+        if let Some(arguments) = definition.service_install(&self.root.controller, application)?
+            && let crate::PlanAction::CreateChild(owner) = &mut plan.action
+        {
+            plan.version = if owner.source.is_some() { 8 } else { 6 };
+            owner.arguments = Some(arguments);
             plan.validate()?;
         }
         Ok(plan)
@@ -497,7 +534,7 @@ pub fn plan_fleet(
             "prepare_role_key",
             "issue_role",
             "close_role_issuance",
-            "observe_role_children",
+            "observe_child_deployments",
         ]
         .iter()
         .any(|required| {
@@ -592,6 +629,14 @@ pub fn plan_fleet(
                     &child_bytes[index],
                 )
             }),
+            funding_operator_role: selected
+                .config
+                .funding_operator_role(children[index].0)
+                .map(str::to_owned),
+            route_operator_role: selected
+                .config
+                .route_operator_role(children[index].0)
+                .map(str::to_owned),
             receiver_role: selected
                 .config
                 .role_receivers
@@ -603,10 +648,12 @@ pub fn plan_fleet(
         })
     };
     let mut value = FleetPlan {
-        version: if crate::maintenance::implicit_child_root(&root.artifact.sha256)
-            || methods
-                .iter()
-                .any(|m| m.mode == "update" && m.name == "observe_store_custody")
+        version: if selected.config.shard_pools.is_empty()
+            && selected.config.top_up_children.is_empty()
+            && (crate::maintenance::implicit_child_root(&root.artifact.sha256)
+                || methods
+                    .iter()
+                    .any(|m| m.mode == "update" && m.name == "observe_store_custody"))
         {
             fleet_version(children.len(), !selected.config.role_receivers.is_empty())
         } else {
@@ -724,7 +771,10 @@ pub fn plan_fleet(
         }
         // Existing approvals keep their delivery contract; a Store alone never migrates inline custody.
         for (child, retained) in value.children.iter_mut().zip(&old.children) {
-            if child.receiver_role != retained.receiver_role {
+            if child.receiver_role != retained.receiver_role
+                || child.route_operator_role != retained.route_operator_role
+                || child.funding_operator_role != retained.funding_operator_role
+            {
                 return Err(Error::Blocked(
                     "changing installed receiver trust requires a separate approval".into(),
                 ));

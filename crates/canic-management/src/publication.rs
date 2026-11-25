@@ -19,7 +19,7 @@ use ic_wasm_store_protocol as store;
 /// Traps unless the actual caller currently controls this Root.
 pub async fn execute(input: Request) -> Reply {
     let target = admit(&input.store, input.expires_at_ns)?;
-    if crate::engine::store_maintenance::active() && !matches!(input.command, Command::Observe(_)) {
+    if crate::engine::store_maintenance::active() {
         return Err(Error::Maintenance);
     }
     let (method, id, bytes, release) = match &input.command {
@@ -56,19 +56,6 @@ pub async fn execute(input: Request) -> Reply {
                 value,
                 ic_wire::Encoding::Frame {
                     method: store::PUBLISH,
-                    direction: ic_wire::Direction::Request,
-                },
-                STORE_LIMITS,
-            ),
-            value,
-        ),
-        Command::Observe(value) => (
-            "observe",
-            store::STATUS,
-            ic_wire::encode(
-                value,
-                ic_wire::Encoding::Frame {
-                    method: store::STATUS,
                     direction: ic_wire::Direction::Request,
                 },
                 STORE_LIMITS,
@@ -146,13 +133,13 @@ pub async fn remove(
     if !input.manifest.valid() {
         return Err(Error::Invalid);
     }
-    let (method, id) = match input.action {
-        Removal::Delete => ("delete", store::DELETE),
-        Removal::Cancel => ("cancel", store::CANCEL),
+    let command = match input.action {
+        Removal::Delete => store::Remove::Delete(input.manifest.clone()),
+        Removal::Cancel => store::Remove::Cancel(input.manifest.clone()),
     };
     // A stalled Store may retain this call indefinitely; the caller stays blocked.
     let reply: Result<store::Manifest, store::Error> =
-        store_call(target, method, id, &input.manifest, Wait::Unbounded).await?;
+        store_call(target, "remove", store::REMOVE, &command, Wait::Unbounded).await?;
     let removed = reply.map_err(Error::Store)?;
     if removed != input.manifest {
         return Err(Error::Uncertain);
@@ -168,6 +155,20 @@ pub async fn observe(
 ) -> canic_management_protocol::publication::ObservationReply {
     use canic_management_protocol::publication::{Observation, ObservationRequest};
     match input {
+        ObservationRequest::ReleaseStatus(request) => {
+            let target = admit(&request.store, request.expires_at_ns)?;
+            if !request.release.valid() {
+                return Err(Error::Invalid);
+            }
+            match observation(target, &store::Observe::Status(request.release.clone())).await? {
+                store::Observation::Status(status)
+                    if status.manifest.release == request.release =>
+                {
+                    Ok(Observation::ReleaseStatus(status))
+                }
+                _ => Err(Error::Uncertain),
+            }
+        }
         ObservationRequest::Info(request) => observe_info(request).await.map(Observation::Info),
         ObservationRequest::Custody(request) => {
             observe_custody(request).await.map(Observation::Custody)
@@ -185,14 +186,10 @@ pub async fn observe_info(
     input: canic_management_protocol::publication::InfoRequest,
 ) -> canic_management_protocol::publication::InfoReply {
     let target = admit(&input.store, input.expires_at_ns)?;
-    store_call(
-        target,
-        "observe_info",
-        store::INFO,
-        &(),
-        Wait::Bounded { seconds: 5 },
-    )
-    .await
+    match observation(target, &store::Observe::Info).await? {
+        store::Observation::Info(info) => Ok(info),
+        _ => Err(Error::Uncertain),
+    }
 }
 
 /// Read one release and all retention obligations on its artifact through Root.
@@ -208,15 +205,11 @@ pub async fn observe_custody(
     if !input.release.valid() {
         return Err(Error::Invalid);
     }
-    let reply: Result<store::Custody, store::Error> = store_call(
-        target,
-        "observe_custody",
-        store::CUSTODY,
-        &input.release,
-        Wait::Bounded { seconds: 5 },
-    )
-    .await?;
-    let custody = reply.map_err(Error::Store)?;
+    let store::Observation::Custody(custody) =
+        observation(target, &store::Observe::Custody(input.release.clone())).await?
+    else {
+        return Err(Error::Uncertain);
+    };
     if custody.status.manifest.release != input.release || custody.pins.len() > store::MAX_PINS {
         return Err(Error::Uncertain);
     }
@@ -243,6 +236,21 @@ pub async fn admission(
         "admission",
         store::ADMISSION,
         &input.command,
+        Wait::Bounded { seconds: 5 },
+    )
+    .await?;
+    reply.map_err(Error::Store)
+}
+
+async fn observation(
+    target: Principal,
+    request: &store::Observe,
+) -> Result<store::Observation, Error> {
+    let reply: Result<store::Observation, store::Error> = store_call(
+        target,
+        "observe",
+        store::OBSERVE,
+        request,
         Wait::Bounded { seconds: 5 },
     )
     .await?;

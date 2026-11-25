@@ -38,13 +38,16 @@ pub(super) fn retained(dir: &Path, fleet: &FleetPlan, root: &Receipt) -> Result<
 }
 
 pub(crate) fn decode(reply: &[u8]) -> Result<[u8; 32]> {
-    let key: std::result::Result<ic_wire::Bytes<32>, String> = ic_wire::decode(
-        reply,
-        frame(ic_wire::Direction::Response),
-        canic_management_protocol::LIMITS,
-    )
-    .map_err(supplier)?;
-    let key = key.map_err(crate::Error::Blocked)?.into_vec();
+    let key: std::result::Result<ic_wire::Bytes<32>, canic::topology::attestation::RoleError> =
+        ic_wire::decode(
+            reply,
+            frame(ic_wire::Direction::Response),
+            canic_management_protocol::LIMITS,
+        )
+        .map_err(supplier)?;
+    let key = key
+        .map_err(|e| crate::Error::Blocked(e.to_string()))?
+        .into_vec();
     key.try_into().map_err(|_| invalid())
 }
 

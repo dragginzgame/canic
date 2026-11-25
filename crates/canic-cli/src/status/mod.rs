@@ -34,11 +34,12 @@ pub(crate) fn plan_preview<'a>(
             approval,
             capacity,
             increases,
+            routes,
             ..
         } => {
             let mut text = pool_header(&deployment.app, &deployment.fleet, network, controller)?;
             pool_terms(&mut text, capacity.as_ref(), None, increases);
-            write_shard(&mut text, approval);
+            write_shard(&mut text, approval, routes.approval.1);
             text
         }
         FleetPlanning::PlacementPools {
@@ -49,6 +50,7 @@ pub(crate) fn plan_preview<'a>(
             capacity,
             standby,
             increases,
+            routes,
             shards,
             instances,
             singleton,
@@ -62,7 +64,11 @@ pub(crate) fn plan_preview<'a>(
                 increases,
             );
             for shard in shards {
-                write_shard(&mut text, &shard.approval);
+                write_shard(
+                    &mut text,
+                    &shard.approval,
+                    routes[&shard.approval.pool].approval.1,
+                );
             }
             if let Some(instance) = instances {
                 write_allocation(&mut text, "Registry", &instance.approval);
@@ -80,7 +86,6 @@ pub(crate) fn plan_preview<'a>(
                 pool_release(
                     &mut text,
                     &grant.reference,
-                    grant.creation_payer,
                     grant.creation_budget,
                     grant.expires_at_ns,
                 );
@@ -177,15 +182,9 @@ fn pool_terms(
     }
 }
 
-fn write_shard(text: &mut String, a: &canic_management_protocol::stored::ShardPool) {
-    writeln!(text, "\nShared shards · {}\nRoot: {}\nHub: {}\nCapacity: {} shards × {} live keys per shard\nInit bytes (hex): {}", escape(&a.pool), a.root, a.hub, a.max_shards, a.keys_per_shard, hex(a.arguments.as_slice())).unwrap();
-    pool_release(
-        text,
-        &a.reference,
-        a.creation_payer,
-        a.creation_budget,
-        a.expires_at_ns,
-    );
+fn write_shard(text: &mut String, a: &canic_management_protocol::stored::ShardPool, keys: u32) {
+    writeln!(text, "\nShared shards · {}\nRoot: {}\nHub: {}\nCreation limit: {} shards\nHub policy: {keys} live keys per shard\nInit bytes (hex): {}", escape(&a.pool), a.root, a.hub, a.max_shards, hex(a.arguments.as_slice())).unwrap();
+    pool_release(text, &a.reference, a.creation_budget, a.expires_at_ns);
 }
 
 fn write_allocation(
@@ -202,29 +201,17 @@ fn write_allocation(
         a.max_instances
     )
     .unwrap();
-    pool_release(
-        text,
-        &a.reference,
-        a.creation_payer,
-        a.creation_budget,
-        a.expires_at_ns,
-    );
+    pool_release(text, &a.reference, a.creation_budget, a.expires_at_ns);
 }
 
 fn pool_release(
     text: &mut String,
     reference: &canic_management_protocol::stored::Reference,
-    payer: canic_management_protocol::stored::CreationPayer,
     budget: u64,
     deadline: u64,
 ) {
-    use canic_management_protocol::stored::CreationPayer;
-    let payer = match payer {
-        CreationPayer::Root => "Root",
-        CreationPayer::Requester => "requesting hub",
-    };
     let m = &reference.manifest;
-    writeln!(text, "Store: {}\nRelease: {} @ {}\nWasm SHA-256: {}\nCreation payer: {payer}\nCreation budget: {budget} cycles\nGrowth deadline: {deadline} Unix ns", reference.store, escape(&m.release.name), escape(&m.release.version), hex(&m.hash)).unwrap();
+    writeln!(text, "Store: {}\nRelease: {} @ {}\nWasm SHA-256: {}\nCreation payer: requester\nCreation budget: {budget} cycles\nGrowth deadline: {deadline} Unix ns", reference.store, escape(&m.release.name), escape(&m.release.version), hex(&m.hash)).unwrap();
 }
 
 pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> {

@@ -229,7 +229,7 @@ fn decode(plan: &Plan, bytes: &[u8]) -> Result<Info> {
             .map_err(supplier)?
             .and_then(|v| match v {
                 wire::Observation::Info(info) => Ok(info),
-                wire::Observation::Custody(_) => Err(wire::Error::Uncertain),
+                _ => Err(wire::Error::Uncertain),
             })
     } else {
         ic_wire::decode(bytes, frame, wire::RESPONSE_LIMITS).map_err(supplier)?

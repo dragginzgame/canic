@@ -1,6 +1,7 @@
 //! The actual pool calls Root for worker custody and its miners for each batch.
 use super::*;
 use canic::method::Contract;
+use canic::sharding::standby::ReserveError;
 use canic_host::application::codec;
 use ex_miner_pool_hub::{PoolReport, Tick};
 
@@ -24,7 +25,7 @@ async fn growth_park_reuse_and_capacity() {
         workers,
         ..
     } = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
-        fleet.worker_pools.first_mut().unwrap().creation_budget = 3 * management::CREATION_CYCLES
+        fleet.worker_pools.first_mut().unwrap().creation_budget = 4 * management::CREATION_CYCLES
     })
     .await;
     let pic = root.pic;
@@ -36,13 +37,13 @@ async fn growth_park_reuse_and_capacity() {
         .unwrap();
     assert_eq!(
         Tick::decode_reply(&refused).unwrap(),
-        "worker 0: Root call rejected"
+        "worker 0: Root has no approved worker grant"
     );
     configure(&root, &capacity, &workers).await;
     let rejection = canic_qualification::upgrade_stopped(
         pic,
         root.id,
-        std::fs::read(artifacts().join("shard-only-root.wasm")).unwrap(),
+        std::fs::read(artifacts().join("management-root.wasm")).unwrap(),
         vec![],
         Some(root.operator),
     )
@@ -51,7 +52,7 @@ async fn growth_park_reuse_and_capacity() {
     assert!(
         rejection
             .reject_message
-            .contains("retained Root approval requires worker-pool"),
+            .contains("retained Root approval requires child-creation"),
         "{rejection:?}"
     );
     let mut changed = workers.approval.clone();
@@ -67,24 +68,27 @@ async fn growth_park_reuse_and_capacity() {
     for changed in [changed, fewer_workers] {
         let conflict: Result<(), management::Refusal> = root
             .update(
-                "configure_workers",
-                stored::CONFIGURE_WORKERS,
-                &changed,
+                "approve_child_creation",
+                stored::APPROVE_CHILD_CREATION,
+                &stored::ChildCreationGrant::Worker(changed.clone()),
                 stored::LIMITS,
             )
             .await;
         assert_eq!(conflict, Err(management::Refusal::Occupied));
     }
     let outsider = CanisterId::self_authenticating(b"other hub");
-    assert!(
-        pic.update_call(
+    crate::store_root_tests::assert_unauthorized(
+        &pic.update_call(
             root.id,
             outsider,
-            "assign_worker",
-            canic::sharding::AssignWorker::encode_request(&("miner".into(), 0)).unwrap()
+            canic::sharding::payment::AcquirePlacement::NAME,
+            crate::store_root_tests::placement_request(canic::sharding::payment::Demand::Worker(
+                "miner".into(),
+                0,
+            )),
         )
         .await
-        .is_err()
+        .unwrap(),
     );
     assert!(
         pic.update_call(
@@ -96,7 +100,7 @@ async fn growth_park_reuse_and_capacity() {
         .await
         .is_err()
     );
-    use canic::sharding::standby::{Asset, InspectStandby, Refill, RefillStandby};
+    use canic::sharding::standby::{Asset, ObserveStandby, Refill, RefillStandby};
     let refill = Refill {
         root: root.id.as_slice().try_into().unwrap(),
         sequence: 0,
@@ -133,10 +137,10 @@ async fn growth_park_reuse_and_capacity() {
         )
         .await
         .unwrap();
-    assert_eq!(
+    assert!(matches!(
         RefillStandby::decode_reply(&reply).unwrap().unwrap_err(),
-        "refill approval differs"
-    );
+        ReserveError::ApprovalConflict(_)
+    ));
     let status = pic
         .canister_status(CanisterId::from_slice(spare.as_slice()), Some(root.id))
         .await
@@ -153,12 +157,12 @@ async fn growth_park_reuse_and_capacity() {
     .await
     .unwrap();
     let inventory = async || {
-        InspectStandby::decode_reply(
+        ObserveStandby::decode_reply(
             &pic.update_call(
                 root.id,
                 root.operator,
-                InspectStandby::NAME,
-                InspectStandby::encode_request(&()).unwrap(),
+                ObserveStandby::NAME,
+                ObserveStandby::encode_request(&()).unwrap(),
             )
             .await
             .unwrap(),
@@ -288,13 +292,16 @@ async fn growth_park_reuse_and_capacity() {
         .update_call(
             root.id,
             pool,
-            canic::sharding::AssignWorker::NAME,
-            canic::sharding::AssignWorker::encode_request(&("miner".into(), 4)).unwrap(),
+            canic::sharding::payment::AcquirePlacement::NAME,
+            crate::store_root_tests::placement_request(canic::sharding::payment::Demand::Worker(
+                "miner".into(),
+                4,
+            )),
         )
         .await
         .unwrap();
     assert_eq!(
-        canic::sharding::AssignWorker::decode_reply(&bytes).unwrap(),
+        crate::store_root_tests::placed(&bytes),
         canic::sharding::Placement::Full
     );
     // Lower demand while the worker is stopped. The reopened hub must drain the original batch.
@@ -453,13 +460,17 @@ async fn growth_park_reuse_and_capacity() {
         .update_call(
             root.id,
             pool,
-            canic::sharding::LookupWorker::NAME,
-            canic::sharding::LookupWorker::encode_request(&("miner".into(), 0)).unwrap(),
+            canic::sharding::LookupPlacement::NAME,
+            canic::sharding::LookupPlacement::encode_request(&canic::sharding::Lookup::Worker(
+                "miner".into(),
+                0,
+            ))
+            .unwrap(),
         )
         .await
         .unwrap();
     assert!(matches!(
-        canic::sharding::LookupWorker::decode_reply(&response).unwrap(),
+        canic::sharding::LookupPlacement::decode_reply(&response).unwrap(),
         canic::sharding::Placement::Unavailable(..)
     ));
     use canic::sharding::standby::{ResetPhase, ResetWorker};
@@ -495,10 +506,10 @@ async fn growth_park_reuse_and_capacity() {
     pic.set_controllers(id, Some(root.id), vec![root.id, outsider])
         .await
         .unwrap();
-    assert_eq!(
+    assert!(matches!(
         reset(&spare_target, deadline).await.unwrap_err(),
-        "Root must be sole controller"
-    );
+        ReserveError::Unauthorized(_)
+    ));
     pic.set_controllers(id, Some(root.id), vec![root.id])
         .await
         .unwrap();
@@ -508,10 +519,10 @@ async fn growth_park_reuse_and_capacity() {
         .await
         .unwrap();
     pic.start_canister(id, Some(root.id)).await.unwrap();
-    assert_eq!(
+    assert!(matches!(
         reset(&spare_target, deadline).await.unwrap_err(),
-        "target has retained snapshots"
-    );
+        ReserveError::CustodyOccupied(_)
+    ));
     assert!(
         pic.canister_status(id, Some(root.id))
             .await
@@ -607,10 +618,10 @@ async fn growth_park_reuse_and_capacity() {
         )
         .await
         .unwrap();
-    assert_eq!(
+    assert!(matches!(
         RefillStandby::decode_reply(&response).unwrap().unwrap_err(),
-        "no approved subnet capacity"
-    );
+        ReserveError::Capacity(_)
+    ));
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted
@@ -631,13 +642,13 @@ async fn configure(
             &capacity.request,
         ),
         (
-            "configure_workers",
-            stored::CONFIGURE_WORKERS,
+            "approve_child_creation",
+            stored::APPROVE_CHILD_CREATION,
             &workers.request,
         ),
         (
-            "configure_workers",
-            stored::CONFIGURE_WORKERS,
+            "approve_child_creation",
+            stored::APPROVE_CHILD_CREATION,
             &workers.request,
         ),
     ] {
@@ -659,7 +670,7 @@ async fn configure(
 }
 
 #[tokio::test(flavor = "current_thread")]
-async fn a_returned_worker_serves_a_fresh_allocation_with_zero_creation_budget() {
+async fn a_returned_worker_is_paid_again_under_its_fresh_allocation() {
     return_and_reuse(true).await;
 }
 
@@ -670,7 +681,7 @@ async fn directly_created_worker_returns_without_refunding_creation() {
 
 async fn return_and_reuse(prepaid: bool) {
     use canic::sharding::{
-        LookupWorker, Placement, ShardTarget,
+        LookupPlacement, Placement, ShardTarget,
         standby::{Asset, ConfirmRelease, Refill, RefillStandby, ResetPhase, ResetWorker},
     };
     use ex_miner_pool_hub::Release;
@@ -687,18 +698,15 @@ async fn return_and_reuse(prepaid: bool) {
     let fleet = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
         fleet.subnet_child_limit = Some(if prepaid { 2 } else { 3 });
         let w = fleet.worker_pools.first_mut().unwrap();
-        w.max_workers = if prepaid { 1 } else { 3 };
-        w.creation_budget = if prepaid {
-            0
-        } else {
-            management::CREATION_CYCLES
-        };
+        w.max_workers = 1;
+        w.creation_budget = 5 * management::CREATION_CYCLES;
         w.minimum_reuse_cycles = std::num::NonZeroU64::new(2 * management::CREATION_CYCLES);
     })
     .await;
     let root = &fleet.root;
     let pic = root.pic;
     let hub = fleet.pool;
+    install_miner_driver(root, hub).await;
     configure(root, &fleet.capacity, &fleet.workers).await;
     let tick = async |round, goal| {
         let bytes = pic
@@ -728,7 +736,7 @@ async fn return_and_reuse(prepaid: bool) {
     // A zero refill target lets the direct case exercise a miss and then a surplus return.
     if !prepaid {
         use canic_management_protocol::stored;
-        root.update::<_, Result<(), String>>(
+        root.update::<_, Result<(), ReserveError>>(
             "configure_standby",
             stored::CONFIGURE_STANDBY,
             &stored::StandbyPolicy {
@@ -764,7 +772,6 @@ async fn return_and_reuse(prepaid: bool) {
             .collect::<Vec<_>>()
     };
     let prepaid_id = if prepaid {
-        assert_eq!(tick(1, 1).await, "growth refused");
         let bytes = pic
             .update_call(
                 root.id,
@@ -788,56 +795,37 @@ async fn return_and_reuse(prepaid: bool) {
         None
     };
     let lookup = async |ordinal| {
-        LookupWorker::decode_reply(
+        LookupPlacement::decode_reply(
             &pic.update_call(
                 root.id,
                 hub,
-                LookupWorker::NAME,
-                LookupWorker::encode_request(&("miner".into(), ordinal)).unwrap(),
+                LookupPlacement::NAME,
+                LookupPlacement::encode_request(&canic::sharding::Lookup::Worker(
+                    "miner".into(),
+                    ordinal,
+                ))
+                .unwrap(),
             )
             .await
             .unwrap(),
         )
         .unwrap()
     };
-    // Queue distinct worker destinations before executing either request.
-    // The grant permits both ordinals and has no budget to create a second principal.
-    let submit = async |ordinal| {
-        pic.submit_call(
-            root.id,
+    let claim = async |ordinal| {
+        acquire_fixture(
+            root,
             hub,
-            canic::sharding::AssignWorker::NAME,
-            canic::sharding::AssignWorker::encode_request(&("miner".into(), ordinal)).unwrap(),
+            canic::sharding::payment::Demand::Worker("miner".into(), ordinal),
         )
         .await
-        .unwrap()
     };
-    let first = submit(0).await;
-    let second = submit(1).await;
-    let result = async |request| {
-        canic::sharding::AssignWorker::decode_reply(&pic.await_call(request).await.unwrap())
-            .unwrap()
+    let (first, second) = tokio::join!(claim(0), claim(1));
+    let Placement::Pending(winner) = first else {
+        panic!("expected paid worker: {first:?}")
     };
-    let Placement::Pending(winner) = result(first).await else {
-        panic!("next ordinal must reserve the spare")
-    };
-    if !prepaid {
-        assert!(
-            reserve_logs()
-                .await
-                .iter()
-                .any(|msg| msg.contains("pool empty"))
-        );
-    }
-    let refused = if prepaid {
-        Placement::Full
-    } else {
-        Placement::GrowthRefused
-    };
-    let second = result(second).await;
-    assert!(second == Placement::Busy || second == refused, "{second:?}");
+    assert!(matches!(second, Placement::Busy | Placement::Full));
     assert_eq!(lookup(1).await, Placement::Unknown);
-    assert_eq!(result(submit(1).await).await, refused);
+    assert_eq!(claim(1).await, Placement::Full);
     settle(1, 1).await;
     let target = |p: Placement| {
         let (allocation, shard) = p.assigned_target().unwrap().unwrap();
@@ -915,12 +903,10 @@ async fn return_and_reuse(prepaid: bool) {
     ] {
         assert_eq!(reset().await.unwrap(), phase);
     }
-    assert!(
-        reset()
-            .await
-            .unwrap_err()
-            .contains("return requires at least")
-    );
+    assert!(matches!(
+        reset().await,
+        Err(ReserveError::BalanceBelowMinimum(_))
+    ));
     pic.add_cycles(
         CanisterId::from_slice(spare.as_slice()),
         u128::from(2 * management::CREATION_CYCLES),
@@ -959,7 +945,7 @@ async fn return_and_reuse(prepaid: bool) {
     reopen().await;
     assert_eq!(target(lookup(1).await), next);
     if !prepaid {
-        assert_eq!(result(submit(2).await).await, Placement::GrowthRefused);
+        assert_eq!(claim(2).await, Placement::Full);
     }
     assert!(matches!(lookup(0).await, Placement::Unavailable(..)));
     assert_eq!(reset().await.unwrap(), ResetPhase::Returned);
@@ -993,7 +979,7 @@ mod reserve;
 
 #[tokio::test(flavor = "current_thread")]
 async fn one_hub_recovers_ordinal_zero_independently_in_two_worker_pools() {
-    use canic::sharding::{AssignWorker, LookupWorker, Placement};
+    use canic::sharding::{LookupPlacement, Placement};
 
     let base =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/examples/miner-pool/artifacts");
@@ -1010,45 +996,44 @@ async fn one_hub_recovers_ordinal_zero_independently_in_two_worker_pools() {
     })
     .await;
     let root = fleet.root;
+    install_miner_driver(&root, fleet.pool).await;
     configure(&root, &fleet.capacity, &fleet.workers).await;
     let mut other = fleet.workers.approval.clone();
     other.component = "auxiliary".into();
     other.creation_budget = management::CREATION_CYCLES;
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_workers",
-        stored::CONFIGURE_WORKERS,
-        &other,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Worker(other.clone()),
         stored::LIMITS,
     )
     .await
     .unwrap();
     let request = async |name: &str, ordinal, assign| {
         let input = (name.to_owned(), ordinal);
-        let bytes = if assign {
-            root.pic
-                .update_call(
-                    root.id,
-                    fleet.pool,
-                    AssignWorker::NAME,
-                    AssignWorker::encode_request(&input).unwrap(),
-                )
-                .await
-                .unwrap()
-        } else {
-            root.pic
-                .update_call(
-                    root.id,
-                    fleet.pool,
-                    LookupWorker::NAME,
-                    LookupWorker::encode_request(&input).unwrap(),
-                )
-                .await
-                .unwrap()
-        };
         if assign {
-            AssignWorker::decode_reply(&bytes).unwrap()
+            acquire_fixture(
+                &root,
+                fleet.pool,
+                canic::sharding::payment::Demand::Worker(name.into(), ordinal),
+            )
+            .await
         } else {
-            LookupWorker::decode_reply(&bytes).unwrap()
+            let bytes = root
+                .pic
+                .update_call(
+                    root.id,
+                    fleet.pool,
+                    LookupPlacement::NAME,
+                    LookupPlacement::encode_request(&canic::sharding::Lookup::Worker(
+                        input.0.clone(),
+                        input.1,
+                    ))
+                    .unwrap(),
+                )
+                .await
+                .unwrap();
+            LookupPlacement::decode_reply(&bytes).unwrap()
         }
     };
     let mut allocations = Vec::new();
@@ -1087,4 +1072,16 @@ async fn one_hub_recovers_ordinal_zero_independently_in_two_worker_pools() {
         ic_testkit::server::Deletion::Attempted
     );
     assert_eq!(server.stop().unwrap().abandoned, 0);
+}
+
+async fn install_miner_driver(root: &Client<'_>, hub: CanisterId) {
+    canic_qualification::upgrade_stopped(
+        root.pic,
+        hub,
+        std::fs::read(artifacts().join("miner-payer.wasm")).unwrap(),
+        vec![],
+        Some(root.id),
+    )
+    .await
+    .unwrap();
 }

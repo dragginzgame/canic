@@ -101,7 +101,7 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
         .update_call(
             fresh,
             CanisterId::anonymous(),
-            "stage_child",
+            "stage_inline_child_creation",
             ic_wire::encode(
                 &canic_management_protocol::children::Request {
                     slot: canic_management_protocol::children::ChildId::FIRST,
@@ -139,8 +139,8 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
     assert_eq!(status(pic, fresh).await.phase, Phase::Empty);
     // The prior Store maintenance layout is refused before its payload can be opened.
     let mut old = stable.clone();
-    let offset = old.windows(4).position(|tag| tag == b"CUJF").unwrap();
-    old[offset..offset + 4].copy_from_slice(b"CUJE");
+    let offset = old.windows(4).position(|tag| tag == b"CUJG").unwrap();
+    old[offset..offset + 4].copy_from_slice(b"CUJF");
     pic.set_stable_memory(fresh, old.clone(), BlobCompression::NoCompression)
         .await;
     let refusal = canic_qualification::upgrade_stopped(

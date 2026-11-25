@@ -7,6 +7,7 @@ use ic_platform_runtime as runtime;
 // Execute the controller's bound snapshot operation and retain its outcome.
 // guard  : Root controller
 // limits : backup::LIMITS (1,081,344 bytes each way)
+canic::__canic_inspect!(wire, "snapshot_execute", update, canic_management_protocol::backup::EXECUTE, Request, Result<Record, Error>, LIMITS, LIMITS);
 #[runtime::update(
     runtime = runtime,
     name = "snapshot_execute",
@@ -24,6 +25,7 @@ async fn execute(request: Request) -> Result<Record, Error> {
 // Observe the original snapshot operation by its exact binding.
 // guard  : Root controller
 // limits : 4,096-byte request, backup::LIMITS reply
+canic::__canic_inspect!(wire, "snapshot_lookup", update, canic_management_protocol::backup::LOOKUP, Binding, Result<Record, Error>, ic_wire::Limits { bytes: 4096, ..LIMITS }, LIMITS);
 #[runtime::update(
     runtime = runtime,
     name = "snapshot_lookup",
@@ -42,6 +44,20 @@ fn lookup(binding: Binding) -> Result<Record, Error> {
 // Select the controller's interruption point for the installed snapshot fixture.
 // guard  : Root controller
 // limits : 128-byte request, backup::LIMITS reply
+#[cfg(feature = "fault-injection")]
+canic::__canic_inspect!(
+    wire,
+    "snapshot_fault",
+    update,
+    82,
+    u8,
+    (),
+    ic_wire::Limits {
+        bytes: 128,
+        ..LIMITS
+    },
+    LIMITS
+);
 #[cfg(feature = "fault-injection")]
 #[runtime::update(
     runtime = runtime,

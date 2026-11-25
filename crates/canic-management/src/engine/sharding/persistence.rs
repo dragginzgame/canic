@@ -22,7 +22,7 @@ impl Pools {
             ..LIMITS
         };
         let payload = ic_wire::encode(self, ic_wire::Encoding::Payload, limits);
-        let mut bytes = b"PLS9".to_vec();
+        let mut bytes = b"PL12".to_vec();
         bytes.extend(payload.expect("bounded placement ledger"));
         bytes
     }
@@ -82,13 +82,6 @@ pub(in crate::engine) fn open(bytes: &[u8]) -> Pools {
         assert!(grant.max_instances <= pools.pool_limit());
         validate_instance(grant).expect("retained instance grant");
         assert!(pools.projects.len() <= pools.instance_slots(grant).len());
-        assert!(
-            pools.creation_debit(
-                pools.instance_slots(grant)[..pools.projects.len()]
-                    .iter()
-                    .copied()
-            ) <= grant.creation_budget
-        );
         for shared in pools.shards.values() {
             assert!(
                 shared.approval.hub != grant.hub && compatible(&shared.approval, grant),
@@ -111,7 +104,6 @@ pub(in crate::engine) fn open(bytes: &[u8]) -> Pools {
         }
         assert!(valid_limits(&l.approval) && l.approval.max_shards <= pools.pool_limit());
         check_shard_topology(&l.approval).expect("retained shard topology");
-        assert!(pools.creation_debit(l.allocated_slots()) <= l.approval.creation_budget);
         for (index, principal) in l.principals.iter().enumerate() {
             assert!(principal.is_none() || l.generations[index].is_some());
         }
@@ -121,7 +113,7 @@ pub(in crate::engine) fn open(bytes: &[u8]) -> Pools {
 
 fn decode(bytes: &[u8]) -> Pools {
     let payload = bytes
-        .strip_prefix(b"PLS9")
+        .strip_prefix(b"PL12")
         .expect("placement custody requires its original Root");
     let pools: Pools =
         ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("placement custody");
@@ -339,7 +331,7 @@ fn validate_inventory(pools: &Pools) {
                 && slot.index() as u32 == target.allocation.slot
                 && pools.draining.get(&slot) == Some(&target.allocation.generation)
                 && ledger.principals[slot.index()].as_deref()
-                    == Some(r.input.approval.shard.as_str())
+                    == Some(r.input.approval.child.as_str())
                 && pools.evacuated.contains(&slot)
                 && r.input.approval.root == api::canister_self().to_text()
                 && r.input.reference.store == ledger.approval.reference.store

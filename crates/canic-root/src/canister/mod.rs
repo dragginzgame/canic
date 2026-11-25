@@ -1,6 +1,6 @@
 #[cfg(feature = "backup")]
 mod backup;
-#[cfg(feature = "sharding")]
+#[cfg(feature = "child-management")]
 mod sharding;
 
 use canic_management::{self as management, Readiness};
@@ -41,15 +41,11 @@ fn init(policy: Option<canic_management_protocol::stored::RootBootstrap>) {
 )]
 fn post_upgrade((): ()) {
     management::open(false, readiness());
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "child-management")]
     for (family, retained) in management::sharding::retained_mounts() {
         const MOUNTS: &[&str] = &[
-            #[cfg(feature = "shard-pool")]
-            "shard-pool",
-            #[cfg(feature = "registry")]
-            "registry",
-            #[cfg(feature = "worker-pool")]
-            "worker-pool",
+            #[cfg(feature = "child-creation")]
+            "child-creation",
             #[cfg(feature = "reserve-pool")]
             "reserve-pool",
             #[cfg(feature = "child-funding")]
@@ -67,23 +63,22 @@ fn post_upgrade((): ()) {
 }
 
 management::mount_endpoints! {
-    store_publication, observe_store, store_admission, store_removal,
+    publish_store_artifact, observe_store, store_admission, store_removal,
     stage_store_maintenance, advance_store_maintenance, observe_store_maintenance,
     install_store_maintenance, activate_store_maintenance, store_maintenance_status, recover_store_maintenance,
-    observe_custody, observe_root_custody, observe_root_history,
-    observe_stored_children, stage_stored_child, reconcile_stored_child,
-    observe_application_children, stage_application_child, reconcile_application_child,
-    stage_stored_upgrade, reconcile_stored_upgrade,
-    observe_children, child_status, observe_child, stage_child, reconcile_child,
-    stage_child_upgrade, observe_child_upgrade, child_upgrade_status, reconcile_child_upgrade,
+    observe_root_custody,
+    stage_child_creation, reconcile_child_creation,
+    stage_child_upgrade, reconcile_child_upgrade,
+    child_status, observe_child, stage_inline_child_creation, reconcile_inline_child_creation,
+    stage_inline_child_upgrade, observe_child_upgrade, child_upgrade_status, reconcile_inline_child_upgrade,
 }
 
-#[cfg(feature = "sharding")]
-management::mount_endpoints! { observe_role_children, }
+#[cfg(feature = "child-management")]
+management::mount_endpoints! { observe_child_deployments, }
 
 #[cfg(feature = "blob")]
 management::mount_endpoints! {
-    stage_application_upgrade, reconcile_application_upgrade, activate_application_upgrade,
+    activate_application_upgrade,
 }
 
 // logs
@@ -95,16 +90,16 @@ fn logs(before: Option<u64>) -> canic::logging::Page {
     canic::logging::page(before)
 }
 
-// publish_directory
+// redeliver_directory_revision
 // Deliver one exact revision to a ready named service under the operator's approval.
 // guard  : Root controller
 // limits : default
-#[canic::update(guard = canic::guard::require_controller)]
-async fn publish_directory(request: (String, u64)) -> Result<u64, String> {
+#[canic::update(contract = canic::topology::directory::RedeliverDirectoryRevision, guard = canic::guard::require_controller)]
+async fn redeliver_directory_revision(
+    request: (String, u64),
+) -> Result<u64, canic::topology::directory::RedeliveryError> {
     let (name, revision) = request;
-    management::application::publish_directory(&name, revision)
-        .await
-        .map_err(String::from)
+    management::application::redeliver_directory_revision(&name, revision).await
 }
 
 // child_metrics

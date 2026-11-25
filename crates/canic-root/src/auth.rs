@@ -25,6 +25,7 @@ fn controller<const ID: u64>() -> Result<(), String> {
 // Approve one receiver grant or confirm an exact retry.
 // guard  : Root controller
 // limits : enrollment::LIMITS (8,192 bytes each way)
+canic::__canic_inspect!(wire, "configure_auth", update, enrollment::CONFIGURE, Grant, Result<(), Error>, enrollment::LIMITS, enrollment::LIMITS);
 #[runtime::update(
     runtime = runtime,
     guard = controller::<{enrollment::CONFIGURE}>,
@@ -40,7 +41,7 @@ fn configure_auth(grant: Grant) -> Result<(), Error> {
         if let Some(authority) = grants.get(&grant.receiver) {
             return authority.matches(&grant);
         }
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "child-management")]
         if !canic_management::sharding::standby::permits_enrollment(grant.receiver) {
             return Err(Error::Binding);
         }
@@ -56,6 +57,7 @@ fn configure_auth(grant: Grant) -> Result<(), Error> {
 // Close the matching receiver grant while preserving grants for other receivers.
 // guard  : Root controller
 // limits : enrollment::LIMITS (8,192 bytes each way)
+canic::__canic_inspect!(wire, "revoke_auth", update, enrollment::REVOKE, Grant, Result<(), Error>, enrollment::LIMITS, enrollment::LIMITS);
 #[runtime::update(
     runtime = runtime,
     guard = controller::<{enrollment::REVOKE}>,
@@ -81,6 +83,7 @@ fn revoke_auth(grant: Grant) -> Result<(), Error> {
 // Return the snapshot for the calling receiver and its requested binding.
 // guard  : transport::admit (enrollment frame)
 // limits : enrollment::LIMITS (8,192 bytes each way)
+canic::__canic_inspect!(wire, "auth_enrollment", update, enrollment::SNAPSHOT, Request, Result<Snapshot, Error>, enrollment::LIMITS, enrollment::LIMITS);
 #[runtime::update(
     runtime = runtime,
     guard = transport::admit::<{enrollment::SNAPSHOT}>,
@@ -108,6 +111,7 @@ fn auth_enrollment(request: Request) -> Result<Snapshot, Error> {
 // Ask a receiver controlled by this Root to pull its current grant.
 // guard  : Root controller
 // limits : enrollment::LIMITS (8,192 bytes each way)
+canic::__canic_inspect!(wire, "refresh_auth_receiver", update, enrollment::TRIGGER_REFRESH, Principal, Result<(), Error>, enrollment::LIMITS, enrollment::LIMITS);
 #[runtime::update(
     runtime = runtime,
     guard = controller::<{enrollment::TRIGGER_REFRESH}>,
@@ -135,7 +139,7 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
 /// Check that this worker has no retained receiver authority before recycling it.
 #[cfg(any(
     feature = "role-issuer",
-    feature = "worker-pool",
+    feature = "child-creation",
     feature = "reserve-pool"
 ))]
 pub(crate) fn require_no_worker_grant(worker: Principal) -> Result<(), String> {

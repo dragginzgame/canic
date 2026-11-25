@@ -158,77 +158,43 @@ fn slot(plan: &Plan) -> ChildId {
 }
 
 pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
+    use application::Deployment::{Application, Stored};
+    let frame = ic_wire::Encoding::Frame {
+        method,
+        direction: ic_wire::Direction::Request,
+    };
+    let slot = slot(plan);
+    let configured = plan.management().is_some_and(|m| m.arguments.is_some());
     match method {
-        application::STAGE_UPGRADE | application::RECONCILE_UPGRADE | application::ACTIVATE => {
-            ic_wire::encode(
-                &Request {
-                    slot: slot(plan),
-                    value: application_upgrade(plan)?,
-                },
-                ic_wire::Encoding::Frame {
-                    method,
-                    direction: ic_wire::Direction::Request,
-                },
-                application::LIMITS,
-            )
-            .map_err(supplier)
+        application::ACTIVATE => ic_wire::encode(
+            &Request {
+                slot,
+                value: application_upgrade(plan)?,
+            },
+            frame,
+            application::LIMITS,
+        )
+        .map_err(supplier),
+        application::CUSTODY | application::CHILD_EVIDENCE => {
+            ic_wire::encode(&(), frame, application::LIMITS).map_err(supplier)
         }
-        application::STAGE | application::RECONCILE => ic_wire::encode(
-            &Request {
-                slot: slot(plan),
-                value: application_stage(plan, super::approval(plan)?)?,
-            },
-            ic_wire::Encoding::Frame {
-                method,
-                direction: ic_wire::Direction::Request,
-            },
-            application::LIMITS,
-        )
-        .map_err(supplier),
-        application::CUSTODY | application::CHILD_EVIDENCE => ic_wire::encode(
-            &(),
-            ic_wire::Encoding::Frame {
-                method,
-                direction: ic_wire::Direction::Request,
-            },
-            application::LIMITS,
-        )
-        .map_err(supplier),
-        wire::CUSTODY
-        | canic_management_protocol::custody::ROOT
-        | canic_management_protocol::custody::ROOT_HISTORY => ic_wire::encode(
-            &(),
-            ic_wire::Encoding::Frame {
-                method,
-                direction: ic_wire::Direction::Request,
-            },
-            wire::LIMITS,
-        )
-        .map_err(supplier),
-        wire::STAGE | wire::RECONCILE => ic_wire::encode(
-            &Request {
-                slot: slot(plan),
-                value: stage(plan, super::approval(plan)?)?,
-            },
-            ic_wire::Encoding::Frame {
-                method,
-                direction: ic_wire::Direction::Request,
-            },
-            wire::LIMITS,
-        )
-        .map_err(supplier),
-        wire::STAGE_UPGRADE | wire::RECONCILE_UPGRADE => ic_wire::encode(
-            &Request {
-                slot: slot(plan),
-                value: stage(plan, super::upgrade::approval(plan)?)?,
-            },
-            ic_wire::Encoding::Frame {
-                method,
-                direction: ic_wire::Direction::Request,
-            },
-            wire::LIMITS,
-        )
-        .map_err(supplier),
+        application::STAGE_CHILD_CREATION | application::RECONCILE_CHILD_CREATION => {
+            let approval = super::approval(plan)?;
+            let value: application::Creation = if configured {
+                Application(application_stage(plan, approval)?)
+            } else {
+                Stored(stage(plan, approval)?)
+            };
+            ic_wire::encode(&Request { slot, value }, frame, wire::LIMITS).map_err(supplier)
+        }
+        application::STAGE_CHILD_UPGRADE | application::RECONCILE_CHILD_UPGRADE => {
+            let value: application::Replacement = if configured {
+                Application(application_upgrade(plan)?)
+            } else {
+                Stored(stage(plan, super::upgrade::approval(plan)?)?)
+            };
+            ic_wire::encode(&Request { slot, value }, frame, wire::LIMITS).map_err(supplier)
+        }
         _ => Err(invalid()),
     }
 }
@@ -238,19 +204,8 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
         .management()
         .and_then(|owner| owner.source.as_ref())
         .ok_or_else(invalid)?;
-    let value = if plan.version == 8 || plan.management().is_some_and(|m| m.arguments.is_some()) {
-        let value: application::Custody = ic_wire::decode(
-            bytes,
-            ic_wire::Encoding::Frame {
-                method: super::Method::Observe.id(plan),
-                direction: ic_wire::Direction::Response,
-            },
-            application::LIMITS,
-        )
-        .map_err(supplier)?;
-        if value.applications.len() != value.root.current.stored.children.len() {
-            return Err(invalid());
-        }
+    let value = {
+        let value = crate::root_custody::decode(super::Method::Observe.id(plan), bytes)?;
         let lifecycle = value
             .applications
             .get(slot(plan).service_index().ok_or_else(invalid)?)
@@ -300,8 +255,6 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
             store_operation: value.root.current.store_operation,
             store_history: value.root.store_history,
         }
-    } else {
-        crate::root_custody::decode(super::Method::Observe.id(plan), bytes)?
     };
     if let Some(attempt) = &source.maintenance {
         if value.store_history.len() as u64 + 1 != attempt.sequence {
@@ -316,6 +269,11 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
         {
             return Err(invalid());
         }
+    }
+    if source.maintenance.is_none()
+        && (value.store_operation.is_some() || !value.store_history.is_empty())
+    {
+        return Err(invalid());
     }
     Ok(value)
 }

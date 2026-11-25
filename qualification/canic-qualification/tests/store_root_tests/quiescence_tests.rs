@@ -49,7 +49,7 @@ pub(super) async fn child_stage(
     root: &Client<'_>,
 ) -> Result<management::Status, management::Refusal> {
     root.update(
-        "stage_child",
+        "stage_inline_child_creation",
         management::children::STAGE,
         &management::children::Request {
             slot: management::children::ChildId::FIRST,
@@ -164,7 +164,7 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     };
     assert_eq!(
         root.update::<_, publication::Reply>(
-            "store_publication",
+            "publish_store_artifact",
             publication::EXECUTE,
             &publication,
             publication::REQUEST_LIMITS

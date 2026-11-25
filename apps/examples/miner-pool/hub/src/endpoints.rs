@@ -2,7 +2,7 @@
 use super::{LIMITS, MAX_WORKERS, Pending, Pool, Worker};
 use canic::{
     method::{CallError, Contract, call},
-    sharding::{AssignWorker, LookupWorker, Placement, ShardTarget},
+    sharding::{LookupPlacement, Placement, ShardTarget},
 };
 use ic_platform_runtime::system;
 
@@ -70,19 +70,40 @@ async fn tick(input: (u64, u8)) -> String {
     match pending.clone() {
         Pending::Grow(index, generation) => {
             let request = (canic::worker_pool!("miner").to_owned(), index);
+            let acquire = async || {
+                use canic::sharding::payment::{Demand, Payment, acquire_placement};
+                let maximum = 5_000_000_000_000;
+                match acquire_placement(
+                    state.root,
+                    Demand::Worker(request.0.clone(), index),
+                    maximum,
+                    maximum,
+                )
+                .await?
+                {
+                    Payment::Placed(placement, _) => Ok(placement),
+                    Payment::Quoted(_) => Ok(Placement::Busy),
+                }
+            };
             let placement = if retry {
-                match call::<LookupWorker>(state.root, 10, &request).await {
+                match call::<LookupPlacement>(
+                    state.root,
+                    10,
+                    &canic::sharding::Lookup::Worker(request.0.clone(), request.1),
+                )
+                .await
+                {
                     Ok(Placement::Unknown) if generation.is_none() => {
                         // Another continuation may have admitted or superseded this claim.
                         if Pool::read().pending != Some(pending.clone()) {
                             return "advanced".into();
                         }
-                        call::<AssignWorker>(state.root, 10, &request).await
+                        acquire().await
                     }
-                    reply => reply,
+                    reply => reply.map_err(canic::sharding::payment::AcquireError::Call),
                 }
             } else {
-                call::<AssignWorker>(state.root, 10, &request).await
+                acquire().await
             };
             let mut latest = Pool::read();
             if latest.pending.as_ref() != Some(&pending) {
@@ -142,7 +163,13 @@ async fn tick(input: (u64, u8)) -> String {
                     }
                     .into();
                 }
-                Err(error) => return format!("worker {index}: Root {}", call_failure(&error)),
+                Err(canic::sharding::payment::AcquireError::Call(error)) => {
+                    return format!("worker {index}: Root {}", call_failure(&error));
+                }
+                Err(canic::sharding::payment::AcquireError::Refused(
+                    canic::sharding::payment::Refusal::UnknownGrant,
+                )) => return format!("worker {index}: Root has no approved worker grant"),
+                Err(error) => return format!("worker {index}: Root {error:?}"),
                 Ok(Placement::Unavailable(..)) => {
                     return format!("worker {index}: original allocation unavailable");
                 }

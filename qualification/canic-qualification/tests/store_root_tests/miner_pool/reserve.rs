@@ -1,8 +1,9 @@
 //! One Root fills, replenishes, and admits a pre-existing surplus principal.
 use super::*;
+use canic::sharding::standby::ReserveError;
 use canic::sharding::{
-    AssignWorker, Placement,
-    standby::{Asset, ImportStandby, InspectStandby, Source},
+    Placement,
+    standby::{Asset, ImportStandby, ObserveStandby, Source},
 };
 
 #[tokio::test(flavor = "current_thread")]
@@ -18,8 +19,16 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     )
     .await;
     let pic = owner.client();
-    let spare = pic.create_canister().await;
-    pic.add_cycles(spare, 1_000_000_000_000).await;
+    let spare = pic
+        .create_canister_with_params(
+            None,
+            ic_testkit::pocket_ic::CreateCanisterParams {
+                cycles: Some(10_000_000_000_000),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
     let registry = CanisterId::from_text("rwlgt-iiaaa-aaaaa-aaaaa-cai").unwrap();
     pic.create_canister_with_id(None, None, registry)
         .await
@@ -42,7 +51,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     let fleet = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
         fleet.subnet_child_limit = Some(7);
         let w = fleet.worker_pools.first_mut().unwrap();
-        w.creation_budget = 0;
+        w.creation_budget = 15 * management::CREATION_CYCLES;
         let spending_deadline = w.expires_at_ns.unwrap();
         w.expires_at_ns = Some(spending_deadline + 7_200_000_000_000);
         fleet.standby_pool = Some(canic_host::StandbyPoolConfig {
@@ -64,7 +73,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     configure(root, &fleet.capacity, &fleet.workers).await;
     let grant = fleet.standby.unwrap();
     let approve = async |p: &stored::StandbyPolicy| {
-        root.update::<_, Result<(), String>>(
+        root.update::<_, Result<(), ReserveError>>(
             "configure_standby",
             stored::CONFIGURE_STANDBY,
             p,
@@ -73,17 +82,17 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
         .await
     };
     let inspect = async || {
-        root.update::<_, <InspectStandby as Contract>::Output>(
-            InspectStandby::NAME,
-            InspectStandby::ID,
+        root.update::<_, <ObserveStandby as Contract>::Output>(
+            ObserveStandby::NAME,
+            ObserveStandby::ID,
             &(),
-            InspectStandby::REPLY,
+            ObserveStandby::REPLY,
         )
         .await
     };
     let imported: <ImportStandby as Contract>::Input = spare.to_text().parse().unwrap();
     let import = async || {
-        root.update::<_, Result<Asset, String>>(
+        root.update::<_, Result<Asset, ReserveError>>(
             ImportStandby::NAME,
             ImportStandby::ID,
             &imported,
@@ -160,17 +169,25 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     let mut changed = grant.approval.clone();
     changed.maximum_creations = 4;
     assert!(approve(&changed).await.is_err());
+    super::install_miner_driver(root, fleet.pool).await;
+    let payer = Client {
+        pic,
+        id: fleet.pool,
+        operator: root.id,
+    };
     let claim = async |ordinal| {
-        let reply = pic
-            .update_call(
-                root.id,
-                fleet.pool,
-                AssignWorker::NAME,
-                AssignWorker::encode_request(&("miner".into(), ordinal)).unwrap(),
+        payer
+            .update::<_, Placement>(
+                "acquire_fixture",
+                ic_wire::method_id("acquire_fixture"),
+                &(
+                    root.id,
+                    canic::sharding::payment::Demand::Worker("miner".into(), ordinal),
+                    12_000_000_000_000_u128,
+                ),
+                canic::sharding::LIMITS,
             )
             .await
-            .unwrap();
-        AssignWorker::decode_reply(&reply).unwrap()
     };
     // Both requests use the same ordinal. Treat the first response as lost to the caller.
     let (first_reply, retry) = tokio::join!(claim(0), claim(0));
@@ -223,7 +240,11 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     );
     assert!(matches!(claim(2).await, Placement::Pending(_)));
     settle(pic).await;
-    assert!(matches!(claim(2).await,Placement::Assigned(_,id) if id==spare.to_text()));
+    let result = claim(2).await;
+    assert!(
+        matches!(&result,Placement::Assigned(_,id) if *id==spare.to_text()),
+        "expected imported {spare}, observed {result:?}"
+    );
     // Additional unassigned surplus can arrive after the spending deadline.
     let extra = pic.create_canister_with_settings(Some(root.id), None).await;
     pic.add_cycles(extra, 1_000_000_000_000).await;
@@ -248,13 +269,13 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     approve(&grant.approval).await.unwrap();
     let extra_id: <ImportStandby as Contract>::Input = extra.to_text().parse().unwrap();
     let before_release = inspect().await;
-    assert_eq!(
+    assert!(matches!(
         former_release(extra_id).await.unwrap_err(),
-        "wrong former Root"
-    );
+        ReserveError::Unauthorized(_)
+    ));
     assert_eq!(inspect().await, before_release);
     let observe_extra = async || {
-        root.update::<_, Result<Asset, String>>(
+        root.update::<_, Result<Asset, ReserveError>>(
             ImportStandby::NAME,
             ImportStandby::ID,
             &extra_id,
@@ -267,10 +288,10 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     pic.stop_canister(extra, Some(root.id)).await.unwrap();
     pic.advance_time(Duration::from_secs(7200)).await;
     let before_admission = inspect().await;
-    assert_eq!(
-        observe_extra().await.unwrap_err(),
-        format!("cannot import {extra}: candidate must be running, observed Stopped")
-    );
+    assert!(matches!(
+        observe_extra().await,
+        Err(ReserveError::WrongAsset(_))
+    ));
     assert_eq!(inspect().await, before_admission);
     pic.start_canister(extra, Some(root.id)).await.unwrap();
     let admitted = observe_extra().await.unwrap();
@@ -285,7 +306,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     );
     for _ in 0..2 {
         let error = root
-            .update::<_, Result<Asset, String>>(
+            .update::<_, Result<Asset, ReserveError>>(
                 ImportStandby::NAME,
                 ImportStandby::ID,
                 &foreign_id,
@@ -294,7 +315,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
             .await
             .unwrap_err();
         assert!(
-            error.contains(&foreign.to_text()) && error.contains("but Root requires"),
+            matches!(&error, ReserveError::WrongSubnet(detail) if detail.contains(&foreign.to_text())),
             "{error}"
         );
         assert_eq!(inspect().await, before);
@@ -364,7 +385,7 @@ async fn two_roots_hold_spare_until_destination_confirms_custody() {
     let deadline = pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000;
     let refill = async |sequence| {
         source
-            .update::<_, Result<Asset, String>>(
+            .update::<_, Result<Asset, ReserveError>>(
                 RefillStandby::NAME,
                 RefillStandby::ID,
                 &Refill {
@@ -384,7 +405,7 @@ async fn two_roots_hold_spare_until_destination_confirms_custody() {
         (spare, destination.id.to_text().parse().unwrap(), deadline);
     let export = async |input| {
         source
-            .update::<_, Result<TransferPhase, String>>(
+            .update::<_, Result<TransferPhase, ReserveError>>(
                 ExportStandby::NAME,
                 ExportStandby::ID,
                 &input,
@@ -394,7 +415,7 @@ async fn two_roots_hold_spare_until_destination_confirms_custody() {
     };
     assert!(export(approval).await.is_err());
     destination
-        .update::<_, Result<(), String>>(
+        .update::<_, Result<(), ReserveError>>(
             "configure_standby",
             stored::CONFIGURE_STANDBY,
             &stored::StandbyPolicy {
@@ -456,7 +477,7 @@ async fn two_roots_hold_spare_until_destination_confirms_custody() {
     );
     let import = async || {
         destination
-            .update::<_, Result<Asset, String>>(
+            .update::<_, Result<Asset, ReserveError>>(
                 ImportStandby::NAME,
                 ImportStandby::ID,
                 &spare,
@@ -592,10 +613,10 @@ pub(super) async fn check_controller_handoff(
         .unwrap();
     held.release(pic, &token).await.unwrap();
     let reply = pic.await_call(call).await.unwrap();
-    assert_eq!(
+    assert!(matches!(
         ConfirmRelease::decode_reply(&reply).unwrap(),
-        Err("Root controller required".into())
-    );
+        Err(ReserveError::Unauthorized(_))
+    ));
     pic.set_controllers(root.id, Some(successor), vec![root.operator])
         .await
         .unwrap();

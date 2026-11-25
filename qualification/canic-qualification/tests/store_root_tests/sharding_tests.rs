@@ -1,5 +1,6 @@
 //! The hub is an independent installed application. Only Root controls the shards.
 use super::*;
+use canic::sharding::standby::ReserveError;
 use canic::sharding::{self, Placement};
 use canic_profile_protocol::ProfileError;
 
@@ -130,7 +131,7 @@ async fn exercise_pool(toko_wasm: Option<PathBuf>, inline: Option<PathBuf>) {
     pic.install_canister(
         hub,
         hub_wasm.clone(),
-        root.id.as_slice().to_vec(),
+        crate::store_root_tests::hub_args(&root),
         Some(root.operator),
     )
     .await;
@@ -227,26 +228,32 @@ expires_at_ns={}
         result.stdout
     };
     let text = String::from_utf8(plan(false)).unwrap();
-    assert!(text.contains("2 shards × 1 live keys"));
+    assert!(text.contains("Creation limit: 2 shards") && text.contains("Hub policy: 1 live keys"));
     let result: serde_json::Value = serde_json::from_slice(&plan(true)).unwrap();
     assert_eq!(result["action"], "shard_pool");
     let bytes: Vec<u8> = serde_json::from_value(result["request"].clone()).unwrap();
     let frame = |direction| ic_wire::Encoding::Frame {
-        method: stored::CONFIGURE_SHARDS,
+        method: stored::APPROVE_CHILD_CREATION,
         direction,
     };
-    let approval: stored::ShardPool =
-        ic_wire::decode(&bytes, frame(ic_wire::Direction::Request), stored::LIMITS).unwrap();
+    let stored::ChildCreationGrant::Shared(approval) =
+        ic_wire::decode(&bytes, frame(ic_wire::Direction::Request), stored::LIMITS).unwrap()
+    else {
+        panic!("expected shared creation grant")
+    };
     assert_eq!(result["approval"], serde_json::to_value(&approval).unwrap());
     assert_eq!(approval.reference.manifest, manifest);
     assert_eq!(approval.arguments.as_slice(), &init);
     let reply = pic
-        .update_call(root.id, root.operator, "configure_shards", bytes)
+        .update_call(root.id, root.operator, "approve_child_creation", bytes)
         .await
         .unwrap();
     let configured: Result<(), management::Refusal> =
         ic_wire::decode(&reply, frame(ic_wire::Direction::Response), stored::LIMITS).unwrap();
     configured.unwrap();
+    super::configure_routes(&root, hub, "user_shard", 1)
+        .await
+        .unwrap();
     let mut changed = approval.clone();
     changed.arguments =
         management::application::Arguments::new(root.operator.as_slice().to_vec()).unwrap();
@@ -309,10 +316,13 @@ expires_at_ns={}
     pic.install_canister(
         unrelated,
         hub_wasm.clone(),
-        root.id.as_slice().to_vec(),
+        crate::store_root_tests::hub_args(&root),
         Some(root.operator),
     )
     .await;
+    super::configure_routes(&root, unrelated, "user_shard", 1)
+        .await
+        .unwrap();
     let retained = pic.get_stable_memory(root.id).await;
     assert_eq!(
         user(pic, unrelated, alice, "lookup").await,
@@ -350,9 +360,14 @@ expires_at_ns={}
     );
     let recovered: management::Status = root
         .update(
-            "reconcile_application_child",
-            management::application::RECONCILE,
-            &children::AllocationRequest { slot, value: exact },
+            "reconcile_child_creation",
+            canic_management_protocol::application::RECONCILE_CHILD_CREATION,
+            &children::AllocationRequest {
+                slot,
+                value: canic_management_protocol::application::Deployment::<(), _>::Application(
+                    exact,
+                ),
+            },
             stored::LIMITS,
         )
         .await;
@@ -394,7 +409,7 @@ expires_at_ns={}
     }
     assert_eq!(user(pic, hub, eve, "signup").await, Placement::Full);
     assert_eq!(user(pic, hub, eve, "lookup").await, Placement::Unknown);
-    for (id, wasm) in [(hub, hub_wasm), (root.id, root_wasm.clone())] {
+    for (id, wasm) in [(hub, hub_wasm.clone()), (root.id, root_wasm.clone())] {
         canic_qualification::upgrade_stopped(pic, id, wasm, vec![], Some(root.operator))
             .await
             .unwrap();
@@ -440,7 +455,7 @@ expires_at_ns = {}
     .unwrap();
     let text = String::from_utf8(plan(false)).unwrap();
     assert!(text.contains("Registry · project"));
-    assert!(text.contains("2 shards × 1 live keys"));
+    assert!(text.contains("Creation limit: 2 shards") && text.contains("Hub policy: 1 live keys"));
     let both: serde_json::Value = serde_json::from_slice(&plan(true)).unwrap();
     assert_eq!(both["action"], "placement_pools");
     assert_eq!(both["shards"][0]["request"], result["request"]);
@@ -462,7 +477,7 @@ expires_at_ns = {}
     std::fs::write(&config, combined_config).unwrap();
     let source: Vec<u8> = serde_json::from_value(both["instances"]["request"].clone()).unwrap();
     assert!(
-        pic.update_call(root.id, alice, "configure_instances", source.clone())
+        pic.update_call(root.id, alice, "approve_child_creation", source.clone())
             .await
             .is_err()
     );
@@ -489,13 +504,13 @@ expires_at_ns = {}
         Err(management::Refusal::Binding)
     );
     let configured = pic
-        .update_call(root.id, root.operator, "configure_instances", source)
+        .update_call(root.id, root.operator, "approve_child_creation", source)
         .await
         .unwrap();
     ic_wire::decode::<Result<(), management::Refusal>>(
         &configured,
         ic_wire::Encoding::Frame {
-            method: stored::CONFIGURE_INSTANCES,
+            method: stored::APPROVE_CHILD_CREATION,
             direction: ic_wire::Direction::Response,
         },
         stored::LIMITS,
@@ -508,7 +523,11 @@ expires_at_ns = {}
             .await
             .unwrap_err();
         assert!(
-            refusal.reject_message.contains("hub: Rejected("),
+            refusal.reject_message.contains(if method == "project" {
+                "hub: Refused(Unauthorized)"
+            } else {
+                "hub: Rejected("
+            }),
             "{method}: {refusal:?}"
         );
     }
@@ -533,6 +552,30 @@ expires_at_ns = {}
     settle(pic).await;
     let project_a = project(pic, unrelated, alice, "lookup_project", 1).await;
     let project_b = project(pic, unrelated, alice, "lookup_project", 2).await;
+    // Completed projects must stay resolvable on a reopened registry with its creator offline.
+    pic.stop_canister(root.id, Some(root.operator))
+        .await
+        .unwrap();
+    canic_qualification::upgrade_stopped(
+        pic,
+        unrelated,
+        hub_wasm.clone(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        project(pic, unrelated, alice, "lookup_project", 1).await,
+        project_a
+    );
+    assert_eq!(
+        project(pic, unrelated, alice, "project", 2).await,
+        project_b
+    );
+    pic.start_canister(root.id, Some(root.operator))
+        .await
+        .unwrap();
     let Placement::Assigned(a, pid_a) = &project_a else {
         panic!("{project_a:?}")
     };
@@ -787,6 +830,7 @@ async fn check_db_owner(pic: &PocketIc, id: CanisterId, hub: CanisterId, operato
 
 #[tokio::test(flavor = "current_thread")]
 async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
+    use canic::method::Contract;
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
@@ -799,10 +843,13 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
     pic.install_canister(
         hub,
         std::fs::read(artifacts().join("hub.wasm")).unwrap(),
-        root.id.as_slice().to_vec(),
+        crate::store_root_tests::hub_args(&root),
         None,
     )
     .await;
+    super::configure_routes(&root, hub, "user_shard", 100_000)
+        .await
+        .unwrap();
     let manifest = store.publish_bytes("one", b"\0asm\x01\0\0\0").await;
     let approval = stored::ShardPool {
         arguments: management::application::Arguments::new(vec![]).unwrap(),
@@ -810,8 +857,6 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
         hub: hub.to_text(),
         pool: "user_shard".into(),
         max_shards: 2,
-        keys_per_shard: 100_000,
-        creation_payer: Default::default(),
         creation_budget: 0,
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
         reference: stored::Reference {
@@ -821,16 +866,16 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
     };
     let caller = CanisterId::self_authenticating(b"user");
     let encoded = ic_wire::encode(
-        &approval,
+        &stored::ChildCreationGrant::Shared(approval.clone()),
         ic_wire::Encoding::Frame {
-            method: stored::CONFIGURE_SHARDS,
+            method: stored::APPROVE_CHILD_CREATION,
             direction: ic_wire::Direction::Request,
         },
         stored::LIMITS,
     )
     .unwrap();
     assert!(
-        pic.update_call(root.id, caller, "configure_shards", encoded)
+        pic.update_call(root.id, caller, "approve_child_creation", encoded)
             .await
             .is_err()
     );
@@ -838,7 +883,7 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
     pic.install_canister(
         project_hub,
         std::fs::read(artifacts().join("hub.wasm")).unwrap(),
-        root.id.as_slice().to_vec(),
+        crate::store_root_tests::hub_args(&root),
         None,
     )
     .await;
@@ -900,6 +945,27 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
         Placement::GrowthRefused
     );
     assert_eq!(user(pic, hub, caller, "lookup").await, Placement::Unknown);
+    let spare = root
+        .update::<_, Result<canic::sharding::standby::Asset, ReserveError>>(
+            canic::sharding::standby::RefillStandby::NAME,
+            canic::sharding::standby::RefillStandby::ID,
+            &canic::sharding::standby::Refill {
+                root: root.id.as_slice().try_into().unwrap(),
+                sequence: 0,
+                cycles: management::CREATION_CYCLES,
+                expires_at_ns: approval.expires_at_ns,
+            },
+            canic::sharding::standby::RefillStandby::REPLY,
+        )
+        .await
+        .unwrap();
+    assert!(matches!(spare, canic::sharding::standby::Asset::Empty(_)));
+    assert_eq!(
+        user(pic, hub, caller, "signup").await,
+        Placement::GrowthRefused
+    );
+    assert_eq!(user(pic, hub, caller, "lookup").await, Placement::Unknown);
+
     assert_eq!(
         configure(
             &root,
@@ -927,9 +993,9 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
 
 async fn configure(root: &Client<'_>, a: &stored::ShardPool) -> Result<(), management::Refusal> {
     root.update(
-        "configure_shards",
-        stored::CONFIGURE_SHARDS,
-        a,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Shared(a.clone()),
         stored::LIMITS,
     )
     .await
@@ -958,7 +1024,6 @@ fn instance_grant(
         )
         .unwrap(),
         max_instances: 2,
-        creation_payer: Default::default(),
         creation_budget: 6 * management::CREATION_CYCLES,
         expires_at_ns,
     }
@@ -969,9 +1034,9 @@ async fn configure_project(
     grant: &stored::InstancePool,
 ) -> Result<(), management::Refusal> {
     root.update(
-        "configure_instances",
-        stored::CONFIGURE_INSTANCES,
-        grant,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Dedicated(grant.clone()),
         stored::LIMITS,
     )
     .await
@@ -988,10 +1053,13 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
     pic.install_canister(
         hub,
         std::fs::read(artifacts().join("hub.wasm")).unwrap(),
-        root.id.as_slice().to_vec(),
+        crate::store_root_tests::hub_args(&root),
         None,
     )
     .await;
+    super::configure_routes(&root, hub, "user_shard", 1)
+        .await
+        .unwrap();
     let manifest = supplier
         .publish_bytes(
             "shards",
@@ -1029,8 +1097,6 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
         hub: hub.to_text(),
         pool: "user_shard".into(),
         max_shards: 2,
-        keys_per_shard: 1,
-        creation_payer: Default::default(),
         creation_budget: 2 * management::CREATION_CYCLES,
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
         reference: stored::Reference {
@@ -1071,9 +1137,14 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
         };
         let observed: management::Status = root
             .update(
-                "reconcile_stored_child",
-                stored::RECONCILE,
-                &children::AllocationRequest { slot, value: input },
+                "reconcile_child_creation",
+                canic_management_protocol::application::RECONCILE_CHILD_CREATION,
+                &children::AllocationRequest {
+                    slot,
+                    value: canic_management_protocol::application::Deployment::<_, ()>::Stored(
+                        input,
+                    ),
+                },
                 stored::LIMITS,
             )
             .await;
@@ -1085,7 +1156,7 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
     pic.install_canister(
         peer,
         std::fs::read(artifacts().join("hub.wasm")).unwrap(),
-        root.id.as_slice().to_vec(),
+        crate::store_root_tests::hub_args(&root),
         None,
     )
     .await;
@@ -1135,7 +1206,7 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
     settle(pic).await;
     let evidence = async || {
         root.update::<_, management::application::Custody>(
-            "observe_role_children",
+            "observe_child_deployments",
             management::application::CHILD_EVIDENCE,
             &(),
             management::application::LIMITS,
@@ -1165,9 +1236,12 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
         value: &change,
     };
     root.update::<_, Result<upgrade::Status, management::Refusal>>(
-        "stage_stored_upgrade",
-        stored::STAGE_UPGRADE,
-        &req,
+        "stage_child_upgrade",
+        canic_management_protocol::application::STAGE_CHILD_UPGRADE,
+        &canic_management_protocol::children::Request {
+            slot: req.slot,
+            value: canic_management_protocol::application::Deployment::<_, ()>::Stored(&req.value),
+        },
         stored::LIMITS,
     )
     .await
@@ -1176,9 +1250,14 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
     let after = evidence().await.root.current.stored;
     let status = root
         .update::<_, upgrade::Status>(
-            "reconcile_stored_upgrade",
-            stored::RECONCILE_UPGRADE,
-            &req,
+            "reconcile_child_upgrade",
+            canic_management_protocol::application::RECONCILE_CHILD_UPGRADE,
+            &canic_management_protocol::children::Request {
+                slot: req.slot,
+                value: canic_management_protocol::application::Deployment::<_, ()>::Stored(
+                    &req.value,
+                ),
+            },
             stored::LIMITS,
         )
         .await;
@@ -1198,14 +1277,14 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
     let frame = ic_wire::encode(
         &(),
         ic_wire::Encoding::Frame {
-            method: stored::CUSTODY,
+            method: management::application::CUSTODY,
             direction: ic_wire::Direction::Request,
         },
         stored::LIMITS,
     )
     .unwrap();
     let refused = pic
-        .update_call(root.id, root.operator, "observe_stored_children", frame)
+        .update_call(root.id, root.operator, "observe_root_custody", frame)
         .await
         .unwrap_err();
     assert!(
@@ -1239,7 +1318,7 @@ async fn grant_with_child(
     pic.install_canister(
         hub,
         std::fs::read(artifacts().join("hub.wasm")).unwrap(),
-        root.id.as_slice().to_vec(),
+        crate::store_root_tests::hub_args(root),
         None,
     )
     .await;
@@ -1254,8 +1333,6 @@ async fn grant_with_child(
         hub: hub.to_text(),
         pool: "user_shard".into(),
         max_shards: 2,
-        keys_per_shard: 10_000,
-        creation_payer: Default::default(),
         creation_budget: 2 * management::CREATION_CYCLES,
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000,
         reference: stored::Reference {
@@ -1269,7 +1346,7 @@ async fn grant_with_child(
 // Call Root directly as the approved hub, before any application provisioning.
 #[tokio::test(flavor = "current_thread")]
 async fn approved_hub_recovers_its_first_growth_ordinal() {
-    use canic::{method::Contract, sharding::GrowShard};
+    use canic::method::Contract;
 
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
@@ -1337,14 +1414,30 @@ async fn approved_hub_recovers_its_first_growth_ordinal() {
         }
     }
 
-    let request = GrowShard::encode_request(&("user_shard".into(), 0)).unwrap();
+    let request = crate::store_root_tests::placement_request(
+        canic::sharding::payment::Demand::ShardCapacity("user_shard".into(), 0),
+    );
     let assign = async || {
-        let reply = pic
-            .update_call(root.id, hub, GrowShard::NAME, request.clone())
-            .await
-            .unwrap();
-        GrowShard::decode_reply(&reply).unwrap().0
+        acquire_fixture(
+            &root,
+            hub,
+            canic::sharding::payment::Demand::ShardCapacity("user_shard".into(), 0),
+        )
+        .await
     };
+    let unpaid = pic
+        .update_call(
+            root.id,
+            hub,
+            canic::sharding::payment::AcquirePlacement::NAME,
+            request,
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        canic::sharding::payment::AcquirePlacement::decode_reply(&unpaid).unwrap(),
+        Ok(canic::sharding::payment::Payment::Quoted(_))
+    ));
     let Placement::Pending(original) = assign().await else {
         panic!("first key must reserve a shard")
     };
@@ -1376,13 +1469,15 @@ async fn ten_thousand_keys_per_shard_survive_rollover_and_hub_reopen() {
     let pic = owner.client();
     let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
     let (root, store) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
-    let (hub, mut approval) = fresh_user_shard_grant(&root, &store).await;
-    approval.keys_per_shard = 100_001;
+    let (hub, approval) = fresh_user_shard_grant(&root, &store).await;
+
     assert_eq!(
-        configure(&root, &approval).await,
-        Err(management::Refusal::Binding)
+        super::configure_routes(&root, hub, "user_shard", 100_001).await,
+        Err(canic::sharding::ShardError::InvalidPolicy)
     );
-    approval.keys_per_shard = 10_000;
+    super::configure_routes(&root, hub, "user_shard", 10_000)
+        .await
+        .unwrap();
     configure(&root, &approval).await.unwrap();
     let account = |n: u32| CanisterId::self_authenticating(n.to_le_bytes());
     let mut assignments = Vec::new();
@@ -1471,7 +1566,6 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
     let (hub, shared) = fresh_user_shard_grant(&root, &store).await;
     let mut grant = instance_grant(root.id, hub, shared.reference, shared.expires_at_ns);
     grant.max_instances = 3;
-    grant.creation_payer = stored::CreationPayer::Requester;
     root.update::<_, Result<(), management::Refusal>>(
         "configure_capacity",
         stored::CONFIGURE_CAPACITY,
@@ -1506,7 +1600,7 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
             )
             .await
             .unwrap();
-        ic_wire::decode::<Result<Payment, String>>(
+        ic_wire::decode::<Result<Payment, canic::sharding::payment::Refusal>>(
             &reply,
             frame(ic_wire::Direction::Response),
             canic::sharding::LIMITS,
@@ -1514,18 +1608,21 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
         .unwrap()
     };
     let denied = root
-        .update::<_, Result<Payment, String>>(
-            canic::sharding::payment::FundPlacement::NAME,
-            canic::sharding::payment::FundPlacement::ID,
+        .update::<_, Result<Payment, canic::sharding::payment::Refusal>>(
+            canic::sharding::payment::AcquirePlacement::NAME,
+            canic::sharding::payment::AcquirePlacement::ID,
             &(Demand::Instance([1; 32]), maximum),
             canic::sharding::LIMITS,
         )
         .await;
-    assert!(denied.unwrap_err().contains("calling hub"));
+    assert_eq!(
+        denied.unwrap_err(),
+        canic::sharding::payment::Refusal::Unauthorized
+    );
     for id in [1, 2] {
         let spare = if id == 1 {
             let asset = root
-                .update::<_, Result<Asset, String>>(
+                .update::<_, Result<Asset, ReserveError>>(
                     RefillStandby::NAME,
                     RefillStandby::ID,
                     &Refill {
@@ -1560,12 +1657,18 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
             .await
             .unwrap();
             assert_eq!(pay(id, 0).await.unwrap(), Payment::Quoted(quote.clone()));
-            assert!(pay(2, 0).await.is_err());
+            assert_eq!(
+                pay(2, 0).await,
+                Err(canic::sharding::payment::Refusal::QuoteConflict)
+            );
         }
         assert_eq!(quote.spare, spare);
         let charge = quote.creation_fee + quote.working_cycles;
         assert!(quote.creation_fee > 0 && quote.working_cycles > 0 && charge <= maximum);
-        assert!(pay(id, charge - 1).await.is_err());
+        assert_eq!(
+            pay(id, charge - 1).await,
+            Err(canic::sharding::payment::Refusal::InsufficientPayment)
+        );
         let before = pic.cycle_balance(hub).await;
         // Discard the first settlement reply. Recover using only the original demand.
         let _discarded = pic
@@ -1612,7 +1715,7 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
         assert!(before - pic.cycle_balance(hub).await < charge / 100);
     }
     // An unpaid reservation excludes other claims only until its original deadline.
-    root.update::<_, Result<(), String>>(
+    root.update::<_, Result<(), ReserveError>>(
         "configure_standby",
         stored::CONFIGURE_STANDBY,
         &stored::StandbyPolicy {
@@ -1642,7 +1745,7 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
             .unwrap()
             .ready
     };
-    root.update::<_, Result<Asset, String>>(
+    root.update::<_, Result<Asset, ReserveError>>(
         RefillStandby::NAME,
         RefillStandby::ID,
         &Refill {
@@ -1661,7 +1764,7 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
         .await
         .unwrap();
     assert!(
-        ic_wire::decode::<Result<Payment, String>>(
+        ic_wire::decode::<Result<Payment, canic::sharding::payment::Refusal>>(
             &low,
             frame(ic_wire::Direction::Response),
             canic::sharding::LIMITS
@@ -1690,7 +1793,7 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
     let pic = owner.client();
     let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
     let (root, store) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
-    let (hub, mut grant) = grant_with_child(&root, &store, "hub.wasm").await;
+    let (hub, grant) = grant_with_child(&root, &store, "hub.wasm").await;
     use canic::{
         method::Contract,
         sharding::standby::{Asset, Refill, RefillStandby},
@@ -1708,7 +1811,7 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
     .await
     .unwrap();
     let Asset::Empty(spare) = root
-        .update::<_, Result<Asset, String>>(
+        .update::<_, Result<Asset, ReserveError>>(
             RefillStandby::NAME,
             RefillStandby::ID,
             &Refill {
@@ -1724,22 +1827,26 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
     else {
         panic!("expected available spare")
     };
-    grant.keys_per_shard = 2;
+    super::configure_routes(&root, hub, "user_shard", 2)
+        .await
+        .unwrap();
     configure(&root, &grant).await.unwrap();
     let grow = async |caller, ordinal| {
         pic.update_call(
             root.id,
             caller,
-            sharding::GrowShard::NAME,
-            sharding::GrowShard::encode_request(&("user_shard".into(), ordinal)).unwrap(),
+            canic::sharding::payment::AcquirePlacement::NAME,
+            crate::store_root_tests::placement_request(
+                canic::sharding::payment::Demand::ShardCapacity("user_shard".into(), ordinal),
+            ),
         )
         .await
     };
-    assert!(grow(root.operator, 0).await.is_err());
+    crate::store_root_tests::assert_unauthorized(&grow(root.operator, 0).await.unwrap());
     let skipped = grow(hub, 1).await.unwrap();
     assert_eq!(
-        sharding::GrowShard::decode_reply(&skipped).unwrap(),
-        (Placement::GrowthRefused, 2)
+        crate::store_root_tests::placed(&skipped),
+        Placement::GrowthRefused
     );
     let request = |name: &str| {
         ic_wire::encode(
@@ -1778,14 +1885,17 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
     let carol = CanisterId::self_authenticating(b"carol");
     // Obtain Root's actual first allocation, then control when its successful reply arrives.
     assert!(matches!(
-        sharding::GrowShard::decode_reply(&grow(hub, 0).await.unwrap())
-            .unwrap()
-            .0,
+        acquire_fixture(
+            &root,
+            hub,
+            sharding::payment::Demand::ShardCapacity("user_shard".into(), 0)
+        )
+        .await,
         Placement::Pending(_)
     ));
     settle(pic).await;
     let ready = grow(hub, 0).await.unwrap();
-    let (original, _) = sharding::GrowShard::decode_reply(&ready).unwrap();
+    let original = crate::store_root_tests::placed(&ready);
     assert_eq!(original.assigned_target().unwrap().unwrap().1, spare);
     revoked_growth(&root, hub, alice, &ready, &wasm, &request("register_local")).await;
     let _lost = pic
@@ -1901,13 +2011,13 @@ async fn revoked_growth(
     use ic_testkit::held::{Catalog, Fixture, Limits, Reply};
 
     let pic = root.pic;
-    let (assigned, _) = sharding::GrowShard::decode_reply(ready).unwrap();
+    let assigned = crate::store_root_tests::placed(ready);
     let shard = CanisterId::from_slice(assigned.assigned_target().unwrap().unwrap().1.as_slice());
     let hub_memory = pic.get_stable_memory(hub).await;
     let shard_memory = pic.get_stable_memory(shard).await;
     let catalog = Catalog::new(
         &[Reply {
-            method: sharding::GrowShard::NAME,
+            method: canic::sharding::payment::AcquirePlacement::NAME,
             bytes: ready,
         }],
         Limits {

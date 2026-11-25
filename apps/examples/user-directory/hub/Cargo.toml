@@ -12,13 +12,24 @@ category = "examples"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "ex-user-directory-hub-client"
+path = "client/main.rs"
+required-features = ["operator-client"]
+
 [features]
+operator-client = ["dep:clap", "dep:serde_json", "dep:ic-platform-types"]
 inspection = ["canic/inspection", "ex-user-directory-schema/inspection"]
 role-service = [
     "dep:ic-platform-runtime",
     "canic/role-attestation",
     "ex-user-directory-schema/role-service",
 ]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+clap = { workspace = true, optional = true }
+ic-platform-types = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 [dependencies]
 canic = { workspace = true, features = ["provisioning"] }

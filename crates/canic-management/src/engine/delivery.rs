@@ -236,20 +236,39 @@ pub(super) async fn pin(slot: ChildId, upgrade: bool) -> Result<(), Failure> {
     if source.state == stored::PinState::Retained {
         return Ok(());
     }
-    let (method, id) = if source.state == stored::PinState::Pending {
+    let issue = source.state == stored::PinState::Pending;
+    if issue {
         mutate(slot, upgrade, |s| s.state = stored::PinState::Issued);
-        ("pin", store::PIN)
-    } else {
-        ("observe_pin", store::OBSERVE_PIN)
-    };
-    let receipt: Result<store::PinReceipt, store::Error> =
-        call(&source, method, id, &source.pin()).await?;
-    let receipt = receipt.map_err(|_| Failure::Mismatch)?;
+    }
+    let receipt = pin_receipt(&source, issue)
+        .await?
+        .map_err(|_| Failure::Mismatch)?;
     if receipt.pin != source.pin() || receipt.owner != api::canister_self().as_slice() {
         return Err(Failure::Mismatch);
     }
     mutate(slot, upgrade, |s| s.state = stored::PinState::Retained);
     Ok(())
+}
+
+pub(super) async fn pin_receipt(
+    source: &stored::Delivery,
+    issue: bool,
+) -> Result<Result<store::PinReceipt, store::Error>, Failure> {
+    if issue {
+        return call(source, "pin", store::PIN, &source.pin()).await;
+    }
+    let result: Result<store::Observation, store::Error> = call(
+        source,
+        "observe",
+        store::OBSERVE,
+        &store::Observe::Pin(source.pin()),
+    )
+    .await?;
+    match result {
+        Ok(store::Observation::Pin(receipt)) => Ok(Ok(receipt)),
+        Ok(_) => Err(Failure::InvalidReply),
+        Err(error) => Ok(Err(error)),
+    }
 }
 
 pub(super) fn needs_pin(slot: ChildId, upgrade: bool) -> bool {

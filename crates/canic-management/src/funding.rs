@@ -3,12 +3,25 @@ use canic::{
     method::{self, Contract},
     topology::directory::retained::DIRECTORY,
 };
+use canic_management_protocol::stored::FundingError;
 use canic_management_protocol::stored::{ChildFunding, ChildFundingStatus};
 use ic_platform_runtime::{raw, system};
 use ic_platform_types::Principal;
 use ic_storage::{DefaultMemoryImpl, MemoryRuntime, adapter::StableCell};
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::BTreeMap};
+
+/// Report whether the forwarded funding call could have reached its recipient.
+#[must_use]
+pub fn call_failure(error: &method::CallError) -> FundingError {
+    use method::CallError;
+    match error {
+        CallError::Request(_) | CallError::Dispatch(_) => FundingError::CallNotSubmitted,
+        CallError::Rejected(_) | CallError::Unknown(_) | CallError::Reply(_) => {
+            FundingError::ReplyUnconfirmed
+        }
+    }
+}
 
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 32_768,
@@ -19,7 +32,7 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
 const MAX_FUNDED_CHILDREN: usize = 8;
 const CHECK_NS: u64 = 60_000_000_000;
 const BOOK: ic_wire::Encoding = ic_wire::Encoding::Frame {
-    method: ic_wire::method_id("canic.application_child_funding.v1"),
+    method: ic_wire::method_id("canic.owner.child_funding.v1"),
     direction: ic_wire::Direction::Response,
 };
 
@@ -33,6 +46,7 @@ struct Grant {
 
 #[derive(Default, Serialize, Deserialize)]
 struct Book {
+    operator: Option<Principal>,
     children: BTreeMap<Principal, Grant>,
     incoming: Option<Incoming>,
 }
@@ -73,12 +87,21 @@ fn read<T>(f: impl FnOnce(&Book) -> T) -> T {
 /// Install or reopen the funding participant in the application's selected storage lease.
 /// # Panics
 /// Requires the original lease, format and lifecycle selection.
-pub fn open(runtime: &MemoryRuntime<DefaultMemoryImpl>, key: &str, fresh: bool) {
+pub fn open(
+    runtime: &MemoryRuntime<DefaultMemoryImpl>,
+    key: &str,
+    install: Option<Option<Principal>>,
+) {
     let cell = canic::storage::cell(
         runtime,
         key,
         LIMITS.bytes,
-        fresh.then(|| encode(&Book::default())),
+        install.map(|operator| {
+            encode(&Book {
+                operator,
+                ..Book::default()
+            })
+        }),
     );
     let book = load(&cell);
     for (child, grant) in book.children {
@@ -105,14 +128,14 @@ pub fn open(runtime: &MemoryRuntime<DefaultMemoryImpl>, key: &str, fresh: bool) 
     }
 }
 
-fn direct(child: Principal) -> Result<[u8; 32], String> {
+fn direct(child: Principal) -> Result<[u8; 32], FundingError> {
     DIRECTORY
         .with_borrow(|d| {
             d.as_ref()?
                 .child_delivery(child)
                 .and_then(|(hop, ack)| (ack.is_some()).then_some(hop.generation))
         })
-        .ok_or_else(|| "acknowledged direct child required".into())
+        .ok_or(FundingError::UnknownChild)
 }
 
 /// Configure the child-side balance trigger from the retained application parent.
@@ -121,7 +144,7 @@ impl Contract for Watch {
     const NAME: &'static str = "watch_child_balance";
     const ID: u64 = ic_wire::method_id(Self::NAME);
     type Input = (u64, u64);
-    type Output = Result<(), String>;
+    type Output = Result<(), FundingError>;
 }
 
 /// Request the next fixed payment. The receiver uses the actual caller as payee.
@@ -130,14 +153,16 @@ impl Contract for Request {
     const NAME: &'static str = "request_child_funding";
     const ID: u64 = ic_wire::method_id(Self::NAME);
     type Input = (u64, u128);
-    type Output = Result<u64, String>;
+    type Output = Result<u64, FundingError>;
 }
 
 /// Admit an immutable funding rule and deliver the threshold to its child.
 /// # Errors
-/// Requires the parent's controller, an acknowledged child and finite bounds.
-pub async fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, String> {
-    canic::guard::require_controller()?;
+/// Requires the parent's installed funding operator, an acknowledged child and finite bounds.
+pub async fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, FundingError> {
+    if !read(|book| book.operator == Some(system::caller())) {
+        return Err(FundingError::Unauthorized);
+    }
     let generation = direct(rule.child)?;
     if rule.parent != system::canister_self()
         || rule.component.is_empty()
@@ -146,7 +171,7 @@ pub async fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, String>
         || rule.amount_cycles == 0
         || rule.amount_cycles > rule.budget_cycles
     {
-        return Err("invalid direct funding approval".into());
+        return Err(FundingError::InvalidApproval);
     }
     let child = rule.child;
     let terms = (rule.below_cycles, rule.expires_at_ns);
@@ -155,11 +180,14 @@ pub async fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, String>
             return if g.rule == rule && g.generation == generation {
                 Ok(g.status.clone())
             } else {
-                Err("child funding approval differs")
+                Err(FundingError::ApprovalConflict)
             };
         }
-        if b.children.len() >= MAX_FUNDED_CHILDREN || system::time() >= rule.expires_at_ns {
-            return Err("child funding grant expired or ledger full");
+        if b.children.len() >= MAX_FUNDED_CHILDREN {
+            return Err(FundingError::Capacity);
+        }
+        if system::time() >= rule.expires_at_ns {
+            return Err(FundingError::Expired);
         }
         b.children.insert(
             child,
@@ -175,18 +203,23 @@ pub async fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, String>
     if !status.closed && system::time() < terms.1 {
         method::call::<Watch>(child, 10, &terms)
             .await
-            .map_err(|_| "balance trigger delivery pending")??;
+            .map_err(|error| call_failure(&error))??;
     }
     Ok(read(|b| b.children[&child].status.clone()))
 }
 
 /// Revoke future payments and preserve any issued debit.
 /// # Errors
-/// Requires the parent's controller and an admitted child.
-pub fn stop(child: Principal) -> Result<ChildFundingStatus, String> {
-    canic::guard::require_controller()?;
+/// Requires the parent's installed funding operator and an admitted child.
+pub fn stop(child: Principal) -> Result<ChildFundingStatus, FundingError> {
+    if !read(|book| book.operator == Some(system::caller())) {
+        return Err(FundingError::Unauthorized);
+    }
     change(|b| {
-        let g = b.children.get_mut(&child).ok_or("unknown funding child")?;
+        let g = b
+            .children
+            .get_mut(&child)
+            .ok_or(FundingError::UnknownChild)?;
         g.status.closed = true;
         Ok(g.status.clone())
     })
@@ -195,20 +228,23 @@ pub fn stop(child: Principal) -> Result<ChildFundingStatus, String> {
 /// Install the threshold under the actual directory parent.
 /// # Errors
 /// Refuses another caller or changes to installed terms.
-pub fn watch((threshold, deadline): (u64, u64)) -> Result<(), String> {
+pub fn watch((threshold, deadline): (u64, u64)) -> Result<(), FundingError> {
     let parent = system::caller();
-    if !DIRECTORY.with_borrow(|d| d.as_ref().is_some_and(|d| d.publisher() == parent))
-        || threshold == 0
-        || deadline <= system::time()
-    {
-        return Err("current parent and valid funding terms required".into());
+    if !DIRECTORY.with_borrow(|d| d.as_ref().is_some_and(|d| d.publisher() == parent)) {
+        return Err(FundingError::Unauthorized);
+    }
+    if deadline <= system::time() {
+        return Err(FundingError::Expired);
+    }
+    if threshold == 0 {
+        return Err(FundingError::InvalidApproval);
     }
     let inserted = change(|b| {
         if let Some(i) = &b.incoming {
             return if (i.parent, i.threshold, i.deadline) == (parent, threshold, deadline) {
                 Ok(false)
             } else {
-                Err("balance trigger changed")
+                Err(FundingError::ApprovalConflict)
             };
         }
         b.incoming = Some(Incoming {
@@ -230,29 +266,43 @@ pub fn watch((threshold, deadline): (u64, u64)) -> Result<(), String> {
 /// A refused or uncertain deposit retains its original exposure.
 /// # Panics
 /// Traps if the original grant disappears during a deposit.
-pub async fn request((sequence, balance): (u64, u128)) -> Result<u64, String> {
+pub async fn request((sequence, balance): (u64, u128)) -> Result<u64, FundingError> {
     let child = system::caller();
     let amount = change(|b| {
-        let g = b.children.get_mut(&child).ok_or("no funding approval")?;
+        let g = b
+            .children
+            .get_mut(&child)
+            .ok_or(FundingError::UnknownChild)?;
         if direct(child)? != g.generation {
-            return Err("funded child generation changed".to_owned());
+            return Err(FundingError::GenerationMismatch);
         }
         if sequence == 0 {
-            return Err("invalid payment sequence".into());
+            return Err(FundingError::InvalidSequence);
         }
         if sequence <= g.paid {
             return Ok(None);
         }
         let s = &mut g.status;
-        if s.closed
-            || s.issued
-            || g.paid.checked_add(1) != Some(sequence)
-            || system::time() >= g.rule.expires_at_ns
-            || balance >= u128::from(g.rule.below_cycles)
-            || g.rule.amount_cycles > g.rule.budget_cycles - s.charged_cycles
-            || raw::liquid_cycle_balance() < u128::from(g.rule.amount_cycles)
-        {
-            return Err("child funding refused or pending".into());
+        if s.issued {
+            return Err(FundingError::PaymentPending);
+        }
+        if s.closed {
+            return Err(FundingError::Closed);
+        }
+        if g.paid.checked_add(1) != Some(sequence) {
+            return Err(FundingError::InvalidSequence);
+        }
+        if system::time() >= g.rule.expires_at_ns {
+            return Err(FundingError::Expired);
+        }
+        if balance >= u128::from(g.rule.below_cycles) {
+            return Err(FundingError::AboveThreshold);
+        }
+        if g.rule.amount_cycles > g.rule.budget_cycles - s.charged_cycles {
+            return Err(FundingError::BudgetExhausted);
+        }
+        if raw::liquid_cycle_balance() < u128::from(g.rule.amount_cycles) {
+            return Err(FundingError::InsufficientCycles);
         }
         s.attempts += 1;
         s.charged_cycles += g.rule.amount_cycles;
@@ -272,7 +322,11 @@ pub async fn request((sequence, balance): (u64, u128)) -> Result<u64, String> {
             }
         });
         if !success {
-            return Err("deposit failed or outcome uncertain".into());
+            return Err(if refund == Some(u128::from(amount)) {
+                FundingError::DepositRefunded
+            } else {
+                FundingError::PaymentPending
+            });
         }
     }
     Ok(sequence)
@@ -315,7 +369,7 @@ fn schedule(deadline: u64) {
 /// A missing acknowledgement retains the same sequence for the next low-balance check.
 /// # Panics
 /// Traps if the retained trigger disappears during a payment.
-pub async fn check() -> Result<bool, String> {
+pub async fn check() -> Result<bool, FundingError> {
     // The next sequence follows from the durable acknowledgement. Even after a
     // lost reply, a new balance observation cannot authorize a second debit.
     let request = read(|b| {
@@ -331,9 +385,9 @@ pub async fn check() -> Result<bool, String> {
     };
     let ack = method::call::<Request>(parent, 10, &(seq, balance))
         .await
-        .map_err(|_| "funding reply pending")??;
+        .map_err(|error| call_failure(&error))??;
     if ack != seq {
-        return Err("unexpected funding sequence".into());
+        return Err(FundingError::InvalidSequence);
     }
     change(|b| {
         let i = b.incoming.as_mut().expect("original trigger");

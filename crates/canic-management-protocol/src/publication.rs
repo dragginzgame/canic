@@ -3,7 +3,7 @@ use ic_wasm_store_protocol as store;
 use serde::{Deserialize, Serialize};
 
 /// Execute one bounded Store operation; never admits deployment or cache work.
-pub const EXECUTE: u64 = 46;
+pub const EXECUTE: u64 = ic_wire::method_id("canic.root.publish_store_artifact.v1");
 /// Last-dispatch window, independent of any child deployment approval.
 pub const MAX_WINDOW_NS: u64 = 300_000_000_000;
 /// One transient chunk plus target/deadline metadata; no durable Root payload.
@@ -20,8 +20,6 @@ pub enum Command {
     Put(store::Put),
     /// Verify and publish all retained bytes; does not install anything.
     Publish(store::Release),
-    /// Replicated progress observation, including after a lost publication reply.
-    Observe(store::Release),
 }
 
 /// The authenticated controller selects the destination and exact command.
@@ -83,7 +81,7 @@ pub struct CustodyRequest {
 pub type CustodyReply = Result<store::Custody, Error>;
 
 /// Read-only Root proxy for Store metadata and release custody.
-pub const OBSERVATION: u64 = ic_wire::method_id("observe_store");
+pub const OBSERVATION: u64 = ic_wire::method_id("canic.root.observe_store.v1");
 /// Select one Store and its original dispatch deadline.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum ObservationRequest {
@@ -91,6 +89,8 @@ pub enum ObservationRequest {
     Info(InfoRequest),
     /// Inspect the named release and all pins on its artifact.
     Custody(CustodyRequest),
+    /// Read publication progress for the named release.
+    ReleaseStatus(CustodyRequest),
 }
 /// Evidence returned by the selected read.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -99,6 +99,8 @@ pub enum Observation {
     Info(store::Info),
     /// Release status and retention obligations.
     Custody(store::Custody),
+    /// Publication progress bound to the original release.
+    ReleaseStatus(store::Status),
 }
 /// Successful typed evidence or a bounded Store failure.
 pub type ObservationReply = Result<Observation, Error>;

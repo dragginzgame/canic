@@ -191,20 +191,33 @@ async fn directory(revoke: bool, stable: bool) {
     pic.set_controllers(store.id, Some(root.operator), vec![root.id])
         .await
         .unwrap();
+    let service = fleet
+        .bind_hub_operator(
+            "ex-user-directory-hub",
+            &root.operator.to_text(),
+            vec![5; 16],
+        )
+        .unwrap();
     let args = fleet
-        .receiver_install_args("ex-user-directory-hub", &pool.root, vec![5; 16])
+        .receiver_install_args("ex-user-directory-hub", &pool.root, service)
         .unwrap();
     let install = canic::auth::install::Install::decode(&args).unwrap();
-    pic.install_canister(hub, initial_role("user_hub"), args, Some(root.operator))
+    pic.set_controllers(hub, Some(root.operator), vec![root.operator, root.id])
+        .await
+        .unwrap();
+    pic.install_canister(hub, initial_role("user_hub"), args, Some(root.id))
         .await;
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_shards",
-        stored::CONFIGURE_SHARDS,
-        &pool,
+        "approve_child_creation",
+        stored::APPROVE_CHILD_CREATION,
+        &stored::ChildCreationGrant::Shared(pool.clone()),
         stored::LIMITS,
     )
     .await
     .unwrap();
+    super::configure_routes(&root, hub, &pool.pool, 1)
+        .await
+        .unwrap();
     let grant = enrollment::Grant {
         receiver: Principal::from_slice(hub.as_slice()),
         issuer: install.issuer,
@@ -276,19 +289,22 @@ async fn directory(revoke: bool, stable: bool) {
         if stable {
             assert_eq!(register().await, Ok(Progress::Ready));
         } else if device == 9 {
-            use canic::{method::Contract, sharding::GrowShard};
+            use canic::method::Contract;
             let raw = pic
                 .update_call(
                     root.id,
                     hub,
-                    GrowShard::NAME,
-                    GrowShard::encode_request(&("ex-user-directory-shard".into(), 0)).unwrap(),
+                    canic::sharding::payment::AcquirePlacement::NAME,
+                    crate::store_root_tests::placement_request(
+                        canic::sharding::payment::Demand::ShardCapacity(
+                            "ex-user-directory-shard".into(),
+                            0,
+                        ),
+                    ),
                 )
                 .await
                 .unwrap();
-            let shard = GrowShard::decode_reply(&raw)
-                .unwrap()
-                .0
+            let shard = crate::store_root_tests::placed(&raw)
                 .assigned_target()
                 .unwrap()
                 .unwrap()

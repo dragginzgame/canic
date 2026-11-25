@@ -1,14 +1,18 @@
 //! Root derives the shared directory from its own ready service installations.
 use super::*;
+use canic::sharding::standby::ReserveError;
 use canic::{
     method::Contract,
-    topology::directory::{Delivery, Directory, Hop, ReceiveDirectory, Service, ServiceInstall},
+    topology::directory::{
+        Delivery, Directory, Hop, ReceiveDirectory, RedeliverDirectoryRevision, RedeliveryError,
+        Service, ServiceInstall,
+    },
 };
 
-async fn publish(root: &Client<'_>, name: &str, revision: u64) -> Result<u64, String> {
+async fn publish(root: &Client<'_>, name: &str, revision: u64) -> Result<u64, RedeliveryError> {
     root.update(
-        "publish_directory",
-        ic_wire::method_id("publish_directory"),
+        RedeliverDirectoryRevision::NAME,
+        RedeliverDirectoryRevision::ID,
         &(name, revision),
         canic::method::LIMITS,
     )
@@ -57,7 +61,7 @@ async fn refused_delivery(
     caller: CanisterId,
     role: &str,
     directory: Directory,
-) -> String {
+) -> canic::topology::directory::DirectoryError {
     let update = Delivery {
         directory,
         path: vec![Hop {
@@ -252,14 +256,16 @@ async fn installed_publication(scenario: Scenario) {
     };
     let stage = async |slot, args: Vec<u8>| -> Result<management::Status, management::Refusal> {
         root.update(
-            "stage_application_child",
-            management::application::STAGE,
+            "stage_child_creation",
+            canic_management_protocol::application::STAGE_CHILD_CREATION,
             &Request {
                 slot,
-                value: management::application::Stage {
-                    source: source.clone(),
-                    arguments: management::application::Arguments::new(args).unwrap(),
-                },
+                value: canic_management_protocol::application::Deployment::<(), _>::Application(
+                    management::application::Stage {
+                        source: source.clone(),
+                        arguments: management::application::Arguments::new(args).unwrap(),
+                    },
+                ),
             },
             stored::LIMITS,
         )
@@ -272,6 +278,8 @@ async fn installed_publication(scenario: Scenario) {
     };
     let named = |name: &str| {
         ServiceInstall {
+            funding_operator: Some(root.operator.to_text().parse().unwrap()),
+            hub_operator: Some(root.operator.to_text().parse().unwrap()),
             name: name.into(),
             role: "hub".into(),
             application: if name == "accounts_hub" {
@@ -289,7 +297,9 @@ async fn installed_publication(scenario: Scenario) {
             .update("observe_child", children::STATUS, &slot, management::LIMITS)
             .await;
         assert_eq!(status.phase, management::Phase::Ready, "{status:?}");
-        CanisterId::from_text(status.worker.unwrap()).unwrap()
+        let id = CanisterId::from_text(status.worker.unwrap()).unwrap();
+        pic.add_cycles(id, 20_000_000_000_000).await;
+        id
     };
     let prefilled = matches!(scenario, Scenario::Capacity(4));
     if prefilled {
@@ -302,7 +312,7 @@ async fn installed_publication(scenario: Scenario) {
             minimum_import_cycles: 1u64.try_into().unwrap(),
             imports: vec![],
         };
-        root.update::<_, Result<(), String>>(
+        root.update::<_, Result<(), ReserveError>>(
             "configure_standby",
             stored::CONFIGURE_STANDBY,
             &policy,
@@ -339,7 +349,7 @@ async fn installed_publication(scenario: Scenario) {
     }
     assert_eq!(
         publish(&root, "accounts_hub", 1).await,
-        Err("no ready named services".into())
+        Err(RedeliveryError::NoReadyServices)
     );
     if let Some(limit) = capacity {
         // First hub already has an outstanding install. Second hub will stage under the ceiling.
@@ -360,14 +370,14 @@ async fn installed_publication(scenario: Scenario) {
     let request = ic_wire::encode(
         &("accounts_hub", 1_u64),
         ic_wire::Encoding::Frame {
-            method: ic_wire::method_id("publish_directory"),
+            method: RedeliverDirectoryRevision::ID,
             direction: ic_wire::Direction::Request,
         },
         canic::method::LIMITS,
     )
     .unwrap();
     let denial = pic
-        .update_call(root.id, outsider, "publish_directory", request)
+        .update_call(root.id, outsider, RedeliverDirectoryRevision::NAME, request)
         .await
         .unwrap_err();
     assert!(
@@ -465,9 +475,21 @@ async fn installed_publication(scenario: Scenario) {
         funding::application_parent(&root, user, child, "worker").await;
         let before = pic.get_stable_memory(child).await;
         for (sender, role, expected) in [
-            (outsider, "worker", "unexpected topology sender"),
-            (user, "hub", "unexpected topology receiver or role"),
-            (user, "worker", "conflicting receiver installation"),
+            (
+                outsider,
+                "worker",
+                canic::topology::directory::DirectoryError::Unauthorized,
+            ),
+            (
+                user,
+                "hub",
+                canic::topology::directory::DirectoryError::InvalidDelivery,
+            ),
+            (
+                user,
+                "worker",
+                canic::topology::directory::DirectoryError::GenerationChanged,
+            ),
         ] {
             assert_eq!(
                 refused_delivery(
@@ -613,12 +635,12 @@ async fn installed_publication(scenario: Scenario) {
     );
     assert_eq!(
         publish(&root, "project_hub", 1).await,
-        Err("directory revision changed".into())
+        Err(RedeliveryError::RevisionChanged)
     );
     if miss_delivery {
         assert_eq!(
             publish(&root, "accounts_hub", 2).await,
-            Err("directory delivery unconfirmed".into())
+            Err(RedeliveryError::DeliveryUnconfirmed)
         );
         pic.start_canister(user, Some(root.id)).await.unwrap();
         assert_eq!(resolve(pic, user).await, Some((1, vec![user])));
@@ -640,7 +662,7 @@ async fn installed_publication(scenario: Scenario) {
     if let Some(child) = stopped_child {
         assert_eq!(
             publish(&root, "accounts_hub", 2).await,
-            Err("directory delivery unconfirmed".into())
+            Err(RedeliveryError::DeliveryUnconfirmed)
         );
         canic_qualification::upgrade_stopped(
             pic,
@@ -689,7 +711,7 @@ async fn installed_publication(scenario: Scenario) {
             };
             assert_eq!(
                 refused_delivery(pic, user, root.id, "hub", old_members).await,
-                "stale or conflicting service directory"
+                canic::topology::directory::DirectoryError::RevisionConflict
             );
             assert_eq!(pic.get_stable_memory(user).await, retained);
         }
@@ -706,11 +728,11 @@ async fn installed_publication(scenario: Scenario) {
             assert_eq!((counts.ready, counts.creations_used), (0, 4));
             assert_eq!(counts.refill, stored::RefillStatus::AllowanceSpent);
             let rows = root
-                .update::<_, <canic::sharding::standby::InspectStandby as Contract>::Output>(
-                    "inspect_standby",
-                    canic::sharding::standby::InspectStandby::ID,
+                .update::<_, <canic::sharding::standby::ObserveStandby as Contract>::Output>(
+                    "observe_standby",
+                    canic::sharding::standby::ObserveStandby::ID,
                     &(),
-                    canic::sharding::standby::InspectStandby::REPLY,
+                    canic::sharding::standby::ObserveStandby::REPLY,
                 )
                 .await;
             assert_eq!(rows.len(), 4);
@@ -756,4 +778,22 @@ async fn installed_publication(scenario: Scenario) {
         ic_testkit::server::Deletion::Attempted
     );
     assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+async fn assert_funding_upgrade_refused(root: &Client<'_>, candidate: &str, family: &str) {
+    let rejection = canic_qualification::upgrade_stopped(
+        root.pic,
+        root.id,
+        std::fs::read(artifacts().join(candidate)).unwrap(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        rejection
+            .reject_message
+            .contains(&format!("retained Root approval requires {family}")),
+        "{rejection:?}"
+    );
 }

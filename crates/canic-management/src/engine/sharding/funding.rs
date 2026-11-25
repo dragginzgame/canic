@@ -1,5 +1,6 @@
 //! Recurring deposits from Root to its directly installed named services.
 use super::super::{MANAGEMENT_LIMITS, STATE, api, directory, management, reserved_cycles};
+use canic_management_protocol::stored::FundingError;
 use canic_management_protocol::{
     Phase,
     children::ChildId,
@@ -51,32 +52,32 @@ fn installed(slot: ChildId, r: &ChildFunding) -> bool {
 /// Requires controller approval, capacity custody and a matching ready permanent child.
 /// # Panics
 /// Requires an opened Root.
-pub fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, String> {
+pub fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, FundingError> {
     if !api::is_controller(&api::caller()) {
-        return Err("controller required".into());
+        return Err(FundingError::Unauthorized);
     }
     let slot = super::super::service_slots()
         .into_iter()
         .find(|&slot| installed(slot, &rule))
-        .ok_or("funding requires the named direct child installed by this Root")?;
+        .ok_or(FundingError::UnknownChild)?;
     if let Some(previous) = STATE.with_borrow(|s| {
         s.as_ref().unwrap().pools.funding.get(&slot).map(|g| {
             if g.rule == rule {
                 Ok(g.status.clone())
             } else {
-                Err("child funding approval differs".into())
+                Err(FundingError::ApprovalConflict)
             }
         })
     }) {
         return previous;
     }
-    super::admit_pool_change(false).map_err(|e| format!("{e:?}"))?;
+    super::admit_pool_change(false).map_err(|_| FundingError::CustodyOccupied)?;
     let grant = Grant {
         rule,
         status: ChildFundingStatus::default(),
     };
     if !super::has_capacity() || !grant.valid() || !grant.active(api::time()) {
-        return Err("funding requires subnet capacity, positive amounts, sufficient budget and a future deadline".into());
+        return Err(FundingError::InvalidApproval);
     }
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().unwrap();
@@ -92,9 +93,9 @@ pub fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, String> {
 /// The caller must control Root and name an approved child.
 /// # Panics
 /// Requires an opened Root.
-pub fn stop(child: Principal) -> Result<ChildFundingStatus, String> {
+pub fn stop(child: Principal) -> Result<ChildFundingStatus, FundingError> {
     if !api::is_controller(&api::caller()) {
-        return Err("controller required".into());
+        return Err(FundingError::Unauthorized);
     }
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().unwrap();
@@ -103,7 +104,7 @@ pub fn stop(child: Principal) -> Result<ChildFundingStatus, String> {
             .funding
             .values_mut()
             .find(|g| g.rule.child == child)
-            .ok_or("unknown funding child")?;
+            .ok_or(FundingError::UnknownChild)?;
         g.status.closed = true;
         let status = g.status.clone();
         s.pool.set(s.pools.encode());
@@ -200,27 +201,4 @@ async fn deposit(slot: ChildId, rule: &ChildFunding) -> Result<bool, ()> {
         s.pool.set(s.pools.encode());
     });
     if success { Ok(true) } else { Err(()) }
-}
-
-/// Verify a managed payment owner before forwarding a controller's funding decision.
-/// # Errors
-/// Requires a ready retained child and Root controller authority.
-/// # Panics
-/// Requires an open Root.
-pub fn check_parent(parent: Principal) -> Result<(), String> {
-    if !api::is_controller(&api::caller()) {
-        return Err("controller required".into());
-    }
-    if STATE.with_borrow(|s| {
-        s.as_ref()
-            .expect("open Root")
-            .journal
-            .0
-            .values()
-            .any(|j| j.0.phase == Phase::Ready && j.0.worker.as_deref() == Some(&parent.to_text()))
-    }) {
-        Ok(())
-    } else {
-        Err("funding parent must be a ready managed installation".into())
-    }
 }

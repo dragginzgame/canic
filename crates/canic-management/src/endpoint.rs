@@ -26,6 +26,7 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
             && matches!(
                 _method,
                 protocol::children::STAGE
+                    | protocol::application::STAGE_CHILD_CREATION
                     | protocol::application::STAGE
                     | protocol::stored::STAGE
                     | protocol::children::RECONCILE
@@ -36,6 +37,9 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
                 protocol::publication::EXECUTE
                     | protocol::publication::OBSERVATION
                     | protocol::application::CHILD_EVIDENCE
+                    | protocol::application::STAGE_CHILD_UPGRADE
+                    | protocol::application::RECONCILE_CHILD_UPGRADE
+                    | protocol::application::RECONCILE_CHILD_CREATION
                     | protocol::stored::STAGE_UPGRADE
                     | protocol::stored::RECONCILE_UPGRADE
                     | protocol::stored::RECONCILE

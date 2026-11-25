@@ -11,9 +11,9 @@ pub const STAGE: u64 = 61;
 /// Reconcile only that complete configured creation.
 pub const RECONCILE: u64 = 62;
 /// Child-only deployment evidence. Never an input to Root maintenance.
-pub const CHILD_EVIDENCE: u64 = ic_wire::method_id("observe_role_children");
+pub const CHILD_EVIDENCE: u64 = ic_wire::method_id("canic.root.observe_child_deployments.v1");
 /// Complete Root custody including lifecycle arguments.
-pub const CUSTODY: u64 = 63;
+pub const CUSTODY: u64 = ic_wire::method_id("canic.root.observe_root_custody.v1");
 /// Admit an exact Blob maintenance upgrade.
 pub const STAGE_UPGRADE: u64 = 64;
 /// Reconcile that upgrade without issuing a replacement effect.
@@ -34,6 +34,18 @@ pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     nodes: crate::custody::ROOT_HISTORY_LIMITS.nodes + 2048,
     depth: crate::custody::ROOT_HISTORY_LIMITS.depth + 2,
 };
+/// Stage or recover the exact Store artifact, including application lifecycle inputs when present.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum Deployment<S, A> {
+    /// The approved Store release and operation.
+    Stored(S),
+    /// The same authority bound to exact application lifecycle bytes.
+    Application(A),
+}
+/// Inputs for creating a child from the fleet Store.
+pub type Creation = Deployment<stored::Stage<crate::Approval>, Stage<crate::Approval>>;
+/// Inputs for upgrading a child from the fleet Store.
+pub type Replacement = Deployment<stored::Stage<crate::upgrade::Approval>, Upgrade>;
 /// Immutable effect authority, source and exact application bytes.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Stage<A> {
@@ -172,3 +184,17 @@ pub struct Custody {
     /// Lifecycle arguments for each permanent slot, absent for legacy children.
     pub applications: Vec<Option<Lifecycle>>,
 }
+
+/// Method identity for `stage_child_creation`.
+pub const STAGE_CHILD_CREATION: u64 = ic_wire::method_id("canic.root.stage_child_creation.v1");
+
+/// Method identity for `reconcile_child_creation`.
+pub const RECONCILE_CHILD_CREATION: u64 =
+    ic_wire::method_id("canic.root.reconcile_child_creation.v1");
+
+/// Method identity for `stage_child_upgrade`.
+pub const STAGE_CHILD_UPGRADE: u64 = ic_wire::method_id("canic.root.stage_child_upgrade.v1");
+
+/// Method identity for `reconcile_child_upgrade`.
+pub const RECONCILE_CHILD_UPGRADE: u64 =
+    ic_wire::method_id("canic.root.reconcile_child_upgrade.v1");

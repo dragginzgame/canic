@@ -13,10 +13,7 @@ thread_local! { static WRITES: std::cell::Cell<u32> = const { std::cell::Cell::n
 
 pub(crate) fn open(fresh: bool) {
     PROFILES.with_borrow_mut(|state| {
-        *state = Some(canic_profile_worker::storage::open(
-            DefaultMemoryImpl::default(),
-            fresh,
-        ))
+        *state = Some(crate::open_profiles(DefaultMemoryImpl::default(), fresh))
     });
 }
 

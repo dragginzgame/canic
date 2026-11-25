@@ -15,12 +15,6 @@ pub(super) struct Registry {
     children: BTreeMap<[u8; 32], (ChildId, [u8; 32])>,
 }
 
-impl Registry {
-    pub(super) fn slots(&self) -> impl Iterator<Item = ChildId> {
-        self.children.values().map(|(slot, _)| *slot)
-    }
-}
-
 impl super::Pools {
     pub(super) fn project(&self, caller: Principal) -> Option<(usize, &super::ProjectClaim)> {
         let caller = caller.to_text();
@@ -125,14 +119,6 @@ pub fn configure_singleton(grant: stored::SingletonGrant) -> Result<(), Refusal>
     })
 }
 
-/// Reserve or recover the calling project's child.
-/// # Panics
-/// Requires an opened Root.
-#[must_use]
-pub fn request_singleton(role: &str) -> Placement {
-    request(role, None)
-}
-
 pub(super) fn request(role: &str, paid: Option<payment::Settlement>) -> Placement {
     let caller = api::caller();
     let selected = STATE.with_borrow(|cell| {
@@ -185,12 +171,7 @@ pub(super) fn request(role: &str, paid: Option<payment::Settlement>) -> Placemen
             .find(|s| state.journal.0[s].0.phase == Phase::Empty)
             .or_else(|| ChildId::service(super::super::service_slots().len()))
             .ok_or(Placement::Full)?;
-        let origin = pools.admit_growth(
-            r.slots(),
-            r.grant.creation_budget,
-            r.grant.creation_payer,
-            paid,
-        )?;
+        let origin = paid.ok_or(Placement::GrowthRefused)?.origin();
         Ok((r.grant.clone(), slot, parent.generation, origin))
     });
     let (grant, slot, parent, origin) = match selected {
@@ -240,7 +221,6 @@ pub(super) fn validate(state: &State) {
         state.pools.instances.as_ref().expect("registry grant").hub
     );
     assert!(r.children.len() <= r.grant.maximum as usize);
-    assert!(state.pools.creation_debit(r.slots()) <= r.grant.creation_budget);
     let mut slots = std::collections::BTreeSet::new();
     for (parent, &(slot, generation)) in &r.children {
         let id = state

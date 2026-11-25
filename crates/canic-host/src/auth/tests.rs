@@ -334,19 +334,19 @@ fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
     assert_eq!(decoded.encode().unwrap(), args);
     assert!(
         config
-            .db_service_install_args("receiver", root, &[5; 16], [7; 32])
+            .db_service_install_args("receiver", root, &[5; 16], [7; 32], root)
             .is_err()
     );
     config.role_receivers.push("receiver".into());
     for nonce in [&[0; 16][..], &[5; 15][..]] {
         assert!(
             config
-                .db_service_install_args("receiver", root, nonce, [7; 32])
+                .db_service_install_args("receiver", root, nonce, [7; 32], root)
                 .is_err()
         );
     }
     let args = config
-        .db_service_install_args("receiver", root, &[5; 16], [7; 32])
+        .db_service_install_args("receiver", root, &[5; 16], [7; 32], root)
         .unwrap();
     let service =
         canic::topology::directory::ServiceInstall::approved(&args, decoded.root).unwrap();

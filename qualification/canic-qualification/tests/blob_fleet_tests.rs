@@ -249,24 +249,32 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         .await
         .unwrap();
     assert_eq!(status.settings.controllers, vec![root]);
-    use canic_management_protocol::{Approval, application, children::Request, stored};
+    use canic_management_protocol::{application, children::Request, stored};
     let operation = dir.join("journal").join(id);
-    let request: Request<application::Stage<Approval>> = ic_wire::decode(
+    let request: Request<canic_management_protocol::application::Creation> = ic_wire::decode(
         &std::fs::read(operation.join("stage/arguments.bin")).unwrap(),
         ic_wire::Encoding::Frame {
-            method: application::STAGE,
+            method: application::STAGE_CHILD_CREATION,
             direction: ic_wire::Direction::Request,
         },
         application::LIMITS,
     )
     .unwrap();
+    let canic_management_protocol::application::Deployment::Application(value) = request.value
+    else {
+        panic!("expected Application input")
+    };
+    let request = canic_management_protocol::children::Request {
+        slot: request.slot,
+        value,
+    };
     assert_eq!(request.value.arguments.as_slice(), args);
     let custody_bytes = owner
         .client()
         .update_call(
             root,
             CanisterId::anonymous(),
-            "observe_application_children",
+            "observe_root_custody",
             frame(application::CUSTODY, &()),
         )
         .await
@@ -323,8 +331,16 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_application_child",
-            frame(application::STAGE, &changed),
+            "stage_child_creation",
+            frame(
+                canic_management_protocol::application::STAGE_CHILD_CREATION,
+                &canic_management_protocol::children::Request {
+                    slot: changed.slot,
+                    value: canic_management_protocol::application::Deployment::<(), _>::Application(
+                        &changed.value,
+                    ),
+                },
+            ),
         )
         .await
         .unwrap();
@@ -332,7 +348,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         ic_wire::decode(
             &bytes,
             ic_wire::Encoding::Frame {
-                method: application::STAGE,
+                method: application::STAGE_CHILD_CREATION,
                 direction: ic_wire::Direction::Response,
             },
             application::LIMITS,
@@ -520,20 +536,30 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
     assert!(!client.ready().await);
     assert_eq!(client.asset(actor(1), 1).await.unwrap(), alice);
     assert_eq!(client.asset(actor(2), 2).await.unwrap(), bob);
-    let upgrade_request: Request<application::Upgrade> = ic_wire::decode(
-        &std::fs::read(
-            dir.join("journal")
-                .join(upgrade)
-                .join("stage/arguments.bin"),
+    let upgrade_request: Request<canic_management_protocol::application::Replacement> =
+        ic_wire::decode(
+            &std::fs::read(
+                dir.join("journal")
+                    .join(upgrade)
+                    .join("stage/arguments.bin"),
+            )
+            .unwrap(),
+            ic_wire::Encoding::Frame {
+                method: application::STAGE_CHILD_UPGRADE,
+                direction: ic_wire::Direction::Request,
+            },
+            application::LIMITS,
         )
-        .unwrap(),
-        ic_wire::Encoding::Frame {
-            method: application::STAGE_UPGRADE,
-            direction: ic_wire::Direction::Request,
-        },
-        application::LIMITS,
-    )
-    .unwrap();
+        .unwrap();
+    let canic_management_protocol::application::Deployment::Application(value) =
+        upgrade_request.value
+    else {
+        panic!("expected Application input")
+    };
+    let upgrade_request = canic_management_protocol::children::Request {
+        slot: upgrade_request.slot,
+        value,
+    };
     let stable = owner.client().get_stable_memory(root).await;
     let mut changed = upgrade_request.clone();
     changed.value.attempt = 2;
@@ -729,8 +755,16 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_application_upgrade",
-            frame(application::STAGE_UPGRADE, &next),
+            "stage_child_upgrade",
+            frame(
+                canic_management_protocol::application::STAGE_CHILD_UPGRADE,
+                &canic_management_protocol::children::Request {
+                    slot: next.slot,
+                    value: canic_management_protocol::application::Deployment::<(), _>::Application(
+                        &next.value,
+                    ),
+                },
+            ),
         )
         .await
         .unwrap();
@@ -740,7 +774,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
     > = ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: application::STAGE_UPGRADE,
+            method: application::STAGE_CHILD_UPGRADE,
             direction: ic_wire::Direction::Response,
         },
         application::LIMITS,
@@ -785,8 +819,16 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         .update_call(
             root,
             CanisterId::anonymous(),
-            "reconcile_application_upgrade",
-            frame(application::RECONCILE_UPGRADE, &next),
+            "reconcile_child_upgrade",
+            frame(
+                canic_management_protocol::application::RECONCILE_CHILD_UPGRADE,
+                &canic_management_protocol::children::Request {
+                    slot: next.slot,
+                    value: canic_management_protocol::application::Deployment::<(), _>::Application(
+                        &next.value,
+                    ),
+                },
+            ),
         )
         .await
         .unwrap();
@@ -829,8 +871,16 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         .update_call(
             root,
             CanisterId::anonymous(),
-            "reconcile_application_upgrade",
-            frame(application::RECONCILE_UPGRADE, &next),
+            "reconcile_child_upgrade",
+            frame(
+                canic_management_protocol::application::RECONCILE_CHILD_UPGRADE,
+                &canic_management_protocol::children::Request {
+                    slot: next.slot,
+                    value: canic_management_protocol::application::Deployment::<(), _>::Application(
+                        &next.value,
+                    ),
+                },
+            ),
         )
         .await
         .unwrap();
@@ -905,7 +955,7 @@ async fn read_custody(
         .update_call(
             root,
             CanisterId::anonymous(),
-            "observe_application_children",
+            "observe_root_custody",
             frame(application::CUSTODY, &()),
         )
         .await

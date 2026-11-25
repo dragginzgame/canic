@@ -7,9 +7,12 @@ async fn stage_upgrade(
     input: &stored::Stage<upgrade::Approval>,
 ) -> Result<upgrade::Status, management::Refusal> {
     root.update(
-        "stage_stored_upgrade",
-        stored::STAGE_UPGRADE,
-        &Request { slot, value: input },
+        "stage_child_upgrade",
+        canic_management_protocol::application::STAGE_CHILD_UPGRADE,
+        &Request {
+            slot,
+            value: canic_management_protocol::application::Deployment::<_, ()>::Stored(input),
+        },
         stored::LIMITS,
     )
     .await
@@ -27,11 +30,11 @@ async fn elapsed_earliest_dispatch_creates_and_upgrades_without_renewing_expiry(
     // Occupy both original slots before installing the service under test.
     for slot in &ChildId::HISTORICAL_SERVICES[..2] {
         root.update::<_, Result<management::Status, management::Refusal>>(
-            "stage_stored_child",
-            stored::STAGE,
+            "stage_child_creation",
+            canic_management_protocol::application::STAGE_CHILD_CREATION,
             &Request {
                 slot: *slot,
-                value: &input,
+                value: canic_management_protocol::application::Deployment::<_, ()>::Stored(&input),
             },
             stored::LIMITS,
         )
@@ -43,9 +46,12 @@ async fn elapsed_earliest_dispatch_creates_and_upgrades_without_renewing_expiry(
     let slot = ChildId::HISTORICAL_SERVICES[2];
     let stage_third = async |input: &stored::Stage<management::Approval>| {
         root.update::<_, Result<management::Status, management::Refusal>>(
-            "stage_stored_child",
-            stored::STAGE,
-            &Request { slot, value: input },
+            "stage_child_creation",
+            canic_management_protocol::application::STAGE_CHILD_CREATION,
+            &Request {
+                slot,
+                value: canic_management_protocol::application::Deployment::<_, ()>::Stored(input),
+            },
             stored::LIMITS,
         )
         .await

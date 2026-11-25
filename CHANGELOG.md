@@ -1,5 +1,92 @@
 # Changelog
 
+## Unreleased
+
+## [0.269.0] - 2026-11-25
+
+### 🔄 Changed
+
+- Both workspaces adopt IC Backup 0.106.0, IC Platform 0.35.1 and Toko Tooling
+  0.46.4.
+  Canic, Auth 0.50.0, Blob Storage 0.111.0, DB 0.31.0 and Wasm Store 0.10.0
+  use Storage 0.80.0. Stable Auth checkpoints bind to the IC canister version.
+
+```sh
+# Verify the installed tooling against the repository snapshot.
+make toko-tooling-check
+# After qualification and Backup signer setup, exercise signed capture and restore.
+make backup-signer-test
+```
+
+- The fleet operator inspects and drains shards directly on the owning hub. Fresh managed
+  hub installs bind the operator. A drained hub releases the exact allocation to Root
+  when its final route moves. Fleet plans include the direct hub routing-policy request.
+  PL12 Roots retain creation receipts. Registries retain completed project bindings.
+  Root’s `child-creation` feature exposes one controller call, `approve_child_creation`,
+  for shared, dedicated, worker and per-parent creation allowances. Application parents
+  authorize their funding operators locally. Root handles approved destructive retirement
+  through `retire_released_child` after the exact release and proof deadline.
+
+```sh
+# On a fresh user-directory fleet, configure the hub before registering accounts.
+canic fleet call --canister ex-user-directory-hub --identity operator configure-shard-routes ex-user-directory-shard 1
+# Inspect the shard, then fence the reported generation.
+canic fleet call --canister ex-user-directory-hub --identity operator observe-shard "$SHARD"
+canic fleet call --canister ex-user-directory-hub --identity operator drain-shard "$SHARD" "$SLOT" "$GENERATION"
+```
+
+- Root exposes `redeliver_directory_revision` with typed revision, recipient and delivery errors.
+  Call `stop_child_funding` on the payer with the child principal. Root administers its own payments.
+  Fresh fleets use the CUJG management journal. Root refuses the preceding CUJF image.
+  Root combines six custody reads in `observe_root_custody`. Store-backed creation and
+  code upgrades each have one stage and one reconcile method, including application lifecycle inputs.
+  Hubs use `acquire_placement` to quote, pay or recover with the same demand and maximum.
+  `lookup_placement` reads existing worker and instance assignments.
+  Read application deployment evidence with `observe_child_deployments` on placement Roots.
+  Submit Store writes through `publish_store_artifact` and read release progress through `observe_store`.
+  Signed shard, standby and standby-handoff observations use the `observe_` prefix.
+
+```sh
+# Build the funding-enabled Root locally and inspect its method signatures.
+canic artifact build --package canic-root --features child-funding --output target/funding-root.wasm
+canic artifact endpoints target/funding-root.wasm
+```
+
+- Root now uses the matching Store 0.10 protocol. A fresh Store exposes 14 endpoints. Release inspection and replicated observation each take a typed request, and removal binds the expected phase. Use the matching Root and Store together.
+
+```sh
+# After building the Store artifact, inspect its exported methods.
+canic artifact endpoints apps/template/artifacts/wasm_store.wasm
+```
+
+- The requesting hub or project pays for every dynamic child, including a reserve hit.
+  Remove `creation_payer` from pool and singleton declarations. The pool's
+  `creation_budget` limits all acquisition charges. Keep `top_up_children` for
+  ongoing payments. Rebuild both callers and Root and start with a fresh PL12
+  placement ledger.
+
+```sh
+canic app build --config apps/examples/miner-pool/canic.toml
+canic artifact endpoints apps/examples/miner-pool/artifacts/root.wasm
+```
+
+- Reserve, child funding, directory delivery, shard drain and role issuance return
+  typed Wire errors. Operators can distinguish an issued handoff or debit from a
+  refusal before dispatch. Rebuild both ends of these calls and refresh reviewed
+  reply schemas. Existing journals, operation IDs and payment sequences still apply.
+
+```sh
+# In a consumer workspace, rebuild the actors and review the generated Wire changes.
+canic app build --config apps/toko/canic.toml --app toko
+```
+
+- Funded placement exposes typed Root refusals and preserves the original call error.
+  Rebuild Root and paying applications together for the new refusal reply. The demand,
+  method ID, successful replies and retained payment receipts are unchanged.
+- Projects can use `canic::topology::acknowledged_singleton(role)` to read their own
+  acknowledged child, including when Root is unavailable.
+
+
 ## [0.268.0] - 2026-11-24
 
 ### 🔄 Changed
@@ -25,7 +112,7 @@ canic fleet plan --app toko --fleet local --controller "$CONTROLLER" --json
   Root approves pool growth by ordinal and retains installation evidence.
   This requires a fresh sharding Root and fresh routes for hubs that previously
   used Root-owned account claims. Requester-funded placements use the new
-  `canic.placement.fund_placement.v1` Wire ID.
+  `canic.placement.acquire_placement.v1` Wire ID.
 
 ```sh
 canic app build --config apps/examples/user-directory/canic.toml

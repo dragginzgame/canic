@@ -3,6 +3,72 @@ use crate::method::Contract;
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
+/// Typed reserve outcome with the operator diagnostic for this exact attempt.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+pub enum ReserveError {
+    /// Caller does not own this operation.
+    Unauthorized(String),
+    /// Request parameters violate the approved rule.
+    InvalidApproval(String),
+    /// Request differs from the retained approval.
+    ApprovalConflict(String),
+    /// The original deadline does not admit dispatch.
+    Deadline(String),
+    /// Root lacks the required operating reserve.
+    InsufficientCycles(String),
+    /// The approved inventory or subnet ceiling is exhausted.
+    Capacity(String),
+    /// The operation lacks a prerequisite grant.
+    NotConfigured(String),
+    /// Another authority or operation retains custody.
+    CustodyOccupied(String),
+    /// The supplied principal or installation is ineligible.
+    WrongAsset(String),
+    /// Observe the original operation for confirmation.
+    AwaitingConfirmation(String),
+    /// The returned evidence could not be verified.
+    InvalidObservation(String),
+    /// An installation still has outstanding role authority.
+    ProofOutstanding(String),
+    /// Creation was issued without a confirmed principal.
+    RefillIssued(String),
+    /// Controller handoff was issued without confirmation.
+    HandoffIssued(String),
+    /// A retained management effect was issued without confirmation.
+    EffectIssued(String),
+    /// The candidate and Root belong to different subnets.
+    WrongSubnet(String),
+    /// The observed balance is below the approved floor.
+    BalanceBelowMinimum(String),
+}
+
+impl std::fmt::Display for ReserveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unauthorized(message)
+            | Self::InvalidApproval(message)
+            | Self::ApprovalConflict(message)
+            | Self::Deadline(message)
+            | Self::InsufficientCycles(message)
+            | Self::Capacity(message)
+            | Self::NotConfigured(message)
+            | Self::CustodyOccupied(message)
+            | Self::WrongAsset(message)
+            | Self::AwaitingConfirmation(message)
+            | Self::InvalidObservation(message)
+            | Self::ProofOutstanding(message)
+            | Self::RefillIssued(message)
+            | Self::HandoffIssued(message)
+            | Self::EffectIssued(message)
+            | Self::WrongSubnet(message)
+            | Self::BalanceBelowMinimum(message) => f.write_str(message),
+        }
+    }
+}
+
+impl std::error::Error for ReserveError {}
+
 /// Exact authorization for one new empty canister on the addressed Root.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Refill {
@@ -68,12 +134,12 @@ pub enum TransferPhase {
 }
 
 /// Read the destination inventory entry as its exact configured former Root.
-pub struct HandoffStatus;
-impl Contract for HandoffStatus {
-    const NAME: &'static str = "standby_handoff_status";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+pub struct ObserveStandbyHandoff;
+impl Contract for ObserveStandbyHandoff {
+    const NAME: &'static str = "observe_standby_handoff";
+    const ID: u64 = ic_wire::method_id("canic.placement.observe_standby_handoff.v1");
     type Input = Principal;
-    type Output = Result<Asset, String>;
+    type Output = Result<Asset, ReserveError>;
 }
 
 /// Export one exact empty spare to its named destination Root.
@@ -82,7 +148,7 @@ impl Contract for ExportStandby {
     const NAME: &'static str = "export_standby";
     const ID: u64 = ic_wire::method_id(Self::NAME);
     type Input = (Principal, Principal, u64);
-    type Output = Result<TransferPhase, String>;
+    type Output = Result<TransferPhase, ReserveError>;
 }
 
 /// Approve one refill or recover the original result.
@@ -92,14 +158,14 @@ impl Contract for RefillStandby {
     const ID: u64 = ic_wire::method_id(Self::NAME);
     type Input = Refill;
     const REPLY: ic_wire::Limits = super::LIMITS;
-    type Output = Result<Asset, String>;
+    type Output = Result<Asset, ReserveError>;
 }
 
 /// Read the ordered operation history without dispatching work.
-pub struct InspectStandby;
-impl Contract for InspectStandby {
-    const NAME: &'static str = "inspect_standby";
-    const ID: u64 = ic_wire::method_id("canic.placement.inspect_standby.v1");
+pub struct ObserveStandby;
+impl Contract for ObserveStandby {
+    const NAME: &'static str = "observe_standby";
+    const ID: u64 = ic_wire::method_id("canic.placement.observe_standby.v1");
     const REPLY: ic_wire::Limits = ic_wire::Limits {
         bytes: 16384,
         allocation: 524288,
@@ -116,7 +182,7 @@ impl Contract for ImportStandby {
     const NAME: &'static str = "import_standby";
     const ID: u64 = ic_wire::method_id(Self::NAME);
     type Input = Principal;
-    type Output = Result<Asset, String>;
+    type Output = Result<Asset, ReserveError>;
 }
 
 /// Read the hub's retained receipt before cleaning its former worker.
@@ -136,7 +202,7 @@ impl Contract for ConfirmRelease {
     const ID: u64 = ic_wire::method_id(Self::NAME);
     const REQUEST: ic_wire::Limits = super::LIMITS;
     type Input = super::ShardTarget;
-    type Output = Result<(), String>;
+    type Output = Result<(), ReserveError>;
 }
 
 /// Durable reset progress. Issued calls are reconciled by management observation.
@@ -161,5 +227,5 @@ impl Contract for ResetWorker {
     const ID: u64 = ic_wire::method_id(Self::NAME);
     const REQUEST: ic_wire::Limits = super::LIMITS;
     type Input = (super::ShardTarget, u64);
-    type Output = Result<ResetPhase, String>;
+    type Output = Result<ResetPhase, ReserveError>;
 }

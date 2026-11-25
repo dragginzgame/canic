@@ -37,29 +37,31 @@ pub(crate) async fn install<'a>(
     let deadline = now + 1_800_000_000_000;
     let staged: Result<management::Status, management::Refusal> = root
         .update(
-            "stage_application_child",
-            management::application::STAGE,
+            "stage_child_creation",
+            canic_management_protocol::application::STAGE_CHILD_CREATION,
             &Request {
                 slot: ChildId::FIRST,
-                value: management::application::Stage {
-                    source: stored::Stage {
-                        approval: management::Approval {
-                            manager: root.id.to_text(),
-                            module_hash: hub_manifest.hash,
-                            creation_cycles: management::CREATION_CYCLES,
-                            execute_at_ns: now,
-                            expires_at_ns: now + 300_000_000_000,
+                value: canic_management_protocol::application::Deployment::<(), _>::Application(
+                    management::application::Stage {
+                        source: stored::Stage {
+                            approval: management::Approval {
+                                manager: root.id.to_text(),
+                                module_hash: hub_manifest.hash,
+                                creation_cycles: management::CREATION_CYCLES,
+                                execute_at_ns: now,
+                                expires_at_ns: now + 300_000_000_000,
+                            },
+                            reference: stored::Reference {
+                                store: store.id.to_text(),
+                                manifest: hub_manifest,
+                            },
                         },
-                        reference: stored::Reference {
-                            store: store.id.to_text(),
-                            manifest: hub_manifest,
-                        },
+                        arguments: management::application::Arguments::new(
+                            root.operator.as_slice().to_vec(),
+                        )
+                        .unwrap(),
                     },
-                    arguments: management::application::Arguments::new(
-                        root.operator.as_slice().to_vec(),
-                    )
-                    .unwrap(),
-                },
+                ),
             },
             stored::LIMITS,
         )
@@ -79,6 +81,7 @@ pub(crate) async fn install<'a>(
         .await;
     assert_eq!(status.phase, management::Phase::Ready, "{status:?}");
     let pool = CanisterId::from_text(status.worker.unwrap()).unwrap();
+    pic.add_cycles(pool, 20_000_000_000_000).await;
     let config_path = base.with_file_name("canic.toml");
     let mut config = canic_host::load_config(&config_path).unwrap();
     let fleet = config

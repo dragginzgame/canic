@@ -92,7 +92,7 @@ async fn directory_recipients_retain_the_installing_root() {
         .unwrap();
     assert_eq!(
         ReceiveDirectory::decode_reply(&refusal).unwrap(),
-        Err("unexpected topology sender".into())
+        Err(canic::topology::directory::DirectoryError::Unauthorized)
     );
     assert_eq!(pic.get_stable_memory(hub).await, original);
     let mut successor = wasm.clone();
@@ -113,7 +113,7 @@ async fn directory_recipients_retain_the_installing_root() {
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_child_upgrade",
+            "stage_inline_child_upgrade",
             ic_wire::encode(
                 &canic_management_protocol::children::Request {
                     slot: canic_management_protocol::children::ChildId::FIRST,

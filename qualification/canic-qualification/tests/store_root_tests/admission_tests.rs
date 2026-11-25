@@ -120,14 +120,8 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
         manifest: manifest.clone(),
     };
     supplier.pin(&pin).await;
-    let custody: Result<store::Custody, store::Error> = supplier
-        .update(
-            "observe_custody",
-            store::CUSTODY,
-            &manifest.release,
-            STORE_LIMITS,
-        )
-        .await;
+    let custody: Result<store::Custody, store::Error> =
+        supplier.release_custody(&manifest.release).await;
     let mut pending = manifest.clone();
     pending.release.version = "pending".into();
     pending.hash = [8; 32];
@@ -258,14 +252,8 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
     assert!(supplier.info().await.maintenance_candidate);
     assert_eq!(send(&root, &observe).await.unwrap(), Some(closed));
     assert_eq!(supplier.status(&pending.release).await, partial);
-    let after: Result<store::Custody, store::Error> = supplier
-        .update(
-            "observe_custody",
-            store::CUSTODY,
-            &manifest.release,
-            STORE_LIMITS,
-        )
-        .await;
+    let after: Result<store::Custody, store::Error> =
+        supplier.release_custody(&manifest.release).await;
     assert_eq!(after, custody);
     let activate = request(&root, &supplier, Command::Activate(first.clone())).await;
     let active = send(&root, &activate).await.unwrap().unwrap();

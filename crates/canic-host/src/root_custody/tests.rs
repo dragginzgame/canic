@@ -100,59 +100,40 @@ fn historical_contracts_keep_empty_and_uncertain_children_bound_to_identity() {
         current: current.clone(),
         store_history: vec![operation(1)],
     };
-    for (method, bytes, expected_operation, expected_history) in [
-        (
-            stored::CUSTODY,
-            frame(&stored, stored::CUSTODY),
-            None,
-            vec![],
-        ),
-        (
-            custody::ROOT,
-            frame(&current, custody::ROOT),
-            current.store_operation.clone(),
-            vec![],
-        ),
+    let value = application::Custody {
+        applications: vec![None; stored.children.len()],
+        root: history.clone(),
+    };
+    for method in [application::CUSTODY, application::CHILD_EVIDENCE] {
+        let bytes = frame(&value, method);
+        let decoded = decode(method, &bytes).unwrap();
+        assert_eq!(decoded, value);
+        let slots = children(decoded.root.current.stored).unwrap();
+        for (index, id) in ChildId::HISTORICAL_SERVICES.into_iter().enumerate() {
+            assert_eq!(slots[&id].journal, stored.children[index]);
+            assert_eq!(slots[&id].sources, stored.sources[index]);
+        }
+        assert!(decode(method, &bytes[..bytes.len() - 1]).is_err());
+    }
+    for (old, bytes) in [
+        (stored::CUSTODY, frame(&stored, stored::CUSTODY)),
+        (custody::ROOT, frame(&current, custody::ROOT)),
         (
             custody::ROOT_HISTORY,
             frame(&history, custody::ROOT_HISTORY),
-            current.store_operation.clone(),
-            history.store_history.clone(),
         ),
     ] {
-        let snapshot = decode(method, &bytes).unwrap();
-        assert_eq!(snapshot.children.len(), ChildId::HISTORICAL_SERVICES.len());
-        for (index, id) in ChildId::HISTORICAL_SERVICES.into_iter().enumerate() {
-            let child = snapshot.child(id).unwrap();
-            assert_eq!(child.journal, stored.children[index]);
-            assert_eq!(child.sources, stored.sources[index]);
-        }
-        assert_eq!(snapshot.store_operation, expected_operation);
-        assert_eq!(snapshot.store_history, expected_history);
-        assert!(decode(method, &bytes[..bytes.len() - 1]).is_err());
-        for wrong in [stored::CUSTODY, custody::ROOT, custody::ROOT_HISTORY]
-            .into_iter()
-            .filter(|id| *id != method)
-        {
-            assert!(
-                decode(wrong, &bytes).is_err(),
-                "a different contract must not become fallback evidence"
-            );
-        }
+        assert!(decode(old, &bytes).is_err());
+        assert!(decode(application::CUSTODY, &bytes).is_err());
     }
-}
-
-#[test]
-fn wrong_direction_and_unsupported_contract_are_not_observations() {
-    let input = ic_wire::encode(
-        &stored(),
-        ic_wire::Encoding::Frame {
-            method: stored::CUSTODY,
-            direction: ic_wire::Direction::Request,
-        },
-        stored::LIMITS,
-    )
-    .unwrap();
-    assert!(decode(stored::CUSTODY, &input).is_err());
-    assert!(decode(custody::OBSERVE, &frame(&stored(), custody::OBSERVE)).is_err());
+    assert!(
+        decode(
+            application::CUSTODY,
+            &frame(&value, application::CHILD_EVIDENCE)
+        )
+        .is_err()
+    );
+    let mut invalid = value;
+    invalid.applications.pop();
+    assert!(decode(application::CUSTODY, &frame(&invalid, application::CUSTODY)).is_err());
 }

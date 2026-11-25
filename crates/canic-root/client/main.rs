@@ -2,16 +2,18 @@
 
 use canic::method::Contract;
 use canic::metrics::{ChildMetrics, Request};
-#[cfg(feature = "shard-pool")]
-use canic::sharding::{Allocation, BeginShardDrain, InspectShard, ShardTarget};
+
 #[cfg(feature = "role-issuer")]
 use canic::topology::attestation::CloseRoleIssuance;
 use clap::{Parser, Subcommand};
-#[cfg(feature = "sharding")]
+#[cfg(any(
+    feature = "child-funding",
+    feature = "reserve-pool",
+    feature = "role-issuer"
+))]
 use ic_platform_types::Principal;
 use serde_json::{Value, json};
-#[cfg(feature = "shard-pool")]
-use std::fmt::Write as _;
+
 use std::io::Read as _;
 
 #[derive(Parser)]
@@ -51,31 +53,19 @@ enum Command {
     },
     /// Advance an exact shard retirement using its approved Store release and balance floor (JSON).
     #[cfg(feature = "role-issuer")]
-    RetireShard { approval: String },
-    /// Stop new placements on the exact allocation returned by inspect-shard.
-    #[cfg(feature = "shard-pool")]
-    DrainShard {
-        shard: Principal,
-        slot: u32,
-        #[arg(value_parser = generation)]
-        generation: [u8; 32],
-    },
+    RetireReleasedChild { approval: String },
     /// Approve the subnet ceiling from the reviewed fleet plan.
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "child-management")]
     ConfigureCapacity { approval: String },
-    /// Approve one singleton role for this registry.
-    #[cfg(feature = "registry")]
-    ConfigureSingleton { approval: String },
+    /// Approve a creation grant for the named requester.
+    #[cfg(feature = "child-creation")]
+    ApproveChildCreation { approval: String },
     /// Approve recurring top-ups or inspect the original approval.
     #[cfg(feature = "child-funding")]
     ConfigureChildFunding { approval: String },
     /// Stop future deposits to the named child.
-    #[cfg(feature = "sharding")]
-    StopChildFunding {
-        child: Principal,
-        #[arg(long)]
-        parent: Option<Principal>,
-    },
+    #[cfg(feature = "child-funding")]
+    StopChildFunding { child: Principal },
     /// Approve the reserve policy from the reviewed fleet plan.
     #[cfg(feature = "reserve-pool")]
     ConfigureStandby { approval: String },
@@ -91,12 +81,12 @@ enum Command {
     ImportStandby { principal: Principal },
     /// Observe the standby inventory and the exact worker allocation holding each spare.
     #[cfg(feature = "reserve-pool")]
-    InspectStandby,
+    ObserveStandby,
     /// Confirm the hub release of this exact worker target (JSON).
-    #[cfg(feature = "worker-pool")]
+    #[cfg(feature = "child-creation")]
     ConfirmWorkerRelease { target: String },
     /// Stop and uninstall an exact released worker. Resume with the original deadline.
-    #[cfg(feature = "worker-pool")]
+    #[cfg(feature = "child-creation")]
     ResetWorker { target: String, expires_at_ns: u64 },
     /// Authorize one new empty canister. Repeat the exact request to inspect its result.
     #[cfg(feature = "reserve-pool")]
@@ -106,9 +96,6 @@ enum Command {
         cycles: u64,
         expires_at_ns: u64,
     },
-    /// Report the allocation, drain state and live placement count.
-    #[cfg(feature = "shard-pool")]
-    InspectShard { shard: Principal },
 }
 
 #[derive(Subcommand)]
@@ -121,7 +108,7 @@ enum Source {
     Endpoints { after: Option<String> },
 }
 
-#[cfg(any(feature = "role-issuer", feature = "shard-pool"))]
+#[cfg(feature = "role-issuer")]
 fn generation(value: &str) -> Result<[u8; 32], String> {
     if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("generation must contain 64 hex digits".into());
@@ -159,10 +146,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         ))?,
         #[cfg(feature = "role-issuer")]
         Action::Encode {
-            command: Command::RetireShard { approval },
-        } => request::<canic_management_protocol::stored::RetireShard>(&serde_json::from_str(
-            &approval,
-        )?)?,
+            command: Command::RetireReleasedChild { approval },
+        } => request::<canic_management_protocol::stored::RetireReleasedChild>(
+            &serde_json::from_str(&approval)?,
+        )?,
         Action::Encode {
             command: Command::ChildMetrics { slot, source },
         } => request::<ChildMetrics>(&(
@@ -176,27 +163,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Source::Endpoints { after } => Request::Endpoints(after),
             },
         ))?,
-        #[cfg(feature = "shard-pool")]
-        Action::Encode {
-            command: Command::InspectShard { shard },
-        } => request::<InspectShard>(&shard)?,
-        #[cfg(feature = "shard-pool")]
-        Action::Encode {
-            command:
-                Command::DrainShard {
-                    shard,
-                    slot,
-                    generation,
-                },
-        } => request::<BeginShardDrain>(&ShardTarget {
-            shard,
-            allocation: Allocation { slot, generation },
-        })?,
-        #[cfg(feature = "worker-pool")]
+        #[cfg(feature = "child-creation")]
         Action::Encode {
             command: Command::ConfirmWorkerRelease { target },
         } => request::<canic::sharding::standby::ConfirmRelease>(&serde_json::from_str(&target)?)?,
-        #[cfg(feature = "worker-pool")]
+        #[cfg(feature = "child-creation")]
         Action::Encode {
             command:
                 Command::ResetWorker {
@@ -207,16 +178,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             serde_json::from_str(&target)?,
             expires_at_ns,
         ))?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "child-management")]
         Action::Encode {
             command: Command::ConfigureCapacity { approval },
         } => request::<canic_management_protocol::stored::ConfigureCapacity>(
             &serde_json::from_str(&approval)?,
         )?,
-        #[cfg(feature = "registry")]
+        #[cfg(feature = "child-creation")]
         Action::Encode {
-            command: Command::ConfigureSingleton { approval },
-        } => request::<canic_management_protocol::stored::ConfigureSingleton>(
+            command: Command::ApproveChildCreation { approval },
+        } => request::<canic_management_protocol::stored::ApproveChildCreation>(
             &serde_json::from_str(&approval)?,
         )?,
         #[cfg(feature = "child-funding")]
@@ -225,24 +196,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => request::<canic_management_protocol::stored::ConfigureChildFunding>(
             &serde_json::from_str(&approval)?,
         )?,
-        #[cfg(feature = "sharding")]
+        #[cfg(feature = "child-funding")]
         Action::Encode {
-            command:
-                Command::StopChildFunding {
-                    child,
-                    parent: None,
-                },
+            command: Command::StopChildFunding { child },
         } => request::<canic_management_protocol::stored::StopChildFunding>(&child)?,
-        #[cfg(feature = "sharding")]
-        Action::Encode {
-            command:
-                Command::StopChildFunding {
-                    child,
-                    parent: Some(parent),
-                },
-        } => request::<canic_management_protocol::stored::StopApplicationChildFunding>(&(
-            parent, child,
-        ))?,
         #[cfg(feature = "reserve-pool")]
         Action::Encode {
             command: Command::ConfigureStandby { approval },
@@ -268,8 +225,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => request::<canic::sharding::standby::ImportStandby>(&principal)?,
         #[cfg(feature = "reserve-pool")]
         Action::Encode {
-            command: Command::InspectStandby,
-        } => request::<canic::sharding::standby::InspectStandby>(&())?,
+            command: Command::ObserveStandby,
+        } => request::<canic::sharding::standby::ObserveStandby>(&())?,
         #[cfg(feature = "reserve-pool")]
         Action::Encode {
             command:
@@ -306,7 +263,7 @@ fn reply_limit() -> usize {
         .bytes
         .max(canic::logging::Logs::REPLY.bytes);
     #[cfg(feature = "reserve-pool")]
-    let limit = canic::sharding::standby::InspectStandby::REPLY
+    let limit = canic::sharding::standby::ObserveStandby::REPLY
         .bytes
         .max(canic::sharding::LIMITS.bytes)
         .max(limit);
@@ -328,34 +285,15 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     if let Ok(reply) = CloseRoleIssuance::decode_reply(bytes) {
         return Ok(json!({"proof_deadline_ns": reply?.to_string()}));
     }
-    #[cfg(feature = "shard-pool")]
-    if let Ok(reply) = InspectShard::decode_reply(bytes) {
-        let status = reply?;
-        let mut generation = String::with_capacity(64);
-        for b in status.target.allocation.generation {
-            write!(generation, "{b:02x}")?;
-        }
-
-        return Ok(json!({
-            "shard": status.target.shard.to_text(),
-            "slot": status.target.allocation.slot,
-            "generation": generation,
-            "draining": status.draining,
-            "live_placements": status.live_placements,
-        }));
-    }
-    #[cfg(feature = "shard-pool")]
-    if let Ok(reply) = BeginShardDrain::decode_reply(bytes) {
-        return Ok(json!({"draining": true, "live_placements": reply?}));
-    }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "child-management")]
     if let Ok(reply) = canic_management_protocol::stored::ConfigureCapacity::decode_reply(bytes) {
         reply.map_err(|e| format!("capacity: {e:?}"))?;
         return Ok(json!({"approved":true}));
     }
-    #[cfg(feature = "registry")]
-    if let Ok(reply) = canic_management_protocol::stored::ConfigureSingleton::decode_reply(bytes) {
-        reply.map_err(|e| format!("singleton: {e:?}"))?;
+    #[cfg(feature = "child-creation")]
+    if let Ok(reply) = canic_management_protocol::stored::ApproveChildCreation::decode_reply(bytes)
+    {
+        reply.map_err(|e| format!("child creation: {e:?}"))?;
         return Ok(json!({"approved":true}));
     }
     #[cfg(feature = "child-funding")]
@@ -363,14 +301,8 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "sharding")]
+    #[cfg(feature = "child-funding")]
     if let Ok(reply) = canic_management_protocol::stored::StopChildFunding::decode_reply(bytes) {
-        return Ok(serde_json::to_value(reply?)?);
-    }
-    #[cfg(feature = "sharding")]
-    if let Ok(reply) =
-        canic_management_protocol::stored::StopApplicationChildFunding::decode_reply(bytes)
-    {
         return Ok(serde_json::to_value(reply?)?);
     }
     #[cfg(feature = "reserve-pool")]
@@ -387,24 +319,24 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
         return Ok(serde_json::to_value(reply?)?);
     }
     #[cfg(feature = "reserve-pool")]
-    if let Ok(reply) = canic::sharding::standby::InspectStandby::decode_reply(bytes) {
+    if let Ok(reply) = canic::sharding::standby::ObserveStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply)?);
     }
     #[cfg(feature = "reserve-pool")]
     if let Ok(reply) = canic::sharding::standby::RefillStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "worker-pool")]
+    #[cfg(feature = "child-creation")]
     if let Ok(reply) = canic::sharding::standby::ConfirmRelease::decode_reply(bytes) {
         reply?;
         return Ok(json!({"released": true}));
     }
-    #[cfg(feature = "worker-pool")]
+    #[cfg(feature = "child-creation")]
     if let Ok(reply) = canic::sharding::standby::ResetWorker::decode_reply(bytes) {
         return Ok(json!({"reset": reply?}));
     }
     #[cfg(feature = "role-issuer")]
-    if let Ok(reply) = canic_management_protocol::stored::RetireShard::decode_reply(bytes) {
+    if let Ok(reply) = canic_management_protocol::stored::RetireReleasedChild::decode_reply(bytes) {
         return Ok(json!({"retirement":reply?}));
     }
     Err("unknown Root reply".into())

@@ -72,12 +72,15 @@ pub mod stored {
 /// Exact application lifecycle bindings, mounted explicitly by Root.
 
 pub mod application {
-    pub use crate::engine::application::{child_evidence, custody, reconcile, stage};
+    pub use crate::engine::application::{
+        child_evidence, custody, reconcile, reconcile_child_creation, reconcile_child_upgrade,
+        stage, stage_child_creation, stage_child_upgrade,
+    };
     #[cfg(feature = "blob")]
     pub use crate::engine::application::{reconcile_upgrade, stage_upgrade};
     #[cfg(feature = "blob")]
     pub use crate::engine::blob::activate;
-    pub use crate::engine::directory::publish_directory;
+    pub use crate::engine::directory::redeliver_directory_revision;
 }
 
 /// Root-owned Store maintenance custody, mounted explicitly by Root.

@@ -14,11 +14,11 @@ async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
         .update_call(
             root,
             CanisterId::anonymous(),
-            "observe_children",
+            "observe_root_custody",
             ic_wire::encode(
                 &(),
                 ic_wire::Encoding::Frame {
-                    method: children::CUSTODY,
+                    method: canic_management_protocol::application::CUSTODY,
                     direction: ic_wire::Direction::Request,
                 },
                 LIMITS,
@@ -27,15 +27,19 @@ async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
         )
         .await
         .unwrap();
-    ic_wire::decode(
+    ic_wire::decode::<canic_management_protocol::application::Custody>(
         &reply,
         ic_wire::Encoding::Frame {
-            method: children::CUSTODY,
+            method: canic_management_protocol::application::CUSTODY,
             direction: ic_wire::Direction::Response,
         },
-        children::LIMITS,
+        canic_management_protocol::application::LIMITS,
     )
     .unwrap()
+    .root
+    .current
+    .stored
+    .children
 }
 
 pub(super) async fn admit(
@@ -48,7 +52,7 @@ pub(super) async fn admit(
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_child",
+            "stage_inline_child_creation",
             ic_wire::encode(
                 &Request { slot, value: input },
                 ic_wire::Encoding::Frame {
@@ -144,7 +148,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             .update_call(
                 root,
                 CanisterId::anonymous(),
-                "stage_child_upgrade",
+                "stage_inline_child_upgrade",
                 ic_wire::encode(
                     &canic_management_protocol::children::Request {
                         slot: canic_management_protocol::children::ChildId::FIRST,
@@ -174,32 +178,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         settle(pic).await;
         previous = change.approval.module_hash;
     }
-    let reply = pic
-        .update_call(
-            root,
-            CanisterId::anonymous(),
-            "observe_custody",
-            ic_wire::encode(
-                &(),
-                ic_wire::Encoding::Frame {
-                    method: custody::OBSERVE,
-                    direction: ic_wire::Direction::Request,
-                },
-                LIMITS,
-            )
-            .unwrap(),
-        )
-        .await
-        .unwrap();
-    let old_custody: custody::Custody = ic_wire::decode(
-        &reply,
-        ic_wire::Encoding::Frame {
-            method: custody::OBSERVE,
-            direction: ic_wire::Direction::Response,
-        },
-        custody::LIMITS,
-    )
-    .unwrap();
+    let old_custody = read(pic, root).await.remove(0);
     assert_eq!(old_custody.upgrades.len(), 2);
     // Latest and historical reads must still distinguish two completed approvals.
     for (selector, expected) in [
@@ -258,11 +237,11 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     let outsider = CanisterId::self_authenticating(b"not-root-operator");
     for (method, frame) in [
         (
-            "observe_children",
+            "observe_root_custody",
             ic_wire::encode(
                 &(),
                 ic_wire::Encoding::Frame {
-                    method: children::CUSTODY,
+                    method: canic_management_protocol::application::CUSTODY,
                     direction: ic_wire::Direction::Request,
                 },
                 LIMITS,
@@ -270,7 +249,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             .unwrap(),
         ),
         (
-            "stage_child",
+            "stage_inline_child_creation",
             ic_wire::encode(
                 &Request {
                     slot: ChildId::SECOND,
@@ -359,7 +338,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_child_upgrade",
+            "stage_inline_child_upgrade",
             ic_wire::encode(
                 &Request {
                     slot: ChildId::FIRST,
@@ -392,7 +371,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             .update_call(
                 root,
                 CanisterId::anonymous(),
-                "stage_child_upgrade",
+                "stage_inline_child_upgrade",
                 ic_wire::encode(
                     &Request {
                         slot,
@@ -466,7 +445,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
                 .update_call(
                     root,
                     CanisterId::anonymous(),
-                    "stage_child_upgrade",
+                    "stage_inline_child_upgrade",
                     ic_wire::encode(
                         &Request {
                             slot,
@@ -628,7 +607,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_child_upgrade",
+            "stage_inline_child_upgrade",
             ic_wire::encode(
                 &Request {
                     slot: ChildId::SECOND,
@@ -672,7 +651,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
             .update_call(
                 root,
                 CanisterId::anonymous(),
-                "reconcile_child_upgrade",
+                "reconcile_inline_child_upgrade",
                 ic_wire::encode(
                     &Request {
                         slot,

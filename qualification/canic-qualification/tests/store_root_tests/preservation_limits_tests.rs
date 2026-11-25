@@ -61,9 +61,9 @@ async fn preservation_distinguishes_removal_from_an_incomplete_upload() {
     }
     supplier
         .update::<_, Result<store::Manifest, store::Error>>(
-            "cancel",
-            store::CANCEL,
-            &removed,
+            "remove",
+            store::REMOVE,
+            &store::Remove::Cancel(removed.clone()),
             STORE_LIMITS,
         )
         .await
@@ -125,15 +125,13 @@ async fn preservation_distinguishes_removal_from_an_incomplete_upload() {
         panic!("restored upload must be active, not a removed label");
     };
     assert_eq!(custody.status.manifest, removed);
-    let tombstones = supplier
-        .update::<_, Result<Vec<store::Manifest>, store::Error>>(
-            "tombstones",
-            store::TOMBSTONES,
-            &None::<store::Release>,
-            STORE_LIMITS,
-        )
+    let store::Observation::Tombstones(tombstones) = supplier
+        .observe(&store::Observe::Tombstones(None))
         .await
-        .unwrap();
+        .unwrap()
+    else {
+        panic!("expected removed releases")
+    };
     assert!(tombstones.is_empty());
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
@@ -156,13 +154,9 @@ async fn historical_scan_keeps_its_refusal_and_digest_after_refused_root_upgrade
     .await;
     let removed = supplier.publish_bytes("a", b"\0asm\x01\0\0\0").await;
     supplier.publish_bytes("z", b"\0asm\x01\0\0\0").await;
+    // This fixture runs frozen Store 0.7 and takes its original delete frame.
     supplier
-        .update::<_, Result<store::Manifest, store::Error>>(
-            "delete",
-            store::DELETE,
-            &removed,
-            STORE_LIMITS,
-        )
+        .update::<_, Result<store::Manifest, store::Error>>("delete", 114, &removed, STORE_LIMITS)
         .await
         .unwrap();
     pic.update_canister_settings(
@@ -227,9 +221,9 @@ async fn root_preserves_removed_entries_and_cursor_across_both_owner_upgrades() 
     supplier.publish_bytes("z", b"\0asm\x01\0\0\0").await;
     supplier
         .update::<_, Result<store::Manifest, store::Error>>(
-            "delete",
-            store::DELETE,
-            &removed,
+            "remove",
+            store::REMOVE,
+            &store::Remove::Delete(removed.clone()),
             STORE_LIMITS,
         )
         .await
@@ -255,9 +249,9 @@ async fn root_preserves_removed_entries_and_cursor_across_both_owner_upgrades() 
         .unwrap();
     supplier
         .update::<_, Result<store::Manifest, store::Error>>(
-            "cancel",
-            store::CANCEL,
-            &pending,
+            "remove",
+            store::REMOVE,
+            &store::Remove::Cancel(pending.clone()),
             STORE_LIMITS,
         )
         .await

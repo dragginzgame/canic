@@ -3,7 +3,7 @@
 mod tests;
 
 use super::{Placement, ShardTarget, grow_shard};
-use ic_platform_types::Principal;
+pub use ic_platform_types::Principal;
 use ic_storage::{
     DefaultMemoryImpl, MemoryRuntime, StableKey,
     adapter::{StableBTreeMap, StableCell},
@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
-    method: ic_wire::method_id("canic.placement.hub_routes.v1"),
+    method: ic_wire::method_id("canic.hub.route_roster.v1"),
     direction: ic_wire::Direction::Response,
 };
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
@@ -25,17 +25,18 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
 #[derive(Serialize, Deserialize)]
 struct Pool {
     name: String,
+    limit: u32,
     shards: Vec<Shard>,
 }
 #[derive(Serialize, Deserialize)]
 struct Shard {
     target: ShardTarget,
-    limit: u32,
     occupied: u32,
     draining: bool,
 }
 #[derive(Serialize, Deserialize)]
 struct Roster {
+    operator: Option<Principal>,
     root: Principal,
     pools: Vec<Pool>,
 }
@@ -76,14 +77,21 @@ pub fn open(
     runtime: &MemoryRuntime<DefaultMemoryImpl>,
     roster_key: &str,
     owners_key: &str,
-    install_root: Option<Principal>,
+    install_root: Option<(Principal, Option<Principal>)>,
 ) {
     let cell = crate::storage::cell(
         runtime,
         roster_key,
         LIMITS.bytes,
-        install_root.map(|root| {
+        install_root.map(|(root, operator)| {
+            assert!(
+                operator.is_none_or(
+                    |p| p != Principal::anonymous() && p != Principal::management_canister()
+                ),
+                "invalid hub operator"
+            );
             Roster {
+                operator,
                 root,
                 pools: vec![],
             }
@@ -102,9 +110,9 @@ pub fn open(
     let occupied: u64 = roster
         .pools
         .iter()
-        .flat_map(|p| &p.shards)
-        .map(|s| {
-            assert!(s.limit > 0 && s.occupied <= s.limit);
+        .flat_map(|p| p.shards.iter().map(move |s| (p.limit, s)))
+        .map(|(limit, s)| {
+            assert!(limit > 0 && s.occupied <= limit);
             u64::from(s.occupied)
         })
         .sum();
@@ -114,6 +122,14 @@ pub fn open(
         cell,
         owners,
     }));
+}
+
+/// Root retained when this hub was installed.
+/// # Panics
+/// Requires an opened route index.
+#[must_use]
+pub fn root() -> Principal {
+    INDEX.with_borrow(|index| index.as_ref().expect("open routes").roster.root)
 }
 
 /// Read an existing assignment locally, including a reservation whose application write is pending.
@@ -195,10 +211,7 @@ async fn reserve<E>(
             let i = i.as_mut().expect("open routes");
             let root = i.roster.root;
             let Some(n) = i.roster.pool(pool) else {
-                if source.is_some() {
-                    return Err("unknown source pool");
-                }
-                return Ok(Reservation::Grow(root, 0));
+                return Err("shard routing policy missing");
             };
             let namespace = u8::try_from(n).expect("pool namespace");
             if let Some(source) = source {
@@ -222,11 +235,12 @@ async fn reserve<E>(
                     i.roster.pools[n].shards[usize::from(slot)].target.clone(),
                 ));
             }
+            let limit = i.roster.pools[n].limit;
             let shards = &mut i.roster.pools[n].shards;
             if let Some((slot, s)) = shards
                 .iter_mut()
                 .enumerate()
-                .find(|(_, s)| !s.draining && s.occupied < s.limit)
+                .find(|(_, s)| !s.draining && s.occupied < limit)
             {
                 let ordinal = u8::try_from(slot).unwrap();
                 let old = i.owners.insert(key, (ordinal, ordinal));
@@ -253,7 +267,7 @@ async fn reserve<E>(
         };
         let reply = grow_shard(root, pool, ordinal).await;
         authorize().map_err(ReservationError::Authorization)?;
-        let (result, limit) =
+        let result =
             reply.map_err(|_| ReservationError::Placement("shard capacity reply unavailable"))?;
         let Some((allocation, shard)) = result
             .assigned_target()
@@ -277,33 +291,56 @@ async fn reserve<E>(
             allocation: allocation.clone(),
             shard,
         };
-        record_shard(pool, ordinal, target, limit);
+        record_shard(pool, ordinal, target);
     }
 }
 
-fn record_shard(pool: &str, ordinal: u8, target: ShardTarget, limit: u32) {
+/// Approve one pool's immutable routing limit on this hub.
+#[doc(hidden)]
+pub fn configure_shard_routes(
+    caller: Principal,
+    pool: &str,
+    limit: u32,
+) -> Result<(), super::ShardError> {
+    use super::ShardError;
+    INDEX.with_borrow_mut(|index| {
+        let index = index.as_mut().expect("open routes");
+        if index.roster.operator != Some(caller) {
+            return Err(ShardError::Unauthorized);
+        }
+        if pool.is_empty() || pool.len() > 64 || !(1..=super::MAX_KEYS_PER_SHARD).contains(&limit) {
+            return Err(ShardError::InvalidPolicy);
+        }
+        if let Some(n) = index.roster.pool(pool) {
+            return (index.roster.pools[n].limit == limit)
+                .then_some(())
+                .ok_or(ShardError::InvalidPolicy);
+        }
+        if index.roster.pools.len() >= 32 {
+            return Err(ShardError::InvalidPolicy);
+        }
+        index.roster.pools.push(Pool {
+            name: pool.to_owned(),
+            limit,
+            shards: vec![],
+        });
+        index.cell.set(index.roster.encode());
+        Ok(())
+    })
+}
+
+fn record_shard(pool: &str, ordinal: u8, target: ShardTarget) {
     INDEX.with_borrow_mut(|i| {
         let i = i.as_mut().expect("open routes");
-        let n = i.roster.pool(pool).unwrap_or_else(|| {
-            i.roster.pools.push(Pool {
-                name: pool.to_owned(),
-                shards: vec![],
-            });
-            i.roster.pools.len() - 1
-        });
+        let n = i.roster.pool(pool).expect("configured pool");
         let shards = &mut i.roster.pools[n].shards;
         if let Some(old) = shards.get(usize::from(ordinal)) {
-            assert_eq!(
-                (&old.target, old.limit),
-                (&target, limit),
-                "capacity binding changed"
-            );
+            assert_eq!(old.target, target, "capacity binding changed");
         } else {
             assert_eq!(usize::from(ordinal), shards.len());
-            assert!(limit > 0 && !shards.iter().any(|s| s.target.shard == target.shard));
+            assert!(!shards.iter().any(|s| s.target.shard == target.shard));
             shards.push(Shard {
                 target,
-                limit,
                 occupied: 0,
                 draining: false,
             });
@@ -398,59 +435,114 @@ pub fn release(pool: &str, subject: Principal, target: &ShardTarget) -> Result<(
     })
 }
 
-/// Observe or permanently fence an exact allocation on request from its retained Root.
-/// # Errors
-/// Refuses foreign callers and unknown pool or allocation bindings.
-/// # Panics
-/// Requires an open hub route index.
-pub fn shard_status(
-    pool: &str,
-    target: &ShardTarget,
-    drain: bool,
-) -> Result<super::ShardStatus, String> {
-    status(ic_platform_runtime::system::caller(), pool, target, drain)
+/// Read local occupancy as the bound hub operator.
+pub fn observe_shard(principal: Principal) -> Result<super::ShardStatus, super::ShardError> {
+    observe(ic_platform_runtime::system::caller(), principal)
 }
 
-fn status(
+fn observe(
     caller: Principal,
-    pool: &str,
-    target: &ShardTarget,
-    drain: bool,
-) -> Result<super::ShardStatus, String> {
-    INDEX.with_borrow_mut(|index| {
-        let i = index.as_mut().expect("open routes");
-        if i.roster.root != caller {
-            return Err("routing Root required".into());
+    principal: Principal,
+) -> Result<super::ShardStatus, super::ShardError> {
+    INDEX.with_borrow(|index| {
+        let index = index.as_ref().expect("open routes");
+        if index.roster.operator != Some(caller) {
+            return Err(super::ShardError::Unauthorized);
         }
-        let n = i.roster.pool(pool).ok_or("unknown shard pool")?;
-        let shard = i.roster.pools[n]
-            .shards
-            .iter_mut()
-            .find(|s| &s.target == target)
-            .ok_or("unknown shard generation")?;
-        let changed = drain && !shard.draining;
-        shard.draining |= drain;
-        let status = super::ShardStatus {
-            target: target.clone(),
-            draining: shard.draining,
-            live_placements: shard.occupied,
-        };
-        if changed {
-            i.cell.set(i.roster.encode());
+        let mut shards = index
+            .roster
+            .pools
+            .iter()
+            .flat_map(|pool| &pool.shards)
+            .filter(|shard| shard.target.shard == principal);
+        let shard = shards.next().ok_or(super::ShardError::UnknownShard)?;
+        if shards.next().is_some() {
+            return Err(super::ShardError::GenerationChanged);
         }
-        Ok(status)
+        Ok(shard.status())
     })
 }
 
-/// Mount Root's route occupancy and drain operation in a hub that opens the index.
+impl Shard {
+    fn status(&self) -> super::ShardStatus {
+        super::ShardStatus {
+            target: self.target.clone(),
+            draining: self.draining,
+            live_placements: self.occupied,
+        }
+    }
+}
+
+fn fence(caller: Principal, target: &ShardTarget) -> Result<(Principal, u32), super::ShardError> {
+    INDEX.with_borrow_mut(|index| {
+        let index = index.as_mut().expect("open routes");
+        if index.roster.operator != Some(caller) {
+            return Err(super::ShardError::Unauthorized);
+        }
+        let shard = index
+            .roster
+            .pools
+            .iter_mut()
+            .flat_map(|pool| &mut pool.shards)
+            .find(|shard| shard.target == *target)
+            .ok_or(super::ShardError::GenerationChanged)?;
+        let occupied = shard.occupied;
+        if !shard.draining {
+            shard.draining = true;
+            index.cell.set(index.roster.encode());
+        }
+        Ok((index.roster.root, occupied))
+    })
+}
+
+/// Fence the exact generation locally. Release it to its creator once evacuated.
+/// # Errors
+/// A lost release acknowledgement is recovered by repeating the same drain.
+/// # Panics
+/// Requires an open hub.
+pub async fn begin_shard_drain(target: ShardTarget) -> Result<u32, super::ShardError> {
+    let (root, occupied) = fence(ic_platform_runtime::system::caller(), &target)?;
+    if occupied == 0 {
+        crate::method::call::<super::ReleaseChildAllocation>(
+            root,
+            10,
+            &(target.shard, target.allocation),
+        )
+        .await
+        .map_err(|_| super::ShardError::ReleaseUnconfirmed)?
+        .map_err(|reason| match reason {
+            super::ReleaseError::Unauthorized => super::ShardError::Unauthorized,
+            super::ReleaseError::UnknownAllocation => super::ShardError::GenerationChanged,
+        })?;
+    }
+    Ok(occupied)
+}
+
+/// Mount direct operator inspection and drain on the owning hub.
 #[macro_export]
 macro_rules! mount_hub_routes {
     () => {
-        #[$crate::update(contract = $crate::sharding::HubShardStatus)]
-        fn hub_shard_status(
-            (pool, target, drain): (String, $crate::sharding::ShardTarget, bool),
-        ) -> Result<$crate::sharding::ShardStatus, String> {
-            $crate::sharding::routes::shard_status(&pool, &target, drain)
+        #[$crate::update(contract = $crate::sharding::ConfigureShardRoutes)]
+        fn configure_shard_routes(
+            input: (String, u32),
+        ) -> Result<(), $crate::sharding::ShardError> {
+            $crate::sharding::routes::configure_shard_routes(
+                $crate::__private::runtime::system::caller(),
+                &input.0,
+                input.1,
+            )
+        }
+        #[$crate::update(contract = $crate::sharding::ObserveShard)]
+        fn observe_shard(
+            shard: $crate::sharding::routes::Principal,
+        ) -> Result<$crate::sharding::ShardStatus, $crate::sharding::ShardError> {
+            $crate::sharding::routes::observe_shard(shard)
+        }
+        #[$crate::update(contract = $crate::sharding::BeginShardDrain)]
+        async fn begin_shard_drain(
+            target: $crate::sharding::ShardTarget,
+        ) -> Result<u32, $crate::sharding::ShardError> {
+            $crate::sharding::routes::begin_shard_drain(target).await
         }
     };
 }

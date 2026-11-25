@@ -14,10 +14,7 @@ use std::{
 };
 
 fn placement_mount(feature: &str) -> bool {
-    matches!(
-        feature,
-        "shard-pool" | "registry" | "worker-pool" | "reserve-pool" | "child-funding"
-    )
+    matches!(feature, "child-creation" | "reserve-pool" | "child-funding")
 }
 
 // Leave at least 190 KiB for Candid/envelope overhead below the IC's 2 MiB ingress limit.
@@ -268,7 +265,7 @@ pub fn build_report(
     features: &[String],
     destination: Option<&Path>,
 ) -> Result<BuildReport> {
-    let source = build_manifest(manifest, package, None)?;
+    let source = build_manifest(manifest, package)?;
     build_for_role(
         manifest,
         &source,
@@ -389,7 +386,8 @@ pub(crate) fn build_for_role(
         && (features
             .iter()
             .any(|f| f == "blob" || f == "role-issuer" || placement_mount(f))
-            || (features.iter().any(|f| f == "auth") && features.iter().any(|f| f == "sharding")))
+            || (features.iter().any(|f| f == "auth")
+                && features.iter().any(|f| f == "child-management")))
     {
         command.args([
             "--config",

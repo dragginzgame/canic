@@ -107,23 +107,10 @@ pub struct Custody {
     pub sources: Vec<Option<Sources>>,
 }
 
-/// Source of the initial fee and operating balance for a new allocation.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CreationPayer {
-    /// Root spends its approved pool budget.
-    #[default]
-    Root,
-    /// Only the approved hub may settle the allocation with attached cycles.
-    Requester,
-}
-
 /// Controller-only approval for Root-managed shard growth from one immutable release.
 /// The selected hub is independent of Root's two managed child identities.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ShardPool {
-    /// Approved economic payer, independent of future operating top-ups.
-    pub creation_payer: CreationPayer,
     /// Exact application-owned initialization bytes for each created shard.
     pub arguments: crate::application::Arguments,
     /// Exact effect owner receiving this approval.
@@ -134,23 +121,17 @@ pub struct ShardPool {
     pub hub: String,
     /// Maximum admitted children, within Root's qualified child bound.
     pub max_shards: u8,
-    /// Maximum live keys per child.
-    pub keys_per_shard: u32,
-    /// Lifetime ceiling on creation attachments; ordinary management fees are separate.
+    /// Lifetime ceiling on requester charges for fresh and reserve acquisitions.
     pub creation_budget: u64,
     /// Last time a new child management effect may be dispatched.
     pub expires_at_ns: u64,
     /// Approved release and supplier.
     pub reference: Reference,
 }
-/// Controller approval frame for a fresh shard pool.
-pub const CONFIGURE_SHARDS: u64 = ic_wire::method_id("canic.placement.configure_shards.v1");
 
 /// Controller approval for dedicated instances owned by one project hub.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct InstancePool {
-    /// Approved economic payer, independent of future operating top-ups.
-    pub creation_payer: CreationPayer,
     /// Installing Root and effect owner.
     pub root: String,
     /// Only this parent may claim a child for a retained key.
@@ -163,7 +144,7 @@ pub struct InstancePool {
     pub arguments: crate::application::Arguments,
     /// Maximum distinct dedicated children.
     pub max_instances: u8,
-    /// Lifetime ceiling for creation attachments.
+    /// Lifetime ceiling on requester charges for fresh and reserve acquisitions.
     pub creation_budget: u64,
     /// Deadline for issuing new work.
     pub expires_at_ns: u64,
@@ -180,11 +161,9 @@ pub struct SingletonGrant {
     pub reference: Reference,
     /// Application bytes nested under the project topology binding.
     pub application: crate::application::Arguments,
-    /// Economic payer for the initial allocation.
-    pub creation_payer: CreationPayer,
     /// Maximum admitted children across the registry.
     pub maximum: u32,
-    /// Lifetime creation attachment ceiling.
+    /// Lifetime ceiling on requester charges for fresh and reserve acquisitions.
     pub creation_budget: u64,
     /// Deadline for new claims.
     pub expires_at_ns: u64,
@@ -192,13 +171,7 @@ pub struct SingletonGrant {
     #[serde(default)]
     pub receiver: Option<crate::application::Arguments>,
 }
-/// Configure one registry-wide singleton rule.
-pub const CONFIGURE_SINGLETON: u64 = ic_wire::method_id("canic.placement.configure_singleton.v1");
 
-/// Approve a dedicated instance pool independently of the shared shard grant.
-pub const CONFIGURE_INSTANCES: u64 = ic_wire::method_id("canic.placement.configure_instances.v1");
-/// Approve the bounded worker allowance for one other hub.
-pub const CONFIGURE_WORKERS: u64 = ic_wire::method_id("canic.placement.configure_workers.v1");
 /// Maximum reserve entries in each acquisition source of the bounded reserve ledger.
 pub const MAX_RESERVE_ENTRIES: u8 = 8;
 /// Dedicated instances also consume the shared subnet allowance.
@@ -315,7 +288,7 @@ impl canic::method::Contract for ConfigureStandby {
     const ID: u64 = CONFIGURE_STANDBY;
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = StandbyPolicy;
-    type Output = Result<(), String>;
+    type Output = Result<(), canic::sharding::standby::ReserveError>;
 }
 
 #[cfg(feature = "standby")]
@@ -330,15 +303,31 @@ impl canic::method::Contract for ConfigureCapacity {
     type Output = Result<(), crate::Refusal>;
 }
 
-/// Controller approval for a per-project singleton.
-pub struct ConfigureSingleton;
+/// Creation allowances retained by Root, including the approved requester and artifact.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ChildCreationGrant {
+    /// Children serving a hub’s shared routing pool.
+    Shared(ShardPool),
+    /// Children created for a registry’s opaque requests.
+    Dedicated(InstancePool),
+    /// Children in a hub’s worker pool.
+    Worker(InstancePool),
+    /// One child of each eligible parent in the registry.
+    PerParent(SingletonGrant),
+}
+
+/// Wire identity for approving Root creation effects.
+pub const APPROVE_CHILD_CREATION: u64 = ic_wire::method_id("canic.root.approve_child_creation.v1");
+
+/// Controller approval for child creation under one requester grant.
+pub struct ApproveChildCreation;
 #[cfg(feature = "standby")]
-impl canic::method::Contract for ConfigureSingleton {
-    const NAME: &'static str = "configure_singleton";
-    const ID: u64 = CONFIGURE_SINGLETON;
+impl canic::method::Contract for ApproveChildCreation {
+    const NAME: &'static str = "approve_child_creation";
+    const ID: u64 = APPROVE_CHILD_CREATION;
     const REQUEST: ic_wire::Limits = LIMITS;
     const REPLY: ic_wire::Limits = crate::LIMITS;
-    type Input = SingletonGrant;
+    type Input = ChildCreationGrant;
     type Output = Result<(), crate::Refusal>;
 }
 
@@ -355,9 +344,6 @@ pub enum IncreasePool {
 }
 /// Increase one pool count without renewing funding or time.
 pub const INCREASE_POOL: u64 = ic_wire::method_id("canic.placement.increase_pool.v1");
-
-/// Absolute backstop for any single shared shard. Fleets approve their own lower limit.
-pub const MAX_KEYS_PER_SHARD: u32 = 100_000;
 
 /// Supplier-owned Store frame budgets.
 pub const STORE_LIMITS: ic_wire::Limits = {
@@ -382,11 +368,11 @@ pub const STORE_CHUNK_LIMITS: ic_wire::Limits = {
 
 /// Controller approval for destructive retirement under an immutable Store release.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ShardRetirement {
+pub struct ChildRetirement {
     /// Root allowed to execute the retirement.
     pub root: String,
     /// Installed shard principal and original allocation.
-    pub shard: String,
+    pub child: String,
     /// Original placement slot.
     pub slot: u32,
     /// Original placement generation.
@@ -426,14 +412,14 @@ pub enum RetirementPhase {
 
 /// Advance the exact controller-approved shard retirement.
 #[cfg(feature = "retirement")]
-pub struct RetireShard;
+pub struct RetireReleasedChild;
 #[cfg(feature = "retirement")]
-impl canic::method::Contract for RetireShard {
-    const NAME: &'static str = "retire_shard";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+impl canic::method::Contract for RetireReleasedChild {
+    const NAME: &'static str = "retire_released_child";
+    const ID: u64 = ic_wire::method_id("canic.root.retire_released_child.v1");
     const REQUEST: ic_wire::Limits = LIMITS;
-    type Input = Stage<ShardRetirement>;
-    type Output = Result<RetirementPhase, String>;
+    type Input = Stage<ChildRetirement>;
+    type Output = Result<RetirementPhase, canic::sharding::standby::ReserveError>;
 }
 
 /// A finite recurring debit approved for one directly installed service.
@@ -456,6 +442,55 @@ pub struct ChildFunding {
     pub expires_at_ns: u64,
 }
 
+/// Refusal or unresolved outcome of an ongoing parent-to-child funding operation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FundingError {
+    /// Caller lacks authority for this funding edge.
+    Unauthorized,
+    /// Child has no acknowledged funding edge.
+    UnknownChild,
+    /// The rule has invalid terms or a different parent.
+    InvalidApproval,
+    /// The installed funding rule differs.
+    ApprovalConflict,
+    /// The funding grant has expired.
+    Expired,
+    /// The funding ledger is full.
+    Capacity,
+    /// The approved parent has no ready installation.
+    ParentUnavailable,
+    /// The child installation changed.
+    GenerationMismatch,
+    /// The payment sequence does not follow the recorded receipt.
+    InvalidSequence,
+    /// The funding edge is closed.
+    Closed,
+    /// The original debit is still outstanding.
+    PaymentPending,
+    /// The reported balance is above the funding threshold.
+    AboveThreshold,
+    /// The grant cannot cover the fixed deposit.
+    BudgetExhausted,
+    /// The parent cannot cover the deposit.
+    InsufficientCycles,
+    /// The failed deposit was fully refunded.
+    DepositRefunded,
+    /// The forwarded request was refused before dispatch.
+    CallNotSubmitted,
+    /// The forwarded request has no verified reply.
+    ReplyUnconfirmed,
+    /// A retained management operation prevents this change.
+    CustodyOccupied,
+}
+
+impl std::fmt::Display for FundingError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self:?}")
+    }
+}
+
+impl std::error::Error for FundingError {}
+
 /// Approve the rule once or observe the original grant.
 #[cfg(feature = "standby")]
 pub struct ConfigureChildFunding;
@@ -464,7 +499,7 @@ impl canic::method::Contract for ConfigureChildFunding {
     const NAME: &'static str = "configure_child_funding";
     const ID: u64 = ic_wire::method_id(Self::NAME);
     type Input = ChildFunding;
-    type Output = Result<ChildFundingStatus, String>;
+    type Output = Result<ChildFundingStatus, FundingError>;
 }
 
 /// The lifetime exposure and outcome of the latest payment.
@@ -488,20 +523,9 @@ pub struct StopChildFunding;
 #[cfg(feature = "standby")]
 impl canic::method::Contract for StopChildFunding {
     const NAME: &'static str = "stop_child_funding";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const ID: u64 = ic_wire::method_id("canic.owner.stop_child_funding.v1");
     type Input = ic_platform_types::Principal;
-    type Output = Result<ChildFundingStatus, String>;
-}
-
-/// Stop one payment edge at a managed application parent through Root.
-#[cfg(feature = "standby")]
-pub struct StopApplicationChildFunding;
-#[cfg(feature = "standby")]
-impl canic::method::Contract for StopApplicationChildFunding {
-    const NAME: &'static str = "stop_application_child_funding";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
-    type Input = (ic_platform_types::Principal, ic_platform_types::Principal);
-    type Output = Result<ChildFundingStatus, String>;
+    type Output = Result<ChildFundingStatus, FundingError>;
 }
 
 /// Operator-approved settings for a fresh Root installation.

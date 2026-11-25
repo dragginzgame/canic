@@ -74,7 +74,7 @@ async fn stage(pic: &PocketIc, root: CanisterId, input: &Stage) -> Result<Status
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_child",
+            "stage_inline_child_creation",
             ic_wire::encode(
                 &canic_management_protocol::children::Request {
                     slot: canic_management_protocol::children::ChildId::FIRST,
@@ -156,7 +156,7 @@ async fn qualify(
         pic.update_call(
             root,
             outsider,
-            "stage_child",
+            "stage_inline_child_creation",
             ic_wire::encode(
                 &canic_management_protocol::children::Request {
                     slot: canic_management_protocol::children::ChildId::FIRST,
@@ -1536,7 +1536,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             .update_call(
                 identities[0].0,
                 CanisterId::anonymous(),
-                "stage_child_upgrade",
+                "stage_inline_child_upgrade",
                 ic_wire::encode(
                     &canic_management_protocol::children::Request {
                         slot: canic_management_protocol::children::ChildId::FIRST,

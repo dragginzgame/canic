@@ -1,11 +1,13 @@
-//! Decode an explicitly selected historical contract into identity-keyed Host evidence.
+//! Decode the selected Root custody observation and preserve service identities.
 //! This projection grants no authority and never probes or falls back to another endpoint.
 
 #[cfg(test)]
 mod tests;
 
 use crate::{Error, Result, supplier};
-use canic_management_protocol::{children::ChildId, custody, store_maintenance, stored};
+use canic_management_protocol::{
+    application, children::ChildId, custody, store_maintenance, stored,
+};
 use std::collections::BTreeMap;
 
 #[derive(Debug, Eq, PartialEq)]
@@ -46,40 +48,53 @@ pub(crate) fn children(value: stored::Custody) -> Result<BTreeMap<ChildId, Child
         .collect())
 }
 
-pub(crate) fn decode(method: u64, bytes: &[u8]) -> Result<Snapshot> {
-    let encoding = ic_wire::Encoding::Frame {
-        method,
-        direction: ic_wire::Direction::Response,
+#[cfg(test)]
+pub(crate) fn frame(
+    current: custody::Root,
+    store_history: Vec<store_maintenance::Status>,
+) -> Vec<u8> {
+    use canic_management_protocol::application;
+    let value = application::Custody {
+        applications: vec![None; current.stored.children.len()],
+        root: custody::RootHistory {
+            current,
+            store_history,
+        },
     };
-    let (current, store_history) = match method {
-        stored::CUSTODY => {
-            let value = ic_wire::decode(bytes, encoding, stored::LIMITS).map_err(supplier)?;
-            (
-                custody::Root {
-                    stored: value,
-                    store_operation: None,
-                },
-                Vec::new(),
-            )
-        }
-        custody::ROOT => (
-            ic_wire::decode(bytes, encoding, custody::ROOT_LIMITS).map_err(supplier)?,
-            Vec::new(),
-        ),
-        custody::ROOT_HISTORY => {
-            let value: custody::RootHistory =
-                ic_wire::decode(bytes, encoding, custody::ROOT_HISTORY_LIMITS).map_err(supplier)?;
-            (value.current, value.store_history)
-        }
-        _ => {
-            return Err(Error::Invalid(
-                "unsupported complete Root custody contract".into(),
-            ));
-        }
-    };
-    Ok(Snapshot {
-        children: children(current.stored)?,
-        store_operation: current.store_operation,
-        store_history,
-    })
+    ic_wire::encode(
+        &value,
+        ic_wire::Encoding::Frame {
+            method: application::CUSTODY,
+            direction: ic_wire::Direction::Response,
+        },
+        application::LIMITS,
+    )
+    .unwrap()
+}
+
+pub(crate) fn decode(method: u64, bytes: &[u8]) -> Result<application::Custody> {
+    if !matches!(method, application::CUSTODY | application::CHILD_EVIDENCE) {
+        return Err(Error::Invalid(
+            "unsupported Root custody observation".into(),
+        ));
+    }
+    let value: application::Custody = ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method,
+            direction: ic_wire::Direction::Response,
+        },
+        application::LIMITS,
+    )
+    .map_err(supplier)?;
+    let stored = &value.root.current.stored;
+    if stored.children.len() < ChildId::HISTORICAL_SERVICES.len()
+        || value.applications.len() != stored.children.len()
+        || stored.sources.len() != stored.children.len()
+    {
+        return Err(Error::Invalid(
+            "Root custody has inconsistent service slots".into(),
+        ));
+    }
+    Ok(value)
 }

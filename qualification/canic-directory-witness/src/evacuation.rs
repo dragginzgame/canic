@@ -12,7 +12,10 @@ pub(super) const KEYS: [&str; 3] = ["hub.roster.v2", "hub.routes.v2", "hub.accou
 type Accounts = StableBTreeMap<Vec<u8>, (u64, u8)>;
 thread_local! { static ACCOUNTS: RefCell<Option<Accounts>> = const { RefCell::new(None) }; }
 
-pub(super) fn open(storage: &MemoryRuntime<DefaultMemoryImpl>, root: Option<Principal>) {
+pub(super) fn open(
+    storage: &MemoryRuntime<DefaultMemoryImpl>,
+    root: Option<(Principal, Option<Principal>)>,
+) {
     routes::open(storage, KEYS[0], KEYS[1], root);
     let lease = storage.open_memory(&KEYS[2].parse().unwrap()).unwrap();
     ACCOUNTS.set(Some(if root.is_some() {

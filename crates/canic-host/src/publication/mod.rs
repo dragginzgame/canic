@@ -194,7 +194,7 @@ pub(crate) fn call(plan: &Plan, command: Command, deadline: u64) -> Result<signe
     Ok(signed::Call {
         canister: root,
         effective: root,
-        method: "store_publication",
+        method: "publish_store_artifact",
         args: ic_wire::encode(
             &wire::Request {
                 store: publication.store.canister.clone(),
@@ -212,10 +212,47 @@ pub(crate) fn call(plan: &Plan, command: Command, deadline: u64) -> Result<signe
 }
 
 pub(crate) fn observation(plan: &Plan, deadline: u64) -> Result<signed::Call<'static>> {
-    call(
-        plan,
-        Command::Observe(binding(plan)?.release.clone()),
-        deadline,
+    let publication = binding(plan)?;
+    let root = principal(&publication.root.canister)?;
+    Ok(signed::Call {
+        canister: root,
+        effective: root,
+        method: "observe_store",
+        args: ic_wire::encode(
+            &wire::ObservationRequest::ReleaseStatus(wire::CustodyRequest {
+                store: publication.store.canister.clone(),
+                expires_at_ns: deadline,
+                release: publication.release.clone(),
+            }),
+            ic_wire::Encoding::Frame {
+                method: wire::OBSERVATION,
+                direction: ic_wire::Direction::Request,
+            },
+            canic_management_protocol::LIMITS,
+        )
+        .map_err(supplier)?,
+    })
+}
+
+fn decode_observation(
+    bytes: &[u8],
+    expected: &protocol::Manifest,
+) -> Result<Option<protocol::Status>> {
+    let reply: wire::ObservationReply = ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: wire::OBSERVATION,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::RESPONSE_LIMITS,
+    )
+    .map_err(supplier)?;
+    checked_status(
+        reply.and_then(|value| match value {
+            wire::Observation::ReleaseStatus(status) => Ok(status),
+            _ => Err(wire::Error::Uncertain),
+        }),
+        expected,
     )
 }
 
@@ -229,6 +266,13 @@ fn decode(bytes: &[u8], expected: &protocol::Manifest) -> Result<Option<protocol
         wire::RESPONSE_LIMITS,
     )
     .map_err(supplier)?;
+    checked_status(reply, expected)
+}
+
+fn checked_status(
+    reply: wire::Reply,
+    expected: &protocol::Manifest,
+) -> Result<Option<protocol::Status>> {
     match reply {
         Err(wire::Error::Store(protocol::Error::NotFound)) => Ok(None),
         Err(error) => Err(Error::Blocked(format!(
@@ -356,7 +400,7 @@ async fn observe(
             continue;
         }
         let reply = signed::observe_operation(&path, plan, identity, icp, client).await?;
-        return Ok((index, decode(&reply, expected)?));
+        return Ok((index, decode_observation(&reply, expected)?));
     }
     Err(Error::Blocked(
         "publication observation budget exhausted; retained evidence is unchanged".into(),
@@ -444,7 +488,7 @@ pub(crate) fn receipt(
         &dir.join(format!("publication/observe/{}", value.observation)),
         plan,
     )?;
-    if decode(&reply, expected)? != value.status {
+    if decode_observation(&reply, expected)? != value.status {
         return Err(Error::Invalid(
             "publication receipt differs from retained observation".into(),
         ));

@@ -667,8 +667,8 @@ not another shipped adapter package or default Canic dependency.
 
 ## Inputs and limits
 
-Both lockfiles select registry engine `ic-auth` 0.49.3, `ic-auth-wire` 0.49.0 and
-`ic-auth-protocol-types` 0.44.0. The private browser client is packed from the
+Both lockfiles select registry engine `ic-auth` 0.50.0, `ic-auth-wire` 0.49.1 and
+`ic-auth-protocol-types` 0.44.1. The private browser client is packed from the
 independently qualified supplier revision `d5382b197ec794b9f30943a3beb978cbaffe8321`. Session
 admission and read replies carry the verified optional `ext` field (up to
 4096 bytes). In a scoped endpoint, `auth.user_id()` returns these verified bytes
@@ -681,7 +681,7 @@ are required. The exact tested artifact is recorded in
 [qualification history](../qualification/history.md).
 
 Application signing and the native test verifier now select registry Platform
-0.34.13's `ed25519` capability as `ic-platform-crypto`. Enrollment and the qualification issuer both call `canic::entropy::fresh(300)`.
+0.35.1's `ed25519` capability as `ic-platform-crypto`. Enrollment and the qualification issuer both call `canic::entropy::fresh(300)`.
 The helper uses Platform’s `raw_rand` codec with a six-byte request budget and
 a 42-byte reply budget.
 Application canisters can enable Canic's `raw-rand` feature and call

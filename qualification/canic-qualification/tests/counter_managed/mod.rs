@@ -12,11 +12,11 @@ async fn custody(pic: &PocketIc, root: CanisterId) -> stored::Custody {
         .update_call(
             root,
             CanisterId::anonymous(),
-            "observe_stored_children",
+            "observe_root_custody",
             ic_wire::encode(
                 &(),
                 Encoding::Frame {
-                    method: stored::CUSTODY,
+                    method: canic_management_protocol::application::CUSTODY,
                     direction: Direction::Request,
                 },
                 canic_management_protocol::LIMITS,
@@ -25,15 +25,18 @@ async fn custody(pic: &PocketIc, root: CanisterId) -> stored::Custody {
         )
         .await
         .unwrap();
-    ic_wire::decode(
+    ic_wire::decode::<canic_management_protocol::application::Custody>(
         &reply,
         Encoding::Frame {
-            method: stored::CUSTODY,
+            method: canic_management_protocol::application::CUSTODY,
             direction: Direction::Response,
         },
-        stored::LIMITS,
+        canic_management_protocol::application::LIMITS,
     )
     .unwrap()
+    .root
+    .current
+    .stored
 }
 
 async fn advance(pic: &PocketIc) {

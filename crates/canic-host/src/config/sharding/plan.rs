@@ -80,6 +80,8 @@ pub(crate) fn preview(
     }
     let fleet = &selected.config;
     let deadlines = check_inputs(selected, config_path)?;
+    use canic::{method::Contract, sharding::ConfigureShardRoutes};
+    let mut routes = BTreeMap::new();
     let mut increases = Vec::new();
     let mut shards = Vec::with_capacity(fleet.shard_pools.len());
     for pool in &fleet.shard_pools {
@@ -94,10 +96,22 @@ pub(crate) fn preview(
                 stored::INCREASE_POOL,
             )?);
         }
-        shards.push(grant(approval, stored::CONFIGURE_SHARDS)?);
+        let input = (approval.pool.clone(), pool.keys_per_shard);
+        routes.insert(
+            approval.pool.clone(),
+            PoolGrant {
+                request: ConfigureShardRoutes::encode_request(&input).map_err(supplier)?,
+                approval: input,
+            },
+        );
+        shards.push(creation_grant(
+            approval,
+            stored::ChildCreationGrant::Shared,
+        )?);
     }
     let instances = if let Some(pool) = &fleet.registry {
         let instance = registry_grant(
+            controller,
             pool,
             selected,
             config_path,
@@ -147,6 +161,9 @@ pub(crate) fn preview(
     if instances.is_none() && workers.is_empty() && standby.is_none() && shards.len() == 1 {
         let PoolGrant { approval, request } = shards.remove(0);
         return Ok(FleetPlanning::ShardPool {
+            routes: routes
+                .remove(&approval.pool)
+                .expect("configured hub routes"),
             capacity,
             increases,
             request,
@@ -184,7 +201,7 @@ pub(crate) fn preview(
                 ))
             })?;
         super::super::positive_count("registry.singleton.maximum", rule.maximum, max_children)?;
-        Some(Box::new(grant(
+        Some(Box::new(creation_grant(
             stored::SingletonGrant {
                 receiver,
                 registry: registry.approval.hub.clone(),
@@ -194,17 +211,17 @@ pub(crate) fn preview(
                     manifest: manifest(selected, config_path, &rule.component, &rule.release)?,
                 },
                 application: install_args(config_path, rule.install_args.as_deref())?,
-                creation_payer: rule.creation_payer,
                 creation_budget: rule.creation_budget,
                 maximum: rule.maximum,
                 expires_at_ns: registry.approval.expires_at_ns,
             },
-            stored::CONFIGURE_SINGLETON,
+            stored::ChildCreationGrant::PerParent,
         )?))
     } else {
         None
     };
     Ok(FleetPlanning::PlacementPools {
+        routes,
         singleton,
         capacity,
         standby,
@@ -254,11 +271,17 @@ fn check_inputs<'a>(
 }
 
 fn registry_grant(
+    operator: &str,
     p: &RegistryConfig,
     selected: &SelectedFleet,
     config_path: &Path,
     expires_at_ns: u64,
 ) -> Result<PoolGrant<stored::InstancePool>> {
+    let inner = install_args(config_path, p.install_args.as_deref())?;
+    let args =
+        selected
+            .config
+            .bind_hub_operator(&p.component, operator, inner.as_slice().to_vec())?;
     let (root, hub, reference, arguments) = PoolInstall {
         component: &p.component,
         root: &p.root,
@@ -268,9 +291,9 @@ fn registry_grant(
     .resolve(
         selected,
         config_path,
-        &install_args(config_path, p.install_args.as_deref())?,
+        &Arguments::new(args).map_err(supplier)?,
     )?;
-    grant(
+    creation_grant(
         stored::InstancePool {
             root,
             hub,
@@ -278,11 +301,10 @@ fn registry_grant(
             arguments,
             component: p.component.clone(),
             max_instances: p.max_instances,
-            creation_payer: p.creation_payer,
             creation_budget: p.creation_budget,
             expires_at_ns,
         },
-        stored::CONFIGURE_INSTANCES,
+        stored::ChildCreationGrant::Dedicated,
     )
 }
 
@@ -312,7 +334,7 @@ fn worker_grant(
         config_path,
         &Arguments::new(args).map_err(supplier)?,
     )?;
-    grant(
+    creation_grant(
         stored::InstancePool {
             root,
             hub,
@@ -320,11 +342,10 @@ fn worker_grant(
             arguments,
             component: p.component.clone(),
             max_instances: p.max_workers,
-            creation_payer: p.creation_payer,
             creation_budget: p.creation_budget,
             expires_at_ns,
         },
-        stored::CONFIGURE_WORKERS,
+        stored::ChildCreationGrant::Worker,
     )
 }
 
@@ -413,6 +434,16 @@ pub(crate) fn check_pool_requirements(
         }
     }
     Ok(())
+}
+
+fn creation_grant<T: Clone>(
+    approval: T,
+    kind: fn(T) -> stored::ChildCreationGrant,
+) -> Result<PoolGrant<T>> {
+    use canic::method::Contract;
+    let request =
+        stored::ApproveChildCreation::encode_request(&kind(approval.clone())).map_err(supplier)?;
+    Ok(PoolGrant { approval, request })
 }
 
 fn grant<T: Serialize>(approval: T, method: u64) -> Result<PoolGrant<T>> {
