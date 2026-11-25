@@ -19,8 +19,8 @@ fn cli(root: &Path, args: &[&str]) -> Value {
     let output = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(args)
         .arg("--json")
-        .arg("--state-dir")
-        .arg(root)
+        .arg("--config")
+        .arg(root.join("canic.toml"))
         .output()
         .unwrap();
     assert!(
@@ -202,53 +202,44 @@ async fn autonomous_growth_and_commit_boundaries() {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    let routing = owner.client().create_canister().await.to_text();
+    let pic = owner.client();
+    let manager = pic
+        .create_canister_with_params(
+            None,
+            CreateCanisterParams {
+                cycles: Some(2_500_000_000_000),
+                ..Default::default()
+            },
+        )
+        .await
+        .unwrap();
+    pic.install_canister(manager, manager_wasm.clone(), vec![], None)
+        .await;
+    let manager_text = manager.to_text();
+    let root_subnet = pic.topology().await.get_nns().unwrap();
     let root = artifacts.join(format!("journey-{}", std::process::id()));
     std::fs::create_dir_all(&root).unwrap();
+    std::fs::write(
+        root.join("canic.toml"),
+        format!(
+            r#"
+[apps.growth.canisters.manager]
+role = "manager"
+parent = "root"
+[apps.growth.fleets.local]
+network = {{ kind = "Local", url = "{url}", root_key = "{key}", routing_canister = "{manager}", root_subnet = "{root_subnet}" }}
+[apps.growth.fleets.local.canisters.manager]
+id = "{manager}"
+"#
+        ),
+    )
+    .unwrap();
     let icp = repo.join(".tools/ic/bin/icp");
-    let plan = cli(
-        &root,
-        &[
-            "fleet",
-            "plan",
-            "--wasm",
-            artifacts.join("manager.wasm").to_str().unwrap(),
-            "--network",
-            "local",
-            "--url",
-            &url,
-            "--root-key",
-            &key,
-            "--root-subnet",
-            &owner.client().topology().await.get_nns().unwrap().to_text(),
-            "--routing-canister",
-            &routing,
-            "--controller",
-            "2vxsx-fae",
-            "--cycles",
-            "2500000000000",
-        ],
-    );
-    let receipt = cli(
-        &root,
-        &[
-            "fleet",
-            "apply",
-            plan["operation"].as_str().unwrap(),
-            "--identity",
-            "anonymous",
-            "--icp-bin",
-            icp.to_str().unwrap(),
-        ],
-    );
-    let manager_text = receipt["canister"].as_str().unwrap();
-    let manager = CanisterId::from_text(manager_text).unwrap();
-    let pic = owner.client();
     let original_count = count(pic, manager).await;
     let file = root.join("approval.json");
     let base = [
         "--manager",
-        manager_text,
+        &manager_text,
         "--identity",
         "anonymous",
         "--network",
@@ -275,7 +266,7 @@ async fn autonomous_growth_and_commit_boundaries() {
     let refused = Command::new(std::env::var_os("CANIC_PROFILE_CLIENT").unwrap())
         .args([
             "--manager",
-            manager_text,
+            &manager_text,
             "--network",
             "ic",
             "growth-approve",
@@ -354,7 +345,7 @@ async fn autonomous_growth_and_commit_boundaries() {
             "fleet",
             "show",
             "--manager",
-            manager_text,
+            &manager_text,
             "--html",
             report.to_str().unwrap(),
         ],
