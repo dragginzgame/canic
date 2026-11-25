@@ -241,7 +241,13 @@ pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Res
     let store = Store::open(root)?;
     let dir = store.operation(digest)?;
     if crate::fleet_plan::exists(&dir)? {
-        return crate::fleet_plan::apply(&dir, digest, identity, icp).await;
+        return crate::fleet_plan::execute(&dir, digest, identity, icp, false).await;
+    }
+    let plan: Plan = store::json(&dir.join("plan.json"))?;
+    if matches!(plan.action, crate::PlanAction::Upgrade(_))
+        || (matches!(plan.action, crate::PlanAction::Create { .. }) && plan.version != 10)
+    {
+        return Err(Error::Blocked("direct deployment approvals from before mandatory fleet Stores require their original Host".into()));
     }
     apply_at(root, &dir, digest, identity, icp).await
 }
@@ -260,7 +266,7 @@ pub async fn reconcile(
     let store = Store::open(root)?;
     let dir = store.operation(digest)?;
     if crate::fleet_plan::exists(&dir)? {
-        return crate::fleet_plan::reconcile(&dir, digest, identity, icp).await;
+        return crate::fleet_plan::execute(&dir, digest, identity, icp, true).await;
     }
     reconcile_at(root, &dir, digest, identity, icp).await
 }
@@ -293,7 +299,7 @@ pub(crate) async fn reconcile_at(
     }
     crate::auth::permit_upgrade(journal, &plan)?;
     let client = plan.network.client()?;
-    crate::managed::recovery::reconcile(dir, digest, &plan, &bytes, identity, icp, &client).await
+    crate::managed::recovery::reconcile(dir, digest, &plan, identity, icp, &client).await
 }
 
 // Caller holds the journal lock; fleet composition uses this same effect owner.
@@ -340,7 +346,7 @@ async fn apply_operation(
         plan.action,
         crate::PlanAction::CreateChild(_) | crate::PlanAction::UpgradeChild { .. }
     ) {
-        return crate::managed::apply(dir, digest, &plan, &wasm, identity, icp, &client).await;
+        return crate::managed::apply(dir, digest, &plan, identity, icp, &client).await;
     }
     if dir.join("receipt.json").try_exists().map_err(supplier)? {
         let receipt: Receipt = store::json(&dir.join("receipt.json"))?;

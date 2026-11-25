@@ -1,7 +1,7 @@
 //! Root is the real admission caller; the fixture retains direct upgrade control explicitly.
 use super::{Client, artifacts, inject, maintain, readiness_tests, store, support};
 use canic_management_protocol::{
-    publication::{self, AdmissionRequest, Error},
+    publication::{self, AdmissionChange, AdmissionRequest, Error},
     stored::STORE_LIMITS,
 };
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
@@ -90,7 +90,11 @@ async fn admission_fences_an_in_flight_cache_repair_without_losing_pins() {
     assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
 }
 
-async fn request(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> AdmissionRequest {
+async fn request(
+    root: &Client<'_>,
+    supplier: &Client<'_>,
+    command: AdmissionChange,
+) -> AdmissionRequest {
     AdmissionRequest {
         store: supplier.id.to_text(),
         command,
@@ -100,7 +104,7 @@ async fn request(root: &Client<'_>, supplier: &Client<'_>, command: Command) -> 
 
 async fn send(root: &Client<'_>, input: &AdmissionRequest) -> publication::AdmissionReply {
     root.update(
-        "store_admission",
+        "change_store_admission",
         publication::ADMISSION,
         input,
         STORE_LIMITS,
@@ -156,9 +160,27 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
         sequence: 2,
         operation: [2; 32],
     };
-    let observe = request(&root, &supplier, Command::Observe).await;
-    assert_eq!(send(&root, &observe).await.unwrap(), None);
-    let close = request(&root, &supplier, Command::Close(first.clone())).await;
+    let read = publication::ObservationRequest::Admission(publication::InfoRequest {
+        store: supplier.id.to_text(),
+        expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
+    });
+    let observe = async || {
+        let reply = root
+            .update::<_, publication::ObservationReply>(
+                "observe_store",
+                publication::OBSERVATION,
+                &read,
+                STORE_LIMITS,
+            )
+            .await
+            .unwrap();
+        let publication::Observation::Admission(status) = reply else {
+            panic!("expected admission status")
+        };
+        status
+    };
+    assert_eq!(observe().await, None);
+    let close = request(&root, &supplier, AdmissionChange::Close(first.clone())).await;
     let frame = ic_wire::encode(
         &close,
         ic_wire::Encoding::Frame {
@@ -168,18 +190,36 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
         STORE_LIMITS,
     )
     .unwrap();
+    let old = ic_wire::encode(
+        &(
+            close.store.clone(),
+            close.expires_at_ns,
+            Command::Close(first.clone()),
+        ),
+        ic_wire::Encoding::Frame {
+            method: 49,
+            direction: ic_wire::Direction::Request,
+        },
+        STORE_LIMITS,
+    )
+    .unwrap();
+    assert!(
+        pic.update_call(root.id, root.operator, "change_store_admission", old)
+            .await
+            .is_err()
+    );
     assert!(
         pic.update_call(
             root.id,
             CanisterId::anonymous(),
-            "store_admission",
+            "change_store_admission",
             frame.clone()
         )
         .await
         .is_err()
     );
     assert!(
-        pic.update_call(root.id, root.operator, "store_admission", vec![1, 2])
+        pic.update_call(root.id, root.operator, "change_store_admission", vec![1, 2])
             .await
             .is_err()
     );
@@ -194,16 +234,16 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
         .await,
         Err(Error::Expired)
     );
-    assert_eq!(send(&root, &observe).await.unwrap(), None);
+    assert_eq!(observe().await, None);
     inject(&root, 12).await;
     assert!(
-        pic.update_call(root.id, root.operator, "store_admission", frame)
+        pic.update_call(root.id, root.operator, "change_store_admission", frame)
             .await
             .is_err()
     );
     inject(&root, 0).await;
     // Store committed despite Root's reply trap; observe instead of inventing another attempt.
-    let closed = send(&root, &observe).await.unwrap().unwrap();
+    let closed = observe().await.unwrap();
     assert!(closed.closed);
     assert_eq!(closed.owner, root.id.as_slice());
     assert_eq!(closed.attempt, first);
@@ -250,18 +290,18 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
         .await
         .unwrap();
     assert!(supplier.info().await.maintenance_candidate);
-    assert_eq!(send(&root, &observe).await.unwrap(), Some(closed));
+    assert_eq!(observe().await, Some(closed));
     assert_eq!(supplier.status(&pending.release).await, partial);
     let after: Result<store::Custody, store::Error> =
         supplier.release_custody(&manifest.release).await;
     assert_eq!(after, custody);
-    let activate = request(&root, &supplier, Command::Activate(first.clone())).await;
+    let activate = request(&root, &supplier, AdmissionChange::Activate(first.clone())).await;
     let active = send(&root, &activate).await.unwrap().unwrap();
     assert!(!active.closed);
     assert_eq!(send(&root, &close).await.unwrap(), Some(active));
     send(
         &root,
-        &request(&root, &supplier, Command::Close(second.clone())).await,
+        &request(&root, &supplier, AdmissionChange::Close(second.clone())).await,
     )
     .await
     .unwrap();
@@ -270,12 +310,12 @@ async fn closed_store_survives_upgrade_and_requires_its_exact_owner_attempt() {
         Err(Error::Store(store::Error::Conflict))
     );
     maintain(&root).await;
-    let latest = send(&root, &observe).await.unwrap().unwrap();
+    let latest = observe().await.unwrap();
     assert!(latest.closed);
     assert_eq!(latest.attempt, second);
     send(
         &root,
-        &request(&root, &supplier, Command::Activate(second)).await,
+        &request(&root, &supplier, AdmissionChange::Activate(second)).await,
     )
     .await
     .unwrap();

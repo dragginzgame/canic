@@ -415,7 +415,6 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
         FleetCommand::Plan {
             canister,
             wasm,
-            network,
             controller,
             identity,
             signer,
@@ -429,6 +428,11 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             cycles,
             ..
         } => {
+            let config = configuration.as_ref().ok_or_else(|| {
+                Error::Invalid(
+                    "fleet plan requires an app and fleet with Root and Wasm Store".into(),
+                )
+            })?;
             let controller = match (controller, identity) {
                 (Some(controller), None) => controller.clone(),
                 (None, Some(identity)) => canic_host::signing_principal(identity, &signer.icp_bin)?,
@@ -441,26 +445,16 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                         .ok_or_else(|| Error::Invalid("dispatch timestamp overflow".into()))
                 })
                 .transpose()?;
-            if canister.is_none()
-                && wasm.is_none()
-                && target.is_none()
-                && let Some(selected) = &configuration
-            {
-                if network.network.is_some()
-                    || network.url.is_some()
-                    || network.root_key.is_some()
-                    || network.root_subnet.is_some()
-                    || network.routing_canister.is_some()
-                    || root_module.is_some()
-                {
+            if canister.is_none() && wasm.is_none() && target.is_none() {
+                if root_module.is_some() {
                     return Err(Error::Invalid(
-                        "whole-fleet planning uses the configured network and Root artifact".into(),
+                        "whole-fleet planning uses the configured Root".into(),
                     ));
                 }
                 let result = canic_host::plan_fleet(
                     &state_dir,
                     &config_path,
-                    selected,
+                    config,
                     &controller,
                     *cycles,
                     dispatch,
@@ -494,35 +488,8 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     "--execute-at requires a whole-fleet plan or --root-module".into(),
                 ));
             }
-            let selected_network = if network.network.is_some() {
-                network.as_ref().clone().into_network()?
-            } else {
-                if network.url.is_some()
-                    || network.root_key.is_some()
-                    || network.root_subnet.is_some()
-                    || network.routing_canister.is_some()
-                {
-                    return Err(Error::Invalid("network options require --network".into()));
-                }
-                configuration
-                    .as_ref()
-                    .ok_or_else(|| {
-                        Error::Invalid("plan requires a fleet config or explicit --network".into())
-                    })?
-                    .config
-                    .network
-                    .clone()
-            };
-            if configuration
-                .as_ref()
-                .is_some_and(|config| config.config.network != selected_network)
-            {
-                return Err(Error::Invalid(
-                    "plan network differs from fleet config".into(),
-                ));
-            }
             let input = PlanInput {
-                network: selected_network,
+                network: config.config.network.clone(),
                 controller,
                 target: target.clone(),
                 previous_module: previous_module.clone(),
@@ -533,9 +500,6 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 }),
             };
             let (digest, plan) = if let Some(canister) = canister {
-                let config = configuration.as_ref().ok_or_else(|| {
-                    Error::Invalid("named deployment requires a fleet config".into())
-                })?;
                 let wasm = config.wasm_path(&config_path, canister, wasm.as_deref())?;
                 if let Some(version) = &publication.publish_version {
                     canic_host::create_publication_plan(
@@ -588,7 +552,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                             canister,
                             root_module,
                             execute_at,
-                            publication.release.as_deref(),
+                            publication.release.as_deref().ok_or_else(|| Error::Invalid("managed child creation and upgrade require --release with a completed Wasm Store publication".into()))?,
                             install_args.as_deref(),
                             *blob_attempt,
                         )?
@@ -597,18 +561,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     canic_host::create_configured_plan(&state_dir, &wasm, input, config, canister)?
                 }
             } else {
-                if configuration.is_some() && target.is_none() {
-                    return Err(Error::Invalid(
-                        "configured creation requires --canister in the selected app/fleet".into(),
-                    ));
-                }
-                if let (Some(config), Some(target)) = (&configuration, target) {
-                    config.check_target(&state_dir, target)?;
-                }
-                let wasm = wasm
-                    .as_ref()
-                    .ok_or_else(|| Error::Invalid("this plan requires --wasm".into()))?;
-                canic_host::create_plan(&state_dir, wasm, input)?
+                return Err(Error::Invalid("deployment requires a Canic fleet with Root and Wasm Store; select --canister or plan the whole fleet".into()));
             };
             if !cli.json {
                 let state = canic_host::status(&state_dir, &digest)?;

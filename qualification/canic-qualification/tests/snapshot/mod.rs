@@ -105,6 +105,12 @@ fn reply(record: Record) -> Vec<u8> {
 
 async fn fixture(pic: &PocketIc, wasm: Vec<u8>) -> (CanisterId, CanisterId, u64) {
     let root = pic.create_canister().await;
+    let store = ChildStore::install(
+        pic,
+        root,
+        std::fs::read(repo().join("target/backup/store.wasm")).unwrap(),
+    )
+    .await;
     pic.add_cycles(root, 5_000_000_000_000).await;
     pic.install_canister(root, wasm, vec![], None).await;
     let child = std::fs::read(repo().join("target/backup/app.wasm")).unwrap();
@@ -119,7 +125,7 @@ async fn fixture(pic: &PocketIc, wasm: Vec<u8>) -> (CanisterId, CanisterId, u64)
         },
         wasm: child,
     };
-    stage(pic, root, &input).await.unwrap();
+    stage(pic, root, &store, &input).await.unwrap();
     settle(pic).await;
     let s = status(pic, root).await;
     assert_eq!(s.phase, Phase::Ready, "{s:?}");

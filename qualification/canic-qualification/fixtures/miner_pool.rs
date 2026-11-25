@@ -2,7 +2,7 @@
 use super::local_store::Client;
 use canic_management_protocol::{
     self as management,
-    children::{self, ChildId, Request},
+    children::{ChildId, Request},
     stored,
 };
 use ic_testkit::{pocket_ic::CanisterId, server::Instance};
@@ -71,14 +71,7 @@ pub(crate) async fn install<'a>(
         pic.advance_time(Duration::from_millis(100)).await;
         pic.tick().await;
     }
-    let status: management::Status = root
-        .update(
-            "observe_child",
-            children::STATUS,
-            &ChildId::FIRST,
-            management::LIMITS,
-        )
-        .await;
+    let status: management::Status = root.observe_creation(ChildId::FIRST).await;
     assert_eq!(status.phase, management::Phase::Ready, "{status:?}");
     let pool = CanisterId::from_text(status.worker.unwrap()).unwrap();
     pic.add_cycles(pool, 20_000_000_000_000).await;

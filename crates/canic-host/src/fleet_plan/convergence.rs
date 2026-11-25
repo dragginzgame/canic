@@ -21,7 +21,7 @@ pub enum FleetPlanning {
         capacity: Option<crate::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
         /// Count-only changes for existing approvals, bound to their original terms.
         #[serde(skip_serializing_if = "Vec::is_empty")]
-        increases: Vec<crate::PoolGrant<canic_management_protocol::stored::IncreasePool>>,
+        increases: Vec<crate::PoolGrant<canic_management_protocol::stored::IncreasePoolLimit>>,
         /// Application and fleet whose pool would be configured.
         deployment: crate::DeploymentName,
         /// Configured replica and trust binding.
@@ -42,7 +42,7 @@ pub enum FleetPlanning {
         capacity: Option<crate::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
         /// Count-only changes for existing approvals, bound to their original terms.
         #[serde(skip_serializing_if = "Vec::is_empty")]
-        increases: Vec<crate::PoolGrant<canic_management_protocol::stored::IncreasePool>>,
+        increases: Vec<crate::PoolGrant<canic_management_protocol::stored::IncreasePoolLimit>>,
         /// Application name.
         app: String,
         /// Fleet name.

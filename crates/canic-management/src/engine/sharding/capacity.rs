@@ -12,7 +12,7 @@ pub(super) fn valid_capacity(capacity: &stored::SubnetCapacity) -> bool {
 /// Refuses conflicting grants, except a controller-approved increase above the default backstop.
 /// # Panics
 /// Requires controller authority and valid Root state.
-pub fn configure_capacity(capacity: stored::SubnetCapacity) -> Result<(), Refusal> {
+pub fn configure_subnet_capacity(capacity: stored::SubnetCapacity) -> Result<(), Refusal> {
     assert!(api::is_controller(&api::caller()));
     if !valid_capacity(&capacity) {
         return Err(Refusal::Binding);
@@ -78,7 +78,7 @@ pub fn configure_capacity(capacity: stored::SubnetCapacity) -> Result<(), Refusa
 /// A stale grant, expired authority, or non-increase refuses.
 /// # Panics
 /// Requires the controller and an opened Root.
-pub fn increase_pool(change: stored::IncreasePool) -> Result<(), Refusal> {
+pub fn increase_pool_limit(change: stored::IncreasePoolLimit) -> Result<(), Refusal> {
     assert!(api::is_controller(&api::caller()));
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
@@ -89,7 +89,7 @@ pub fn increase_pool(change: stored::IncreasePool) -> Result<(), Refusal> {
             .ok_or(Refusal::Binding)?
             .max_children;
         let (initial, previous, next, history, deadline, family_limit) = match change {
-            stored::IncreasePool::Shards(mut old, next) => {
+            stored::IncreasePoolLimit::Shards(mut old, next) => {
                 let ledger = state
                     .pools
                     .shards
@@ -109,7 +109,7 @@ pub fn increase_pool(change: stored::IncreasePool) -> Result<(), Refusal> {
                     stored::MAX_SHARDS,
                 )
             }
-            stored::IncreasePool::Instances(mut old, next) => {
+            stored::IncreasePoolLimit::Instances(mut old, next) => {
                 let initial = state.pools.instances.as_ref().ok_or(Refusal::Binding)?;
                 let previous = std::mem::replace(&mut old.max_instances, initial.max_instances);
                 if &old != initial {

@@ -6,7 +6,6 @@ mod tests;
 use crate::{
     Artifact, Error, Network, Result, artifact,
     network::principal,
-    now,
     store::{self, Store},
     supplier,
 };
@@ -103,11 +102,21 @@ impl Plan {
                 | (7, true)
                 | (8, true)
                 | (9, true)
-        ) || (self.version == 9
-            && self.store_root().is_none()
-            && self.store_upgrade_root().is_none())
+                | (10, true)
+                | (11, true)
+        ) || (self.version == 10
+            && !matches!(
+                self.action,
+                PlanAction::Create {
+                    bootstrap: None,
+                    ..
+                }
+            ))
+            || (self.version == 9
+                && self.store_root().is_none()
+                && self.store_upgrade_root().is_none())
             || (self.version == 3) != self.publication().is_some()
-            || (self.version == 4) != self.removal().is_some()
+            || matches!(self.version, 4 | 11) != self.removal().is_some()
             || (self.version == 5) != self.auth().is_some()
             || (self.version != 8
                 && (self.version == 6) != self.management().is_some_and(|m| m.arguments.is_some()))
@@ -267,8 +276,9 @@ impl Plan {
 ///
 /// # Errors
 /// Refuses invalid budgets, occupied records, concurrent operators or failed durable publication.
-pub fn create_plan(root: &Path, wasm: &Path, input: PlanInput) -> Result<(String, Plan)> {
-    retain(root, wasm, input, None, None, now()?)
+#[cfg(test)]
+pub(crate) fn create_plan(root: &Path, wasm: &Path, input: PlanInput) -> Result<(String, Plan)> {
+    retain(root, wasm, input, None, None, crate::now()?)
 }
 
 // Equality is the ready-to-dispatch plan. Historical future schedules retain their
@@ -281,6 +291,7 @@ pub(crate) fn admission_deadline(created: u64, dispatch: u64, expires: u64) -> u
     }
 }
 
+#[cfg(test)]
 pub(crate) fn retain(
     root: &Path,
     wasm: &Path,

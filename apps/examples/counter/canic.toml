@@ -1,5 +1,4 @@
 [apps.ex-counter]
-wasm_store = true
 
 [apps.ex-counter.canisters.ex-counter]
 role = "app"

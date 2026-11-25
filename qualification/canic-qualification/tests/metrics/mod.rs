@@ -39,6 +39,7 @@ async fn controller_queries_preserve_state_and_upgrade_resets_only_diagnostics()
         .unwrap();
     let pic = owner.client();
     let root = pic.create_canister().await;
+    let store = ChildStore::install(pic, root, children::artifact("store.wasm")).await;
     pic.install_canister(root, children::artifact("root.wasm"), vec![], None)
         .await;
     let logs = async |before: Option<u64>| {
@@ -77,7 +78,7 @@ async fn controller_queries_preserve_state_and_upgrade_resets_only_diagnostics()
         children::artifact("app.wasm"),
         pic.get_time().await.as_nanos_since_unix_epoch(),
     );
-    stage(pic, root, &input).await.unwrap();
+    stage(pic, root, &store, &input).await.unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     let complete = status(pic, root).await;
@@ -85,7 +86,14 @@ async fn controller_queries_preserve_state_and_upgrade_resets_only_diagnostics()
     let ready = logs(None).await;
     assert_eq!(ready.entries[0].source, "management");
     assert_eq!(ready.entries[0].message, "child 0: Ready");
-    assert_eq!(logs(Some(ready.entries[0].sequence)).await, first);
+    let earlier = logs(Some(ready.entries[0].sequence)).await;
+    assert_eq!(earlier.entries.last(), first.entries.last());
+    assert!(
+        earlier
+            .entries
+            .iter()
+            .all(|entry| entry.sequence < ready.entries[0].sequence)
+    );
     assert_eq!(logs(None).await, ready);
     let before = read(pic, root, CanisterId::anonymous()).await;
     let timers = before.timers.unwrap();
@@ -156,6 +164,7 @@ async fn controller_queries_preserve_state_and_upgrade_resets_only_diagnostics()
     children::admit(
         pic,
         root,
+        &store,
         canic_management_protocol::children::ChildId::SECOND,
         late,
     )

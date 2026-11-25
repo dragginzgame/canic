@@ -3,7 +3,7 @@ use super::{Client, artifacts, inject, maintain, readiness_tests, recover_store,
 use canic_management_protocol::{
     self as management, publication,
     store_maintenance::{self as wire, Approval, Phase, Status},
-    stored::STORE_LIMITS,
+    stored::{self, STORE_LIMITS},
 };
 use ic_testkit::pocket_ic::{CanisterId, CanisterSettings};
 use std::time::Duration;
@@ -47,30 +47,33 @@ async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
 
 pub(super) async fn child_stage(
     root: &Client<'_>,
+    supplier: &Client<'_>,
+    manifest: &store::Manifest,
 ) -> Result<management::Status, management::Refusal> {
+    let now = root.pic.get_time().await.as_nanos_since_unix_epoch();
     root.update(
-        "stage_inline_child_creation",
-        management::children::STAGE,
+        "stage_child_creation",
+        management::application::STAGE_CHILD_CREATION,
         &management::children::Request {
             slot: management::children::ChildId::FIRST,
-            value: management::Stage {
+            value: management::application::Deployment::<_, ()>::Stored(stored::Stage {
                 approval: management::Approval {
                     manager: root.id.to_text(),
-                    module_hash: management::digest(b"\0asm\x01\0\0\0"),
+                    module_hash: manifest.hash,
                     creation_cycles: management::CREATION_CYCLES,
-                    execute_at_ns: root.pic.get_time().await.as_nanos_since_unix_epoch()
-                        + 120_000_000_000,
-                    expires_at_ns: root.pic.get_time().await.as_nanos_since_unix_epoch()
-                        + 240_000_000_000,
+                    execute_at_ns: now + 120_000_000_000,
+                    expires_at_ns: now + 240_000_000_000,
                 },
-                wasm: b"\0asm\x01\0\0\0".to_vec(),
-            },
+                reference: stored::Reference {
+                    store: supplier.id.to_text(),
+                    manifest: manifest.clone(),
+                },
+            }),
         },
-        management::STAGE_LIMITS,
+        stored::LIMITS,
     )
     .await
 }
-
 #[tokio::test(flavor = "current_thread")]
 async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upgrade() {
     let (_, binary) = support::inputs();
@@ -138,15 +141,18 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     let reserved = reserved.unwrap();
     assert_eq!(reserved.phase, Phase::Reserved);
     assert_eq!(recover_store(&root, &input).await, reserved); // Recovery cannot close Store.
-    assert_eq!(child_stage(&root).await, Err(management::Refusal::Occupied));
+    assert_eq!(
+        child_stage(&root, &supplier, &first).await,
+        Err(management::Refusal::Occupied)
+    );
     let raw = publication::AdmissionRequest {
         store: input.store.clone(),
         expires_at_ns: input.expires_at_ns,
-        command: store::AdmissionCommand::Activate(input.attempt.clone()),
+        command: publication::AdmissionChange::Activate(input.attempt.clone()),
     };
     assert_eq!(
         root.update::<_, publication::AdmissionReply>(
-            "store_admission",
+            "change_store_admission",
             publication::ADMISSION,
             &raw,
             STORE_LIMITS
@@ -154,6 +160,20 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
         .await,
         Err(publication::Error::Maintenance)
     );
+    let read = publication::ObservationRequest::Admission(publication::InfoRequest {
+        store: input.store.clone(),
+        expires_at_ns: input.expires_at_ns,
+    });
+    let gate = root
+        .update::<_, publication::ObservationReply>(
+            "observe_store",
+            publication::OBSERVATION,
+            &read,
+            STORE_LIMITS,
+        )
+        .await
+        .unwrap();
+    assert!(matches!(gate, publication::Observation::Admission(_)));
     let publication = publication::Request {
         store: input.store.clone(),
         expires_at_ns: input.expires_at_ns,
@@ -288,7 +308,10 @@ async fn maintenance_refuses_unfinished_children_and_checks_live_store_authority
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
     let (busy, supplier) = readiness_tests::fixture(pic).await;
-    child_stage(&busy).await.unwrap();
+    let manifest = supplier
+        .publish_bytes("scheduled", b"\0asm\x01\0\0\0")
+        .await;
+    child_stage(&busy, &supplier, &manifest).await.unwrap();
     let input = approval(&busy, &supplier).await;
     let refused: Result<Status, management::Refusal> = busy
         .update("stage_store_maintenance", wire::STAGE, &input, wire::LIMITS)

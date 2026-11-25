@@ -10,6 +10,24 @@ use std::{
 
 pub(crate) const MAX_RECORD: usize = 12 * 1024 * 1024;
 
+/// Find the first observation whose terminal evidence has not been retained.
+pub(crate) fn next_observation(
+    prefix: &Path,
+    limit: usize,
+    markers: &[&str],
+) -> Result<Option<(usize, PathBuf)>> {
+    'slots: for index in 0..limit {
+        let path = prefix.join(index.to_string());
+        for marker in markers {
+            if path.join(marker).try_exists().map_err(supplier)? {
+                continue 'slots;
+            }
+        }
+        return Ok(Some((index, path)));
+    }
+    Ok(None)
+}
+
 pub(crate) struct Store {
     pub path: PathBuf,
     _lock: ic_host_fs::Lock,

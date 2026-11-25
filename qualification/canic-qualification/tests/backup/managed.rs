@@ -1,7 +1,7 @@
 //! The operator controls Root. Only Root controls the admitted counter.
 use super::*;
 use canic_management_protocol::{
-    Approval, CREATION_CYCLES, LIMITS, Phase, STAGE_LIMITS, Stage, Status, children, digest,
+    Approval, CREATION_CYCLES, LIMITS, Phase, Stage, Status, children, digest,
 };
 use ic_testkit::pocket_ic::nonblocking::PocketIc;
 
@@ -34,19 +34,21 @@ pub(super) async fn install(
         method,
         direction: ic_wire::Direction::Request,
     };
+    let store =
+        child_store::ChildStore::install(pic, root, fs::read(assets.join("store.wasm")).unwrap())
+            .await;
     pic.update_call(
         root,
         caller,
-        "stage_inline_child_creation",
-        ic_wire::encode(
-            &children::Request {
-                slot: children::ChildId::FIRST,
-                value: stage,
-            },
-            request(children::STAGE),
-            STAGE_LIMITS,
-        )
-        .unwrap(),
+        "stage_child_creation",
+        store
+            .frame(
+                canic_management_protocol::application::STAGE_CHILD_CREATION,
+                children::ChildId::FIRST,
+                &stage.approval,
+                &stage.wasm,
+            )
+            .await,
     )
     .await
     .unwrap();

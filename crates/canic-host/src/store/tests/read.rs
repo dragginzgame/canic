@@ -45,3 +45,25 @@ fn final_links_refuse_and_ancestor_links_remain_supported() {
     assert!(read(&actual.join("record/"), 100).is_err());
     std::fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn observation_slots_preserve_terminal_evidence_and_signed_attempts() {
+    let root = directory();
+    for index in 0..3 {
+        std::fs::create_dir(root.join(index.to_string())).unwrap();
+    }
+    for (index, marker) in [(0, "reply.bin"), (1, "rejected.json"), (2, "signed.json")] {
+        std::fs::write(root.join(index.to_string()).join(marker), b"original").unwrap();
+    }
+    let next =
+        |limit, markers: &[&str]| crate::store::next_observation(&root, limit, markers).unwrap();
+    assert_eq!(next(3, &["reply.bin"]), Some((1, root.join("1"))));
+    assert_eq!(
+        next(3, &["reply.bin", "rejected.json"]),
+        Some((2, root.join("2")))
+    );
+    assert_eq!(next(2, &["reply.bin", "rejected.json"]), None);
+    for entry in ["0/reply.bin", "1/rejected.json", "2/signed.json"] {
+        assert_eq!(std::fs::read(root.join(entry)).unwrap(), b"original");
+    }
+}

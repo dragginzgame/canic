@@ -252,27 +252,21 @@ pub(crate) async fn apply(
     icp: &Path,
     reconcile: bool,
 ) -> Result<crate::ApplyOutcome> {
-    if let Some(call) = receipt(dir, plan, bytes)? {
-        return Ok(crate::ApplyOutcome::Call { call });
-    }
     let path = dir.join("call");
-    let prepared = path.join("signed.json").try_exists().map_err(supplier)?;
-    if reconcile && !prepared {
-        return Err(Error::Blocked(
-            "call has not been signed; apply its original approval first".into(),
-        ));
-    }
-    signed::execute(
-        &path,
+    let call = signed::RetainedAttempt {
         plan,
-        &call(plan, bytes)?,
         identity,
         icp,
-        &plan.network.client()?,
+        reconcile,
+    }
+    .execute(
+        &path,
+        "call has not been signed; apply its original approval first",
+        "application has no retained reply",
+        || receipt(dir, plan, bytes),
+        async |_| call(plan, bytes),
     )
     .await?;
-    let call = receipt(dir, plan, bytes)?
-        .ok_or_else(|| Error::Blocked("application has no retained reply".into()))?;
     Ok(crate::ApplyOutcome::Call { call })
 }
 

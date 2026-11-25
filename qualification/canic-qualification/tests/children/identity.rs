@@ -31,6 +31,7 @@ async fn identified_records_preserve_pending_children_and_refuse_old_storage_cod
         "a00ce6fcac8687c9c350e317c53d2d653665c1c531639af9d07961ade96cc90d"
     );
     let root = pic.create_canister().await;
+    let store = ChildStore::install(pic, root, artifact("store.wasm")).await;
     pic.install_canister(root, artifact("root.wasm"), vec![], None)
         .await;
     pic.add_cycles(root, 10_000_000_000_000).await;
@@ -46,7 +47,10 @@ async fn identified_records_preserve_pending_children_and_refuse_old_storage_cod
             pic.get_time().await.as_nanos_since_unix_epoch(),
         );
         assert_eq!(
-            admit(pic, root, slot, stage.clone()).await.unwrap().phase,
+            admit(pic, root, &store, slot, stage.clone())
+                .await
+                .unwrap()
+                .phase,
             Phase::Scheduled
         );
         approvals.push((slot, stage));
@@ -61,7 +65,10 @@ async fn identified_records_preserve_pending_children_and_refuse_old_storage_cod
     assert_eq!(read(pic, root).await, scheduled);
     for (slot, stage) in &approvals {
         assert_eq!(
-            admit(pic, root, *slot, stage.clone()).await.unwrap().phase,
+            admit(pic, root, &store, *slot, stage.clone())
+                .await
+                .unwrap()
+                .phase,
             Phase::Scheduled
         );
     }
@@ -107,7 +114,7 @@ async fn identified_records_preserve_pending_children_and_refuse_old_storage_cod
     let subnet = pic.get_subnet(root).await.unwrap();
     assert_eq!(
         pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
-        3
+        4
     );
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,

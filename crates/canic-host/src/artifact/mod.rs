@@ -13,10 +13,6 @@ use std::{
     time::Duration,
 };
 
-fn placement_mount(feature: &str) -> bool {
-    matches!(feature, "child-creation" | "reserve-pool" | "child-funding")
-}
-
 // Leave at least 190 KiB for Candid/envelope overhead below the IC's 2 MiB ingress limit.
 // This is Host direct installation, independent of Root's retained inline-child quota.
 pub(crate) const MAX_WASM: usize = 1_900_000;
@@ -380,15 +376,8 @@ pub(crate) fn build_for_role(
         .arg("--target-dir")
         .arg(private.path())
         .env("CARGO_BUILD_BUILD_DIR", cache);
-    // Strip large Root builds before hashing for direct install. Other Roots retain
-    // symbolized traps for diagnosing refused stable-layout transitions.
-    if package == "canic-root"
-        && (features
-            .iter()
-            .any(|f| f == "blob" || f == "role-issuer" || placement_mount(f))
-            || (features.iter().any(|f| f == "auth")
-                && features.iter().any(|f| f == "child-management")))
-    {
+    // Every Root includes the placement engine and must fit direct installation.
+    if package == "canic-root" {
         command.args([
             "--config",
             "profile.release.package.canic-root.strip='symbols'",

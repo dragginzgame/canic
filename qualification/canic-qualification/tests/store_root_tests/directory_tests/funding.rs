@@ -68,7 +68,16 @@ pub(super) async fn exercise(root: &Client<'_>, target: CanisterId, sibling: Can
         (2, rule.budget_cycles)
     );
     assert!(!spent.issued);
-    assert_funding_upgrade_refused(root, "without-topups.wasm", "child-funding").await;
+    canic_qualification::upgrade_stopped(
+        pic,
+        root.id,
+        std::fs::read(artifacts().join("baseline-root.wasm")).unwrap(),
+        vec![],
+        Some(root.operator),
+    )
+    .await
+    .unwrap();
+    assert_eq!(configure(&rule).await.unwrap(), spent);
     let closed = root
         .update::<_, Result<ChildFundingStatus, stored::FundingError>>(
             StopChildFunding::NAME,

@@ -22,20 +22,20 @@ pub(super) async fn counts(root: &Client<'_>) -> stored::SpareCounts {
         .query_call(
             root.id,
             CanisterId::anonymous(),
-            stored::ReadSpareCounts::NAME,
-            stored::ReadSpareCounts::encode_request(&()).unwrap(),
+            stored::ReadStandbyStatus::NAME,
+            stored::ReadStandbyStatus::encode_request(&()).unwrap(),
         )
         .await
         .unwrap();
-    stored::ReadSpareCounts::decode_reply(&reply)
+    stored::ReadStandbyStatus::decode_reply(&reply)
         .unwrap()
         .unwrap()
 }
 
 pub(super) async fn approve(root: &Client<'_>, max_children: u8) {
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_capacity",
-        stored::CONFIGURE_CAPACITY,
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
         &stored::SubnetCapacity {
             allow_large_subnet: false,
             root: root.id.to_text(),

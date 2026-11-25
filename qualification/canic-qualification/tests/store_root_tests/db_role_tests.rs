@@ -11,6 +11,69 @@ use canic::{
 };
 
 #[tokio::test]
+async fn lost_empty_grant_history_refuses_standby_imports() {
+    use canic::sharding::standby::ReserveError;
+    let (mut server, owner) = support::instance(&canic_qualification::server_directory()).await;
+    let pic = owner.client();
+    let wasm = std::fs::read(artifacts().join("db-role-root.wasm")).unwrap();
+    let (root, _) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
+    let spare = pic.create_canister().await;
+    let policy = stored::StandbyPolicy {
+        root: root.id.to_text(),
+        minimum_available: 0,
+        maximum_creations: 0,
+        expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 60_000_000_000,
+        minimum_import_cycles: 1_u64.try_into().unwrap(),
+        imports: vec![stored::StandbyImport {
+            principal: spare.to_text(),
+            previous_root: None,
+        }],
+    };
+    root.update::<_, Result<(), management::Refusal>>(
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
+        &stored::SubnetCapacity {
+            root: root.id.to_text(),
+            max_children: 8,
+            allow_large_subnet: false,
+        },
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
+    root.update::<_, Result<(), ReserveError>>(
+        "configure_standby",
+        stored::CONFIGURE_STANDBY,
+        &policy,
+        stored::LIMITS,
+    )
+    .await
+    .unwrap();
+    pic.upgrade_canister(root.id, wasm, vec![], Some(root.operator))
+        .await
+        .unwrap();
+    let result: Result<(), ReserveError> = root
+        .update(
+            "configure_standby",
+            stored::CONFIGURE_STANDBY,
+            &policy,
+            stored::LIMITS,
+        )
+        .await;
+    assert_eq!(
+        result,
+        Err(ReserveError::CustodyOccupied(
+            "worker Auth grant history is occupied or unavailable".into()
+        ))
+    );
+    assert_eq!(
+        owner.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+#[tokio::test]
 async fn placed_db_shard_recovers_its_project_after_receiver_upgrade() {
     installed_roles(Journey::Shards).await;
 }
@@ -158,8 +221,8 @@ async fn installed_roles(journey: Journey) {
         Err(management::Refusal::Binding)
     );
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_capacity",
-        stored::CONFIGURE_CAPACITY,
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
         &stored::SubnetCapacity {
             allow_large_subnet: false,
             root: root.id.to_text(),
@@ -174,9 +237,7 @@ async fn installed_roles(journey: Journey) {
     }
     settle(pic).await;
     let ready = async |slot| {
-        let status: management::Status = root
-            .update("observe_child", children::STATUS, &slot, management::LIMITS)
-            .await;
+        let status: management::Status = root.observe_creation(slot).await;
         assert_eq!(status.phase, management::Phase::Ready, "{status:?}");
         CanisterId::from_text(status.worker.unwrap()).unwrap()
     };

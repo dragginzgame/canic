@@ -306,25 +306,22 @@ pub(crate) async fn finish(
     {
         return retained(dir, plan, canister);
     }
-    for index in 0..OBSERVATIONS {
-        let path = dir.join(format!("store-observe/{index}"));
-        if path.join("reply.bin").try_exists().map_err(supplier)?
-            || path.join("rejected.json").try_exists().map_err(supplier)?
-        {
-            continue;
-        }
-        let reply = signed::observe_store(&path, plan, canister, identity, icp, client).await?;
-        let info = decode(plan, &reply)?;
-        store::put_json(
-            &dir.join("store-ready.json"),
-            &Readiness {
-                observation: index,
-                info,
-            },
-        )?;
-        return Ok(());
-    }
-    Err(Error::Blocked(
-        "Store readiness observation budget exhausted; retain evidence".into(),
-    ))
+    let (index, path) = store::next_observation(
+        &dir.join("store-observe"),
+        OBSERVATIONS,
+        &["reply.bin", "rejected.json"],
+    )?
+    .ok_or_else(|| {
+        Error::Blocked("Store readiness observation budget exhausted; retain evidence".into())
+    })?;
+    let reply = signed::observe_store(&path, plan, canister, identity, icp, client).await?;
+    let info = decode(plan, &reply)?;
+    store::put_json(
+        &dir.join("store-ready.json"),
+        &Readiness {
+            observation: index,
+            info,
+        },
+    )?;
+    Ok(())
 }

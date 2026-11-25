@@ -2,7 +2,7 @@
 use super::{FleetOperation, network};
 use crate::{Error, Result, SelectedFleet, supplier};
 use canic::method::Contract;
-use canic_management_protocol::stored::{ReadSpareCounts, SpareCounts};
+use canic_management_protocol::stored::{ReadStandbyStatus, SpareCounts};
 use std::{collections::BTreeSet, time::Duration};
 
 pub(super) async fn observe(
@@ -39,19 +39,19 @@ pub(super) async fn observe(
     let Some(id) = ids.first() else {
         return Ok(None);
     };
-    let request = ReadSpareCounts::encode_request(&()).map_err(supplier)?;
+    let request = ReadStandbyStatus::encode_request(&()).map_err(supplier)?;
     let reply = tokio::time::timeout(
         Duration::from_secs(2),
         network::query(
             &network.client()?,
             network::principal(id)?,
-            ReadSpareCounts::NAME,
+            ReadStandbyStatus::NAME,
             &request,
         ),
     )
     .await
     .map_err(|_| Error::Blocked("reserve observation timed out".into()))??;
-    ReadSpareCounts::decode_reply(&reply)
+    ReadStandbyStatus::decode_reply(&reply)
         .map_err(supplier)?
         .map(Some)
         .ok_or_else(|| Error::Blocked("Root has no approved reserve policy".into()))

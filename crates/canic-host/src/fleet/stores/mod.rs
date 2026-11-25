@@ -76,15 +76,12 @@ pub(super) async fn collect(
         let network = targets
             .get(&(network_id.clone(), root.clone()))
             .ok_or_else(|| Error::Invalid("Store owner has no exact network binding".into()))?;
-        let budget = deadline
-            .saturating_duration_since(tokio::time::Instant::now())
-            .min(Duration::from_secs(5));
-        let result = if budget.is_zero() {
-            Err(Error::Blocked(
-                "snapshot network budget exhausted; Store maintenance not observed".into(),
-            ))
-        } else {
-            tokio::time::timeout(budget, async {
+        let result = super::budgeted_observation(
+            deadline,
+            Duration::from_secs(5),
+            "snapshot network budget exhausted; Store maintenance not observed",
+            "Store maintenance observation timed out",
+            async {
                 network::principal(&root)?;
                 let args = ic_wire::encode(
                     &(),
@@ -103,14 +100,12 @@ pub(super) async fn collect(
                 )
                 .await?;
                 decode(&store, &response)
-            })
-            .await
-            .map_err(|_| Error::Blocked("Store maintenance observation timed out".into()))
-            .and_then(|value| value)
-        };
+            },
+        )
+        .await;
         let (reported, observation_error) = match result {
             Ok(report) => (report, None),
-            Err(error) => (None, Some(error.to_string().chars().take(500).collect())),
+            Err(error) => (None, Some(error)),
         };
         reports.push(FleetStoreMaintenance {
             network_id,

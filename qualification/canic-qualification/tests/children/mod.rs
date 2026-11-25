@@ -45,6 +45,7 @@ async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
 pub(super) async fn admit(
     pic: &PocketIc,
     root: CanisterId,
+    store: &ChildStore<'_>,
     slot: ChildId,
     input: Stage,
 ) -> Result<Status, Refusal> {
@@ -52,23 +53,22 @@ pub(super) async fn admit(
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_inline_child_creation",
-            ic_wire::encode(
-                &Request { slot, value: input },
-                ic_wire::Encoding::Frame {
-                    method: children::STAGE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
+            "stage_child_creation",
+            store
+                .frame(
+                    application::STAGE_CHILD_CREATION,
+                    slot,
+                    &input.approval,
+                    &input.wasm,
+                )
+                .await,
         )
         .await
         .unwrap();
     ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: children::STAGE,
+            method: application::STAGE_CHILD_CREATION,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,
@@ -114,6 +114,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         .unwrap();
     let pic = owner.client();
     let root = pic.create_canister().await;
+    let store = ChildStore::install(pic, root, artifact("store.wasm")).await;
     // Old allocator images are qualified separately as refused upgrades.
     pic.install_canister(root, artifact("root.wasm"), vec![], None)
         .await;
@@ -122,7 +123,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         padded_artifact("app.wasm"),
         pic.get_time().await.as_nanos_since_unix_epoch(),
     );
-    stage(pic, root, &first).await.unwrap();
+    stage(pic, root, &store, &first).await.unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     let first_ready = status(pic, root).await;
@@ -148,26 +149,22 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             .update_call(
                 root,
                 CanisterId::anonymous(),
-                "stage_inline_child_upgrade",
-                ic_wire::encode(
-                    &canic_management_protocol::children::Request {
-                        slot: canic_management_protocol::children::ChildId::FIRST,
-                        value: &change,
-                    },
-                    ic_wire::Encoding::Frame {
-                        method: canic_management_protocol::children::STAGE_UPGRADE,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    STAGE_LIMITS,
-                )
-                .unwrap(),
+                "stage_child_upgrade",
+                store
+                    .frame(
+                        application::STAGE_CHILD_UPGRADE,
+                        canic_management_protocol::children::ChildId::FIRST,
+                        &change.approval,
+                        &change.wasm,
+                    )
+                    .await,
             )
             .await
             .unwrap();
         let admitted: Result<upgrade::Status, Refusal> = ic_wire::decode(
             &reply,
             ic_wire::Encoding::Frame {
-                method: canic_management_protocol::children::STAGE_UPGRADE,
+                method: application::STAGE_CHILD_UPGRADE,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -180,6 +177,28 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     }
     let old_custody = read(pic, root).await.remove(0);
     assert_eq!(old_custody.upgrades.len(), 2);
+    // The controller read must recover both exact approvals after the second upgrade.
+    for expected in &old_custody.upgrades {
+        let frame = |direction| ic_wire::Encoding::Frame {
+            method: children::OBSERVE_STATUS,
+            direction,
+        };
+        let request = children::ObserveStatus::Upgrade(Request {
+            slot: ChildId::FIRST,
+            value: expected.approval.clone().unwrap(),
+        });
+        let reply = pic
+            .update_call(
+                root,
+                CanisterId::anonymous(),
+                "observe_child_status",
+                ic_wire::encode(&request, frame(ic_wire::Direction::Request), LIMITS).unwrap(),
+            )
+            .await
+            .unwrap();
+        let record = ic_wire::decode(&reply, frame(ic_wire::Direction::Response), LIMITS).unwrap();
+        assert!(matches!(record, children::ObservedStatus::Upgrade(status) if status == *expected));
+    }
     // Latest and historical reads must still distinguish two completed approvals.
     for (selector, expected) in [
         (None, &old_custody.upgrades[1]),
@@ -224,16 +243,6 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         padded_artifact("app-v2.wasm"),
         pic.get_time().await.as_nanos_since_unix_epoch(),
     );
-    let too_large = input(
-        root,
-        pad_artifact("app-v2.wasm", canic_management_protocol::MAX_WASM),
-        pic.get_time().await.as_nanos_since_unix_epoch(),
-    );
-    assert_eq!(
-        admit(pic, root, ChildId::SECOND, too_large).await,
-        Err(Refusal::Artifact)
-    );
-    assert_eq!(read(pic, root).await, migrated);
     let outsider = CanisterId::self_authenticating(b"not-root-operator");
     for (method, frame) in [
         (
@@ -249,19 +258,15 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             .unwrap(),
         ),
         (
-            "stage_inline_child_creation",
-            ic_wire::encode(
-                &Request {
-                    slot: ChildId::SECOND,
-                    value: second.clone(),
-                },
-                ic_wire::Encoding::Frame {
-                    method: children::STAGE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
+            "stage_child_creation",
+            store
+                .frame(
+                    application::STAGE_CHILD_CREATION,
+                    ChildId::SECOND,
+                    &second.approval,
+                    &second.wasm,
+                )
+                .await,
         ),
     ] {
         assert!(
@@ -271,7 +276,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         );
     }
     assert_eq!(read(pic, root).await, migrated);
-    admit(pic, root, ChildId::SECOND, second.clone())
+    admit(pic, root, &store, ChildId::SECOND, second.clone())
         .await
         .unwrap();
     // An old maintenance client must fail closed, never omit the second slot.
@@ -331,66 +336,28 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         },
         wasm,
     };
-    let mut too_large = change.clone();
-    too_large.wasm = pad_artifact("app-v2.wasm", canic_management_protocol::MAX_WASM);
-    too_large.approval.module_hash = digest(&too_large.wasm);
-    let reply = pic
-        .update_call(
-            root,
-            CanisterId::anonymous(),
-            "stage_inline_child_upgrade",
-            ic_wire::encode(
-                &Request {
-                    slot: ChildId::FIRST,
-                    value: too_large,
-                },
-                ic_wire::Encoding::Frame {
-                    method: children::STAGE_UPGRADE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
-        )
-        .await
-        .unwrap();
-    let refused: Result<upgrade::Status, Refusal> = ic_wire::decode(
-        &reply,
-        ic_wire::Encoding::Frame {
-            method: children::STAGE_UPGRADE,
-            direction: ic_wire::Direction::Response,
-        },
-        LIMITS,
-    )
-    .unwrap();
-    assert_eq!(refused, Err(Refusal::Artifact));
-    assert_eq!(read(pic, root).await, both);
     // Wrong-slot upgrade authority must not cross into its sibling's journal.
     for (slot, expected) in [(ChildId::SECOND, false), (ChildId::FIRST, true)] {
         let reply = pic
             .update_call(
                 root,
                 CanisterId::anonymous(),
-                "stage_inline_child_upgrade",
-                ic_wire::encode(
-                    &Request {
+                "stage_child_upgrade",
+                store
+                    .frame(
+                        application::STAGE_CHILD_UPGRADE,
                         slot,
-                        value: change.clone(),
-                    },
-                    ic_wire::Encoding::Frame {
-                        method: children::STAGE_UPGRADE,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    STAGE_LIMITS,
-                )
-                .unwrap(),
+                        &change.approval,
+                        &change.wasm,
+                    )
+                    .await,
             )
             .await
             .unwrap();
         let admitted: Result<upgrade::Status, Refusal> = ic_wire::decode(
             &reply,
             ic_wire::Encoding::Frame {
-                method: children::STAGE_UPGRADE,
+                method: application::STAGE_CHILD_UPGRADE,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -445,26 +412,22 @@ async fn two_children_preserve_history_and_upgrade_independently() {
                 .update_call(
                     root,
                     CanisterId::anonymous(),
-                    "stage_inline_child_upgrade",
-                    ic_wire::encode(
-                        &Request {
+                    "stage_child_upgrade",
+                    store
+                        .frame(
+                            application::STAGE_CHILD_UPGRADE,
                             slot,
-                            value: change,
-                        },
-                        ic_wire::Encoding::Frame {
-                            method: children::STAGE_UPGRADE,
-                            direction: ic_wire::Direction::Request,
-                        },
-                        STAGE_LIMITS,
-                    )
-                    .unwrap(),
+                            &change.approval,
+                            &change.wasm,
+                        )
+                        .await,
                 )
                 .await
                 .unwrap();
             let admitted: Result<upgrade::Status, Refusal> = ic_wire::decode(
                 &reply,
                 ic_wire::Encoding::Frame {
-                    method: children::STAGE_UPGRADE,
+                    method: application::STAGE_CHILD_UPGRADE,
                     direction: ic_wire::Direction::Response,
                 },
                 LIMITS,
@@ -487,14 +450,14 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             .iter()
             .all(|c| c.upgrades.len() == upgrade::MAX_UPGRADES)
     );
-    let replay = admit(pic, root, ChildId::SECOND, second.clone())
+    let replay = admit(pic, root, &store, ChildId::SECOND, second.clone())
         .await
         .unwrap();
     assert_eq!(replay.worker, both[1].creation.worker);
     let mut changed = second;
     changed.approval.expires_at_ns += 1;
     assert_eq!(
-        admit(pic, root, ChildId::SECOND, changed).await,
+        admit(pic, root, &store, ChildId::SECOND, changed).await,
         Err(Refusal::Occupied)
     );
     canic_qualification::upgrade_stopped(pic, root, artifact("root.wasm"), vec![], None)
@@ -505,7 +468,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     let subnet = pic.get_subnet(root).await.unwrap();
     assert_eq!(
         pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
-        3
+        4
     );
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
@@ -536,6 +499,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
         .unwrap();
     let pic = owner.client();
     let root = pic.create_canister().await;
+    let store = ChildStore::install(pic, root, artifact("store.wasm")).await;
     pic.install_canister(root, artifact("faults.wasm"), vec![], None)
         .await;
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
@@ -560,8 +524,12 @@ async fn lost_creation_callback_does_not_block_sibling() {
     )
     .await
     .unwrap();
-    admit(pic, root, ChildId::FIRST, first).await.unwrap();
-    admit(pic, root, ChildId::SECOND, second).await.unwrap();
+    admit(pic, root, &store, ChildId::FIRST, first)
+        .await
+        .unwrap();
+    admit(pic, root, &store, ChildId::SECOND, second)
+        .await
+        .unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     let evidence = read(pic, root).await;
@@ -607,26 +575,22 @@ async fn lost_creation_callback_does_not_block_sibling() {
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_inline_child_upgrade",
-            ic_wire::encode(
-                &Request {
-                    slot: ChildId::SECOND,
-                    value: change.clone(),
-                },
-                ic_wire::Encoding::Frame {
-                    method: children::STAGE_UPGRADE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
+            "stage_child_upgrade",
+            store
+                .frame(
+                    application::STAGE_CHILD_UPGRADE,
+                    ChildId::SECOND,
+                    &change.approval,
+                    &change.wasm,
+                )
+                .await,
         )
         .await
         .unwrap();
     let admitted: Result<upgrade::Status, Refusal> = ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: children::STAGE_UPGRADE,
+            method: application::STAGE_CHILD_UPGRADE,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,
@@ -651,19 +615,15 @@ async fn lost_creation_callback_does_not_block_sibling() {
             .update_call(
                 root,
                 CanisterId::anonymous(),
-                "reconcile_inline_child_upgrade",
-                ic_wire::encode(
-                    &Request {
+                "reconcile_child_upgrade",
+                store
+                    .frame(
+                        application::RECONCILE_CHILD_UPGRADE,
                         slot,
-                        value: change.approval.clone(),
-                    },
-                    ic_wire::Encoding::Frame {
-                        method: children::RECONCILE_UPGRADE,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    LIMITS,
-                )
-                .unwrap(),
+                        &change.approval,
+                        &change.wasm,
+                    )
+                    .await,
             )
             .await;
         assert_eq!(result.is_ok(), slot == ChildId::SECOND);
@@ -677,7 +637,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
     let subnet = pic.get_subnet(root).await.unwrap();
     assert_eq!(
         pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
-        3
+        4
     );
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
@@ -717,19 +677,24 @@ async fn child_admission_reserves_siblings_unissued_attachment() {
         )
         .await
         .unwrap();
+    let store = ChildStore::install(pic, root, artifact("store.wasm")).await;
     pic.install_canister(root, artifact("root.wasm"), vec![], None)
         .await;
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
     let first = input(root, artifact("app.wasm"), now);
     let second = input(root, artifact("app-v2.wasm"), now);
-    admit(pic, root, ChildId::FIRST, first).await.unwrap();
+    admit(pic, root, &store, ChildId::FIRST, first)
+        .await
+        .unwrap();
     assert_eq!(
-        admit(pic, root, ChildId::SECOND, second.clone()).await,
+        admit(pic, root, &store, ChildId::SECOND, second.clone()).await,
         Err(Refusal::Reserve)
     );
     assert_eq!(read(pic, root).await[1].creation, Status::default());
     pic.add_cycles(root, 1_000_000_000_000).await;
-    admit(pic, root, ChildId::SECOND, second).await.unwrap();
+    admit(pic, root, &store, ChildId::SECOND, second)
+        .await
+        .unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     let evidence = read(pic, root).await;

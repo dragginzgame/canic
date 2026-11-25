@@ -394,17 +394,18 @@ async fn observe(
     icp: &Path,
     client: &ReadClient,
 ) -> Result<(usize, Option<protocol::Status>)> {
-    for index in 0..OBSERVATIONS {
-        let path = dir.join(format!("publication/observe/{index}"));
-        if path.join("reply.bin").try_exists().map_err(supplier)? {
-            continue;
-        }
-        let reply = signed::observe_operation(&path, plan, identity, icp, client).await?;
-        return Ok((index, decode_observation(&reply, expected)?));
-    }
-    Err(Error::Blocked(
-        "publication observation budget exhausted; retained evidence is unchanged".into(),
-    ))
+    let (index, path) = store::next_observation(
+        &dir.join("publication/observe"),
+        OBSERVATIONS,
+        &["reply.bin"],
+    )?
+    .ok_or_else(|| {
+        Error::Blocked(
+            "publication observation budget exhausted; retained evidence is unchanged".into(),
+        )
+    })?;
+    let reply = signed::observe_operation(&path, plan, identity, icp, client).await?;
+    Ok((index, decode_observation(&reply, expected)?))
 }
 
 pub(crate) async fn apply(

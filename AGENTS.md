@@ -52,7 +52,7 @@ installer, never by editing installed bytes.
 - The operator bootstraps Root. Root installs every other managed fleet canister.
   Use Root's retained installation evidence for directory publication. A hub's
   application parentage and its ability to request children are separate from installation.
-- The managed starter uses a Root, separate versioned Wasm Store and application
+- Every Canic app uses a Root, mandatory separate versioned Wasm Store and application
   children. Root owns effect authority and retained evidence; Store owns durable
   artifact bytes, immutable releases and pins. Do not grow Root into an artifact
   repository or implicitly migrate retained inline fleets. Cascading discovery,
@@ -217,8 +217,9 @@ current journeys and remaining gates; do not substitute sibling working trees.
   reply rollback. Mounts grant no enrollment, storage or timer authority. Lost
   volatile replay/revocation state stays closed; fresh enrollment is not recovery.
   A receiver grant allows application upgrades. Volatile receivers stay closed
-  afterward. Stable receivers require a fresh Root refresh. A Root with retained
-  grant approvals remains fenced until its grant and revocation transition qualifies.
+  afterward. Stable receivers require a fresh Root refresh. An Auth-enabled Root loses
+  volatile grant history on upgrade, even with zero prior grants.
+  Worker reset, retirement and reserve imports stay fenced afterward.
 - Issuers own intents/renewal/results/pruning; reconciliation is lookup-only.
   Local signers do not qualify production keys or external signing recovery.
   Logout passes the captured caller; account fields are selectors. Browser code

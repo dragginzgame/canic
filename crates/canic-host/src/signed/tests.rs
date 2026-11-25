@@ -53,6 +53,23 @@ pub(crate) fn controller() -> String {
     ic_platform_types::Principal::self_authenticating(public_key()).to_text()
 }
 
+fn child_source() -> crate::StoredArtifact {
+    crate::StoredArtifact {
+        maintenance: None,
+        store: crate::UpgradeTarget {
+            canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+            module: "22".repeat(32),
+        },
+        manifest: crate::publication::release_manifest(
+            ic_wasm_store_protocol::Release {
+                name: "child".into(),
+                version: "v1".into(),
+            },
+            b"test",
+        ),
+    }
+}
+
 fn public_key() -> Vec<u8> {
     let mut der = crate::unhex("302a300506032b6570032100").unwrap();
     der.extend_from_slice(SigningKey::from_bytes(&[9; 32]).verifying_key().as_bytes());
@@ -184,7 +201,7 @@ async fn recovery_retains_exact_attempt_and_deadline_after_effect_expiry() {
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
         arguments: None,
         blob_attempt: None,
-        source: None,
+        source: Some(child_source()),
         slot: None,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
@@ -489,7 +506,7 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
         arguments: None,
         blob_attempt: None,
-        source: None,
+        source: Some(child_source()),
         slot: None,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
@@ -537,7 +554,7 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
         ));
     }
     // Even the correct read method cannot use arbitrary payload bytes.
-    call.method = "observe_upgrade";
+    call.method = "observe_root_custody";
     assert!(matches!(
         super::observe(
             &dir,
@@ -555,12 +572,12 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
 }
 
 #[tokio::test]
-async fn scoped_observation_rejects_sibling_and_legacy_payloads_before_signing() {
+async fn stored_observation_rejects_other_contracts_before_signing() {
     let (_, mut plan, _) = fixture();
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
         arguments: None,
         blob_attempt: None,
-        source: None,
+        source: Some(child_source()),
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
         execute_at_ns: 1,
@@ -568,16 +585,9 @@ async fn scoped_observation_rejects_sibling_and_legacy_payloads_before_signing()
     });
     let client = plan.network.client().unwrap();
     let dir = crate::tests::directory();
-    for slot in [
-        None,
-        Some(canic_management_protocol::children::ChildId::FIRST),
-    ] {
-        let mut other = plan.clone();
-        let crate::PlanAction::CreateChild(owner) = &mut other.action else {
-            panic!("child creation")
-        };
-        owner.slot = slot;
-        let call = crate::managed::observation(&other).unwrap();
+    for method in ["observe_child", "observe", "observe_child_deployments"] {
+        let mut call = crate::managed::observation(&plan).unwrap();
+        call.method = method;
         assert!(matches!(
             super::observe(
                 &dir,

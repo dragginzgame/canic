@@ -226,7 +226,7 @@ root-test:
 
 root-clippy:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-directory-witness --target wasm32-unknown-unknown -- -D warnings
-	cargo clippy --locked -p canic-management-protocol -p canic-management -p canic-root --features backup,canic-management/sharding,canic-root/child-management --all-targets -- -D warnings
+	cargo clippy --locked -p canic-management-protocol -p canic-management -p canic-root --features backup,canic-management/sharding --all-targets -- -D warnings
 	cargo clippy --locked -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test root --test endpoints -- -D warnings
 

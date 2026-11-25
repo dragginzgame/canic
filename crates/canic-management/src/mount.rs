@@ -5,16 +5,16 @@
 /// Names are the existing exports: `status`, `observe`, `observe_custody`, `stage`, `reconcile`,
 /// `stage_upgrade`, `upgrade_status`, `observe_upgrade`, `reconcile_upgrade`,
 /// and (only with the supplier's `fault-injection` feature) `inject_fault`.
-/// Child-scoped selections: `child_status`, `child_upgrade_status`, `observe_child`, `observe_children`,
-/// `stage_inline_child_creation`, `reconcile_inline_child_creation`, `stage_inline_child_upgrade`, `observe_child_upgrade`,
+/// Child-scoped selections: `child_status`, `child_upgrade_status`, `observe_child_status`, `observe_children`,
+/// `stage_inline_child_creation`, `reconcile_inline_child_creation`, `stage_inline_child_upgrade`,
 /// `reconcile_inline_child_upgrade` and test-only `inject_child_fault`.
 /// Root uses `stage_child_creation` and `reconcile_child_creation` for Store-backed creation,
 /// and `stage_child_upgrade` and `reconcile_child_upgrade` for code upgrades.
 /// `publish_store_artifact` mounts a separate, controller-only bounded publication call.
 /// `observe_store` reads initialized Store state through Root without claiming deployment.
 /// Its custody variant reads one release and all pins on its shared artifact.
-/// `store_admission` forwards an exact Store close/observe/activate command, not an upgrade.
-/// `store_removal` forwards one exact deletion/cancellation; the caller owns settlement custody.
+/// `change_store_admission` forwards an exact Store close or activate command, not an upgrade.
+/// `remove_store_artifact` forwards one exact deletion/cancellation; the caller owns settlement custody.
 /// `stage_store_maintenance`, `advance_store_maintenance` and `observe_store_maintenance`
 /// retain and recover Root-owned closure/stopping.
 /// `install_store_maintenance` supplies approved replacement bytes; `activate_store_maintenance`
@@ -22,6 +22,8 @@
 /// `store_maintenance_status` reports the same retained metadata as an uncertified public query.
 /// `recover_store_maintenance` retains observed outcomes without issuing fresh maintenance effects.
 /// `observe_root_custody` reads all service children, artifact sources, lifecycle inputs and Store history.
+/// `observe_child_deployments` reads retained deployment evidence on placement Roots.
+/// `activate_application_upgrade` activates an approved Blob application upgrade.
 /// Pass an approval to `observe_store_maintenance` to read its exact retained outcome.
 /// Duplicate selections fail compilation. Unknown names have no expansion.
 /// This mounts no lifecycle hooks, storage, timers or readiness policy.
@@ -80,13 +82,13 @@ macro_rules! mount_endpoints {
             [] () -> Option<$crate::endpoint::protocol::store_maintenance::Status>,
             $crate::store_maintenance::observe());
     };
-    (@select store_removal) => {
-        $crate::mount_endpoints!(@method store_removal, "store_removal", update, true, publication::REMOVE, publication::REMOVAL_LIMITS,
+    (@select remove_store_artifact) => {
+        $crate::mount_endpoints!(@method remove_store_artifact, "remove_store_artifact", update, true, publication::REMOVE, publication::REMOVAL_LIMITS,
             [async] (input: $crate::endpoint::protocol::publication::RemovalRequest) -> $crate::endpoint::protocol::publication::RemovalReply,
             $crate::publication::remove(input).await);
     };
-    (@select store_admission) => {
-        $crate::mount_endpoints!(@method store_admission, "store_admission", update, true, publication::ADMISSION, LIMITS,
+    (@select change_store_admission) => {
+        $crate::mount_endpoints!(@method change_store_admission, "change_store_admission", update, true, publication::ADMISSION, LIMITS,
             [async] (input: $crate::endpoint::protocol::publication::AdmissionRequest) -> $crate::endpoint::protocol::publication::AdmissionReply,
             $crate::publication::admission(input).await);
     };
@@ -190,10 +192,16 @@ macro_rules! mount_endpoints {
             [] (input: $crate::endpoint::protocol::children::ChildId) -> $crate::endpoint::protocol::Status,
             $crate::children::status(input));
     };
-    (@select observe_child) => {
-        $crate::mount_endpoints!(@method observe_child, "observe_child", update, true, children::STATUS, LIMITS,
-            [] (input: $crate::endpoint::protocol::children::ChildId) -> $crate::endpoint::protocol::Status,
-            $crate::children::status(input));
+    (@select observe_child_status) => {
+        $crate::mount_endpoints!(@method observe_child_status, "observe_child_status", update, true, children::OBSERVE_STATUS, LIMITS,
+            [] (input: $crate::endpoint::protocol::children::ObserveStatus) -> $crate::endpoint::protocol::children::ObservedStatus,
+            {
+                use $crate::endpoint::protocol::children::{ObserveStatus, ObservedStatus};
+                match input {
+                    ObserveStatus::Creation(slot) => ObservedStatus::Creation($crate::children::status(slot)),
+                    ObserveStatus::Upgrade(request) => ObservedStatus::Upgrade($crate::children::observe_upgrade(request.slot, &request.value)),
+                }
+            });
     };
     (@select stage_inline_child_creation) => {
         $crate::mount_endpoints!(@method stage_inline_child_creation, "stage_inline_child_creation", update, true, children::STAGE, STAGE_LIMITS,
@@ -209,11 +217,6 @@ macro_rules! mount_endpoints {
         $crate::mount_endpoints!(@method stage_inline_child_upgrade, "stage_inline_child_upgrade", update, true, children::STAGE_UPGRADE, STAGE_LIMITS,
             [] (input: $crate::endpoint::protocol::children::Request<$crate::endpoint::protocol::upgrade::Stage>) -> Result<$crate::endpoint::protocol::upgrade::Status, $crate::endpoint::protocol::Refusal>,
             $crate::children::stage_upgrade(input.slot, input.value));
-    };
-    (@select observe_child_upgrade) => {
-        $crate::mount_endpoints!(@method observe_child_upgrade, "observe_child_upgrade", update, true, children::OBSERVE_UPGRADE, LIMITS,
-            [] (input: $crate::endpoint::protocol::children::Request<$crate::endpoint::protocol::upgrade::Approval>) -> $crate::endpoint::protocol::upgrade::Status,
-            $crate::children::observe_upgrade(input.slot, &input.value));
     };
     (@select child_upgrade_status) => {
         $crate::mount_endpoints!(@method child_upgrade_status, "child_upgrade_status", query, false, children::UPGRADE_STATUS, LIMITS,

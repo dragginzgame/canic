@@ -1,5 +1,4 @@
 [apps.ex-template]
-wasm_store = true
 
 [apps.ex-template.canisters.ex-template]
 role = "app"

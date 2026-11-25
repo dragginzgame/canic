@@ -346,7 +346,7 @@ fn store_declarations_cannot_use_the_greeting_child_contract() {
         "store",
         &"11".repeat(32),
         None,
-        None,
+        "",
         None,
         None,
     )
@@ -378,13 +378,13 @@ fn deployment_refuses_an_unpublished_release_before_reserving_the_child() {
             "app",
             &"11".repeat(32),
             None,
-            Some(&id),
+            &id,
             None,
             None,
         ),
         Err(Error::Blocked(_))
     ));
-    // Publication did not reserve the child: an ordinary independent approval still fits.
+    // Omitting the release cannot bypass publication.
     crate::create_managed_plan(
         &dir,
         &wasm,
@@ -393,10 +393,10 @@ fn deployment_refuses_an_unpublished_release_before_reserving_the_child() {
         "app",
         &"11".repeat(32),
         None,
-        None,
+        "",
         None,
         None,
     )
-    .unwrap();
+    .unwrap_err();
     std::fs::remove_dir_all(dir).unwrap();
 }

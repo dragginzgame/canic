@@ -22,7 +22,7 @@ async fn request(
 }
 
 async fn remove(root: &Client<'_>, input: &RemovalRequest) -> wire::RemovalReply {
-    root.update("store_removal", wire::REMOVE, input, STORE_LIMITS)
+    root.update("remove_store_artifact", wire::REMOVE, input, STORE_LIMITS)
         .await
 }
 
@@ -105,9 +105,21 @@ async fn root_removal_keeps_pins_labels_and_exact_identity_before_expired_author
     for (caller, args) in [
         (CanisterId::anonymous(), frame.clone()),
         (root.operator, vec![0]),
+        (
+            root.operator,
+            ic_wire::encode(
+                &input,
+                ic_wire::Encoding::Frame {
+                    method: 60,
+                    direction: ic_wire::Direction::Request,
+                },
+                STORE_LIMITS,
+            )
+            .unwrap(),
+        ),
     ] {
         assert!(
-            pic.update_call(root.id, caller, "store_removal", args)
+            pic.update_call(root.id, caller, "remove_store_artifact", args)
                 .await
                 .is_err()
         );
@@ -235,7 +247,7 @@ async fn root_cancellation_preserves_tombstone_and_lost_reply_never_becomes_a_re
     )
     .unwrap();
     assert!(
-        pic.update_call(root.id, root.operator, "store_removal", frame)
+        pic.update_call(root.id, root.operator, "remove_store_artifact", frame)
             .await
             .is_err()
     );

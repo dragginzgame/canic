@@ -15,5 +15,7 @@ cp "$v1" target/journey/hello-v1.wasm
 "$cli" artifact build --json --package canic-greeting-witness --manifest qualification/Cargo.toml --features greeting-v2 > target/journey/v2.json
 v2=$(jq -r '.wasm' target/journey/v2.json)
 cp "$v2" target/journey/hello-v2.wasm
+"$cli" artifact build --package canic-root --output target/journey/root.wasm
+"$cli" artifact build --package ic-wasm-store --output target/journey/store.wasm
 CANIC_CLI="$cli" CANIC_HELLO_V1="$root/target/journey/hello-v1.wasm" CANIC_HELLO_V2="$root/target/journey/hello-v2.wasm" \
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test journey -- --nocapture

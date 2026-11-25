@@ -1,5 +1,8 @@
 # Canic qualification
 
+Fresh fleet qualification always installs a separate Wasm Store. The greeting journey covers Root bootstrap, Store-backed child creation, signed admission replay, publication and upgrade. The publication suite exercises lost replies for named child operations. The profile fixture installs its isolated actors directly in PocketIC for ownership and storage tests. Its managed fleet journey runs in the Root suite. Historical inline journals and standalone approvals can be inspected with the current Host. Their original Host owns execution.
+
+
 Run the commands below from the repository root. Installed tests use a prepared local
 simulator and synthetic cycles. Prepare the simulator once with `make qualification-setup`.
 Set `IC_TESTKIT_SERVER_DIRECTORY` to use an existing prepared bundle. Signer and browser
@@ -138,7 +141,7 @@ The installed directory participant contributes one stable key to its existing
 bootstrap, initializes IC Timers and opens `canic_management::funding`. The
 parent mounts configure, stop and request. The child mounts the balance watcher.
 Root forwards the operator's exact grant to the managed parent. Use the Root
-client's `stop-child-funding CHILD --parent PARENT` for revocation. The directory suite checks the built funding exports and codec for placement with and without ongoing top-ups. Installed upgrades must preserve cancellation for a parent-held grant.
+client's `stop-child-funding CHILD --parent PARENT` for revocation. The directory suite checks the built funding exports and codec for baseline and role-enabled Roots. Installed upgrades must preserve cancellation for a parent-held grant.
 
 `bash scripts/dev/test-store.sh directory` exercises Root availability with two
 installed hubs. Each hub requests its first shard while Root is stopped. After

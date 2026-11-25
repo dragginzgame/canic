@@ -66,38 +66,39 @@ pub(crate) async fn apply(
     icp: &Path,
     reconcile: bool,
 ) -> Result<crate::ApplyOutcome> {
-    if let Some(auth) = receipt(dir, plan)? {
-        return Ok(crate::ApplyOutcome::Auth { auth });
-    }
     let path = dir.join("auth");
-    let prepared = path.join("signed.json").try_exists().map_err(supplier)?;
-    if reconcile && !prepared {
-        return Err(Error::Blocked(
-            "Auth reconciliation needs the original signed attempt; use apply first".into(),
-        ));
+    let auth = signed::RetainedAttempt {
+        plan,
+        identity,
+        icp,
+        reconcile,
     }
-    let client = plan.network.client()?;
-    {
-        let approval = plan.auth().expect("Auth caller");
-        for (target, controller) in [
-            (&approval.root, plan.controller.as_str()),
-            (
-                &approval.receiver,
-                approval.expected_receiver_controller(&plan.controller),
-            ),
-        ] {
-            let id = crate::network::principal(&target.canister)?;
-            operation::controllers(&client, id, controller).await?;
-            if operation::module(&client, id).await? != target.module {
-                return Err(Error::Blocked(
-                    "Auth installed code differs from approval".into(),
-                ));
+    .execute(
+        &path,
+        "Auth reconciliation needs the original signed attempt; use apply first",
+        "Auth has no retained response",
+        || receipt(dir, plan),
+        async |client| {
+            let approval = plan.auth().expect("Auth caller");
+            for (target, controller) in [
+                (&approval.root, plan.controller.as_str()),
+                (
+                    &approval.receiver,
+                    approval.expected_receiver_controller(&plan.controller),
+                ),
+            ] {
+                let id = crate::network::principal(&target.canister)?;
+                operation::controllers(client, id, controller).await?;
+                if operation::module(client, id).await? != target.module {
+                    return Err(Error::Blocked(
+                        "Auth installed code differs from approval".into(),
+                    ));
+                }
             }
-        }
-    }
-    signed::execute(&path, plan, &call(plan)?, identity, icp, &client).await?;
-    let auth = receipt(dir, plan)?
-        .ok_or_else(|| Error::Blocked("Auth has no retained response".into()))?;
+            call(plan)
+        },
+    )
+    .await?;
     Ok(crate::ApplyOutcome::Auth { auth })
 }
 

@@ -1,6 +1,6 @@
 //! Optional Blob lifecycle around the existing child upgrade effect owner.
 //! Supplier state decides admission. Issued calls are observed, never replaced.
-use super::{Artifact, STATE, application, management, upgrade};
+use super::{Artifact, STATE, application, upgrade};
 use canic::blob::{
     self,
     supplier::{
@@ -14,10 +14,7 @@ use canic_management_protocol::{
     children::ChildId,
     upgrade::Approval,
 };
-use ic_platform_protocol::{
-    management::{self as mgmt, CanisterArgs},
-    management_snapshots::Status as RuntimeStatus,
-};
+use ic_platform_protocol::management_snapshots::Status as RuntimeStatus;
 use ic_platform_runtime::{
     call::{Call, Wait},
     system as api,
@@ -153,41 +150,19 @@ async fn command(slot: ChildId, a: &Approval, activate: bool) -> Result<(), Fail
 }
 
 async fn runtime(slot: ChildId, a: &Approval, start: bool) -> Result<(), Failure> {
-    // Restart is a new effect too; observing a completed installation cannot
-    // renew its original deadline or consume the other children's reserve.
-    if api::time() > a.expires_at_ns
-        || ic_platform_runtime::raw::liquid_cycle_balance() < super::reserved_cycles()
-    {
-        return Err(Failure::Uncertain);
-    }
-    let bytes = CanisterArgs {
-        canister_id: Principal::from_text(&a.child).expect("retained child"),
-    }
-    .encode(1024)
-    .expect("management args");
-    issue(
-        slot,
-        if start {
-            Phase::StartIssued
-        } else {
-            Phase::StopIssued
-        },
-        if start { 2 } else { 1 },
-        &bytes,
-    );
-    let bytes = management(
-        if start {
-            "start_canister"
-        } else {
-            "stop_canister"
-        },
-        bytes,
-        0,
-    )
+    upgrade::dispatch_runtime_transition(slot, a, start, if start { 22 } else { 21 }, |bytes| {
+        issue(
+            slot,
+            if start {
+                Phase::StartIssued
+            } else {
+                Phase::StopIssued
+            },
+            if start { 2 } else { 1 },
+            bytes,
+        );
+    })
     .await?;
-    super::fault(slot, if start { 22 } else { 21 });
-    mgmt::decode_empty_response(&bytes, super::MANAGEMENT_LIMITS)
-        .map_err(|_| Failure::InvalidReply)?;
     observe(slot, a).await
 }
 

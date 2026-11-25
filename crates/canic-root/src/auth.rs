@@ -7,6 +7,7 @@ use ic_platform_runtime::{self as runtime, system as api};
 use std::{cell::RefCell, collections::BTreeMap};
 
 thread_local! {
+    // After upgrade, None fences grants until their history can be recovered.
     static STATE: RefCell<Option<BTreeMap<Principal, Authority>>> = const { RefCell::new(None) };
 }
 
@@ -14,7 +15,6 @@ pub(crate) fn fresh() {
     STATE.with_borrow_mut(|state| *state = Some(BTreeMap::new()));
 }
 
-// None after upgrade is closed, not an empty configuration to refill.
 /// Require a current controller of this Root.
 fn controller<const ID: u64>() -> Result<(), String> {
     canic::guard::require_controller()?;
@@ -41,7 +41,6 @@ fn configure_auth(grant: Grant) -> Result<(), Error> {
         if let Some(authority) = grants.get(&grant.receiver) {
             return authority.matches(&grant);
         }
-        #[cfg(feature = "child-management")]
         if !canic_management::sharding::standby::permits_enrollment(grant.receiver) {
             return Err(Error::Binding);
         }
@@ -137,11 +136,6 @@ fn endpoint_error(error: impl std::fmt::Debug) -> ! {
 }
 
 /// Check that this worker has no retained receiver authority before recycling it.
-#[cfg(any(
-    feature = "role-issuer",
-    feature = "child-creation",
-    feature = "reserve-pool"
-))]
 pub(crate) fn require_no_worker_grant(worker: Principal) -> Result<(), String> {
     STATE.with_borrow(|s| match s {
         Some(grants) if !grants.contains_key(&worker) => Ok(()),

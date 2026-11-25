@@ -155,6 +155,17 @@ pub async fn observe(
 ) -> canic_management_protocol::publication::ObservationReply {
     use canic_management_protocol::publication::{Observation, ObservationRequest};
     match input {
+        ObservationRequest::Admission(request) => {
+            // Occupied placement Roots fence Store admission, including this read.
+            #[cfg(feature = "sharding")]
+            if crate::sharding::occupied() {
+                api::trap("shard pool custody required");
+            }
+            let target = admit(&request.store, request.expires_at_ns)?;
+            store_admission_call(target, &store::AdmissionCommand::Observe)
+                .await
+                .map(Observation::Admission)
+        }
         ObservationRequest::ReleaseStatus(request) => {
             let target = admit(&request.store, request.expires_at_ns)?;
             if !request.release.valid() {
@@ -216,7 +227,7 @@ pub async fn observe_custody(
     Ok(custody)
 }
 
-/// Close, inspect or activate Store mutation admission under the current controller.
+/// Close or activate Store mutation admission under the current controller.
 /// Store retains its exact attempt. Root owns no installation journal through this call.
 /// # Errors
 /// Refuses invalid/expired targets, propagates Store refusals or reports transport uncertainty.
@@ -226,16 +237,26 @@ pub async fn admission(
     input: canic_management_protocol::publication::AdmissionRequest,
 ) -> canic_management_protocol::publication::AdmissionReply {
     let target = admit(&input.store, input.expires_at_ns)?;
-    if crate::engine::store_maintenance::active()
-        && input.command != store::AdmissionCommand::Observe
-    {
+    use canic_management_protocol::publication::AdmissionChange;
+    if crate::engine::store_maintenance::active() {
         return Err(Error::Maintenance);
     }
+    let command = match input.command {
+        AdmissionChange::Close(attempt) => store::AdmissionCommand::Close(attempt),
+        AdmissionChange::Activate(attempt) => store::AdmissionCommand::Activate(attempt),
+    };
+    store_admission_call(target, &command).await
+}
+
+async fn store_admission_call(
+    target: Principal,
+    command: &store::AdmissionCommand,
+) -> canic_management_protocol::publication::AdmissionReply {
     let reply: Result<Option<store::Admission>, store::Error> = store_call(
         target,
         "admission",
         store::ADMISSION,
-        &input.command,
+        command,
         Wait::Bounded { seconds: 5 },
     )
     .await?;

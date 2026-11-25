@@ -1,7 +1,7 @@
 //! Serial child upgrades with bounded immutable history and one active effect owner.
 use super::{
-    Artifact, MANAGEMENT_LIMITS, OBSERVING, STATE, State, delivery, failure, fault, management,
-    observing, reserved_cycles, response, schedule, snapshot,
+    Artifact, ChildEvidence, ChildObservation, MANAGEMENT_LIMITS, OBSERVING, STATE, State,
+    delivery, fault, management, observing, reserved_cycles, schedule, snapshot,
 };
 use canic_management_protocol::{
     Failure, Phase, Refusal,
@@ -13,13 +13,10 @@ use canic_management_protocol::{
     },
 };
 use ic_platform_protocol::{
-    management::{self as mgmt, CanisterArgs, CanisterStatus, InstallChunkedCodeArgs, InstallMode},
+    management::{self as mgmt, CanisterArgs, CanisterStatus, InstallMode},
     management_snapshots::Status as RuntimeStatus,
 };
-use ic_platform_runtime::{
-    call::{Call, Wait},
-    system as api,
-};
+use ic_platform_runtime::system as api;
 use ic_platform_types::Principal;
 
 /// Read committed upgrade evidence without dispatching work.
@@ -395,18 +392,7 @@ pub(super) fn next(slot: ChildId) -> Option<u64> {
 }
 
 pub(super) async fn inspect(a: &Approval) -> Result<CanisterStatus, Failure> {
-    let args = CanisterArgs {
-        canister_id: Principal::from_text(&a.child).map_err(|_| Failure::Mismatch)?,
-    }
-    .encode(1024)
-    .expect("status args");
-    let reply = management("canister_status", args, 0).await?;
-    let value = mgmt::decode_canister_status(&reply, MANAGEMENT_LIMITS)
-        .map_err(|_| Failure::InvalidReply)?;
-    if value.settings.controllers != [api::canister_self()] {
-        return Err(Failure::Mismatch);
-    }
-    Ok(value)
+    super::inspect_child(Principal::from_text(&a.child).map_err(|_| Failure::Mismatch)?).await
 }
 
 fn issue(slot: ChildId, index: usize, phase: UpgradePhase, bytes: &[u8]) {
@@ -493,10 +479,10 @@ pub(super) async fn step(slot: ChildId) {
             Ok(())
         }),
         UpgradePhase::Checked => {
-            let upload = delivery::upload(slot, true, a.module_hash, a.expires_at_ns);
-            issue(slot, 0, UpgradePhase::UploadIssued, &upload.bytes);
-            let result = upload
-                .send()
+            let result =
+                delivery::dispatch_upload(slot, true, a.module_hash, a.expires_at_ns, |bytes| {
+                    issue(slot, 0, UpgradePhase::UploadIssued, bytes)
+                })
                 .await
                 .map(|()| mutate(slot, |s| s.phase = UpgradePhase::Uploaded));
             fault(slot, 6); // Lost upload callback is recoverable from the chunk store.
@@ -522,29 +508,18 @@ pub(super) async fn step(slot: ChildId) {
                         mutate(slot, |s| s.phase = UpgradePhase::ReserveBlocked);
                         return;
                     }
-                    let (store, chunks) = delivery::layout(slot, true, a.module_hash);
-                    let bytes = InstallChunkedCodeArgs {
-                        mode: InstallMode::Upgrade(None),
-                        target_canister: Principal::from_text(&a.child).expect("retained child"),
-                        store_canister: Some(store),
-                        chunk_hashes_list: chunks,
-                        wasm_module_hash: a.module_hash.to_vec(),
-                        arg: super::application::arguments(slot, true),
-                        sender_canister_version: Some(api::canister_version()),
-                    }
-                    .encode(8192)
-                    .expect("upgrade args");
-                    issue(slot, 1, UpgradePhase::InstallIssued, &bytes);
-                    fault(slot, 7); // Trap rolls back dispatch and intent together.
-                    let result =
-                        management("install_chunked_code", bytes, 0)
-                            .await
-                            .and_then(|bytes| {
-                                mgmt::decode_empty_response(&bytes, MANAGEMENT_LIMITS)
-                                    .map_err(|_| Failure::InvalidReply)?;
-                                mutate(slot, |s| s.phase = UpgradePhase::Installed);
-                                Ok(())
-                            });
+                    let result = delivery::install(
+                        slot,
+                        InstallMode::Upgrade(None),
+                        Principal::from_text(&a.child).expect("retained child"),
+                        a.module_hash,
+                        |bytes| {
+                            issue(slot, 1, UpgradePhase::InstallIssued, bytes);
+                            fault(slot, 7);
+                        },
+                    )
+                    .await
+                    .map(|()| mutate(slot, |s| s.phase = UpgradePhase::Installed));
                     fault(slot, 8); // The upgrade may commit while its callback evidence rolls back.
                     result
                 }
@@ -566,6 +541,27 @@ pub(super) async fn step(slot: ChildId) {
 // Stop/start have no caller-supplied payload beyond the immutable approved child.
 // Their issued phases are durable fences. No observation path can reissue them.
 async fn runtime_transition(slot: ChildId, a: &Approval, start: bool) -> Result<(), Failure> {
+    dispatch_runtime_transition(slot, a, start, if start { 25 } else { 24 }, |_| {
+        mutate(slot, |s| {
+            s.phase = if start {
+                UpgradePhase::StartIssued
+            } else {
+                UpgradePhase::StopIssued
+            };
+            s.failure = Some(Failure::Uncertain);
+        });
+    })
+    .await?;
+    observe_runtime(slot, a, start).await
+}
+
+pub(super) async fn dispatch_runtime_transition(
+    slot: ChildId,
+    a: &Approval,
+    start: bool,
+    fault_point: u8,
+    issue: impl FnOnce(&[u8]),
+) -> Result<(), Failure> {
     if api::time() > a.expires_at_ns
         || ic_platform_runtime::raw::liquid_cycle_balance() < reserved_cycles()
     {
@@ -576,14 +572,7 @@ async fn runtime_transition(slot: ChildId, a: &Approval, start: bool) -> Result<
     }
     .encode(1024)
     .expect("bounded management target");
-    mutate(slot, |s| {
-        s.phase = if start {
-            UpgradePhase::StartIssued
-        } else {
-            UpgradePhase::StopIssued
-        };
-        s.failure = Some(Failure::Uncertain);
-    });
+    issue(&args);
     let reply = management(
         if start {
             "start_canister"
@@ -594,9 +583,8 @@ async fn runtime_transition(slot: ChildId, a: &Approval, start: bool) -> Result<
         0,
     )
     .await?;
-    fault(slot, if start { 25 } else { 24 });
-    mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)?;
-    observe_runtime(slot, a, start).await
+    fault(slot, fault_point);
+    mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)
 }
 
 async fn observe_runtime(slot: ChildId, a: &Approval, start: bool) -> Result<(), Failure> {
@@ -639,37 +627,14 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
         super::blob::observe(slot, a).await?;
         mutate(slot, |s| s.failure = None);
     }
-    match s.phase {
-        UpgradePhase::StopIssued => observe_runtime(slot, a, false).await?,
-        UpgradePhase::StartIssued => observe_runtime(slot, a, true).await?,
-        UpgradePhase::Scheduled if delivery::needs_pin(slot, true) => {
-            if delivery::source(slot, true).expect("Store source").state == stored::PinState::Issued
-            {
-                delivery::pin(slot, true).await?;
-                mutate(slot, |s| s.failure = None);
-            }
-        }
-        UpgradePhase::UploadIssued => {
-            delivery::observe_cache(slot, true, a.module_hash).await?;
-            mutate(slot, |s| {
-                s.phase = UpgradePhase::Uploaded;
-                s.failure = None;
-            });
-        }
-        UpgradePhase::InstallIssued | UpgradePhase::Installed => {
-            let value = inspect(a).await?;
-            if value.module_hash.as_deref() != Some(a.module_hash.as_slice())
-                || Some(value.version) != s.previous_version.and_then(|v| v.checked_add(1))
-            {
-                return Err(Failure::Mismatch);
-            }
-            mutate(slot, |s| {
-                s.phase = UpgradePhase::Verified;
-                s.observed_version = Some(value.version);
-                s.failure = None;
-            });
-        }
-        UpgradePhase::Verified if super::application::lifecycle(slot).is_none() => {}
+    let child = || Principal::from_text(&a.child).expect("retained child");
+    let step = match s.phase {
+        UpgradePhase::StopIssued => return observe_runtime(slot, a, false).await,
+        UpgradePhase::StartIssued => return observe_runtime(slot, a, true).await,
+        UpgradePhase::Scheduled => ChildObservation::Pin,
+        UpgradePhase::UploadIssued => ChildObservation::Upload,
+        UpgradePhase::InstallIssued | UpgradePhase::Installed => ChildObservation::Install(child()),
+        UpgradePhase::Verified if super::application::lifecycle(slot).is_none() => return Ok(()),
         UpgradePhase::Verified | UpgradePhase::Started | UpgradePhase::Ready => {
             #[cfg(feature = "blob")]
             if super::application::lifecycle(slot).is_some()
@@ -677,25 +642,31 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
             {
                 return Ok(());
             }
-            let readiness =
-                STATE.with_borrow(|state| state.as_ref().expect("state").readiness.clone());
-            let reply = Call::new(
-                Principal::from_text(&a.child).expect("retained child"),
-                readiness.method,
-                Wait::Bounded { seconds: 5 },
-            )
-            .owned_args(readiness.request)
-            .execute()
-            .await
-            .map_err(failure)
-            .and_then(response)?;
-            (readiness.accept)(&reply)?;
+            ChildObservation::Readiness(child())
+        }
+        _ => return Ok(()),
+    };
+    match super::observe_child(slot, true, a.module_hash, step).await? {
+        ChildEvidence::Unchanged => (),
+        ChildEvidence::Pinned => mutate(slot, |s| s.failure = None),
+        ChildEvidence::Uploaded => mutate(slot, |s| {
+            s.phase = UpgradePhase::Uploaded;
+            s.failure = None;
+        }),
+        ChildEvidence::Installed { version, .. } => {
+            if Some(version) != s.previous_version.and_then(|v| v.checked_add(1)) {
+                return Err(Failure::Mismatch);
+            }
             mutate(slot, |s| {
-                s.phase = UpgradePhase::Ready;
+                s.phase = UpgradePhase::Verified;
+                s.observed_version = Some(version);
                 s.failure = None;
             });
         }
-        _ => {}
+        ChildEvidence::Ready => mutate(slot, |s| {
+            s.phase = UpgradePhase::Ready;
+            s.failure = None;
+        }),
     }
     Ok(())
 }

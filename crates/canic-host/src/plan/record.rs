@@ -112,7 +112,7 @@ impl TryFrom<PlanRecord> for Plan {
             }
             PlanAction::Auth(value)
         } else if let Some(value) = removal {
-            if version != 4 || has_deployment_fields {
+            if !matches!(version, 4 | 11) || has_deployment_fields {
                 return Err(invalid());
             }
             PlanAction::Remove(value)

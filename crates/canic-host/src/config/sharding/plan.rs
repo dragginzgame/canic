@@ -92,8 +92,8 @@ pub(crate) fn preview(
             let mut prior = approval.clone();
             prior.max_shards = old;
             increases.push(grant(
-                stored::IncreasePool::Shards(prior, approval.max_shards),
-                stored::INCREASE_POOL,
+                stored::IncreasePoolLimit::Shards(prior, approval.max_shards),
+                stored::INCREASE_POOL_LIMIT,
             )?);
         }
         let input = (approval.pool.clone(), pool.keys_per_shard);
@@ -121,8 +121,8 @@ pub(crate) fn preview(
             let mut prior = instance.approval.clone();
             prior.max_instances = old;
             increases.push(grant(
-                stored::IncreasePool::Instances(prior, instance.approval.max_instances),
-                stored::INCREASE_POOL,
+                stored::IncreasePoolLimit::Instances(prior, instance.approval.max_instances),
+                stored::INCREASE_POOL_LIMIT,
             )?);
         }
         Some(instance)
@@ -155,7 +155,7 @@ pub(crate) fn preview(
             max_children,
             allow_large_subnet: fleet.allow_large_subnet,
         },
-        stored::CONFIGURE_CAPACITY,
+        stored::CONFIGURE_SUBNET_CAPACITY,
     )?);
 
     if instances.is_none() && workers.is_empty() && standby.is_none() && shards.len() == 1 {

@@ -110,10 +110,13 @@ async fn refuse_old_backing(root: &Client<'_>) {
     )
     .await
     .expect_err("fresh Root cannot reopen the old allocator");
+    // Optimized builds may expose a Wasm trap without Rust panic symbols.
     assert!(
-        error
-            .reject_message
-            .contains("canic_management::engine::open"),
+        matches!(
+            error.error_code,
+            ic_testkit::pocket_ic::ErrorCode::CanisterTrapped
+                | ic_testkit::pocket_ic::ErrorCode::CanisterCalledTrap
+        ),
         "{error:?}"
     );
     assert_eq!(status().await.unwrap().module_hash, Some(module));
@@ -469,24 +472,22 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
     )
     .await
     .unwrap();
-    let wasm = std::fs::read(artifacts().join("app.wasm")).unwrap();
-    let inline = management::Stage {
+    let sibling = stored::Stage {
         approval: management::Approval {
-            module_hash: management::digest(&wasm),
             execute_at_ns: now + 5_000_000_000,
             expires_at_ns: now + 200_000_000_000,
             ..input.approval.clone()
         },
-        wasm,
+        reference: input.reference.clone(),
     };
     root.update::<_, Result<management::Status, management::Refusal>>(
-        "stage_inline_child_creation",
-        children::STAGE,
+        "stage_child_creation",
+        management::application::STAGE_CHILD_CREATION,
         &Request {
             slot: ChildId::SECOND,
-            value: inline,
+            value: management::application::Deployment::<_, ()>::Stored(&sibling),
         },
-        management::STAGE_LIMITS,
+        stored::LIMITS,
     )
     .await
     .unwrap();
@@ -504,7 +505,10 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
         upgraded.sources[0].as_ref().unwrap().upgrades[0]
     );
     assert_eq!(history.children[1].creation.phase, management::Phase::Ready);
-    assert!(history.sources[1].is_none());
+    assert_eq!(
+        history.sources[1].as_ref().unwrap().creation.reference,
+        sibling.reference
+    );
     let old = root
         .update::<_, Result<upgrade::Status, management::Refusal>>(
             "stage_child_upgrade",

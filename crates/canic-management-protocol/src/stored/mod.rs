@@ -217,11 +217,11 @@ pub enum RefillStatus {
 
 #[cfg(feature = "standby")]
 /// Unsigned read of the active Root policy and its inventory totals.
-pub struct ReadSpareCounts;
+pub struct ReadStandbyStatus;
 #[cfg(feature = "standby")]
-impl canic::method::Contract for ReadSpareCounts {
-    const NAME: &'static str = "spare_counts";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+impl canic::method::Contract for ReadStandbyStatus {
+    const NAME: &'static str = "standby_status";
+    const ID: u64 = ic_wire::method_id("canic.root.standby_status.v1");
     type Input = ();
     type Output = Option<SpareCounts>;
 }
@@ -293,11 +293,11 @@ impl canic::method::Contract for ConfigureStandby {
 
 #[cfg(feature = "standby")]
 /// Shared controller-approved subnet ceiling.
-pub struct ConfigureCapacity;
+pub struct ConfigureSubnetCapacity;
 #[cfg(feature = "standby")]
-impl canic::method::Contract for ConfigureCapacity {
-    const NAME: &'static str = "configure_capacity";
-    const ID: u64 = CONFIGURE_CAPACITY;
+impl canic::method::Contract for ConfigureSubnetCapacity {
+    const NAME: &'static str = "configure_subnet_capacity";
+    const ID: u64 = CONFIGURE_SUBNET_CAPACITY;
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = SubnetCapacity;
     type Output = Result<(), crate::Refusal>;
@@ -332,18 +332,19 @@ impl canic::method::Contract for ApproveChildCreation {
 }
 
 /// Admit the shared ceiling before configuring larger pools.
-pub const CONFIGURE_CAPACITY: u64 = ic_wire::method_id("canic.placement.configure_capacity.v1");
+pub const CONFIGURE_SUBNET_CAPACITY: u64 =
+    ic_wire::method_id("canic.placement.configure_subnet_capacity.v1");
 
 /// Count-only change bound to the complete previous grant.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum IncreasePool {
+pub enum IncreasePoolLimit {
     /// Current shared-shard grant and its new count.
     Shards(ShardPool, u8),
     /// Current dedicated-instance grant and its new count.
     Instances(InstancePool, u8),
 }
 /// Increase one pool count without renewing funding or time.
-pub const INCREASE_POOL: u64 = ic_wire::method_id("canic.placement.increase_pool.v1");
+pub const INCREASE_POOL_LIMIT: u64 = ic_wire::method_id("canic.placement.increase_pool_limit.v1");
 
 /// Supplier-owned Store frame budgets.
 pub const STORE_LIMITS: ic_wire::Limits = {

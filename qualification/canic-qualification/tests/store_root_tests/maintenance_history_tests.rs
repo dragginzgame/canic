@@ -101,7 +101,7 @@ async fn root_retains_store_successors_across_upgrade_and_refuses_stale_authorit
     supplier
         .pin(&store::Pin {
             operation: [93; 32],
-            manifest,
+            manifest: manifest.clone(),
         })
         .await;
     let approval = first::stopped(&root, &supplier, &candidate).await;
@@ -330,7 +330,9 @@ async fn root_retains_store_successors_across_upgrade_and_refuses_stale_authorit
     )
     .await
     .unwrap();
-    quiescence_tests::child_stage(&root).await.unwrap();
+    quiescence_tests::child_stage(&root, &supplier, &manifest)
+        .await
+        .unwrap();
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

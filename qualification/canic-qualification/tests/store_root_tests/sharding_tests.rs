@@ -27,8 +27,7 @@ async fn project(
 
 #[tokio::test(flavor = "current_thread")]
 async fn large_subnet_requires_exact_controller_opt_in() {
-    let (_, binary) = support::inputs();
-    let (mut server, owner) = support::instance(&binary).await;
+    let (mut server, owner) = support::instance(&canic_qualification::server_directory()).await;
     let pic = owner.client();
     let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
     let (root, _) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
@@ -41,7 +40,7 @@ async fn large_subnet_requires_exact_controller_opt_in() {
     let request = ic_wire::encode(
         &large,
         ic_wire::Encoding::Frame {
-            method: stored::CONFIGURE_CAPACITY,
+            method: stored::CONFIGURE_SUBNET_CAPACITY,
             direction: ic_wire::Direction::Request,
         },
         stored::LIMITS,
@@ -51,7 +50,7 @@ async fn large_subnet_requires_exact_controller_opt_in() {
         pic.update_call(
             root.id,
             pic.create_canister().await,
-            "configure_capacity",
+            "configure_subnet_capacity",
             request
         )
         .await
@@ -66,8 +65,8 @@ async fn large_subnet_requires_exact_controller_opt_in() {
     ] {
         assert_eq!(
             root.update::<_, Result<(), management::Refusal>>(
-                "configure_capacity",
-                stored::CONFIGURE_CAPACITY,
+                "configure_subnet_capacity",
+                stored::CONFIGURE_SUBNET_CAPACITY,
                 &approval,
                 stored::LIMITS
             )
@@ -75,13 +74,14 @@ async fn large_subnet_requires_exact_controller_opt_in() {
             expected
         );
     }
+    check_occupied_placement_endpoints(&root).await;
     pic.upgrade_canister(root.id, wasm, vec![], Some(root.operator))
         .await
         .unwrap();
     assert_eq!(
         root.update::<_, Result<(), management::Refusal>>(
-            "configure_capacity",
-            stored::CONFIGURE_CAPACITY,
+            "configure_subnet_capacity",
+            stored::CONFIGURE_SUBNET_CAPACITY,
             &grant(40_000, false),
             stored::LIMITS,
         )
@@ -93,6 +93,128 @@ async fn large_subnet_requires_exact_controller_opt_in() {
         ic_testkit::server::Deletion::Attempted
     );
     assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+async fn check_occupied_placement_endpoints(root: &Client<'_>) {
+    fn frame<T: serde::Serialize>(method: u64, value: &T) -> Vec<u8> {
+        ic_wire::encode(
+            value,
+            ic_wire::Encoding::Frame {
+                method,
+                direction: ic_wire::Direction::Request,
+            },
+            management::LIMITS,
+        )
+        .unwrap()
+    }
+    let pic = root.pic;
+    // Malformed input distinguishes admission from decoding without issuing effects.
+    for (method, fenced) in [
+        ("observe_root_custody", true),
+        ("change_store_admission", true),
+        ("remove_store_artifact", true),
+        ("stage_store_maintenance", true),
+        ("advance_store_maintenance", true),
+        ("install_store_maintenance", true),
+        ("activate_store_maintenance", true),
+        ("recover_store_maintenance", true),
+        ("observe_child_status", false),
+        ("observe_store_maintenance", false),
+        ("observe_store", false),
+        ("observe_child_deployments", false),
+        ("publish_store_artifact", false),
+        ("stage_child_creation", false),
+        ("reconcile_child_creation", false),
+        ("stage_child_upgrade", false),
+        ("reconcile_child_upgrade", false),
+    ] {
+        let reject = pic
+            .update_call(root.id, root.operator, method, vec![])
+            .await
+            .unwrap_err();
+        assert!(
+            reject.reject_message.contains("management endpoint"),
+            "{method}: {reject:?}"
+        );
+        assert_eq!(
+            reject
+                .reject_message
+                .contains("shard pool custody required"),
+            fenced,
+            "{method}: {reject:?}"
+        );
+    }
+    let read = management::publication::ObservationRequest::Admission(
+        management::publication::InfoRequest {
+            store: root.id.to_text(),
+            expires_at_ns: 0,
+        },
+    );
+    let denied = pic
+        .update_call(
+            root.id,
+            root.operator,
+            "observe_store",
+            frame(management::publication::OBSERVATION, &read),
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        denied
+            .reject_message
+            .contains("shard pool custody required"),
+        "{denied:?}"
+    );
+    for (name, args) in [
+        ("child_status", frame(children::STATUS, &ChildId::FIRST)),
+        (
+            "child_upgrade_status",
+            frame(
+                children::UPGRADE_STATUS,
+                &children::Request {
+                    slot: ChildId::FIRST,
+                    value: None::<management::upgrade::Approval>,
+                },
+            ),
+        ),
+        (
+            "store_maintenance_status",
+            frame(store_maintenance::STATUS, &()),
+        ),
+    ] {
+        pic.query_call(root.id, CanisterId::anonymous(), name, args)
+            .await
+            .unwrap();
+    }
+    let status = frame(children::STATUS, &ChildId::FIRST);
+    let outsider = CanisterId::anonymous();
+    let public = pic
+        .query_call(root.id, outsider, "child_status", status.clone())
+        .await
+        .unwrap();
+    let replicated = root.observe_creation(ChildId::FIRST).await;
+    let public: management::Status = ic_wire::decode(
+        &public,
+        ic_wire::Encoding::Frame {
+            method: children::STATUS,
+            direction: ic_wire::Direction::Response,
+        },
+        management::LIMITS,
+    )
+    .unwrap();
+    assert_eq!(public, replicated);
+    let status = frame(
+        children::OBSERVE_STATUS,
+        &children::ObserveStatus::Creation(ChildId::FIRST),
+    );
+    let denied = pic
+        .update_call(root.id, outsider, "observe_child_status", status)
+        .await
+        .unwrap_err();
+    assert!(
+        denied.reject_message.contains("controller required"),
+        "{denied:?}"
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -344,9 +466,7 @@ expires_at_ns={}
     assert!(pic.get_stable_memory(root.id).await == retained);
     assert_eq!(user(pic, hub, alice, "lookup").await, original);
     let slot = ChildId::placement(a.slot as usize).unwrap();
-    let journal: management::Status = root
-        .update("observe_child", children::STATUS, &slot, management::LIMITS)
-        .await;
+    let journal: management::Status = root.observe_creation(slot).await;
     let exact = management::application::Stage {
         source: stored::Stage {
             approval: journal.approval.clone().unwrap(),
@@ -644,15 +764,45 @@ expires_at_ns = {}
     assert_eq!(cap.max_children, 9);
     let changes = expanded["increases"].as_array().unwrap();
     assert_eq!(changes.len(), 2);
+    let old_request = |name| ic_wire::Encoding::Frame {
+        method: ic_wire::method_id(name),
+        direction: ic_wire::Direction::Request,
+    };
+    for (endpoint, bytes) in [
+        (
+            "configure_subnet_capacity",
+            ic_wire::encode(
+                &cap,
+                old_request("canic.placement.configure_capacity.v1"),
+                stored::LIMITS,
+            )
+            .unwrap(),
+        ),
+        (
+            "increase_pool_limit",
+            ic_wire::encode(
+                &stored::IncreasePoolLimit::Instances(projects.clone(), 6),
+                old_request("canic.placement.increase_pool.v1"),
+                stored::LIMITS,
+            )
+            .unwrap(),
+        ),
+    ] {
+        assert!(
+            pic.update_call(root.id, root.operator, endpoint, bytes)
+                .await
+                .is_err()
+        );
+    }
     for (item, endpoint, method) in std::iter::once((
         &expanded["capacity"],
-        "configure_capacity",
-        stored::CONFIGURE_CAPACITY,
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
     ))
     .chain(
         changes
             .iter()
-            .map(|item| (item, "increase_pool", stored::INCREASE_POOL)),
+            .map(|item| (item, "increase_pool_limit", stored::INCREASE_POOL_LIMIT)),
     ) {
         let req: Vec<u8> = serde_json::from_value(item["request"].clone()).unwrap();
         assert!(
@@ -689,9 +839,9 @@ expires_at_ns = {}
     ] {
         let result: Result<(), management::Refusal> = root
             .update(
-                "increase_pool",
-                stored::INCREASE_POOL,
-                &stored::IncreasePool::Instances(forged, 6),
+                "increase_pool_limit",
+                stored::INCREASE_POOL_LIMIT,
+                &stored::IncreasePoolLimit::Instances(forged, 6),
                 stored::LIMITS,
             )
             .await;
@@ -699,21 +849,21 @@ expires_at_ns = {}
     }
     let stale: Result<(), management::Refusal> = root
         .update(
-            "increase_pool",
-            stored::INCREASE_POOL,
-            &stored::IncreasePool::Instances(projects.clone(), 7),
+            "increase_pool_limit",
+            stored::INCREASE_POOL_LIMIT,
+            &stored::IncreasePoolLimit::Instances(projects.clone(), 7),
             stored::LIMITS,
         )
         .await;
     assert_eq!(stale, Err(management::Refusal::Occupied));
     for change in [
-        stored::IncreasePool::Instances(projects.clone(), 9),
-        stored::IncreasePool::Shards(approval.clone(), 9),
+        stored::IncreasePoolLimit::Instances(projects.clone(), 9),
+        stored::IncreasePoolLimit::Shards(approval.clone(), 9),
     ] {
         let result: Result<(), management::Refusal> = root
             .update(
-                "increase_pool",
-                stored::INCREASE_POOL,
+                "increase_pool_limit",
+                stored::INCREASE_POOL_LIMIT,
                 &change,
                 stored::LIMITS,
             )
@@ -929,8 +1079,8 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
     configure(&root, &approval).await.unwrap();
     // A large backstop alone cannot authorize spending on either pool.
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_capacity",
-        stored::CONFIGURE_CAPACITY,
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
         &stored::SubnetCapacity {
             allow_large_subnet: false,
             root: root.id.to_text(),
@@ -978,9 +1128,7 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
         Err(management::Refusal::Occupied)
     );
     for slot in ChildId::HISTORICAL_SERVICES {
-        let journal: management::Status = root
-            .update("observe_child", children::STATUS, &slot, management::LIMITS)
-            .await;
+        let journal: management::Status = root.observe_creation(slot).await;
         assert_eq!(journal.phase, management::Phase::Empty);
         assert_eq!(journal.attempts, [0; 3]);
     }
@@ -1084,8 +1232,8 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
         max_children: 2,
     };
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_capacity",
-        stored::CONFIGURE_CAPACITY,
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
         &ceiling,
         stored::LIMITS,
     )
@@ -1124,9 +1272,7 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
     );
     {
         let slot = ChildId::placement(original.slot as usize).unwrap();
-        let journal: management::Status = root
-            .update("observe_child", children::STATUS, &slot, management::LIMITS)
-            .await;
+        let journal: management::Status = root.observe_creation(slot).await;
 
         assert_eq!(journal.phase, management::Phase::CreateIssued);
         assert_eq!(journal.attempts, [1, 0, 0]);
@@ -1189,8 +1335,8 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
     let pic = owner.client();
     let (root, supplier, mut input, second) = fixture_with_module(pic, "pool-root.wasm").await;
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_capacity",
-        stored::CONFIGURE_CAPACITY,
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
         &stored::SubnetCapacity {
             allow_large_subnet: false,
             root: root.id.to_text(),
@@ -1356,8 +1502,8 @@ async fn approved_hub_recovers_its_first_growth_ordinal() {
     let (hub, mut grant) = fresh_user_shard_grant(&root, &store).await;
     grant.max_shards = 1;
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_capacity",
-        stored::CONFIGURE_CAPACITY,
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
         &stored::SubnetCapacity {
             allow_large_subnet: false,
             root: root.id.to_text(),
@@ -1567,8 +1713,8 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
     let mut grant = instance_grant(root.id, hub, shared.reference, shared.expires_at_ns);
     grant.max_instances = 3;
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_capacity",
-        stored::CONFIGURE_CAPACITY,
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
         &stored::SubnetCapacity {
             allow_large_subnet: false,
             root: root.id.to_text(),
@@ -1735,12 +1881,12 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
             .query_call(
                 root.id,
                 root.operator,
-                stored::ReadSpareCounts::NAME,
-                stored::ReadSpareCounts::encode_request(&()).unwrap(),
+                stored::ReadStandbyStatus::NAME,
+                stored::ReadStandbyStatus::encode_request(&()).unwrap(),
             )
             .await
             .unwrap();
-        stored::ReadSpareCounts::decode_reply(&reply)
+        stored::ReadStandbyStatus::decode_reply(&reply)
             .unwrap()
             .unwrap()
             .ready
@@ -1799,8 +1945,8 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
         sharding::standby::{Asset, Refill, RefillStandby},
     };
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_capacity",
-        stored::CONFIGURE_CAPACITY,
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
         &stored::SubnetCapacity {
             allow_large_subnet: false,
             root: root.id.to_text(),

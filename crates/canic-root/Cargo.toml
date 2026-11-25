@@ -20,39 +20,29 @@ required-features = ["operator-client"]
 operator-client = ["dep:clap", "dep:serde_json"]
 child-metrics = ["operator-client"]
 role-issuer = [
-    "child-management",
+    "operator-client",
     "canic-management/role-issuer",
     "canic-management-protocol/retirement",
 ]
-child-creation = ["child-management"]
-reserve-pool = ["child-management"]
-child-funding = ["child-management"]
-backup = ["canic-management/backup", "dep:serde"]
-child-management = [
-    "canic-management-protocol/standby",
-    "canic/sharding",
-    "canic-management/sharding",
-    "operator-client",
-    "dep:ic-platform-types",
-    "dep:serde",
-]
+reserve-pool = ["operator-client"]
+backup = ["canic-management/backup"]
 blob = ["canic-management/blob"]
 auth = ["canic/auth-enrollment", "canic-management/auth"]
 fault-injection = ["canic-management/fault-injection"]
 maintenance-candidate = ["canic-management/maintenance-candidate"]
 
-[dependencies]
-canic = { workspace = true, features = ["logging", "metrics"] }
-canic-management.workspace = true
-canic-management-protocol.workspace = true
-ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
-ic-platform-types = { workspace = true, optional = true }
-ic-wire.workspace = true
-serde = { workspace = true, optional = true }
-
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 clap = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
+
+[dependencies]
+canic = { workspace = true, features = ["logging", "metrics", "sharding"] }
+canic-management = { workspace = true, features = ["sharding"] }
+canic-management-protocol = { workspace = true, features = ["standby"] }
+ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
+ic-platform-types.workspace = true
+ic-wire.workspace = true
+serde.workspace = true
 
 [dev-dependencies]
 toko-tooling.workspace = true

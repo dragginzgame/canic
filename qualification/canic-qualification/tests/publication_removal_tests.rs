@@ -330,7 +330,7 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
     )
     .unwrap();
     let reply: wire::RemovalReply =
-        update(pic, root, "store_removal", wire::REMOVE, &request).await;
+        update(pic, root, "remove_store_artifact", wire::REMOVE, &request).await;
     assert_eq!(reply, Err(wire::Error::Expired));
     assert_eq!(pic.get_stable_memory(root).await, root_stable);
 

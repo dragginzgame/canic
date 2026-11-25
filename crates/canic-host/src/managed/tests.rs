@@ -31,47 +31,45 @@ fn selection() -> SelectedFleet {
     )
 }
 
+// Historical record for testing retained evidence independently of fresh planning.
+fn inline_record(dir: &Path, wasm: &Path) -> (String, Plan) {
+    let at = crate::now().unwrap();
+    plan::retain(
+        dir,
+        wasm,
+        input(),
+        Some(DeploymentName {
+            app: "starter".into(),
+            fleet: "mainnet".into(),
+            canister: "app".into(),
+        }),
+        Some(ManagedOwner {
+            root: selection().config.canisters["root"].id.clone().unwrap(),
+            root_module: "01".repeat(32),
+            execute_at_ns: at,
+            slot: Some(ChildId::FIRST),
+            arguments: None,
+            blob_attempt: None,
+            source: None,
+        }),
+        at,
+    )
+    .unwrap()
+}
+
 #[tokio::test]
 async fn recovery_requires_retained_admission_and_never_bootstraps_work() {
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let (id, plan) = create_managed_plan(
-        &dir,
-        &wasm,
-        input(),
-        &selection(),
-        "app",
-        &"01".repeat(32),
-        None,
-        None,
-        None,
-        None,
-    )
-    .unwrap();
+    let (id, plan) = inline_record(&dir, &wasm);
     let before = plan.clone();
     let result = crate::reconcile(&dir, &id, "must-not-run", Path::new("must-not-run")).await;
     assert!(matches!(result, Err(Error::Blocked(_))));
     assert!(!dir.join(&id).join("observe").exists());
     assert!(!dir.join(&id).join("stage").exists());
     assert_eq!(plan::load(&dir.join(&id), &id).unwrap().0, before);
-    let call = recovery::call(&plan).unwrap();
-    assert_eq!(call.method, "reconcile_inline_child_creation");
-    assert_eq!(
-        call.canister,
-        principal(plan.application_controller()).unwrap()
-    );
-    let bound: canic_management_protocol::children::Request<Approval> = ic_wire::decode(
-        &call.args,
-        ic_wire::Encoding::Frame {
-            method: canic_management_protocol::children::RECONCILE,
-            direction: ic_wire::Direction::Request,
-        },
-        LIMITS,
-    )
-    .unwrap();
-    assert_eq!(bound.slot, ChildId::FIRST);
-    assert_eq!(bound.value, approval(&plan).unwrap());
+    assert!(matches!(recovery::call(&plan), Err(Error::Blocked(_))));
     let mut unmanaged = plan;
     unmanaged.action = crate::PlanAction::Create {
         bootstrap: None,
@@ -86,19 +84,7 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let (id, plan) = create_managed_plan(
-        &dir,
-        &wasm,
-        input(),
-        &selection(),
-        "app",
-        &"01".repeat(32),
-        None,
-        None,
-        None,
-        None,
-    )
-    .unwrap();
+    let (id, plan) = inline_record(&dir, &wasm);
     let operation = dir.join(&id);
     let slot = operation.join("observe/0");
     crate::output_publication::prepare(&slot.join("reconcile"), 0o700).unwrap();
@@ -159,7 +145,7 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
     let selected = selection();
     assert!(crate::create_configured_plan(&dir, &wasm, input(), &selected, "app").is_err());
-    let (id, plan) = create_managed_plan(
+    let refusal = create_managed_plan(
         &dir,
         &wasm,
         input(),
@@ -167,11 +153,13 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
         "app",
         &"01".repeat(32),
         None,
-        None,
+        "",
         None,
         None,
     )
-    .unwrap();
+    .unwrap_err();
+    assert!(refusal.to_string().contains("--release"));
+    let (id, plan) = inline_record(&dir, &wasm);
     assert_eq!(plan.management().unwrap().execute_at_ns, plan.created_at_ns);
     assert_eq!(plan.expires_at_ns - plan.created_at_ns, 600_000_000_000);
     assert_eq!(
@@ -186,70 +174,6 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
         plan.application_controller(),
         selected.config.canisters["root"].id.as_ref().unwrap()
     );
-    assert_eq!(
-        create_managed_plan(
-            &dir,
-            &wasm,
-            input(),
-            &selected,
-            "app",
-            &"01".repeat(32),
-            None,
-            None,
-            None,
-            None,
-        )
-        .unwrap(),
-        (id.clone(), plan.clone())
-    );
-    assert_eq!(
-        create_managed_plan(
-            &dir,
-            &wasm,
-            input(),
-            &selected,
-            "app",
-            &"01".repeat(32),
-            Some(1),
-            None,
-            None,
-            None,
-        )
-        .unwrap(),
-        (id.clone(), plan.clone())
-    );
-    assert!(matches!(
-        create_managed_plan(
-            &dir,
-            &wasm,
-            input(),
-            &selected,
-            "app",
-            &"02".repeat(32),
-            None,
-            None,
-            None,
-            None,
-        ),
-        Err(Error::Blocked(_))
-    ));
-    let mut other = selected;
-    other.app = "another".into();
-    assert!(matches!(
-        create_managed_plan(
-            &dir,
-            &wasm,
-            input(),
-            &other,
-            "app",
-            &"01".repeat(32),
-            None,
-            None,
-            None,
-            None,
-        ),
-        Err(Error::Blocked(_))
-    ));
     let mut invalid = serde_json::to_value(&plan).unwrap();
     invalid["creation_cycles"] = serde_json::json!(plan.creation_cycles() + 1);
     assert!(serde_json::from_value::<Plan>(invalid).is_err());
@@ -280,19 +204,7 @@ fn managed_reply_preserves_binding_child_and_attempt_evidence() {
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let (_, plan) = create_managed_plan(
-        &dir,
-        &wasm,
-        input(),
-        &selection(),
-        "app",
-        &"01".repeat(32),
-        None,
-        None,
-        None,
-        None,
-    )
-    .unwrap();
+    let (_, plan) = inline_record(&dir, &wasm);
     let scheduled = Status {
         approval: Some(approval(&plan).unwrap()),
         phase: Phase::Scheduled,
@@ -388,7 +300,7 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
             "app",
             &root_hash,
             None,
-            None,
+            "",
             None,
             None,
         )
@@ -431,7 +343,7 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
             "app",
             &root_hash,
             None,
-            None,
+            "",
             None,
             None,
         )
@@ -453,12 +365,12 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
         }
         assert!(
             create_managed_plan(
-                &dir, &wasm, invalid, &selected, "app", &root_hash, None, None, None, None,
+                &dir, &wasm, invalid, &selected, "app", &root_hash, None, "", None, None,
             )
             .is_err()
         );
     }
-    let (id, plan) = create_managed_plan(
+    let refusal = create_managed_plan(
         &dir,
         &wasm,
         upgrade_input(),
@@ -466,70 +378,13 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
         "app",
         &root_hash,
         None,
-        None,
+        "",
         None,
         None,
     )
-    .unwrap();
-    assert_ne!(id, created_id);
-    assert_eq!(plan.management().unwrap().slot, slot);
-    assert_eq!(plan.target().map(String::as_str), Some(child));
-    assert_eq!(
-        plan.application_controller(),
-        created.application_controller()
-    );
-    assert_eq!(
-        create_managed_plan(
-            &dir,
-            &wasm,
-            upgrade_input(),
-            &selected,
-            "app",
-            &root_hash,
-            Some(1),
-            None,
-            None,
-            None,
-        )
-        .unwrap(),
-        (id, plan)
-    );
+    .unwrap_err();
+    assert!(refusal.to_string().contains("--release"));
     assert_eq!(plan::load(&created_dir, &created_id).unwrap().0, created);
-    assert_eq!(
-        store::json::<Receipt>(&created_dir.join("receipt.json")).unwrap(),
-        receipt
-    );
-    assert!(
-        create_managed_plan(
-            &dir,
-            &wasm,
-            upgrade_input(),
-            &selected,
-            "app",
-            &"02".repeat(32),
-            None,
-            None,
-            None,
-            None,
-        )
-        .is_err()
-    );
-    std::fs::write(&wasm, b"\0asm\x01\0\0\0\0\x02\x01x").unwrap();
-    assert!(
-        create_managed_plan(
-            &dir,
-            &wasm,
-            upgrade_input(),
-            &selected,
-            "app",
-            &root_hash,
-            None,
-            None,
-            None,
-            None,
-        )
-        .is_err()
-    );
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -539,19 +394,7 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let (_, mut plan) = create_managed_plan(
-        &dir,
-        &wasm,
-        input(),
-        &selection(),
-        "app",
-        &"01".repeat(32),
-        None,
-        None,
-        None,
-        None,
-    )
-    .unwrap();
+    let (_, mut plan) = inline_record(&dir, &wasm);
     plan.action = crate::PlanAction::UpgradeChild {
         target: crate::UpgradeTarget {
             canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
@@ -698,19 +541,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     let wasm = dir.join("app.wasm");
     let bytes = b"\0asm\x01\0\0\0";
     std::fs::write(&wasm, bytes).unwrap();
-    let (_, mut plan) = create_managed_plan(
-        &dir,
-        &wasm,
-        input(),
-        &selection(),
-        "app",
-        &"01".repeat(32),
-        None,
-        None,
-        None,
-        None,
-    )
-    .unwrap();
+    let (_, mut plan) = inline_record(&dir, &wasm);
     let source = crate::StoredArtifact {
         maintenance: None,
         store: crate::UpgradeTarget {
@@ -733,7 +564,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     owner.source = Some(source.clone());
     plan.validate().unwrap();
     let digest = plan.digest().unwrap();
-    let call = stage_call(&plan, bytes).unwrap();
+    let call = Method::Stage.call(&plan).unwrap();
     assert_eq!(call.method, "stage_child_creation");
     let request: children::Request<canic_management_protocol::application::Creation> =
         ic_wire::decode(
@@ -1011,7 +842,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         },
     };
     plan.validate().unwrap();
-    let call = Method::StageUpgrade.call(&plan, &(), LIMITS).unwrap();
+    let call = Method::StageUpgrade.call(&plan).unwrap();
     let expected: children::Request<canic_management_protocol::application::Replacement> =
         ic_wire::decode(
             &call.args,
@@ -1135,7 +966,7 @@ fn assert_application_arguments(
         serde_json::from_slice::<Plan>(&serde_json::to_vec(&plan).unwrap()).unwrap(),
         plan
     );
-    let call = stage_call(&plan, &[]).unwrap();
+    let call = Method::Stage.call(&plan).unwrap();
     assert_eq!(call.method, "stage_child_creation");
     let request: Request<canic_management_protocol::application::Creation> = ic_wire::decode(
         &call.args,
@@ -1353,40 +1184,28 @@ fn assert_delivery_history(plan: &Plan, mut custody: canic_management_protocol::
 
 #[test]
 fn adding_discovery_preserves_two_earlier_named_creation_approvals() {
-    let journal = directory();
-    let wasm = journal.join("app.wasm");
-    std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let mut fleet = selection();
-    let service = fleet.config.canisters.remove("app").unwrap();
-    for name in ["user_hub", "project_registry"] {
-        fleet.config.canisters.insert(name.into(), service.clone());
-    }
-    let plan = |fleet: &SelectedFleet, name: &str| {
-        create_managed_plan(
-            &journal,
-            &wasm,
-            input(),
-            fleet,
-            name,
-            &"ab".repeat(32),
-            None,
-            None,
-            None,
-            None,
-        )
-        .unwrap()
+    let fleet = selection();
+    let deployment = |name: &str| DeploymentName {
+        app: fleet.app.clone(),
+        fleet: fleet.fleet.clone(),
+        canister: name.into(),
     };
-    let (user, _) = plan(&fleet, "user_hub");
-    let (registry, _) = plan(&fleet, "project_registry");
-    fleet
-        .config
-        .canisters
-        .insert("discovery_hub".into(), service);
-    let (_, discovery) = plan(&fleet, "discovery_hub");
-    assert_eq!(
-        discovery.management().unwrap().slot,
-        Some(ChildId::HISTORICAL_SERVICES[2])
-    );
-    assert_eq!(plan(&fleet, "user_hub").0, user);
-    assert_eq!(plan(&fleet, "project_registry").0, registry);
+    let user = deployment("user_hub");
+    let registry = deployment("project_registry");
+    let discovery = deployment("discovery_hub");
+    let children = ["discovery_hub", "project_registry", "user_hub"];
+    let reserved = [
+        (Some(ChildId::SECOND), Some(&user)),
+        (Some(ChildId::FIRST), Some(&registry)),
+    ];
+    for (name, expected) in [
+        (&user, ChildId::SECOND),
+        (&registry, ChildId::FIRST),
+        (&discovery, ChildId::HISTORICAL_SERVICES[2]),
+    ] {
+        assert_eq!(
+            permanent_slot(&children, name, reserved.into_iter()).unwrap(),
+            Some(expected)
+        );
+    }
 }

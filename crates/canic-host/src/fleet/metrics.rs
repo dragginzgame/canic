@@ -26,22 +26,17 @@ pub(super) async fn collect(
 ) -> Vec<FleetMetrics> {
     let mut reports = Vec::new();
     for ((network_id, canister), network) in targets {
-        let budget = deadline
-            .saturating_duration_since(tokio::time::Instant::now())
-            .min(Duration::from_secs(2));
-        let result = if budget.is_zero() {
-            Err(Error::Blocked(
-                "snapshot budget exhausted; metrics not observed".into(),
-            ))
-        } else {
-            tokio::time::timeout(budget, observe(network, canister))
-                .await
-                .map_err(|_| Error::Blocked("metrics observation timed out".into()))
-                .and_then(|value| value)
-        };
+        let result = super::budgeted_observation(
+            deadline,
+            Duration::from_secs(2),
+            "snapshot budget exhausted; metrics not observed",
+            "metrics observation timed out",
+            observe(network, canister),
+        )
+        .await;
         let (reported, observation_error) = match result {
             Ok(value) => (Some(value), None),
-            Err(error) => (None, Some(error.to_string().chars().take(500).collect())),
+            Err(error) => (None, Some(error)),
         };
         reports.push(FleetMetrics {
             network_id: network_id.clone(),

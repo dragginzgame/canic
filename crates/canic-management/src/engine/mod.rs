@@ -26,10 +26,7 @@ use canic_management_protocol::{
 };
 use ic_platform_protocol::{
     candid::Limits,
-    management::{
-        self as mgmt, CanisterArgs, CanisterSettings, CreateCanisterArgs, InstallChunkedCodeArgs,
-        InstallMode,
-    },
+    management::{self as mgmt, CanisterArgs, CanisterSettings, CreateCanisterArgs, InstallMode},
 };
 use ic_platform_runtime::{
     call::{Call, Completion, Outcome, SubmitError, Wait},
@@ -682,10 +679,14 @@ pub(crate) fn reply_fault(method: u64) -> bool {
         ),
         (
             Some(9),
-            canic_management_protocol::STAGE | canic_management_protocol::children::STAGE
+            canic_management_protocol::STAGE
+                | canic_management_protocol::children::STAGE
+                | canic_management_protocol::application::STAGE_CHILD_CREATION
         ) | (
             Some(10),
-            canic_management_protocol::RECONCILE | canic_management_protocol::children::RECONCILE
+            canic_management_protocol::RECONCILE
+                | canic_management_protocol::children::RECONCILE
+                | canic_management_protocol::application::RECONCILE_CHILD_CREATION
         ) | (Some(12), canic_management_protocol::publication::EXECUTE)
             | (
                 Some(12),
@@ -840,40 +841,29 @@ async fn step(slot: ChildId) {
         Phase::Created => {
             fault(slot, 3); // A later message cannot erase the already committed principal.
             let approval = s.approval.as_ref().expect("approval");
-            let upload =
-                delivery::upload(slot, false, approval.module_hash, approval.expires_at_ns);
-            issue(slot, 1, Phase::UploadIssued, &upload.bytes);
-            match upload.send().await {
+            match delivery::dispatch_upload(
+                slot,
+                false,
+                approval.module_hash,
+                approval.expires_at_ns,
+                |bytes| issue(slot, 1, Phase::UploadIssued, bytes),
+            )
+            .await
+            {
                 Ok(()) => mutate(slot, |s| s.phase = Phase::Uploaded),
                 Err(error) => mutate(slot, |s| s.failure = Some(error)),
             }
             fault(slot, 4);
         }
         Phase::Uploaded => {
-            let hash = s.approval.as_ref().expect("approval").module_hash.to_vec();
-            let (store, chunks) = delivery::layout(
+            let result = delivery::install(
                 slot,
-                false,
+                InstallMode::Install,
+                worker(&s),
                 s.approval.as_ref().expect("approval").module_hash,
-            );
-            let bytes = InstallChunkedCodeArgs {
-                mode: InstallMode::Install,
-                target_canister: worker(&s),
-                store_canister: Some(store),
-                chunk_hashes_list: chunks,
-                wasm_module_hash: hash,
-                arg: application::arguments(slot, false),
-                sender_canister_version: Some(api::canister_version()),
-            }
-            .encode(8192)
-            .expect("install args");
-            issue(slot, 2, Phase::InstallIssued, &bytes);
-            let result = management("install_chunked_code", bytes, 0)
-                .await
-                .and_then(|bytes| {
-                    mgmt::decode_empty_response(&bytes, MANAGEMENT_LIMITS)
-                        .map_err(|_| Failure::InvalidReply)
-                });
+                |bytes| issue(slot, 2, Phase::InstallIssued, bytes),
+            )
+            .await;
             match result {
                 Ok(()) => mutate(slot, |s| s.phase = Phase::Installed),
                 Err(error) => mutate(slot, |s| s.failure = Some(error)),
@@ -889,62 +879,104 @@ async fn step(slot: ChildId) {
     }
 }
 
+enum ChildObservation {
+    Pin,
+    Upload,
+    Install(Principal),
+    Readiness(Principal),
+}
+
+enum ChildEvidence {
+    Unchanged,
+    Pinned,
+    Uploaded,
+    Installed { hash: Option<Vec<u8>>, version: u64 },
+    Ready,
+}
+
+async fn inspect_child(child: Principal) -> Result<mgmt::CanisterStatus, Failure> {
+    let args = CanisterArgs { canister_id: child }
+        .encode(1024)
+        .expect("status args");
+    let reply = management("canister_status", args, 0).await?;
+    let value = mgmt::decode_canister_status(&reply, MANAGEMENT_LIMITS)
+        .map_err(|_| Failure::InvalidReply)?;
+    if value.settings.controllers != [api::canister_self()] {
+        return Err(Failure::Mismatch);
+    }
+    Ok(value)
+}
+
+async fn observe_child(
+    slot: ChildId,
+    upgrade: bool,
+    hash: [u8; 32],
+    step: ChildObservation,
+) -> Result<ChildEvidence, Failure> {
+    match step {
+        ChildObservation::Pin => {
+            if delivery::source(slot, upgrade)
+                .is_some_and(|source| source.state == stored::PinState::Issued)
+            {
+                delivery::pin(slot, upgrade).await?;
+                Ok(ChildEvidence::Pinned)
+            } else {
+                Ok(ChildEvidence::Unchanged)
+            }
+        }
+        ChildObservation::Upload => {
+            delivery::observe_cache(slot, upgrade, hash).await?;
+            Ok(ChildEvidence::Uploaded)
+        }
+        ChildObservation::Install(child) => {
+            let value = inspect_child(child).await?;
+            if value.module_hash.as_deref() != Some(hash.as_slice()) {
+                return Err(Failure::Mismatch);
+            }
+            Ok(ChildEvidence::Installed {
+                hash: value.module_hash,
+                version: value.version,
+            })
+        }
+        ChildObservation::Readiness(child) => {
+            let readiness = STATE.with_borrow(|s| s.as_ref().expect("open Root").readiness.clone());
+            let reply = Call::new(child, readiness.method, Wait::Bounded { seconds: 5 })
+                .owned_args(readiness.request)
+                .execute()
+                .await
+                .map_err(failure)
+                .and_then(response)?;
+            (readiness.accept)(&reply)?;
+            Ok(ChildEvidence::Ready)
+        }
+    }
+}
+
 async fn observation(slot: ChildId) -> Result<(), Failure> {
     let before = snapshot(slot);
     let Some(a) = before.approval.as_ref() else {
         return Ok(());
     };
-    match before.phase {
-        Phase::Scheduled if delivery::needs_pin(slot, false) => {
-            if delivery::source(slot, false).expect("Store source").state
-                == stored::PinState::Issued
-            {
-                delivery::pin(slot, false).await?;
-                mutate(slot, |s| s.failure = None);
-            }
-        }
-        Phase::UploadIssued => {
-            delivery::observe_cache(slot, false, a.module_hash).await?;
-            mutate(slot, |s| {
-                s.phase = Phase::Uploaded;
-                s.failure = None;
-            });
-        }
-        Phase::InstallIssued | Phase::Installed => {
-            let bytes = CanisterArgs {
-                canister_id: worker(&before),
-            }
-            .encode(1024)
-            .expect("status args");
-            let reply = management("canister_status", bytes, 0).await?;
-            let value = mgmt::decode_canister_status(&reply, MANAGEMENT_LIMITS)
-                .map_err(|_| Failure::InvalidReply)?;
-            if value.module_hash.as_deref() != Some(a.module_hash.as_slice())
-                || value.settings.controllers != [api::canister_self()]
-            {
-                return Err(Failure::Mismatch);
-            }
-            mutate(slot, |s| {
-                s.phase = Phase::Verified;
-                s.observed_module = value.module_hash;
-                s.failure = None;
-            });
-        }
-        Phase::Verified | Phase::Ready => {
-            let readiness =
-                STATE.with_borrow(|state| state.as_ref().expect("state").readiness.clone());
-            let bytes = readiness.request;
-            let reply = Call::new(
-                worker(&before),
-                readiness.method,
-                Wait::Bounded { seconds: 5 },
-            )
-            .owned_args(bytes)
-            .execute()
-            .await
-            .map_err(failure)
-            .and_then(response)?;
-            (readiness.accept)(&reply)?;
+    let step = match before.phase {
+        Phase::Scheduled => ChildObservation::Pin,
+        Phase::UploadIssued => ChildObservation::Upload,
+        Phase::InstallIssued | Phase::Installed => ChildObservation::Install(worker(&before)),
+        Phase::Verified | Phase::Ready => ChildObservation::Readiness(worker(&before)),
+        _ => return Ok(()),
+    };
+    match observe_child(slot, false, a.module_hash, step).await? {
+        ChildEvidence::Unchanged => (),
+        ChildEvidence::Pinned => mutate(slot, |s| s.failure = None),
+        ChildEvidence::Uploaded => mutate(slot, |s| {
+            s.phase = Phase::Uploaded;
+            s.failure = None;
+        }),
+        ChildEvidence::Installed { hash, .. } => mutate(slot, |s| {
+            s.phase = Phase::Verified;
+            s.observed_module = hash;
+            s.failure = None;
+        }),
+        ChildEvidence::Ready => {
             #[cfg(feature = "sharding")]
             sharding::bind_ready(slot, before.worker.as_deref().expect("verified worker"));
             mutate(slot, |s| {
@@ -955,7 +987,6 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
                 directory::schedule(Some(slot));
             }
         }
-        _ => {} // No observation can invent a lost creation principal.
     }
     Ok(())
 }

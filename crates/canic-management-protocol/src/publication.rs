@@ -91,6 +91,8 @@ pub enum ObservationRequest {
     Custody(CustodyRequest),
     /// Read publication progress for the named release.
     ReleaseStatus(CustodyRequest),
+    /// Read the latest Store admission attempt.
+    Admission(InfoRequest),
 }
 /// Evidence returned by the selected read.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -101,27 +103,38 @@ pub enum Observation {
     Custody(store::Custody),
     /// Publication progress bound to the original release.
     ReleaseStatus(store::Status),
+    /// Latest Store admission, absent until the first closure.
+    Admission(Option<store::Admission>),
 }
 /// Successful typed evidence or a bounded Store failure.
 pub type ObservationReply = Result<Observation, Error>;
 
 /// Explicit Store-local admission transition through its controller; never installs code.
-pub const ADMISSION: u64 = 49;
-/// Root forwards only Store's fixed close/observe/activate contract.
+pub const ADMISSION: u64 = ic_wire::method_id("canic.root.change_store_admission.v1");
+
+/// Explicit transitions of the Store mutation gate.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum AdmissionChange {
+    /// Close under this exact attempt.
+    Close(store::MaintenanceAttempt),
+    /// Reopen under this exact attempt.
+    Activate(store::MaintenanceAttempt),
+}
+/// Root forwards the controller’s selected admission transition.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct AdmissionRequest {
     /// Canonical Store principal.
     pub store: String,
     /// Last dispatch time, at most five minutes from Root admission.
     pub expires_at_ns: u64,
-    /// Exact Store attempt or a read-only observation.
-    pub command: store::AdmissionCommand,
+    /// Exact Store transition and attempt.
+    pub command: AdmissionChange,
 }
 /// Store's retained admission phase; no quiescence or installation receipt.
 pub type AdmissionReply = Result<Option<store::Admission>, Error>;
 
 /// One exact removal through Root; no retry, restoration or pin-release authority.
-pub const REMOVE: u64 = 60;
+pub const REMOVE: u64 = ic_wire::method_id("canic.root.remove_store_artifact.v1");
 /// One full manifest plus target/deadline; no transient Wasm bytes.
 pub const REMOVAL_LIMITS: ic_wire::Limits = RESPONSE_LIMITS;
 /// Published deletion and incomplete-upload cancellation have different supplier contracts.

@@ -24,6 +24,15 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
                 },
             ),
             (
+                "store".into(),
+                CanisterConfig {
+                    role: Some("wasm-store".into()),
+                    parent: Some("root".into()),
+                    wasm: Some("root.wasm".into()),
+                    ..Default::default()
+                },
+            ),
+            (
                 "app".into(),
                 CanisterConfig {
                     parent: Some("root".into()),
@@ -36,13 +45,23 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
     (dir, selected)
 }
 
+fn store_output(fleet: &FleetPlan, root: &Receipt) -> Receipt {
+    let plan = fleet.store_plan(root).unwrap();
+    Receipt {
+        operation: plan.digest().unwrap(),
+        module_hash: plan.artifact.sha256,
+        controller: root.canister.clone(),
+        canister: "r7inp-6aaaa-aaaaa-aaabq-cai".into(),
+    }
+}
+
 fn create(dir: &Path, selected: &SelectedFleet) -> Result<(String, FleetPlan)> {
     let result = plan_fleet(
         &dir.join("journal"),
         &dir.join("canic.toml"),
         selected,
         &input().controller,
-        Some(3_000_000_000_000),
+        Some(5_000_000_000_000),
         None,
     )?;
     match result {
@@ -55,7 +74,7 @@ fn create(dir: &Path, selected: &SelectedFleet) -> Result<(String, FleetPlan)> {
 }
 
 #[test]
-fn stored_fleet_admits_full_manifests_and_keeps_retained_inline_delivery() {
+fn stored_fleet_admits_full_manifests_and_rejects_retained_inline_delivery() {
     let (dir, mut selected) = fixture();
     selected.config.canisters.insert(
         "store".into(),
@@ -136,7 +155,7 @@ fn stored_fleet_admits_full_manifests_and_keeps_retained_inline_delivery() {
     )
     .unwrap();
     std::fs::rename(path, dir.join("journal").join(&old_id)).unwrap();
-    assert_eq!(
+    assert!(matches!(
         plan_fleet(
             &dir.join("journal"),
             &dir.join("canic.toml"),
@@ -144,13 +163,9 @@ fn stored_fleet_admits_full_manifests_and_keeps_retained_inline_delivery() {
             &input().controller,
             None,
             None
-        )
-        .unwrap(),
-        FleetPlanning::Create {
-            operation: old_id,
-            fleet_plan
-        }
-    );
+        ),
+        Err(Error::Blocked(_))
+    ));
 }
 
 #[test]
@@ -256,7 +271,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
     // Altering/removing infrastructure cannot be treated as an application upgrade.
     let mut changed = selected.clone();
     changed.config.canisters.remove("store");
-    assert!(matches!(create(&dir, &changed), Err(Error::Blocked(_))));
+    assert!(create(&dir, &changed).is_err());
     std::fs::write(dir.join("store.wasm"), b"\0asm\x01\0\0\0\0\x01\0").unwrap();
     changed = selected.clone();
     changed.config.canisters.get_mut("store").unwrap().wasm = Some("store.wasm".into());
@@ -300,7 +315,9 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
     )
     .unwrap();
     store::put_json(&path.join("root/receipt.json"), &root).unwrap();
-    let child = fleet.child_plan(&root, None, ChildId::FIRST).unwrap();
+    let child = fleet
+        .child_plan(&root, Some(&store_output(&fleet, &root)), ChildId::FIRST)
+        .unwrap();
     store::put_json(&path.join("child/plan.json"), &child).unwrap();
     let receipt = Receipt {
         operation: child.digest().unwrap(),
@@ -314,7 +331,7 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
     let ready = Status {
         approval: Some(crate::managed::approval(&child).unwrap()),
         phase: Phase::Ready,
-        worker: Some(receipt.canister.clone()),
+        worker: Some(receipt.canister),
         observed_module: Some(crate::unhex(&child.artifact.sha256).unwrap()),
         attempts: [1; 3],
         ..Default::default()
@@ -343,77 +360,9 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
             dispatch,
         )
     };
-    assert_eq!(
-        planning(None).unwrap(),
-        FleetPlanning::Unchanged {
-            operation: id.clone()
-        }
-    );
-    // Both planners use these limits after reconstructing actual creation custody.
-    {
-        let mut history = super::history::load(&Store::open(&journal).unwrap(), &id, &fleet, &[])
-            .unwrap()
-            .unwrap();
-        history.children[0].dispatch = 10;
-        assert!(super::history::check_upgrade(&history.children, 0, 8, 11).is_ok());
-        assert!(super::history::check_upgrade(&history.children, 0, 8, 10).is_err());
-        assert!(
-            super::history::check_upgrade(
-                &history.children,
-                0,
-                canic_management_protocol::children::MAX_ARTIFACT_BYTES,
-                11
-            )
-            .is_err()
-        );
-        history.children[0].custody.upgrades =
-            vec![Default::default(); canic_management_protocol::upgrade::MAX_UPGRADES];
-        assert!(
-            super::history::check_upgrade(&history.children, 0, 8, 11)
-                .unwrap_err()
-                .to_string()
-                .contains("history is full")
-        );
-    }
-    std::fs::write(dir.join("app.wasm"), b"\0asm\x01\0\0\0\0\x02\x01x").unwrap();
-    let planned = planning(None).unwrap();
-    let FleetPlanning::Upgrade { operation, plan } = &planned else {
-        panic!("expected upgrade")
-    };
-    assert_eq!(plan.target(), Some(&receipt.canister));
-    assert_eq!(plan.previous_module(), Some(&receipt.module_hash));
-    assert_eq!(plan.creation_cycles(), 0);
-    assert_eq!(planning(Some(1)).unwrap(), planned);
-    // An upgrade receipt without Ready/version evidence also cannot become no-change.
-    let upgraded = Receipt {
-        operation: operation.clone(),
-        module_hash: plan.artifact.sha256.clone(),
-        ..receipt
-    };
-    store::put_json(&journal.join(operation).join("receipt.json"), &upgraded).unwrap();
+    // A fabricated inline Ready reply cannot substitute for Store and publication custody.
     assert!(planning(None).is_err());
-    std::fs::remove_file(journal.join(operation).join("receipt.json")).unwrap();
-    assert_eq!(planning(None).unwrap(), planned);
-    // The stale creation artifact must not hide the pending upgrade.
-    std::fs::write(dir.join("app.wasm"), b"\0asm\x01\0\0\0").unwrap();
-    assert!(
-        planning(None)
-            .unwrap_err()
-            .to_string()
-            .contains("unfinished")
-    );
-    // A different child target cannot bypass the fleet reservation.
-    let mut foreign = plan.clone();
-    let crate::PlanAction::UpgradeChild { target, .. } = &mut foreign.action else {
-        panic!("child upgrade")
-    };
-    target.canister = "r7inp-6aaaa-aaaaa-aaabq-cai".into();
-    assert!(
-        permits_upgrade(&Store::open(&journal).unwrap(), &id, &fleet, &mut foreign)
-            .unwrap()
-            .is_none()
-    );
-    assert_eq!(load(&path, &id).unwrap(), fleet);
+    assert!(!path.join("store/receipt.json").exists());
 }
 
 #[test]
@@ -438,7 +387,7 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
             &dir.join("canic.toml"),
             &selected,
             &input().controller,
-            Some(3_000_000_000_000),
+            Some(5_000_000_000_000),
             Some(1)
         )
         .unwrap(),
@@ -558,7 +507,13 @@ fn fleet_refuses_unsupported_trees_conflicts_and_tampered_artifacts() {
         module_hash: value.root.artifact.sha256.clone(),
         controller: value.root.controller.clone(),
     };
-    let child = value.child_plan(&receipt, None, ChildId::FIRST).unwrap();
+    let child = value
+        .child_plan(
+            &receipt,
+            Some(&store_output(&value, &receipt)),
+            ChildId::FIRST,
+        )
+        .unwrap();
     store::put_json(&root.join("child/plan.json"), &child).unwrap();
     // An invented child plan without Root result custody is never admitted.
     assert!(load(&root, &id).is_err());
@@ -584,9 +539,10 @@ async fn expired_unsubmitted_fleet_cannot_start_root_or_renew_its_schedule() {
         value.children[0].execute_at_ns = dispatch;
         value.root.expires_at_ns = 600_000_000_000 + dispatch;
         value.children[0].parent.operation = value.root.digest().unwrap();
+        value.store.as_mut().unwrap().parent.operation = value.root.digest().unwrap();
         let id = value.digest().unwrap();
         let path = journal.join(&id);
-        for leaf in ["root", "child"] {
+        for leaf in ["root", "store", "child"] {
             std::fs::create_dir_all(path.join(leaf)).unwrap();
             std::fs::copy(
                 journal.join(&original_id).join(leaf).join("module.wasm"),
@@ -599,7 +555,11 @@ async fn expired_unsubmitted_fleet_cannot_start_root_or_renew_its_schedule() {
         let error = crate::reconcile(&journal, &id, "unused", Path::new("must-not-run"))
             .await
             .unwrap_err();
-        assert!(error.to_string().contains("retained child admission"));
+        assert!(
+            error
+                .to_string()
+                .contains("Root bootstrap has no retained receipt")
+        );
         let error = crate::apply(&journal, &id, "unused", Path::new("must-not-run"))
             .await
             .unwrap_err();
@@ -694,8 +654,12 @@ fn two_child_approval_retains_slot_mapping_and_cancels_only_before_preparation()
         module_hash: fleet.root.artifact.sha256.clone(),
         controller: fleet.root.controller.clone(),
     };
-    let first = fleet.child_plan(&root, None, ChildId::FIRST).unwrap();
-    let second = fleet.child_plan(&root, None, ChildId::SECOND).unwrap();
+    let first = fleet
+        .child_plan(&root, Some(&store_output(&fleet, &root)), ChildId::FIRST)
+        .unwrap();
+    let second = fleet
+        .child_plan(&root, Some(&store_output(&fleet, &root)), ChildId::SECOND)
+        .unwrap();
     assert_eq!(
         first.management().unwrap().slot,
         Some(canic_management_protocol::children::ChildId::FIRST)

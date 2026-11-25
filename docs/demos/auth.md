@@ -665,6 +665,10 @@ This uses PocketIC and synthetic cycles. It opens no browser and deploys nothing
 to mainnet. The qualification-only canister is a separate application artifact,
 not another shipped adapter package or default Canic dependency.
 
+An upgraded Auth-enabled placement Root has unknown receiver-grant history.
+Worker reset, released-child retirement and standby imports stay fenced for
+the lifetime of that installation, including when no grants preceded the upgrade.
+
 ## Inputs and limits
 
 Both lockfiles select registry engine `ic-auth` 0.50.0, `ic-auth-wire` 0.49.1 and

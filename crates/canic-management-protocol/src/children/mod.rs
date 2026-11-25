@@ -8,6 +8,27 @@ use serde::{Deserialize, Serialize};
 /// Public query for the latest or an exact upgrade in one explicit slot.
 pub const UPGRADE_STATUS: u64 = ic_wire::method_id("child_upgrade_status");
 
+/// Controller update to read one creation or exact upgrade journal.
+pub const OBSERVE_STATUS: u64 = ic_wire::method_id("canic.root.observe_child_status.v1");
+
+/// Select the retained record and its original child scope.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum ObserveStatus {
+    /// Creation evidence for a service or placement allocation.
+    Creation(ChildId),
+    /// Upgrade evidence for a permanent service and its exact approval.
+    Upgrade(Request<crate::upgrade::Approval>),
+}
+
+/// The journal selected by the controller.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum ObservedStatus {
+    /// Creation progress and retained effect evidence.
+    Creation(crate::Status),
+    /// Upgrade progress and retained effect evidence.
+    Upgrade(crate::upgrade::Status),
+}
+
 /// Stable numeric identity scoped to one management owner, never a canister principal.
 /// Admission order and configuration sorting cannot change it. The current protocol
 /// preserves the original two service identities and assigns separate slots for mixed-fleet growth.

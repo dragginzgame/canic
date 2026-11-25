@@ -275,50 +275,14 @@ pub(super) fn needs_pin(slot: ChildId, upgrade: bool) -> bool {
     source(slot, upgrade).is_some_and(|s| s.state != stored::PinState::Retained)
 }
 
-pub(super) struct Upload {
-    pub bytes: Vec<u8>,
-    source: Option<stored::Delivery>,
+/// Retain the exact upload frame before the IC call.
+pub(super) async fn dispatch_upload(
+    slot: ChildId,
+    upgrade: bool,
     hash: [u8; 32],
-}
-impl Upload {
-    pub(super) async fn send(self) -> Result<(), Failure> {
-        if let Some(source) = self.source {
-            let reply = Call::new(
-                Principal::from_text(&source.reference.store).expect("Store principal"),
-                "prepare_cache",
-                Wait::Unbounded,
-            )
-            .owned_args(self.bytes)
-            .execute()
-            .await
-            .map_err(failure)
-            .and_then(response)?;
-            let ready: Result<store::CacheReady, store::CacheError> = ic_wire::decode(
-                &reply,
-                ic_wire::Encoding::Frame {
-                    method: store::PREPARE_CACHE,
-                    direction: ic_wire::Direction::Response,
-                },
-                STORE_LIMITS,
-            )
-            .map_err(|_| Failure::InvalidReply)?;
-            let ready = ready.map_err(|_| Failure::Uncertain)?;
-            if ready.pin != source.pin() || ready.uploaded as usize > store::MAX_CHUNKS {
-                return Err(Failure::Mismatch);
-            }
-        } else {
-            let reply = management("upload_chunk", self.bytes, 0).await?;
-            let chunk = chunks::decode_upload_chunk(&reply, MANAGEMENT_LIMITS)
-                .map_err(|_| Failure::InvalidReply)?;
-            if chunk.hash != self.hash {
-                return Err(Failure::Mismatch);
-            }
-        }
-        Ok(())
-    }
-}
-
-pub(super) fn upload(slot: ChildId, upgrade: bool, hash: [u8; 32], expires: u64) -> Upload {
+    expires: u64,
+    issue: impl FnOnce(&[u8]),
+) -> Result<(), Failure> {
     let source = source(slot, upgrade);
     let bytes = if let Some(source) = &source {
         assert_eq!(source.state, stored::PinState::Retained);
@@ -346,14 +310,69 @@ pub(super) fn upload(slot: ChildId, upgrade: bool, hash: [u8; 32], expires: u64)
         chunks::encode_upload_chunk(api::canister_self(), &wasm, STAGE_LIMITS.bytes)
             .expect("upload args")
     };
-    Upload {
-        bytes,
-        source,
-        hash,
+    issue(&bytes);
+    if let Some(source) = source {
+        let reply = Call::new(
+            Principal::from_text(&source.reference.store).expect("Store principal"),
+            "prepare_cache",
+            Wait::Unbounded,
+        )
+        .owned_args(bytes)
+        .execute()
+        .await
+        .map_err(failure)
+        .and_then(response)?;
+        let ready: Result<store::CacheReady, store::CacheError> = ic_wire::decode(
+            &reply,
+            ic_wire::Encoding::Frame {
+                method: store::PREPARE_CACHE,
+                direction: ic_wire::Direction::Response,
+            },
+            STORE_LIMITS,
+        )
+        .map_err(|_| Failure::InvalidReply)?;
+        let ready = ready.map_err(|_| Failure::Uncertain)?;
+        if ready.pin != source.pin() || ready.uploaded as usize > store::MAX_CHUNKS {
+            return Err(Failure::Mismatch);
+        }
+    } else {
+        let reply = management("upload_chunk", bytes, 0).await?;
+        let chunk = chunks::decode_upload_chunk(&reply, MANAGEMENT_LIMITS)
+            .map_err(|_| Failure::InvalidReply)?;
+        if chunk.hash != hash {
+            return Err(Failure::Mismatch);
+        }
     }
+    Ok(())
 }
 
-pub(super) fn layout(slot: ChildId, upgrade: bool, hash: [u8; 32]) -> (Principal, Vec<ChunkHash>) {
+pub(super) async fn install(
+    slot: ChildId,
+    mode: ic_platform_protocol::management::InstallMode,
+    target: Principal,
+    hash: [u8; 32],
+    issue: impl FnOnce(&[u8]),
+) -> Result<(), Failure> {
+    use ic_platform_protocol::management::{self as mgmt, InstallChunkedCodeArgs, InstallMode};
+    let upgrade = matches!(mode, InstallMode::Upgrade(_));
+    let (store, chunks) = layout(slot, upgrade, hash);
+    let bytes = InstallChunkedCodeArgs {
+        mode,
+        target_canister: target,
+        store_canister: Some(store),
+        chunk_hashes_list: chunks,
+        wasm_module_hash: hash.to_vec(),
+        arg: super::application::arguments(slot, upgrade),
+        sender_canister_version: Some(api::canister_version()),
+    }
+    .encode(8192)
+    .expect("bounded chunk install");
+    issue(&bytes);
+    let reply = management("install_chunked_code", bytes, 0).await?;
+    mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)
+}
+
+fn layout(slot: ChildId, upgrade: bool, hash: [u8; 32]) -> (Principal, Vec<ChunkHash>) {
     if let Some(source) = source(slot, upgrade) {
         (
             Principal::from_text(&source.reference.store).expect("Store principal"),

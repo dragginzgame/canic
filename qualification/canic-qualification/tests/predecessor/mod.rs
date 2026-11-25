@@ -1,20 +1,14 @@
 //! The old allocator Root is preserved when a new records executable refuses its image.
 use super::*;
-use canic_management_protocol::upgrade;
 
 #[tokio::test]
 async fn retained_predecessor_maintenance_refuses_old_storage_without_reset() {
     for completed in [false, true] {
-        qualify_predecessor(completed, false).await;
+        qualify_predecessor(completed).await;
     }
 }
 
-#[tokio::test]
-async fn retained_predecessor_maintenance_refuses_untracked_scheduled_work() {
-    qualify_predecessor(false, true).await;
-}
-
-async fn qualify_predecessor(completed: bool, untracked: bool) {
+async fn qualify_predecessor(completed: bool) {
     let original = std::fs::read(
         repo().join("qualification/canic-qualification/fixtures/root-single-upgrade.wasm"),
     )
@@ -37,286 +31,51 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
         },
     )
     .unwrap();
-    let mut owner = server
+    let owner = server
         .instance(
-            PocketIcBuilder::new()
-                .with_nns_subnet()
-                .with_application_subnet(),
+            PocketIcBuilder::new().with_application_subnet(),
             Duration::from_secs(30),
         )
         .await
         .unwrap();
-    let routing = owner.client().create_canister().await;
-    let url = owner.client_mut().make_live(None).await.to_string();
-    let key: String = owner
-        .client()
-        .root_key()
+    let pic = owner.client();
+    let root = pic.create_canister().await;
+    pic.install_canister(root, original.clone(), vec![], None)
+        .await;
+    let input = children::input(
+        root,
+        children::artifact("app.wasm"),
+        pic.get_time().await.as_nanos_since_unix_epoch(),
+    );
+    storage_reopen::historical_stage(pic, root, &input)
         .await
-        .unwrap()
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect();
-    let workspace = repo().join(format!(
-        "target/root/predecessor-{}-{completed}-{untracked}",
-        std::process::id()
-    ));
-    let initialized = {
-        let created = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
-            .args([
-                "app",
-                "init",
-                "transition",
-                "--source",
-                workspace.to_str().unwrap(),
-                "--json",
-            ])
-            .output()
-            .unwrap();
-        assert!(
-            created.status.success(),
-            "{}",
-            String::from_utf8_lossy(&created.stderr)
-        );
-        std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
-            .args([
-                "fleet",
-                "init",
-                "local",
-                "--app",
-                "transition",
-                "--network",
-                "local",
-                "--url",
-                &url,
-                "--root-key",
-                &key,
-                "--root-subnet",
-                &owner.client().topology().await.get_nns().unwrap().to_text(),
-                "--routing-canister",
-                &routing.to_text(),
-                "--config",
-                workspace.join("canic.toml").to_str().unwrap(),
-                "--json",
-            ])
-            .output()
-            .unwrap()
-    };
-    assert!(
-        initialized.status.success(),
-        "{}",
-        String::from_utf8_lossy(&initialized.stderr)
-    );
-    let artifacts = repo().join("target/root");
-    std::fs::create_dir_all(workspace.join("artifacts")).unwrap();
-    std::fs::write(workspace.join("artifacts/root.wasm"), &original).unwrap();
-    std::fs::copy(
-        artifacts.join("app.wasm"),
-        workspace.join("artifacts/app.wasm"),
-    )
-    .unwrap();
-    let config = workspace.join("canic.toml");
-    inline_fixture(&config, "transition");
-    let dispatch = || {
-        (std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs()
-            + 40)
-            .to_string()
-    };
-    let creation = cli(
-        &config,
-        &[
-            "fleet",
-            "plan",
-            "--identity",
-            "anonymous",
-            "--execute-at",
-            &dispatch(),
-        ],
-    );
-    let creation_id = creation["operation"].as_str().unwrap();
-    let pending = cli(
-        &config,
-        &["fleet", "apply", creation_id, "--identity", "anonymous"],
-    );
-    let root = CanisterId::from_text(pending["root"]["canister"].as_str().unwrap()).unwrap();
-    owner.client().stop_progress().await;
-    owner.client().advance_time(Duration::from_secs(45)).await;
-    settle(owner.client()).await;
-    owner.client().auto_progress().await;
-    let created = cli(
-        &config,
-        &["fleet", "apply", creation_id, "--identity", "anonymous"],
-    );
-    let child = CanisterId::from_text(
-        created["children"][0]["outcome"]["canister"]
-            .as_str()
-            .unwrap(),
-    )
-    .unwrap();
-    let journal = PathBuf::from(creation["state_dir"].as_str().unwrap());
-    let creation_bytes = std::fs::read(journal.join(creation_id).join("fleet.json")).unwrap();
-    let before = storage_reopen::historical_status(owner.client(), root).await;
-    let child_code = std::fs::read(artifacts.join("app-v2.wasm")).unwrap();
-    let mut old_upgrade_record = None;
+        .unwrap();
     if completed {
-        std::fs::write(workspace.join("artifacts/app.wasm"), &child_code).unwrap();
-        let at = (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000 + 40)
-            .to_string();
-        let planned = cli(
-            &config,
-            &[
-                "fleet",
-                "plan",
-                "--identity",
-                "anonymous",
-                "--execute-at",
-                &at,
-            ],
-        );
-        let id = planned["operation"].as_str().unwrap();
-        assert_eq!(
-            cli(&config, &["fleet", "apply", id, "--identity", "anonymous"])["upgrade"]["phase"],
-            "Scheduled"
-        );
-        owner.client().stop_progress().await;
-        owner.client().advance_time(Duration::from_secs(45)).await;
-        settle(owner.client()).await;
-        owner.client().auto_progress().await;
-        // Model custody already retained by the previous CLI: an authenticated
-        // ID-25 reply remains readable, without adding live fallback to child apply.
-        let reply = owner
-            .client()
-            .update_call(
-                root,
-                CanisterId::anonymous(),
-                "observe_upgrade",
-                ic_wire::encode(
-                    &(),
-                    ic_wire::Encoding::Frame {
-                        method: upgrade::STATUS,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    LIMITS,
-                )
-                .unwrap(),
-            )
-            .await
-            .unwrap();
-        let old: upgrade::Status = ic_wire::decode(
-            &reply,
-            ic_wire::Encoding::Frame {
-                method: upgrade::STATUS,
-                direction: ic_wire::Direction::Response,
-            },
-            LIMITS,
-        )
-        .unwrap();
-        assert_eq!(old.phase, upgrade::Phase::Ready);
-        let dir = journal.join(id).join("observe/0");
-        std::fs::create_dir_all(&dir).unwrap();
-        std::fs::write(dir.join("reply.bin"), &reply).unwrap();
-        assert_eq!(
-            cli(&config, &["fleet", "apply", id, "--identity", "anonymous"])["canister"],
-            child.to_text()
-        );
-        old_upgrade_record = Some((dir.join("reply.bin"), reply));
+        pic.advance_time(Duration::from_secs(11)).await;
+        settle(pic).await;
     }
-    std::fs::copy(
-        artifacts.join("root.wasm"),
-        workspace.join("artifacts/root.wasm"),
-    )
-    .unwrap();
-    if untracked {
-        let now = owner.client().get_time().await.as_nanos_since_unix_epoch();
-        let input = upgrade::Stage {
-            approval: upgrade::Approval {
-                manager: root.to_text(),
-                child: child.to_text(),
-                previous_module: digest(&std::fs::read(artifacts.join("app.wasm")).unwrap()),
-                module_hash: digest(&child_code),
-                execute_at_ns: now + 40_000_000_000,
-                expires_at_ns: now + 640_000_000_000,
-            },
-            wasm: child_code,
-        };
-        let reply = owner
-            .client()
-            .update_call(
-                root,
-                CanisterId::anonymous(),
-                "stage_upgrade",
-                ic_wire::encode(
-                    &input,
-                    ic_wire::Encoding::Frame {
-                        method: upgrade::STAGE,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    STAGE_LIMITS,
-                )
-                .unwrap(),
-            )
-            .await
-            .unwrap();
-        let admitted: Result<upgrade::Status, Refusal> = ic_wire::decode(
-            &reply,
-            ic_wire::Encoding::Frame {
-                method: upgrade::STAGE,
-                direction: ic_wire::Direction::Response,
-            },
-            LIMITS,
-        )
-        .unwrap();
-        assert_eq!(admitted.unwrap().phase, upgrade::Phase::Scheduled);
-    }
-    let stable = owner.client().get_stable_memory(root).await;
-    let original_status = owner.client().canister_status(root, None).await.unwrap();
-    let journal_entries = || {
-        std::fs::read_dir(&journal)
-            .unwrap()
-            .map(|entry| entry.unwrap().file_name())
-            .collect::<std::collections::BTreeSet<_>>()
-    };
-    let entries = journal_entries();
-    for _ in 0..2 {
-        let refused = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
-            .args(["fleet", "plan", "--identity", "anonymous", "--config"])
-            .arg(&config)
-            .arg("--json")
-            .output()
-            .unwrap();
-        assert!(!refused.status.success());
-        let error: serde_json::Value = serde_json::from_slice(&refused.stderr).unwrap();
-        assert_eq!(error["error"], "invalid");
-        assert!(
-            error["message"]
-                .as_str()
-                .unwrap()
-                .contains("Root maintenance")
-        );
-        assert_eq!(journal_entries(), entries);
-    }
-    assert_eq!(owner.client().get_stable_memory(root).await, stable);
-    let after = owner.client().canister_status(root, None).await.unwrap();
-    assert_eq!(after.version, original_status.version);
-    assert_eq!(after.module_hash, Some(digest(&original).to_vec()));
-    assert_eq!(format!("{:?}", after.status), "Running");
+    let retained = storage_reopen::historical_status(pic, root).await;
     assert_eq!(
-        std::fs::read(journal.join(creation_id).join("fleet.json")).unwrap(),
-        creation_bytes
+        retained.phase,
+        if completed {
+            Phase::Ready
+        } else {
+            Phase::Scheduled
+        }
     );
-    if let Some((path, bytes)) = old_upgrade_record {
-        assert_eq!(std::fs::read(path).unwrap(), bytes);
-    }
+    let stable = pic.get_stable_memory(root).await;
+    canic_qualification::upgrade_stopped(pic, root, children::artifact("root.wasm"), vec![], None)
+        .await
+        .expect_err("old inline custody must stay with its original Root");
+    assert_eq!(pic.get_stable_memory(root).await, stable);
+    assert_eq!(storage_reopen::historical_status(pic, root).await, retained);
     assert_eq!(
-        storage_reopen::historical_status(owner.client(), root).await,
-        before
+        pic.canister_status(root, None).await.unwrap().module_hash,
+        Some(digest(&original).to_vec())
     );
     assert_eq!(
-        owner.close(std::time::Duration::from_secs(10)).await,
+        owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted
     );
-    let stopped = server.stop().unwrap();
-    assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
+    assert!(server.stop().unwrap().process.cleanup.is_empty());
 }

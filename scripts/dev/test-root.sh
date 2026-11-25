@@ -7,6 +7,7 @@ prepare_snapshot() {
     cargo test --locked -p canic-management-protocol --features backup backup::tests
     mkdir -p target/backup
     "$1" artifact build --package canic-root --features backup,fault-injection --output target/backup/root.wasm --json > target/backup/root.json
+    "$1" artifact build --package ic-wasm-store --output target/backup/store.wasm --json > target/backup/store.json
     "$1" artifact build --package ex-counter --output target/backup/app.wasm --json > target/backup/app.json
 }
 if [[ $# == 1 && $1 == snapshot:: ]]; then

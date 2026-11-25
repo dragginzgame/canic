@@ -60,7 +60,6 @@ async fn paid_singleton_reopens_its_parent_bound_receiver() {
     let source = format!(
         r#"
 [apps.projects]
-wasm_store = true
 [apps.projects.canisters]
 registry = {{ role = "registry" }}
 project = {{ role = "project", parent = "registry", wasm = "db-role-project.wasm" }}
@@ -121,8 +120,8 @@ limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns
         panic!("expected placement grants")
     };
     root.update::<_, Result<(), management::Refusal>>(
-        "configure_capacity",
-        stored::CONFIGURE_CAPACITY,
+        "configure_subnet_capacity",
+        stored::CONFIGURE_SUBNET_CAPACITY,
         &capacity.approval,
         stored::LIMITS,
     )

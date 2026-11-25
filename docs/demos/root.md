@@ -2,8 +2,7 @@
 
 ## Build the published Root and its operator client
 
-A managed app gets `root` automatically when it selects the Store or declares
-a child with `parent = "root"`. Build it with `canic app build --canister root`.
+Every Canic app gets a Root and a separate Wasm Store automatically. Build it with `canic app build --canister root`.
 Canic writes `artifacts/root.wasm` and `artifacts/root.client` and enables the
 Root capabilities used by the app's fleet policies.
 
@@ -18,12 +17,12 @@ using the checkout’s lockfile.
 Fresh Root builds address each child by its slot, including the first. The public
 `child_upgrade_status` query takes the slot and an optional approval. Omit the
 approval to read the latest upgrade or supply it to retrieve the exact retained
-outcome. Controller updates stage and reconcile an explicit slot. Root keeps
+outcome. Controllers call `observe_child_status` to read a slot’s creation status or the status of an exact upgrade approval as a replicated update. Controller updates stage and reconcile an explicit slot. Root keeps
 custody reads separate from application observations. Host retains the original
 method names and frames for historical plans with an implicit first slot.
 
 The native Root build type-checks the same management mounts and engine as the
-installed canister. For example, `stage_inline_child_creation` checks the actual controller,
+installed canister. For example, `stage_child_creation` checks the actual controller,
 decodes its request and stages the child in the engine. Scheduled creation
 reaches `management_completion("create_canister", …)` and awaits Platform’s
 `Call::execute`. Outside a canister, polling that call yields
@@ -81,7 +80,7 @@ admitting either app; the approval includes its separate 1T debit. See the
 [Store bootstrap workflow](wasm-store.md). Adding Store to an already retained
 fleet remains an unqualified adoption path; the existing mainnet demo below is
 unchanged. Fresh fleets with Store publish each application by content hash before
-admission; existing inline fleets keep their original delivery contract. A changed
+admission; historical inline fleets require their original Root and Host. A changed
 Store-backed child with unpublished bytes first needs publication plan/apply, then a separate upgrade
 plan/apply. See [whole-fleet artifacts](wasm-store.md#whole-fleet-artifacts).
 
@@ -428,7 +427,7 @@ canic fleet apply UPGRADE_OPERATION --identity canic-mainnet
 
 New Store-backed bytes first need publication; copy PUBLICATION_OPERATION from
 that plan, apply it, then plan again for the upgrade. Already published bytes and
-existing inline fleets skip that publication step.
+every fresh fleet publishes its application releases before installation.
 
 The planner resolves the existing child, previous module and exact Root module
 from retained completion; no principal or hash needs copying. Review the upgrade

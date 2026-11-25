@@ -141,7 +141,7 @@ fn pool_terms(
     text: &mut String,
     capacity: Option<&canic_host::PoolGrant<canic_management_protocol::stored::SubnetCapacity>>,
     standby: Option<&canic_management_protocol::stored::StandbyPolicy>,
-    increases: &[canic_host::PoolGrant<canic_management_protocol::stored::IncreasePool>],
+    increases: &[canic_host::PoolGrant<canic_management_protocol::stored::IncreasePoolLimit>],
 ) {
     if let Some(cap) = capacity {
         writeln!(
@@ -173,10 +173,10 @@ fn pool_terms(
         }
     }
     for change in increases {
-        use canic_management_protocol::stored::IncreasePool;
+        use canic_management_protocol::stored::IncreasePoolLimit;
         let (pool, old, new) = match &change.approval {
-            IncreasePool::Shards(a, n) => (&a.pool, a.max_shards, n),
-            IncreasePool::Instances(a, n) => (&a.component, a.max_instances, n),
+            IncreasePoolLimit::Shards(a, n) => (&a.pool, a.max_shards, n),
+            IncreasePoolLimit::Instances(a, n) => (&a.component, a.max_instances, n),
         };
         writeln!(text, "Increase {}: {old} → {new} children", escape(pool)).unwrap();
     }

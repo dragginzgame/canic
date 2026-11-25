@@ -204,6 +204,13 @@ fn discovery_does_not_follow_child_symlinks() {
     std::fs::remove_dir_all(source).unwrap();
 }
 
+fn bootstrap_config() -> SelectedFleet {
+    toml::from_str::<Config>("[apps.hello.fleets.demo]\nnetwork = {kind = 'Mainnet'}")
+        .unwrap()
+        .select(None, None)
+        .unwrap()
+}
+
 fn declaration(selected: &SelectedFleet) -> Config {
     let canisters = selected
         .config
@@ -295,7 +302,7 @@ fn reusable_app_definitions_resolve_across_fleets_without_copying_bindings() {
     )
     .unwrap();
     let next = init_fleet(&path, "hello", "staging", Network::Mainnet).unwrap();
-    assert_eq!(next.config.canisters.len(), 2);
+    assert_eq!(next.config.canisters.len(), 4);
     assert!(next.config.canisters.values().all(|c| c.id.is_none()));
     let loaded = load_config(&path).unwrap();
     assert!(loaded.apps["hello"].fleets["staging"].canisters.is_empty());
@@ -456,7 +463,10 @@ fn loaded_config_and_selection_retain_one_validated_snapshot() {
         loaded.select(Some("hello"), Some("demo")).unwrap(),
         selected
     );
-    assert_eq!(selected, config());
+    assert_eq!(
+        selected.config.canisters["backend"],
+        config().config.canisters["backend"]
+    );
     assert_eq!(
         load_config(&path)
             .unwrap()
@@ -465,7 +475,7 @@ fn loaded_config_and_selection_retain_one_validated_snapshot() {
             .config
             .canisters
             .len(),
-        2
+        4
     );
 }
 
@@ -655,7 +665,10 @@ fn initialization_is_local_bounded_and_preserves_existing_files() {
     let path = root.join("canic.toml");
     let config = declaration(&config());
     init_config(&path, &config).unwrap();
-    assert_eq!(load_config(&path).unwrap(), config);
+    assert_eq!(
+        load_config(&path).unwrap().apps["hello"].fleets,
+        config.apps["hello"].fleets
+    );
     assert_eq!(std::fs::read_dir(&root).unwrap().count(), 1);
     let before = std::fs::read(&path).unwrap();
     assert!(init_config(&path, &config).is_err());
@@ -680,23 +693,23 @@ fn named_plans_retain_identity_and_never_renew_expired_or_conflicting_authority(
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
     let journal = root.join("state");
     let (id, plan) =
-        create_configured_plan(&journal, &wasm, input(), &config(), "backend").unwrap();
-    assert_eq!(plan.version, 2);
+        create_configured_plan(&journal, &wasm, input(), &bootstrap_config(), "root").unwrap();
+    assert_eq!(plan.version, 10);
     assert_eq!(plan.deployment.as_ref().unwrap().app, "hello");
-    let mut described = config();
+    let mut described = bootstrap_config();
     described
         .config
         .canisters
         .insert("manager".into(), CanisterConfig::default());
-    let backend = described.config.canisters.get_mut("backend").unwrap();
+    let backend = described.config.canisters.get_mut("root").unwrap();
     backend.role = Some("worker".into());
     backend.parent = Some("manager".into());
-    assert!(create_configured_plan(&journal, &wasm, input(), &described, "backend").is_err());
+    assert!(create_configured_plan(&journal, &wasm, input(), &described, "root").is_err());
     // A changed tree cannot turn direct authority into Root-owned authority.
     // The original operation remains intact and available to apply/status.
     assert_eq!(plan::load(&journal.join(&id), &id).unwrap().0, plan);
     assert_eq!(
-        create_configured_plan(&journal, &wasm, input(), &config(), "backend").unwrap(),
+        create_configured_plan(&journal, &wasm, input(), &bootstrap_config(), "root").unwrap(),
         (id.clone(), plan.clone())
     );
     let mut renamed = plan.clone();
@@ -704,8 +717,12 @@ fn named_plans_retain_identity_and_never_renew_expired_or_conflicting_authority(
     assert_ne!(renamed.digest().unwrap(), id);
     let mut conflicting = input();
     conflicting.creation_cycles += 1;
-    assert!(create_configured_plan(&journal, &wasm, conflicting, &config(), "backend").is_err());
-    assert!(create_configured_plan(&journal, &wasm, input(), &config(), "missing").is_err());
+    assert!(
+        create_configured_plan(&journal, &wasm, conflicting, &bootstrap_config(), "root").is_err()
+    );
+    assert!(
+        create_configured_plan(&journal, &wasm, input(), &bootstrap_config(), "missing").is_err()
+    );
     let mut expired = plan;
     expired.created_at_ns = 1;
     expired.expires_at_ns = 2;
@@ -717,12 +734,12 @@ fn named_plans_retain_identity_and_never_renew_expired_or_conflicting_authority(
     )
     .unwrap();
     assert_eq!(
-        create_configured_plan(&journal, &wasm, input(), &config(), "backend").unwrap(),
+        create_configured_plan(&journal, &wasm, input(), &bootstrap_config(), "root").unwrap(),
         (expired_id, expired)
     );
     assert_eq!(std::fs::read_dir(&journal).unwrap().count(), 2); // One operation and the journal lock.
     let _lock = store::Store::open(&journal).unwrap();
-    assert!(create_configured_plan(&journal, &wasm, input(), &config(), "backend").is_err());
+    assert!(create_configured_plan(&journal, &wasm, input(), &bootstrap_config(), "root").is_err());
 }
 
 #[test]
@@ -876,8 +893,9 @@ async fn config_edits_do_not_rebind_existing_network_authority() {
     let root = directory();
     let wasm = root.join("hello.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let (id, _) = create_configured_plan(&root, &wasm, input(), &config(), "backend").unwrap();
-    let mut edited = config();
+    let (id, _) =
+        create_configured_plan(&root, &wasm, input(), &bootstrap_config(), "root").unwrap();
+    let mut edited = bootstrap_config();
     edited.config.network = Network::Local {
         url: "http://localhost:8000".into(),
         root_key: "00".repeat(133),
@@ -886,7 +904,7 @@ async fn config_edits_do_not_rebind_existing_network_authority() {
     };
     let mut changed_input = input();
     changed_input.network = edited.config.network.clone();
-    assert!(create_configured_plan(&root, &wasm, changed_input, &edited, "backend").is_err());
+    assert!(create_configured_plan(&root, &wasm, changed_input, &edited, "root").is_err());
     let snapshot = crate::fleet_with_config(&root, &[], Some(&edited))
         .await
         .unwrap();
@@ -912,7 +930,7 @@ async fn config_edits_do_not_rebind_existing_network_authority() {
 async fn one_app_has_multiple_isolated_fleets_and_requires_explicit_selection() {
     let root = directory();
     let config_path = root.join("canic.toml");
-    let mut catalog = declaration(&config());
+    let mut catalog = declaration(&bootstrap_config());
     let definition = catalog.apps.get_mut("hello").unwrap();
     definition
         .fleets
@@ -940,11 +958,10 @@ async fn one_app_has_multiple_isolated_fleets_and_requires_explicit_selection() 
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
     // Even a shared explicit journal cannot merge pending named operations.
     let journal = root.join("shared");
-    let (demo_id, _) = create_configured_plan(&journal, &wasm, input(), &demo, "backend").unwrap();
+    let (demo_id, _) = create_configured_plan(&journal, &wasm, input(), &demo, "root").unwrap();
     let (staging_id, _) =
-        create_configured_plan(&journal, &wasm, input(), &staging, "backend").unwrap();
-    let (other_id, _) =
-        create_configured_plan(&journal, &wasm, input(), &other, "backend").unwrap();
+        create_configured_plan(&journal, &wasm, input(), &staging, "root").unwrap();
+    let (other_id, _) = create_configured_plan(&journal, &wasm, input(), &other, "root").unwrap();
     for (selected, id) in [
         (&demo, &demo_id),
         (&staging, &staging_id),
@@ -1195,7 +1212,7 @@ creation_budget = 2000000000000
 expires_at_ns = 1800000000000000000
 "#;
     let config: Config = toml::from_str(source).unwrap();
-    assert_eq!(config.select_app(None).unwrap().1.canisters.len(), 2);
+    assert_eq!(config.select_app(None).unwrap().1.canisters.len(), 4);
     let selected = config.select(None, None).unwrap();
     assert_eq!(
         selected.config.canisters["store"].role.as_deref(),
@@ -1708,7 +1725,7 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
     assert_eq!(increases.len(), 1);
     assert_eq!(
         increases[0].approval,
-        canic_management_protocol::stored::IncreasePool::Shards(previous, 2)
+        canic_management_protocol::stored::IncreasePoolLimit::Shards(previous, 2)
     );
     assert_eq!(shards.len(), 2);
     assert_ne!(shards[0].approval.pool, shards[1].approval.pool);
@@ -1739,7 +1756,6 @@ fn registry_plans_project_paid_singletons_without_funding_projects() {
     let source = r#"
 [apps.projects.canisters]
 root = { role = "root" }
-store = { role = "wasm-store", parent = "root" }
 registry = { role = "registry", parent = "root" }
 project = { role = "project", parent = "registry", wasm = "project.wasm" }
 ledger = { role = "project_ledger", parent = "project", wasm = "ledger.wasm" }
@@ -1934,7 +1950,6 @@ project_registry = { id = "ryjl3-tyaaa-aaaaa-aaaba-cai" }
 fn supplied_store_uses_declared_root_and_rejects_conflicting_slots() {
     let source = r#"
 [apps.demo]
-wasm_store = true
 [apps.demo.canisters.manager]
 role = "root"
 wasm = "artifacts/custom-root.wasm"
@@ -1959,12 +1974,13 @@ build = { manifest = "../../qualification/Cargo.toml", package = "canic-root", f
             .unwrap_err()
             .to_string();
         assert!(
-            error.contains("apps.demo.wasm_store = true") && error.contains(reason),
+            error.contains("apps.demo.canisters") && error.contains(reason),
             "{error}"
         );
     }
-    let disabled: Config = toml::from_str(&source.replace("true", "false")).unwrap();
-    assert!(!disabled.apps["demo"].canisters.contains_key("store"));
+    for value in ["true", "false"] {
+        assert!(toml::from_str::<Config>(&format!("[apps.demo]\nwasm_store = {value}")).is_err());
+    }
 }
 
 #[test]
@@ -1983,7 +1999,7 @@ wasm = "artifacts/hub.wasm"
     assert_eq!(recipe.manifest, Path::new("../../Cargo.toml"));
     assert_eq!(recipe.features, ["child-metrics"]);
     assert_eq!(recipe.client.as_deref(), Some("canic-root-client"));
-    assert!(!slots.contains_key("store"));
+    assert!(slots.contains_key("store"));
     assert!(toml::from_str::<Config>("[apps.demo.root]").is_err());
 }
 
@@ -1991,11 +2007,7 @@ wasm = "artifacts/hub.wasm"
 fn adding_first_managed_child_recomputes_both_supplied_recipes() {
     let temp = tempfile::tempdir().unwrap();
     let path = temp.path().join("canic.toml");
-    std::fs::write(
-        &path,
-        "[apps.demo]\n# Managed infrastructure\nwasm_store = true\n",
-    )
-    .unwrap();
+    std::fs::write(&path, "[apps.demo]\n# Managed infrastructure\n").unwrap();
     let config = add_app_canister(
         &path,
         "demo",
@@ -2055,6 +2067,6 @@ fn root_build_unions_pool_mounts_across_fleets() {
             .as_ref()
             .unwrap()
             .features,
-        ["auth", "child-creation", "child-metrics", "reserve-pool"]
+        ["auth", "child-metrics", "reserve-pool"]
     );
 }

@@ -54,14 +54,21 @@ async fn directory_recipients_retain_the_installing_root() {
         .unwrap();
     let pic = instance.client();
     let root = pic.create_canister().await;
+    let store = ChildStore::install(pic, root, artifact("store.wasm")).await;
     pic.install_canister(root, artifact("root.wasm"), vec![], None)
         .await;
     pic.add_cycles(root, 10_000_000_000_000).await;
     let wasm = artifact("directory.wasm");
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    admit(pic, root, ChildId::FIRST, input(root, wasm.clone(), now))
-        .await
-        .unwrap();
+    admit(
+        pic,
+        root,
+        &store,
+        ChildId::FIRST,
+        input(root, wasm.clone(), now),
+    )
+    .await
+    .unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     let first = read(pic, root).await.into_iter().next().unwrap();
@@ -113,26 +120,22 @@ async fn directory_recipients_retain_the_installing_root() {
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_inline_child_upgrade",
-            ic_wire::encode(
-                &canic_management_protocol::children::Request {
-                    slot: canic_management_protocol::children::ChildId::FIRST,
-                    value: &change,
-                },
-                ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::children::STAGE_UPGRADE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
+            "stage_child_upgrade",
+            store
+                .frame(
+                    application::STAGE_CHILD_UPGRADE,
+                    canic_management_protocol::children::ChildId::FIRST,
+                    &change.approval,
+                    &change.wasm,
+                )
+                .await,
         )
         .await
         .unwrap();
     ic_wire::decode::<Result<upgrade::Status, Refusal>>(
         &reply,
         ic_wire::Encoding::Frame {
-            method: canic_management_protocol::children::STAGE_UPGRADE,
+            method: application::STAGE_CHILD_UPGRADE,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,

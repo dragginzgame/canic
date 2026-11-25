@@ -8,26 +8,20 @@ use std::path::{Path, PathBuf};
 
 pub(crate) fn call(plan: &Plan) -> Result<signed::Call<'static>> {
     match plan.action {
-        crate::PlanAction::UpgradeChild { .. } => {
-            Method::ReconcileUpgrade.call(plan, &upgrade::approval(plan)?, LIMITS)
-        }
-        crate::PlanAction::CreateChild(_) => {
-            Method::Reconcile.call(plan, &super::approval(plan)?, LIMITS)
-        }
+        crate::PlanAction::UpgradeChild { .. } => Method::ReconcileUpgrade.call(plan),
+        crate::PlanAction::CreateChild(_) => Method::Reconcile.call(plan),
         _ => Err(Error::Invalid("expected Root-owned child recovery".into())),
     }
 }
 
 pub(super) fn next_observation(dir: &Path) -> Result<PathBuf> {
-    for index in 0..OBSERVATIONS {
-        let path = dir.join(format!("observe/{index}"));
-        if !path.join("reply.bin").try_exists().map_err(supplier)? {
-            return Ok(path);
-        }
-    }
-    Err(Error::Blocked(format!(
-        "{OBSERVATIONS} retained observation slots exhausted; preserve this journal"
-    )))
+    crate::store::next_observation(&dir.join("observe"), OBSERVATIONS, &["reply.bin"])?
+        .map(|(_, path)| path)
+        .ok_or_else(|| {
+            Error::Blocked(format!(
+                "{OBSERVATIONS} retained observation slots exhausted; preserve this journal"
+            ))
+        })
 }
 
 fn attempt(dir: &Path) -> Result<PathBuf> {
@@ -61,11 +55,18 @@ pub(crate) async fn reconcile(
     dir: &Path,
     id: &str,
     plan: &Plan,
-    wasm: &[u8],
     identity: &str,
     icp: &Path,
     client: &ReadClient,
 ) -> Result<ApplyOutcome> {
+    if plan
+        .management()
+        .is_some_and(|owner| owner.source.is_none())
+    {
+        return Err(Error::Blocked(
+            "inline child approvals require their original Root and Host".into(),
+        ));
+    }
     let call = call(plan)?;
     if !dir
         .join("stage/signed.json")
@@ -129,5 +130,5 @@ pub(crate) async fn reconcile(
     }
     // Keep one chronological stream of authenticated progress. Existing apply
     // observes an already signed admission; it cannot create a replacement stage.
-    super::apply(dir, id, plan, wasm, identity, icp, client).await
+    super::apply(dir, id, plan, identity, icp, client).await
 }

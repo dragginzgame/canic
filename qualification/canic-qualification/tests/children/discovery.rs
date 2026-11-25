@@ -44,6 +44,7 @@ async fn discovers_nine_children_without_local_deployment_records() {
     owner.client().add_cycles(root, 20_000_000_000_000).await;
     let url = owner.client_mut().make_live(None).await.to_string();
     let pic = owner.client();
+    let store = ChildStore::install(pic, root, artifact("store.wasm")).await;
     let key: String = pic
         .root_key()
         .await
@@ -92,7 +93,7 @@ async fn discovers_nine_children_without_local_deployment_records() {
             artifact("app.wasm"),
             pic.get_time().await.as_nanos_since_unix_epoch(),
         );
-        admit(pic, root, slot, stage.clone()).await.unwrap();
+        admit(pic, root, &store, slot, stage.clone()).await.unwrap();
         pic.advance_time(Duration::from_secs(11)).await;
         settle(pic).await;
         if index == 8 {
@@ -101,7 +102,7 @@ async fn discovers_nine_children_without_local_deployment_records() {
             pic.upgrade_canister(root, artifact("root.wasm"), vec![], None)
                 .await
                 .unwrap();
-            let retried = admit(pic, root, slot, stage).await.unwrap();
+            let retried = admit(pic, root, &store, slot, stage).await.unwrap();
             assert_eq!(retried.phase, Phase::Ready);
             assert_eq!(retried.worker, original.worker);
             assert_eq!(retried.attempts, original.attempts);
@@ -144,7 +145,7 @@ async fn discovers_nine_children_without_local_deployment_records() {
         pic.get_time().await.as_nanos_since_unix_epoch(),
     );
     assert_eq!(
-        admit(pic, root, ChildId::service(9).unwrap(), tenth).await,
+        admit(pic, root, &store, ChildId::service(9).unwrap(), tenth).await,
         Err(Refusal::Occupied)
     );
     let output = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())

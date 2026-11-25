@@ -72,9 +72,9 @@ pub use operation::{
     ApplyOutcome, CanisterStatus, ChildOutcome, FleetChildStatus, FleetStatus, FleetStepStatus,
     ManagementStatus, OperationStatus, Receipt, StatusDetail, apply, reconcile, status,
 };
-pub use plan::{
-    ManagedOwner, Plan, PlanAction, PlanInput, StoreMaintenance, UpgradeTarget, create_plan,
-};
+#[cfg(test)]
+pub(crate) use plan::create_plan;
+pub use plan::{ManagedOwner, Plan, PlanAction, PlanInput, StoreMaintenance, UpgradeTarget};
 pub use publication::{
     Publication, PublicationInput, PublicationProgress, create_publication_plan,
     list::{FleetArtifact, FleetArtifacts, fleet_artifacts},

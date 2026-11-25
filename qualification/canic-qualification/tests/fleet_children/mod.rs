@@ -118,7 +118,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         String::from_utf8_lossy(&output.stderr)
     );
     let config = workspace.join("canic.toml");
-    inline_fixture(&config, "starter");
+    supply_store_artifact(&config);
     cli(
         &config,
         &[
@@ -192,8 +192,8 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         "Scheduled"
     );
     let summary = status_text(&config, id, "local");
-    assert!(summary.contains("\nChild: app\nRetained Root phase: Scheduled"));
-    assert!(summary.contains("\nChild: worker\nRetained Root phase: Scheduled"));
+    assert!(summary.contains("Child: app"));
+    assert!(summary.contains("Child: worker"));
     let path = journal.join(id);
     let first_signed = std::fs::read(path.join("child/stage/signed.json")).unwrap();
     let second_signed = std::fs::read(path.join("sibling/stage/signed.json")).unwrap();
@@ -264,7 +264,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         &config,
         &["fleet", "show", "--html", report.to_str().unwrap()],
     );
-    assert_eq!(before_receipts["canisters"].as_array().unwrap().len(), 3);
+    assert_eq!(before_receipts["canisters"].as_array().unwrap().len(), 4);
     assert_eq!(before_receipts["managers"].as_array().unwrap().len(), 2);
     assert!(
         before_receipts["managers"]
@@ -349,6 +349,21 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         let dispatch =
             (owner.client().get_time().await.as_nanos_since_unix_epoch() / 1_000_000_000 + 60)
                 .to_string();
+        let plan_args = [
+            "fleet",
+            "plan",
+            "--identity",
+            "anonymous",
+            "--execute-at",
+            &dispatch,
+        ];
+        let publication = cli(&config, &plan_args);
+        assert_eq!(publication["action"], "publication");
+        let release = publication["operation"].as_str().unwrap();
+        cli(
+            &config,
+            &["fleet", "apply", release, "--identity", "anonymous"],
+        );
         let upgrade = if name == "worker" {
             // Named planning must recover Second from creation custody, not
             // silently use the original first-slot endpoint.
@@ -356,13 +371,21 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
             let previous_module = complete["children"][1]["outcome"]["module_hash"]
                 .as_str()
                 .unwrap();
+            let mut named: serde_json::Value =
+                toml::from_str(std::str::from_utf8(&config_bytes).unwrap()).unwrap();
+            named["apps"]["starter"]["fleets"]["local"]["canisters"]["store"] =
+                serde_json::json!({"id": complete["store"]["canister"]});
+            let named_config = workspace.join("named.toml");
+            std::fs::write(&named_config, toml::to_string(&named).unwrap()).unwrap();
             cli(
-                &config,
+                &named_config,
                 &[
                     "fleet",
                     "plan",
                     "--canister",
                     name,
+                    "--release",
+                    release,
                     "--root-module",
                     root_module,
                     "--target",
@@ -500,31 +523,32 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         },
         wasm,
     };
+    let store = ChildStore::bound(
+        owner.client(),
+        root,
+        CanisterId::from_text(complete["store"]["canister"].as_str().unwrap()).unwrap(),
+    );
     let reply = owner
         .client()
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_inline_child_upgrade",
-            ic_wire::encode(
-                &canic_management_protocol::children::Request {
-                    slot: canic_management_protocol::children::ChildId::SECOND,
-                    value: change,
-                },
-                ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::children::STAGE_UPGRADE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
+            "stage_child_upgrade",
+            store
+                .frame(
+                    application::STAGE_CHILD_UPGRADE,
+                    canic_management_protocol::children::ChildId::SECOND,
+                    &change.approval,
+                    &change.wasm,
+                )
+                .await,
         )
         .await
         .unwrap();
     let admitted: Result<canic_management_protocol::upgrade::Status, Refusal> = ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: canic_management_protocol::children::STAGE_UPGRADE,
+            method: application::STAGE_CHILD_UPGRADE,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,
@@ -562,7 +586,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
             .await
             .unwrap()
             .num_canisters,
-        4
+        5
     ); // Includes local routing fixture.
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,

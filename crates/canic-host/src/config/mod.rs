@@ -506,51 +506,16 @@ impl AppConfig {
         &self,
         fleet: &FleetDeclaration,
     ) -> Result<BTreeMap<String, CanisterConfig>> {
-        let mut canisters = self.resolve_canisters(&fleet.canisters);
-        for (root, store) in fleet
-            .shard_pools
-            .iter()
-            .map(|p| (&p.root, &p.store))
-            .chain(fleet.worker_pools.iter().map(|p| (&p.root, &p.store)))
-            .chain(fleet.registry.iter().map(|p| (&p.root, &p.store)))
+        let canisters = self.resolve_canisters(&fleet.canisters);
+        if let Some(policy) = &fleet.standby_pool
+            && !canisters
+                .get(&policy.root)
+                .is_some_and(|slot| slot.role.as_deref() == Some("root") && !slot.profile_manager)
         {
-            for (slot, role) in [(root, "root"), (store, "wasm-store")] {
-                if self.canisters.contains_key(slot) {
-                    continue;
-                }
-                let binding = fleet.canisters.get(slot);
-                if binding.is_some_and(|b| b.profile_manager) {
-                    return Err(Error::Invalid(
-                        "supplied pool infrastructure cannot be a profile manager".into(),
-                    ));
-                }
-                canisters.insert(
-                    slot.clone(),
-                    CanisterConfig {
-                        role: Some(role.into()),
-                        id: binding.map(|b| b.id.clone()),
-                        ..Default::default()
-                    },
-                );
-            }
-        }
-        if let Some(policy) = &fleet.standby_pool {
-            let slot = canisters
-                .entry(policy.root.clone())
-                .or_insert_with(|| CanisterConfig {
-                    role: Some("root".into()),
-                    id: fleet
-                        .canisters
-                        .get(&policy.root)
-                        .map(|binding| binding.id.clone()),
-                    ..Default::default()
-                });
-            if slot.role.as_deref() != Some("root") || slot.profile_manager {
-                return Err(Error::Invalid(format!(
-                    "standby_pool.root = {:?} requires the fleet Root",
-                    policy.root
-                )));
-            }
+            return Err(Error::Invalid(format!(
+                "standby_pool.root = {:?} requires the fleet Root",
+                policy.root
+            )));
         }
         if let Some(slot) = fleet
             .canisters
@@ -558,7 +523,7 @@ impl AppConfig {
             .find(|slot| !canisters.contains_key(*slot))
         {
             return Err(Error::Invalid(format!(
-                "fleet binding {slot:?} must name an app canister definition or supplied shard infrastructure"
+                "fleet binding {slot:?} must name an app canister definition"
             )));
         }
         Ok(canisters)
@@ -1303,12 +1268,8 @@ pub(super) fn load_build_config(path: &Path, app: Option<&str>) -> Result<Config
                 "root" => {
                     "Root is supplied automatically; use parent = \"root\" on managed children"
                 }
-                "wasm_store" | "wasm-store" => {
-                    "select the supplied Wasm Store with wasm_store = true on the app"
-                }
-                "store" if field.is_empty() => {
-                    "store is the supplied Wasm Store slot; set wasm_store = true on the app"
-                }
+                "wasm_store" | "wasm-store" => "the Wasm Store is supplied automatically",
+                "store" if field.is_empty() => "store is the mandatory supplied Wasm Store slot",
                 "coordinator" => "coordinator is reserved for Canic infrastructure",
                 _ => continue,
             };
@@ -1333,7 +1294,7 @@ pub fn create_configured_plan(
 ) -> Result<(String, Plan)> {
     selection.validate()?;
     if selection.config.receiver_selected(canister) {
-        return Err(Error::Invalid("selected Auth role needs its approved receiver install arguments; use a managed Store release or supply the receiver envelope to the independent installer".into()));
+        return Err(Error::Invalid("selected Auth role requires a managed Store release with its approved receiver install arguments".into()));
     }
     if selection
         .config
@@ -1345,6 +1306,19 @@ pub fn create_configured_plan(
             "a child slot requires explicit Root-owned planning with --root-module".into(),
         ));
     }
+    if !selection
+        .config
+        .canisters
+        .get(canister)
+        .is_some_and(|slot| slot.role.as_deref() == Some("root"))
+        || !selection.config.canisters.values().any(|slot| {
+            slot.role.as_deref() == Some("wasm-store") && slot.parent.as_deref() == Some(canister)
+        })
+    {
+        return Err(Error::Invalid(
+            "direct bootstrap requires the fleet Root with its declared Wasm Store".into(),
+        ));
+    }
     if input.network != selection.config.network
         || input.target.is_some()
         || input.previous_module.is_some()
@@ -1354,10 +1328,9 @@ pub fn create_configured_plan(
             .get(canister)
             .is_some_and(|slot| slot.id.is_none())
     {
-        return Err(Error::Invalid("select an unbound canister in this app/fleet for first deployment; existing canisters require an explicit target/hash upgrade plan".into()));
+        return Err(Error::Invalid("select the unbound fleet Root for bootstrap; plan Root maintenance through the whole fleet".into()));
     }
-    plan::retain(
-        root,
+    let (mut plan, bytes) = plan::prepare(
         wasm,
         input,
         Some(DeploymentName {
@@ -1367,5 +1340,8 @@ pub fn create_configured_plan(
         }),
         None,
         crate::now()?,
-    )
+    )?;
+    plan.version = 10;
+    plan.validate()?;
+    plan::retain_locked(&store::Store::open(root)?, plan, &bytes)
 }

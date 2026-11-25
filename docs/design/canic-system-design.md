@@ -340,7 +340,7 @@ manager; those deployments predate the separate Store decision. Moving their
 custody requires the qualified transition below, not an automatic migration.
 
 A supplied Root builds the union of endpoint families needed by the app’s declared fleets.
-A shard pool, registry or worker pool selects Root’s child-creation mount. A pool that returns workers to reserve also selects reserve operations. Each payer owns its funding approval, debit journal and revocation. Operators call the payer directly. Root’s funding mount serves its own payments. Each hub owns its routing policy, durable account routes and occupancy. It requests a new child under its creation grant when local capacity runs out.
+Every Root serves child creation, placement and direct-child top-ups. Fleet declarations supply the individual grants and spending limits. Fresh Roots allocate the placement ledger even for fleets with no pools. A pool that returns workers to reserve also selects reserve operations. Each payer owns its funding approval, debit journal and revocation. Operators call the payer directly. Root’s funding mount serves its own payments. Each hub owns its routing policy, durable account routes and occupancy. It requests a new child under its creation grant when local capacity runs out.
 
 ### Repository and workspace boundary
 
@@ -360,10 +360,7 @@ context, endpoint mounts and outbound calls. Sharing a library does not imply
 shared memory, a shared canister or permission to call another role. Select the
 library modules and supplier features each host actually needs. Root and Wasm
 Store remain supplied infrastructure; applications do not copy their implementations.
-Root is implicit when an app uses managed infrastructure. Selecting
-`wasm_store = true` or declaring a child of `root` supplies Root. Fleet policies
-select its Auth, placement and role issuer features. The separate Store uses
-Root’s locked build workspace. A future Coordinator belongs with supplied
+Every Canic app has a supplied Root and a separate Wasm Store from Root’s locked build workspace. Fleets may be declared later. Root creates and upgrades application children only from published Store releases. A single independently deployed canister is outside the Canic deployment model. The hard cut applies to fresh fleets; retained inline journals belong to their original executables. A future Coordinator belongs with supplied
 infrastructure if its global responsibility is admitted.
 This layout is a recommended composition, not another scaffold generator or a
 requirement to split a small single-purpose actor into extra packages.
@@ -628,16 +625,14 @@ Markers describe build composition without establishing readiness or authority.
 Only structured output (`--json`) is global. App/fleet selection and journal
 arguments belong to deployment actions, not artifact inspection, saved-report
 viewing or wallet queries. Without a canister, Wasm override or target,
-`fleet plan` consumes the selected fleet's declared Root, optional Store and up to eight
+`fleet plan` consumes the selected fleet's declared Root, mandatory Store and up to eight
 application artifacts. Fresh creation refuses unsupported trees, existing
 bindings and competing individual plans rather than deploying a partial fleet.
 Its immutable approval names the future Root as the
 typed output of its approved creation. Root and child signing/evidence remain
 with the same existing effect owners; the journal lock covers their composition.
 Replanning identical desired inputs returns original authority, including after
-expiry. Existing single-canister planning remains explicit: a configured creation
-names an unbound slot, while an upgrade
-names an admitted principal and its previous module hash. Named creation uses the
+expiry. Named changes target fleet infrastructure or a managed child with an approved Store release. Named creation uses the
 app-defined Wasm input when present and refuses a competing CLI override; otherwise
 an explicit `--wasm` remains required. `fleet call` uses the app's optional native
 `build.client` codec, built beside its Wasm by `app build`. The app interprets
@@ -1637,7 +1632,7 @@ The registry retains completed project keys on its own Storage lease. Root authe
 retry through that index before reserving a slot. On reopen, check every project
 claim against its indexed position and refuse a missing or inconsistent index.
 The previous sharding Root layout requires its original executable.
-Fresh placement Roots use the PL12 ledger and the `canic.placement.configure_capacity.v1` frame, which retains the explicit large-subnet opt-in. PL12 retains Root’s own funding approvals. Each application payer retains its operator and revocation path. Roots with earlier placement ledgers require their original executable. The subnet ceiling is separate from the capacities of permanent services,
+Fresh placement Roots use the PL12 ledger and the `canic.placement.configure_subnet_capacity.v1` frame, which retains the explicit large-subnet opt-in. PL12 retains Root’s own funding approvals. Each application payer retains its operator and revocation path. Roots with earlier placement ledgers require their original executable. The subnet ceiling is separate from the capacities of permanent services,
 shared shards and registry instances. A project and its singleton ledger each
 consume one reservation. The current slot representation still bounds each
 family separately; larger registries need indexed child journals and Store custody.
@@ -1651,7 +1646,7 @@ systems for the last slot and recovers the winning assignment after Root upgrade
 
 To raise a live pool from two to six, keep its original release, install bytes,
 cycle budget and deadline. Set its count to six and `increase_from = 2` in the
-same pool table. Submit its `increases[].request` to `increase_pool` as the
+same pool table. Submit its `increases[].request` to `increase_pool_limit` as the
 Root controller. Replaying an exact increase acknowledges the retained change.
 A stale count cannot authorize a different change. An unresolved creation still
 occupies capacity. The 0.239.0 two-slot whole-fleet approval and custody APIs
@@ -2092,6 +2087,18 @@ application descendant in its declared tree, including a ledger beneath a projec
 An occupied placement pool or a full child allowance permits publication and
 read-only Store observations. Publication consumes no child slot and leaves
 install authority, pool artifact pins, and maintenance admission in their existing owners.
+On an occupied placement Root, public child, child-upgrade and Store maintenance
+status remain readable. Their replicated observations still require a controller.
+Publication, deployment evidence and approved Store-backed child operations retain
+their existing authority. Ordinary inline creation requires declared capacity.
+The mixed Store admission endpoint (including its observe variant), removal,
+maintenance effects, inline upgrades and full Root maintenance custody stay
+fenced. Their approvals omit live placement custody. A query or observation cannot authorize those effects.
+
+An Auth-enabled Root loses its volatile receiver-grant history on upgrade, even
+when it previously issued zero grants. Worker reset, released-child retirement
+and reserve imports then refuse recycling. Only a fresh installation starts
+with known-empty history.
 Legacy `377fbce` distinguished per-project singleton ledgers from globally indexed
 Root services in `docs/design/archive/0.64-service-singleton-topology/0.64-design.md`.
 The descendant's logical parent determines its singleton scope; publication binds
@@ -2245,7 +2252,7 @@ new discriminant rejected by historical readers; CUJG preserves that evidence ac
 upgrades. Fresh attempts require method 117; missing support blocks before
 stop without falling back.
 
-Root's separate `store_removal` contract forwards one exact deletion or cancellation
+Root's separate `remove_store_artifact` contract forwards one exact deletion or cancellation
 under captured controller authority and the original dispatch deadline. Store
 still owns pin refusal, immutable tombstones and quota. The call uses unbounded
 wait so a successful reply follows the actual Store response, rather than a

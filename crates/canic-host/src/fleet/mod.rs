@@ -614,6 +614,27 @@ pub async fn fleet_with_managers(root: &Path, selected: &[String]) -> Result<Fle
     fleet_with_config(root, selected, None).await
 }
 
+async fn budgeted_observation<T>(
+    deadline: tokio::time::Instant,
+    cap: Duration,
+    exhausted: &str,
+    timed_out: &str,
+    query: impl Future<Output = Result<T>>,
+) -> std::result::Result<T, String> {
+    let budget = deadline
+        .saturating_duration_since(tokio::time::Instant::now())
+        .min(cap);
+    let result = if budget.is_zero() {
+        Err(Error::Blocked(exhausted.into()))
+    } else {
+        tokio::time::timeout(budget, query)
+            .await
+            .map_err(|_| Error::Blocked(timed_out.into()))
+            .and_then(|value| value)
+    };
+    result.map_err(|error| error.to_string().chars().take(500).collect())
+}
+
 /// Observe a configured fleet, including undeployed named slots in its declaration.
 ///
 /// # Errors
@@ -846,28 +867,17 @@ pub async fn fleet_with_config(
     let mut canisters = Vec::new();
     let stores = stores::collect(&operations, &targets, deadline).await?;
     for ((network_id, canister), network) in targets {
-        let budget = deadline
-            .saturating_duration_since(tokio::time::Instant::now())
-            .min(Duration::from_secs(5));
-        let result = if budget.is_zero() {
-            Err(Error::Blocked(
-                "snapshot network budget exhausted; target not observed".into(),
-            ))
-        } else {
-            tokio::time::timeout(budget, observe(&network, &canister))
-                .await
-                .map_err(|_| {
-                    Error::Blocked("observation timed out; current state is unknown".into())
-                })
-                .and_then(|value| value)
-        };
+        let result = budgeted_observation(
+            deadline,
+            Duration::from_secs(5),
+            "snapshot network budget exhausted; target not observed",
+            "observation timed out; current state is unknown",
+            observe(&network, &canister),
+        )
+        .await;
         let (module_hash, controllers, observation_error) = match result {
             Ok((module, controllers)) => (Some(module), Some(controllers), None),
-            Err(error) => (
-                None,
-                None,
-                Some(error.to_string().chars().take(500).collect()),
-            ),
+            Err(error) => (None, None, Some(error)),
         };
         canisters.push(FleetCanister {
             network_id,

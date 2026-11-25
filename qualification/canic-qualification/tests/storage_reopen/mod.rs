@@ -97,23 +97,20 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
         children::artifact("app.wasm"),
         pic.get_time().await.as_nanos_since_unix_epoch(),
     );
+    let store = ChildStore::install(pic, fresh, children::artifact("store.wasm")).await;
     let failed = pic
         .update_call(
             fresh,
             CanisterId::anonymous(),
-            "stage_inline_child_creation",
-            ic_wire::encode(
-                &canic_management_protocol::children::Request {
-                    slot: canic_management_protocol::children::ChildId::FIRST,
-                    value: &input,
-                },
-                ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::children::STAGE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
+            "stage_child_creation",
+            store
+                .frame(
+                    application::STAGE_CHILD_CREATION,
+                    canic_management_protocol::children::ChildId::FIRST,
+                    &input.approval,
+                    &input.wasm,
+                )
+                .await,
         )
         .await
         .unwrap_err();

@@ -43,11 +43,11 @@ if [[ "$scope" == all || "$scope" == miner ]]; then
     "$cli" --json artifact endpoints apps/examples/miner-pool/artifacts/root.wasm |
         jq -e '[.endpoints[].name] | contains(["acquire_placement","lookup_placement","refill_standby"]) and (index("assign_shard") == null) and (index("assign_instance") == null)' >/dev/null
     build_payer miner-payer
-    build management-root canic-root --features child-management
+    build baseline-root canic-root
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test miner
 fi
 if [[ "$scope" == miner ]]; then
-    build pool-faults canic-root --features child-creation,reserve-pool,fault-injection
+    build pool-faults canic-root --features reserve-pool,fault-injection
     CANIC_CLI="$cli" CANIC_STORE_APP_DIRECTORY="$root/target/store" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
     exit
 fi
@@ -61,7 +61,7 @@ if [[ "$scope" == all || "$scope" == db-roles ]]; then
     "$cli" --json artifact endpoints target/store/db-role-schema.wasm |
         jq -e 'any(.endpoints[]; .name == "echo_id" and .mode == "query")' >/dev/null
     build_payer registry-payer
-    build db-role-root canic-root --features auth,role-issuer,child-creation
+    build db-role-root canic-root --features auth,role-issuer,reserve-pool
     build db-role-project canic-directory-witness --manifest qualification/Cargo.toml --features funding
     cp -- target/store/registry-payer.wasm target/store/db-role-hub.wasm
     build hub canic-shard-hub --manifest qualification/Cargo.toml
@@ -74,40 +74,30 @@ if [[ "$scope" == db-roles ]]; then
     exit
 fi
 if [[ "$scope" == all || "$scope" == directory ]]; then
-    pools=child-creation,reserve-pool
-    all_funding=role-issuer,$pools,child-funding
-    cargo build --locked --release -p canic-root --features "$all_funding" --bin canic-root-client --message-format=json-render-diagnostics > "$records"
+    role_features=role-issuer,reserve-pool
+    cargo build --locked --release -p canic-root --features "$role_features" --bin canic-root-client --message-format=json-render-diagnostics > "$records"
     cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic-root-client" and .executable != null) | .executable] | if length == 1 then .[0] else error("expected role-enabled Root client") end' "$records")" target/store/role-root.client
     cargo build --locked -p ex-user-directory-hub --features operator-client --bin ex-user-directory-hub-client --message-format=json-render-diagnostics > "$records"
     cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "ex-user-directory-hub-client") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected hub codec") end' "$records")" target/store/hub.client
     build recycled-miner ex-miner-pool-miner
     build dormant canic-dormant
-    # Compare the funding exports and matching operator codec for each policy.
-    for variant in without-topups role-root; do
-        case "$variant" in
-            without-topups) topups=false; features=$pools ;;
-            role-root) topups=true; features=$all_funding ;;
-        esac
-        build "$variant" canic-root --features "$features"
+    # Both the baseline and role-enabled builds own creation and top-ups.
+    build baseline-root canic-root
+    build role-root canic-root --features "$role_features"
+    for variant in baseline-root role-root; do
         "$cli" --json artifact endpoints "target/store/$variant.wasm" |
-            jq -e --argjson topups "$topups" '
-                [.endpoints[].name] as $names |
-                ($names | contains(["acquire_placement", "approve_child_creation"])) and
-                all("configure_shard_routes", "observe_shard", "begin_shard_drain", "configure_shards", "configure_instances", "configure_workers", "configure_singleton"; . as $name | ($names | index($name) == null)) and
-                ($names | index("stop_application_child_funding") == null) and
-                all("configure_child_funding", "stop_child_funding";
-                    . as $name | (($names | index($name) != null) == $topups))' >/dev/null
-        help=$(cargo run --quiet --locked -p canic-root --features "$features" --bin canic-root-client -- encode --help)
-        for action in configure-child-funding stop-child-funding; do
-            available=false
-            if grep -qw -- "$action" <<<"$help"; then available=true; fi
-            [[ "$available" == "$topups" ]]
-        done
+            jq -e '[.endpoints[].name] as $names |
+                ($names | contains(["acquire_placement", "approve_child_creation", "configure_subnet_capacity", "increase_pool_limit", "configure_child_funding", "stop_child_funding"])) and
+                all("configure_capacity", "increase_pool", "configure_shard_routes", "observe_shard", "begin_shard_drain", "configure_shards", "configure_instances", "configure_workers", "configure_singleton", "stop_application_child_funding"; . as $name | ($names | index($name) == null))' >/dev/null
+    done
+    help=$(cargo run --quiet --locked -p canic-root --features operator-client --bin canic-root-client -- encode --help)
+    for action in configure-child-funding stop-child-funding approve-child-creation configure-subnet-capacity; do
+        grep -qw -- "$action" <<<"$help"
     done
     build directory canic-directory-witness --manifest qualification/Cargo.toml --features placement,role-probe,funding
 fi
 if [[ "$scope" == directory ]]; then
-    build pool-root canic-root --features child-creation,child-funding,reserve-pool
+    build pool-root canic-root --features reserve-pool
     build root canic-root
     build original ic-wasm-store
     CANIC_STORE_APP_DIRECTORY="$root/target/store" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
@@ -129,8 +119,8 @@ if [[ "$scope" == all || "$scope" == sharding ]]; then
     cargo test --locked -p canic --features sharding,storage sharding::
     cargo test --locked -p canic-management --features sharding placement::
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-db-witness --features managed-fixture --output target/store/pool-db.wasm --json > target/store/pool-db.json
-    build pool-root canic-root --features child-creation,child-funding,reserve-pool
-    build pool-faults canic-root --features child-creation,reserve-pool,fault-injection
+    build pool-root canic-root --features reserve-pool
+    build pool-faults canic-root --features reserve-pool,fault-injection
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-shard-hub --output target/store/hub.wasm --json > target/store/hub.json
 fi
 build original ic-wasm-store

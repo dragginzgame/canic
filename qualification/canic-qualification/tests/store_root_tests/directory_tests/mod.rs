@@ -293,9 +293,7 @@ async fn installed_publication(scenario: Scenario) {
     };
     let ready = async |slot| {
         settle(pic).await;
-        let status: management::Status = root
-            .update("observe_child", children::STATUS, &slot, management::LIMITS)
-            .await;
+        let status: management::Status = root.observe_creation(slot).await;
         assert_eq!(status.phase, management::Phase::Ready, "{status:?}");
         let id = CanisterId::from_text(status.worker.unwrap()).unwrap();
         pic.add_cycles(id, 20_000_000_000_000).await;
@@ -331,14 +329,7 @@ async fn installed_publication(scenario: Scenario) {
             Err(management::Refusal::Occupied)
         );
         stage(ChildId::FIRST, named("accounts_hub")).await.unwrap();
-        let status: management::Status = root
-            .update(
-                "observe_child",
-                children::STATUS,
-                &ChildId::SECOND,
-                management::LIMITS,
-            )
-            .await;
+        let status: management::Status = root.observe_creation(ChildId::SECOND).await;
         assert_eq!(status.phase, management::Phase::Empty);
         assert_eq!(
             instance.close(Duration::from_secs(10)).await,
@@ -436,14 +427,7 @@ async fn installed_publication(scenario: Scenario) {
             stage(ChildId::SECOND, foreign_parent.encode().unwrap()).await,
             Err(management::Refusal::Binding)
         );
-        let untouched: management::Status = root
-            .update(
-                "observe_child",
-                children::STATUS,
-                &ChildId::SECOND,
-                management::LIMITS,
-            )
-            .await;
+        let untouched: management::Status = root.observe_creation(ChildId::SECOND).await;
         assert_eq!(untouched.phase, management::Phase::Empty);
         assert_eq!(untouched.attempts, [0; 3]);
         stage(ChildId::SECOND, install.encode().unwrap())
@@ -741,9 +725,7 @@ async fn installed_publication(scenario: Scenario) {
                     panic!("one spare per installed child")
                 };
                 let slot = ChildId::placement(allocation.slot as usize).unwrap();
-                let status: management::Status = root
-                    .update("observe_child", children::STATUS, &slot, management::LIMITS)
-                    .await;
+                let status: management::Status = root.observe_creation(slot).await;
                 assert_eq!(status.worker, Some(id.to_text()));
                 assert_eq!(status.attempts, [0, 1, 1]);
             }
@@ -778,22 +760,4 @@ async fn installed_publication(scenario: Scenario) {
         ic_testkit::server::Deletion::Attempted
     );
     assert!(server.stop().unwrap().process.cleanup.is_empty());
-}
-
-async fn assert_funding_upgrade_refused(root: &Client<'_>, candidate: &str, family: &str) {
-    let rejection = canic_qualification::upgrade_stopped(
-        root.pic,
-        root.id,
-        std::fs::read(artifacts().join(candidate)).unwrap(),
-        vec![],
-        Some(root.operator),
-    )
-    .await
-    .unwrap_err();
-    assert!(
-        rejection
-            .reject_message
-            .contains(&format!("retained Root approval requires {family}")),
-        "{rejection:?}"
-    );
 }

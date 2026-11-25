@@ -10,6 +10,7 @@ export CANIC_BACKUP_FIXTURE
 CANIC_BACKUP_FIXTURE=$(mktemp -d)
 trap 'rm -rf -- "$CANIC_BACKUP_FIXTURE"' EXIT
 canic artifact build --package canic-root --features backup --output "$CANIC_BACKUP_FIXTURE/root.wasm"
+canic artifact build --package ic-wasm-store --output "$CANIC_BACKUP_FIXTURE/store.wasm"
 canic artifact build --package ex-counter --output "$CANIC_BACKUP_FIXTURE/counter.wasm"
 export ICP_HOME="$CANIC_BACKUP_FIXTURE" XDG_CONFIG_HOME="$CANIC_BACKUP_FIXTURE/config" XDG_DATA_HOME="$CANIC_BACKUP_FIXTURE/data" XDG_RUNTIME_DIR="$CANIC_BACKUP_FIXTURE/runtime"
 unset GNOME_KEYRING_CONTROL DISPLAY WAYLAND_DISPLAY XAUTHORITY

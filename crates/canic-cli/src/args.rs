@@ -276,8 +276,6 @@ pub(super) enum FleetCommand {
         /// Local Wasm input; omit for a named canister with an app-defined Wasm path.
         #[arg(long, value_name = "WASM_FILE")]
         wasm: Option<PathBuf>,
-        #[command(flatten)]
-        network: Box<NetworkArgs>,
         /// Controller principal to bind into this exact plan.
         #[arg(
             long,

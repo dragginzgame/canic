@@ -103,13 +103,13 @@ pub(super) async fn apply(
     dir: &Path,
     fleet: &FleetPlan,
     root: &Receipt,
-    store: Option<&Receipt>,
+    store: &Receipt,
     identity: &str,
     icp: &Path,
 ) -> Result<()> {
     // Publish every selected release before the first child admission. Resume the same signed attempts.
-    for (slot, child) in fleet.children().filter(|(_, c)| c.release.is_some()) {
-        let value = fleet.publication(root, store, slot)?;
+    for (slot, child) in fleet.children() {
+        let value = fleet.publication(root, Some(store), slot)?;
         let child_dir = dir.join(record::child_leaf(slot));
         let path = child_dir.join("publication");
         let bytes = store::read(&child_dir.join("module.wasm"), child.artifact_limit())?;

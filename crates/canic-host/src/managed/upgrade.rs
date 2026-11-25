@@ -1,17 +1,10 @@
 //! Authenticated one-use child upgrade custody through the existing plan and signer.
-use super::{complete, stage_evidence, visit_observations, wire::Method};
-use crate::{
-    ApplyOutcome, Error, Plan, Result,
-    network::principal,
-    operation,
-    signed::{self},
-    supplier,
-};
+use super::{complete, stage_evidence, wire::Method};
+use crate::{ApplyOutcome, Error, Plan, Result, network::principal, operation, supplier};
 use canic_management_protocol::{
-    LIMITS, Refusal, STAGE_LIMITS,
-    upgrade::{Approval, OBSERVE, Phase, STATUS, Stage, Status},
+    LIMITS, Refusal,
+    upgrade::{Approval, OBSERVE, Phase, STATUS, Status},
 };
-use ic_platform::native::ReadClient;
 use std::path::Path;
 
 pub(crate) fn approval(plan: &Plan) -> Result<Approval> {
@@ -130,25 +123,22 @@ pub(crate) fn evidence_with_source(
     dir: &Path,
     plan: &Plan,
 ) -> Result<Option<(Status, Option<canic_management_protocol::stored::Delivery>)>> {
-    let mut latest = stage_evidence(dir, |bytes| stage_reply(plan, bytes))?
-        .map(|status| {
-            validate(plan, None, &status)?;
-            Ok::<_, Error>((status, None))
-        })
-        .transpose()?;
-    visit_observations(
+    super::fold_evidence(
         dir,
         [Method::ReconcileUpgrade, Method::ObserveUpgrade],
+        stage_evidence(dir, |bytes| stage_reply(plan, bytes))?,
+        |old, new| validate(plan, old, new),
+        |status| *status == Status::default(),
         |method, bytes| {
             let method = method.id(plan);
-            let (status, source) = if matches!(
+            if matches!(
                 method,
                 canic_management_protocol::application::CHILD_EVIDENCE
                     | canic_management_protocol::application::CUSTODY
             ) {
-                super::stored::upgrade_evidence(plan, bytes)?
+                super::stored::upgrade_evidence(plan, bytes)
             } else {
-                (
+                Ok((
                     ic_wire::decode(
                         bytes,
                         ic_wire::Encoding::Frame {
@@ -174,40 +164,17 @@ pub(crate) fn evidence_with_source(
                     })
                     .map_err(supplier)?,
                     None,
-                )
-            };
-            if status == Status::default() && latest.is_none() {
-                return Ok(());
+                ))
             }
-            validate(plan, latest.as_ref().map(|(s, _)| s), &status)?;
-            let source = super::stored::retain_delivery(
-                latest.as_ref().and_then(|(_, source)| source.as_ref()),
-                source,
-            )?;
-            latest = Some((status, source));
-            Ok(())
         },
-    )?;
-    Ok(latest)
+    )
 }
 
-pub(super) async fn apply(
-    dir: &Path,
-    id: &str,
-    plan: &Plan,
-    wasm: &[u8],
-    identity: &str,
-    icp: &Path,
-    client: &ReadClient,
-) -> Result<ApplyOutcome> {
+pub(super) async fn apply(admission: &super::Admission<'_>, id: &str) -> Result<ApplyOutcome> {
+    let super::Admission {
+        dir, plan, client, ..
+    } = *admission;
     let owner = plan.management().expect("managed upgrade dispatcher");
-    let root = principal(&owner.root)?;
-    operation::controllers(client, root, &plan.controller).await?;
-    if operation::module(client, root).await? != owner.root_module {
-        return Err(Error::Blocked(
-            "Root code differs from reviewed upgrade owner".into(),
-        ));
-    }
     let retained = evidence(dir, plan)?;
     let child = plan.target().expect("upgrade target");
     if retained
@@ -216,71 +183,26 @@ pub(super) async fn apply(
     {
         return complete(dir, id, plan, child, client).await;
     }
-    super::stored::verify(plan, client).await?;
-    let stage = dir.join("stage");
-    let call = if owner.source.is_some() {
-        Method::StageUpgrade.call(plan, &(), LIMITS)?
-    } else {
-        Method::StageUpgrade.call(
-            plan,
-            &Stage {
-                approval: approval(plan)?,
-                wasm: wasm.to_vec(),
+    let status = admission
+        .stage(
+            retained.is_some(),
+            async {
+                operation::controllers(client, principal(child)?, &owner.root).await?;
+                if operation::module(client, principal(child)?).await?
+                    != *plan.previous_module().expect("old code")
+                {
+                    return Err(Error::Blocked(
+                        "upgrade precondition: previous module hash changed".into(),
+                    ));
+                }
+                Ok(())
             },
-            STAGE_LIMITS,
-        )?
-    };
-    let status = if !stage.join("signed.json").try_exists().map_err(supplier)? {
-        if crate::now()?
-            >= crate::plan::admission_deadline(
-                plan.created_at_ns,
-                owner.execute_at_ns,
-                plan.expires_at_ns,
-            )
-        {
-            return Err(Error::Blocked(
-                "Root upgrade admission time passed; no new attempt signed".into(),
-            ));
-        }
-        operation::controllers(client, principal(child)?, &owner.root).await?;
-        if operation::module(client, principal(child)?).await?
-            != *plan.previous_module().expect("old code")
-        {
-            return Err(Error::Blocked(
-                "upgrade precondition: previous module hash changed".into(),
-            ));
-        }
-        stage_reply(
-            plan,
-            &signed::execute(&stage, plan, &call, identity, icp, client).await?,
-        )?
-    } else {
-        let path = super::recovery::next_observation(dir)?;
-        let read = super::observation(plan)?;
-        super::recovery::require_settled(&path)?;
-        let bytes = signed::observe(&path, plan, &read, identity, icp, client).await?;
-        let observed: Status = if owner.source.is_some() {
-            super::stored::upgraded(plan, &bytes)?
-        } else {
-            ic_wire::decode(
-                &bytes,
-                ic_wire::Encoding::Frame {
-                    method: Method::ObserveUpgrade.id(plan),
-                    direction: ic_wire::Direction::Response,
-                },
-                LIMITS,
-            )
-            .map_err(supplier)?
-        };
-        if observed == Status::default() && retained.is_none() {
-            stage_reply(
-                plan,
-                &signed::execute(&stage, plan, &call, identity, icp, client).await?,
-            )?
-        } else {
-            observed
-        }
-    };
+            || Method::StageUpgrade.call(plan),
+            |bytes| stage_reply(plan, bytes),
+            |bytes| super::stored::upgraded(plan, bytes),
+            |status| *status == Status::default(),
+        )
+        .await?;
     validate(plan, retained.as_ref(), &status)?;
     if status.phase == Phase::Ready {
         complete(dir, id, plan, child, client).await

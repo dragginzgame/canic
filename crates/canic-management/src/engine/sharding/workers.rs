@@ -127,42 +127,34 @@ fn installed_hub(state: &super::super::State, hub: &str) -> bool {
 /// # Panics
 /// Requires Root's controller and opened placement state.
 pub fn configure_workers(grant: stored::InstancePool) -> Result<(), Refusal> {
-    assert!(api::is_controller(&api::caller()));
-    if let Some(result) = STATE.with_borrow(|s| {
-        let state = s.as_ref().unwrap();
-        let pools = &state.pools;
-        if let Some(workers) = pools.workers.get(&grant.component) {
-            return Some(if workers.grant == grant {
-                Ok(())
-            } else {
-                Err(Refusal::Occupied)
-            });
-        }
-        if pools.workers.len() >= usize::from(pools.pool_limit().min(stored::MAX_INSTANCES)) {
-            return Some(Err(Refusal::Binding));
-        }
-        (!installed_hub(state, &grant.hub) || !compatible(pools, &grant))
-            .then_some(Err(Refusal::Binding))
-    }) {
-        return result;
-    }
-    super::admit_pool_change(false)?;
-    validate_worker(&grant)?;
-    if api::time() >= grant.expires_at_ns {
-        return Err(Refusal::Time);
-    }
-    STATE.with_borrow_mut(|s| {
-        let state = s.as_mut().unwrap();
-        state.pools.workers.insert(
-            grant.component.clone(),
-            Workers {
-                grant,
-                claims: Vec::new(),
-            },
-        );
-        state.pool.set(state.pools.encode());
-    });
-    Ok(())
+    let expires = grant.expires_at_ns;
+    super::admit_grant(
+        grant,
+        expires,
+        |state, grant| {
+            let pools = &state.pools;
+            if let Some(workers) = pools.workers.get(&grant.component) {
+                return Some(super::existing_grant(&workers.grant, grant));
+            }
+            if pools.workers.len() >= usize::from(pools.pool_limit().min(stored::MAX_INSTANCES)) {
+                return Some(Err(Refusal::Binding));
+            }
+            (!installed_hub(state, &grant.hub) || !compatible(pools, grant))
+                .then_some(Err(Refusal::Binding))
+        },
+        validate_worker,
+        |pools, grant| {
+            pools.workers.insert(
+                grant.component.clone(),
+                Workers {
+                    grant,
+                    claims: Vec::new(),
+                },
+            );
+
+            Ok(())
+        },
+    )
 }
 
 /// Observe a worker ordinal under the original hub grant.

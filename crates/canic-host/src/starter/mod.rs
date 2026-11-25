@@ -33,7 +33,6 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
         apps: BTreeMap::from([(
             app.into(),
             crate::config::SourceApp {
-                wasm_store: true,
                 canisters: BTreeMap::from([(
                     "app".into(),
                     CanisterDefinition {

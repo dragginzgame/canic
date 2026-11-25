@@ -19,34 +19,7 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
         return Err("controller required".into());
     }
     #[cfg(feature = "sharding")]
-    if crate::sharding::occupied()
-        && !(cfg!(feature = "fault-injection") && private && _method == protocol::children::INJECT)
-        && !(private
-            && crate::sharding::has_capacity()
-            && matches!(
-                _method,
-                protocol::children::STAGE
-                    | protocol::application::STAGE_CHILD_CREATION
-                    | protocol::application::STAGE
-                    | protocol::stored::STAGE
-                    | protocol::children::RECONCILE
-            ))
-        && !(private
-            && matches!(
-                _method,
-                protocol::publication::EXECUTE
-                    | protocol::publication::OBSERVATION
-                    | protocol::application::CHILD_EVIDENCE
-                    | protocol::application::STAGE_CHILD_UPGRADE
-                    | protocol::application::RECONCILE_CHILD_UPGRADE
-                    | protocol::application::RECONCILE_CHILD_CREATION
-                    | protocol::stored::STAGE_UPGRADE
-                    | protocol::stored::RECONCILE_UPGRADE
-                    | protocol::stored::RECONCILE
-                    | protocol::application::RECONCILE
-                    | protocol::children::STATUS
-            ))
-    {
+    if crate::sharding::occupied() && !placement_admits(private, _method) {
         return Err("shard pool custody required".into());
     }
     #[cfg(feature = "backup")]
@@ -54,9 +27,36 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
         return Err("snapshot custody fences ordinary management".into());
     }
     if ic_platform_runtime::system::argument_size() > limit {
-        return Err("growth frame too large".into());
+        return Err("management frame too large".into());
     }
     Ok(())
+}
+
+#[cfg(feature = "sharding")]
+fn placement_admits(private: bool, method: u64) -> bool {
+    use protocol::{application, children, publication, store_maintenance, stored};
+    match method {
+        children::STATUS | children::UPGRADE_STATUS | store_maintenance::STATUS => true,
+        children::INJECT => private && cfg!(feature = "fault-injection"),
+        children::STAGE
+        | application::STAGE_CHILD_CREATION
+        | application::STAGE
+        | stored::STAGE
+        | children::RECONCILE => private && crate::sharding::has_capacity(),
+        children::OBSERVE_STATUS
+        | store_maintenance::READ_ATTEMPT
+        | publication::EXECUTE
+        | publication::OBSERVATION
+        | application::CHILD_EVIDENCE
+        | application::STAGE_CHILD_UPGRADE
+        | application::RECONCILE_CHILD_UPGRADE
+        | application::RECONCILE_CHILD_CREATION
+        | stored::STAGE_UPGRADE
+        | stored::RECONCILE_UPGRADE
+        | stored::RECONCILE
+        | application::RECONCILE => private,
+        _ => false,
+    }
 }
 
 /// Response policy, with a deliberately impossible frame budget in fault builds.

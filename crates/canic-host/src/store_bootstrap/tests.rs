@@ -86,7 +86,7 @@ fn store_bootstrap_retains_distinct_authority_and_original_approval() {
     record["target"] = serde_json::json!("ryjl3-tyaaa-aaaaa-aaaba-cai");
     assert!(serde_json::from_value::<Plan>(record).is_err());
     // Store infrastructure does not consume the only application slot.
-    let (_, child) = crate::create_managed_plan(
+    let error = crate::create_managed_plan(
         &journal,
         &wasm,
         input(),
@@ -94,13 +94,13 @@ fn store_bootstrap_retains_distinct_authority_and_original_approval() {
         "app",
         &"11".repeat(32),
         None,
-        None,
+        "",
         None,
         None,
     )
-    .unwrap();
-    assert!(child.management().is_some());
+    .unwrap_err();
     std::fs::remove_dir_all(dir).unwrap();
+    assert!(error.to_string().contains("--release"));
 }
 
 #[test]

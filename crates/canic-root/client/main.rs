@@ -1,16 +1,12 @@
-//! Native codec for controller operations on a sharding Root.
+//! Native codec for controller operations on Root.
 
 use canic::method::Contract;
+#[cfg(feature = "child-metrics")]
 use canic::metrics::{ChildMetrics, Request};
 
 #[cfg(feature = "role-issuer")]
 use canic::topology::attestation::CloseRoleIssuance;
 use clap::{Parser, Subcommand};
-#[cfg(any(
-    feature = "child-funding",
-    feature = "reserve-pool",
-    feature = "role-issuer"
-))]
 use ic_platform_types::Principal;
 use serde_json::{Value, json};
 
@@ -36,6 +32,7 @@ enum Command {
     /// Read Root diagnostics, newest first, optionally before a sequence in this incarnation.
     Logs { before: Option<u64> },
     /// Read one metrics source from a ready child.
+    #[cfg(feature = "child-metrics")]
     ChildMetrics {
         slot: u8,
         #[command(subcommand)]
@@ -55,16 +52,12 @@ enum Command {
     #[cfg(feature = "role-issuer")]
     RetireReleasedChild { approval: String },
     /// Approve the subnet ceiling from the reviewed fleet plan.
-    #[cfg(feature = "child-management")]
-    ConfigureCapacity { approval: String },
+    ConfigureSubnetCapacity { approval: String },
     /// Approve a creation grant for the named requester.
-    #[cfg(feature = "child-creation")]
     ApproveChildCreation { approval: String },
     /// Approve recurring top-ups or inspect the original approval.
-    #[cfg(feature = "child-funding")]
     ConfigureChildFunding { approval: String },
     /// Stop future deposits to the named child.
-    #[cfg(feature = "child-funding")]
     StopChildFunding { child: Principal },
     /// Approve the reserve policy from the reviewed fleet plan.
     #[cfg(feature = "reserve-pool")]
@@ -83,10 +76,8 @@ enum Command {
     #[cfg(feature = "reserve-pool")]
     ObserveStandby,
     /// Confirm the hub release of this exact worker target (JSON).
-    #[cfg(feature = "child-creation")]
     ConfirmWorkerRelease { target: String },
     /// Stop and uninstall an exact released worker. Resume with the original deadline.
-    #[cfg(feature = "child-creation")]
     ResetWorker { target: String, expires_at_ns: u64 },
     /// Authorize one new empty canister. Repeat the exact request to inspect its result.
     #[cfg(feature = "reserve-pool")]
@@ -98,6 +89,7 @@ enum Command {
     },
 }
 
+#[cfg(feature = "child-metrics")]
 #[derive(Subcommand)]
 enum Source {
     Db,
@@ -150,6 +142,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => request::<canic_management_protocol::stored::RetireReleasedChild>(
             &serde_json::from_str(&approval)?,
         )?,
+        #[cfg(feature = "child-metrics")]
         Action::Encode {
             command: Command::ChildMetrics { slot, source },
         } => request::<ChildMetrics>(&(
@@ -163,11 +156,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Source::Endpoints { after } => Request::Endpoints(after),
             },
         ))?,
-        #[cfg(feature = "child-creation")]
         Action::Encode {
             command: Command::ConfirmWorkerRelease { target },
         } => request::<canic::sharding::standby::ConfirmRelease>(&serde_json::from_str(&target)?)?,
-        #[cfg(feature = "child-creation")]
         Action::Encode {
             command:
                 Command::ResetWorker {
@@ -178,25 +169,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             serde_json::from_str(&target)?,
             expires_at_ns,
         ))?,
-        #[cfg(feature = "child-management")]
         Action::Encode {
-            command: Command::ConfigureCapacity { approval },
-        } => request::<canic_management_protocol::stored::ConfigureCapacity>(
+            command: Command::ConfigureSubnetCapacity { approval },
+        } => request::<canic_management_protocol::stored::ConfigureSubnetCapacity>(
             &serde_json::from_str(&approval)?,
         )?,
-        #[cfg(feature = "child-creation")]
         Action::Encode {
             command: Command::ApproveChildCreation { approval },
         } => request::<canic_management_protocol::stored::ApproveChildCreation>(
             &serde_json::from_str(&approval)?,
         )?,
-        #[cfg(feature = "child-funding")]
         Action::Encode {
             command: Command::ConfigureChildFunding { approval },
         } => request::<canic_management_protocol::stored::ConfigureChildFunding>(
             &serde_json::from_str(&approval)?,
         )?,
-        #[cfg(feature = "child-funding")]
         Action::Encode {
             command: Command::StopChildFunding { child },
         } => request::<canic_management_protocol::stored::StopChildFunding>(&child)?,
@@ -259,9 +246,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn reply_limit() -> usize {
-    let limit = ChildMetrics::REPLY
-        .bytes
-        .max(canic::logging::Logs::REPLY.bytes);
+    let limit = canic::logging::Logs::REPLY.bytes;
+    #[cfg(feature = "child-metrics")]
+    let limit = limit.max(ChildMetrics::REPLY.bytes);
     #[cfg(feature = "reserve-pool")]
     let limit = canic::sharding::standby::ObserveStandby::REPLY
         .bytes
@@ -274,6 +261,7 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     if let Ok(page) = canic::logging::Logs::decode_reply(bytes) {
         return Ok(serde_json::to_value(page)?);
     }
+    #[cfg(feature = "child-metrics")]
     if let Ok(page) = ChildMetrics::decode_reply(bytes) {
         return Ok(serde_json::to_value(page)?);
     }
@@ -285,23 +273,21 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     if let Ok(reply) = CloseRoleIssuance::decode_reply(bytes) {
         return Ok(json!({"proof_deadline_ns": reply?.to_string()}));
     }
-    #[cfg(feature = "child-management")]
-    if let Ok(reply) = canic_management_protocol::stored::ConfigureCapacity::decode_reply(bytes) {
+    if let Ok(reply) =
+        canic_management_protocol::stored::ConfigureSubnetCapacity::decode_reply(bytes)
+    {
         reply.map_err(|e| format!("capacity: {e:?}"))?;
         return Ok(json!({"approved":true}));
     }
-    #[cfg(feature = "child-creation")]
     if let Ok(reply) = canic_management_protocol::stored::ApproveChildCreation::decode_reply(bytes)
     {
         reply.map_err(|e| format!("child creation: {e:?}"))?;
         return Ok(json!({"approved":true}));
     }
-    #[cfg(feature = "child-funding")]
     if let Ok(reply) = canic_management_protocol::stored::ConfigureChildFunding::decode_reply(bytes)
     {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "child-funding")]
     if let Ok(reply) = canic_management_protocol::stored::StopChildFunding::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply?)?);
     }
@@ -326,12 +312,10 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     if let Ok(reply) = canic::sharding::standby::RefillStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "child-creation")]
     if let Ok(reply) = canic::sharding::standby::ConfirmRelease::decode_reply(bytes) {
         reply?;
         return Ok(json!({"released": true}));
     }
-    #[cfg(feature = "child-creation")]
     if let Ok(reply) = canic::sharding::standby::ResetWorker::decode_reply(bytes) {
         return Ok(json!({"reset": reply?}));
     }
@@ -340,4 +324,21 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
         return Ok(json!({"retirement":reply?}));
     }
     Err("unknown Root reply".into())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn child_metrics_command_and_decoder_follow_the_mount() {
+        let selected = cfg!(feature = "child-metrics");
+        let command =
+            Args::try_parse_from(["root-client", "encode", "child-metrics", "0", "timers"]);
+        assert_eq!(command.is_ok(), selected);
+        let reply =
+            canic::metrics::ChildMetrics::encode_reply(&canic::metrics::Report::Unavailable)
+                .unwrap();
+        assert_eq!(decode(&reply).is_ok(), selected);
+    }
 }

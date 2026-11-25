@@ -1,7 +1,6 @@
 #[cfg(feature = "backup")]
 mod backup;
-#[cfg(feature = "child-management")]
-mod sharding;
+mod placement;
 
 use canic_management::{self as management, Readiness};
 use canic_management_protocol::Failure;
@@ -41,19 +40,8 @@ fn init(policy: Option<canic_management_protocol::stored::RootBootstrap>) {
 )]
 fn post_upgrade((): ()) {
     management::open(false, readiness());
-    #[cfg(feature = "child-management")]
-    for (family, retained) in management::sharding::retained_mounts() {
-        const MOUNTS: &[&str] = &[
-            #[cfg(feature = "child-creation")]
-            "child-creation",
-            #[cfg(feature = "reserve-pool")]
-            "reserve-pool",
-            #[cfg(feature = "child-funding")]
-            "child-funding",
-        ];
-        if retained && !MOUNTS.contains(&family) {
-            runtime::system::trap(&format!("retained Root approval requires {family}"));
-        }
+    if !cfg!(feature = "reserve-pool") && management::sharding::requires_reserve_pool() {
+        runtime::system::trap("retained Root approval requires reserve-pool");
     }
     canic::logging::record(
         canic::logging::Level::Info,
@@ -63,18 +51,14 @@ fn post_upgrade((): ()) {
 }
 
 management::mount_endpoints! {
-    publish_store_artifact, observe_store, store_admission, store_removal,
+    publish_store_artifact, observe_store, change_store_admission, remove_store_artifact,
     stage_store_maintenance, advance_store_maintenance, observe_store_maintenance,
     install_store_maintenance, activate_store_maintenance, store_maintenance_status, recover_store_maintenance,
-    observe_root_custody,
+    observe_root_custody, observe_child_deployments,
     stage_child_creation, reconcile_child_creation,
     stage_child_upgrade, reconcile_child_upgrade,
-    child_status, observe_child, stage_inline_child_creation, reconcile_inline_child_creation,
-    stage_inline_child_upgrade, observe_child_upgrade, child_upgrade_status, reconcile_inline_child_upgrade,
+    child_status, observe_child_status, child_upgrade_status,
 }
-
-#[cfg(feature = "child-management")]
-management::mount_endpoints! { observe_child_deployments, }
 
 #[cfg(feature = "blob")]
 management::mount_endpoints! {

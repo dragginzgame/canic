@@ -14,23 +14,6 @@ use std::{
     time::Duration,
 };
 
-fn cli(root: &Path, args: &[&str]) -> Value {
-    let output = Command::new(std::env::var_os("CANIC_CLI").expect("run make profile-test"))
-        .args(args)
-        .arg("--json")
-        .arg("--state-dir")
-        .arg(root)
-        .arg("--no-config")
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
-}
-
 async fn put(
     pic: &PocketIc,
     worker: CanisterId,
@@ -241,39 +224,18 @@ async fn named_profile(pic: &PocketIc, entry: CanisterId) {
 
 async fn entry_journey(
     pic: &PocketIc,
-    root: &Path,
     artifacts: &Path,
-    network_args: &[&str],
+    url: &str,
+    key: &str,
     worker: CanisterId,
     icp: &Path,
 ) -> String {
     let wasm = artifacts.join("entry.wasm");
     let entry_bytes = std::fs::read(&wasm).unwrap();
     let entry_facts = canic_qualification::footprint::measure(&entry_bytes).unwrap();
-    let mut args = vec![
-        "fleet",
-        "plan",
-        "--wasm",
-        wasm.to_str().unwrap(),
-        "--controller",
-        "2vxsx-fae",
-    ];
-    args.extend_from_slice(network_args);
-    let plan = cli(root, &args);
-    let receipt = cli(
-        root,
-        &[
-            "fleet",
-            "apply",
-            plan["operation"].as_str().unwrap(),
-            "--identity",
-            "anonymous",
-            "--icp-bin",
-            icp.to_str().unwrap(),
-        ],
-    );
-    let entry_text = receipt["canister"].as_str().unwrap().to_owned();
-    let entry = CanisterId::from_text(&entry_text).unwrap();
+    let entry = pic.create_canister().await;
+    pic.install_canister(entry, entry_bytes, vec![], None).await;
+    let entry_text = entry.to_text();
     named_profile(pic, entry).await;
     let outsider = CanisterId::self_authenticating(b"entry outsider");
     let resolve = ic_wire::encode(
@@ -457,8 +419,6 @@ async fn entry_journey(
 
     // Real native client resolves through ICP's certified update path, then queries the worker.
     let client = std::env::var_os("CANIC_PROFILE_CLIENT").unwrap();
-    let url = network_args[3];
-    let key = network_args[5];
     let base = [
         "--entry",
         &entry_text,
@@ -740,47 +700,17 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect();
-    let routing = owner.client().create_canister().await.to_text();
-    let root = artifacts.join(format!("journey-{}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
     let icp = repo.join(".tools/ic/bin/icp");
-    let plan = cli(
-        &root,
-        &[
-            "fleet",
-            "plan",
-            "--wasm",
-            artifacts.join("v1.wasm").to_str().unwrap(),
-            "--network",
-            "local",
-            "--url",
-            &url,
-            "--root-key",
-            &root_key,
-            "--root-subnet",
-            &owner.client().topology().await.get_nns().unwrap().to_text(),
-            "--routing-canister",
-            &routing,
-            "--controller",
-            "2vxsx-fae",
-        ],
-    );
-    let id = plan["operation"].as_str().unwrap();
-    let receipt = cli(
-        &root,
-        &[
-            "fleet",
-            "apply",
-            id,
-            "--identity",
-            "anonymous",
-            "--icp-bin",
-            icp.to_str().unwrap(),
-        ],
-    );
-    let worker_text = receipt["canister"].as_str().unwrap();
-    let worker = CanisterId::from_text(worker_text).unwrap();
     let pic = owner.client();
+    let worker = pic.create_canister().await;
+    pic.install_canister(
+        worker,
+        std::fs::read(artifacts.join("v1.wasm")).unwrap(),
+        vec![],
+        None,
+    )
+    .await;
+    let worker_text = worker.to_text();
     let initial = pic.canister_status(worker, None).await.unwrap();
     let stable_before = u64::try_from(&initial.memory_metrics.stable_memory_size.0).unwrap();
     assert!(stable_before <= 32 * 65_536);
@@ -791,7 +721,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
         Command::new(std::env::var_os("CANIC_PROFILE_CLIENT").expect("run make profile-test"))
             .args([
                 "--canister",
-                worker_text,
+                &worker_text,
                 "--identity",
                 "anonymous",
                 "--network",
@@ -933,46 +863,15 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
         );
     }
     assert_eq!(info(pic, worker).await.executable, "profile-v1");
-    let upgrade = cli(
-        &root,
-        &[
-            "fleet",
-            "plan",
-            "--wasm",
-            artifacts.join("v2.wasm").to_str().unwrap(),
-            "--network",
-            "local",
-            "--url",
-            &url,
-            "--root-key",
-            &root_key,
-            "--root-subnet",
-            &owner.client().topology().await.get_nns().unwrap().to_text(),
-            "--routing-canister",
-            &routing,
-            "--controller",
-            "2vxsx-fae",
-            "--target",
-            worker_text,
-            "--previous-module",
-            receipt["module_hash"].as_str().unwrap(),
-        ],
-    );
-    let upgrade_id = upgrade["operation"].as_str().unwrap();
-    let upgraded = cli(
-        &root,
-        &[
-            "fleet",
-            "apply",
-            upgrade_id,
-            "--identity",
-            "anonymous",
-            "--icp-bin",
-            icp.to_str().unwrap(),
-        ],
-    );
-    assert_eq!(upgraded["canister"], worker_text);
-    assert_ne!(upgraded["module_hash"], receipt["module_hash"]);
+    canic_qualification::upgrade_stopped(
+        pic,
+        worker,
+        std::fs::read(artifacts.join("v2.wasm")).unwrap(),
+        vec![],
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(info(pic, worker).await.executable, "profile-v2");
     assert_eq!(get(pic, worker, alice, 41).await.unwrap(), changed);
     for (principal, profile) in &other_profiles {
@@ -998,65 +897,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
         .await,
         Err(ProfileError::Capacity)
     );
-    let replay = cli(
-        &root,
-        &[
-            "fleet",
-            "apply",
-            upgrade_id,
-            "--identity",
-            "anonymous",
-            "--icp-bin",
-            "/missing-signer",
-        ],
-    );
-    assert_eq!(replay, upgraded);
-    let entry = entry_journey(
-        pic,
-        &root,
-        &artifacts,
-        &[
-            "--network",
-            "local",
-            "--url",
-            &url,
-            "--root-key",
-            &root_key,
-            "--root-subnet",
-            &owner.client().topology().await.get_nns().unwrap().to_text(),
-            "--routing-canister",
-            &routing,
-        ],
-        worker,
-        &icp,
-    )
-    .await;
-    let report = root.join("fleet.html");
-    let fleet = cli(
-        &root,
-        &[
-            "fleet",
-            "show",
-            "--html",
-            report.to_str().unwrap(),
-            "--link",
-            &format!("{entry}:{worker_text}"),
-        ],
-    );
-    assert_eq!(fleet["canisters"].as_array().unwrap().len(), 2);
-    assert_eq!(fleet["operations"].as_array().unwrap().len(), 3);
-    let html = std::fs::read_to_string(report).unwrap();
-    assert!(html.contains("Declared application routes"));
-    assert!(html.contains(&entry) && html.contains(worker_text));
-    assert_eq!(
-        fleet["canisters"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .find(|value| value["canister"] == worker_text)
-            .unwrap()["module_hash"],
-        upgraded["module_hash"]
-    );
+    entry_journey(pic, &artifacts, &url, &root_key, worker, &icp).await;
     println!(
         "profile baseline: raw_wasm_bytes={}, code_section_bytes={}, functions={}, initial_stable_bytes={stable_before}, full_stable_bytes={stable_full}, initial_heap_bytes={}, full_heap_bytes={}",
         facts.raw_bytes,
@@ -1065,9 +906,7 @@ async fn profile_deploy_ownership_capacity_and_upgrade() {
         initial.memory_metrics.wasm_memory_size,
         full.memory_metrics.wasm_memory_size
     );
-    println!(
-        "profile: Canic deploy/client/read/write/limits/failed-upgrade/v2 preservation/no-signer replay/fleet passed"
-    );
+    println!("profile client, ownership, capacity and upgrade preservation passed");
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

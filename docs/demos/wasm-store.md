@@ -8,12 +8,7 @@ builds that registry archive with its packaged lockfile. Both selections and the
 archive's protocol must match; Git/path overrides are refused. No sibling
 checkout is needed.
 
-Select the separate Store on the app. Canic supplies its Root automatically.
-
-```toml
-[apps.toko]
-wasm_store = true
-```
+Every app automatically includes Root and its Wasm Store.
 
 Application children refer to `parent = "root"`. The operator bootstraps Root.
 Root installs the separate `store` slot from `artifacts/wasm_store.wasm`.
@@ -30,7 +25,7 @@ The endpoint identities and Store record encodings are preserved, but the
 underlying directory format changed.
 
 The supplier also supports exact removal/restoration and tombstones. Root now
-forwards exact deletion/cancellation through `store_removal`; Host retains their
+forwards exact deletion/cancellation through `remove_store_artifact`; Host retains their
 exact signed attempts under the existing journal lock. New Root attempts use Store 0.8’s
 `observe_preservation` (method 117): explicit active/removed entries ordered by name, active
 before removed, then version. The retained cursor includes that flag, and a
@@ -277,8 +272,7 @@ with `bash scripts/dev/test-store.sh custody` after simulator preparation.
 
 Store's `admission` endpoint accepts only close, observe and activate. It captures
 the controller and retains the exact operation and increasing sequence in its
-existing settings allocation. Root forwards those commands through
-`store_admission` with the same controller/deadline checks as publication. While
+existing settings allocation. Root forwards close and activate through `change_store_admission`. Controllers read the retained attempt through the Admission selector of `observe_store`. Both enforce the original deadline and placement fence. While
 closed, prepare/put/publish, pin acquisition, quota changes and fresh cache work
 are refused; reads and exact attempt recovery remain available. Store upgrades
 leave the gate closed until explicit matching activation. Old cache callbacks

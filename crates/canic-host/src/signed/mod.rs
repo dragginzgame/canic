@@ -213,6 +213,41 @@ struct Rejection {
     message: String,
 }
 
+/// Apply or observe one retained attempt, allowing each owner to verify its own binding.
+pub(crate) struct RetainedAttempt<'a> {
+    pub plan: &'a Plan,
+    pub identity: &'a str,
+    pub icp: &'a Path,
+    pub reconcile: bool,
+}
+impl<'a> RetainedAttempt<'a> {
+    pub async fn execute<T>(
+        &self,
+        path: &Path,
+        unsigned: &str,
+        missing_reply: &str,
+        receipt: impl Fn() -> Result<Option<T>>,
+        prepare: impl AsyncFnOnce(&ReadClient) -> Result<Call<'a>>,
+    ) -> Result<T> {
+        let Self {
+            plan,
+            identity,
+            icp,
+            reconcile,
+        } = *self;
+        if let Some(value) = receipt()? {
+            return Ok(value);
+        }
+        if reconcile && !path.join("signed.json").try_exists().map_err(supplier)? {
+            return Err(Error::Blocked(unsigned.into()));
+        }
+        let client = plan.network.client()?;
+        let call = prepare(&client).await?;
+        execute(path, plan, &call, identity, icp, &client).await?;
+        receipt()?.ok_or_else(|| Error::Blocked(missing_reply.into()))
+    }
+}
+
 pub(crate) async fn execute(
     path: &Path,
     plan: &Plan,

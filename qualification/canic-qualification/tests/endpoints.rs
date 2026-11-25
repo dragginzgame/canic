@@ -158,6 +158,28 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
             ic_wire::decode::<Status>(&reply, encoding(ic_wire::Direction::Response), LIMITS)
                 .unwrap()
         };
+        if variant == "root" {
+            for method in [
+                "store_admission",
+                "store_removal",
+                "observe_child",
+                "observe_child_upgrade",
+                "stage_inline_child_creation",
+                "stage_inline_child_upgrade",
+                "reconcile_inline_child_creation",
+                "reconcile_inline_child_upgrade",
+            ] {
+                let error = pic
+                    .update_call(target, controller, method, vec![])
+                    .await
+                    .unwrap_err();
+                assert_eq!(
+                    error.error_code,
+                    ic_testkit::pocket_ic::ErrorCode::CanisterMethodNotFound,
+                    "{error:?}"
+                );
+            }
+        }
         let initial = if variant == "root" {
             root_status(children::ChildId::FIRST).await
         } else {
@@ -169,7 +191,13 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         let mut methods = if variant == "root" {
             vec![
                 ("child_status", true, false, children::STATUS, LIMITS),
-                ("observe_child", false, true, children::STATUS, LIMITS),
+                (
+                    "observe_child_status",
+                    false,
+                    true,
+                    children::OBSERVE_STATUS,
+                    LIMITS,
+                ),
                 (
                     "observe_root_custody",
                     false,
@@ -178,25 +206,25 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                     LIMITS,
                 ),
                 (
-                    "stage_inline_child_creation",
+                    "stage_child_creation",
                     false,
                     true,
-                    children::STAGE,
-                    STAGE_LIMITS,
+                    canic_management_protocol::application::STAGE_CHILD_CREATION,
+                    canic_management_protocol::stored::LIMITS,
                 ),
                 (
-                    "reconcile_inline_child_creation",
+                    "reconcile_child_creation",
                     false,
                     true,
-                    children::RECONCILE,
-                    LIMITS,
+                    canic_management_protocol::application::RECONCILE_CHILD_CREATION,
+                    canic_management_protocol::stored::LIMITS,
                 ),
                 (
-                    "stage_inline_child_upgrade",
+                    "stage_child_upgrade",
                     false,
                     true,
-                    children::STAGE_UPGRADE,
-                    STAGE_LIMITS,
+                    canic_management_protocol::application::STAGE_CHILD_UPGRADE,
+                    canic_management_protocol::stored::LIMITS,
                 ),
                 (
                     "child_upgrade_status",
@@ -206,18 +234,11 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                     LIMITS,
                 ),
                 (
-                    "observe_child_upgrade",
+                    "reconcile_child_upgrade",
                     false,
                     true,
-                    children::OBSERVE_UPGRADE,
-                    LIMITS,
-                ),
-                (
-                    "reconcile_inline_child_upgrade",
-                    false,
-                    true,
-                    children::RECONCILE_UPGRADE,
-                    LIMITS,
+                    canic_management_protocol::application::RECONCILE_CHILD_UPGRADE,
+                    canic_management_protocol::stored::LIMITS,
                 ),
             ]
         } else {
@@ -310,7 +331,7 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                         .contains(if private && caller == outsider {
                             "controller required"
                         } else {
-                            "growth frame too large"
+                            "management frame too large"
                         })
                 );
             }
@@ -471,6 +492,37 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
             // reconciliation and matching approvals across multiple installed slots.
             for slot in [children::ChildId::FIRST, children::ChildId::SECOND] {
                 assert_eq!(root_status(slot).await, initial);
+                let frame = |method, direction| ic_wire::Encoding::Frame { method, direction };
+                let request = ic_wire::encode(
+                    &children::ObserveStatus::Creation(slot),
+                    frame(children::OBSERVE_STATUS, ic_wire::Direction::Request),
+                    LIMITS,
+                )
+                .unwrap();
+                let reply = pic
+                    .update_call(target, controller, "observe_child_status", request)
+                    .await
+                    .unwrap();
+                let observed = ic_wire::decode(
+                    &reply,
+                    frame(children::OBSERVE_STATUS, ic_wire::Direction::Response),
+                    LIMITS,
+                )
+                .unwrap();
+                assert!(
+                    matches!(observed, children::ObservedStatus::Creation(status) if status == initial)
+                );
+                let old_frame = ic_wire::encode(
+                    &slot,
+                    frame(children::STATUS, ic_wire::Direction::Request),
+                    LIMITS,
+                )
+                .unwrap();
+                assert!(
+                    pic.update_call(target, controller, "observe_child_status", old_frame)
+                        .await
+                        .is_err()
+                );
             }
             continue;
         }

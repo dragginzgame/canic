@@ -23,7 +23,6 @@ canic-root = "=0.253.0"
 TOML
 cat > canic.toml <<'TOML'
 [apps.consumer]
-wasm_store = true
 [apps.consumer.canisters.hub]
 role = "hub"
 parent = "root"

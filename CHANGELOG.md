@@ -2,6 +2,54 @@
 
 ## Unreleased
 
+## [0.270.0] - 2026-11-25
+
+### 🔄 Changed
+
+- Root renames `store_removal` to `remove_store_artifact`, `store_admission` to `change_store_admission`, and the reserve-pool query `spare_counts` to `standby_status`. Read admission through `observe_store`. Close and activate use the change endpoint. Pre-cut removal approvals retain their original signing contract and require the original Host and Root for execution.
+
+```sh
+# Build a reserve-pool Root and inspect the three renamed exports.
+canic artifact build --package canic-root --features reserve-pool --output target/reserve-root.wasm
+canic artifact endpoints target/reserve-root.wasm
+```
+
+- Root replaces the controller updates `observe_child` and `observe_child_upgrade` with `observe_child_status`. Select creation by slot or an upgrade by slot and exact approval. The public queries remain `child_status` and `child_upgrade_status`.
+
+```sh
+# Build Root and inspect its exported methods.
+canic artifact build --package canic-root --output target/root.wasm
+canic artifact endpoints target/root.wasm
+```
+
+- Every Canic app supplies Root and a separate Wasm Store. Remove the former `wasm_store` setting from app declarations. Root stages and reconciles application creation and upgrades from published releases. Start fresh fleets for this cut.
+
+```sh
+# Inspect the supplied Root and Store in the starter definition.
+canic app canister list --config apps/template/canic.toml
+```
+
+- Every fresh Root includes child creation and direct-child top-ups. Configure each grant and budget on the paying parent. The capacity endpoints are now `configure_subnet_capacity` and `increase_pool_limit`.
+
+```sh
+# Build a baseline Root and inspect its callable methods.
+canic artifact build --package canic-root --output target/baseline-root.wasm
+canic artifact endpoints target/baseline-root.wasm
+```
+
+- Occupied placement Roots serve public status queries and authenticated status observations. Full Root custody and Store maintenance effects remain fenced. Auth-enabled Roots that lose volatile grant history on upgrade refuse worker recycling, including after zero grants. [#93 Define and qualify the placement Root endpoint fence, including public status queries and Store maintenance](https://github.com/dragginzgame/canic/issues/93) [#94 Auth-enabled placement Roots lose worker recycling after any upgrade, even without issued grants](https://github.com/dragginzgame/canic/issues/94)
+- Root documents its current service and placement limits. The native client exposes child metrics only when the Root build selects them. [#95 Refresh stale Root and management endpoint documentation](https://github.com/dragginzgame/canic/issues/95) [#96 Gate the Root client's child-metrics command on the child-metrics feature](https://github.com/dragginzgame/canic/issues/96)
+
+```sh
+# Inspect the commands available for each local Root client build.
+cargo run -p canic-root --features operator-client --bin canic-root-client -- encode --help
+cargo run -p canic-root --features child-metrics --bin canic-root-client -- encode --help
+```
+
+- Fleet apply and reconcile share the child walk. Auth, application and removal calls share signed attempt recovery. [#97 Fleet steps repeat the same child walk](https://github.com/dragginzgame/canic/issues/97) [#98 Retained calls repeat the same signed attempt](https://github.com/dragginzgame/canic/issues/98)
+- Placement grants share admission, and child creates and upgrades share staging, retained evidence, effect observation and chunk installation. [#99 Pool grants repeat the same admission](https://github.com/dragginzgame/canic/issues/99) [#100 Child admission repeats the same stage](https://github.com/dragginzgame/canic/issues/100) [#101 Child evidence repeats the same observation](https://github.com/dragginzgame/canic/issues/101) [#102 Child observations repeat the same phase](https://github.com/dragginzgame/canic/issues/102) [#103 Chunk installs repeat the same dispatch](https://github.com/dragginzgame/canic/issues/103)
+- Child runtime transitions share dispatch. Fleet observations share timeout and journal slot selection. [#104 Canister runtime repeats the same transition](https://github.com/dragginzgame/canic/issues/104) [#105 Snapshot budgets repeat the same timeout](https://github.com/dragginzgame/canic/issues/105) [#106 Observation slots repeat the same scan](https://github.com/dragginzgame/canic/issues/106)
+
 ## [0.269.0] - 2026-11-25
 
 ### 🔄 Changed

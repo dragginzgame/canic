@@ -2,14 +2,12 @@
 
 use canic::guard::require_controller;
 use canic::sharding::LIMITS;
-#[cfg(feature = "child-creation")]
 use canic::sharding::Placement;
 use canic_management::sharding;
 use canic_management_protocol::{Refusal, stored};
 use ic_platform_runtime as runtime;
 
 // Approve the creating Root’s permitted effect, requester, limits and artifact.
-#[cfg(feature = "child-creation")]
 #[canic::update(contract = stored::ApproveChildCreation, guard = require_controller)]
 fn approve_child_creation(grant: stored::ChildCreationGrant) -> Result<(), Refusal> {
     use stored::ChildCreationGrant;
@@ -21,45 +19,44 @@ fn approve_child_creation(grant: stored::ChildCreationGrant) -> Result<(), Refus
     }
 }
 
-// configure_capacity
+// configure_subnet_capacity
 // Set this subnet owner's shared placement ceiling.
 // guard  : Root controller
 // limits : stored::LIMITS request (65,536 bytes), sharding::LIMITS reply (1,024 bytes)
-canic::__canic_inspect!(wire, "configure_capacity", update, stored::CONFIGURE_CAPACITY, stored::SubnetCapacity, Result<(), Refusal>, stored::LIMITS, LIMITS);
+canic::__canic_inspect!(wire, "configure_subnet_capacity", update, stored::CONFIGURE_SUBNET_CAPACITY, stored::SubnetCapacity, Result<(), Refusal>, stored::LIMITS, LIMITS);
 #[runtime::update(
     runtime = runtime,
-    name = "configure_capacity",
+    name = "configure_subnet_capacity",
     guard = require_controller,
-    decode = approval::<stored::SubnetCapacity, {stored::CONFIGURE_CAPACITY}>,
-    encode = configured::<{stored::CONFIGURE_CAPACITY}>,
+    decode = approval::<stored::SubnetCapacity, {stored::CONFIGURE_SUBNET_CAPACITY}>,
+    encode = configured::<{stored::CONFIGURE_SUBNET_CAPACITY}>,
     max_bytes = 65536,
     on_error = fail,
 )]
-fn configure_capacity(input: stored::SubnetCapacity) -> Result<(), Refusal> {
-    sharding::configure_capacity(input)
+fn configure_subnet_capacity(input: stored::SubnetCapacity) -> Result<(), Refusal> {
+    sharding::configure_subnet_capacity(input)
 }
 
-// increase_pool
+// increase_pool_limit
 // Raise one pool count under its existing funding and deadline.
 // guard  : Root controller
 // limits : stored::LIMITS request (65,536 bytes), sharding::LIMITS reply (1,024 bytes)
-canic::__canic_inspect!(wire, "increase_pool", update, stored::INCREASE_POOL, stored::IncreasePool, Result<(), Refusal>, stored::LIMITS, LIMITS);
+canic::__canic_inspect!(wire, "increase_pool_limit", update, stored::INCREASE_POOL_LIMIT, stored::IncreasePoolLimit, Result<(), Refusal>, stored::LIMITS, LIMITS);
 #[runtime::update(
     runtime = runtime,
-    name = "increase_pool",
+    name = "increase_pool_limit",
     guard = require_controller,
-    decode = approval::<stored::IncreasePool, {stored::INCREASE_POOL}>,
-    encode = configured::<{stored::INCREASE_POOL}>,
+    decode = approval::<stored::IncreasePoolLimit, {stored::INCREASE_POOL_LIMIT}>,
+    encode = configured::<{stored::INCREASE_POOL_LIMIT}>,
     max_bytes = 65536,
     on_error = fail,
 )]
-fn increase_pool(input: stored::IncreasePool) -> Result<(), Refusal> {
-    sharding::increase_pool(input)
+fn increase_pool_limit(input: stored::IncreasePoolLimit) -> Result<(), Refusal> {
+    sharding::increase_pool_limit(input)
 }
 
 // lookup_placement
 // Read the calling hub's retained assignment without allocating.
-#[cfg(feature = "child-creation")]
 #[canic::update(contract = canic::sharding::LookupPlacement)]
 fn lookup_placement(request: canic::sharding::Lookup) -> Placement {
     use canic::sharding::Lookup;
@@ -88,7 +85,7 @@ fn configured<const METHOD: u64>(value: Result<(), Refusal>) -> Result<Vec<u8>, 
 }
 
 fn fail(error: impl std::fmt::Debug) -> ! {
-    runtime::system::trap(&format!("shard placement: {error:?}"))
+    runtime::system::trap(&format!("child placement: {error:?}"))
 }
 
 // prepare_role_key
@@ -103,6 +100,7 @@ async fn prepare_role_key() -> Result<ic_wire::Bytes<32>, canic::topology::attes
 
 // issue_role
 // Issue a two-hour receiver-bound credential for a ready shard, instance or named service.
+// guard  : ready caller with an assigned role
 // limits : default
 #[cfg(feature = "role-issuer")]
 #[canic::update(contract = canic::topology::attestation::Issue)]
@@ -114,7 +112,6 @@ fn issue_role(
 
 // release_child_allocation
 // The approved parent acknowledges release of its original child generation.
-#[cfg(feature = "child-creation")]
 #[canic::update(contract = canic::sharding::ReleaseChildAllocation)]
 fn release_child_allocation(
     (child, allocation): (ic_platform_types::Principal, canic::sharding::Allocation),
@@ -178,7 +175,6 @@ fn observe_standby() -> Vec<(
 // Withdraw an exact worker allocation once its hub confirms durable release.
 // guard  : Root controller
 // limits : sharding request, default reply
-#[cfg(feature = "child-creation")]
 #[canic::update(contract = canic::sharding::standby::ConfirmRelease, guard = require_controller)]
 async fn confirm_worker_release(
     target: canic::sharding::ShardTarget,
@@ -190,7 +186,6 @@ async fn confirm_worker_release(
 // Advance an exact released worker through stop and uninstall.
 // guard  : Root controller
 // limits : sharding request, default reply
-#[cfg(feature = "child-creation")]
 #[canic::update(contract = canic::sharding::standby::ResetWorker, guard = require_controller)]
 async fn reset_worker(
     (target, deadline): (canic::sharding::ShardTarget, u64),
@@ -277,13 +272,13 @@ fn observe_standby_handoff(
     sharding::standby::policy::handoff_status(id)
 }
 
-// spare_counts
+// standby_status
 // Report the subnet fleet's aggregate ready count, target and refill availability.
 // guard  : public
 // limits : default Wire
 #[cfg(feature = "reserve-pool")]
-#[canic::query(contract = stored::ReadSpareCounts)]
-fn spare_counts() -> Option<stored::SpareCounts> {
+#[canic::query(contract = stored::ReadStandbyStatus)]
+fn standby_status() -> Option<stored::SpareCounts> {
     sharding::standby::policy::spare_counts()
 }
 
@@ -291,7 +286,6 @@ fn spare_counts() -> Option<stored::SpareCounts> {
 // Start fixed deposits below an approved balance or observe the original grant.
 // guard  : Root controller
 // limits : default Wire limits
-#[cfg(feature = "child-funding")]
 #[canic::update(contract = stored::ConfigureChildFunding, guard = require_controller)]
 fn configure_child_funding(
     input: stored::ChildFunding,
@@ -301,7 +295,6 @@ fn configure_child_funding(
 
 // stop_child_funding
 // Revoke future payments at their approved owner; retain prior and unresolved debits.
-#[cfg(feature = "child-funding")]
 #[canic::update(contract = stored::StopChildFunding, guard = require_controller)]
 fn stop_child_funding(
     child: ic_platform_types::Principal,
@@ -313,7 +306,6 @@ fn stop_child_funding(
 // Recover or pay for the original demand under a requester-funded grant.
 // guard  : exact approved hub checked before reading or changing any assignment
 // limits : 1 KiB request and reply
-#[cfg(feature = "child-creation")]
 #[canic::update(contract = canic::sharding::payment::AcquirePlacement)]
 async fn acquire_placement(
     input: (canic::sharding::payment::Demand, u128),

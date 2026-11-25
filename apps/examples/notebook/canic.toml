@@ -1,5 +1,6 @@
 [apps.ex-notebook.canisters.notebook]
 role = "app"
+parent = "root"
 wasm = "artifacts/notebook.wasm"
 build = { manifest = "../../../Cargo.toml", package = "ex-notebook" }
 

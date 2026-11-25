@@ -367,8 +367,8 @@ async fn two_roots_hold_spare_until_destination_confirms_custody() {
         let client = Client { pic, id, operator };
         client
             .update::<_, Result<(), management::Refusal>>(
-                "configure_capacity",
-                stored::CONFIGURE_CAPACITY,
+                "configure_subnet_capacity",
+                stored::CONFIGURE_SUBNET_CAPACITY,
                 &stored::SubnetCapacity {
                     allow_large_subnet: false,
                     root: id.to_text(),

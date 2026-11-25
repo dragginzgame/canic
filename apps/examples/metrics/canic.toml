@@ -1,5 +1,4 @@
 [apps.ex-metrics]
-wasm_store = true
 
 [apps.ex-metrics.canisters.ex-metrics]
 role = "app"

@@ -104,7 +104,7 @@ pub struct FleetStore {
     pub creation_cycles: u64,
 }
 
-/// Bounded fleet journey: one new Root, optional Store and permanent application children under its approved subnet limit.
+/// One fleet Root, its Wasm Store and permanent application children under the approved subnet limit.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FleetPlan {
     /// Fleet envelope format, independent of existing single-canister plan formats.
@@ -490,11 +490,13 @@ pub fn plan_fleet(
         return Err(Error::Invalid("receiver install requires a resolved Root; bootstrap infrastructure and plan named Store-backed children".into()));
     }
     let slots = &selected.config.canisters;
-    let stores: Vec<_> = slots
+    let mut stores = slots
         .iter()
-        .filter(|(_, s)| s.role.as_deref() == Some("wasm-store"))
-        .collect();
-    if stores.len() > 1 || slots.values().any(|s| s.id.is_some() || s.profile_manager) {
+        .filter(|(_, s)| s.role.as_deref() == Some("wasm-store"));
+    let (store_name, store_slot) = stores
+        .next()
+        .ok_or_else(|| Error::Invalid("fleet requires a Wasm Store under Root".into()))?;
+    if stores.next().is_some() || slots.values().any(|s| s.id.is_some() || s.profile_manager) {
         return Err(invalid());
     }
     let (root_name, _) = slots
@@ -517,11 +519,7 @@ pub fn plan_fleet(
             children.len()
         )));
     }
-    if children.len() + 1 + stores.len() != slots.len()
-        || stores
-            .first()
-            .is_some_and(|(_, s)| s.parent.as_ref() != Some(root_name))
-    {
+    if children.len() + 2 != slots.len() || store_slot.parent.as_ref() != Some(root_name) {
         return Err(invalid());
     }
     let root_bytes = store::read(
@@ -552,26 +550,16 @@ pub fn plan_fleet(
         .map(|(name, _)| {
             let bytes = store::read(
                 &selected.wasm_path(config_path, name, None)?,
-                if stores.is_empty() {
-                    canic_management_protocol::MAX_WASM
-                } else {
-                    artifact::MAX_ARTIFACT_BYTES
-                },
+                artifact::MAX_ARTIFACT_BYTES,
             )?;
             crate::config::sharding::check_pool_requirements(&bytes, name, selected)?;
             Ok(bytes)
         })
         .collect::<Result<_>>()?;
-    let store_bytes = stores
-        .first()
-        .map(|(name, _)| {
-            store::read(
-                &selected.wasm_path(config_path, name, None)?,
-                artifact::MAX_WASM,
-            )
-        })
-        .transpose()?;
-    let store_cycles = if stores.is_empty() { 0 } else { STORE_CYCLES };
+    let store_bytes = store::read(
+        &selected.wasm_path(config_path, store_name, None)?,
+        artifact::MAX_WASM,
+    )?;
     let now = crate::now()?;
     let dispatch = execute_at_ns.unwrap_or(now);
     let name = |slot: &str| DeploymentName {
@@ -595,10 +583,10 @@ pub fn plan_fleet(
                 .or_else(|| {
                     (children.len() as u64 + 2)
                         .checked_mul(1_000_000_000_000)?
-                        .checked_add(store_cycles)
+                        .checked_add(STORE_CYCLES)
                 })
                 .ok_or_else(invalid)?
-                .checked_sub(store_cycles)
+                .checked_sub(STORE_CYCLES)
                 .ok_or_else(invalid)?,
         },
         created_at_ns: now,
@@ -612,15 +600,8 @@ pub fn plan_fleet(
             parent: CreatedCanister {
                 operation: String::new(),
             },
-            artifact: artifact::admit_bounded(
-                &child_bytes[index],
-                if stores.is_empty() {
-                    canic_management_protocol::MAX_WASM
-                } else {
-                    artifact::MAX_ARTIFACT_BYTES
-                },
-            )?,
-            release: (!stores.is_empty()).then(|| {
+            artifact: artifact::admit_bounded(&child_bytes[index], artifact::MAX_ARTIFACT_BYTES)?,
+            release: Some({
                 crate::publication::release_manifest(
                     ic_wasm_store_protocol::Release {
                         name: children[index].0.clone(),
@@ -661,20 +642,14 @@ pub fn plan_fleet(
         },
         children: (0..children.len()).map(definition).collect::<Result<_>>()?,
         root,
-        store: stores
-            .first()
-            .zip(store_bytes.as_ref())
-            .map(|((slot, _), bytes)| -> Result<FleetStore> {
-                Ok(FleetStore {
-                    deployment: name(slot),
-                    parent: CreatedCanister {
-                        operation: String::new(),
-                    },
-                    artifact: artifact::admit(bytes)?,
-                    creation_cycles: STORE_CYCLES,
-                })
-            })
-            .transpose()?,
+        store: Some(FleetStore {
+            deployment: name(store_name),
+            parent: CreatedCanister {
+                operation: String::new(),
+            },
+            artifact: artifact::admit(&store_bytes)?,
+            creation_cycles: STORE_CYCLES,
+        }),
     };
     let store = Store::open(journal)?;
     // One fleet reservation covers Root and its children before any ID is known.
@@ -770,7 +745,7 @@ pub fn plan_fleet(
             child.slot = ChildId::service(index).ok_or_else(invalid)?;
         }
         // Existing approvals keep their delivery contract; a Store alone never migrates inline custody.
-        for (child, retained) in value.children.iter_mut().zip(&old.children) {
+        for (child, retained) in value.children.iter().zip(&old.children) {
             if child.receiver_role != retained.receiver_role
                 || child.route_operator_role != retained.route_operator_role
                 || child.funding_operator_role != retained.funding_operator_role
@@ -780,7 +755,7 @@ pub fn plan_fleet(
                 ));
             }
             if retained.release.is_none() {
-                child.release = None;
+                return Err(Error::Blocked("inline fleet approvals require their original Root and Host; initialize a fresh Store-backed fleet".into()));
             }
         }
         if old.children.len() < value.children.len()
@@ -798,7 +773,7 @@ pub fn plan_fleet(
             &id,
             old,
             value,
-            (&root_bytes, &child_bytes, store_bytes.as_deref()),
+            (&root_bytes, &child_bytes, Some(store_bytes.as_slice())),
             &individual,
             &publications,
         );
@@ -840,7 +815,8 @@ pub fn plan_fleet(
         std::ffi::OsStr::new("plan.json"),
         &root_plan,
     )?;
-    if let Some(bytes) = store_bytes {
+    {
+        let bytes = store_bytes;
         let directory = held
             .prepare_directories(&[std::ffi::OsStr::new("store")], 0o700, 0)
             .map_err(supplier)?;
@@ -869,171 +845,118 @@ pub fn plan_fleet(
     })
 }
 
-pub(crate) async fn apply(
+pub(crate) async fn execute(
     dir: &Path,
     id: &str,
     identity: &str,
     icp: &Path,
+    reconcile: bool,
 ) -> Result<ApplyOutcome> {
     let value = load(dir, id)?;
+    if value.store.is_none() || value.children.iter().any(|c| c.release.is_none()) {
+        return Err(Error::Blocked(
+            "inline fleet approvals require their original Root and Host".into(),
+        ));
+    }
     if cancelled(dir, id)? {
         return Err(Error::Blocked(
             "this fleet approval was cancelled; plan and review a new operation".into(),
         ));
     }
-    if crate::now()?
-        >= plan::admission_deadline(
-            value.root.created_at_ns,
-            value.dispatch_at_ns(),
-            value.root.expires_at_ns,
-        )
-        && !dir
-            .join("root/create/signed.json")
-            .try_exists()
-            .map_err(supplier)?
-    {
-        return Err(Error::Blocked(
-            "fleet child admission time passed; no Root creation was signed".into(),
-        ));
-    }
-    let root = operation::apply_at(
-        dir.parent().ok_or_else(invalid)?,
-        &dir.join("root"),
-        &value.root.digest()?,
-        identity,
-        icp,
-    )
-    .await?;
-    let ApplyOutcome::Complete(root) = root else {
-        return Err(invalid());
-    };
-    let store = if value.store.is_some() {
-        let plan = value.store_plan(&root)?;
-        let path = dir.join("store");
-        if !path.join("plan.json").try_exists().map_err(supplier)? {
-            store::put_json(&path.join("plan.json"), &plan)?;
-        }
-        load(dir, id)?;
-        let ApplyOutcome::Complete(receipt) = operation::apply_at(
-            dir.parent().ok_or_else(invalid)?,
-            &path,
-            &plan.digest()?,
-            identity,
-            icp,
-        )
-        .await?
-        else {
-            return Err(invalid());
-        };
-        Some(receipt)
+    let journal = dir.parent().ok_or_else(invalid)?;
+    let root = if reconcile {
+        root_receipt(dir, &value)?.ok_or_else(|| {
+            Error::Blocked("Root bootstrap has no retained receipt; resume fleet apply".into())
+        })?
     } else {
-        None
-    };
-    releases::apply(dir, &value, &root, store.as_ref(), identity, icp).await?;
-    if value
-        .children
-        .iter()
-        .any(|child| child.receiver_role.is_some())
-    {
-        role_key::prepare(dir, &value, &root, identity, icp).await?;
-    }
-    let mut outcomes = Vec::new();
-    for (index, definition) in value.children() {
-        let child = value.resolved_child(dir, &root, store.as_ref(), index)?;
-        let child_id = child.digest()?;
-        let path = dir.join(record::child_leaf(index));
-        if !path.join("plan.json").try_exists().map_err(supplier)? {
-            store::put_json(&path.join("plan.json"), &child)?;
-        }
-        load(dir, id)?;
-        outcomes.push(crate::operation::ChildOutcome {
-            name: definition.deployment.canister.clone(),
-            outcome: operation::apply_at(
-                dir.parent().ok_or_else(invalid)?,
-                &path,
-                &child_id,
-                identity,
-                icp,
+        if crate::now()?
+            >= plan::admission_deadline(
+                value.root.created_at_ns,
+                value.dispatch_at_ns(),
+                value.root.expires_at_ns,
             )
-            .await?,
-        });
-    }
-    Ok(ApplyOutcome::Fleet {
-        operation: id.into(),
-        root,
-        store,
-        children: outcomes,
-    })
-}
-
-pub(crate) async fn reconcile(
-    dir: &Path,
-    id: &str,
-    identity: &str,
-    icp: &Path,
-) -> Result<ApplyOutcome> {
-    let value = load(dir, id)?;
-    if cancelled(dir, id)? {
-        return Err(Error::Blocked(
-            "this fleet approval was cancelled; plan and review a new operation".into(),
-        ));
-    }
-    let store = if value.store.is_some() {
-        let root = root_receipt(dir, &value)?.ok_or_else(invalid)?;
-        let path = dir.join("store");
-        if !path.join("plan.json").try_exists().map_err(supplier)? {
+            && !dir
+                .join("root/create/signed.json")
+                .try_exists()
+                .map_err(supplier)?
+        {
             return Err(Error::Blocked(
-                "Store bootstrap has not begun; resume fleet apply".into(),
+                "fleet child admission time passed; no Root creation was signed".into(),
             ));
         }
-        let ApplyOutcome::Complete(receipt) = operation::reconcile_at(
-            dir.parent().ok_or_else(invalid)?,
-            &path,
-            &value.store_plan(&root)?.digest()?,
+        let root = operation::apply_at(
+            journal,
+            &dir.join("root"),
+            &value.root.digest()?,
             identity,
             icp,
         )
-        .await?
-        else {
+        .await?;
+        let ApplyOutcome::Complete(root) = root else {
             return Err(invalid());
         };
-        Some(receipt)
-    } else {
-        None
+        root
     };
-    releases::reconcile(dir, &value, identity, icp).await?;
-    for (index, _) in value.children() {
-        if !dir
-            .join(record::child_leaf(index))
-            .join("plan.json")
-            .try_exists()
-            .map_err(supplier)?
+    let run = async |path: &Path, plan: &Plan, missing: &str| {
+        let record = path.join("plan.json");
+        if !record.try_exists().map_err(supplier)? {
+            if reconcile {
+                return Err(Error::Blocked(missing.into()));
+            }
+            store::put_json(&record, plan)?;
+        }
+        if reconcile {
+            operation::reconcile_at(journal, path, &plan.digest()?, identity, icp).await
+        } else {
+            load(dir, id)?;
+            operation::apply_at(journal, path, &plan.digest()?, identity, icp).await
+        }
+    };
+    let outcome = run(
+        &dir.join("store"),
+        &value.store_plan(&root)?,
+        "Store bootstrap has not begun; resume fleet apply",
+    )
+    .await?;
+    let ApplyOutcome::Complete(store) = outcome else {
+        return Err(invalid());
+    };
+    const MISSING_CHILD: &str = "reconciliation requires retained child admission for every approved slot; resume the original apply first";
+    if reconcile {
+        releases::reconcile(dir, &value, identity, icp).await?;
+        for (index, _) in value.children() {
+            if !dir
+                .join(record::child_leaf(index))
+                .join("plan.json")
+                .try_exists()
+                .map_err(supplier)?
+            {
+                return Err(Error::Blocked(MISSING_CHILD.into()));
+            }
+        }
+    } else {
+        releases::apply(dir, &value, &root, &store, identity, icp).await?;
+        if value
+            .children
+            .iter()
+            .any(|child| child.receiver_role.is_some())
         {
-            return Err(Error::Blocked("reconciliation requires retained child admission for every approved slot; resume the original apply first".into()));
+            role_key::prepare(dir, &value, &root, identity, icp).await?;
         }
     }
-    let root = root_receipt(dir, &value)?.ok_or_else(invalid)?;
     let mut outcomes = Vec::new();
     for (index, definition) in value.children() {
-        let path = dir.join(record::child_leaf(index));
+        let child = value.resolved_child(dir, &root, Some(&store), index)?;
+        let outcome = run(&dir.join(record::child_leaf(index)), &child, MISSING_CHILD).await?;
         outcomes.push(crate::operation::ChildOutcome {
             name: definition.deployment.canister.clone(),
-            outcome: operation::reconcile_at(
-                dir.parent().ok_or_else(invalid)?,
-                &path,
-                &value
-                    .resolved_child(dir, &root, store.as_ref(), index)?
-                    .digest()?,
-                identity,
-                icp,
-            )
-            .await?,
+            outcome,
         });
     }
     Ok(ApplyOutcome::Fleet {
         operation: id.into(),
         root,
-        store,
+        store: Some(store),
         children: outcomes,
     })
 }

@@ -111,7 +111,7 @@ Set `IDENTITY` to the controller signer name and run these commands from the con
 
 ```sh
 canic --json fleet plan --identity "$IDENTITY" > reserve-plan.json
-canic fleet call --canister root --identity "$IDENTITY" configure-capacity "$(jq -c '.capacity.approval' reserve-plan.json)"
+canic fleet call --canister root --identity "$IDENTITY" configure-subnet-capacity "$(jq -c '.capacity.approval' reserve-plan.json)"
 canic fleet call --canister root --identity "$IDENTITY" configure-standby "$(jq -c '.standby.approval' reserve-plan.json)"
 canic fleet call --canister root --identity "$IDENTITY" observe-standby
 ```

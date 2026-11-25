@@ -1,5 +1,6 @@
 [apps.ex-asset-library.canisters.library]
 role = "app"
+parent = "root"
 wasm = "artifacts/library.wasm"
 build = { manifest = "../../../qualification/Cargo.toml", package = "canic-asset-catalog" }
 

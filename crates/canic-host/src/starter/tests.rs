@@ -33,10 +33,7 @@ fn starter_config_resolves_supplied_root_store_and_generated_app_without_effects
     assert!(!destination.join(".canic").exists());
     crate::init_fleet(&config, "hello", "mainnet", crate::Network::Mainnet).unwrap();
     let declaration = manifest(&config).unwrap();
-    assert_eq!(
-        declaration["apps"]["hello"]["wasm_store"].as_bool(),
-        Some(true)
-    );
+    assert!(declaration["apps"]["hello"].get("wasm_store").is_none());
     assert!(
         declaration["apps"]["hello"]["canisters"]
             .get("store")

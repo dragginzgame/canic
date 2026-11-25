@@ -1,5 +1,4 @@
 [apps.ex-miner-pool]
-wasm_store = true
 
 [apps.ex-miner-pool.canisters.pool]
 role = "pool"

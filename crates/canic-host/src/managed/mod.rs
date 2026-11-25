@@ -20,7 +20,7 @@ use crate::{
 };
 pub use application::activate;
 use canic_management_protocol::children::ChildId;
-use canic_management_protocol::{Approval, LIMITS, Phase, Refusal, STAGE_LIMITS, Stage, Status};
+use canic_management_protocol::{Approval, LIMITS, Phase, Refusal, Status};
 use ic_platform::native::ReadClient;
 use std::path::Path;
 use wire::Method;
@@ -33,7 +33,7 @@ pub(crate) const OBSERVATIONS: usize = 32;
 /// `execute_at_ns` selects a new plan's schedule (default: ready once approved);
 /// reopening preserves the original schedule.
 /// `release` selects a completed publication operation in this journal. Its exact
-/// bytes, app/fleet and owners must match; absence retains inline delivery.
+/// bytes, app/fleet and owners must match.
 /// Fleet-owned upgrades resolve original and later child admissions through the
 /// same retained history as whole-fleet planning, including completed maintenance.
 ///
@@ -51,7 +51,7 @@ pub fn create_managed_plan(
     canister: &str,
     root_module: &str,
     execute_at_ns: Option<u64>,
-    release: Option<&str>,
+    release: &str,
     arguments: Option<&Path>,
     blob_attempt: Option<u64>,
 ) -> Result<(String, Plan)> {
@@ -207,11 +207,6 @@ pub fn create_managed_plan(
                 "managed receiver must select the planned Root".into(),
             ));
         }
-        if release.is_none() {
-            return Err(Error::Invalid(
-                "configured receiver creation requires a Store release".into(),
-            ));
-        }
         if role_service {
             let pin = crate::application::issuer_pin(
                 journal,
@@ -251,17 +246,27 @@ pub fn create_managed_plan(
     } else {
         arguments
     };
-    let source = release
-        .map(|id| stored::select(journal, id, &input, selection, canister, &root, root_module))
-        .transpose()?;
+    if release.is_empty() {
+        return Err(Error::Invalid(
+            "--release requires a completed Wasm Store publication".into(),
+        ));
+    }
+    let source = stored::select(
+        journal,
+        release,
+        &input,
+        selection,
+        canister,
+        &root,
+        root_module,
+    )?;
     let now = crate::now()?;
     let execute_at_ns = execute_at_ns.unwrap_or(now);
     let fleet = &selection.config;
-    let pool_child_evidence = source.is_some()
-        && (!fleet.shard_pools.is_empty()
-            || fleet.registry.is_some()
-            || !fleet.worker_pools.is_empty()
-            || fleet.standby_pool.is_some());
+    let pool_child_evidence = !fleet.shard_pools.is_empty()
+        || fleet.registry.is_some()
+        || !fleet.worker_pools.is_empty()
+        || fleet.standby_pool.is_some();
     let (mut plan, bytes) = plan::prepare(
         wasm,
         input,
@@ -275,7 +280,7 @@ pub fn create_managed_plan(
             blob_attempt,
             slot,
             root,
-            source,
+            source: Some(source),
             root_module: root_module.into(),
             execute_at_ns,
         }),
@@ -409,20 +414,6 @@ fn validate(plan: &Plan, previous: Option<&Status>, status: &Status) -> Result<(
     Ok(())
 }
 
-fn stage_call(plan: &Plan, wasm: &[u8]) -> Result<Call<'static>> {
-    if plan.management().is_some_and(|m| m.source.is_some()) {
-        return Method::Stage.call(plan, &(), LIMITS);
-    }
-    Method::Stage.call(
-        plan,
-        &Stage {
-            approval: approval(plan)?,
-            wasm: wasm.to_vec(),
-        },
-        STAGE_LIMITS,
-    )
-}
-
 fn stage_reply(plan: &Plan, bytes: &[u8]) -> Result<Status> {
     let reply: std::result::Result<Status, Refusal> = ic_wire::decode(
         bytes,
@@ -477,67 +468,155 @@ pub(crate) fn evidence(dir: &Path, plan: &Plan) -> Result<Option<Status>> {
     evidence_with_source(dir, plan).map(|value| value.map(|(status, _)| status))
 }
 
+type Evidence<S> = (S, Option<canic_management_protocol::stored::Delivery>);
+
+fn fold_evidence<S>(
+    dir: &Path,
+    methods: [Method; 2],
+    staged: Option<S>,
+    validate: impl Fn(Option<&S>, &S) -> Result<()>,
+    empty: impl Fn(&S) -> bool,
+    decode: impl Fn(Method, &[u8]) -> Result<Evidence<S>>,
+) -> Result<Option<Evidence<S>>> {
+    let mut latest = if let Some(status) = staged {
+        validate(None, &status)?;
+        Some((status, None))
+    } else {
+        None
+    };
+    visit_observations(dir, methods, |method, bytes| {
+        let (status, source) = decode(method, bytes)?;
+        if latest.is_none() && empty(&status) {
+            return Ok(());
+        }
+        validate(latest.as_ref().map(|(previous, _)| previous), &status)?;
+        let source =
+            stored::retain_delivery(latest.as_ref().and_then(|(_, old)| old.as_ref()), source)?;
+        latest = Some((status, source));
+        Ok(())
+    })?;
+    Ok(latest)
+}
+
 pub(crate) fn evidence_with_source(
     dir: &Path,
     plan: &Plan,
 ) -> Result<Option<(Status, Option<canic_management_protocol::stored::Delivery>)>> {
-    let mut latest = stage_evidence(dir, |bytes| stage_reply(plan, bytes))?
-        .map(|status| {
-            validate(plan, None, &status)?;
-            Ok::<_, Error>((status, None))
-        })
-        .transpose()?;
-    visit_observations(
+    fold_evidence(
         dir,
         [Method::Reconcile, Method::Observe],
+        stage_evidence(dir, |bytes| stage_reply(plan, bytes))?,
+        |old, new| validate(plan, old, new),
+        |status| status.phase == Phase::Empty && status.approval.is_none(),
         |method, bytes| {
             let method = method.id(plan);
-            let (status, source) = if matches!(
+            if matches!(
                 method,
                 canic_management_protocol::application::CHILD_EVIDENCE
                     | canic_management_protocol::application::CUSTODY
             ) {
-                stored::creation_evidence(plan, bytes)?
+                stored::creation_evidence(plan, bytes)
             } else {
-                (decode_observation(plan, method, bytes)?, None)
-            };
-            if status.phase == Phase::Empty && status.approval.is_none() && latest.is_none() {
-                return Ok(());
+                Ok((decode_observation(plan, method, bytes)?, None))
             }
-            validate(plan, latest.as_ref().map(|(s, _)| s), &status)?;
-            let source = stored::retain_delivery(
-                latest.as_ref().and_then(|(_, source)| source.as_ref()),
-                source,
-            )?;
-            latest = Some((status, source));
-            Ok(())
         },
-    )?;
-    Ok(latest)
+    )
+}
+
+struct Admission<'a> {
+    dir: &'a Path,
+    plan: &'a Plan,
+    identity: &'a str,
+    icp: &'a Path,
+    client: &'a ReadClient,
+}
+
+impl Admission<'_> {
+    async fn stage<S>(
+        &self,
+        retained: bool,
+        before_signing: impl Future<Output = Result<()>>,
+        call: impl FnOnce() -> Result<Call<'static>>,
+        staged: impl FnOnce(&[u8]) -> Result<S>,
+        observed: impl FnOnce(&[u8]) -> Result<S>,
+        empty: impl FnOnce(&S) -> bool,
+    ) -> Result<S> {
+        let Self {
+            dir,
+            plan,
+            identity,
+            icp,
+            client,
+        } = *self;
+        stored::verify(plan, client).await?;
+        let stage = dir.join("stage");
+        if stage.join("signed.json").try_exists().map_err(supplier)? {
+            let path = recovery::next_observation(dir)?;
+            let read = observation(plan)?;
+            recovery::require_settled(&path)?;
+            let bytes = signed::observe(&path, plan, &read, identity, icp, client).await?;
+            let status = observed(&bytes)?;
+            if retained || !empty(&status) {
+                return Ok(status);
+            }
+            // An empty observation cannot replace the original signed attempt.
+        } else {
+            let owner = plan.management().expect("managed child");
+            if crate::now()?
+                >= plan::admission_deadline(
+                    plan.created_at_ns,
+                    owner.execute_at_ns,
+                    plan.expires_at_ns,
+                )
+            {
+                let reason = if plan.target().is_some() {
+                    "Root upgrade admission time passed; no new attempt signed"
+                } else {
+                    "Root admission time passed; no new stage attempt was signed"
+                };
+                return Err(Error::Blocked(reason.into()));
+            }
+            before_signing.await?;
+        }
+        staged(&signed::execute(&stage, plan, &call()?, identity, icp, client).await?)
+    }
 }
 
 pub(crate) async fn apply(
     dir: &Path,
     id: &str,
     plan: &Plan,
-    wasm: &[u8],
     identity: &str,
     icp: &Path,
     client: &ReadClient,
 ) -> Result<ApplyOutcome> {
-    let owner = match &plan.action {
-        crate::PlanAction::CreateChild(owner) => owner,
-        crate::PlanAction::UpgradeChild { .. } => {
-            return upgrade::apply(dir, id, plan, wasm, identity, icp, client).await;
-        }
-        _ => return Err(Error::Invalid("expected Root-owned child operation".into())),
-    };
+    let owner = plan
+        .management()
+        .ok_or_else(|| Error::Invalid("expected Root-owned child operation".into()))?;
+    if owner.source.is_none() {
+        return Err(Error::Blocked(
+            "inline child approvals require their original Root and Host".into(),
+        ));
+    }
     let root = principal(&owner.root)?;
     operation::controllers(client, root, &plan.controller).await?;
     if operation::module(client, root).await? != owner.root_module {
-        return Err(Error::Blocked(
-            "Root code differs from the reviewed management owner".into(),
-        ));
+        let reason = if matches!(plan.action, crate::PlanAction::UpgradeChild { .. }) {
+            "Root code differs from reviewed upgrade owner"
+        } else {
+            "Root code differs from the reviewed management owner"
+        };
+        return Err(Error::Blocked(reason.into()));
+    }
+    let admission = Admission {
+        dir,
+        plan,
+        identity,
+        icp,
+        client,
+    };
+    if matches!(plan.action, crate::PlanAction::UpgradeChild { .. }) {
+        return upgrade::apply(&admission, id).await;
     }
     let retained = evidence(dir, plan)?;
     if let Some(status) = &retained
@@ -545,53 +624,16 @@ pub(crate) async fn apply(
     {
         return finish(dir, id, plan, status, client).await;
     }
-    stored::verify(plan, client).await?;
-    let stage = dir.join("stage");
-    let status = if !stage.join("signed.json").try_exists().map_err(supplier)? {
-        if crate::now()?
-            >= plan::admission_deadline(plan.created_at_ns, owner.execute_at_ns, plan.expires_at_ns)
-        {
-            return Err(Error::Blocked(
-                "Root admission time passed; no new stage attempt was signed".into(),
-            ));
-        }
-        stage_reply(
-            plan,
-            &signed::execute(
-                &stage,
-                plan,
-                &stage_call(plan, wasm)?,
-                identity,
-                icp,
-                client,
-            )
-            .await?,
-        )?
-    } else {
-        // A replicated read can recover admission even when the staging response was lost.
-        let path = recovery::next_observation(dir)?;
-        let call = observation(plan)?;
-        recovery::require_settled(&path)?;
-        let bytes = signed::observe(&path, plan, &call, identity, icp, client).await?;
-        let observed = decode_observation(plan, Method::Observe.id(plan), &bytes)?;
-        if observed.phase == Phase::Empty && observed.approval.is_none() && retained.is_none() {
-            // Empty is not proof the original staging attempt cannot still execute.
-            stage_reply(
-                plan,
-                &signed::execute(
-                    &stage,
-                    plan,
-                    &stage_call(plan, wasm)?,
-                    identity,
-                    icp,
-                    client,
-                )
-                .await?,
-            )?
-        } else {
-            observed
-        }
-    };
+    let status = admission
+        .stage(
+            retained.is_some(),
+            async { Ok(()) },
+            || Method::Stage.call(plan),
+            |bytes| stage_reply(plan, bytes),
+            |bytes| decode_observation(plan, Method::Observe.id(plan), bytes),
+            |status| status.phase == Phase::Empty && status.approval.is_none(),
+        )
+        .await?;
     validate(plan, retained.as_ref(), &status)?;
     if status.phase == Phase::Ready {
         finish(dir, id, plan, &status, client).await

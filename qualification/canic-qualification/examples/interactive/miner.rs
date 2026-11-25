@@ -45,8 +45,8 @@ pub(super) async fn session(owner: &mut Instance, artifacts: &Path, seconds: u64
     let limit = fleet.workers.approval.max_instances;
     for (name, id, request) in [
         (
-            "configure_capacity",
-            stored::CONFIGURE_CAPACITY,
+            "configure_subnet_capacity",
+            stored::CONFIGURE_SUBNET_CAPACITY,
             &fleet.capacity.request,
         ),
         (

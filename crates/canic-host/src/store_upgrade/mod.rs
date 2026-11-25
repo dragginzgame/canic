@@ -163,16 +163,10 @@ fn path(dir: &Path, index: usize) -> PathBuf {
 }
 
 fn next(dir: &Path) -> Result<usize> {
-    for index in 0..OBSERVATIONS {
-        if !path(dir, index)
-            .join("reply.bin")
-            .try_exists()
-            .map_err(supplier)?
-        {
-            return Ok(index);
-        }
-    }
-    Ok(OBSERVATIONS)
+    Ok(
+        store::next_observation(&dir.join("store-upgrade"), OBSERVATIONS, &["reply.bin"])?
+            .map_or(OBSERVATIONS, |(index, _)| index),
+    )
 }
 
 async fn observe(

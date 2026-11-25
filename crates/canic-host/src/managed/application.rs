@@ -17,7 +17,7 @@ pub async fn activate(
 ) -> Result<ApplyOutcome> {
     let journal = store::Store::open(root)?;
     let dir = journal.operation(digest)?;
-    let (plan, wasm) = plan::load(&dir, digest)?;
+    let (plan, _) = plan::load(&dir, digest)?;
     let owner = plan
         .management()
         .filter(|m| m.blob_attempt.is_some())
@@ -29,7 +29,7 @@ pub async fn activate(
         .target()
         .ok_or_else(|| Error::Invalid("activation requires a child upgrade".into()))?;
     crate::auth::permit_upgrade(root, &plan)?;
-    let outcome = super::apply(&dir, digest, &plan, &wasm, identity, icp, &client).await?;
+    let outcome = super::apply(&dir, digest, &plan, identity, icp, &client).await?;
     if matches!(outcome, ApplyOutcome::Complete(_)) {
         return Ok(outcome);
     }
@@ -40,8 +40,7 @@ pub async fn activate(
     match maintenance.phase {
         MaintenancePhase::Active => return Ok(outcome),
         MaintenancePhase::ActivateIssued => {
-            return super::recovery::reconcile(&dir, digest, &plan, &wasm, identity, icp, &client)
-                .await;
+            return super::recovery::reconcile(&dir, digest, &plan, identity, icp, &client).await;
         }
         MaintenancePhase::Inspected => {}
         _ => return Err(Error::Blocked(
@@ -56,7 +55,7 @@ pub async fn activate(
             "child code changed before activation".into(),
         ));
     }
-    let call = super::Method::ActivateUpgrade.call(&plan, &(), application::LIMITS)?;
+    let call = super::Method::ActivateUpgrade.call(&plan)?;
     let bytes =
         signed::execute(&dir.join("activate"), &plan, &call, identity, icp, &client).await?;
     let result: std::result::Result<application::Maintenance, canic_management_protocol::Failure> =
@@ -86,5 +85,5 @@ pub async fn activate(
             "activation reply changed the approved maintenance custody".into(),
         ));
     }
-    super::apply(&dir, digest, &plan, &wasm, identity, icp, &client).await
+    super::apply(&dir, digest, &plan, identity, icp, &client).await
 }

@@ -1,5 +1,9 @@
 //! Direct, stopped fixture with disposable external secp256k1 custody.
+#[path = "../../fixtures/child_store.rs"]
+mod child_store;
 mod gateway;
+#[path = "../../fixtures/local_store.rs"]
+mod local_store;
 mod managed;
 mod signed_bindings;
 mod signer_failures;

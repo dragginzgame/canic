@@ -1,5 +1,4 @@
 [apps.ex-user-directory]
-wasm_store = true
 
 [apps.ex-user-directory.canisters.ex-user-directory-hub]
 role = "user_hub"

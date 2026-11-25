@@ -273,7 +273,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     supplier
         .pin(&store::Pin {
             operation: [82; 32],
-            manifest: alias,
+            manifest: alias.clone(),
         })
         .await;
     let pending = store::Manifest {
@@ -394,11 +394,11 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     let raw = publication::AdmissionRequest {
         store: supplier.id.to_text(),
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
-        command: store::AdmissionCommand::Activate(approval.attempt.clone()),
+        command: publication::AdmissionChange::Activate(approval.attempt.clone()),
     };
     assert_eq!(
         root.update::<_, publication::AdmissionReply>(
-            "store_admission",
+            "change_store_admission",
             publication::ADMISSION,
             &raw,
             STORE_LIMITS
@@ -459,7 +459,9 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
         .await
         .unwrap();
     }
-    quiescence_tests::child_stage(&root).await.unwrap(); // Completion releases the mutation fence.
+    quiescence_tests::child_stage(&root, &supplier, &alias)
+        .await
+        .unwrap(); // Completion releases the mutation fence.
     maintain(&root).await; // Later child work does not invalidate completed maintenance custody.
     assert_eq!(observe(&root).await, ready);
     check_current_custody(&root, &ready).await;
@@ -485,14 +487,14 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
         sequence: 2,
         operation: [91; 32],
     };
-    let mut raw = publication::AdmissionRequest {
+    let raw = publication::AdmissionRequest {
         store: supplier.id.to_text(),
         expires_at_ns: pic.get_time().await.as_nanos_since_unix_epoch() + 240_000_000_000,
-        command: store::AdmissionCommand::Close(next.clone()),
+        command: publication::AdmissionChange::Close(next.clone()),
     };
     let closed = root
         .update::<_, publication::AdmissionReply>(
-            "store_admission",
+            "change_store_admission",
             publication::ADMISSION,
             &raw,
             STORE_LIMITS,
@@ -504,17 +506,20 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     assert_eq!(closed.attempt, next);
     assert_eq!(activate(&root, &approval).await, ready); // A completed old operation cannot reopen a newer gate.
     assert_eq!(recover_store(&root, &approval).await, ready);
-    raw.command = store::AdmissionCommand::Observe;
-    assert_eq!(
-        root.update::<_, publication::AdmissionReply>(
-            "store_admission",
-            publication::ADMISSION,
-            &raw,
-            STORE_LIMITS
+    let observed = root
+        .update::<_, publication::ObservationReply>(
+            "observe_store",
+            publication::OBSERVATION,
+            &publication::ObservationRequest::Admission(publication::InfoRequest {
+                store: raw.store,
+                expires_at_ns: raw.expires_at_ns,
+            }),
+            STORE_LIMITS,
         )
         .await
-        .unwrap(),
-        Some(closed)
+        .unwrap();
+    assert!(
+        matches!(observed, publication::Observation::Admission(Some(value)) if value == closed)
     );
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,

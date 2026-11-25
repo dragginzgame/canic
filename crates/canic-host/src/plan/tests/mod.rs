@@ -269,3 +269,31 @@ fn historical_scan_json_keeps_approval_fields_while_entries_are_explicit() {
         assert!(serde_json::from_value::<Scan>(invalid).is_err());
     }
 }
+
+#[tokio::test]
+async fn historical_direct_approvals_remain_readable_but_cannot_start_effects() {
+    for mut legacy in [
+        named_creation(),
+        Plan {
+            version: 1,
+            deployment: None,
+            ..named_creation()
+        },
+    ] {
+        // Keep the approval current so expiration cannot account for the refusal.
+        legacy.created_at_ns = crate::now().unwrap();
+        legacy.expires_at_ns = legacy.created_at_ns + 60_000_000_000;
+        let directory = crate::tests::directory();
+        let id = {
+            let journal = Store::open(&directory).unwrap();
+            publish_locked(&journal, legacy.clone(), WASM).unwrap().0
+        };
+        let path = directory.join(&id);
+        assert_eq!(load(&path, &id).unwrap().0, legacy);
+        assert!(
+            matches!(crate::apply(&directory, &id, "anonymous", Path::new("unused")).await,
+            Err(Error::Blocked(message)) if message.contains("original Host"))
+        );
+        assert!(!path.join("create").exists());
+    }
+}

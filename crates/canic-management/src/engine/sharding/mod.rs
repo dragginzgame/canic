@@ -10,7 +10,7 @@ pub mod standby;
 #[cfg(test)]
 mod tests;
 mod workers;
-pub use capacity::{configure_capacity, increase_pool};
+pub use capacity::{configure_subnet_capacity, increase_pool_limit};
 pub use drain::release_child_allocation;
 pub(super) use persistence::{BYTES, open};
 pub use workers::{configure_workers, lookup_worker};
@@ -270,34 +270,21 @@ fn check_shard_topology(grant: &ShardPool) -> Result<(), Refusal> {
     Ok(())
 }
 
-/// Identify the placement mounts needed to recover existing approvals after an upgrade.
+/// Whether retained standby custody requires the reserve endpoints after upgrade.
 /// # Panics
 /// Requires an opened Root.
 #[must_use]
-pub fn retained_mounts() -> [(&'static str, bool); 3] {
+pub fn requires_reserve_pool() -> bool {
     use canic::sharding::standby::{Asset, Source};
     STATE.with_borrow(|state| {
         let pools = &state.as_ref().expect("open Root").pools;
-        [
-            (
-                "child-creation",
-                !pools.shards.is_empty()
-                    || pools.instances.is_some()
-                    || pools.singleton.is_some()
-                    || !pools.workers.is_empty(),
-            ),
-            ("child-funding", !pools.funding.is_empty()),
-            (
-                "reserve-pool",
-                pools.reserve_policy.is_some()
-                    || pools.standby.iter().any(|(source, asset)| {
-                        matches!(
-                            source,
-                            Source::Imported(_) | Source::Automatic(_) | Source::Refill(_)
-                        ) || matches!(asset, Asset::Transfer(..))
-                    }),
-            ),
-        ]
+        pools.reserve_policy.is_some()
+            || pools.standby.iter().any(|(source, asset)| {
+                matches!(
+                    source,
+                    Source::Imported(_) | Source::Automatic(_) | Source::Refill(_)
+                ) || matches!(asset, Asset::Transfer(..))
+            })
     })
 }
 
@@ -351,75 +338,102 @@ impl Pools {
     }
 }
 
+fn existing_grant<G: PartialEq>(previous: &G, proposed: &G) -> Result<(), Refusal> {
+    if previous == proposed {
+        Ok(())
+    } else {
+        Err(Refusal::Occupied)
+    }
+}
+
+fn admit_grant<G>(
+    grant: G,
+    expires_at_ns: u64,
+    prior: impl FnOnce(&super::State, &G) -> Option<Result<(), Refusal>>,
+    validate: impl FnOnce(&G) -> Result<(), Refusal>,
+    insert: impl FnOnce(&mut Pools, G) -> Result<(), Refusal>,
+) -> Result<(), Refusal> {
+    assert!(api::is_controller(&api::caller()));
+    if let Some(result) = STATE.with_borrow(|s| prior(s.as_ref().expect("open Root"), &grant)) {
+        return result;
+    }
+    admit_pool_change(false)?;
+    validate(&grant)?;
+    if expires_at_ns <= api::time() {
+        return Err(Refusal::Time);
+    }
+    STATE.with_borrow_mut(|s| {
+        let state = s.as_mut().expect("open Root");
+        insert(&mut state.pools, grant)?;
+        state.pool.set(state.pools.encode());
+        Ok(())
+    })
+}
+
 /// Approve the exact hub, retained artifact and lifetime ceilings once.
 /// # Errors
 /// An occupied owner or invalid approval cannot reserve a pool.
 /// # Panics
 /// Requires controller authority and a successfully opened Root.
 pub fn configure(a: ShardPool) -> Result<(), Refusal> {
-    assert!(api::is_controller(&api::caller()));
-    if let Some(result) = STATE.with_borrow(|s| {
-        let pools = &s.as_ref().expect("open Root").pools;
-        if a.max_shards > pools.pool_limit()
-            || pools.workers.values().any(|w| !compatible(&a, &w.grant))
-        {
-            return Some(Err(Refusal::Binding));
-        }
-        if let Some(l) = pools.shards.get(&a.pool) {
-            return Some(if l.approval == a {
-                Ok(())
-            } else {
-                Err(Refusal::Occupied)
-            });
-        }
-        if (!pools.shards.is_empty() && pools.capacity.is_none())
-            || pools.shards.len() >= usize::from(pools.pool_limit().min(stored::MAX_SHARDS))
-            || pools
-                .shards
-                .values()
-                .any(|other| other.approval.reference.store != a.reference.store)
-        {
-            return Some(Err(Refusal::Binding));
-        }
-        pools
-            .instances
-            .as_ref()
-            .filter(|i| a.hub == i.hub || !compatible(&a, i))
-            .map(|_| Err(Refusal::Binding))
-    }) {
-        return result;
-    }
-    admit_pool_change(false)?;
-    let hub = Principal::from_text(&a.hub).map_err(|_| Refusal::Binding)?;
-    if !valid_limits(&a)
-        || a.root != api::canister_self().to_text()
-        || hub.to_text() != a.hub
-        || hub.as_slice().last() != Some(&1)
-        || hub == api::canister_self()
-        || a.hub == a.reference.store
-    {
-        return Err(Refusal::Binding);
-    }
-    check_shard_topology(&a)?;
-    if a.expires_at_ns <= api::time() {
-        return Err(Refusal::Time);
-    }
-    delivery::admit(&a.reference, &a.reference.manifest.hash)?;
-    STATE.with_borrow_mut(|s| {
-        let state = s.as_mut().unwrap();
-        state.pools.shards.insert(
-            a.pool.clone(),
-            Ledger {
-                ordinals: Vec::new(),
-                increases: Vec::new(),
-                approval: a,
-                generations: [None; SLOT_COUNT],
-                principals: Default::default(),
-            },
-        );
-        state.pool.set(state.pools.encode());
-    });
-    Ok(())
+    let expires = a.expires_at_ns;
+    admit_grant(
+        a,
+        expires,
+        |state, a| {
+            let pools = &state.pools;
+            if a.max_shards > pools.pool_limit()
+                || pools.workers.values().any(|w| !compatible(a, &w.grant))
+            {
+                return Some(Err(Refusal::Binding));
+            }
+            if let Some(l) = pools.shards.get(&a.pool) {
+                return Some(existing_grant(&l.approval, a));
+            }
+            if (!pools.shards.is_empty() && pools.capacity.is_none())
+                || pools.shards.len() >= usize::from(pools.pool_limit().min(stored::MAX_SHARDS))
+                || pools
+                    .shards
+                    .values()
+                    .any(|other| other.approval.reference.store != a.reference.store)
+            {
+                return Some(Err(Refusal::Binding));
+            }
+            pools
+                .instances
+                .as_ref()
+                .filter(|i| a.hub == i.hub || !compatible(a, i))
+                .map(|_| Err(Refusal::Binding))
+        },
+        |a| {
+            let hub = Principal::from_text(&a.hub).map_err(|_| Refusal::Binding)?;
+            if !valid_limits(a)
+                || a.root != api::canister_self().to_text()
+                || hub.to_text() != a.hub
+                || hub.as_slice().last() != Some(&1)
+                || hub == api::canister_self()
+                || a.hub == a.reference.store
+            {
+                return Err(Refusal::Binding);
+            }
+            check_shard_topology(a)
+        },
+        |pools, a| {
+            delivery::admit(&a.reference, &a.reference.manifest.hash)?;
+            pools.shards.insert(
+                a.pool.clone(),
+                Ledger {
+                    ordinals: Vec::new(),
+                    increases: Vec::new(),
+                    approval: a,
+                    generations: [None; SLOT_COUNT],
+                    principals: Default::default(),
+                },
+            );
+
+            Ok(())
+        },
+    )
 }
 
 // An explicit backstop accounts for existing ordinary reservations. Historical
@@ -482,44 +496,35 @@ fn validate_pool_install(
 /// # Panics
 /// Requires the Root controller and an opened placement ledger.
 pub fn configure_instances(a: stored::InstancePool) -> Result<(), Refusal> {
-    assert!(api::is_controller(&api::caller()));
-    let prior = STATE.with_borrow(|s| {
-        let pools = &s.as_ref().expect("open Root").pools;
-        if a.max_instances > pools.pool_limit()
-            || pools
-                .workers
+    let expires = a.expires_at_ns;
+    admit_grant(
+        a,
+        expires,
+        |state, a| {
+            let pools = &state.pools;
+            if a.max_instances > pools.pool_limit()
+                || pools
+                    .workers
+                    .values()
+                    .any(|w| !workers::separate(a, &w.grant))
+            {
+                return Some(Err(Refusal::Binding));
+            }
+            if let Some(previous) = &pools.instances {
+                return Some(existing_grant(previous, a));
+            }
+            pools
+                .shards
                 .values()
-                .any(|w| !workers::separate(&a, &w.grant))
-        {
-            return Some(Err(Refusal::Binding));
-        }
-        if let Some(previous) = &pools.instances {
-            return Some(if previous == &a {
-                Ok(())
-            } else {
-                Err(Refusal::Occupied)
-            });
-        }
-        pools
-            .shards
-            .values()
-            .find(|l| l.approval.hub == a.hub || !compatible(&l.approval, &a))
-            .map(|_| Err(Refusal::Binding))
-    });
-    if let Some(result) = prior {
-        return result;
-    }
-    admit_pool_change(false)?;
-    validate_instance(&a)?;
-    if a.expires_at_ns <= api::time() {
-        return Err(Refusal::Time);
-    }
-    STATE.with_borrow_mut(|s| {
-        let state = s.as_mut().expect("open Root");
-        state.pools.instances = Some(a);
-        state.pool.set(state.pools.encode());
-    });
-    Ok(())
+                .find(|l| l.approval.hub == a.hub || !compatible(&l.approval, a))
+                .map(|_| Err(Refusal::Binding))
+        },
+        validate_instance,
+        |pools, a| {
+            pools.instances = Some(a);
+            Ok(())
+        },
+    )
 }
 
 fn resolve(

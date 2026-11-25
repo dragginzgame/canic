@@ -359,9 +359,11 @@ async fn app_artifact_and_topology_are_shared_but_fleet_plans_remain_independent
             .as_array()
             .unwrap()
             .iter()
-            .all(|fleet| fleet["declared_canisters"] == 1)
+            .all(|fleet| fleet["declared_canisters"] == 3)
     );
     let owner = "o5trf-oqyg7-cawjp-xs4pw-aomb3-iwki5-hyezf-qahfz-j3ffd-jh4fc-oqe";
+    std::fs::create_dir(root.join("artifacts")).unwrap();
+    std::fs::copy(root.join("app.wasm"), root.join("artifacts/root.wasm")).unwrap();
     let mut operations = Vec::new();
     for fleet in ["first", "second"] {
         let args = [
@@ -372,7 +374,7 @@ async fn app_artifact_and_topology_are_shared_but_fleet_plans_remain_independent
             "--fleet",
             fleet,
             "--canister",
-            "backend",
+            "root",
             "--controller",
             owner,
             "--config",
@@ -397,7 +399,7 @@ async fn app_artifact_and_topology_are_shared_but_fleet_plans_remain_independent
         assert!(run(&conflicting).await.is_err());
     }
     assert_ne!(operations[0], operations[1]);
-    std::fs::write(root.join("app.wasm"), b"\0asm\x01\0\0\0\0\x01\0").unwrap();
+    std::fs::write(root.join("artifacts/root.wasm"), b"\0asm\x01\0\0\0\0\x01\0").unwrap();
     let changed = Cli::try_parse_from([
         "canic",
         "fleet",
@@ -407,7 +409,7 @@ async fn app_artifact_and_topology_are_shared_but_fleet_plans_remain_independent
         "--fleet",
         "first",
         "--canister",
-        "backend",
+        "root",
         "--controller",
         owner,
         "--config",
@@ -481,8 +483,8 @@ async fn canister_declarations_retain_roles_and_parents_without_effect_authority
     assert!(text.contains("manager"));
     let listed = json(&args).await;
     assert_eq!(
-        listed["configuration"]["config"]["canisters"],
-        added["configuration"]["apps"]["profiles"]["canisters"]
+        listed["configuration"]["config"]["canisters"]["child"],
+        added["configuration"]["apps"]["profiles"]["canisters"]["child"]
     );
     let app_list = Cli::try_parse_from([
         "canic", "app", "canister", "list", "--app", "profiles", "--config", config,
@@ -870,7 +872,8 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     assert_eq!(empty["configuration"]["fleet"], "demo");
     assert_eq!(empty["canisters"], serde_json::json!([]));
     assert!(!root.join(".canic").exists());
-    let wasm = root.join("hello.wasm");
+    std::fs::create_dir(root.join("artifacts")).unwrap();
+    let wasm = root.join("artifacts/root.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
     let args = [
         "fleet",
@@ -896,7 +899,8 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     let Output::Text(text) = run(&view).await.unwrap() else {
         panic!("expected text");
     };
-    assert!(text.contains("No canisters declared yet"));
+    assert!(text.contains("root"));
+    assert!(text.contains("store"));
     let slot_args = [
         "app", "canister", "add", "backend", "--app", "hello", "--config", config,
     ];
@@ -912,8 +916,8 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     ];
     let listed = json(&list_args).await;
     assert_eq!(
-        listed["configuration"]["config"]["canisters"],
-        serde_json::json!({"backend":{}})
+        listed["configuration"]["config"]["canisters"]["backend"],
+        serde_json::json!({})
     );
     let list = Cli::try_parse_from(std::iter::once("canic").chain(list_args)).unwrap();
     let Output::Text(text) = run(&list).await.unwrap() else {
@@ -922,6 +926,16 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
     assert!(text.contains("backend"));
     assert!(text.starts_with("App: hello · Fleet: demo\n\nCANISTER"));
     let mut declared = canic_host::load_config(std::path::Path::new(config)).unwrap();
+    let args = [
+        "fleet",
+        "plan",
+        "--config",
+        config,
+        "--canister",
+        "root",
+        "--controller",
+        "o5trf-oqyg7-cawjp-xs4pw-aomb3-iwki5-hyezf-qahfz-j3ffd-jh4fc-oqe",
+    ];
     let first = json(&args).await;
     let repeated = json(&args).await;
     assert_eq!(first, repeated);
@@ -941,7 +955,7 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
         panic!("expected readable operation status");
     };
     assert!(text.contains(id));
-    assert!(text.contains("App: hello\nFleet: demo\nCanister slot: backend"));
+    assert!(text.contains("App: hello\nFleet: demo\nCanister slot: root"));
     assert!(text.contains("Not submitted"));
     assert!(text.contains("Receipt: none retained"));
     assert_eq!(
@@ -956,7 +970,7 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
         panic!("expected text");
     };
     assert!(text.contains("hello / demo · IC mainnet"));
-    assert!(text.contains("backend: Awaiting deployment"));
+    assert!(text.contains("root: Awaiting deployment"));
     assert!(!text.contains("canic fleet status"));
     assert!(text.contains("IC mainnet"));
     let report = root.join("fleet.html");
@@ -1058,7 +1072,7 @@ async fn init_named_plan_and_inspection_share_config_without_network_effects() {
             .err()
             .unwrap()
             .to_string()
-            .contains("upgrade target does not belong")
+            .contains("deployment requires a Canic fleet")
     );
     assert_eq!(
         std::fs::read_dir(root.join("original-journal"))

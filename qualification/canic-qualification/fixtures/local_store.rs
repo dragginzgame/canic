@@ -10,6 +10,26 @@ pub(crate) struct Client<'a> {
     pub(crate) operator: CanisterId,
 }
 impl Client<'_> {
+    #[allow(dead_code, reason = "used by installed placement fixtures")]
+    pub(crate) async fn observe_creation(
+        &self,
+        slot: canic_management_protocol::children::ChildId,
+    ) -> canic_management_protocol::Status {
+        use canic_management_protocol::children::{OBSERVE_STATUS, ObserveStatus, ObservedStatus};
+        match self
+            .update(
+                "observe_child_status",
+                OBSERVE_STATUS,
+                &ObserveStatus::Creation(slot),
+                canic_management_protocol::LIMITS,
+            )
+            .await
+        {
+            ObservedStatus::Creation(status) => status,
+            ObservedStatus::Upgrade(_) => panic!("expected creation status"),
+        }
+    }
+
     pub(crate) async fn update<T: Serialize, R: DeserializeOwned>(
         &self,
         method: &str,
@@ -106,6 +126,10 @@ impl Client<'_> {
     }
 }
 
+#[allow(
+    dead_code,
+    reason = "some qualification targets install their own Root"
+)]
 pub(crate) async fn fixture_with_code(
     pic: &PocketIc,
     root_wasm: Vec<u8>,

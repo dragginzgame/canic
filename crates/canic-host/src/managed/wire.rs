@@ -1,10 +1,9 @@
 //! One selector for signed child methods and their retained response contracts.
-use crate::{Plan, Result, network::principal, signed::Call, supplier};
+use crate::{Plan, Result, network::principal, signed::Call};
 use canic_management_protocol::{
     self as protocol,
     children::{self, ChildId},
 };
-use serde::Serialize;
 
 #[derive(Clone, Copy)]
 pub(super) enum Method {
@@ -70,48 +69,18 @@ impl Method {
         }
     }
 
-    pub(super) fn call<T: Serialize>(
-        self,
-        plan: &Plan,
-        value: &T,
-        limits: ic_wire::Limits,
-    ) -> Result<Call<'static>> {
+    pub(super) fn call(self, plan: &Plan) -> Result<Call<'static>> {
         let owner = plan
             .management()
             .ok_or_else(|| crate::Error::Invalid("missing child scope".into()))?;
+        if owner.source.is_none() {
+            return Err(crate::Error::Blocked(
+                "inline child approvals require their original Root and Host".into(),
+            ));
+        }
         let root = principal(&owner.root)?;
         let (method, id) = self.contract(plan);
-        let args = if owner.source.is_some() {
-            super::stored::arguments(plan, id)?
-        } else {
-            match owner.slot {
-                Some(slot) if matches!(self, Self::Observe) => ic_wire::encode(
-                    &slot,
-                    ic_wire::Encoding::Frame {
-                        method: id,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    limits,
-                ),
-                Some(slot) => ic_wire::encode(
-                    &children::Request { slot, value },
-                    ic_wire::Encoding::Frame {
-                        method: id,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    limits,
-                ),
-                None => ic_wire::encode(
-                    value,
-                    ic_wire::Encoding::Frame {
-                        method: id,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    limits,
-                ),
-            }
-            .map_err(supplier)?
-        };
+        let args = super::stored::arguments(plan, id)?;
         Ok(Call {
             canister: root,
             effective: root,
@@ -123,10 +92,8 @@ impl Method {
 
 pub(crate) fn observation(plan: &Plan) -> Result<Call<'static>> {
     match plan.action {
-        crate::PlanAction::UpgradeChild { .. } => {
-            Method::ObserveUpgrade.call(plan, &super::upgrade::approval(plan)?, protocol::LIMITS)
-        }
-        crate::PlanAction::CreateChild(_) => Method::Observe.call(plan, &(), protocol::LIMITS),
+        crate::PlanAction::UpgradeChild { .. } => Method::ObserveUpgrade.call(plan),
+        crate::PlanAction::CreateChild(_) => Method::Observe.call(plan),
         _ => Err(crate::Error::Invalid(
             "expected Root-owned child observation".into(),
         )),

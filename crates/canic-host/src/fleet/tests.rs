@@ -407,3 +407,24 @@ async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
     assert!(unknown.reported.is_none());
     assert!(unknown.observation_error.is_some());
 }
+
+#[tokio::test]
+async fn observation_budget_skips_expired_queries_and_bounds_unicode_diagnostics() {
+    let now = tokio::time::Instant::now();
+    let cap = Duration::from_secs(2);
+    let expired: std::result::Result<(), _> =
+        budgeted_observation(now, cap, "expired", "late", async {
+            panic!("expired query polled")
+        })
+        .await;
+    assert_eq!(
+        expired.unwrap_err(),
+        Error::Blocked("expired".into()).to_string()
+    );
+    let result: std::result::Result<(), _> =
+        budgeted_observation(now + cap, cap, "expired", "late", async {
+            Err(Error::Blocked("界".repeat(800)))
+        })
+        .await;
+    assert_eq!(result.unwrap_err().chars().count(), 500);
+}
