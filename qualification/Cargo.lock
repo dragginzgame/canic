@@ -342,6 +342,7 @@ dependencies = [
  "canic",
  "canic-profile-protocol",
  "canic-profile-worker",
+ "canic-root",
  "ic-platform-runtime",
  "ic-platform-types",
  "ic-storage",
@@ -484,6 +485,7 @@ dependencies = [
  "ic-wasm-store-protocol",
  "ic-wire",
  "serde",
+ "sha2 0.11.2",
 ]
 
 [[package]]
@@ -605,6 +607,19 @@ dependencies = [
  "toml",
  "wasmparser",
  "wat",
+]
+
+[[package]]
+name = "canic-root"
+version = "0.270.0"
+dependencies = [
+ "canic",
+ "canic-management",
+ "canic-management-protocol",
+ "ic-platform-runtime",
+ "ic-platform-types",
+ "ic-wire",
+ "serde",
 ]
 
 [[package]]

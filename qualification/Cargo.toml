@@ -38,6 +38,7 @@ canic-management-protocol = { path = "../crates/canic-management-protocol" }
 canic-profile-protocol = { path = "canic-profile-protocol" }
 canic-profile-worker = { path = "canic-profile-worker", default-features = false }
 canic-qualification = { path = "canic-qualification" }
+canic-root = { path = "../crates/canic-root" }
 clap = { version = "4.6.7", features = ["derive"] }
 ex-counter = { path = "../apps/examples/counter" }
 ex-miner-pool-hub = { path = "../apps/examples/miner-pool/hub" }

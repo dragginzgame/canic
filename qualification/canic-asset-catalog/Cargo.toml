@@ -7,6 +7,10 @@ license-file.workspace = true
 publish.workspace = true
 description = "Installed embedded Blob and application catalog composition witness"
 
+# The asset-library app builder resolves Root from this workspace lock.
+[target.'cfg(any())'.dependencies]
+canic-root.workspace = true
+
 [package.metadata.toko-tooling.loc]
 category = "tests"
 
