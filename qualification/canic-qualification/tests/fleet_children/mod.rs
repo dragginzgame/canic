@@ -167,7 +167,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         ],
     );
     let id = planned["operation"].as_str().unwrap();
-    assert_eq!(planned["fleet_plan"]["version"], 8);
+    assert_eq!(planned["fleet_plan"]["version"], 9);
     assert_eq!(
         planned["fleet_plan"]["children"][0]["deployment"]["canister"],
         "app"

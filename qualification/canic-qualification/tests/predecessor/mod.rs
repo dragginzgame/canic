@@ -228,11 +228,6 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
         workspace.join("artifacts/root.wasm"),
     )
     .unwrap();
-    let maintenance = cli(&config, &["fleet", "plan", "--identity", "anonymous"]);
-    assert_eq!(maintenance["action"], "maintenance");
-    let id = maintenance["operation"].as_str().unwrap();
-    let dir = journal.join(id);
-    let apply = ["fleet", "apply", id, "--identity", "anonymous"];
     if untracked {
         let now = owner.client().get_time().await.as_nanos_since_unix_epoch();
         let input = upgrade::Stage {
@@ -274,66 +269,39 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
         )
         .unwrap();
         assert_eq!(admitted.unwrap().phase, upgrade::Phase::Scheduled);
+    }
+    let stable = owner.client().get_stable_memory(root).await;
+    let original_status = owner.client().canister_status(root, None).await.unwrap();
+    let journal_entries = || {
+        std::fs::read_dir(&journal)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect::<std::collections::BTreeSet<_>>()
+    };
+    let entries = journal_entries();
+    for _ in 0..2 {
         let refused = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
-            .args(apply)
-            .args(["--config", config.to_str().unwrap(), "--json"])
+            .args(["fleet", "plan", "--identity", "anonymous", "--config"])
+            .arg(&config)
+            .arg("--json")
             .output()
             .unwrap();
         assert!(!refused.status.success());
-        assert!(!dir.join("install/signed.json").exists());
-        assert!(!dir.join("receipt.json").exists());
-        assert_eq!(
-            owner
-                .client()
-                .canister_status(root, None)
-                .await
+        let error: serde_json::Value = serde_json::from_slice(&refused.stderr).unwrap();
+        assert_eq!(error["error"], "invalid");
+        assert!(
+            error["message"]
+                .as_str()
                 .unwrap()
-                .module_hash,
-            Some(digest(&original).to_vec())
+                .contains("Root maintenance")
         );
-        assert_eq!(
-            owner.close(std::time::Duration::from_secs(10)).await,
-            ic_testkit::server::Deletion::Attempted
-        );
-        let stopped = server.stop().unwrap();
-        assert!(stopped.process.cleanup.is_empty(), "{stopped:?}");
-        return;
+        assert_eq!(journal_entries(), entries);
     }
-    let stable = owner.client().get_stable_memory(root).await;
-    let refused = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
-        .args(apply)
-        .args(["--config", config.to_str().unwrap(), "--json"])
-        .output()
-        .unwrap();
-    assert!(!refused.status.success());
-    assert!(!dir.join("receipt.json").exists());
     assert_eq!(owner.client().get_stable_memory(root).await, stable);
-    let install = std::fs::read(dir.join("install/signed.json")).unwrap();
-    let original_status = owner.client().canister_status(root, None).await.unwrap();
-    assert_eq!(
-        original_status.module_hash,
-        Some(digest(&original).to_vec())
-    );
-    assert_eq!(format!("{:?}", original_status.status), "Stopped");
-    let replay = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
-        .args(apply)
-        .args(["--config", config.to_str().unwrap(), "--json"])
-        .output()
-        .unwrap();
-    assert!(!replay.status.success());
-    assert_eq!(
-        std::fs::read(dir.join("install/signed.json")).unwrap(),
-        install
-    );
-    assert_eq!(
-        owner
-            .client()
-            .canister_status(root, None)
-            .await
-            .unwrap()
-            .version,
-        original_status.version
-    );
+    let after = owner.client().canister_status(root, None).await.unwrap();
+    assert_eq!(after.version, original_status.version);
+    assert_eq!(after.module_hash, Some(digest(&original).to_vec()));
+    assert_eq!(format!("{:?}", after.status), "Running");
     assert_eq!(
         std::fs::read(journal.join(creation_id).join("fleet.json")).unwrap(),
         creation_bytes
@@ -341,8 +309,6 @@ async fn qualify_predecessor(completed: bool, untracked: bool) {
     if let Some((path, bytes)) = old_upgrade_record {
         assert_eq!(std::fs::read(path).unwrap(), bytes);
     }
-    // Explicit fixture recovery restarts the retained old executable, not a replacement.
-    owner.client().start_canister(root, None).await.unwrap();
     assert_eq!(
         storage_reopen::historical_status(owner.client(), root).await,
         before
