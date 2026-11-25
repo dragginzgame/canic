@@ -104,7 +104,7 @@ async fn approval_journey(operator_owned: bool) {
         .join(format!("host-{}-{now}", std::process::id()));
     std::fs::create_dir(&dir).unwrap();
     let mut config = json!({"apps":{"demo":{
-    "canisters":{"root":{"wasm":root_wasm}, "receiver":{"wasm":receiver_wasm}},
+    "canisters":{"receiver":{"role":"receiver","parent":"root","wasm":receiver_wasm}},
     "fleets":{"local":{
         "network":{"kind":"Local", "url":url, "root_key":hex(&owner.client().root_key().await.unwrap()), "root_subnet":owner.client().topology().await.get_nns().unwrap().to_text(), "routing_canister":root.to_text()},
         "journal":"journal", "canisters":{"root":{"id":root.to_text()}, "receiver":{"id":receiver.to_text()}},
@@ -117,14 +117,10 @@ async fn approval_journey(operator_owned: bool) {
             json!("operator");
     }
     std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
-    let mut wrong_code = config.clone();
-    wrong_code["apps"]["demo"]["canisters"]["root"]["wasm"] =
-        config["apps"]["demo"]["canisters"]["receiver"]["wasm"].clone();
-    std::fs::write(
-        dir.join("canic.toml"),
-        toml::to_string(&wrong_code).unwrap(),
-    )
-    .unwrap();
+    let artifacts = dir.join("artifacts");
+    std::fs::create_dir(&artifacts).unwrap();
+    let configured_root = artifacts.join("root.wasm");
+    std::fs::copy(&receiver_wasm, &configured_root).unwrap();
     let wrong_journal = dir.join("wrong-code");
     let wrong_plan = cli(
         &dir,
@@ -161,7 +157,7 @@ async fn approval_journey(operator_owned: bool) {
             .join("auth/signed.json")
             .exists()
     );
-    std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
+    std::fs::copy(&root_wasm, &configured_root).unwrap();
     let planned = cli(
         &dir,
         &["fleet", "auth", "plan", "--controller", "2vxsx-fae"],
@@ -241,7 +237,8 @@ async fn approval_journey(operator_owned: bool) {
             .unwrap();
         let mut both = config.clone();
         let app = &mut both["apps"]["demo"];
-        app["canisters"]["shard"] = json!({"wasm":receiver_wasm});
+        app["canisters"]["shard"] =
+            json!({"role":"shard","parent":"receiver","wasm":receiver_wasm});
         let fleet = &mut app["fleets"]["local"];
         fleet["canisters"]["shard"] = json!({"id":shard.to_text()});
         let hub_grant = fleet["auth"].clone();
