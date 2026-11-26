@@ -14,7 +14,7 @@ category = "examples"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-canic = { workspace = true, features = ["lifecycle", "method", "readiness", "storage", "topology"] }
+canic = { workspace = true, features = ["endpoints", "storage"] }
 ic-platform-runtime.workspace = true
 ic-storage.workspace = true
 ic-wire.workspace = true

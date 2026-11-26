@@ -1,6 +1,6 @@
 //! The hub is an independent installed application. Only Root controls the shards.
 use super::*;
-use canic::sharding::standby::ReserveError;
+use canic::sharding::standby::StandbyPoolError;
 use canic::sharding::{self, Placement};
 use canic_profile_protocol::ProfileError;
 
@@ -1104,7 +1104,7 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
     );
     assert_eq!(user(pic, hub, caller, "lookup").await, Placement::Unknown);
     let spare = root
-        .update::<_, Result<canic::sharding::standby::Asset, ReserveError>>(
+        .update::<_, Result<canic::sharding::standby::Asset, StandbyPoolError>>(
             canic::sharding::standby::RefillStandby::NAME,
             canic::sharding::standby::RefillStandby::ID,
             &canic::sharding::standby::Refill {
@@ -1203,7 +1203,7 @@ async fn lost_create_result_keeps_the_original_claim_and_blocks_another_creation
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
-    let wasm = std::fs::read(artifacts().join("pool-faults.wasm")).unwrap();
+    let wasm = std::fs::read(artifacts().join("root-faults.wasm")).unwrap();
     let (root, supplier) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
     let hub = pic.create_canister().await;
     pic.install_canister(
@@ -1776,7 +1776,7 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
     for id in [1, 2] {
         let spare = if id == 1 {
             let asset = root
-                .update::<_, Result<Asset, ReserveError>>(
+                .update::<_, Result<Asset, StandbyPoolError>>(
                     RefillStandby::NAME,
                     RefillStandby::ID,
                     &Refill {
@@ -1869,7 +1869,7 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
         assert!(before - pic.cycle_balance(hub).await < charge / 100);
     }
     // An unpaid reservation excludes other claims only until its original deadline.
-    root.update::<_, Result<(), ReserveError>>(
+    root.update::<_, Result<(), StandbyPoolError>>(
         "configure_standby",
         stored::CONFIGURE_STANDBY,
         &stored::StandbyPolicy {
@@ -1899,7 +1899,7 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
             .unwrap()
             .ready
     };
-    root.update::<_, Result<Asset, ReserveError>>(
+    root.update::<_, Result<Asset, StandbyPoolError>>(
         RefillStandby::NAME,
         RefillStandby::ID,
         &Refill {
@@ -1965,7 +1965,7 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
     .await
     .unwrap();
     let Asset::Empty(spare) = root
-        .update::<_, Result<Asset, ReserveError>>(
+        .update::<_, Result<Asset, StandbyPoolError>>(
             RefillStandby::NAME,
             RefillStandby::ID,
             &Refill {

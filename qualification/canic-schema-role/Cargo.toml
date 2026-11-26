@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 inspection = ["canic/inspection"]
 
 [dependencies]
-canic = { workspace = true, features = ["db-store", "lifecycle", "method"] }
+canic = { workspace = true, features = ["db-store"] }
 ic-db.workspace = true
 ic-platform-runtime.workspace = true
 

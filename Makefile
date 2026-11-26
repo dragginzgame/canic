@@ -214,7 +214,7 @@ growth-test:
 # Focused management mounting/admission and reply rollback; no CLI journey suite.
 .PHONY: endpoint-test
 endpoint-test:
-	cargo test --locked -p canic --features method --test named_contract
+	cargo test --locked -p canic --features endpoints --test named_contract
 	bash scripts/dev/test-endpoints.sh
 
 .PHONY: root-test root-clippy root-doc
@@ -223,7 +223,7 @@ root-test:
 
 root-clippy:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-directory-witness --target wasm32-unknown-unknown -- -D warnings
-	cargo clippy --locked -p canic-management-protocol -p canic-management -p canic-root --features canic-management/sharding --all-targets -- -D warnings
+	cargo clippy --locked -p canic-management-protocol -p canic-management -p canic-root --all-targets -- -D warnings
 	cargo clippy --locked -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test root --test endpoints -- -D warnings
 

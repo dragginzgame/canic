@@ -258,7 +258,7 @@ fn an_unversioned_directory_cannot_reopen_as_a_pool_aware_index() {
     assert_eq!(cell.get(), &old);
 }
 
-#[cfg(all(feature = "storage", feature = "method"))]
+#[cfg(feature = "storage")]
 #[test]
 fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_after_reopen() {
     let memory = ic_storage::DefaultMemoryImpl::default();
@@ -341,7 +341,7 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
     retained::DIRECTORY.set(None);
 }
 
-#[cfg(all(feature = "storage", feature = "method"))]
+#[cfg(feature = "storage")]
 #[test]
 fn withdrawn_generation_refuses_delayed_delivery_and_ack_after_reopen() {
     let memory = ic_storage::VectorMemory::default();

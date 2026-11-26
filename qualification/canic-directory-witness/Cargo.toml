@@ -24,9 +24,9 @@ placement = ["canic/sharding", "ic-platform-types/principal-self-authenticating"
 role-probe = ["canic/role-attestation"]
 
 [dependencies]
-canic = { workspace = true, features = ["lifecycle", "method", "readiness", "topology", "storage"] }
+canic = { workspace = true, features = ["endpoints", "storage"] }
 canic-management = { workspace = true, optional = true }
-canic-management-protocol = { workspace = true, features = ["standby"], optional = true }
+canic-management-protocol = { workspace = true, features = ["endpoints"], optional = true }
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
 ic-storage.workspace = true

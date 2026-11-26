@@ -185,7 +185,7 @@ fn validate_inventory(pools: &Pools) {
         );
     }
     // Each acquisition origin has its own lifetime bound. Exported rows remain receipts.
-    assert!(standby.len() <= 5 * usize::from(stored::MAX_RESERVE_ENTRIES));
+    assert!(standby.len() <= 5 * usize::from(stored::MAX_STANDBY_POOL_ENTRIES));
     let mut refill_sequence = 0;
     let mut principals = std::collections::BTreeSet::new();
     let mut slots = std::collections::BTreeSet::new();

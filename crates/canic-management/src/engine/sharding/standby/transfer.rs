@@ -1,15 +1,15 @@
 //! One source approval pins an empty spare to the Root that reserved it.
 use super::{Asset, STATE, api, available, management, mgmt, policy, reset};
-use canic::sharding::standby::ReserveError;
+use canic::sharding::standby::StandbyPoolError;
 use canic::sharding::standby::{ImportStandby, ObserveStandbyHandoff, TransferPhase};
 use ic_platform_types::Principal;
 
 // No await separates replacement from persistence. A competing continuation can only observe.
-fn replace(index: usize, expected: &Asset, next: Asset) -> Result<(), ReserveError> {
+fn replace(index: usize, expected: &Asset, next: Asset) -> Result<(), StandbyPoolError> {
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().expect("opened Root");
         if s.pools.reserved_for_payment(index) || s.pools.standby[index].1 != *expected {
-            return Err(ReserveError::AwaitingConfirmation(
+            return Err(StandbyPoolError::AwaitingConfirmation(
                 "source inventory advanced; observe the original transfer".into(),
             ));
         }
@@ -28,7 +28,7 @@ pub async fn export(
     id: Principal,
     destination: Principal,
     deadline: u64,
-) -> Result<TransferPhase, ReserveError> {
+) -> Result<TransferPhase, StandbyPoolError> {
     use TransferPhase::{Confirmed, ControllersIssued, Reserved};
     let caller = api::caller();
     super::authorize_change(caller)?;
@@ -36,7 +36,7 @@ pub async fn export(
         || destination == id
         || destination == api::canister_self()
     {
-        return Err(ReserveError::InvalidApproval(
+        return Err(StandbyPoolError::InvalidApproval(
             "a distinct destination Root is required".into(),
         ));
     }
@@ -56,12 +56,12 @@ pub async fn export(
                 })
         })
         .ok_or_else(|| {
-            ReserveError::WrongAsset("source has no claimable spare with that principal".into())
+            StandbyPoolError::WrongAsset("source has no claimable spare with that principal".into())
         })?;
     let entry = |phase| Asset::Transfer(id, destination, deadline, phase);
     if let Asset::Transfer(_, owner, original, phase) = before {
         if owner != destination || deadline != original {
-            return Err(ReserveError::ApprovalConflict(
+            return Err(StandbyPoolError::ApprovalConflict(
                 "spare is bound to another transfer approval".into(),
             ));
         }
@@ -72,7 +72,7 @@ pub async fn export(
     let reported = canic::method::call::<ObserveStandbyHandoff>(destination, 10, &id)
         .await
         .map_err(|e| {
-            ReserveError::AwaitingConfirmation(format!(
+            StandbyPoolError::AwaitingConfirmation(format!(
                 "destination reservation unconfirmed: {e:?}"
             ))
         })??;
@@ -90,7 +90,7 @@ pub async fn export(
             | Asset::Transfer(p, ..)
                 if p == id => {}
             _ => {
-                return Err(ReserveError::AwaitingConfirmation(
+                return Err(StandbyPoolError::AwaitingConfirmation(
                     "destination has not verified custody".into(),
                 ));
             }
@@ -102,7 +102,7 @@ pub async fn export(
     let check_deadline = || {
         let now = api::time();
         if deadline <= now || deadline - now > 600_000_000_000 {
-            return Err(ReserveError::Deadline(
+            return Err(StandbyPoolError::Deadline(
                 "transfer requires the original deadline within ten minutes".into(),
             ));
         }
@@ -111,12 +111,12 @@ pub async fn export(
     check_deadline()?;
     if before != entry(Reserved) {
         if reported != Asset::AwaitingRelease(id) {
-            return Err(ReserveError::AwaitingConfirmation(
+            return Err(StandbyPoolError::AwaitingConfirmation(
                 "destination reservation already released".into(),
             ));
         }
         if policy::subnet(api::canister_self()).await? != policy::subnet(destination).await? {
-            return Err(ReserveError::WrongSubnet(
+            return Err(StandbyPoolError::WrongSubnet(
                 "destination Root is on another subnet".into(),
             ));
         }
@@ -128,10 +128,12 @@ pub async fn export(
     let released = canic::method::call::<ImportStandby>(destination, 10, &id)
         .await
         .map_err(|e| {
-            ReserveError::AwaitingConfirmation(format!("destination release unconfirmed: {e:?}"))
+            StandbyPoolError::AwaitingConfirmation(format!(
+                "destination release unconfirmed: {e:?}"
+            ))
         })??;
     if released != Asset::AwaitingHandoff(id) {
-        return Err(ReserveError::AwaitingConfirmation(
+        return Err(StandbyPoolError::AwaitingConfirmation(
             "destination did not retain release".into(),
         ));
     }
@@ -142,7 +144,7 @@ pub async fn export(
     if status.module_hash.is_some()
         || status.status != ic_platform_protocol::management_snapshots::Status::Running
     {
-        return Err(ReserveError::WrongAsset(
+        return Err(StandbyPoolError::WrongAsset(
             "transfer requires a running, uninstalled spare".into(),
         ));
     }
@@ -160,7 +162,7 @@ pub async fn export(
     .expect("bounded controllers");
     replace(index, &entry(Reserved), entry(ControllersIssued))?;
     management("update_settings", args, 0).await.map_err(|e| {
-        ReserveError::HandoffIssued(format!(
+        StandbyPoolError::HandoffIssued(format!(
             "controller handoff issued; observe destination custody: {e:?}"
         ))
     })?;

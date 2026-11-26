@@ -1,5 +1,5 @@
 //! Bounded child management engine. Ordinary approvals address two child slots.
-//! The optional placement engine retains separate shard and project identities under
+//! The placement engine tracks shared shards, dedicated instances, workers and per-parent children under
 //! one controller-approved subnet ceiling. Canisters own endpoints and lifecycle.
 //! Host consumers use canic-management-protocol without this runtime.
 
@@ -32,7 +32,7 @@ pub use single::{
     observe_upgrade, reconcile, reconcile_upgrade, stage, stage_upgrade, status, upgrade_status,
 };
 
-/// Operator approval and authenticated hub operations for one Root-owned shard pool.
+/// Root placement grants, child allocation and standby pool management.
 #[cfg(feature = "sharding")]
 pub use engine::sharding;
 

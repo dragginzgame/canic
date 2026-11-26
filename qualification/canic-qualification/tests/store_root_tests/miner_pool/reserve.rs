@@ -1,6 +1,6 @@
 //! One Root fills, replenishes, and admits a pre-existing surplus principal.
 use super::*;
-use canic::sharding::standby::ReserveError;
+use canic::sharding::standby::StandbyPoolError;
 use canic::sharding::{
     Placement,
     standby::{Asset, ImportStandby, ObserveStandby, Source},
@@ -73,7 +73,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     configure(root, &fleet.capacity, &fleet.workers).await;
     let grant = fleet.standby.unwrap();
     let approve = async |p: &stored::StandbyPolicy| {
-        root.update::<_, Result<(), ReserveError>>(
+        root.update::<_, Result<(), StandbyPoolError>>(
             "configure_standby",
             stored::CONFIGURE_STANDBY,
             p,
@@ -92,7 +92,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     };
     let imported: <ImportStandby as Contract>::Input = spare.to_text().parse().unwrap();
     let import = async || {
-        root.update::<_, Result<Asset, ReserveError>>(
+        root.update::<_, Result<Asset, StandbyPoolError>>(
             ImportStandby::NAME,
             ImportStandby::ID,
             &imported,
@@ -271,11 +271,11 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     let before_release = inspect().await;
     assert!(matches!(
         former_release(extra_id).await.unwrap_err(),
-        ReserveError::Unauthorized(_)
+        StandbyPoolError::Unauthorized(_)
     ));
     assert_eq!(inspect().await, before_release);
     let observe_extra = async || {
-        root.update::<_, Result<Asset, ReserveError>>(
+        root.update::<_, Result<Asset, StandbyPoolError>>(
             ImportStandby::NAME,
             ImportStandby::ID,
             &extra_id,
@@ -290,7 +290,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     let before_admission = inspect().await;
     assert!(matches!(
         observe_extra().await,
-        Err(ReserveError::WrongAsset(_))
+        Err(StandbyPoolError::WrongAsset(_))
     ));
     assert_eq!(inspect().await, before_admission);
     pic.start_canister(extra, Some(root.id)).await.unwrap();
@@ -306,7 +306,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     );
     for _ in 0..2 {
         let error = root
-            .update::<_, Result<Asset, ReserveError>>(
+            .update::<_, Result<Asset, StandbyPoolError>>(
                 ImportStandby::NAME,
                 ImportStandby::ID,
                 &foreign_id,
@@ -315,7 +315,7 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
             .await
             .unwrap_err();
         assert!(
-            matches!(&error, ReserveError::WrongSubnet(detail) if detail.contains(&foreign.to_text())),
+            matches!(&error, StandbyPoolError::WrongSubnet(detail) if detail.contains(&foreign.to_text())),
             "{error}"
         );
         assert_eq!(inspect().await, before);
@@ -385,7 +385,7 @@ async fn two_roots_hold_spare_until_destination_confirms_custody() {
     let deadline = pic.get_time().await.as_nanos_since_unix_epoch() + 600_000_000_000;
     let refill = async |sequence| {
         source
-            .update::<_, Result<Asset, ReserveError>>(
+            .update::<_, Result<Asset, StandbyPoolError>>(
                 RefillStandby::NAME,
                 RefillStandby::ID,
                 &Refill {
@@ -405,7 +405,7 @@ async fn two_roots_hold_spare_until_destination_confirms_custody() {
         (spare, destination.id.to_text().parse().unwrap(), deadline);
     let export = async |input| {
         source
-            .update::<_, Result<TransferPhase, ReserveError>>(
+            .update::<_, Result<TransferPhase, StandbyPoolError>>(
                 ExportStandby::NAME,
                 ExportStandby::ID,
                 &input,
@@ -415,7 +415,7 @@ async fn two_roots_hold_spare_until_destination_confirms_custody() {
     };
     assert!(export(approval).await.is_err());
     destination
-        .update::<_, Result<(), ReserveError>>(
+        .update::<_, Result<(), StandbyPoolError>>(
             "configure_standby",
             stored::CONFIGURE_STANDBY,
             &stored::StandbyPolicy {
@@ -477,7 +477,7 @@ async fn two_roots_hold_spare_until_destination_confirms_custody() {
     );
     let import = async || {
         destination
-            .update::<_, Result<Asset, ReserveError>>(
+            .update::<_, Result<Asset, StandbyPoolError>>(
                 ImportStandby::NAME,
                 ImportStandby::ID,
                 &spare,
@@ -615,7 +615,7 @@ pub(super) async fn check_controller_handoff(
     let reply = pic.await_call(call).await.unwrap();
     assert!(matches!(
         ConfirmRelease::decode_reply(&reply).unwrap(),
-        Err(ReserveError::Unauthorized(_))
+        Err(StandbyPoolError::Unauthorized(_))
     ));
     pic.set_controllers(root.id, Some(successor), vec![root.operator])
         .await

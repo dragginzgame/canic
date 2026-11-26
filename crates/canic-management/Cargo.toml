@@ -11,17 +11,12 @@ description = "Reusable bounded child management engine"
 [features]
 auth = ["canic/auth"]
 role-issuer = ["sharding", "canic/raw-rand", "dep:ic-platform"]
-sharding = [
-    "ic-platform-protocol/registry-placement",
-    "canic/sharding",
-    "canic/topology",
-    "dep:sha2",
-]
+sharding = ["ic-platform-protocol/registry-placement", "canic/sharding", "dep:sha2"]
 blob = ["canic/blob"]
 fault-injection = []
 
 [dependencies]
-canic = { workspace = true, features = ["storage", "timers", "topology"] }
+canic = { workspace = true, features = ["storage", "timers"] }
 canic-management-protocol.workspace = true
 ic-platform = { workspace = true, features = ["ed25519"], optional = true }
 ic-platform-protocol = { workspace = true, features = ["management"] }

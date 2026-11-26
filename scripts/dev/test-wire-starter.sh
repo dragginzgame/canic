@@ -26,7 +26,6 @@ check
 sed -i.bak '/^\[dependencies\]$/a\
 ic-timers = "0.46.13"
 ' starter-app/Cargo.toml
-sed -i.bak 's/"readiness"/"readiness", "lifecycle"/' starter-app/Cargo.toml
 echo 'mod lifecycle;' >>starter-app/src/lib.rs
 cat >starter-app/src/lifecycle.rs <<'RS'
 canic::mount_lifecycle!(install = timers, reopen = timers);

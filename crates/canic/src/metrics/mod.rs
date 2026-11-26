@@ -1,20 +1,20 @@
 //! Bounded canister diagnostics, independent of recording engines and durable authority.
 
-#[cfg(all(test, feature = "method"))]
+#[cfg(all(test, feature = "endpoints"))]
 mod tests;
 
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 mod endpoint;
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 pub use endpoint::set_guard;
 #[cfg(feature = "timers")]
 pub(crate) use endpoint::start_timer_window;
 
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 pub mod performance;
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 mod protocol;
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 pub use protocol::{BlobCommand, BlobSizes, ObserveChildMetrics, ReadMetrics, Report, Request};
 
 pub mod store;
@@ -47,7 +47,7 @@ impl ic_wire::typescript::Wire for Counter {
     }
 }
 
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 impl From<ic_metrics::MeasurementCounter> for Counter {
     fn from(counter: ic_metrics::MeasurementCounter) -> Self {
         Self {

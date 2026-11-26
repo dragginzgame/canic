@@ -3,7 +3,7 @@
 ## Build the published Root and its operator client
 
 Every Canic app gets a Root and a separate Wasm Store automatically. Build it with `canic app build --canister root`.
-Canic writes `artifacts/root.wasm` and `artifacts/root.client` for every fleet. Auth grants, role keys, reserve pools and Blob maintenance
+Canic writes `artifacts/root.wasm` and `artifacts/root.client` for every fleet. Auth grants, role keys, standby pools and Blob maintenance
 are configured or approved when used.
 
 Canic uses the common workspace manifest of the app's build recipes. When they

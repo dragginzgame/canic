@@ -21,7 +21,7 @@ inspection = [
 profile-state = ["canic-auth-witness/profile", "dep:canic-profile-worker", "dep:ic-storage"]
 
 [dependencies]
-canic = { workspace = true, features = ["method"] }
+canic = { workspace = true, features = ["endpoints"] }
 canic-profile-worker = { workspace = true, optional = true }
 example-counter.workspace = true
 ic-host-artifacts.workspace = true
@@ -31,7 +31,7 @@ ic-wire.workspace = true
 wasmparser.workspace = true
 
 [dev-dependencies]
-canic = { workspace = true, features = ["db", "lifecycle", "recovery", "sharding", "topology"] }
+canic = { workspace = true, features = ["sharding"] }
 canic-artifact-probe.workspace = true
 canic-asset-catalog.workspace = true
 canic-auth-witness.workspace = true

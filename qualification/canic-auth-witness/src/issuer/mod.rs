@@ -1,4 +1,4 @@
-//! Application-owned, volatile test signer. No production key custody is claimed.
+//! Application-owned test signer. The stable witness checkpoints its issuer state and key binding.
 use crate::{IssuerObservation, audience};
 use canic::auth::{
     issuer::{Issue, Logout, Lookup, Refusal, Renew, Revoked, Status},
@@ -88,7 +88,7 @@ fn initialize(engine: Engine) {
     });
 }
 
-// No upgrade initializer: missing volatile intent/replay state stays unavailable.
+// Fixture controls require an initialized or reopened issuer.
 pub(crate) fn control(command: u8) -> bool {
     STATE.with_borrow_mut(|state| {
         let Some(s) = state else {

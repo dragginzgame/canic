@@ -20,7 +20,7 @@ profile-v2 = []
 reject-upgrade = []
 
 [dependencies]
-canic = { workspace = true, optional = true, features = ["method"] }
+canic = { workspace = true, optional = true, features = ["endpoints"] }
 canic-profile-protocol.workspace = true
 ic-platform-runtime = { workspace = true, optional = true }
 ic-storage.workspace = true

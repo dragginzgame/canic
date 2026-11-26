@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "canic-host",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "canic-dormant"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -350,7 +350,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -383,7 +383,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -394,7 +394,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -413,7 +413,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -428,7 +428,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -925,7 +925,7 @@ dependencies = [
 
 [[package]]
 name = "example-counter"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "clap",
@@ -940,7 +940,7 @@ dependencies = [
 
 [[package]]
 name = "example-metrics"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "clap",
@@ -950,7 +950,7 @@ dependencies = [
 
 [[package]]
 name = "example-miner-pool-hub"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "clap",
@@ -965,7 +965,7 @@ dependencies = [
 
 [[package]]
 name = "example-miner-pool-miner"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -978,7 +978,7 @@ dependencies = [
 
 [[package]]
 name = "example-notebook"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -991,7 +991,7 @@ dependencies = [
 
 [[package]]
 name = "example-template"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "serde",
@@ -1000,7 +1000,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-hub"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "clap",
@@ -1014,7 +1014,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-schema"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -1025,7 +1025,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-shard"
-version = "0.272.0"
+version = "0.273.0"
 dependencies = [
  "canic",
  "example-user-directory-schema",
@@ -1650,12 +1650,11 @@ checksum = "26753889d6a2849a9844bef6064dbccfda89e8d76b4fbd7cc5eb6a34c4c79268"
 
 [[package]]
 name = "ic-platform-types"
-version = "0.21.5"
+version = "0.21.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81810d3daa26f7ee13ed687d3f093f18bda2127bba5210a81fabae7a075e1b3f"
+checksum = "4f6c4c1f4cd93bf0143623ad199f705151a9508c746ad9dbed3eda4972f5d14f"
 dependencies = [
  "crc32fast",
- "data-encoding",
  "serde",
  "serde_bytes",
  "sha2 0.11.2",
@@ -3410,9 +3409,9 @@ dependencies = [
 
 [[package]]
 name = "toko-tooling"
-version = "0.46.5"
+version = "0.46.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "038380e2f80a7301dee19c19e2afd38a0bfbbfc41b447a1c81178afc1de94bc7"
+checksum = "e2503246851871fc0f452977eee6851205987c63571a5ec4492347a7e10fbb04"
 
 [[package]]
 name = "toml"

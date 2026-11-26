@@ -2,7 +2,7 @@ use super::*;
 use canic_host::Plan;
 
 #[test]
-fn reserve_preview_uses_the_prepared_principals_and_terms() {
+fn standby_pool_preview_uses_the_prepared_principals_and_terms() {
     use canic_management_protocol::stored::{StandbyImport, StandbyPolicy};
 
     let policy = StandbyPolicy {
@@ -39,7 +39,7 @@ fn reserve_preview_uses_the_prepared_principals_and_terms() {
         "Placement approvals · miners/demo",
         "Network: IC mainnet",
         "Controller: operator",
-        "Reserve Root: rrkah-fqaaa-aaaaa-aaaaq-cai",
+        "Standby pool Root: rrkah-fqaaa-aaaaa-aaaaq-cai",
         "Min available spares: 2 (subnet fleet) · at most 3 automatic creations · deadline 123 Unix ns",
         "Import ryjl3-tyaaa-aaaaa-aaaba-cai · minimum 17 cycles",
         "Previous Root: r7inp-6aaaa-aaaaa-aaabq-cai",

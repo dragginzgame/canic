@@ -17,7 +17,7 @@ crate-type = ["cdylib", "rlib"]
 greeting-v2 = []
 
 [dependencies]
-canic = { workspace = true, features = ["lifecycle", "method", "readiness"] }
+canic = { workspace = true, features = ["endpoints"] }
 ic-platform-runtime.workspace = true
 serde.workspace = true
 

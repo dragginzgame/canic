@@ -1,13 +1,13 @@
 //! Reusable caller checks for Canic endpoints. Each check reads the receiving canister's authority.
 #[cfg(feature = "role-verification")]
 use crate::topology::attestation::{Proof, RoleAdmission, RoleMethod};
-#[cfg(feature = "topology")]
+#[cfg(feature = "endpoints")]
 use ic_platform_types::Principal;
 
 /// Require the actual caller to control this canister.
 /// # Errors
 /// Refuses a caller outside the current IC controller set.
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 pub fn require_controller() -> Result<(), &'static str> {
     use ic_platform_runtime::system;
     system::is_controller(&system::caller())
@@ -18,7 +18,7 @@ pub fn require_controller() -> Result<(), &'static str> {
 /// Check the actual caller against a locally retained topology authority.
 /// # Errors
 /// Refuses an invalid authority or a call from another principal.
-#[cfg(feature = "topology")]
+#[cfg(feature = "endpoints")]
 pub fn require_sender(expected: Principal) -> Result<(), &'static str> {
     if expected.as_slice().last() == Some(&1) && expected == ic_platform_runtime::system::caller() {
         Ok(())
@@ -30,7 +30,7 @@ pub fn require_sender(expected: Principal) -> Result<(), &'static str> {
 /// Require the actual IC caller to be the named canister in this actor's directory.
 /// # Errors
 /// Refuses an unopened directory, an unpublished name, or a different caller.
-#[cfg(all(feature = "topology", feature = "storage"))]
+#[cfg(all(feature = "endpoints", feature = "storage"))]
 pub fn require_canister(name: &str) -> Result<(), &'static str> {
     let principal = crate::topology::directory::retained::DIRECTORY
         .with_borrow(|slot| slot.as_ref()?.current()?.by_name(name))
@@ -41,7 +41,7 @@ pub fn require_canister(name: &str) -> Result<(), &'static str> {
 /// Pre-decode guard for a parent-only endpoint.
 /// # Errors
 /// Refuses a missing binding or a caller other than this actor's parent.
-#[cfg(all(feature = "topology", feature = "storage"))]
+#[cfg(all(feature = "endpoints", feature = "storage"))]
 pub fn require_parent() -> Result<(), &'static str> {
     (crate::topology::parent() == Some(ic_platform_runtime::system::caller()))
         .then_some(())

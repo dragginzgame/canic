@@ -506,7 +506,7 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
                 .unwrap(),
             );
         }
-        let ack = call(pic, broken, "snapshot_fault", 82, &point).await;
+        let ack = call(pic, broken, "inject_snapshot_fault", 82, &point).await;
         ic_wire::decode::<()>(
             &ack,
             ic_wire::Encoding::Frame {

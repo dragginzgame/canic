@@ -30,7 +30,7 @@ Existing crates can adopt the check by adding the table.
 
 ### Adding an application endpoint
 
-New apps already enable Canic's `method` feature. Put the function at the top of `src/lib.rs`.
+New apps already enable Canic's `endpoints` feature. Put the function at the top of `src/lib.rs`.
 The function name is the public export and the Wire method ID defaults to the
 hash of that name. Each direction defaults to a 16 KiB frame, 384 KiB of Wire allocation accounting,
 4,096 node visits and depth 16.

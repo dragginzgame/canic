@@ -4,7 +4,7 @@ use crate::engine::{
     self, STATE, api, delivery, management,
     sharding::{self, standby},
 };
-use canic::sharding::standby::ReserveError;
+use canic::sharding::standby::StandbyPoolError;
 use canic::{
     sharding::standby::{Asset, ResetPhase, Source},
     topology::dormancy::{DormancyReceipt, Receipt},
@@ -18,12 +18,14 @@ fn check(
     approval: &ChildRetirement,
     subject: Principal,
     grant: impl Fn(Principal) -> Result<(), String>,
-) -> Result<(), ReserveError> {
-    grant(subject).map_err(ReserveError::CustodyOccupied)?;
+) -> Result<(), StandbyPoolError> {
+    grant(subject).map_err(StandbyPoolError::CustodyOccupied)?;
     sharding::admit_pool_change(false)
-        .map_err(|e| ReserveError::CustodyOccupied(format!("outstanding custody: {e:?}")))?;
+        .map_err(|e| StandbyPoolError::CustodyOccupied(format!("outstanding custody: {e:?}")))?;
     if api::time() >= approval.expires_at_ns {
-        return Err(ReserveError::Deadline("retirement approval expired".into()));
+        return Err(StandbyPoolError::Deadline(
+            "retirement approval expired".into(),
+        ));
     }
     Ok(())
 }
@@ -36,27 +38,27 @@ fn check(
 pub async fn retire(
     input: Stage<ChildRetirement>,
     grant: impl Fn(Principal) -> Result<(), String>,
-) -> Result<P, ReserveError> {
+) -> Result<P, StandbyPoolError> {
     let controller = api::caller();
     if !api::is_controller(&controller) {
-        return Err(ReserveError::Unauthorized("controller required".into()));
+        return Err(StandbyPoolError::Unauthorized("controller required".into()));
     }
     let approval = &input.approval;
     let subject = Principal::from_text(&approval.child)
-        .map_err(|_| ReserveError::InvalidApproval("invalid shard principal".into()))?;
+        .map_err(|_| StandbyPoolError::InvalidApproval("invalid shard principal".into()))?;
     let slot = ChildId::placement(approval.slot as usize)
-        .ok_or_else(|| ReserveError::InvalidApproval("unknown shard slot".into()))?;
+        .ok_or_else(|| StandbyPoolError::InvalidApproval("unknown shard slot".into()))?;
     let _lock = engine::observing(slot).ok_or_else(|| {
-        ReserveError::CustodyOccupied("retirement observation in progress".into())
+        StandbyPoolError::CustodyOccupied("retirement observation in progress".into())
     })?;
     let deadline = engine::role_issuer::deadline(subject, &approval.generation)
-        .ok_or_else(|| ReserveError::ProofOutstanding("role issuance remains open".into()))?;
+        .ok_or_else(|| StandbyPoolError::ProofOutstanding("role issuance remains open".into()))?;
     let (before, hub, old_hash) = STATE.with_borrow(|s| {
         let s = s.as_ref().unwrap();
         let ledger = s
             .pools
             .shard_at(slot)
-            .ok_or_else(|| ReserveError::NotConfigured("missing shard pool".into()))?;
+            .ok_or_else(|| StandbyPoolError::NotConfigured("missing shard pool".into()))?;
         if approval.root != api::canister_self().to_text()
             || approval.child != subject.to_text()
             || s.pools.capacity.is_none()
@@ -66,14 +68,14 @@ pub async fn retire(
             || !s.pools.evacuated.contains(&slot)
             || input.reference.store != ledger.approval.reference.store
         {
-            return Err(ReserveError::ApprovalConflict(
+            return Err(StandbyPoolError::ApprovalConflict(
                 "retirement binding differs".into(),
             ));
         }
         let before = match s.pools.retirements.get(&slot) {
             Some(r) if r.input == input && r.proof_deadline == deadline => Some(r.phase),
             Some(_) => {
-                return Err(ReserveError::ApprovalConflict(
+                return Err(StandbyPoolError::ApprovalConflict(
                     "retirement approval differs".into(),
                 ));
             }
@@ -81,7 +83,7 @@ pub async fn retire(
         };
         let journal = &s.journal.0[&slot];
         if !journal.ready_for_role() || journal.1.approval.is_some() {
-            return Err(ReserveError::CustodyOccupied(
+            return Err(StandbyPoolError::CustodyOccupied(
                 "shard has outstanding custody".into(),
             ));
         }
@@ -92,7 +94,7 @@ pub async fn retire(
                 .0
                 .observed_module
                 .clone()
-                .ok_or_else(|| ReserveError::WrongAsset("missing shard module".into()))?,
+                .ok_or_else(|| StandbyPoolError::WrongAsset("missing shard module".into()))?,
         ))
     })?;
     if before == Some(P::Returned) {
@@ -100,7 +102,7 @@ pub async fn retire(
     }
     let authorize = || {
         if !api::is_controller(&controller) {
-            return Err(ReserveError::Unauthorized("controller changed".into()));
+            return Err(StandbyPoolError::Unauthorized("controller changed".into()));
         }
         check(approval, subject, &grant)
     };
@@ -122,7 +124,7 @@ pub async fn retire(
     };
     let reference = &input.reference;
     delivery::admit(reference, &reference.manifest.hash)
-        .map_err(|_| ReserveError::InvalidApproval("invalid dormant release".into()))?;
+        .map_err(|_| StandbyPoolError::InvalidApproval("invalid dormant release".into()))?;
     let source = delivery::retained(
         slot,
         ic_wire::method_id("canic.root.retire_released_child.v1"),
@@ -154,13 +156,13 @@ pub async fn retire(
                     || approval.expires_at_ns
                         > deadline.max(api::time()).saturating_add(600_000_000_000)
                 {
-                    return Err(ReserveError::Deadline(
+                    return Err(StandbyPoolError::Deadline(
                         "retirement deadline must allow proof expiry and a bounded return window"
                             .into(),
                     ));
                 }
                 if reference.manifest.hash.as_slice() == old_hash {
-                    return Err(ReserveError::InvalidApproval(
+                    return Err(StandbyPoolError::InvalidApproval(
                         "dormant release matches original code".into(),
                     ));
                 }
@@ -168,10 +170,10 @@ pub async fn retire(
             }
             let pin = delivery::pin_receipt(&source, before.is_none())
                 .await
-                .map_err(|e| ReserveError::AwaitingConfirmation(format!("pin: {e:?}")))?
-                .map_err(|e| ReserveError::AwaitingConfirmation(format!("pin: {e:?}")))?;
+                .map_err(|e| StandbyPoolError::AwaitingConfirmation(format!("pin: {e:?}")))?
+                .map_err(|e| StandbyPoolError::AwaitingConfirmation(format!("pin: {e:?}")))?;
             if pin.pin != source.pin() || pin.owner != api::canister_self().as_slice() {
-                return Err(ReserveError::InvalidObservation(
+                return Err(StandbyPoolError::InvalidObservation(
                     "dormant pin differs".into(),
                 ));
             }
@@ -189,13 +191,13 @@ pub async fn retire(
             let result: Result<store::CacheReady, store::CacheError> =
                 delivery::call(&source, "prepare_cache", store::PREPARE_CACHE, &request)
                     .await
-                    .map_err(|e| ReserveError::AwaitingConfirmation(format!("cache: {e:?}")))?;
+                    .map_err(|e| StandbyPoolError::AwaitingConfirmation(format!("cache: {e:?}")))?;
             if result
-                .map_err(|e| ReserveError::AwaitingConfirmation(format!("cache: {e:?}")))?
+                .map_err(|e| StandbyPoolError::AwaitingConfirmation(format!("cache: {e:?}")))?
                 .pin
                 != request.pin
             {
-                return Err(ReserveError::InvalidObservation(
+                return Err(StandbyPoolError::InvalidObservation(
                     "dormant cache differs".into(),
                 ));
             }
@@ -203,7 +205,7 @@ pub async fn retire(
         }
         Some(P::CacheIssued) => {
             delivery::verify_chunks(store, &chunks).await.map_err(|e| {
-                ReserveError::AwaitingConfirmation(format!("cache observation: {e:?}"))
+                StandbyPoolError::AwaitingConfirmation(format!("cache observation: {e:?}"))
             })?;
             P::Cached
         }
@@ -217,16 +219,16 @@ pub async fn retire(
                 )
                 .await
                 .map_err(|error| {
-                    ReserveError::AwaitingConfirmation(format!(
+                    StandbyPoolError::AwaitingConfirmation(format!(
                         "hub withdrawal unconfirmed: {error:?}"
                     ))
                 })?
-                .map_err(|e| ReserveError::AwaitingConfirmation(e.to_string()))?;
+                .map_err(|e| StandbyPoolError::AwaitingConfirmation(e.to_string()))?;
             }
             let (status, _) = standby::reset::observe_target(&args).await?;
             if before == Some(P::Cached) {
                 if status.module_hash != Some(old_hash) {
-                    return Err(ReserveError::WrongAsset("source module differs".into()));
+                    return Err(StandbyPoolError::WrongAsset("source module differs".into()));
                 }
                 authorize()?;
                 let bytes = mgmt::InstallChunkedCodeArgs {
@@ -244,23 +246,23 @@ pub async fn retire(
                 management("install_chunked_code", bytes, 0)
                     .await
                     .map_err(|e| {
-                        ReserveError::EffectIssued(format!("dormant install issued: {e:?}"))
+                        StandbyPoolError::EffectIssued(format!("dormant install issued: {e:?}"))
                     })?;
                 return Ok(P::InstallIssued);
             }
             if status.module_hash.as_deref() != Some(&reference.manifest.hash) {
-                return Err(ReserveError::AwaitingConfirmation(
+                return Err(StandbyPoolError::AwaitingConfirmation(
                     "dormant installation unconfirmed".into(),
                 ));
             }
             if canic::method::call::<DormancyReceipt>(subject, 10, &())
                 .await
                 .map_err(|e| {
-                    ReserveError::AwaitingConfirmation(format!("dormancy receipt: {e:?}"))
+                    StandbyPoolError::AwaitingConfirmation(format!("dormancy receipt: {e:?}"))
                 })?
                 != receipt
             {
-                return Err(ReserveError::InvalidObservation(
+                return Err(StandbyPoolError::InvalidObservation(
                     "dormancy receipt differs".into(),
                 ));
             }
@@ -268,7 +270,7 @@ pub async fn retire(
         }
         Some(current) => {
             if api::time() < deadline {
-                return Err(ReserveError::ProofOutstanding(
+                return Err(StandbyPoolError::ProofOutstanding(
                     "original role proof window remains open".into(),
                 ));
             }
@@ -297,15 +299,15 @@ pub async fn retire(
             if let Some(method) = method {
                 authorize()?;
                 phase(next);
-                management(method, args, 0)
-                    .await
-                    .map_err(|e| ReserveError::EffectIssued(format!("{method} issued: {e:?}")))?;
+                management(method, args, 0).await.map_err(|e| {
+                    StandbyPoolError::EffectIssued(format!("{method} issued: {e:?}"))
+                })?;
                 return Ok(next);
             }
             if next == P::Returned {
-                grant(subject).map_err(ReserveError::CustodyOccupied)?;
+                grant(subject).map_err(StandbyPoolError::CustodyOccupied)?;
                 sharding::admit_pool_change(false).map_err(|e| {
-                    ReserveError::CustodyOccupied(format!("outstanding custody: {e:?}"))
+                    StandbyPoolError::CustodyOccupied(format!("outstanding custody: {e:?}"))
                 })?;
                 STATE.with_borrow_mut(|s| {
                     let s = s.as_mut().unwrap();

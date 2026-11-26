@@ -1422,8 +1422,9 @@ at most 60 seconds and bounded by the original grant deadline. Refresh does not
 extend a captured session lease. Clock disagreement may cause conservative
 refusal; it never permits extending a deadline or assuming synchronized clocks.
 
-After either owner upgrades, lost volatile state remains closed; reenrollment or
-an exact configuration retry cannot reconstruct it. A surviving receiver cannot
+After a receiver upgrade, its stable checkpoint supplies session and replay state.
+The receiver requires a fresh authenticated enrollment pull before serving sessions.
+After a Root upgrade, loss of previously issued grant details closes enrollment. A surviving receiver cannot
 instantly detect Root loss: its last accepted snapshot remains usable only within
 its original freshness window. Failed refreshes extend neither that window nor
 captured session leases. Root's existing management
@@ -1440,16 +1441,12 @@ Canonical network/application identities are explicit, not display names or the
 Host transport digest. Auth approvals are not deployment-slot reservations or
 deployment receipts. Known Auth grants fence preservation upgrades of the authoritative Root in that
 journal, including after revocation. A receiver grant permits ordinary upgrades of
-the application. Volatile receivers lose their sessions and stay closed; stable
-receivers need a fresh authenticated Root pull. An admitted Root upgrade blocks
-new grant configuration. The managed Auth lifecycle remains unfinished;
-do not enable the feature in a
-default fleet recipe or represent this local witness as an upgrade-safe login.
-This is [#8 — Mount Auth receiver contracts](https://github.com/dragginzgame/canic/issues/8),
-not production login readiness. The [Auth guide](../demos/auth.md) links the
-separate admitted enrollment, issuance and profile/browser work. A fresh application with IC Auth 0.48.6 can select governed receiver and issuer
-checkpoints. A receiver must refresh its enrollment after every reopen. Root upgrades
-with retained grants remain an intended delivery path. Before admitting one, qualify
+the application. A Root that has never issued a grant can reopen its empty grant
+history. After first use, loss of the detailed history blocks new grants.
+Fleet recipes opt in to Auth. Fresh stateful roles use IC Auth 0.51 stable
+checkpoints. The [Auth guide](../demos/auth.md) describes the enrollment,
+issuance and browser flows covered by [Canic #8](https://github.com/dragginzgame/canic/issues/8).
+Root upgrades with retained grants remain an intended delivery path. Before admitting one, qualify
 preservation of each grant, snapshot revision, original challenge and terminal
 revocation across a stopped, exact-code Root transition. Until then the Host keeps
 its upgrade restriction, including for a Root with only revoked grants.
@@ -1933,7 +1930,7 @@ fields alone cannot detect nested payload changes. The Wasm request path has no
 schema inventory.
 
 The agreed application interface is a Rust function with `#[canic::query]` or
-`#[canic::update]` and Canic's `method` feature. Public functions use standard
+`#[canic::update]` and Canic's `endpoints` feature. Public functions use standard
 Wire defaults. A private function selects `scope = "write"` (or its required
 scope). Its Rust parameters describe only the Wire request. The attribute binds
 `auth` locally to the verified caller's issuer, subject, optional issuer-attested application ID and required scope.
@@ -2108,9 +2105,9 @@ fenced. Their approvals omit live placement custody. A query or observation cann
 
 Root records its first successful grant in a dedicated stable lease. A Root
 that has never issued a grant reopens its empty authority map. After any grant,
-upgrade loses the volatile receiver history and fences recycling and enrollment.
+upgrade loses Root’s in-memory grant history and fences recycling and enrollment.
 
-Every production Root includes Auth, role issuance, standby reserves and Blob
+Every production Root includes Auth, role issuance, standby pools and Blob
 maintenance. The fleet selects operations and grants at runtime. This storage
 layout requires a fresh fleet. Root create and maintenance approvals over
 1,900,000 bytes use a distinct signed plan domain (version 12). Host uploads
@@ -2683,8 +2680,8 @@ claims for it. Only the winning destination may install.
 For [#76](https://github.com/dragginzgame/canic/issues/76), use the legacy
 managed-child flow. The hub owns placement in its named pool. It reserves the
 request locally and asks its fleet Root for a child. Root checks the caller,
-grant, subnet ceiling and funding authority. It claims an available reserve
-principal first and issues a paid create only after confirming the reserve is
+grant, subnet ceiling and funding authority. It claims an available spare
+principal first and issues a paid create only after confirming the standby pool is
 empty for that allocation. Root installs the pinned Store release, verifies
 controllers, module and readiness, and returns the original allocation. The hub
 registers the child and routes work to it. Existing ready routes serve locally
@@ -2700,13 +2697,13 @@ hub and child. Root retains installation, upgrades and retirement authority.
 The legacy [child allocation path](https://github.com/dragginzgame/canic-legacy/blob/377fbce/crates/canic-control-plane/src/workflow/component_registry/component_installation/mod.rs#L103-L137)
 returned `CAPACITY_INSUFFICIENT` on a miss. The rewrite deliberately allows
 Root to issue a bounded create in that case. A timeout at the hub cannot
-authorize another create. A ready reserve entry is uninstalled, so both paths
+authorize another create. A ready standby pool entry is uninstalled, so both paths
 use install mode. Store prepares its IC chunk cache and Root passes hashes to
 `install_chunked_code`. Root retains the approval and receipt without copying
 Store-backed Wasm through its journal.
 
 [Canic #78](https://github.com/dragginzgame/canic/issues/78) covers child funding.
-The requester pays before Root issues a create or releases a spare. On a reserve
+The requester pays before Root issues a create or releases a spare. On a standby pool
 hit, retain the current same-subnet creation fee with the allocation and
 recover the same payment on retry. Account separately for the spare's operating
 balance. A requester's attached cycles set a maximum debit. For example, a
@@ -2724,13 +2721,13 @@ the creation fee or delivered a funded spare, retain the charge and principal
 with that allocation for recovery. Any refund requires separate operator
 approval. An install retry cannot charge for a second principal.
 
-Every dynamic allocation charges its requester. The pool’s lifetime creation budget covers the sum of accepted charges on reserve hits and misses. Platform Runtime 0.23.25 supplies
+Every dynamic allocation charges its requester. The pool’s lifetime creation budget covers the sum of accepted charges on standby pool hits and misses. Platform Runtime 0.23.25 supplies
 `cost_create_canister`, `msg_cycles_available` and `msg_cycles_accept` for
 requester-funded admission. Root currently records a fresh spare's principal
 without observing its working balance. A reimbursement quote requires an actual
-balance observation. The retained zero creation attachment on a reserve hit
+balance observation. The retained zero creation attachment on a standby pool hit
 measures the cost of Root’s create dispatch alone.
-On a reserve hit, Root reserves the exact spare for the original request before
+On a standby pool hit, Root reserves the exact spare for the original request before
 observing its balance. The hub settles the quote with an unbounded-wait call to
 its retained Root. Retain the attachment and refund against the same request.
 A bounded-wait call can lose unaccepted cycles on `SYS_UNKNOWN`. [IC message execution properties 10 and 11](https://docs.internetcomputer.org/references/message-execution-properties/#property-10)
@@ -2842,7 +2839,7 @@ Keep the archived source allocation and debit evidence distinct from the new
 one. Reserve physical capacity on creation; reusing a held principal still
 requires a role grant and charges the requester for acquisition while occupying the existing physical slot.
 
-A worker can return to the reserve whether its original installation claimed an
+A worker can return to the standby pool whether its original installation claimed an
 empty canister or spent the hub’s creation allowance. A directly created worker
 gets its inventory row on confirmed release. Only a verified reset makes it
 claimable. Its original paid creation remains charged after reuse.

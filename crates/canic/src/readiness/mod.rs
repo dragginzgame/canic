@@ -3,7 +3,7 @@
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "readiness")]
+#[cfg(feature = "endpoints")]
 pub mod endpoint;
 
 use serde::{Deserialize, Serialize};
@@ -44,7 +44,7 @@ pub enum State {
 /// Mount a public replicated observation using an explicit synchronous application handler.
 /// The handler returns `readiness::State` without changing application state.
 /// Mounting initializes no storage, timers or services and grants no activation authority.
-#[cfg(feature = "readiness")]
+#[cfg(feature = "endpoints")]
 // Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
 #[rustfmt::skip]
 #[macro_export]

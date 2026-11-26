@@ -121,7 +121,7 @@ pub struct ShardPool {
     pub hub: String,
     /// Maximum admitted children, within Root's qualified child bound.
     pub max_shards: u8,
-    /// Lifetime ceiling on requester charges for fresh and reserve acquisitions.
+    /// Lifetime ceiling on requester charges for fresh creations and standby pool acquisitions.
     pub creation_budget: u64,
     /// Last time a new child management effect may be dispatched.
     pub expires_at_ns: u64,
@@ -144,7 +144,7 @@ pub struct InstancePool {
     pub arguments: crate::application::Arguments,
     /// Maximum distinct dedicated children.
     pub max_instances: u8,
-    /// Lifetime ceiling on requester charges for fresh and reserve acquisitions.
+    /// Lifetime ceiling on requester charges for fresh creations and standby pool acquisitions.
     pub creation_budget: u64,
     /// Deadline for issuing new work.
     pub expires_at_ns: u64,
@@ -163,7 +163,7 @@ pub struct SingletonGrant {
     pub application: crate::application::Arguments,
     /// Maximum admitted children across the registry.
     pub maximum: u32,
-    /// Lifetime ceiling on requester charges for fresh and reserve acquisitions.
+    /// Lifetime ceiling on requester charges for fresh creations and standby pool acquisitions.
     pub creation_budget: u64,
     /// Deadline for new claims.
     pub expires_at_ns: u64,
@@ -172,14 +172,14 @@ pub struct SingletonGrant {
     pub receiver: Option<crate::application::Arguments>,
 }
 
-/// Maximum reserve entries in each acquisition source of the bounded reserve ledger.
-pub const MAX_RESERVE_ENTRIES: u8 = 8;
+/// Maximum standby pool entries per acquisition source.
+pub const MAX_STANDBY_POOL_ENTRIES: u8 = 8;
 /// Dedicated instances also consume the shared subnet allowance.
 pub const MAX_INSTANCES: u8 = crate::children::ChildId::INSTANCES.len() as u8;
 /// Addressable shared shard slots.
 pub const MAX_SHARDS: u8 = crate::children::ChildId::SHARDS.len() as u8;
 
-/// Aggregate fleet reserve observation, without principals or handoff records.
+/// Aggregate standby pool observation, without principals or handoff records.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct SpareCounts {
     /// Root's approved target.
@@ -194,7 +194,7 @@ pub struct SpareCounts {
     pub refill: RefillStatus,
 }
 
-/// First applicable condition controlling reserve demand.
+/// First applicable condition controlling standby pool refill.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum RefillStatus {
     /// Enough spares for the target.
@@ -215,10 +215,10 @@ pub enum RefillStatus {
     Due,
 }
 
-#[cfg(feature = "standby")]
+#[cfg(feature = "standby-pool")]
 /// Unsigned read of the active Root policy and its inventory totals.
 pub struct ReadStandbyStatus;
-#[cfg(feature = "standby")]
+#[cfg(feature = "standby-pool")]
 impl canic::method::Contract for ReadStandbyStatus {
     const NAME: &'static str = "standby_status";
     const ID: u64 = ic_wire::method_id("canic.root.standby_status.v1");
@@ -237,7 +237,7 @@ pub struct StandbyImport {
     pub previous_root: Option<String>,
 }
 
-/// One immutable fleet reserve approval. Imports identify unassigned, externally released assets.
+/// One immutable standby pool approval. Imports identify unassigned, externally released assets.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct StandbyPolicy {
@@ -276,25 +276,25 @@ impl SubnetCapacity {
         max_children > 0 && (max_children <= DEFAULT_SUBNET_CHILD_LIMIT || allow_large_subnet)
     }
 }
-/// Approve the fleet reserve target and paid creation allowance.
+/// Approve the fleet standby pool target and paid creation allowance.
 pub const CONFIGURE_STANDBY: u64 = ic_wire::method_id("configure_standby");
 
-#[cfg(feature = "standby")]
-/// Controller's exact reserve policy.
+#[cfg(feature = "standby-pool")]
+/// Controller's exact standby pool policy.
 pub struct ConfigureStandby;
-#[cfg(feature = "standby")]
+#[cfg(feature = "standby-pool")]
 impl canic::method::Contract for ConfigureStandby {
     const NAME: &'static str = "configure_standby";
     const ID: u64 = CONFIGURE_STANDBY;
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = StandbyPolicy;
-    type Output = Result<(), canic::sharding::standby::ReserveError>;
+    type Output = Result<(), canic::sharding::standby::StandbyPoolError>;
 }
 
-#[cfg(feature = "standby")]
+#[cfg(feature = "endpoints")]
 /// Shared controller-approved subnet ceiling.
 pub struct ConfigureSubnetCapacity;
-#[cfg(feature = "standby")]
+#[cfg(feature = "endpoints")]
 impl canic::method::Contract for ConfigureSubnetCapacity {
     const NAME: &'static str = "configure_subnet_capacity";
     const ID: u64 = CONFIGURE_SUBNET_CAPACITY;
@@ -321,7 +321,7 @@ pub const APPROVE_CHILD_CREATION: u64 = ic_wire::method_id("canic.root.approve_c
 
 /// Controller approval for child creation under one requester grant.
 pub struct ApproveChildCreation;
-#[cfg(feature = "standby")]
+#[cfg(feature = "endpoints")]
 impl canic::method::Contract for ApproveChildCreation {
     const NAME: &'static str = "approve_child_creation";
     const ID: u64 = APPROVE_CHILD_CREATION;
@@ -412,15 +412,15 @@ pub enum RetirementPhase {
 }
 
 /// Advance the exact controller-approved shard retirement.
-#[cfg(feature = "retirement")]
+#[cfg(feature = "standby-pool")]
 pub struct RetireReleasedChild;
-#[cfg(feature = "retirement")]
+#[cfg(feature = "standby-pool")]
 impl canic::method::Contract for RetireReleasedChild {
     const NAME: &'static str = "retire_released_child";
     const ID: u64 = ic_wire::method_id("canic.root.retire_released_child.v1");
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = Stage<ChildRetirement>;
-    type Output = Result<RetirementPhase, canic::sharding::standby::ReserveError>;
+    type Output = Result<RetirementPhase, canic::sharding::standby::StandbyPoolError>;
 }
 
 /// A finite recurring debit approved for one directly installed service.
@@ -493,9 +493,9 @@ impl std::fmt::Display for FundingError {
 impl std::error::Error for FundingError {}
 
 /// Approve the rule once or observe the original grant.
-#[cfg(feature = "standby")]
+#[cfg(feature = "endpoints")]
 pub struct ConfigureChildFunding;
-#[cfg(feature = "standby")]
+#[cfg(feature = "endpoints")]
 impl canic::method::Contract for ConfigureChildFunding {
     const NAME: &'static str = "configure_child_funding";
     const ID: u64 = ic_wire::method_id(Self::NAME);
@@ -519,9 +519,9 @@ pub struct ChildFundingStatus {
 }
 
 /// Revoke future payments without erasing an outstanding debit.
-#[cfg(feature = "standby")]
+#[cfg(feature = "endpoints")]
 pub struct StopChildFunding;
-#[cfg(feature = "standby")]
+#[cfg(feature = "endpoints")]
 impl canic::method::Contract for StopChildFunding {
     const NAME: &'static str = "stop_child_funding";
     const ID: u64 = ic_wire::method_id("canic.owner.stop_child_funding.v1");
@@ -554,9 +554,9 @@ pub fn valid_snapshot_readers(readers: &[ic_platform_types::Principal]) -> bool 
 }
 
 /// Set only snapshot visibility, using the IC management canister.
-#[cfg(feature = "standby")]
+#[cfg(feature = "endpoints")]
 pub struct ConfigureSnapshotReaders;
-#[cfg(feature = "standby")]
+#[cfg(feature = "endpoints")]
 impl canic::method::Contract for ConfigureSnapshotReaders {
     const NAME: &'static str = "configure_snapshot_readers";
     const ID: u64 = ic_wire::method_id("canic.root.configure_snapshot_readers.v1");

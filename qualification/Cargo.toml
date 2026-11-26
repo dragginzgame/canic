@@ -54,7 +54,7 @@ ic-host-process = { version = "0.81.0", default-features = false }
 ic-platform-crypto = { package = "ic-platform", version = "0.35.1", default-features = false, features = ["ed25519"] }
 ic-platform-protocol = { version = "0.3.11", default-features = false }
 ic-platform-runtime = { version = "0.23.27", default-features = false, features = ["entrypoint-macros", "system-raw"] }
-ic-platform-types = { version = "0.21.5", default-features = false }
+ic-platform-types = { version = "0.21.6", default-features = false }
 ic-storage = "0.80.0"
 ic-testkit = { version = "0.110.0", default-features = false, features = ["managed-server"] }
 ic-timers = "0.46.13"
@@ -67,7 +67,7 @@ serde_json = "1.0.154"
 sha2 = "0.11.1"
 tempfile = { version = "3.27.0", default-features = false }
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
-toko-tooling = "=0.46.5"
+toko-tooling = "=0.46.7"
 toml = "1.2.1"
 wasmparser = { version = "0.263.0", default-features = false, features = ["std", "validate", "features"] }
 wat = "1.263.0"

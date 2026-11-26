@@ -9,11 +9,11 @@ publish.workspace = true
 description = "Bounded child management authority and evidence"
 
 [features]
-standby = ["canic/method", "canic/sharding"]
-retirement = ["canic/method", "canic/sharding"]
+endpoints = ["canic/endpoints"]
+standby-pool = ["endpoints", "canic/sharding"]
 
 [dependencies]
-canic = { workspace = true, features = ["recovery"] }
+canic.workspace = true
 ic-platform-protocol = { workspace = true, features = ["management-snapshots"] }
 ic-platform-types.workspace = true
 ic-wasm-store-protocol.workspace = true

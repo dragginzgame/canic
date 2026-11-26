@@ -220,7 +220,7 @@ current journeys and remaining gates; do not substitute sibling working trees.
   A receiver grant allows application upgrades. Stateful receivers reopen their
   stable checkpoint and require a fresh Root refresh. Root records first grant use durably.
   A never-used Root reopens with empty grant history. After any grant has been
-  issued, volatile history loss fences worker reset, retirement and reserve imports.
+  issued, volatile history loss fences worker reset, retirement and standby pool imports.
 - Issuers own intents/renewal/results/pruning; reconciliation is lookup-only.
   Local signers do not qualify production keys or external signing recovery.
   Logout passes the captured caller; account fields are selectors. Browser code

@@ -1,7 +1,7 @@
 //! The actual pool calls Root for worker custody and its miners for each batch.
 use super::*;
 use canic::method::Contract;
-use canic::sharding::standby::ReserveError;
+use canic::sharding::standby::StandbyPoolError;
 use canic_host::application::codec;
 use example_miner_pool_hub::{PoolReport, Tick};
 
@@ -124,7 +124,7 @@ async fn growth_park_reuse_and_capacity() {
         .unwrap();
     assert!(matches!(
         RefillStandby::decode_reply(&reply).unwrap().unwrap_err(),
-        ReserveError::ApprovalConflict(_)
+        StandbyPoolError::ApprovalConflict(_)
     ));
     let status = pic
         .canister_status(CanisterId::from_slice(spare.as_slice()), Some(root.id))
@@ -493,7 +493,7 @@ async fn growth_park_reuse_and_capacity() {
         .unwrap();
     assert!(matches!(
         reset(&spare_target, deadline).await.unwrap_err(),
-        ReserveError::Unauthorized(_)
+        StandbyPoolError::Unauthorized(_)
     ));
     pic.set_controllers(id, Some(root.id), vec![root.id])
         .await
@@ -506,7 +506,7 @@ async fn growth_park_reuse_and_capacity() {
     pic.start_canister(id, Some(root.id)).await.unwrap();
     assert!(matches!(
         reset(&spare_target, deadline).await.unwrap_err(),
-        ReserveError::CustodyOccupied(_)
+        StandbyPoolError::CustodyOccupied(_)
     ));
     assert!(
         pic.canister_status(id, Some(root.id))
@@ -528,7 +528,7 @@ async fn growth_park_reuse_and_capacity() {
     canic_qualification::upgrade_stopped(
         pic,
         root.id,
-        std::fs::read(artifacts().join("pool-faults.wasm")).unwrap(),
+        std::fs::read(artifacts().join("root-faults.wasm")).unwrap(),
         vec![],
         Some(root.operator),
     )
@@ -605,7 +605,7 @@ async fn growth_park_reuse_and_capacity() {
         .unwrap();
     assert!(matches!(
         RefillStandby::decode_reply(&response).unwrap().unwrap_err(),
-        ReserveError::Capacity(_)
+        StandbyPoolError::Capacity(_)
     ));
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
@@ -721,7 +721,7 @@ async fn return_and_reuse(prepaid: bool) {
     // A zero refill target lets the direct case exercise a miss and then a surplus return.
     if !prepaid {
         use canic_management_protocol::stored;
-        root.update::<_, Result<(), ReserveError>>(
+        root.update::<_, Result<(), StandbyPoolError>>(
             "configure_standby",
             stored::CONFIGURE_STANDBY,
             &stored::StandbyPolicy {
@@ -752,7 +752,7 @@ async fn return_and_reuse(prepaid: bool) {
             .unwrap()
             .entries
             .into_iter()
-            .filter(|row| row.source == "reserve")
+            .filter(|row| row.source == "standby_pool")
             .map(|row| row.message)
             .collect::<Vec<_>>()
     };
@@ -890,7 +890,7 @@ async fn return_and_reuse(prepaid: bool) {
     }
     assert!(matches!(
         reset().await,
-        Err(ReserveError::BalanceBelowMinimum(_))
+        Err(StandbyPoolError::BalanceBelowMinimum(_))
     ));
     pic.add_cycles(
         CanisterId::from_slice(spare.as_slice()),
@@ -928,7 +928,9 @@ async fn return_and_reuse(prepaid: bool) {
             .unwrap();
         assert_eq!(
             RefillStandby::decode_reply(&response).unwrap(),
-            Err(ReserveError::Capacity("no approved subnet capacity".into()))
+            Err(StandbyPoolError::Capacity(
+                "no approved subnet capacity".into()
+            ))
         );
     };
     if prepaid {

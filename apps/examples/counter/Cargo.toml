@@ -29,7 +29,7 @@ initially-fenced = []
 reject-upgrade = []
 
 [dependencies]
-canic = { workspace = true, features = ["lifecycle", "method", "readiness", "recovery", "storage"] }
+canic = { workspace = true, features = ["endpoints", "storage"] }
 ic-platform-runtime = { workspace = true, features = ["system-raw"] }
 ic-platform-types.workspace = true
 ic-storage.workspace = true

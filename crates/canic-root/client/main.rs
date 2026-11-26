@@ -55,7 +55,7 @@ enum Command {
     ConfigureChildFunding { approval: String },
     /// Stop future deposits to the named child.
     StopChildFunding { child: Principal },
-    /// Approve the reserve policy from the reviewed fleet plan.
+    /// Approve the standby pool policy from the reviewed fleet plan.
     ConfigureStandby { approval: String },
     /// Hand a claimable spare to the exact destination Root.
     ExportStandby {

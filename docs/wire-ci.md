@@ -119,7 +119,7 @@ In the receiver module, import `canic::update`, the protocol types and constants
 and the application's `ops` module. In the passive protocol module, import
 `canic::attested_method as update` and the same protocol types and constants.
 Each module uses `include!("path/to/lookup.rs");` with its path to that file.
-The protocol crate needs Canic's `method` and `topology` features. The receiver
+The protocol crate selects Canic’s `endpoints` feature. The receiver
 also needs `role-verification` and its installed Root pin.
 
 The descriptor expansion emits the type `lookup` with the function's visibility,
@@ -139,7 +139,7 @@ Miner Pool declares `mine` once in [mine.rs](../apps/examples/miner-pool/miner/s
 Its miner imports `canic::update` and the receiver-local `require_parent` guard.
 Its hub includes the same file in a protocol module with `use canic::method_descriptor as update;`.
 The generated type implements `canic::method::Contract`. The caller needs only
-Canic’s `method` feature and any types or budget constants referenced by the signature.
+Canic’s `endpoints` feature and any types or budget constants referenced by the signature.
 
 Use `call::<protocol::mine>(target, seconds, &batch).await` for a bounded wait or
 `call_unbounded::<protocol::mine>(target, &batch).await` for an unbounded wait.

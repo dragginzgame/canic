@@ -296,7 +296,7 @@ fn validate_capacity(
         }
     }
     if let Some(p) = standby {
-        let reserve_limit = cap.min(u32::from(stored::MAX_RESERVE_ENTRIES));
+        let reserve_limit = cap.min(u32::from(stored::MAX_STANDBY_POOL_ENTRIES));
         name(&p.root)?;
         for (label, count) in [
             ("min_available_spares", usize::from(p.minimum_available)),
@@ -305,7 +305,7 @@ fn validate_capacity(
         ] {
             if count > reserve_limit as usize && count <= cap as usize {
                 return Err(Error::Invalid(format!(
-                    "standby_pool.{label} = {count} exceeds the reserve ledger limit of {reserve_limit}"
+                    "standby_pool.{label} = {count} exceeds the standby pool ledger limit of {reserve_limit}"
                 )));
             }
             if count > cap as usize {

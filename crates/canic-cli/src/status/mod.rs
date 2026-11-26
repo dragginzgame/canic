@@ -152,7 +152,7 @@ fn pool_terms(
         .unwrap();
     }
     if let Some(p) = standby {
-        writeln!(text, "Reserve Root: {}", escape(&p.root)).unwrap();
+        writeln!(text, "Standby pool Root: {}", escape(&p.root)).unwrap();
         writeln!(
             text,
             "Min available spares: {} (subnet fleet) · at most {} automatic creations · deadline {} Unix ns",

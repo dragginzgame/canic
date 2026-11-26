@@ -27,7 +27,7 @@ pub enum Command {
     Open(u64),
 }
 
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 impl crate::method::Contract for Command {
     const NAME: &'static str = "recovery";
     const ID: u64 = METHOD;

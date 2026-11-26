@@ -17,8 +17,8 @@ ephemeral = ["dep:ic-testkit"]
 
 [dependencies]
 base64.workspace = true
-canic = { workspace = true, features = ["auth", "method", "topology"] }
-canic-management-protocol = { workspace = true, features = ["standby"] }
+canic = { workspace = true, features = ["auth"] }
+canic-management-protocol = { workspace = true, features = ["standby-pool"] }
 ic-host-artifacts.workspace = true
 ic-host-fs.workspace = true
 ic-host-process.workspace = true

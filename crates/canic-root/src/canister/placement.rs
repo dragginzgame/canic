@@ -1,4 +1,5 @@
-//! Explicit Root operations for controller-approved shard pools.
+//! Root approves child creation, places children and retains their allocation evidence.
+//! Hubs own application routing and registries own keyed claims.
 
 use canic::guard::require_controller;
 use canic::sharding::LIMITS;
@@ -154,7 +155,7 @@ fn retirement_status(
 #[canic::update(contract = canic::sharding::standby::RefillStandby, guard = require_controller)]
 async fn refill_standby(
     input: canic::sharding::standby::Refill,
-) -> Result<canic::sharding::standby::Asset, canic::sharding::standby::ReserveError> {
+) -> Result<canic::sharding::standby::Asset, canic::sharding::standby::StandbyPoolError> {
     sharding::standby::refill(input).await
 }
 
@@ -178,7 +179,7 @@ fn observe_standby() -> Vec<(
 #[canic::update(contract = canic::sharding::standby::ConfirmRelease, guard = require_controller)]
 async fn confirm_worker_release(
     target: canic::sharding::ShardTarget,
-) -> Result<(), canic::sharding::standby::ReserveError> {
+) -> Result<(), canic::sharding::standby::StandbyPoolError> {
     sharding::standby::confirm_release(target).await
 }
 
@@ -189,7 +190,7 @@ async fn confirm_worker_release(
 #[canic::update(contract = canic::sharding::standby::ResetWorker, guard = require_controller)]
 async fn reset_worker(
     (target, deadline): (canic::sharding::ShardTarget, u64),
-) -> Result<canic::sharding::standby::ResetPhase, canic::sharding::standby::ReserveError> {
+) -> Result<canic::sharding::standby::ResetPhase, canic::sharding::standby::StandbyPoolError> {
     let admit_receiver = crate::auth::require_no_worker_grant;
     sharding::standby::reset(target, deadline, admit_receiver).await
 }
@@ -202,25 +203,25 @@ async fn reset_worker(
 #[canic::update(contract = stored::RetireReleasedChild, guard = require_controller)]
 async fn retire_released_child(
     input: stored::Stage<stored::ChildRetirement>,
-) -> Result<stored::RetirementPhase, canic::sharding::standby::ReserveError> {
+) -> Result<stored::RetirementPhase, canic::sharding::standby::StandbyPoolError> {
     let grant = crate::auth::require_no_worker_grant;
     sharding::standby::retire(input, grant).await
 }
 
 // configure_standby
-// Retain the reserve policy and start bounded fill.
+// Retain the standby pool policy and start bounded fill.
 // guard  : Root controller
 // limits : stored request, default reply
 
 #[canic::update(contract = stored::ConfigureStandby, guard = require_controller)]
 fn configure_standby(
     policy: stored::StandbyPolicy,
-) -> Result<(), canic::sharding::standby::ReserveError> {
+) -> Result<(), canic::sharding::standby::StandbyPoolError> {
     for text in &policy.imports {
         crate::auth::require_no_worker_grant(text.principal.parse().map_err(|_| {
-            canic::sharding::standby::ReserveError::InvalidApproval(text.principal.clone())
+            canic::sharding::standby::StandbyPoolError::InvalidApproval(text.principal.clone())
         })?)
-        .map_err(canic::sharding::standby::ReserveError::CustodyOccupied)?;
+        .map_err(canic::sharding::standby::StandbyPoolError::CustodyOccupied)?;
     }
     sharding::standby::policy::configure(policy)
 }
@@ -233,7 +234,7 @@ fn configure_standby(
 #[canic::update(contract = canic::sharding::standby::ImportStandby, guard = sharding::standby::policy::import_caller)]
 async fn import_standby(
     id: ic_platform_types::Principal,
-) -> Result<canic::sharding::standby::Asset, canic::sharding::standby::ReserveError> {
+) -> Result<canic::sharding::standby::Asset, canic::sharding::standby::StandbyPoolError> {
     sharding::standby::policy::import(id).await
 }
 
@@ -249,7 +250,7 @@ async fn export_standby(
         ic_platform_types::Principal,
         u64,
     ),
-) -> Result<canic::sharding::standby::TransferPhase, canic::sharding::standby::ReserveError> {
+) -> Result<canic::sharding::standby::TransferPhase, canic::sharding::standby::StandbyPoolError> {
     sharding::standby::transfer::export(input.0, input.1, input.2).await
 }
 
@@ -261,7 +262,7 @@ async fn export_standby(
 #[canic::update(contract = canic::sharding::standby::ObserveStandbyHandoff, guard = sharding::standby::policy::import_caller)]
 fn observe_standby_handoff(
     id: ic_platform_types::Principal,
-) -> Result<canic::sharding::standby::Asset, canic::sharding::standby::ReserveError> {
+) -> Result<canic::sharding::standby::Asset, canic::sharding::standby::StandbyPoolError> {
     sharding::standby::policy::handoff_status(id)
 }
 

@@ -50,7 +50,6 @@ pub struct Install {
     pub application: Vec<u8>,
 }
 
-#[cfg(feature = "topology")]
 fn matches(bytes: &[u8], method: u64) -> bool {
     bytes
         .first_chunk()
@@ -60,7 +59,6 @@ fn matches(bytes: &[u8], method: u64) -> bool {
 impl Install {
     /// Recognize this receiver envelope without treating arbitrary application bytes as Auth.
     #[must_use]
-    #[cfg(feature = "topology")]
     pub(crate) fn is_frame(bytes: &[u8]) -> bool {
         // Recognize retired frames so topology readers reject them through decode.
         [METHOD, 0x4341_5554_4807, 0x4341_5554_4808]

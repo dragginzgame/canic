@@ -22,7 +22,7 @@ name = "example-miner-pool-client"
 path = "client/main.rs"
 
 [dependencies]
-canic = { workspace = true, features = ["lifecycle", "method", "readiness", "storage", "sharding"] }
+canic = { workspace = true, features = ["storage", "sharding"] }
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
 ic-storage.workspace = true

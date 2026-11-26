@@ -1,12 +1,14 @@
 //! Keep paid refill outcomes outside the disposable canister.
 use super::super::{MANAGEMENT_LIMITS, create_args, management, reserved_cycles};
 use super::{STATE, api};
-use canic::sharding::standby::ReserveError;
+use canic::sharding::standby::StandbyPoolError;
 use canic::sharding::{
     Allocation,
     standby::{Asset, Refill, Source},
 };
-use canic_management_protocol::{CREATION_CYCLES, children::ChildId, stored::MAX_RESERVE_ENTRIES};
+use canic_management_protocol::{
+    CREATION_CYCLES, children::ChildId, stored::MAX_STANDBY_POOL_ENTRIES,
+};
 use ic_platform_protocol::management as mgmt;
 use ic_platform_types::Principal;
 
@@ -47,13 +49,13 @@ pub fn permits_enrollment(receiver: Principal) -> bool {
 }
 
 // Check the original operator again when a custody observation resumes.
-fn authorize_change(controller: Principal) -> Result<(), ReserveError> {
+fn authorize_change(controller: Principal) -> Result<(), StandbyPoolError> {
     if !api::is_controller(&controller) {
-        return Err(ReserveError::Unauthorized(
+        return Err(StandbyPoolError::Unauthorized(
             "Root controller required".into(),
         ));
     }
-    super::admit_pool_change(false).map_err(|e| ReserveError::CustodyOccupied(format!("{e:?}")))
+    super::admit_pool_change(false).map_err(|e| StandbyPoolError::CustodyOccupied(format!("{e:?}")))
 }
 
 /// Observe retained approvals without changing the pool.
@@ -70,10 +72,10 @@ pub fn inspect() -> Vec<(Source, Asset)> {
 /// Refuses changed or out-of-sequence authority, insufficient funding or exhausted capacity.
 /// # Panics
 /// Requires the Root controller and opened placement state.
-pub async fn refill(input: Refill) -> Result<Asset, ReserveError> {
+pub async fn refill(input: Refill) -> Result<Asset, StandbyPoolError> {
     assert!(api::is_controller(&api::caller()));
     if input.root != api::canister_self() || input.cycles != CREATION_CYCLES {
-        return Err(ReserveError::InvalidApproval(
+        return Err(StandbyPoolError::InvalidApproval(
             "wrong Root or creation debit".into(),
         ));
     }
@@ -91,7 +93,7 @@ pub async fn refill(input: Refill) -> Result<Asset, ReserveError> {
                     if approval == &input {
                         Ok(asset.clone())
                     } else {
-                        Err(ReserveError::ApprovalConflict(
+                        Err(StandbyPoolError::ApprovalConflict(
                             "refill approval differs".into(),
                         ))
                     }
@@ -101,24 +103,27 @@ pub async fn refill(input: Refill) -> Result<Asset, ReserveError> {
     if let Some(result) = original {
         return result;
     }
-    super::admit_pool_change(false).map_err(|e| ReserveError::CustodyOccupied(format!("{e:?}")))?;
+    super::admit_pool_change(false)
+        .map_err(|e| StandbyPoolError::CustodyOccupied(format!("{e:?}")))?;
     let now = api::time();
     if input.expires_at_ns <= now || input.expires_at_ns - now > 600_000_000_000 {
-        return Err(ReserveError::Deadline(
+        return Err(StandbyPoolError::Deadline(
             "refill requires a deadline within ten minutes".into(),
         ));
     }
     if ic_platform_runtime::raw::liquid_cycle_balance()
         < reserved_cycles() + u128::from(input.cycles)
     {
-        return Err(ReserveError::InsufficientCycles(
-            "insufficient Root reserve".into(),
+        return Err(StandbyPoolError::InsufficientCycles(
+            "insufficient Root cycle reserve".into(),
         ));
     }
     let index = STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
         if state.pools.capacity.is_none() || state.pools.full() {
-            return Err(ReserveError::Capacity("no approved subnet capacity".into()));
+            return Err(StandbyPoolError::Capacity(
+                "no approved subnet capacity".into(),
+            ));
         }
         if state
             .pools
@@ -127,9 +132,9 @@ pub async fn refill(input: Refill) -> Result<Asset, ReserveError> {
             .filter(|(source, _)| matches!(source, Source::Refill(_)))
             .count()
             != usize::from(input.sequence)
-            || input.sequence >= MAX_RESERVE_ENTRIES
+            || input.sequence >= MAX_STANDBY_POOL_ENTRIES
         {
-            return Err(ReserveError::Capacity(
+            return Err(StandbyPoolError::Capacity(
                 "refill sequence outside retained capacity".into(),
             ));
         }
@@ -145,15 +150,15 @@ pub async fn refill(input: Refill) -> Result<Asset, ReserveError> {
 }
 
 // Dispatch only after the exact debit and inventory slot have been retained.
-async fn create_issued(index: usize, source: Source) -> Result<Asset, ReserveError> {
+async fn create_issued(index: usize, source: Source) -> Result<Asset, StandbyPoolError> {
     let (Source::Refill(input) | Source::Automatic(input)) = &source else {
         unreachable!()
     };
     let bytes = management("create_canister", create_args(), u128::from(input.cycles))
         .await
-        .map_err(|e| ReserveError::RefillIssued(format!("refill issued: {e:?}")))?;
+        .map_err(|e| StandbyPoolError::RefillIssued(format!("refill issued: {e:?}")))?;
     let id = mgmt::decode_created(&bytes, MANAGEMENT_LIMITS)
-        .map_err(|_| ReserveError::RefillIssued("refill issued: unreadable principal".into()))?
+        .map_err(|_| StandbyPoolError::RefillIssued("refill issued: unreadable principal".into()))?
         .canister_id;
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
@@ -194,7 +199,7 @@ pub(in crate::engine::sharding) fn reserve(
         assert_eq!(
             available(asset).map(|(id, _)| id),
             Some(id),
-            "selected reserve changed"
+            "selected spare changed"
         );
         *asset = Asset::Claimed(
             id,
@@ -206,7 +211,7 @@ pub(in crate::engine::sharding) fn reserve(
     } else if pools.reserve_policy.is_some() {
         canic::logging::record(
             canic::logging::Level::Warn,
-            "reserve",
+            "standby_pool",
             &format!(
                 "pool empty; child {} scheduled for approved creation",
                 slot.index()
@@ -228,7 +233,7 @@ fn log_surplus(pools: &super::Pools) {
     if ready > usize::from(policy.minimum_available) {
         canic::logging::record(
             canic::logging::Level::Info,
-            "reserve",
+            "standby_pool",
             &format!(
                 "{ready} ready canisters exceed target {}; surplus retained for operator action",
                 policy.minimum_available
@@ -251,15 +256,15 @@ pub(super) fn released_binding(asset: &Asset) -> Option<(Principal, &Allocation)
 /// Requires an exact live claim and an affirmative reply from the recorded worker hub.
 /// # Panics
 /// Requires Root's controller and opened custody.
-pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(), ReserveError> {
+pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(), StandbyPoolError> {
     let controller = api::caller();
     assert!(api::is_controller(&controller));
     let claimed = Asset::Claimed(target.shard, target.allocation.clone());
     let released = Asset::Released(target.shard, target.allocation.clone());
     let slot = ChildId::placement(target.allocation.slot as usize)
-        .ok_or_else(|| ReserveError::InvalidApproval("unknown worker slot".into()))?;
+        .ok_or_else(|| StandbyPoolError::InvalidApproval("unknown worker slot".into()))?;
     if !ChildId::INSTANCES.contains(&slot) {
-        return Err(ReserveError::WrongAsset(
+        return Err(StandbyPoolError::WrongAsset(
             "released worker allocation required".into(),
         ));
     }
@@ -278,14 +283,14 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
         let (workers, actual) = state
             .pools
             .worker_at(slot)
-            .ok_or_else(|| ReserveError::NotConfigured("missing worker allowance".into()))?;
+            .ok_or_else(|| StandbyPoolError::NotConfigured("missing worker allowance".into()))?;
         workers
             .minimum_reuse_cycles()
-            .map_err(|e| ReserveError::NotConfigured(e.into()))?;
+            .map_err(|e| StandbyPoolError::NotConfigured(e.into()))?;
         if actual.generation != target.allocation.generation
             || actual.principal.as_deref() != Some(&target.shard.to_text())
         {
-            return Err(ReserveError::ApprovalConflict(
+            return Err(StandbyPoolError::ApprovalConflict(
                 "worker binding changed".into(),
             ));
         }
@@ -299,10 +304,10 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
     if !canic::method::call::<canic::sharding::standby::WorkerReleased>(hub, 10, &target)
         .await
         .map_err(|e| {
-            ReserveError::AwaitingConfirmation(format!("hub release unconfirmed: {e:?}"))
+            StandbyPoolError::AwaitingConfirmation(format!("hub release unconfirmed: {e:?}"))
         })?
     {
-        return Err(ReserveError::AwaitingConfirmation(
+        return Err(StandbyPoolError::AwaitingConfirmation(
             "hub still owns worker".into(),
         ));
     }
@@ -319,13 +324,13 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
                 .journal
                 .0
                 .get(&slot)
-                .ok_or_else(|| ReserveError::WrongAsset("missing worker journal".into()))?
+                .ok_or_else(|| StandbyPoolError::WrongAsset("missing worker journal".into()))?
                 .0;
             if status.phase != canic_management_protocol::Phase::Ready
                 || status.attempts[0] != 1
                 || status.worker.as_deref() != Some(target.shard.to_text().as_str())
             {
-                return Err(ReserveError::WrongAsset(
+                return Err(StandbyPoolError::WrongAsset(
                     "missing original paid worker creation".into(),
                 ));
             }

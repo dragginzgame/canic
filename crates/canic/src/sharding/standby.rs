@@ -3,10 +3,10 @@ use crate::method::Contract;
 use ic_platform_types::Principal;
 use serde::{Deserialize, Serialize};
 
-/// Typed reserve outcome with the operator diagnostic for this exact attempt.
+/// Typed standby pool outcome with the operator diagnostic for this exact attempt.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
-pub enum ReserveError {
+pub enum StandbyPoolError {
     /// Caller does not own this operation.
     Unauthorized(String),
     /// Request parameters violate the approved rule.
@@ -43,7 +43,7 @@ pub enum ReserveError {
     BalanceBelowMinimum(String),
 }
 
-impl std::fmt::Display for ReserveError {
+impl std::fmt::Display for StandbyPoolError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Unauthorized(message)
@@ -67,7 +67,7 @@ impl std::fmt::Display for ReserveError {
     }
 }
 
-impl std::error::Error for ReserveError {}
+impl std::error::Error for StandbyPoolError {}
 
 /// Exact authorization for one new empty canister on the addressed Root.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -91,7 +91,7 @@ pub enum Source {
     Shard(super::ShardTarget),
     /// Operator supplied unassigned canister.
     Imported(Principal),
-    /// Root created this entry against the fleet reserve allowance.
+    /// Root created this entry against the standby pool allowance.
     Automatic(Refill),
     /// Worker created against its hub’s allowance, then released to the fleet.
     Worker(super::ShardTarget),
@@ -139,7 +139,7 @@ impl Contract for ObserveStandbyHandoff {
     const NAME: &'static str = "observe_standby_handoff";
     const ID: u64 = ic_wire::method_id("canic.placement.observe_standby_handoff.v1");
     type Input = Principal;
-    type Output = Result<Asset, ReserveError>;
+    type Output = Result<Asset, StandbyPoolError>;
 }
 
 /// Export one exact empty spare to its named destination Root.
@@ -148,7 +148,7 @@ impl Contract for ExportStandby {
     const NAME: &'static str = "export_standby";
     const ID: u64 = ic_wire::method_id(Self::NAME);
     type Input = (Principal, Principal, u64);
-    type Output = Result<TransferPhase, ReserveError>;
+    type Output = Result<TransferPhase, StandbyPoolError>;
 }
 
 /// Approve one refill or recover the original result.
@@ -158,7 +158,7 @@ impl Contract for RefillStandby {
     const ID: u64 = ic_wire::method_id(Self::NAME);
     type Input = Refill;
     const REPLY: ic_wire::Limits = super::LIMITS;
-    type Output = Result<Asset, ReserveError>;
+    type Output = Result<Asset, StandbyPoolError>;
 }
 
 /// Read the ordered operation history without dispatching work.
@@ -182,7 +182,7 @@ impl Contract for ImportStandby {
     const NAME: &'static str = "import_standby";
     const ID: u64 = ic_wire::method_id(Self::NAME);
     type Input = Principal;
-    type Output = Result<Asset, ReserveError>;
+    type Output = Result<Asset, StandbyPoolError>;
 }
 
 /// Read the hub's retained receipt before cleaning its former worker.
@@ -202,7 +202,7 @@ impl Contract for ConfirmRelease {
     const ID: u64 = ic_wire::method_id(Self::NAME);
     const REQUEST: ic_wire::Limits = super::LIMITS;
     type Input = super::ShardTarget;
-    type Output = Result<(), ReserveError>;
+    type Output = Result<(), StandbyPoolError>;
 }
 
 /// Durable reset progress. Issued calls are reconciled by management observation.
@@ -227,5 +227,5 @@ impl Contract for ResetWorker {
     const ID: u64 = ic_wire::method_id(Self::NAME);
     const REQUEST: ic_wire::Limits = super::LIMITS;
     type Input = (super::ShardTarget, u64);
-    type Output = Result<ResetPhase, ReserveError>;
+    type Output = Result<ResetPhase, StandbyPoolError>;
 }

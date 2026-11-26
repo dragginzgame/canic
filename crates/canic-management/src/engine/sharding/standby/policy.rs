@@ -1,7 +1,7 @@
 //! One controller approval owns initial fill, replenishment and external handoff.
 use super::{Asset, Refill, STATE, Source, api, available, create_issued, reserved_cycles};
 use crate::engine::{MANAGEMENT_LIMITS, sharding};
-use canic::sharding::standby::ReserveError;
+use canic::sharding::standby::StandbyPoolError;
 use canic_management_protocol::{CREATION_CYCLES, stored::StandbyPolicy};
 use ic_platform_protocol::{management as mgmt, placement};
 use ic_platform_runtime::call::{Call, Outcome, Wait};
@@ -13,9 +13,9 @@ thread_local! {
     static TIMER: RefCell<Option<Once>> = const { RefCell::new(None) };
 }
 
-pub(in crate::engine) fn validate(p: &StandbyPolicy, cap: u32) -> Result<(), ReserveError> {
+pub(in crate::engine) fn validate(p: &StandbyPolicy, cap: u32) -> Result<(), StandbyPoolError> {
     let cap = cap.min(u32::from(
-        canic_management_protocol::stored::MAX_RESERVE_ENTRIES,
+        canic_management_protocol::stored::MAX_STANDBY_POOL_ENTRIES,
     )) as u8;
     if p.root != api::canister_self().to_text()
         || p.minimum_available > cap
@@ -23,8 +23,8 @@ pub(in crate::engine) fn validate(p: &StandbyPolicy, cap: u32) -> Result<(), Res
         || p.imports.len() > usize::from(cap)
         || p.expires_at_ns == 0
     {
-        return Err(ReserveError::InvalidApproval(
-            "reserve bounds differ from the addressed Root and subnet ceiling".into(),
+        return Err(StandbyPoolError::InvalidApproval(
+            "standby pool bounds differ from the addressed Root and subnet ceiling".into(),
         ));
     }
     let mut ids = std::collections::BTreeSet::new();
@@ -33,26 +33,26 @@ pub(in crate::engine) fn validate(p: &StandbyPolicy, cap: u32) -> Result<(), Res
         if let Some(previous) = &candidate.previous_root {
             let old: Principal = previous
                 .parse()
-                .map_err(|_| ReserveError::InvalidApproval("invalid former Root".into()))?;
+                .map_err(|_| StandbyPoolError::InvalidApproval("invalid former Root".into()))?;
             if old.as_slice().last() != Some(&1)
                 || old.to_text() != *previous
                 || old == api::canister_self()
                 || previous == text
             {
-                return Err(ReserveError::InvalidApproval(format!(
+                return Err(StandbyPoolError::InvalidApproval(format!(
                     "invalid former Root {previous} for {text}"
                 )));
             }
         }
         let id: Principal = text
             .parse()
-            .map_err(|_| ReserveError::InvalidApproval("invalid import principal".into()))?;
+            .map_err(|_| StandbyPoolError::InvalidApproval("invalid import principal".into()))?;
         if id.to_text() != *text
             || id == api::canister_self()
             || id.as_slice().last() != Some(&1)
             || !ids.insert(id)
         {
-            return Err(ReserveError::InvalidApproval(format!(
+            return Err(StandbyPoolError::InvalidApproval(format!(
                 "invalid or duplicate import {text}"
             )));
         }
@@ -65,17 +65,17 @@ pub(in crate::engine) fn validate(p: &StandbyPolicy, cap: u32) -> Result<(), Res
 /// Refuses changed terms, competing custody and capacity overflow.
 /// # Panics
 /// Requires an opened Root and its controller.
-pub fn configure(policy: StandbyPolicy) -> Result<(), ReserveError> {
+pub fn configure(policy: StandbyPolicy) -> Result<(), StandbyPoolError> {
     assert!(api::is_controller(&api::caller()));
     sharding::admit_pool_change(false)
-        .map_err(|e| ReserveError::CustodyOccupied(format!("{e:?}")))?;
-    STATE.with_borrow_mut(|s| -> Result<(), ReserveError> {
+        .map_err(|e| StandbyPoolError::CustodyOccupied(format!("{e:?}")))?;
+    STATE.with_borrow_mut(|s| -> Result<(), StandbyPoolError> {
         let s = s.as_mut().unwrap();
         let pools = &mut s.pools;
         let cap = pools
             .capacity
             .as_ref()
-            .ok_or_else(|| ReserveError::Capacity("configure subnet capacity first".into()))?
+            .ok_or_else(|| StandbyPoolError::Capacity("configure subnet capacity first".into()))?
             .max_children;
         validate(&policy, cap)?;
         // Appending named candidates cannot renew paid creations or change a
@@ -87,8 +87,8 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), ReserveError> {
                 && policy.expires_at_ns == old.expires_at_ns
                 && policy.minimum_import_cycles == old.minimum_import_cycles;
             if !same_allowance {
-                return Err(ReserveError::ApprovalConflict(
-                    "reserve approval differs".into(),
+                return Err(StandbyPoolError::ApprovalConflict(
+                    "standby pool approval differs".into(),
                 ));
             }
             if old.imports.starts_with(&policy.imports) {
@@ -98,7 +98,7 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), ReserveError> {
                 .imports
                 .strip_prefix(old.imports.as_slice())
                 .ok_or_else(|| {
-                    ReserveError::ApprovalConflict(
+                    StandbyPoolError::ApprovalConflict(
                         "import list must retain original candidates".into(),
                     )
                 })?
@@ -106,7 +106,7 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), ReserveError> {
             policy.imports.as_slice()
         };
         if pools.occupied_slots() + added.len() > cap as usize {
-            return Err(ReserveError::Capacity(
+            return Err(StandbyPoolError::Capacity(
                 "imports exceed remaining physical capacity".into(),
             ));
         }
@@ -120,7 +120,7 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), ReserveError> {
                     .values()
                     .any(|j| j.0.attempts[0] > 0 && j.0.worker.is_none()))
         {
-            return Err(ReserveError::CustodyOccupied(
+            return Err(StandbyPoolError::CustodyOccupied(
                 "unresolved creation prevents proving import uniqueness".into(),
             ));
         }
@@ -148,7 +148,7 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), ReserveError> {
                     | Asset::Reset(id, ..) => id.to_text() == *text,
                 })
             {
-                return Err(ReserveError::CustodyOccupied(
+                return Err(StandbyPoolError::CustodyOccupied(
                     "import principal already belongs to this fleet".into(),
                 ));
             }
@@ -262,18 +262,18 @@ pub(in crate::engine) fn wake() {
     TIMER.with_borrow_mut(|t| {
         let timer = t.get_or_insert_with(|| {
             ic_timers::bind_once(["canic", "reserve", "fill"], Lifetime::Retained, step)
-                .expect("reserve timer")
+                .expect("standby pool timer")
         });
         timer
             .set(OnceDemand::At(api::time()))
-            .expect("schedule reserve demand");
+            .expect("schedule standby pool refill");
     });
 }
 
-pub(super) async fn subnet(id: Principal) -> Result<Principal, ReserveError> {
+pub(super) async fn subnet(id: Principal) -> Result<Principal, StandbyPoolError> {
     let registry = "rwlgt-iiaaa-aaaaa-aaaaa-cai".parse().expect("NNS Registry");
     let args = placement::encode_get_subnet_for_canister_args(id, 256)
-        .map_err(|_| ReserveError::InvalidObservation("invalid lookup".into()))?;
+        .map_err(|_| StandbyPoolError::InvalidObservation("invalid lookup".into()))?;
     let reply = Call::new(
         registry,
         "get_subnet_for_canister",
@@ -282,7 +282,7 @@ pub(super) async fn subnet(id: Principal) -> Result<Principal, ReserveError> {
     .owned_args(args)
     .execute()
     .await
-    .map_err(|_| ReserveError::InvalidObservation("registry unavailable".into()))?;
+    .map_err(|_| StandbyPoolError::InvalidObservation("registry unavailable".into()))?;
     if let Outcome::Reply(bytes) = reply.into_parts().0
         && let Ok(placement::PlacementResult::Ok(row)) =
             placement::decode_get_subnet_for_canister_response(&bytes, MANAGEMENT_LIMITS)
@@ -290,7 +290,7 @@ pub(super) async fn subnet(id: Principal) -> Result<Principal, ReserveError> {
     {
         return Ok(subnet);
     }
-    Err(ReserveError::InvalidObservation(
+    Err(StandbyPoolError::InvalidObservation(
         "registry did not establish placement".into(),
     ))
 }
@@ -320,11 +320,11 @@ pub fn import_caller() -> Result<(), &'static str> {
 /// Read the candidate-specific release record without advancing the handoff.
 /// # Errors
 /// Only the former Root declared for this candidate may observe it.
-pub fn handoff_status(id: Principal) -> Result<Asset, ReserveError> {
+pub fn handoff_status(id: Principal) -> Result<Asset, StandbyPoolError> {
     STATE.with_borrow(|s| {
         let pools = &s
             .as_ref()
-            .ok_or_else(|| ReserveError::NotConfigured("Root not opened".into()))?
+            .ok_or_else(|| StandbyPoolError::NotConfigured("Root not opened".into()))?
             .pools;
         if !pools.reserve_policy.as_ref().is_some_and(|policy| {
             policy.imports.iter().any(|i| {
@@ -332,7 +332,7 @@ pub fn handoff_status(id: Principal) -> Result<Asset, ReserveError> {
                     && i.previous_root.as_deref() == Some(&api::caller().to_text())
             })
         }) {
-            return Err(ReserveError::WrongAsset(
+            return Err(StandbyPoolError::WrongAsset(
                 "no reservation for this source Root and spare".into(),
             ));
         }
@@ -341,7 +341,7 @@ pub fn handoff_status(id: Principal) -> Result<Asset, ReserveError> {
             .iter()
             .find(|(source, _)| source == &Source::Imported(id))
             .map(|(_, asset)| asset.clone())
-            .ok_or_else(|| ReserveError::WrongAsset("missing import custody".into()))
+            .ok_or_else(|| StandbyPoolError::WrongAsset("missing import custody".into()))
     })
 }
 
@@ -350,20 +350,19 @@ pub fn handoff_status(id: Principal) -> Result<Asset, ReserveError> {
 /// Requires a named surplus principal on Root's subnet with a sufficient balance.
 /// # Panics
 /// Requires an opened Root and its controller.
-pub async fn import(id: Principal) -> Result<Asset, ReserveError> {
+pub async fn import(id: Principal) -> Result<Asset, StandbyPoolError> {
     let caller = api::caller();
     let (index, before, floor, former) = STATE.with_borrow(|s| {
         let pools = &s.as_ref().unwrap().pools;
-        let policy = pools
-            .reserve_policy
-            .as_ref()
-            .ok_or_else(|| ReserveError::NotConfigured("reserve is not configured".into()))?;
+        let policy = pools.reserve_policy.as_ref().ok_or_else(|| {
+            StandbyPoolError::NotConfigured("standby pool is not configured".into())
+        })?;
         let candidate = policy
             .imports
             .iter()
             .find(|i| i.principal == id.to_text())
             .ok_or_else(|| {
-                ReserveError::NotConfigured("principal is not approved for import".into())
+                StandbyPoolError::NotConfigured("principal is not approved for import".into())
             })?;
         let (index, (_, asset)) = pools
             .standby
@@ -371,7 +370,7 @@ pub async fn import(id: Principal) -> Result<Asset, ReserveError> {
             .enumerate()
             .find(|(_, (source, _))| source == &Source::Imported(id))
             .expect("approved candidate");
-        Ok::<_, ReserveError>((
+        Ok::<_, StandbyPoolError>((
             index,
             asset.clone(),
             policy.minimum_import_cycles,
@@ -380,7 +379,7 @@ pub async fn import(id: Principal) -> Result<Asset, ReserveError> {
     })?;
     if former && matches!(before, Asset::AwaitingRelease(_)) {
         sharding::admit_pool_change(false)
-            .map_err(|e| ReserveError::CustodyOccupied(format!("{e:?}")))?;
+            .map_err(|e| StandbyPoolError::CustodyOccupied(format!("{e:?}")))?;
         return STATE.with_borrow_mut(|s| {
             let s = s.as_mut().unwrap();
             s.pools.standby[index].1 = Asset::AwaitingHandoff(id);
@@ -392,7 +391,7 @@ pub async fn import(id: Principal) -> Result<Asset, ReserveError> {
         return if former {
             Ok(before)
         } else {
-            Err(ReserveError::Unauthorized("wrong former Root".into()))
+            Err(StandbyPoolError::Unauthorized("wrong former Root".into()))
         };
     }
     match before {
@@ -403,7 +402,7 @@ pub async fn import(id: Principal) -> Result<Asset, ReserveError> {
     let root_subnet = subnet(api::canister_self()).await?;
     let candidate_subnet = subnet(id).await?;
     if root_subnet != candidate_subnet {
-        return Err(ReserveError::WrongSubnet(format!(
+        return Err(StandbyPoolError::WrongSubnet(format!(
             "cannot import {id}: registry reports subnet {candidate_subnet}, but Root requires {root_subnet}"
         )));
     }
@@ -412,29 +411,29 @@ pub async fn import(id: Principal) -> Result<Asset, ReserveError> {
         .expect("principal");
     let (status, balance) = super::reset::observe_target(&args).await?;
     if !api::is_controller(&caller) {
-        return Err(ReserveError::Unauthorized(
+        return Err(StandbyPoolError::Unauthorized(
             "import caller no longer controls Root".into(),
         ));
     }
     if status.module_hash.is_some() {
-        return Err(ReserveError::WrongAsset(format!(
+        return Err(StandbyPoolError::WrongAsset(format!(
             "cannot import {id}: candidate still has installed code"
         )));
     }
     if status.status != ic_platform_protocol::management_snapshots::Status::Running {
-        return Err(ReserveError::WrongAsset(format!(
+        return Err(StandbyPoolError::WrongAsset(format!(
             "cannot import {id}: candidate must be running, observed {:?}",
             status.status
         )));
     }
     if balance < u128::from(floor.get()) {
-        return Err(ReserveError::BalanceBelowMinimum(format!(
+        return Err(StandbyPoolError::BalanceBelowMinimum(format!(
             "cannot import {id}: balance {balance} cycles is below the approved minimum {}",
             floor.get()
         )));
     }
     sharding::admit_pool_change(false)
-        .map_err(|e| ReserveError::CustodyOccupied(format!("{e:?}")))?;
+        .map_err(|e| StandbyPoolError::CustodyOccupied(format!("{e:?}")))?;
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().unwrap();
         let entry = &mut s.pools.standby[index].1;

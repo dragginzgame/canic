@@ -96,7 +96,6 @@ fn with_log<T>(read: impl FnOnce(u64, &RefCell<ActorLog>) -> T) -> T {
 }
 
 /// Open the log at the lifecycle boundary. Custom actors can also open it on first use.
-#[cfg(feature = "lifecycle")]
 pub(crate) fn initialize() {
     with_log(|_, _| ());
 }

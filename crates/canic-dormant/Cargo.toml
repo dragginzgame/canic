@@ -12,7 +12,7 @@ description = "Dormant Canic canister that retains one retirement receipt"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-canic = { workspace = true, features = ["lifecycle", "method", "storage", "topology"] }
+canic = { workspace = true, features = ["endpoints", "storage"] }
 ic-platform-runtime.workspace = true
 ic-storage.workspace = true
 

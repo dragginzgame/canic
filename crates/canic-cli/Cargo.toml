@@ -17,7 +17,7 @@ path = "src/main.rs"
 doc = false
 
 [dependencies]
-canic = { workspace = true, features = ["db"] }
+canic = { workspace = true, features = ["endpoints"] }
 canic-host.workspace = true
 canic-management-protocol.workspace = true
 clap.workspace = true

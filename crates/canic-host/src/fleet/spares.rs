@@ -1,4 +1,4 @@
-//! One bounded anonymous observation of the Root selected by this fleet's reserve.
+//! One bounded anonymous observation of the Root selected by this fleet's standby pool.
 use super::{FleetOperation, network};
 use crate::{Error, Result, SelectedFleet, supplier};
 use canic::method::Contract;
@@ -34,7 +34,9 @@ pub(super) async fn observe(
         }
     }
     if ids.len() > 1 {
-        return Err(Error::Invalid("conflicting reserve Root bindings".into()));
+        return Err(Error::Invalid(
+            "conflicting standby pool Root bindings".into(),
+        ));
     }
     let Some(id) = ids.first() else {
         return Ok(None);
@@ -50,9 +52,9 @@ pub(super) async fn observe(
         ),
     )
     .await
-    .map_err(|_| Error::Blocked("reserve observation timed out".into()))??;
+    .map_err(|_| Error::Blocked("standby pool observation timed out".into()))??;
     ReadStandbyStatus::decode_reply(&reply)
         .map_err(supplier)?
         .map(Some)
-        .ok_or_else(|| Error::Blocked("Root has no approved reserve policy".into()))
+        .ok_or_else(|| Error::Blocked("Root has no approved standby pool policy".into()))
 }

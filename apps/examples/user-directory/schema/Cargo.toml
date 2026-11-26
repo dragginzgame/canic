@@ -14,11 +14,11 @@ category = "examples"
 name = "user_directory_schema"
 
 [features]
-role-service = ["canic/topology"]
+role-service = []
 inspection = ["dep:ic-wire", "ic-wire/derive"]
 
 [dependencies]
-canic = { workspace = true, features = ["sharding", "method"] }
+canic = { workspace = true, features = ["sharding"] }
 ic-db.workspace = true
 ic-wire = { workspace = true, optional = true }
 serde.workspace = true

@@ -256,10 +256,8 @@ pub enum RedeliveryError {
 }
 
 /// Deliver a named service's original directory revision again.
-#[cfg(feature = "method")]
 pub struct RedeliverDirectoryRevision;
 
-#[cfg(feature = "method")]
 impl crate::method::Contract for RedeliverDirectoryRevision {
     const NAME: &'static str = "redeliver_directory_revision";
     const ID: u64 = ic_wire::method_id("canic.topology.redeliver_directory_revision.v1");
@@ -268,10 +266,8 @@ impl crate::method::Contract for RedeliverDirectoryRevision {
 }
 
 /// Directional Wire contract for a full service directory delivery.
-#[cfg(feature = "method")]
 pub struct ReceiveDirectory;
 
-#[cfg(feature = "method")]
 impl crate::method::Contract for ReceiveDirectory {
     const NAME: &'static str = "receive_directory";
     const ID: u64 = ic_wire::method_id("canic.topology.deliver_installation.v1");
@@ -282,10 +278,8 @@ impl crate::method::Contract for ReceiveDirectory {
 }
 
 /// Query this installation's last published backup assignment.
-#[cfg(feature = "method")]
 pub struct ReadBackupTiming;
 
-#[cfg(feature = "method")]
 impl crate::method::Contract for ReadBackupTiming {
     const NAME: &'static str = "backup_timing";
     const ID: u64 = ic_wire::method_id("canic.topology.backup_timing.v1");
@@ -294,10 +288,8 @@ impl crate::method::Contract for ReadBackupTiming {
 }
 
 /// Withdraw one exact child installation before its principal can be recycled.
-#[cfg(feature = "method")]
 pub struct WithdrawChild;
 
-#[cfg(feature = "method")]
 impl crate::method::Contract for WithdrawChild {
     const NAME: &'static str = "withdraw_child";
     const ID: u64 = ic_wire::method_id("canic.withdraw_child.v1");
@@ -308,7 +300,7 @@ impl crate::method::Contract for WithdrawChild {
 
 /// Mount delivery into the actor’s retained service directory. Install or reopen the
 /// index during the actor's lifecycle before receiving the first publication.
-#[cfg(all(feature = "storage", feature = "method"))]
+#[cfg(feature = "storage")]
 #[macro_export]
 macro_rules! mount_service_directory {
     () => {
@@ -592,7 +584,6 @@ pub mod retained {
             )
         }
 
-        #[cfg(feature = "method")]
         pub(super) fn acknowledge(
             &mut self,
             directory: &Directory,
@@ -751,7 +742,6 @@ pub mod retained {
     /// Refuses a foreign publisher, mismatched receiver, invalid branch or unconfirmed hop.
     /// # Panics
     /// Requires an installed canister with an open index.
-    #[cfg(feature = "method")]
     pub async fn receive<M: MemoryBacking + 'static>(
         index: &'static std::thread::LocalKey<std::cell::RefCell<Option<Index<M>>>>,
         mut update: Delivery,

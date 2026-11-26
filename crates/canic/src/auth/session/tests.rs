@@ -75,7 +75,6 @@ fn pre_cut_receiver_frames_are_refused() {
             enrollment::LIMITS,
         )
         .unwrap();
-        #[cfg(feature = "topology")]
         assert!(crate::topology::Install::approved(&bytes).is_err());
         assert!(crate::auth::install::Install::decode(&bytes).is_err());
     }

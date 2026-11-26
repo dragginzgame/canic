@@ -23,7 +23,7 @@ name = "example-metrics-client"
 path = "client/main.rs"
 
 [dependencies]
-canic = { workspace = true, features = ["method", "readiness"] }
+canic = { workspace = true, features = ["endpoints"] }
 
 [dev-dependencies]
 toko-tooling.workspace = true

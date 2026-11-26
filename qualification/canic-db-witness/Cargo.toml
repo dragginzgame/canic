@@ -16,10 +16,10 @@ crate-type = ["cdylib", "rlib"]
 [features]
 fault-injection = ["canic/jobs", "canic/entropy", "dep:ic-timers"]
 incompatible-schema = []
-managed-fixture = ["canic/readiness", "canic/topology"]
+managed-fixture = []
 
 [dependencies]
-canic = { workspace = true, features = ["db", "db-store", "lifecycle", "storage"] }
+canic = { workspace = true, features = ["db-store"] }
 ic-db.workspace = true
 ic-platform-runtime.workspace = true
 ic-storage.workspace = true

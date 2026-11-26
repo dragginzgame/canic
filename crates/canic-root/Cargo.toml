@@ -23,9 +23,9 @@ path = "client/main.rs"
 fault-injection = ["canic-management/fault-injection"]
 
 [dependencies]
-canic = { workspace = true, features = ["auth-enrollment", "lifecycle", "sharding"] }
-canic-management = { workspace = true, features = ["auth", "blob", "role-issuer", "sharding"] }
-canic-management-protocol = { workspace = true, features = ["retirement", "standby"] }
+canic = { workspace = true, features = ["auth-enrollment", "sharding"] }
+canic-management = { workspace = true, features = ["auth", "blob", "role-issuer"] }
+canic-management-protocol = { workspace = true, features = ["standby-pool"] }
 ic-platform-runtime = { workspace = true, features = ["entrypoint-macros", "system-raw"] }
 ic-platform-types.workspace = true
 ic-wire.workspace = true

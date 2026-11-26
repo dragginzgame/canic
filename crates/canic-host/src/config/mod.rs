@@ -147,7 +147,7 @@ pub struct FleetDeclaration {
     /// Registry assigning one dedicated child per application key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registry: Option<RegistryConfig>,
-    /// Subnet reserve maintenance and unassigned external candidates.
+    /// Subnet standby pool maintenance and unassigned external candidates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standby_pool: Option<StandbyPoolConfig>,
     /// Named worker allowances, each bound to its component and parent hub.
@@ -198,7 +198,7 @@ pub struct FleetConfig {
     /// Registry assigning one dedicated child per application key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registry: Option<RegistryConfig>,
-    /// Subnet reserve maintenance and unassigned external candidates.
+    /// Subnet standby pool maintenance and unassigned external candidates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standby_pool: Option<canic_management_protocol::stored::StandbyPolicy>,
     /// Named worker allowances, each bound to its component and parent hub.

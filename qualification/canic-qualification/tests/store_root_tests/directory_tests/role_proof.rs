@@ -730,7 +730,7 @@ pub(super) async fn exercise(
         .await;
     assert!(matches!(
         worker_reset,
-        Err(canic::sharding::standby::ReserveError::WrongAsset(_))
+        Err(canic::sharding::standby::StandbyPoolError::WrongAsset(_))
     ));
     canic_qualification::upgrade_stopped(pic, child.id, wasm, vec![], Some(issuer.id))
         .await

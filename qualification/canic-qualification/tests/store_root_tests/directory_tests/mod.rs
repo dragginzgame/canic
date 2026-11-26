@@ -1,6 +1,6 @@
 //! Root derives the shared directory from its own ready service installations.
 use super::*;
-use canic::sharding::standby::ReserveError;
+use canic::sharding::standby::StandbyPoolError;
 use canic::{
     method::Contract,
     topology::directory::{
@@ -379,7 +379,7 @@ async fn installed_publication(scenario: Scenario) {
             minimum_import_cycles: 1u64.try_into().unwrap(),
             imports: vec![],
         };
-        root.update::<_, Result<(), ReserveError>>(
+        root.update::<_, Result<(), StandbyPoolError>>(
             "configure_standby",
             stored::CONFIGURE_STANDBY,
             &policy,

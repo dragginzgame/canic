@@ -1,6 +1,41 @@
 # Changelog
 
-## Unreleased
+## [0.273.0] - 2026-11-26
+
+Both workspaces adopt IC Platform Types 0.21.6.
+
+Rename the `method` Cargo feature to `endpoints` in dependency manifests.
+The Rust path `canic::method::Contract` stays the same. The feature supplies Canic’s endpoint runtime, including readiness,
+lifecycle hooks, typed DB endpoint mounts and topology contracts. Remove
+`readiness`, `lifecycle`, `db` and `topology` from feature lists. Select `endpoints`
+if no other selected feature enables it. Applications choose which endpoints
+and hooks to mount. Keep `db-store` when using the IC DB engine.
+
+The recovery command and codec are available with no features. Remove the
+`recovery` feature from passive consumers. Applications that export a recovery
+handler use the endpoint runtime.
+
+```sh
+# From the checkout, build the counter and inspect its readiness update.
+canic app build --config apps/examples/counter/canic.toml --canister counter
+canic artifact endpoints apps/examples/counter/artifacts/app.wasm
+```
+
+Updated both Cargo workspaces and the authenticated tooling snapshot to Toko Tooling 0.46.7.
+
+Consumers of `canic-management-protocol` select `standby-pool` for standby and
+retirement contracts. It includes `endpoints`, which can also be selected alone for
+child creation, funding, subnet capacity and snapshot reader contracts. Rust clients
+use `StandbyPoolError` and `MAX_STANDBY_POOL_ENTRIES`. New standby pool log
+entries use the source `standby_pool`. Fleet configuration
+and Root endpoint names stay the same. The qualification build adds two updates,
+`inject_child_fault` and `inject_snapshot_fault`, to the deployment build.
+
+```sh
+# From the checkout, build the deployment Root and inspect its endpoints.
+canic app build --config apps/examples/counter/canic.toml --canister root
+canic artifact endpoints apps/examples/counter/artifacts/root.wasm
+```
 
 ## [0.272.0] - 2026-11-26
 

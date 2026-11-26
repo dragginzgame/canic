@@ -1,5 +1,9 @@
 # Optional Auth composition witness
 
+Stateful fleet receivers keep their sessions and replay protection in stable
+leases. After an upgrade, the receiver reopens its checkpoint and must refresh
+its enrollment from Root before serving sessions. See [Stateful Auth storage](#stateful-auth-storage).
+
 Canic mounts three receiver endpoints behind `canic`'s optional `auth` feature:
 
 | Export | Mode | Passive contract |
@@ -188,8 +192,9 @@ local signature is rolled back with its result and cannot escape the callback.
 `MemoryIssuer::revoke_browser` verifies the captured browser against the original
 account/login selectors and atomically revokes that login. Exact repeats return
 the original deadline. Initial/renewal work completing later stays fenced; other
-devices and retained completed results remain available. Missing/pruned or lost
-volatile state refuses. The installed `auth_logout_tests` cover these boundaries,
+devices and retained completed results remain available. Missing or pruned records
+refuse logout. The interruption fixture also refuses logout after an upgrade
+that skips its issuer checkpoint. The installed `auth_logout_tests` cover these boundaries,
 malformed input and post-mutation encoding failure rolling back revocation.
 There is no Canic login index or reinterpretation of a browser as an account.
 Receiver logout remains its separate, unchanged unit-input operation.
@@ -246,8 +251,9 @@ production wallet or key-deletion guarantee. The issuer fixture admits five reta
 logins and three slots per account to include the revoked predecessor; revocation
 does not reclaim its slot. The native harness independently observes six committed
 signatures, five logins and exactly two successful profile writes.
-It upgrades the receiver and reopens both profiles unchanged; the previously active
-replacement login is refused after losing volatile Auth state, including to fresh enrollment.
+The browser interruption fixture deliberately skips the Auth checkpoint on upgrade.
+Both profiles reopen, but the receiver refuses the previously active login and
+returns `Closed` on refresh.
 
 The independent device requests only `read`: its authenticated profile read succeeds
 while a write is refused without changing the stored profile. The final browser case
@@ -331,8 +337,8 @@ It uses a disposable issuer and local root of trust.
 
 ### Opt-in receiver
 
-Select `auth-enrollment` for each participating Wasm (and `method` for named
-application methods). In the fleet config, declare the shared policy once. This
+Select `auth-enrollment` for each participating Wasm. It includes the `endpoints`
+runtime for named application methods. Declare the shared fleet policy once. This
 example uses a disposable issuer; bind the fixture's actual issuer before planning.
 
 ```toml
@@ -572,9 +578,10 @@ let bytes = ic_wire::encode(
 )?;
 ```
 
-The prior single-grant Root executable does not support this trigger. Use a
-fresh qualified Auth deployment. An upgrade clears volatile Auth authority and
-cannot migrate a live fleet by replaying its old approvals.
+The historical single-grant Root lacked this trigger. Use a fresh installation
+for the current Auth contract. Root records first grant use durably and keeps
+detailed grant history in memory. Once it has issued a grant, losing that
+history closes enrollment, including attempts to replay an earlier approval.
 
 For a direct profile read, Toko's existing `user_shard::get_me` already looks
 up the verified issuer and subject. Keep its input free of account selectors.
@@ -582,8 +589,9 @@ In the installed journey, check each boundary separately: a new shard starts
 closed, an admitted user reads their own record on their assigned shard, the
 other shard returns no record for that user, and an unenrolled caller cannot
 read either. Exercise revocation both before and after the receiver refreshes;
-the last accepted snapshot has a bounded freshness window. Reopening the
-database on upgrade cannot reconstruct volatile sessions or replay protection.
+the last accepted snapshot has a bounded freshness window. On upgrade, the
+application reopens its database and the receiver reopens its own Auth checkpoint.
+Serving sessions also requires an authenticated enrollment refresh.
 
 Legacy review at `377fbceb3994c9d1f3033979ef4e4ce9e6b85801` covered
 `crates/canic-core/src/domain/policy/pure/auth/root_provisioning/{mod.rs,tests/mod.rs}`

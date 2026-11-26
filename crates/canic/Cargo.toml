@@ -12,7 +12,7 @@ description = "Small Canic contracts and optional actor adapters"
 ignored = ["toko-tooling"]
 
 [features]
-auth = ["method", "dep:ic-auth-protocol-types", "dep:ic-auth-wire"]
+auth = ["endpoints", "dep:ic-auth-protocol-types", "dep:ic-auth-wire"]
 auth-browser = ["auth", "ic-auth-wire/typescript"]
 auth-enrollment = [
     "auth",
@@ -20,14 +20,12 @@ auth-enrollment = [
     "storage",
     "ic-auth/ed25519-verification",
     "raw-rand",
-    "lifecycle",
     "dep:sha2",
 ]
 auth-issuer-stable = ["auth", "ic-auth/issuer-stable"]
-blob = ["method", "dep:ic-blob-storage", "dep:ic-storage"]
-db = ["method"]
-db-store = ["lifecycle", "dep:ic-db", "dep:sha2", "storage"]
-entropy = ["lifecycle", "dep:ic-entropy", "raw-rand"]
+blob = ["endpoints", "dep:ic-blob-storage", "dep:ic-storage"]
+db-store = ["endpoints", "dep:ic-db", "dep:sha2", "storage"]
+entropy = ["endpoints", "dep:ic-entropy", "raw-rand"]
 inspection = [
     "dep:inventory",
     "dep:serde_json",
@@ -37,8 +35,8 @@ inspection = [
     "ic-db?/wire",
 ]
 jobs = ["dep:ic-jobs", "timers"]
-lifecycle = ["method"]
-method = [
+# Endpoint runtime for canister calls, exports and diagnostics.
+endpoints = [
     "dep:ic-logging",
     "ic-blob-storage?/logging",
     "ic-db?/logging",
@@ -55,22 +53,14 @@ method = [
     "ic-timers?/metrics",
 ]
 raw-rand = ["dep:ic-platform-runtime", "ic-platform-runtime/raw-rand"]
-recovery = []
-provisioning = [
-    "ic-platform-types/principal-self-authenticating",
-    "sharding",
-    "stateful-role",
-    "method",
-]
-readiness = ["method"]
+provisioning = ["ic-platform-types/principal-self-authenticating", "stateful-role"]
 role-attestation = ["role-verification", "storage"]
-role-verification = ["topology", "method", "dep:ic-platform"]
-sharding = ["method", "dep:sha2"]
-receiver-role = ["method", "auth-enrollment", "readiness", "sharding", "topology"]
+role-verification = ["endpoints", "dep:ic-platform"]
+sharding = ["endpoints", "dep:sha2"]
+receiver-role = ["auth-enrollment", "sharding"]
 stateful-role = ["receiver-role", "db-store"]
 storage = ["dep:ic-storage"]
-timers = ["dep:ic-timers", "lifecycle"]
-topology = ["method"]
+timers = ["dep:ic-timers", "endpoints"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 inventory = { workspace = true, optional = true }
@@ -109,7 +99,7 @@ required-features = ["auth-browser"]
 
 [[test]]
 name = "named_contract"
-required-features = ["method"]
+required-features = ["endpoints"]
 
 [[test]]
 name = "durable_routes"

@@ -11,7 +11,7 @@ description = "Private Wire contract for retained profile qualification"
 category = "tests"
 
 [dependencies]
-canic = { workspace = true, features = ["method"] }
+canic = { workspace = true, features = ["endpoints"] }
 ic-wire.workspace = true
 serde.workspace = true
 

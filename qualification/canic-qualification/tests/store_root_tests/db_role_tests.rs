@@ -12,7 +12,7 @@ use canic::{
 
 #[tokio::test]
 async fn never_granted_root_preserves_standby_import_policy_after_upgrade() {
-    use canic::sharding::standby::ReserveError;
+    use canic::sharding::standby::StandbyPoolError;
     let (mut server, owner) = support::instance(&canic_qualification::server_directory()).await;
     let pic = owner.client();
     let wasm = std::fs::read(artifacts().join("root.wasm")).unwrap();
@@ -41,7 +41,7 @@ async fn never_granted_root_preserves_standby_import_policy_after_upgrade() {
     )
     .await
     .unwrap();
-    root.update::<_, Result<(), ReserveError>>(
+    root.update::<_, Result<(), StandbyPoolError>>(
         "configure_standby",
         stored::CONFIGURE_STANDBY,
         &policy,
@@ -52,7 +52,7 @@ async fn never_granted_root_preserves_standby_import_policy_after_upgrade() {
     pic.upgrade_canister(root.id, wasm, vec![], Some(root.operator))
         .await
         .unwrap();
-    let result: Result<(), ReserveError> = root
+    let result: Result<(), StandbyPoolError> = root
         .update(
             "configure_standby",
             stored::CONFIGURE_STANDBY,

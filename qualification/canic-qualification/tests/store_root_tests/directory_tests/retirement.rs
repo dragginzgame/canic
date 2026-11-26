@@ -1,6 +1,6 @@
 //! Same-principal handover from a proof-bearing shared shard to a worker.
 use super::*;
-use canic::sharding::standby::ReserveError;
+use canic::sharding::standby::StandbyPoolError;
 use canic::sharding::{
     Allocation, BeginShardDrain, Placement, ShardTarget,
     standby::{Asset, ObserveStandby, Source},
@@ -49,7 +49,7 @@ pub(super) async fn exercise(
     if from_spare {
         use canic::sharding::standby::RefillStandby;
         let asset = root
-            .update::<_, Result<Asset, ReserveError>>(
+            .update::<_, Result<Asset, StandbyPoolError>>(
                 RefillStandby::NAME,
                 RefillStandby::ID,
                 &refill,
@@ -379,7 +379,7 @@ pub(super) async fn exercise(
         },
     };
     let advance = async |approval: &stored::Stage<stored::ChildRetirement>| {
-        root.update::<_, Result<P, ReserveError>>(
+        root.update::<_, Result<P, StandbyPoolError>>(
             "retire_released_child",
             ic_wire::method_id("canic.root.retire_released_child.v1"),
             approval,
@@ -430,7 +430,7 @@ pub(super) async fn exercise(
     changed.approval.minimum_reuse_cycles = 1u64.try_into().unwrap();
     assert!(matches!(
         advance(&changed).await.unwrap_err(),
-        ReserveError::ApprovalConflict(_)
+        StandbyPoolError::ApprovalConflict(_)
     ));
     for phase in [P::CacheIssued, P::Cached] {
         assert_eq!(advance(&input).await, Ok(phase));
@@ -438,7 +438,7 @@ pub(super) async fn exercise(
     pic.stop_canister(user, Some(root.id)).await.unwrap();
     assert!(matches!(
         advance(&input).await,
-        Err(ReserveError::AwaitingConfirmation(_))
+        Err(StandbyPoolError::AwaitingConfirmation(_))
     ));
     pic.start_canister(user, Some(root.id)).await.unwrap();
     assert!(members().await.contains(&child.id));
@@ -458,7 +458,7 @@ pub(super) async fn exercise(
     };
     assert!(matches!(
         advance(&input).await.unwrap_err(),
-        ReserveError::ProofOutstanding(_)
+        StandbyPoolError::ProofOutstanding(_)
     ));
     // Exercise both independent hubs and co-owned worker and shard grants.
     let pool = if from_spare { user } else { pool };

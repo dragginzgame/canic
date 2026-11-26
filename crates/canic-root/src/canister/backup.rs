@@ -40,14 +40,14 @@ fn lookup(binding: Binding) -> Result<Record, Error> {
     backup::lookup(&binding)
 }
 
-// inject
+// inject_snapshot_fault
 // Select the controller's interruption point for the installed snapshot fixture.
 // guard  : Root controller
 // limits : 128-byte request, backup::LIMITS reply
 #[cfg(feature = "fault-injection")]
 canic::__canic_inspect!(
     wire,
-    "snapshot_fault",
+    "inject_snapshot_fault",
     update,
     82,
     u8,
@@ -61,14 +61,14 @@ canic::__canic_inspect!(
 #[cfg(feature = "fault-injection")]
 #[runtime::update(
     runtime = runtime,
-    name = "snapshot_fault",
+    name = "inject_snapshot_fault",
     guard = canic::guard::require_controller,
     decode = decode::<u8, 82>,
     encode = encode::<(), 82>,
     max_bytes = 128,
     on_error = fail,
 )]
-fn inject(point: u8) {
+fn inject_snapshot_fault(point: u8) {
     backup::inject(point);
 }
 

@@ -15,7 +15,7 @@ crate-type = ["cdylib", "rlib"]
 inspection = ["canic/inspection"]
 
 [dependencies]
-canic = { workspace = true, features = ["method", "readiness"] }
+canic = { workspace = true, features = ["endpoints"] }
 serde.workspace = true
 
 # Locked artifact sources for managed builds.

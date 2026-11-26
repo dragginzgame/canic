@@ -265,7 +265,7 @@ pub(super) enum FleetCommand {
         #[command(flatten)]
         selection: CanisterConfigArgs,
     },
-    /// Plan deployment, maintenance or publication, or preview a configured shard pool.
+    /// Plan deployment, maintenance or publication, or preview child placement and standby pool policy.
     #[command(mut_arg("icp_bin", |arg| arg.conflicts_with("controller")))]
     Plan {
         #[command(flatten)]

@@ -1,4 +1,4 @@
-//! Optional, volatile per-receiver authority under Root's existing controller guard.
+//! Root controllers approve per-receiver grants. Root keeps the grant details in memory.
 use canic::auth::enrollment::{
     self as enrollment, Authority, Error, Grant, Request, Snapshot, transport,
 };

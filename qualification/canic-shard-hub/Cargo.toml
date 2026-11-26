@@ -14,7 +14,7 @@ category = "tests"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-canic = { workspace = true, features = ["lifecycle", "method", "readiness", "sharding", "storage"] }
+canic = { workspace = true, features = ["sharding", "storage"] }
 canic-profile-protocol.workspace = true
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true

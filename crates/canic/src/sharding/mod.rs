@@ -42,7 +42,6 @@ impl std::fmt::Display for ShardError {
 impl std::error::Error for ShardError {}
 
 /// Optional hub and shard composition for an issuer-qualified account.
-#[cfg(feature = "method")]
 pub mod provisioning;
 
 pub use client::{ACQUISITION_CYCLES, Lookup, LookupPlacement, grow_shard};
@@ -74,7 +73,7 @@ pub struct Allocation {
 pub struct ShardTarget {
     /// Original slot and creation generation.
     pub allocation: Allocation,
-    /// Installed shard principal.
+    /// Installed canister principal. Worker release and reset use this field for the worker.
     pub shard: ic_platform_types::Principal,
 }
 
@@ -104,10 +103,8 @@ impl crate::method::Contract for ConfigureShardRoutes {
 }
 
 /// Observe a shard by principal in the addressed hub.
-#[cfg(feature = "method")]
 pub struct ObserveShard;
 
-#[cfg(feature = "method")]
 impl crate::method::Contract for ObserveShard {
     const NAME: &'static str = "observe_shard";
     const ID: u64 = ic_wire::method_id("canic.hub.observe_shard.v1");
@@ -117,10 +114,8 @@ impl crate::method::Contract for ObserveShard {
 }
 
 /// Approve drain for an exact installed shard allocation.
-#[cfg(feature = "method")]
 pub struct BeginShardDrain;
 
-#[cfg(feature = "method")]
 impl crate::method::Contract for BeginShardDrain {
     const NAME: &'static str = "begin_shard_drain";
     const ID: u64 = ic_wire::method_id("canic.hub.begin_shard_drain.v1");

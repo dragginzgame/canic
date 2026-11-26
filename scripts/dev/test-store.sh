@@ -46,11 +46,6 @@ if [[ "$scope" == all || "$scope" == miner ]]; then
     build_hub_example miner-payer
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test miner
 fi
-if [[ "$scope" == miner ]]; then
-    build pool-faults canic-root --features fault-injection
-    CANIC_CLI="$cli" CANIC_STORE_APP_DIRECTORY="$root/target/store" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
-    exit
-fi
 if [[ "$scope" == all || "$scope" == db-roles ]]; then
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-schema-role --output target/store/db-role-schema.wasm --json > target/store/db-role-schema.json
     cargo run --quiet --locked --manifest-path qualification/Cargo.toml -p canic-schema-role \
@@ -75,7 +70,7 @@ if [[ "$scope" == db-roles ]]; then
 fi
 if [[ "$scope" == all || "$scope" == directory ]]; then
     cargo build --locked --release -p canic-root --bin canic-root-client --message-format=json-render-diagnostics > "$records"
-    cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic-root-client" and .executable != null) | .executable] | if length == 1 then .[0] else error("expected role-enabled Root client") end' "$records")" target/store/root.client
+    cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic-root-client" and .executable != null) | .executable] | if length == 1 then .[0] else error("expected Root client") end' "$records")" target/store/root.client
     cargo build --locked -p example-user-directory-hub --features operator-client --bin example-user-directory-hub-client --message-format=json-render-diagnostics > "$records"
     cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "example-user-directory-hub-client") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected hub codec") end' "$records")" target/store/hub.client
     build recycled-miner example-miner-pool-miner
@@ -106,17 +101,28 @@ if [[ "$scope" == user-directory ]]; then
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
     exit
 fi
+build root-faults canic-root --features fault-injection
+for variant in root root-faults; do
+    "$cli" --json artifact endpoints "target/store/$variant.wasm" > "target/store/$variant.endpoints.json"
+done
+jq -se 'map(.endpoints) as [$root, $faults] |
+    ($root - $faults) == [] and
+    (($faults - $root) | map({name, mode}) | sort_by(.name)) ==
+        [{name:"inject_child_fault", mode:"update"}, {name:"inject_snapshot_fault", mode:"update"}]' \
+    target/store/{root,root-faults}.endpoints.json >/dev/null
+if [[ "$scope" == miner ]]; then
+    CANIC_CLI="$cli" CANIC_STORE_APP_DIRECTORY="$root/target/store" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
+    exit
+fi
 if [[ "$scope" == all || "$scope" == sharding ]]; then
     cargo check --locked -p canic --features receiver-role --test durable_routes --target wasm32-unknown-unknown
     cargo test --locked -p canic --features sharding,storage sharding::
     cargo test --locked -p canic-management --features sharding placement::
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-db-witness --features managed-fixture --output target/store/pool-db.wasm --json > target/store/pool-db.json
-    build pool-faults canic-root --features fault-injection
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-shard-hub --output target/store/hub.wasm --json > target/store/hub.json
 fi
 build original ic-wasm-store
 bash scripts/dev/prepare-root-maintenance-fixture.sh target/store/root.wasm target/store/root-maintenance.wasm
-build root-faults canic-root --features fault-injection
 if [[ "$scope" == all || "$scope" == root-maintenance ]]; then
     records=$(mktemp target/store/host-tests.XXXXXX.jsonl)
     cargo test --locked -p canic-host --lib --no-run --message-format=json-render-diagnostics > "$records"

@@ -61,7 +61,7 @@ On a sharding Root, an exact controller refill approval creates one empty
 canister and consumes one physical subnet slot. The next admitted worker
 can claim it and install its approved Store release. Each mining request
 includes the generation Root delivered at install. Root can confirm a release
-by reading the original hub's receipt for either a directly created worker or one originally claimed from the reserve. A confirmed release stays quarantined
+by reading the original hub's receipt for either a directly created worker or one originally claimed from the standby pool. A confirmed release stays quarantined
 and consumes capacity. A controller can issue `reset-worker` with that exact target and a deadline
 within ten minutes. Repeat the same call to observe stop, issue uninstall and
 verify the empty module. Retained snapshots block reset. Reset progress survives
@@ -83,7 +83,7 @@ unapproved. Both forms deliver only the exact allocation generation to the miner
 
 ## Keeping spare canisters ready
 
-A sharding Root can maintain a fleet reserve even when the worker hub’s own
+Root can maintain a fleet standby pool even when the worker hub’s own
 creation budget is zero. In a fleet with a bound Root and an approved subnet
 ceiling, add the optional table below to `canic.toml`. Select an absolute
 spending deadline in Unix nanoseconds. The example timestamp is illustrative.
@@ -110,9 +110,9 @@ Review the resolved principals, spending ceiling and deadline before submission.
 Set `IDENTITY` to the controller signer name and run these commands from the configured fleet directory.
 
 ```sh
-canic --json fleet plan --identity "$IDENTITY" > reserve-plan.json
-canic fleet call --canister root --identity "$IDENTITY" configure-subnet-capacity "$(jq -c '.capacity.approval' reserve-plan.json)"
-canic fleet call --canister root --identity "$IDENTITY" configure-standby "$(jq -c '.standby.approval' reserve-plan.json)"
+canic --json fleet plan --identity "$IDENTITY" > standby-pool-plan.json
+canic fleet call --canister root --identity "$IDENTITY" configure-subnet-capacity "$(jq -c '.capacity.approval' standby-pool-plan.json)"
+canic fleet call --canister root --identity "$IDENTITY" configure-standby "$(jq -c '.standby.approval' standby-pool-plan.json)"
 canic fleet call --canister root --identity "$IDENTITY" observe-standby
 ```
 

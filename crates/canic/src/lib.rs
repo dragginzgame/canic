@@ -4,15 +4,7 @@
 // Endpoint attributes use the same absolute crate path in Canic and in applications.
 extern crate self as canic;
 
-#[cfg(any(
-    feature = "auth",
-    feature = "blob",
-    feature = "db",
-    feature = "lifecycle",
-    feature = "method",
-    feature = "readiness",
-    feature = "sharding"
-))]
+#[cfg(feature = "endpoints")]
 #[doc(hidden)]
 pub mod __private {
     pub use ic_platform_runtime as runtime;
@@ -22,7 +14,7 @@ pub mod __private {
 #[cfg(feature = "auth")]
 pub mod auth;
 
-#[cfg(any(feature = "blob", feature = "db"))]
+#[cfg(feature = "endpoints")]
 mod frame;
 
 /// Optional Blob endpoint composition; no implicit lifecycle or service activation.
@@ -30,7 +22,7 @@ mod frame;
 pub mod blob;
 
 /// Optional application-owned typed database endpoints.
-#[cfg(any(feature = "db", feature = "db-store"))]
+#[cfg(feature = "endpoints")]
 pub mod db;
 
 /// Fresh platform requests and an optional supplier with shared diagnostics.
@@ -44,26 +36,25 @@ pub mod guard;
 pub use ic_jobs as jobs;
 
 /// Explicit lifecycle hooks independent of storage and Auth.
-#[cfg(feature = "lifecycle")]
+#[cfg(feature = "endpoints")]
 pub mod lifecycle;
 
 /// Bounded operational diagnostics owned by the hosting canister.
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 pub mod logging;
 
-#[cfg(any(feature = "method", feature = "sharding"))]
+#[cfg(feature = "endpoints")]
 pub mod method;
 
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 pub mod funding;
 
 /// Passive operational reports. Canic actors export one guarded reader.
 pub mod metrics;
 
-/// Application-owned readiness; the optional feature enables an explicit replicated mount.
+/// Application-owned readiness with an explicit replicated endpoint mount.
 pub mod readiness;
 
-#[cfg(feature = "recovery")]
 pub mod recovery;
 
 /// Actor composition for Auth-enrolled stateful hubs and shards.
@@ -78,12 +69,12 @@ pub mod storage;
 pub mod sharding;
 
 /// Fleet-approved shard installation context.
-#[cfg(feature = "topology")]
+#[cfg(feature = "endpoints")]
 pub mod topology;
 
-#[cfg(feature = "method")]
+#[cfg(feature = "endpoints")]
 pub use canic_macros::{attested_method, method_descriptor, query, update};
-#[cfg(any(feature = "method", feature = "topology"))]
+#[cfg(feature = "endpoints")]
 pub use canic_macros::{shard_pool, worker_pool};
 
 /// Emit a local build-report marker without adding an IC export.

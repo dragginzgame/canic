@@ -17,15 +17,12 @@ pub(crate) mod test_store {
 #[cfg(feature = "db-store")]
 pub mod store;
 
-#[cfg(feature = "db")]
 #[doc(hidden)]
 pub mod endpoint;
 /// Passive bounded inspection contract, usable independently of the database engine.
-#[cfg(feature = "db")]
 pub mod inspection;
 
 /// Fixed transport envelope, independent of the application's narrower work bounds.
-#[cfg(feature = "db")]
 pub const RPC_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 65_536,
     allocation: 8 * 1024 * 1024,
@@ -33,7 +30,6 @@ pub const RPC_LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: 32,
 };
 /// Surface presented to the application's synchronous pre-decode authorization.
-#[cfg(feature = "db")]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Operation {
     /// Read the executable schema fingerprint and ordinary database admission.
@@ -54,7 +50,6 @@ pub enum Operation {
 /// `(caller, request, time)`. All handlers are synchronous; reply failure traps.
 /// An allowed operation may still need row/tenant checks inside its typed handler.
 /// Mounting performs no initialization, grants no authority and exports no lifecycle.
-#[cfg(feature = "db")]
 // Rustfmt 1.100 repeatedly reindents multiline attributes in this macro body.
 #[rustfmt::skip]
 #[macro_export]

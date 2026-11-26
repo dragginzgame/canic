@@ -1,5 +1,4 @@
 //! Explicit topology for a newly created shard. The pool approval owns these bytes.
-#[cfg(feature = "method")]
 pub mod attestation;
 pub mod directory;
 #[cfg(feature = "role-attestation")]
@@ -7,7 +6,6 @@ mod service;
 pub mod worker;
 #[cfg(feature = "role-attestation")]
 pub use service::{attach_role_calls, call_service, call_service_by_role};
-#[cfg(feature = "method")]
 pub mod dormancy;
 
 use ic_platform_types::Principal;
