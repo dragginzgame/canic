@@ -7,6 +7,34 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## IC Wire 0.31.0 compatibility check — 2026-11-26
+
+At Canic `81b4eb7`, selecting Wire 0.31.0 in both workspaces compiled the
+`canic/endpoints` Wasm runtime, native Host and the passive management
+protocol. At that revision three required integrations depended on the supplier's Wire
+0.30.2 types. Both lockfiles retained 0.30.2.
+
+| Caller checked with Wire 0.31.0 | Observed failure |
+| --- | --- |
+| `canic` Wasm with `blob` | IC Blob Storage 0.112.0 supplies `RPC_LIMITS` as Wire 0.30.2's `Limits`. The Canic frame reader, writer and admission guard expect the 0.31.0 type. |
+| Native User Directory hub with `inspection` | IC Auth Wire 0.49.1 session inputs, replies and refusals implement the 0.30.2 schema trait. The Canic inspector requires the 0.31.0 trait. |
+| `canic-schema-role-wire` with `inspection` | The exporter compiles, then refuses the `echo_id` request. IC DB 0.32.0, the latest published DB at the time of the check, supplies the schema for `ic_db::Ulid` through Wire 0.30.2. |
+
+The 0.31.1 retry used IC Blob Storage 0.113.0, IC Auth 0.51.1, Auth Wire
+0.50.0 and IC DB 0.33.0. The Blob Wasm build succeeded. The DB inspector
+exported the DB-owned `Ulid`, and all six installed DB-role cases passed.
+The Store 0.10.0 protocol retained Wire 0.30.2 during that check. The subsequent
+Store 0.11.0 adoption aligned its packaged runtime and both Canic workspaces
+on Wire 0.31.1.
+
+The browser parity test caught an extra byte in the generated issuance request.
+Marking ordinary Serde structs `#[wire(fixed)]` restored parity with the native
+vectors. The reviewed User Directory and starter baseline changes consist solely
+of fixed-layout markers. The endpoint names, modes, IDs and field layouts match
+the previous baselines.
+The installed suites passed all 10 Blob, 22 Auth and 11 Chromium cases,
+including the 10,000-login checkpoint and recovery with the existing browser client.
+
 ## IC Auth 0.51 stable receivers — 2026-11-26
 
 Both workspaces select IC Auth 0.51.0, Auth Wire 0.49.1 and Auth protocol

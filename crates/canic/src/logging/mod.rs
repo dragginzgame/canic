@@ -18,6 +18,7 @@ use std::{
 ///
 
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct Entry {
     /// Sequence within this incarnation.
@@ -40,6 +41,7 @@ pub struct Entry {
 ///
 
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct Page {
     /// Canister version at initialization. Restart pagination if this changes.

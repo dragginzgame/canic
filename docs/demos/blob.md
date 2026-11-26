@@ -6,7 +6,7 @@ is [canic-asset-catalog](../../qualification/canic-asset-catalog/src/lib.rs), in
 qualification workspace. It is a finite local catalog example, not a provider
 client or a production deployment recipe.
 
-The published 0.112.0 Service accepts the application’s Storage 0.80 lease.
+The published 0.113.0 Service accepts the application’s Storage 0.80 lease.
 Use `canic::blob::open_service` on install and reopen to attach the
 Canic metrics store and log sink. Custom lifecycle hooks call
 `canic::lifecycle::initialize_diagnostics()` first.
@@ -180,7 +180,7 @@ the same registry archive in both locks, and records library hashes and consumer
 before/after each installed run. Release evidence is recorded in the
 [qualification history](../qualification/history.md).
 
-Canic and Blob use Wire 0.25.0. `canic::blob::RPC_LIMITS` re-exports the
+Canic and Blob use Wire 0.31.1. `canic::blob::RPC_LIMITS` re-exports the
 supplier's protocol constant. Blob owns its persistence codec.
 The older input hashes below describe their dated run.
 

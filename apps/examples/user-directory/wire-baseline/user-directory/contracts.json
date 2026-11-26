@@ -97,6 +97,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Bytes_ceafa818703233a0": {
@@ -124,6 +125,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire__u8__32__a6c3ffa4fc6f7348": {
@@ -419,6 +421,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_u64_4d35d3193e8d66f2": {
@@ -457,6 +460,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Box_a1fbf0d4f9e63efd": {
@@ -504,6 +508,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ChainKeyAlgorithm_fdf5366e13224129": {
@@ -612,6 +617,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ChainKeyBatchWitnessStepV1_97703821142072f8": {
@@ -645,6 +651,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ChainKeyDelegationCertV1_18b7b19e40f7af45": {
@@ -741,6 +748,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ChainKeyKeyId_f6b46c2384ff67e6": {
@@ -753,6 +761,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ChainKeyRootSignatureV1_346836fc3be657c3": {
@@ -793,6 +802,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_DelegatedRoleGrant_c99b5891c7e6eb29": {
@@ -812,6 +822,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_DelegationAudience_0d4dcf94cc0737b0": {
@@ -907,6 +918,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_DelegationProof_d277fb44d3d3cee4": {
@@ -926,6 +938,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_IcCanisterSignatureProofV1_fb2c8c3cba723804": {
@@ -945,6 +958,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_IcChainKeyBatchSignatureProofV1_4325affd9c98c289": {
@@ -978,6 +992,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_IssuerProofAlgorithm_d7884866b5fb688c": {
@@ -1069,6 +1084,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_PortableProof_2968b956605d919b": {
@@ -1133,6 +1149,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Text_4419a861e8a2bb65": {
@@ -1337,6 +1354,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Option_8177596c9bc78c33": {
@@ -1370,6 +1388,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_String_76e26e9121e02e46": {
@@ -1479,6 +1498,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_BlobSizes_5d304a0bef2147bd": {
@@ -1505,6 +1525,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Counter__4__eabb2cbf3e4193cf": {
@@ -1579,6 +1600,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Option_55484f6a31fd52df": {
@@ -1619,6 +1641,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Report_b83d16feaf56ae0c": {
@@ -1870,6 +1893,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_String_76e26e9121e02e46": {
@@ -1934,6 +1958,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Vec_5c0c54a149989d27": {
@@ -2130,6 +2155,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Bytes_ceafa818703233a0": {
@@ -2215,6 +2241,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ShardTarget_0faa5d1d3bc98256": {
@@ -2234,6 +2261,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire__u8__32__a6c3ffa4fc6f7348": {
@@ -2405,6 +2433,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_u64_4d35d3193e8d66f2": {
@@ -2889,6 +2918,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_u64_4d35d3193e8d66f2": {
@@ -2927,6 +2957,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Box_a1fbf0d4f9e63efd": {
@@ -2974,6 +3005,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ChainKeyAlgorithm_fdf5366e13224129": {
@@ -3082,6 +3114,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ChainKeyBatchWitnessStepV1_97703821142072f8": {
@@ -3115,6 +3148,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ChainKeyDelegationCertV1_18b7b19e40f7af45": {
@@ -3211,6 +3245,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ChainKeyKeyId_f6b46c2384ff67e6": {
@@ -3223,6 +3258,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_ChainKeyRootSignatureV1_346836fc3be657c3": {
@@ -3263,6 +3299,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_DelegatedRoleGrant_c99b5891c7e6eb29": {
@@ -3282,6 +3319,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_DelegationAudience_0d4dcf94cc0737b0": {
@@ -3377,6 +3415,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_DelegationProof_d277fb44d3d3cee4": {
@@ -3396,6 +3435,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_IcCanisterSignatureProofV1_fb2c8c3cba723804": {
@@ -3415,6 +3455,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_IcChainKeyBatchSignatureProofV1_4325affd9c98c289": {
@@ -3448,6 +3489,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_IssuerProofAlgorithm_d7884866b5fb688c": {
@@ -3539,6 +3581,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_PortableProof_2968b956605d919b": {
@@ -3603,6 +3646,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Text_4419a861e8a2bb65": {
@@ -3807,6 +3851,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Option_8177596c9bc78c33": {
@@ -3840,6 +3885,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_String_76e26e9121e02e46": {
@@ -3949,6 +3995,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_BlobSizes_5d304a0bef2147bd": {
@@ -3975,6 +4022,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Counter__4__eabb2cbf3e4193cf": {
@@ -4049,6 +4097,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Option_55484f6a31fd52df": {
@@ -4089,6 +4138,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Report_b83d16feaf56ae0c": {
@@ -4340,6 +4390,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_String_76e26e9121e02e46": {
@@ -4404,6 +4455,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Vec_5c0c54a149989d27": {
@@ -4695,6 +4747,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_u64_4d35d3193e8d66f2": {
@@ -4755,6 +4808,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Binding_57ec4921c3e07d2e": {
@@ -4781,6 +4835,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Bytes_ceafa818703233a0": {
@@ -4865,6 +4920,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Binding_57ec4921c3e07d2e": {
@@ -4891,6 +4947,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Bytes_ceafa818703233a0": {
@@ -4918,6 +4975,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire____07e11f07b4a6665a": {

@@ -20,6 +20,7 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 /// Durable account selector derived from the authenticated issuer and subject.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 pub struct AuthSubject {
     /// Admitted issuer.
     pub issuer: Principal,
@@ -65,6 +66,7 @@ pub trait Resource {
 /// Exact identity acknowledged by the originally called shard.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 pub struct Binding<I> {
     /// Application-supplied ID.
     pub id: I,
@@ -88,6 +90,7 @@ impl<I: Eq> Binding<I> {
 /// Exact provisioning request. Retries use the retained payload.
 #[derive(Serialize, Deserialize)]
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 pub struct Request<I, D> {
     /// Immutable assignment.
     pub binding: Binding<I>,

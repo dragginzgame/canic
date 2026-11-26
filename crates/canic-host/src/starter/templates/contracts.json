@@ -20,6 +20,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_String_76e26e9121e02e46": {
@@ -107,6 +108,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Option_8177596c9bc78c33": {
@@ -140,6 +142,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_String_76e26e9121e02e46": {
@@ -249,6 +252,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_BlobSizes_5d304a0bef2147bd": {
@@ -275,6 +279,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Counter__4__eabb2cbf3e4193cf": {
@@ -349,6 +354,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Option_55484f6a31fd52df": {
@@ -389,6 +395,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Report_b83d16feaf56ae0c": {
@@ -640,6 +647,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_String_76e26e9121e02e46": {
@@ -704,6 +712,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_Vec_5c0c54a149989d27": {
@@ -841,6 +850,7 @@
                 }
               }
             ],
+            "fixed": true,
             "k": "record"
           },
           "Wire_String_76e26e9121e02e46": {

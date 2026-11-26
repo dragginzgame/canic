@@ -22,7 +22,7 @@ exclude = ["qualification"]
 resolver = "3"
 
 [workspace.package]
-version = "0.273.0"
+version = "0.274.0"
 edition = "2024"
 rust-version = "1.100.0"
 repository = "https://github.com/dragginzgame/canic"
@@ -32,17 +32,17 @@ publish = ["crates-io"]
 [workspace.dependencies]
 # Production
 base64 = "0.23.1"
-canic-host = { path = "crates/canic-host", version = "0.273.0" }
-canic-macros = { path = "crates/canic-macros", version = "0.273.0" }
-canic-management = { path = "crates/canic-management", version = "0.273.0" }
-canic-management-protocol = { path = "crates/canic-management-protocol", version = "0.273.0" }
+canic-host = { path = "crates/canic-host", version = "0.274.0" }
+canic-macros = { path = "crates/canic-macros", version = "0.274.0" }
+canic-management = { path = "crates/canic-management", version = "0.274.0" }
+canic-management-protocol = { path = "crates/canic-management-protocol", version = "0.274.0" }
 clap = { version = "4.6.7", features = ["derive"] }
 example-user-directory-schema = { path = "apps/examples/user-directory/schema" }
-ic-auth = "0.51.0"
-ic-auth-protocol-types = "0.44.1"
-ic-auth-wire = "0.49.1"
-ic-blob-storage = "0.112.0"
-ic-db = "0.32.0"
+ic-auth = "0.51.1"
+ic-auth-protocol-types = "0.44.2"
+ic-auth-wire = "0.50.0"
+ic-blob-storage = "0.113.0"
+ic-db = "0.33.0"
 ic-entropy = { version = "0.7.0", default-features = false }
 ic-host-artifacts = "0.80.3"
 ic-host-fs = { version = "0.80.3", default-features = false }
@@ -56,8 +56,8 @@ ic-platform-runtime = { version = "0.23.27", default-features = false }
 ic-platform-types = { version = "0.21.6", default-features = false }
 ic-testkit = { version = "0.110.3", default-features = false }
 ic-timers = "0.46.13"
-ic-wasm-store = "0.10.0"
-ic-wasm-store-protocol = "0.10.0"
+ic-wasm-store = "0.11.0"
+ic-wasm-store-protocol = "0.11.0"
 proc-macro2 = "1.0.107"
 quote = "1.0.47"
 serde_bytes = "0.11.19"
@@ -73,18 +73,18 @@ url = "2.5.8"
 wasmparser = { version = "0.263.0", default-features = false, features = ["std"] }
 
 # Production and tests
-canic = { path = "crates/canic", version = "0.273.0" }
+canic = { path = "crates/canic", version = "0.274.0" }
 ic-platform = { version = "0.35.1", default-features = false }
 ic-query-topology = "0.110.6"
 ic-storage = "0.80.0"
-ic-wire = { version = "0.30.0", default-features = false }
+ic-wire = { version = "0.31.1", default-features = false }
 inventory = "0.3"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 toml = "1.2.1"
 
 # Tests and tooling
-toko-tooling = "=0.46.7"
+toko-tooling = "=0.46.9"
 
 [workspace.lints.cargo]
 unused_dependencies = "deny"

@@ -252,9 +252,9 @@ mainnet work or existing-Root layout migration is qualified. Every fresh Root al
 
 ## Storage 0.80 adoption
 
-Both workspaces select Storage 0.80.6. Auth 0.51.0, Blob Storage 0.112.0
-and DB 0.32.0 consume leases from the same application bootstrap. The
-separate Wasm Store 0.10.0 uses the same Storage release. Stable Auth
+Both workspaces select Wire 0.31.1 and Storage 0.80.6. Auth 0.51.1, Blob Storage 0.113.0
+and DB 0.33.0 consume leases from the same application bootstrap. The
+separate Wasm Store 0.11.0 uses the same Storage release. Stable Auth
 receivers and the qualification issuer pass the IC canister version to
 the supplier when sealing and reopening their checkpoints.
 

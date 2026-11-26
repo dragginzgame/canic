@@ -60,6 +60,7 @@ pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
 /// Identity scoped to the addressed Root and its immutable pool approval.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 pub struct Allocation {
     /// Permanent child slot.
     pub slot: u32,
@@ -70,6 +71,7 @@ pub struct Allocation {
 /// Exact original destination of a placement under the addressed Root.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 pub struct ShardTarget {
     /// Original slot and creation generation.
     pub allocation: Allocation,
@@ -80,6 +82,7 @@ pub struct ShardTarget {
 /// Operator observation of one installed shard allocation.
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 pub struct ShardStatus {
     /// Target to bind into a subsequent drain decision.
     pub target: ShardTarget,

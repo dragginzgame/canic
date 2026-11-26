@@ -346,26 +346,7 @@ pub enum IncreasePoolLimit {
 /// Increase one pool count without renewing funding or time.
 pub const INCREASE_POOL_LIMIT: u64 = ic_wire::method_id("canic.placement.increase_pool_limit.v1");
 
-/// Supplier-owned Store frame budgets.
-pub const STORE_LIMITS: ic_wire::Limits = {
-    let limits = ic_wasm_store_protocol::LIMITS;
-    ic_wire::Limits {
-        bytes: limits.bytes,
-        nodes: limits.nodes,
-        depth: limits.depth,
-        allocation: limits.allocation,
-    }
-};
-/// Supplier chunk budget for the Canic Wire codec.
-pub const STORE_CHUNK_LIMITS: ic_wire::Limits = {
-    let limits = ic_wasm_store_protocol::CHUNK_LIMITS;
-    ic_wire::Limits {
-        bytes: limits.bytes,
-        nodes: limits.nodes,
-        depth: limits.depth,
-        allocation: limits.allocation,
-    }
-};
+pub use ic_wasm_store_protocol::{CHUNK_LIMITS as STORE_CHUNK_LIMITS, LIMITS as STORE_LIMITS};
 
 /// Controller approval for destructive retirement under an immutable Store release.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

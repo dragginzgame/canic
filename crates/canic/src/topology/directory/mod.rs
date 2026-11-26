@@ -221,6 +221,7 @@ pub struct Hop {
 /// Root's advisory daily capture timing for one installation.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 pub struct BackupTiming {
     /// Monotonic assignment revision, independent of directory changes.
     pub revision: u64,

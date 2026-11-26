@@ -659,8 +659,8 @@ retirement and standby imports because the detailed grant history was volatile.
 
 Fresh stateful Auth installations use stable leases exclusively. Existing 0.50 owners require their original executables. A receiver upgrade seals the checkpoint and the next executable reopens it before an authenticated Root refresh.
 
-Both lockfiles select registry engine `ic-auth` 0.51.0, `ic-auth-wire` 0.49.1 and
-`ic-auth-protocol-types` 0.44.1. The private browser client is packed from the
+Both lockfiles select registry engine `ic-auth` 0.51.1, `ic-auth-wire` 0.50.0 and
+`ic-auth-protocol-types` 0.44.2. The private browser client is packed from the
 independently qualified supplier revision `8c7abf8243cd5fc9c6bf72bd2dd248087b805e01`. Session
 admission and read replies carry the verified optional `ext` field (up to
 4096 bytes). In a scoped endpoint, `auth.user_id()` returns these verified bytes

@@ -40,7 +40,7 @@ pub const RESPONSE_LIMITS: Limits = Limits {
 #[cfg_attr(
     any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
-    wire(crate = "ic_auth_wire::wire")
+    wire(crate = "ic_auth_wire::wire", fixed)
 )]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Issue {
@@ -61,7 +61,7 @@ pub struct Issue {
 #[cfg_attr(
     any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
-    wire(crate = "ic_auth_wire::wire")
+    wire(crate = "ic_auth_wire::wire", fixed)
 )]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Renew {
@@ -80,7 +80,7 @@ pub struct Renew {
 #[cfg_attr(
     any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
-    wire(crate = "ic_auth_wire::wire")
+    wire(crate = "ic_auth_wire::wire", fixed)
 )]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Logout {
@@ -95,7 +95,7 @@ pub struct Logout {
 #[cfg_attr(
     any(feature = "auth-browser", feature = "inspection"),
     derive(wire::typescript::Wire),
-    wire(crate = "ic_auth_wire::wire")
+    wire(crate = "ic_auth_wire::wire", fixed)
 )]
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Revoked {

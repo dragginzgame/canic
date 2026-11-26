@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.274.0] - 2026-11-26
+
+Both workspaces adopt Toko Tooling 0.46.9 and Wasm Store 0.11.0. Root and
+Host now share Wire 0.31.1 with the Store protocol.
+
+```sh
+# In the checkout, verify the tooling snapshot and build the published Store.
+make toko-tooling-check
+canic artifact build --package ic-wasm-store
+```
+
+Both workspaces adopt IC Wire 0.31.1 with IC Auth 0.51.1, Blob Storage 0.113.0
+and IC DB 0.33.0. Applications using ordinary Serde structs in Wire endpoints
+should mark their inspected structs with `#[wire(fixed)]` and regenerate their
+clients. This preserves their existing request and reply bytes.
+
+```sh
+# From an app checkout with the matching Canic CLI, review its Wire contracts.
+canic app check-wire
+# Generate the TypeScript client into a fresh directory.
+canic app export-wire --out generated
+```
+
 ## [0.273.0] - 2026-11-26
 
 Both workspaces adopt IC Platform Types 0.21.6.

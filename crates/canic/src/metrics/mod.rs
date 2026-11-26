@@ -82,6 +82,7 @@ mod total {
 
 /// Volatile aggregate counters for one timer runtime incarnation, reset on upgrade.
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Timers {
     /// Canister version captured at lifecycle initialization, not at query time.
@@ -104,6 +105,7 @@ pub struct Timers {
 
 /// Uncertified, same-query observations. Absence means unavailable, never zero or healthy.
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Snapshot {
     /// IC Unix nanoseconds at observation, supplied by the endpoint owner.

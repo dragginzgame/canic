@@ -75,7 +75,9 @@ fn main() -> Result<(), String> {
 ```
 
 Forward the inspection feature to any application schema crates that need it.
-Derive IC Wire's schema trait for owned data. For a custom Serde representation,
+Derive IC Wire's schema trait for owned data. Mark ordinary Serde structs
+with `#[wire(fixed)]` wherever you derive `Wire` for inspection, so generated
+clients use the same bytes as the endpoint. For a custom Serde representation,
 supply a separately tested layout with `Schemas::describe_as` and pass those
 schemas to `print_manifest`. The inspector includes dependency-provided mounts
 such as the shared metrics query. Canic classifies the exact IC Timers `update __ic_scheduling_once`

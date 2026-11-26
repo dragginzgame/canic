@@ -18,7 +18,7 @@ control of Store to Root.
 Each fleet binds its own principals. Builds reject explicit Root, Store and Coordinator definitions. When removing them, ensure the application build workspace's Cargo.lock
 selects both supplier packages and the matching Store protocol.
 
-Both Canic workspaces select the published Store 0.10.0 runtime and protocol. The protocol uses IC Wire 0.30.2. Install a fresh Store and rebuild artifact manifests for 1 MiB chunks. The supplier refuses upgrades from the 256 KiB format. The following evidence applies to Store 0.6.0.
+Both Canic workspaces select the published Store 0.11.0 runtime and protocol. Canic and Store both use IC Wire 0.31.1. Install a fresh Store and rebuild artifact manifests for 1 MiB chunks. The supplier refuses upgrades from the 256 KiB format. The following evidence applies to Store 0.6.0.
 A local Root-managed upgrade from 0.5.2 preserved the populated Store’s stable
 memory. [Qualification record](../qualification/history.md#wasm-store-052-to-060--2026-11-21)
 

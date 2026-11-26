@@ -69,6 +69,7 @@ pub const LIFETIME_NS: u64 = 7_200_000_000_000;
 /// Signed allocation identity under its issuing Root.
 #[derive(Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 pub struct Claim {
     /// Root responsible for this allocation.
     pub root: Principal,

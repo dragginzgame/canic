@@ -22,6 +22,7 @@ pub enum Request {
 
 /// Command outcomes observed by the local Blob recorder.
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlobCommand {
     /// Blob command kind.
@@ -40,6 +41,7 @@ pub struct BlobCommand {
 
 /// Declared object sizes recorded on first successful registration.
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 #[derive(Debug, Deserialize, Serialize)]
 pub struct BlobSizes {
     /// Inclusive byte limits of the four supplier buckets.

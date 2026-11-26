@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 ///
 
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct Measurement {
     /// IC export name.
@@ -34,6 +35,7 @@ pub struct Measurement {
 ///
 
 #[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+#[cfg_attr(feature = "inspection", wire(fixed))]
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct Page {
     /// Up to sixteen observed update handlers.
