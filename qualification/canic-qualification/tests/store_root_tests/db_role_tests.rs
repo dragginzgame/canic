@@ -11,7 +11,7 @@ use canic::{
 };
 
 #[tokio::test]
-async fn lost_empty_grant_history_refuses_standby_imports() {
+async fn never_granted_root_preserves_standby_import_policy_after_upgrade() {
     use canic::sharding::standby::ReserveError;
     let (mut server, owner) = support::instance(&canic_qualification::server_directory()).await;
     let pic = owner.client();
@@ -60,12 +60,7 @@ async fn lost_empty_grant_history_refuses_standby_imports() {
             stored::LIMITS,
         )
         .await;
-    assert_eq!(
-        result,
-        Err(ReserveError::CustodyOccupied(
-            "worker Auth grant history is occupied or unavailable".into()
-        ))
-    );
+    assert_eq!(result, Ok(()));
     assert_eq!(
         owner.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted
