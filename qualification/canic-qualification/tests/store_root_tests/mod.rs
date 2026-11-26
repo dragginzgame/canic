@@ -285,6 +285,13 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
     let (root, supplier, input, second) = fixture(pic, true).await;
+    // PocketIC can populate Root's management cache when installing Root itself.
+    let root_chunks = async || {
+        pic.stored_chunks(root.id, Some(root.operator))
+            .await
+            .unwrap()
+    };
+    let bootstrap_chunks = root_chunks().await;
     stage(&root, &input).await.unwrap();
     let staged = custody(&root).await;
     assert_eq!(
@@ -304,12 +311,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
         ready.sources[0].as_ref().unwrap().creation.state,
         stored::PinState::Retained
     );
-    assert!(
-        pic.stored_chunks(root.id, Some(root.operator))
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert_eq!(root_chunks().await, bootstrap_chunks);
     let worker =
         CanisterId::from_text(ready.children[0].creation.worker.as_ref().unwrap()).unwrap();
     let installed = pic.canister_status(worker, Some(root.id)).await.unwrap();
@@ -410,7 +412,9 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
         interrupted.children[0].upgrades[0].phase,
         upgrade::Phase::UploadIssued
     );
+    assert_eq!(root_chunks().await, bootstrap_chunks);
     maintain(&root).await;
+    let maintenance_chunks = root_chunks().await;
     assert_eq!(custody(&root).await, interrupted);
     root.update::<_, upgrade::Status>(
         "reconcile_child_upgrade",
@@ -441,12 +445,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
             .module_hash,
         Some(upgrade.approval.module_hash.to_vec())
     );
-    assert!(
-        pic.stored_chunks(root.id, Some(root.operator))
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert_eq!(root_chunks().await, maintenance_chunks);
     maintain(&root).await;
     assert_eq!(custody(&root).await, upgraded);
     // A second upgrade retains the first source; an inline sibling still uses its old codec.
