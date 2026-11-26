@@ -288,8 +288,8 @@ The counter checks persistent state, write fencing, failed-upgrade rollback and 
 reinitialize damaged storage. The managed variant publishes through Store and upgrades
 through Root. Run `bash scripts/dev/test-publication.sh counter_managed::` for that path.
 
-The CLI journey also builds a standalone consumer's locked crates.io Root with
-Auth and role issuance. It checks that both updates are exported, the Wasm fits
+The CLI journey also builds a pinned historical crates.io Root and client as a
+fleetless artifact fixture with Auth and role issuance. It checks that both updates are exported, the Wasm fits
 direct installation, the paired native client encodes the role-key command, and
 the consumer lockfile stays byte-identical. To run that case on its own after
 `make canic`, use `bash scripts/dev/test-locked-root.sh "$(command -v canic)"`
