@@ -82,6 +82,7 @@ async fn directory_recipients_retain_the_installing_root() {
             CanisterId::anonymous(),
             ReceiveDirectory::NAME,
             ReceiveDirectory::encode_request(&Delivery {
+                backup_timing: None,
                 directory: Directory {
                     revision: 1,
                     services: vec![],

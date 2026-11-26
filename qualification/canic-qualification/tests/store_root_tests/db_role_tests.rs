@@ -15,7 +15,7 @@ async fn lost_empty_grant_history_refuses_standby_imports() {
     use canic::sharding::standby::ReserveError;
     let (mut server, owner) = support::instance(&canic_qualification::server_directory()).await;
     let pic = owner.client();
-    let wasm = std::fs::read(artifacts().join("db-role-root.wasm")).unwrap();
+    let wasm = std::fs::read(artifacts().join("root.wasm")).unwrap();
     let (root, _) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
     let spare = pic.create_canister().await;
     let policy = stored::StandbyPolicy {
@@ -95,7 +95,7 @@ enum Journey {
 }
 
 async fn installed_roles(journey: Journey) {
-    const HUB: &str = "ex-user-directory-hub";
+    const HUB: &str = "hub";
     let wasm = |name: &str| std::fs::read(artifacts().join(format!("{name}.wasm"))).unwrap();
     let (mut server, mut instance) = support::instance_with(
         &canic_qualification::server_directory(),
@@ -107,7 +107,7 @@ async fn installed_roles(journey: Journey) {
     let gateway = instance.client_mut().make_live(None).await;
     instance.client_mut().stop_live().await;
     let pic = instance.client();
-    let (root, store) = readiness_tests::fixture_with_root(pic, wasm("db-role-root")).await;
+    let (root, store) = readiness_tests::fixture_with_root(pic, wasm("root")).await;
     let hub_wasm = wasm("db-role-hub");
     let hubs = store.publish_named("hubs", "1", &hub_wasm).await;
     let shards = store
@@ -120,7 +120,7 @@ async fn installed_roles(journey: Journey) {
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../apps/examples/user-directory/canic.toml");
     let mut config = canic_host::load_config(&path).unwrap();
-    let app = config.apps.get_mut("ex-user-directory").unwrap();
+    let app = config.apps.get_mut("user-directory").unwrap();
     let hub = app.canisters.get_mut(HUB).unwrap();
     hub.parent = Some("root".into());
     let mut project = hub.clone();
@@ -248,7 +248,7 @@ async fn installed_roles(journey: Journey) {
     fleet.canisters.get_mut(HUB).unwrap().id = Some(hub.to_text());
     let pool = fleet
         .shard_pool_approval(
-            "ex-user-directory-shard",
+            "shard",
             shards,
             management::application::Arguments::new(vec![7; 16]).unwrap(),
         )
@@ -347,6 +347,22 @@ async fn installed_roles(journey: Journey) {
             .unwrap()
             .unwrap();
     let shard = CanisterId::from_slice(shard.as_slice());
+    let shard_client = Client { id: shard, ..user };
+    let routing_root = || {
+        user_directory_tests::query::<Option<ic_auth_protocol_types::Principal>>(
+            &shard_client,
+            "routing_root",
+        )
+    };
+    let expected_root = Some(ic_auth_protocol_types::Principal::from_slice(
+        root.id.as_slice(),
+    ));
+    assert_ne!(root.id, hub);
+    assert_eq!(routing_root().await.unwrap(), expected_root);
+    canic_qualification::upgrade_stopped(pic, shard, wasm("db-role-shard"), vec![], Some(root.id))
+        .await
+        .unwrap();
+    assert_eq!(routing_root().await.unwrap(), expected_root);
     user_directory_tests::enroll(&root, shard, &grant, true).await;
     login(shard).await;
     let shard = Client { id: shard, ..user };
@@ -557,7 +573,7 @@ async fn dedicated_receiver(
         slot.wasm = None;
     }
     config.canisters.get_mut("project_hub").unwrap().id = Some(registry.to_text());
-    let mut slot = config.canisters["ex-user-directory-shard"].clone();
+    let mut slot = config.canisters["shard"].clone();
     slot.parent = Some("project_hub".into());
     slot.wasm = Some("db-role-shard.wasm".into());
     config.canisters.insert("dedicated".into(), slot);
@@ -575,7 +591,7 @@ async fn dedicated_receiver(
     });
     let dir = artifacts();
     let selection = canic_host::SelectedFleet {
-        app: "ex-user-directory".into(),
+        app: "user-directory".into(),
         fleet: "local".into(),
         config,
     };
@@ -650,7 +666,7 @@ async fn dedicated_receiver(
         canic_qualification::upgrade_stopped(
             pic,
             root.id,
-            std::fs::read(dir.join("db-role-root.wasm")).unwrap(),
+            std::fs::read(dir.join("root.wasm")).unwrap(),
             vec![],
             Some(root.operator),
         )

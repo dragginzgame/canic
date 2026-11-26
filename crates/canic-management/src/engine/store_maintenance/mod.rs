@@ -17,6 +17,23 @@ use ic_platform_types::Principal;
 use ic_wasm_store_protocol as store;
 pub use installation::{activate, install};
 
+/// Execute one controller-selected maintenance action under its original approval.
+/// # Errors
+/// Returns the staging or installation refusal from the owning phase.
+/// # Panics
+/// Traps on invalid authority or a failed durable write.
+pub async fn maintain(
+    request: canic_management_protocol::store_maintenance::Request,
+) -> Result<Status, Refusal> {
+    use canic_management_protocol::store_maintenance::Request;
+    match request {
+        Request::Stage(approval) => stage(approval),
+        Request::Advance(approval) => Ok(advance(approval).await),
+        Request::Install(input) => install(input).await,
+        Request::Activate(approval) => Ok(activate(approval).await),
+    }
+}
+
 pub(crate) fn active() -> bool {
     STATE.with_borrow(|state| {
         state

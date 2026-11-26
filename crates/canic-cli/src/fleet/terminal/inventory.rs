@@ -116,7 +116,7 @@ pub(super) fn render(
             [
                 label,
                 target.canister.clone(),
-                roles::role(snapshot, target, links).into(),
+                crate::topology::role_label(roles::role(snapshot, target, links)).into(),
                 controllers,
                 if target.observation_error.is_none()
                     && target.module_hash.is_some()

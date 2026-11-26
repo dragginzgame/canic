@@ -44,7 +44,7 @@ async fn root_maintenance_preserves_store_operation() {
     .unwrap();
     let operation = input.expected.store_operation.as_ref().unwrap();
     let plan = Plan {
-        version: 2,
+        version: crate::plan::root_install_version(wasm.len(), 2),
         network: input.network,
         controller: "2vxsx-fae".into(),
         artifact: crate::inspect(&input.artifacts.join("root-maintenance.wasm")).unwrap(),

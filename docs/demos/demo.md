@@ -33,7 +33,7 @@ no raw endpoint or lifecycle exception; the existing counter actor is unchanged.
 The selected stateful application is now a small persistent counter, replacing
 the profile app as the hands-on consumer. Capture and restore will be explicit
 operator maintenance operations; restoration keeps writes fenced until the
-operator explicitly accepts and reopens the application. The Backup signer exercise below qualifies this path locally.
+operator explicitly accepts and reopens the application. The Root snapshot rehearsal below qualifies this path locally.
 
 The counter stores a bounded 256-byte payload in a named Storage 0.80 cell.
 Its installed local witness checks an eight-page backing limit. The app lives in `apps/examples/counter`; it owns its protocol, value,
@@ -55,12 +55,12 @@ permission. In the installed managed witness that caller is Root. Its separate
 Store publishes the counter; the normal fleet CLI creates and upgrades it while
 preserving value. A counter installed with closed admission stays fenced and
 does not receive a deployment completion receipt. Repeated observations cannot
-activate it. The local Backup witness below exercises Root-mediated fencing and reopening.
+activate it. The local snapshot rehearsal below exercises Root-mediated fencing and reopening.
 
 This is the small Canic-owned companion to Toko development. Both use the same
 app declarations, Cargo build recipes and explicit actor composition. The demo
 has its own [configuration](../../apps/examples/counter/canic.toml), separate from the
-existing hello-world and profile mainnet deployments. `ex-counter` is one
+existing hello-world and profile mainnet deployments. `example-counter` is one
 application crate; its native contract does not link the Storage runtime.
 
 ```text
@@ -88,7 +88,7 @@ canic artifact inspect artifacts/app.wasm
 
 These commands require no identity, funding or network deployment. Build uses
 the locked workspace graph and produces counter, Root and Store under
-`apps/examples/counter/artifacts/`. Use `--canister ex-counter` to rebuild only the counter.
+`apps/examples/counter/artifacts/`. Use `--canister counter` to rebuild only the counter.
 The [actor](../../apps/examples/counter/src/lib.rs) explicitly creates or opens its record
 and mounts readiness; its `counter` endpoint accepts application-owned Wire
 `Read`, `Increment`, `Fence { attempt }` and `Activate { attempt }` requests.
@@ -106,17 +106,9 @@ It tests two public callers, value and authority preservation, closed admission,
 stale activation, malformed requests, incompatible schemas and rollback after a
 candidate writes then traps. It also refuses empty/corrupt state without creating
 a replacement record. `counter-v2`, `initially-fenced`, `reject-upgrade` and `incompatible-schema` are
-qualification-only build selections, not live deployment features. For checkpoint recovery, Root retains the generation outside the counter. With
-the disposable Linux signer and simulator prepared, run the installed journey:
-
-```sh
-make backup-signer-test
-```
-
-It restores the counter from 2 to 1, starts it fenced, rejects premature
-opening, and permits writes only after separate operator acceptance and reopening
-through Root. The [qualification guide](../../qualification/README.md) describes
-the original-request custody and the limits of this single-counter deployment.
+qualification-only build selections, not live deployment features. For the native snapshot
+executor rehearsal, use `bash scripts/dev/test-root.sh snapshot::` with the CLI
+and simulator prepared.
 
 The managed counter journey uses synthetic cycles and the real fleet CLI:
 
@@ -156,7 +148,7 @@ exit
 For the [metrics example](../../apps/examples/metrics/README.md), run
 `make demo DEMO_APP=metrics` and try `ping hello`, `checksum hello` and `metrics`.
 
-Application commands use `build.client = "ex-counter-client"`. This executable
+Application commands use `build.client = "example-counter-client"`. This executable
 implements `encode COMMAND [ARGS...]` returning JSON `{method, arguments}` and
 `decode` reading raw reply bytes on stdin and returning app-owned JSON. Canic
 bounds process time/output and request bytes; the app codec applies its actual
@@ -175,17 +167,15 @@ session limit also end the session. Shutdown attempts instance deletion and stop
 the owned server; deletion-attempt completion is not independent proof of remote
 deletion. Local config, artifacts and journals remain for inspection. A new run
 gets a fresh instance and directory; old session receipts cannot authorize work
-in it. The interactive session preserves state across a compatible upgrade. The separate
-`make backup-signer-test` journey qualifies checkpoint restoration. Simulator
-process restart remains outside both witnesses.
+in it. The interactive session preserves state across a compatible upgrade. Simulator process restart remains outside this witness.
 
 ## Actor composition
 
 The [CLI qualification actor](../../qualification/canic-greeting-witness/src/lib.rs)
 declares its own `greet` query and replicated `probe` update. Both use the same
 application reply and Wire method ID for compatibility with existing callers.
-A separate readiness endpoint reports application readiness. The optional metrics
-endpoint reports observation time and the absence of a timer provider.
+A separate readiness endpoint reports application readiness. The shared metrics endpoint reports handler instructions, the observation time
+and the absence of a timer provider.
 
 ## Deployment boundary
 

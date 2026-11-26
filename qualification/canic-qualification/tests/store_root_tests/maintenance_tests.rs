@@ -86,37 +86,81 @@ async fn check_current_custody(root: &Client<'_>, expected: &Status) {
     assert_eq!(complete.store_operation.as_ref(), Some(expected));
 }
 
-pub(super) async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
+// These two checked-in executables predate the command envelope. Exercise their exact ABI.
+async fn uses_legacy_maintenance(root: &Client<'_>) -> bool {
+    let hash = root
+        .pic
+        .canister_status(root.id, Some(root.operator))
+        .await
+        .unwrap()
+        .module_hash
+        .unwrap();
+    [
+        include_bytes!("../../fixtures/root-release-scan.wasm").as_slice(),
+        include_bytes!("../../fixtures/root-store-single-maintenance.wasm").as_slice(),
+    ]
+    .iter()
+    .any(|wasm| store::digest(wasm).as_slice() == hash)
+}
+
+pub(super) async fn command(
+    root: &Client<'_>,
+    request: &wire::Request,
+) -> Result<Status, management::Refusal> {
+    if uses_legacy_maintenance(root).await {
+        return match request {
+            wire::Request::Stage(a) => {
+                root.update("stage_store_maintenance", wire::STAGE, a, wire::LIMITS)
+                    .await
+            }
+            wire::Request::Advance(a) => Ok(root
+                .update("advance_store_maintenance", wire::ADVANCE, a, wire::LIMITS)
+                .await),
+            wire::Request::Activate(a) => Ok(root
+                .update(
+                    "activate_store_maintenance",
+                    wire::ACTIVATE,
+                    a,
+                    wire::LIMITS,
+                )
+                .await),
+            wire::Request::Install(i) => {
+                root.update(
+                    "install_store_maintenance",
+                    wire::INSTALL,
+                    i,
+                    wire::INSTALL_LIMITS,
+                )
+                .await
+            }
+        };
+    }
     root.update(
-        "advance_store_maintenance",
-        wire::ADVANCE,
-        approval,
-        wire::LIMITS,
+        "maintain_store",
+        wire::MAINTAIN,
+        request,
+        wire::INSTALL_LIMITS,
     )
     .await
 }
 
+pub(super) async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
+    command(root, &wire::Request::Advance(approval.clone()))
+        .await
+        .unwrap()
+}
+
 pub(super) async fn activate(root: &Client<'_>, approval: &Approval) -> Status {
-    root.update(
-        "activate_store_maintenance",
-        wire::ACTIVATE,
-        approval,
-        wire::LIMITS,
-    )
-    .await
+    command(root, &wire::Request::Activate(approval.clone()))
+        .await
+        .unwrap()
 }
 
 pub(super) async fn install(
     root: &Client<'_>,
     input: &wire::Install,
 ) -> Result<Status, management::Refusal> {
-    root.update(
-        "install_store_maintenance",
-        wire::INSTALL,
-        input,
-        wire::INSTALL_LIMITS,
-    )
-    .await
+    command(root, &wire::Request::Install(input.clone())).await
 }
 
 pub(super) async fn stopped(
@@ -151,14 +195,9 @@ pub(super) async fn stopped(
     approval.module_hash = store::digest(replacement);
     approval.expires_at_ns =
         root.pic.get_time().await.as_nanos_since_unix_epoch() + 1_800_000_000_000;
-    root.update::<_, Result<Status, management::Refusal>>(
-        "stage_store_maintenance",
-        wire::STAGE,
-        &approval,
-        wire::LIMITS,
-    )
-    .await
-    .unwrap();
+    command(root, &wire::Request::Stage(approval.clone()))
+        .await
+        .unwrap();
     for _ in 0..16 {
         if advance(root, &approval).await.phase == Phase::Stopped {
             return approval;
@@ -174,11 +213,11 @@ async fn lost_advance(root: &Client<'_>, approval: &Approval, point: u8, phase: 
             .update_call(
                 root.id,
                 root.operator,
-                "advance_store_maintenance",
+                "maintain_store",
                 ic_wire::encode(
-                    approval,
+                    &wire::Request::Advance(approval.clone()),
                     ic_wire::Encoding::Frame {
-                        method: wire::ADVANCE,
+                        method: wire::MAINTAIN,
                         direction: ic_wire::Direction::Request
                     },
                     wire::LIMITS
@@ -314,24 +353,42 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     };
     assert_eq!(activate(&root, &approval).await, closed);
     inject(&root, 15).await;
-    assert!(
-        pic.update_call(
-            root.id,
-            root.operator,
-            "install_store_maintenance",
-            ic_wire::encode(
-                &input,
-                ic_wire::Encoding::Frame {
-                    method: wire::INSTALL,
-                    direction: ic_wire::Direction::Request
-                },
-                wire::INSTALL_LIMITS
+    let failed = if historical_scan {
+        root.pic
+            .update_call(
+                root.id,
+                root.operator,
+                "install_store_maintenance",
+                ic_wire::encode(
+                    &input,
+                    ic_wire::Encoding::Frame {
+                        method: wire::INSTALL,
+                        direction: ic_wire::Direction::Request,
+                    },
+                    wire::INSTALL_LIMITS,
+                )
+                .unwrap(),
             )
-            .unwrap()
-        )
-        .await
-        .is_err()
-    );
+            .await
+    } else {
+        root.pic
+            .update_call(
+                root.id,
+                root.operator,
+                "maintain_store",
+                ic_wire::encode(
+                    &wire::Request::Install(input.clone()),
+                    ic_wire::Encoding::Frame {
+                        method: wire::MAINTAIN,
+                        direction: ic_wire::Direction::Request,
+                    },
+                    wire::INSTALL_LIMITS,
+                )
+                .unwrap(),
+            )
+            .await
+    };
+    assert!(failed.is_err());
     inject(&root, 0).await;
     assert_eq!(read().await.phase, Phase::UploadIssued);
     let pending_upload = read().await;
@@ -411,11 +468,11 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
         pic.update_call(
             root.id,
             root.operator,
-            "activate_store_maintenance",
+            "maintain_store",
             ic_wire::encode(
-                &approval,
+                &wire::Request::Activate(approval.clone()),
                 ic_wire::Encoding::Frame {
-                    method: wire::ACTIVATE,
+                    method: wire::MAINTAIN,
                     direction: ic_wire::Direction::Request
                 },
                 wire::LIMITS
@@ -610,9 +667,9 @@ async fn store_install_refuses_wrong_bytes_callers_frames_and_expired_dispatch()
         (
             CanisterId::anonymous(),
             ic_wire::encode(
-                &input,
+                &wire::Request::Install(input.clone()),
                 ic_wire::Encoding::Frame {
-                    method: wire::INSTALL,
+                    method: wire::MAINTAIN,
                     direction: ic_wire::Direction::Request,
                 },
                 wire::INSTALL_LIMITS,
@@ -622,7 +679,7 @@ async fn store_install_refuses_wrong_bytes_callers_frames_and_expired_dispatch()
         (root.operator, vec![0, 1, 2]),
     ] {
         assert!(
-            pic.update_call(root.id, caller, "install_store_maintenance", bytes)
+            pic.update_call(root.id, caller, "maintain_store", bytes)
                 .await
                 .is_err()
         );

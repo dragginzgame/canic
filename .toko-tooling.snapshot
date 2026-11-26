@@ -1,9 +1,9 @@
 # Toko Tooling snapshot v1
-# version	0.46.4
+# version	0.46.5
 # layout	vendor
 format	1
 source	https://crates.io/crates/toko-tooling
-revision	d3889bff0f8ff6dc8c80b161c908f4b598125b55bf55f18146471f9ac3294cff
+revision	038380e2f80a7301dee19c19e2afd38a0bfbbfc41b447a1c81178afc1de94bc7
 # entrypoint	TOKO-TOOLING.md
 # entrypoint	vendor/toko-tooling/make/consumer.mk
 # entrypoint	vendor/toko-tooling/make/cargo-dependencies.mk
@@ -18,7 +18,7 @@ revision	d3889bff0f8ff6dc8c80b161c908f4b598125b55bf55f18146471f9ac3294cff
 # entrypoint	vendor/toko-tooling/scripts/ci/run-validation-stage.pl
 # entrypoint	vendor/toko-tooling/scripts/ci/SetupDiagnostics.pm
 # entrypoint	vendor/toko-tooling/scripts/ci/check-api-baseline.sh
-file	500328533f1ebd35729fca7dc4fa7ecfbf7a1b96d507f433edc9477c0d95e7ce	-	TOKO-TOOLING.md
+file	f9b7398a85b99b074620bc71b09f4436f2a4c041d218daab18d6d10b52021485	-	TOKO-TOOLING.md
 file	e5be6f538ee619be119aef9b3fca9d156f35c08732d9775e4e2efd698db8cbd7	-	vendor/toko-tooling/make/consumer.mk
 file	07b59f8cc784c79c648d379561f2493e40bac5b7c2809e8eda960cba661fae7d	-	vendor/toko-tooling/make/cargo-dependencies.mk
 file	1085e5521dfacb38aed065b70f905aab666ab73ef49dd5a25270c2ec2cf63710	x	vendor/toko-tooling/.githooks/pre-commit
@@ -39,7 +39,7 @@ file	85acf1dd722a00daa6c0bbd7edaf49255285e10085829e9d9b3da6f886fca4b9	-	vendor/t
 file	0410d920b4e6f7aa7cc420aa157b287405168bd2ed51996b7b4302e15cf389c2	-	vendor/toko-tooling/make/rust-format.mk
 file	46077e4508b98e086e9772ac107b759bb251b3671aa965311c51b35dd71aef8d	x	vendor/toko-tooling/scripts/dev/install-git-hooks.sh
 file	f6ecd07a9577b0b307d2bef6c8185125c611e05732c119c63bb474cbf50e18d5	-	vendor/toko-tooling/make/execution.mk
-file	37fec4ef571caa7199f284bdcc28e4a5d8c74da300362f48e688654bbda64966	-	vendor/toko-tooling/scripts/dev/cargo-dependencies.pl
+file	c9a6e4268f7c8684f977bb72ea9140e0053333ee1ef701c654a403b53ba249a6	-	vendor/toko-tooling/scripts/dev/cargo-dependencies.pl
 file	3bbcd3458afbeee5803bf4f51e624afd2b11578ee961250522c9332ed0fc7b4f	x	vendor/toko-tooling/scripts/ci/check-make-execution.sh
 file	3e3510f6cf5b8a576f0d5b0fc9e9540417fd8e0e1baa8f35faf8f0882c93d640	-	vendor/toko-tooling/scripts/ci/read-cargo-workspace-rust-version.sh
 file	33060e8f4a77791ef3c97caca8a983db98a8205f933d17bb08b632ee2e1d9f30	x	vendor/toko-tooling/scripts/ci/tool-catalog-records.pl

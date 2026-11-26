@@ -52,6 +52,775 @@
         "nodes": 256
       }
     },
+    "logs": {
+      "id": "0x2183955139ce40a5",
+      "mode": "update",
+      "reply": {
+        "rust": "canic::logging::Page",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Page_bbd84f8e9bc234f9"
+          },
+          "Wire_Entry_bc462ee24be4289a": {
+            "fields": [
+              {
+                "name": "sequence",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u64_4d35d3193e8d66f2"
+                }
+              },
+              {
+                "name": "created_at_secs",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u64_4d35d3193e8d66f2"
+                }
+              },
+              {
+                "name": "level",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_String_76e26e9121e02e46"
+                }
+              },
+              {
+                "name": "source",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_String_76e26e9121e02e46"
+                }
+              },
+              {
+                "name": "message",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_String_76e26e9121e02e46"
+                }
+              },
+              {
+                "name": "truncated",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_bool_cd2fd49bc6b014bd"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_Option_8177596c9bc78c33": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_u64_4d35d3193e8d66f2"
+            },
+            "k": "option"
+          },
+          "Wire_Page_bbd84f8e9bc234f9": {
+            "fields": [
+              {
+                "name": "started_at_version",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u64_4d35d3193e8d66f2"
+                }
+              },
+              {
+                "name": "entries",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Vec_1dcdf3f5b7dab9f3"
+                }
+              },
+              {
+                "name": "next_before",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Option_8177596c9bc78c33"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          },
+          "Wire_Vec_1dcdf3f5b7dab9f3": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_Entry_bc462ee24be4289a"
+            },
+            "k": "list"
+          },
+          "Wire_bool_cd2fd49bc6b014bd": {
+            "k": "bool"
+          },
+          "Wire_u64_4d35d3193e8d66f2": {
+            "bits": 64,
+            "k": "u"
+          }
+        }
+      },
+      "reply_limits": {
+        "allocation": 65536,
+        "bytes": 4096,
+        "depth": 8,
+        "nodes": 4096
+      },
+      "request": {
+        "rust": "core::option::Option<u64>",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Option_8177596c9bc78c33"
+          },
+          "Wire_Option_8177596c9bc78c33": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_u64_4d35d3193e8d66f2"
+            },
+            "k": "option"
+          },
+          "Wire_u64_4d35d3193e8d66f2": {
+            "bits": 64,
+            "k": "u"
+          }
+        }
+      },
+      "request_limits": {
+        "allocation": 393216,
+        "bytes": 16384,
+        "depth": 16,
+        "nodes": 4096
+      }
+    },
+    "metrics": {
+      "id": "0x7bea4b7278ea6feb",
+      "mode": "query",
+      "reply": {
+        "rust": "canic::metrics::protocol::Report",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Report_b83d16feaf56ae0c"
+          },
+          "Wire_BlobCommand_cc180c13d5f1cd92": {
+            "fields": [
+              {
+                "name": "command",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_String_76e26e9121e02e46"
+                }
+              },
+              {
+                "name": "succeeded",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              },
+              {
+                "name": "denied",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              },
+              {
+                "name": "capacity",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              },
+              {
+                "name": "expired",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              },
+              {
+                "name": "other_refusals",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_BlobSizes_5d304a0bef2147bd": {
+            "fields": [
+              {
+                "name": "upper_bounds",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire__u64__4__0aafaa87ffe0aab7"
+                }
+              },
+              {
+                "name": "buckets",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter__4__eabb2cbf3e4193cf"
+                }
+              },
+              {
+                "name": "above",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_Counter__4__eabb2cbf3e4193cf": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_Counter_e951298c8353c17a"
+            },
+            "k": "array",
+            "max": 4
+          },
+          "Wire_Counter_e951298c8353c17a": {
+            "fields": [
+              {
+                "name": "total",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u128_9478b2e531ac5cf1"
+                }
+              },
+              {
+                "name": "overflowed",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_bool_cd2fd49bc6b014bd"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_Measurement_dc753df448468dec": {
+            "fields": [
+              {
+                "name": "endpoint",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_String_76e26e9121e02e46"
+                }
+              },
+              {
+                "name": "calls",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u64_4d35d3193e8d66f2"
+                }
+              },
+              {
+                "name": "latest",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u64_4d35d3193e8d66f2"
+                }
+              },
+              {
+                "name": "average",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Option_8177596c9bc78c33"
+                }
+              },
+              {
+                "name": "maximum",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u64_4d35d3193e8d66f2"
+                }
+              },
+              {
+                "name": "overflowed",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_bool_cd2fd49bc6b014bd"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_Option_55484f6a31fd52df": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_String_76e26e9121e02e46"
+            },
+            "k": "option"
+          },
+          "Wire_Option_8177596c9bc78c33": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_u64_4d35d3193e8d66f2"
+            },
+            "k": "option"
+          },
+          "Wire_Option_b7cf1cb05068ee23": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_Timers_1fc1f7871b490458"
+            },
+            "k": "option"
+          },
+          "Wire_Page_aaa31ce2d530be53": {
+            "fields": [
+              {
+                "name": "measurements",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Vec_bd0f474a8116e22f"
+                }
+              },
+              {
+                "name": "next",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Option_55484f6a31fd52df"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_Report_b83d16feaf56ae0c": {
+            "k": "enum",
+            "variants": [
+              {
+                "id": 0,
+                "name": "Unavailable",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 1,
+                "name": "Timers",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Snapshot_6904dfee9badf7e6"
+                }
+              },
+              {
+                "id": 2,
+                "name": "Endpoints",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Page_aaa31ce2d530be53"
+                }
+              },
+              {
+                "id": 3,
+                "name": "Blob",
+                "value": {
+                  "fields": [
+                    {
+                      "name": "commands",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Vec_5c0c54a149989d27"
+                      }
+                    },
+                    {
+                      "name": "sizes",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_BlobSizes_5d304a0bef2147bd"
+                      }
+                    }
+                  ],
+                  "k": "record"
+                }
+              },
+              {
+                "id": 4,
+                "name": "Db",
+                "value": {
+                  "fields": [
+                    {
+                      "name": "queries",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "query_failures",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "examined",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "fetched",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "returned",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "output_bytes",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "commits",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "commit_failures",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "job_starts",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "job_resumes",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "job_failures",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    }
+                  ],
+                  "k": "record"
+                }
+              },
+              {
+                "id": 5,
+                "name": "Jobs",
+                "value": {
+                  "fields": [
+                    {
+                      "name": "started",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "retry_attempts",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "skipped_late",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "no_work",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "succeeded",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "expected_failures",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "retryable_failures",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    }
+                  ],
+                  "k": "record"
+                }
+              },
+              {
+                "id": 6,
+                "name": "Entropy",
+                "value": {
+                  "fields": [
+                    {
+                      "name": "attempts",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "succeeded",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "failed",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    },
+                    {
+                      "name": "cancelled",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Counter_e951298c8353c17a"
+                      }
+                    }
+                  ],
+                  "k": "record"
+                }
+              }
+            ]
+          },
+          "Wire_Snapshot_6904dfee9badf7e6": {
+            "fields": [
+              {
+                "name": "observed_at_ns",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u64_4d35d3193e8d66f2"
+                }
+              },
+              {
+                "name": "timers",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Option_b7cf1cb05068ee23"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          },
+          "Wire_Timers_1fc1f7871b490458": {
+            "fields": [
+              {
+                "name": "started_at_version",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u64_4d35d3193e8d66f2"
+                }
+              },
+              {
+                "name": "started_at_ns",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_u64_4d35d3193e8d66f2"
+                }
+              },
+              {
+                "name": "accepted",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              },
+              {
+                "name": "completed",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              },
+              {
+                "name": "abandoned",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              },
+              {
+                "name": "expected_failures",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              },
+              {
+                "name": "deferred_submissions",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              },
+              {
+                "name": "provider_faults",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Counter_e951298c8353c17a"
+                }
+              }
+            ],
+            "k": "record"
+          },
+          "Wire_Vec_5c0c54a149989d27": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_BlobCommand_cc180c13d5f1cd92"
+            },
+            "k": "list"
+          },
+          "Wire_Vec_bd0f474a8116e22f": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_Measurement_dc753df448468dec"
+            },
+            "k": "list"
+          },
+          "Wire__u64__4__0aafaa87ffe0aab7": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_u64_4d35d3193e8d66f2"
+            },
+            "k": "array",
+            "max": 4
+          },
+          "Wire_bool_cd2fd49bc6b014bd": {
+            "k": "bool"
+          },
+          "Wire_u128_9478b2e531ac5cf1": {
+            "bits": 128,
+            "k": "u"
+          },
+          "Wire_u64_4d35d3193e8d66f2": {
+            "bits": 64,
+            "k": "u"
+          }
+        }
+      },
+      "reply_limits": {
+        "allocation": 131072,
+        "bytes": 4096,
+        "depth": 8,
+        "nodes": 4096
+      },
+      "request": {
+        "rust": "canic::metrics::protocol::Request",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Request_4e015b36a225cf13"
+          },
+          "Wire_Option_55484f6a31fd52df": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_String_76e26e9121e02e46"
+            },
+            "k": "option"
+          },
+          "Wire_Request_4e015b36a225cf13": {
+            "k": "enum",
+            "variants": [
+              {
+                "id": 0,
+                "name": "Timers",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 1,
+                "name": "Endpoints",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_Option_55484f6a31fd52df"
+                }
+              },
+              {
+                "id": 2,
+                "name": "Blob",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 3,
+                "name": "Db",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 4,
+                "name": "Jobs",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 5,
+                "name": "Entropy",
+                "value": {
+                  "k": "unit"
+                }
+              }
+            ]
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          }
+        }
+      },
+      "request_limits": {
+        "allocation": 16384,
+        "bytes": 512,
+        "depth": 8,
+        "nodes": 256
+      }
+    },
     "probe": {
       "id": "0x0000000000000001",
       "mode": "update",

@@ -43,15 +43,16 @@ fn supply_store_artifact(config: &std::path::Path) {
 }
 
 async fn status(pic: &PocketIc, root: CanisterId) -> Status {
+    use canic_management_protocol::children;
     let reply = pic
         .query_call(
             root,
             CanisterId::anonymous(),
             "child_status",
             ic_wire::encode(
-                &canic_management_protocol::children::ChildId::FIRST,
+                &children::StatusRequest::Creation(children::ChildId::FIRST),
                 ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::children::STATUS,
+                    method: children::READ_STATUS,
                     direction: ic_wire::Direction::Request,
                 },
                 LIMITS,
@@ -60,15 +61,18 @@ async fn status(pic: &PocketIc, root: CanisterId) -> Status {
         )
         .await
         .unwrap();
-    ic_wire::decode(
+    let children::ObservedStatus::Creation(status) = ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: canic_management_protocol::children::STATUS,
+            method: children::READ_STATUS,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,
     )
-    .unwrap()
+    .unwrap() else {
+        panic!("expected Creation status")
+    };
+    status
 }
 
 async fn stage(

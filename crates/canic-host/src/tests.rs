@@ -28,6 +28,7 @@ pub(crate) fn selected_fleet(
         app: app.into(),
         fleet: fleet.into(),
         config: crate::FleetConfig {
+            snapshots: None,
             network,
             canisters,
             journal: None,

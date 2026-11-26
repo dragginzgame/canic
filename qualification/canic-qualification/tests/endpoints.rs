@@ -146,17 +146,25 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         .await;
         let root_status = async |slot: children::ChildId| {
             let encoding = |direction| ic_wire::Encoding::Frame {
-                method: children::STATUS,
+                method: children::READ_STATUS,
                 direction,
             };
-            let request =
-                ic_wire::encode(&slot, encoding(ic_wire::Direction::Request), LIMITS).unwrap();
+            let request = ic_wire::encode(
+                &children::StatusRequest::Creation(slot),
+                encoding(ic_wire::Direction::Request),
+                LIMITS,
+            )
+            .unwrap();
             let reply = pic
                 .query_call(target, outsider, "child_status", request)
                 .await
                 .unwrap();
-            ic_wire::decode::<Status>(&reply, encoding(ic_wire::Direction::Response), LIMITS)
-                .unwrap()
+            let children::ObservedStatus::Creation(status) =
+                ic_wire::decode(&reply, encoding(ic_wire::Direction::Response), LIMITS).unwrap()
+            else {
+                panic!("expected creation status")
+            };
+            status
         };
         if variant == "root" {
             for method in [
@@ -190,7 +198,7 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         // specified independently here: this tests the mounted public contract.
         let mut methods = if variant == "root" {
             vec![
-                ("child_status", true, false, children::STATUS, LIMITS),
+                ("child_status", true, false, children::READ_STATUS, LIMITS),
                 (
                     "observe_child_status",
                     false,
@@ -225,13 +233,6 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                     true,
                     canic_management_protocol::application::STAGE_CHILD_UPGRADE,
                     canic_management_protocol::stored::LIMITS,
-                ),
-                (
-                    "child_upgrade_status",
-                    true,
-                    false,
-                    children::UPGRADE_STATUS,
-                    LIMITS,
                 ),
                 (
                     "reconcile_child_upgrade",
@@ -519,6 +520,11 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                 )
                 .unwrap();
                 assert!(
+                    pic.query_call(target, outsider, "child_status", old_frame.clone())
+                        .await
+                        .is_err()
+                );
+                assert!(
                     pic.update_call(target, controller, "observe_child_status", old_frame)
                         .await
                         .is_err()
@@ -760,17 +766,16 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
 
     // An infrastructure upgrade clears volatile callback fencing but preserves
     // the committed principal and spent slot. No reinstall or fresh effect.
-    canic_qualification::upgrade_stopped(
-        pic,
-        target,
-        std::fs::read(artifacts.join("maintenance.wasm")).unwrap(),
-        vec![],
-        None,
-    )
-    .await
-    .unwrap();
-    let mut maintained = ready;
-    maintained.maintenance_candidate = true;
+    let candidate = std::fs::read(artifacts.join("maintenance.wasm")).unwrap();
+    let candidate_hash = digest(&candidate).to_vec();
+    canic_qualification::upgrade_stopped(pic, target, candidate, vec![], None)
+        .await
+        .unwrap();
+    assert_eq!(
+        pic.canister_status(target, None).await.unwrap().module_hash,
+        Some(candidate_hash)
+    );
+    let maintained = ready;
     assert_eq!(status(pic, target).await, maintained);
     let reply = pic
         .update_call(

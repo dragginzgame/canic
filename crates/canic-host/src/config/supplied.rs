@@ -37,28 +37,6 @@ fn supply_root(app: &mut AppConfig) {
         .filter(|first| manifests.all(|other| other == *first))
         .cloned()
         .unwrap_or_else(|| PathBuf::from("Cargo.toml"));
-    let mut features = std::collections::BTreeSet::from(["child-metrics"]);
-    for fleet in app.fleets.values() {
-        for (family, selected) in [
-            (
-                "auth",
-                !fleet.auth.is_empty() || fleet.receiver_policy.is_some(),
-            ),
-            ("role-issuer", !fleet.role_receivers.is_empty()),
-            (
-                "reserve-pool",
-                fleet.standby_pool.is_some()
-                    || fleet
-                        .worker_pools
-                        .iter()
-                        .any(|pool| pool.minimum_reuse_cycles.is_some()),
-            ),
-        ] {
-            if selected {
-                features.insert(family);
-            }
-        }
-    }
     slots.insert(
         "root".into(),
         CanisterDefinition {
@@ -68,7 +46,7 @@ fn supply_root(app: &mut AppConfig) {
             build: Some(BuildInput {
                 manifest,
                 package: "canic-root".into(),
-                features: features.into_iter().map(str::to_owned).collect(),
+                features: Vec::new(),
                 client: Some("canic-root-client".into()),
             }),
         },
@@ -103,9 +81,10 @@ impl TryFrom<SourceConfig> for Config {
                 || PathBuf::from("Cargo.toml"),
                 |recipe| recipe.manifest.clone(),
             );
+            let parent = root_name.clone();
             let store = CanisterDefinition {
                 role: Some("wasm-store".into()),
-                parent: Some(root_name.clone()),
+                parent: Some(parent),
                 wasm: Some("artifacts/wasm_store.wasm".into()),
                 build: Some(BuildInput {
                     manifest,

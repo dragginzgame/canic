@@ -62,22 +62,15 @@ async fn host_root_maintenance_preserves_stopped_store_operation_and_signed_inst
         assert_eq!(before.stored, super::custody(&root).await);
         let approval = quiescence_tests::approval(&root, &supplier).await;
         root.update::<_, Result<maintenance::Status, management::Refusal>>(
-            "stage_store_maintenance",
-            maintenance::STAGE,
-            &approval,
+            "maintain_store",
+            maintenance::MAINTAIN,
+            &maintenance::Request::Stage(approval.clone()),
             maintenance::LIMITS,
         )
         .await
         .unwrap();
         for _ in 0..16 {
-            let value: maintenance::Status = root
-                .update(
-                    "advance_store_maintenance",
-                    maintenance::ADVANCE,
-                    &approval,
-                    maintenance::LIMITS,
-                )
-                .await;
+            let value = super::maintenance_tests::advance(&root, &approval).await;
             if value.phase == maintenance::Phase::Stopped {
                 break;
             }

@@ -15,10 +15,10 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 fault-injection = ["canic-management/fault-injection"]
-maintenance-candidate = ["canic-management/maintenance-candidate"]
+maintenance-candidate = []
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-canic = { workspace = true, features = ["metrics"] }
+canic = { workspace = true, features = ["lifecycle"] }
 canic-management.workspace = true
 canic-management-protocol.workspace = true
 canic-profile-protocol.workspace = true

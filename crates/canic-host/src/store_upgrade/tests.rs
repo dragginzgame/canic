@@ -70,6 +70,29 @@ fn store_approval_binds_code_owner_operation_and_original_deadline() {
 }
 
 #[test]
+fn unified_commands_bind_new_plans_and_leave_signed_predecessor_frames_intact() {
+    let mut old = plan();
+    old.version = 9;
+    let mut current = old.clone();
+    current.version = crate::plan::STORE_MAINTENANCE_VERSION;
+    assert_ne!(old.digest().unwrap(), current.digest().unwrap());
+    let action = wire::Request::Stage(approval(&current).unwrap());
+    let call = command(&current, &action).unwrap();
+    assert_eq!(call.method, "maintain_store");
+    let original = command(&old, &wire::Request::Stage(approval(&old).unwrap())).unwrap();
+    assert_eq!(original.method, "stage_store_maintenance");
+    assert_ne!(call.args, original.args);
+    assert_eq!(
+        observation(&current).unwrap().method,
+        "observe_store_maintenance"
+    );
+    assert_eq!(
+        recovery(&current).unwrap().method,
+        "recover_store_maintenance"
+    );
+}
+
+#[test]
 fn explicit_sequence_binds_exact_observation_without_rewriting_old_approvals() {
     let historical = plan();
     let old_bytes = serde_json::to_vec(&historical).unwrap();

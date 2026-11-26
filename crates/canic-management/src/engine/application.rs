@@ -128,13 +128,20 @@ pub fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Statu
             return Err(Refusal::Binding);
         }
     }
-    if let Ok(named) = ServiceInstall::approved(input.arguments.as_slice(), api::canister_self())
-        && super::service_slots()
+    if let Ok(named) = ServiceInstall::approved(input.arguments.as_slice(), api::canister_self()) {
+        let mut count = 0;
+        for other in super::service_slots()
             .into_iter()
             .filter_map(super::directory::named_service)
-            .any(|other| other.name == named.name)
-    {
-        return Err(Refusal::Binding);
+        {
+            if other.name == named.name {
+                return Err(Refusal::Binding);
+            }
+            count += 1;
+        }
+        if count >= canic::topology::directory::MAX_SERVICES {
+            return Err(Refusal::Binding);
+        }
     }
     input
         .source

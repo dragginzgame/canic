@@ -2,6 +2,162 @@
 
 ## Unreleased
 
+## [0.271.0] - 2026-11-26
+
+### 🔄 Changed
+
+Canic adopts IC DB 0.32.0 and Entropy 0.7.0. Both send diagnostics directly to
+Canic’s Logging 0.26.0 recorder. Blob 0.111 retains its Logging 0.25 adapter.
+
+
+Root exposes one public `child_status` query for creation, latest upgrade and
+exact upgrade evidence. Rebuild clients for its new Wire frame. Explicit Blob
+activation uses `activate_child_upgrade`; retained approvals keep their original
+signed method. Root controllers can read metrics above slot 255 with the
+`observe-child-metrics` command.
+
+```sh
+# From the checkout, rebuild Root and its native command codec and inspect the exports.
+canic app build --config apps/examples/counter/canic.toml --canister root
+canic artifact endpoints apps/examples/counter/artifacts/root.wasm
+```
+
+Root consolidates Store upgrade commands under `maintain_store`. Stage,
+Advance, Install and Activate still require the original approval. Observation,
+recovery and public status keep their separate contracts. Host binds fresh
+Store upgrade plans to the new method.
+
+```sh
+# From the checkout, build Root and inspect the maintenance exports locally.
+canic app build --config apps/examples/counter/canic.toml --canister root
+canic artifact endpoints apps/examples/counter/artifacts/root.wasm
+```
+
+Fresh Roots expose `execute_snapshot_step`, `lookup_snapshot_step`,
+`grant_auth_access`, `revoke_auth_access`, `fetch_auth_enrollment` and
+`issue_role_proof`. Rebuild callers for these names. Host binds new Auth
+approvals to the renamed methods and preserves the original methods for retained
+version-five plans.
+
+All fleets build one production Root with Auth, role issuance, reserves and Blob
+maintenance. Remove the former Root feature selections. Install a fresh fleet for
+the new stable layout. Large Root bootstrap and maintenance use journaled chunk
+uploads to the target before installation. The supported Root artifact limit is 8 MiB.
+
+```sh
+# In the checkout, build Root and inspect its callable endpoints locally.
+canic artifact build --package canic-root --output target/root.wasm
+canic artifact endpoints target/root.wasm
+```
+
+Root includes native snapshot execution and lookup in every build. Remove
+`backup` from build recipes. Install a fresh fleet if its Root lacks the
+snapshot storage lease. Host refuses retired version-ten backup-catalog journals.
+
+```sh
+# From the checkout, build Root with its standard snapshot endpoints.
+canic artifact build --package canic-root --output target/root.wasm
+```
+
+Fleet configuration accepts up to ten authenticated snapshot readers per selected
+application role under `snapshots.download_principals`. Root applies the reviewed
+list to a ready permanent child. An empty list restores controller-only access.
+The change covers earlier and future native snapshots on that canister.
+
+```sh
+# From a bound fleet with an installed child and an updated Root and native client:
+approval=$(canic --json fleet canister plan-snapshot-readers counter --fleet local)
+# Inspect the target and readers before signing as a Root controller.
+echo "$approval"
+canic fleet call --fleet local --canister root --identity operator configure-snapshot-readers "$approval"
+```
+
+Fresh directory recipients can look up all 256 named fleet services. Each parent
+stores direct children and withdrawn installations individually, with no child-count
+limit in the directory. Install fresh recipients for the new storage layout and
+delivery contract. A directory recipient's public `backup_timing` query reports
+its last assignment. Current Roots publish inactive timing because automatic
+rolling captures are still under development.
+
+```sh
+# From the checkout, exercise full directory delivery and retained backup timing.
+cargo test -p canic --features storage,topology topology::directory
+```
+
+Root's native client builds directly. Remove `operator-client` and
+`maintenance-candidate` from explicit Root recipes. Maintenance rehearsals
+compare the installed module hash and retained child state after upgrade.
+
+```sh
+# From this checkout, inspect the native codec without selecting any features.
+cargo run -p canic-root --bin canic-root-client -- encode --help
+```
+
+Every Root now exports `observe_child_metrics`. Remove the `child-metrics` Cargo feature
+from explicit Root recipes. The native client takes a 32-bit permanent service slot.
+
+```sh
+# In a deployed fleet with controller identity operator, read ready child slot zero.
+canic fleet call --canister root --identity operator observe-child-metrics 0 endpoints
+```
+
+Canic actors now expose a controller-only `logs` update and a `metrics` query
+with controller access by default. Every completed synchronous Canic update
+records handler instructions. Remove `canic/metrics`, `canic/endpoint-metrics`
+and `canic/logging` from build recipes. Selected suppliers contribute their
+diagnostics through the existing lifecycle hooks. Each actor budgets 512 KiB per incarnation for retained log rows and text.
+IC Logging 0.26 shares the full budget across entries and reports usage in constant time.
+
+Build reports list optional modules in lowercase, separated by commas. Logs
+and metrics come standard and count toward the endpoint total.
+
+```sh
+# From the repository root with the current CLI installed, inspect the counter build.
+canic app build --config apps/examples/counter/canic.toml --canister counter
+```
+
+### Changed
+
+Removed the IC Backup Host integration, local signer workflow and separate
+backup history canister. The counter’s ephemeral fleet is now named `local`. Remove the fleet's legacy `backup` table and configure
+native snapshot access under `snapshots`.
+
+```sh
+# Inspect the example fleet with the current CLI from this checkout.
+canic fleet canister list --config apps/examples/counter/canic.toml --fleet local
+```
+
+### 🩹 Fixed
+
+- Attested shards expose their validated routing Root through `canic::role::root()` after installation and upgrade. [Canic #107](https://github.com/dragginzgame/canic/issues/107)
+- Published Root and Store archive builds use the consumer-selected Rust toolchain and the archive’s locked dependencies, isolated from consumer-local Cargo patches. [Canic #108](https://github.com/dragginzgame/canic/issues/108)
+
+```sh
+# With the Wasm toolchain prepared, build the Store from its locked registry archive.
+canic artifact build --package ic-wasm-store --output target/store.wasm
+```
+
+### 🔄 Changed
+
+- Root’s capacity module owns physical slot accounting across returns and upgrades. Host’s configuration editor owns locked, comment-preserving declaration edits. [Canic #109](https://github.com/dragginzgame/canic/issues/109) · [Canic #110](https://github.com/dragginzgame/canic/issues/110)
+- Example Cargo packages use `example-`. App and fleet commands use short names such as `counter` and `user-directory` with its `hub` and `shard` slots. Use the new names for fresh example fleets.
+
+```sh
+# From the repository root, list the directory slots and build the counter.
+canic app canister list --config apps/examples/user-directory/canic.toml --app user-directory
+canic app build --config apps/examples/counter/canic.toml --canister counter
+```
+
+### 🛠️ Tooling
+
+- Adopt Toko Tooling 0.46.5. `make deps-list` lists product workspace packages by default. Select the qualification manifest to include its packages.
+
+```sh
+# From the repository root, inspect local package versions.
+make deps-list
+make deps-list DEPENDENCY_MANIFEST=qualification/Cargo.toml
+```
+
 ## [0.270.0] - 2026-11-25
 
 ### 🔄 Changed

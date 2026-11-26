@@ -270,9 +270,9 @@ async fn root_preserves_removed_entries_and_cursor_across_both_owner_upgrades() 
     let mut approval = quiescence_tests::approval(&root, &supplier).await;
     approval.module_hash = store::digest(&replacement);
     root.update::<_, Result<wire::Status, management::Refusal>>(
-        "stage_store_maintenance",
-        wire::STAGE,
-        &approval,
+        "maintain_store",
+        wire::MAINTAIN,
+        &wire::Request::Stage(approval.clone()),
         wire::LIMITS,
     )
     .await

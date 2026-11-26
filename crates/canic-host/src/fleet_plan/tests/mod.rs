@@ -781,3 +781,18 @@ fn whole_fleet_keeps_nine_service_approvals_and_journal_paths() {
         Err(Error::Blocked(_))
     ));
 }
+
+#[test]
+fn retired_catalog_record_version_is_refused() {
+    let (dir, selected) = fixture();
+    let (_, plan) = create(&dir, &selected).unwrap();
+    let mut record = serde_json::json!({
+        "version": 10,
+        "root": plan.root,
+        "children": plan.children,
+        "store": plan.store,
+    });
+    assert!(serde_json::from_value::<FleetPlan>(record.clone()).is_err());
+    record["children"][0]["backup_history"] = serde_json::json!({});
+    assert!(serde_json::from_value::<FleetPlan>(record).is_err());
+}

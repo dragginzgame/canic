@@ -37,9 +37,9 @@ before draining it. Repeat drain after the application moves its last account so
 receives the exact generation release.
 
 ```sh
-canic fleet call --canister ex-user-directory-hub --identity operator configure-shard-routes ex-user-directory-shard 1
-canic fleet call --canister ex-user-directory-hub --identity operator observe-shard "$SHARD"
-canic fleet call --canister ex-user-directory-hub --identity operator drain-shard "$SHARD" "$SLOT" "$GENERATION"
+canic fleet call --canister hub --identity operator configure-shard-routes shard 1
+canic fleet call --canister hub --identity operator observe-shard "$SHARD"
+canic fleet call --canister hub --identity operator drain-shard "$SHARD" "$SLOT" "$GENERATION"
 ```
 
 From the repository root, run the installed example with synthetic cycles:

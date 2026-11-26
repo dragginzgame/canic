@@ -1,15 +1,19 @@
 //! Compare host ABI declarations with each actual User Directory executable.
 use canic::inspection::{Schemas, methods};
 use canic_asset_catalog as _;
-use ex_user_directory_hub as _;
-use ex_user_directory_shard as _;
+use example_user_directory_hub as _;
+use example_user_directory_shard as _;
 use std::path::Path;
 
 #[test]
 fn inventory_matches_built_hub_and_shard() {
     for role in ["hub", "shard"] {
-        let actor = format!("ex_user_directory_{role}");
-        let inventory = methods(&actor, &Schemas::default()).unwrap();
+        let actor = format!("example_user_directory_{role}");
+        let schemas = Schemas::default();
+        let mut inventory = methods(&actor, &schemas).unwrap();
+        for (name, method) in methods("canic", &schemas).unwrap() {
+            assert!(inventory.insert(name, method).is_none(), "duplicate {name}");
+        }
         let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
             "../../apps/examples/user-directory/artifacts/user_{role}.wasm"
         ));

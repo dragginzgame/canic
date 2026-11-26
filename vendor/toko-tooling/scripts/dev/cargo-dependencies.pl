@@ -8,7 +8,7 @@ use JSON::PP qw(decode_json);
 
 sub usage {
     return "Usage: cargo-dependencies.pl update|list [--consumer DIR] [--manifest RELATIVE/Cargo.toml] [--package NAME] [--precise VERSION]\n"
-        . "list: Local package versions; publication status is not checked. '-' means no release group.\n"
+        . "list: Root workspace package versions plus explicit manifests; publication status is not checked. '-' means no release group.\n"
         . "update: Runs cargo update -v; --package and --precise apply only to update.\n";
 }
 my @attempted;
@@ -37,7 +37,7 @@ eval {
     $consumer = abs_path($consumer);
     $consumer !~ /[\r\n]/ or die "invalid resolved consumer directory\n";
     my @manifests = ('Cargo.toml');
-    push @manifests, 'qualification/Cargo.toml' if -e "$consumer/qualification/Cargo.toml";
+    push @manifests, 'qualification/Cargo.toml' if $mode eq 'update' && -e "$consumer/qualification/Cargo.toml";
     push @manifests, @extra;
     my (%seen, @selected);
     # Check every explicit path before allowing Cargo to change any lockfile.

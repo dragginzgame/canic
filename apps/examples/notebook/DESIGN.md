@@ -17,8 +17,8 @@ The regression (`make notebook-test`) installs Notebook with a named local ident
 
 The note, installer and fence share the stable record `notebook.record.v1`. This layout requires a fresh install for anyone running the earlier text-only experiment. Reopening its `notebook.note.v1` layout fails before writes are admitted.
 
-## Managed Backup follow-up
+## Managed snapshot follow-up
 
 The installed example exercises the application boundary directly. A managed fleet must install Notebook through Root so Root is its recovery authority. Root retains the recovery generation and operation evidence outside the restored child. It must prevent replay of the checkpoint’s original opening before acceptance and mediate separate operator acceptance and reopening.
 
-Extend the installed Backup signer journey to interrupt delivery of a Notebook restore result, resume observation of that original attempt and show one restore. The fleet view should identify the affected notebook, snapshot operation and current fence.
+Extend the installed Root snapshot rehearsal to interrupt delivery of a Notebook restore result, resume observation of that original attempt and show one restore. The fleet view should identify the affected notebook, snapshot operation and current fence.

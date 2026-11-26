@@ -7,6 +7,15 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Host backup integration retirement — 2026-11-26
+
+The former IC Backup 0.106.0 qualification used an external keyring signer,
+exported snapshot bundles on the Host, and tested a Root-installed history
+catalog. The on-subnet design now uses the IC management canister for snapshot
+storage and viewer permissions. Previously approved fleet records retain their
+catalog install encoding. The native Root capture and restore fixture continues
+to exercise the original management request and callback recovery boundaries.
+
 ## Auth known-login capacity — 2026-11-23
 
 An installed stable receiver using IC Auth 0.49.2 admitted 10,000 distinct

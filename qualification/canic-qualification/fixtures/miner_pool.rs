@@ -79,7 +79,7 @@ pub(crate) async fn install<'a>(
     let mut config = canic_host::load_config(&config_path).unwrap();
     let fleet = config
         .apps
-        .get_mut("ex-miner-pool")
+        .get_mut("miner-pool")
         .unwrap()
         .fleets
         .get_mut("local")

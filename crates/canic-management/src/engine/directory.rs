@@ -60,7 +60,7 @@ fn service_directory() -> Result<Directory, RedeliveryError> {
 fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
     STATE.with_borrow(|state| {
         let state = state.as_ref().expect("open engine");
-        let mut children = Vec::new();
+        let mut children = std::collections::BTreeMap::<Principal, Vec<Hop>>::new();
         let mut service = None;
         for (slot, journal) in &state.journal.0 {
             #[cfg(feature = "sharding")]
@@ -86,18 +86,15 @@ fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
                 canic::topology::Install::approved(lifecycle.creation.as_slice())
                 && binding.root == ic_platform_runtime::system::canister_self()
             {
-                children.push((
-                    binding.parent,
-                    Hop {
-                        #[cfg(feature = "sharding")]
-                        shard_pool: state.pools.shard_pool_name(*slot).map(str::to_owned),
-                        #[cfg(not(feature = "sharding"))]
-                        shard_pool: None,
-                        canister,
-                        generation,
-                        role: binding.role,
-                    },
-                ));
+                children.entry(binding.parent).or_default().push(Hop {
+                    #[cfg(feature = "sharding")]
+                    shard_pool: state.pools.shard_pool_name(*slot).map(str::to_owned),
+                    #[cfg(not(feature = "sharding"))]
+                    shard_pool: None,
+                    canister,
+                    generation,
+                    role: binding.role,
+                });
             }
         }
         let mut paths = vec![vec![service.expect("ready named installation")]];
@@ -105,9 +102,9 @@ fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
         while cursor < paths.len() {
             let path = paths[cursor].clone();
             let parent = path.last().expect("addressed service").canister;
-            for (_, child) in children.iter().filter(|(p, _)| *p == parent) {
+            for child in children.remove(&parent).unwrap_or_default() {
                 let mut next = path.clone();
-                next.push(child.clone());
+                next.push(child);
                 paths.push(next);
             }
             cursor += 1;
@@ -153,6 +150,12 @@ async fn publish_branch(
             return Err(RedeliveryError::RevisionChanged);
         }
         let delivery = Delivery {
+            // Root currently owns manual captures only. Publish an explicit inactive
+            // assignment so a recipient can distinguish it from a missed delivery.
+            backup_timing: Some(canic::topology::directory::BackupTiming {
+                revision: 1,
+                daily_at_utc_secs: None,
+            }),
             directory: directory.clone(),
             path,
         };

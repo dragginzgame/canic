@@ -281,7 +281,7 @@ pub fn create_receiver_auth_plan(
     let receiver_artifact = artifact::admit_bounded(&receiver_bytes, artifact::MAX_ARTIFACT_BYTES)?;
     let now = crate::now()?;
     let proposed = Plan {
-        version: 5,
+        version: plan::AUTH_ACCESS_VERSION,
         network: selected.config.network.clone(),
         controller: controller.into(),
         action: PlanAction::Auth(Box::new(AuthApproval {

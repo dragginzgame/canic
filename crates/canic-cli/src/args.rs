@@ -470,6 +470,13 @@ pub(super) enum CanisterCommand {
         #[command(flatten)]
         selection: CanisterConfigArgs,
     },
+    /// Preview native snapshot download access for one permanent application child.
+    PlanSnapshotReaders {
+        /// Child component whose snapshots will be readable.
+        name: String,
+        #[command(flatten)]
+        selection: CanisterConfigArgs,
+    },
     /// Prepare a finite top-up approval from the declared direct funding edge.
     PlanFunding {
         /// Bound child component.

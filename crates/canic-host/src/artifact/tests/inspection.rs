@@ -99,10 +99,7 @@ fn endpoints_only_list_callable_function_exports() {
     let file = tempfile::NamedTempFile::new().unwrap();
     std::fs::write(file.path(), &wasm).unwrap();
     let methods = crate::endpoints(file.path()).unwrap();
-    assert_eq!(
-        super::compiled_metadata(&wasm, false).unwrap().1,
-        methods.len()
-    );
+    assert_eq!(super::compiled_metadata(&wasm).unwrap().1, methods.len());
     let actual: Vec<_> = methods.iter().map(|e| (e.mode, e.name.as_str())).collect();
     assert_eq!(
         actual,

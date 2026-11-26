@@ -8,6 +8,22 @@ mod preservation;
 pub use preservation::{Preservation, Scan};
 use serde::{Deserialize, Serialize};
 
+/// Controller command for an approved Store replacement.
+pub const MAINTAIN: u64 = ic_wire::method_id("maintain_store");
+
+/// Each action carries its exact approval. Only installation supplies replacement bytes.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum Request {
+    /// Reserve the operation before issuing effects.
+    Stage(Approval),
+    /// Continue the current phase under the original deadline.
+    Advance(Approval),
+    /// Supply the replacement committed by the approval.
+    Install(Install),
+    /// Reopen admission after preservation has been verified.
+    Activate(Approval),
+}
+
 /// Retain one immutable maintenance approval before remote effects.
 pub const STAGE: u64 = 50;
 /// Advance only the exact retained attempt; issued stop effects are observed, never repeated.

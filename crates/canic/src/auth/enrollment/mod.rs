@@ -46,7 +46,7 @@ pub const REFRESH_METHOD: &str = "refresh_auth";
 /// Maximum receivers, including revoked slots, retained by a fresh Root.
 pub const MAX_RECEIVERS: usize = 32;
 /// Snapshot exported by an explicitly selected authority.
-pub const SNAPSHOT_METHOD: &str = "auth_enrollment";
+pub const SNAPSHOT_METHOD: &str = "fetch_auth_enrollment";
 /// Bounded single-role exchange, including the metadata and complete scope list.
 pub const LIMITS: Limits = Limits {
     bytes: 8192,

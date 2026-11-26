@@ -67,7 +67,7 @@ async fn call<T: serde::Serialize>(
 }
 
 async fn execute(pic: &PocketIc, root: CanisterId, r: &Request) -> Result<Record, Error> {
-    let bytes = call(pic, root, "snapshot_execute", protocol::EXECUTE, r).await;
+    let bytes = call(pic, root, "execute_snapshot_step", protocol::EXECUTE, r).await;
     match r.prepare() {
         Ok((binding, _)) => protocol::Exchange::Execute
             .decode_response(&binding, &bytes)
@@ -90,7 +90,14 @@ async fn execute(pic: &PocketIc, root: CanisterId, r: &Request) -> Result<Record
 
 async fn lookup(pic: &PocketIc, root: CanisterId, r: &Request) -> Result<Record, Error> {
     let binding = r.prepare().unwrap().0;
-    let bytes = call(pic, root, "snapshot_lookup", protocol::LOOKUP, &binding).await;
+    let bytes = call(
+        pic,
+        root,
+        "lookup_snapshot_step",
+        protocol::LOOKUP,
+        &binding,
+    )
+    .await;
     protocol::Exchange::Lookup
         .decode_response(&binding, &bytes)
         .unwrap()
@@ -175,7 +182,7 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         pic,
         child,
         CanisterId::anonymous(),
-        ex_counter::Request::Increment,
+        example_counter::Request::Increment,
     )
     .await;
     assert_eq!(value.unwrap().value, 1);
@@ -204,15 +211,20 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
     )
     .unwrap();
     assert!(
-        pic.update_call(root, outsider, "snapshot_execute", encoded)
+        pic.update_call(root, outsider, "execute_snapshot_step", encoded)
             .await
             .is_err()
     );
     reply(execute(pic, root, &stop).await.unwrap());
     assert!(
-        pic.update_call(root, CanisterId::anonymous(), "snapshot_execute", vec![0])
-            .await
-            .is_err()
+        pic.update_call(
+            root,
+            CanisterId::anonymous(),
+            "execute_snapshot_step",
+            vec![0]
+        )
+        .await
+        .is_err()
     );
     let initial = request(
         &op,
@@ -257,14 +269,14 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         pic.update_call(
             root,
             CanisterId::anonymous(),
-            "snapshot_lookup",
+            "lookup_snapshot_step",
             bytes.clone()
         )
         .await
         .is_err()
     );
     let observed = pic
-        .update_call(root, outsider, "snapshot_lookup", bytes)
+        .update_call(root, outsider, "lookup_snapshot_step", bytes)
         .await
         .unwrap();
     let observed: Result<Record, Error> = ic_wire::decode(
@@ -282,7 +294,7 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         .unwrap();
     let mut stale = take.prepare().unwrap().0;
     stale.operation.generation += 1;
-    let bytes = call(pic, root, "snapshot_lookup", protocol::LOOKUP, &stale).await;
+    let bytes = call(pic, root, "lookup_snapshot_step", protocol::LOOKUP, &stale).await;
     let refused = protocol::Exchange::Lookup
         .decode_response(&stale, &bytes)
         .unwrap();
@@ -476,8 +488,9 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         "expiry cannot replace the original result"
     );
     // A callback trap after the management effect leaves the original slot pending across upgrade.
+    let fault_wasm = std::fs::read(repo().join("target/backup/root-fault.wasm")).unwrap();
     for (point, step) in [(1u8, Step::Take), (2, Step::Take), (1, Step::Fence)] {
-        let (broken, worker, expiry) = fixture(pic, wasm.clone()).await;
+        let (broken, worker, expiry) = fixture(pic, fault_wasm.clone()).await;
         let op = operation(broken, worker);
         let args = m::CanisterArgs {
             canister_id: op.target.parse().unwrap(),
@@ -536,9 +549,14 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         )
         .unwrap();
         assert!(
-            pic.update_call(broken, CanisterId::anonymous(), "snapshot_execute", bytes)
-                .await
-                .is_err()
+            pic.update_call(
+                broken,
+                CanisterId::anonymous(),
+                "execute_snapshot_step",
+                bytes
+            )
+            .await
+            .is_err()
         );
         assert_eq!(
             lookup(pic, broken, &lost).await.unwrap().outcome,
@@ -557,10 +575,10 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
                     pic,
                     worker,
                     CanisterId::anonymous(),
-                    ex_counter::Request::Increment
+                    example_counter::Request::Increment
                 )
                 .await,
-                Err(ex_counter::Error::Fenced)
+                Err(example_counter::Error::Fenced)
             );
         }
         let changed = request(
@@ -576,9 +594,14 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
     // The application can reject Root's requested generation. A valid transport
     // reply from the executor retains that rejection and grants no stop.
     let (r, worker, expiry) = fixture(pic, wasm.clone()).await;
-    canic_qualification::counter(pic, worker, r, ex_counter::Request::Fence { attempt: 4 })
-        .await
-        .unwrap();
+    canic_qualification::counter(
+        pic,
+        worker,
+        r,
+        example_counter::Request::Fence { attempt: 4 },
+    )
+    .await
+    .unwrap();
     let op = operation(r, worker);
     let args = m::CanisterArgs {
         canister_id: op.target.parse().unwrap(),

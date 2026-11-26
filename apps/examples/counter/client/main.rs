@@ -2,7 +2,7 @@
 
 use canic::method::Contract;
 use clap::{Parser, Subcommand};
-use ex_counter::CounterMethod;
+use example_counter::CounterMethod;
 use std::io::Read as _;
 
 #[derive(Parser)]
@@ -34,8 +34,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let result = match Args::parse().action {
         Action::Encode { command } => {
             let request = match command {
-                Counter::Increment => ex_counter::Request::Increment,
-                Counter::Read => ex_counter::Request::Read,
+                Counter::Increment => example_counter::Request::Increment,
+                Counter::Read => example_counter::Request::Read,
             };
             let arguments = CounterMethod::encode_request(&request)
                 .map_err(|e| format!("counter request refused: {e:?}"))?;

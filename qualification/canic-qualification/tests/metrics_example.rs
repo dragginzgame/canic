@@ -2,7 +2,7 @@
 
 use canic::{
     method::Contract,
-    metrics::{ChildMetrics, ReadMetrics, Report, Request},
+    metrics::{ObserveChildMetrics, ReadMetrics, Report, Request},
 };
 use canic_host::application::codec;
 use ic_testkit::{
@@ -56,11 +56,11 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
     .await;
     let root_codec = artifacts.join("root.client");
     for source in ["timers", "endpoints", "blob", "db", "jobs", "entropy"] {
-        let args = ["child-metrics", "0", source].map(str::to_owned);
+        let args = ["observe-child-metrics", "256", source].map(str::to_owned);
         let frame = codec::encode(&root_codec, &args).unwrap();
-        assert_eq!(frame.method, ChildMetrics::NAME);
-        let (slot, selected) = ChildMetrics::decode_request(&frame.arguments).unwrap();
-        assert_eq!(slot, 0);
+        assert_eq!(frame.method, ObserveChildMetrics::NAME);
+        let (slot, selected) = ObserveChildMetrics::decode_request(&frame.arguments).unwrap();
+        assert_eq!(slot, 256);
         assert!(matches!(
             (source, selected),
             ("timers", Request::Timers)
@@ -86,8 +86,8 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
             .update_call(
                 root,
                 caller,
-                ChildMetrics::NAME,
-                ChildMetrics::encode_request(&(0, Request::Timers)).unwrap(),
+                ObserveChildMetrics::NAME,
+                ObserveChildMetrics::encode_request(&(256, Request::Timers)).unwrap(),
             )
             .await
             .unwrap_err();
@@ -178,6 +178,22 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
             .unwrap()
             .measurements,
         page.measurements[1..]
+    );
+    let request = canic::logging::Logs::encode_request(&None).unwrap();
+    let denied = pic
+        .update_call(id, CanisterId::anonymous(), "logs", request.clone())
+        .await
+        .unwrap_err();
+    assert!(denied.reject_message.contains("controller required"));
+    let reply = pic
+        .update_call(id, installer, "logs", request)
+        .await
+        .unwrap();
+    assert!(
+        canic::logging::Logs::decode_reply(&reply)
+            .unwrap()
+            .entries
+            .is_empty()
     );
     canic_qualification::upgrade_stopped(pic, id, wasm, vec![], Some(installer))
         .await

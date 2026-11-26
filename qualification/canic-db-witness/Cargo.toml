@@ -19,7 +19,7 @@ incompatible-schema = []
 managed-fixture = ["canic/readiness", "canic/topology"]
 
 [dependencies]
-canic = { workspace = true, features = ["db", "db-store", "logging", "metrics", "storage"] }
+canic = { workspace = true, features = ["db", "db-store", "lifecycle", "storage"] }
 ic-db.workspace = true
 ic-platform-runtime.workspace = true
 ic-storage.workspace = true

@@ -59,7 +59,7 @@ fn bootstrap(
     }
 }
 
-/// Routing Root recovered from this hub's own configuration.
+/// Routing Root recovered from this hub’s configuration or this attested shard’s retained binding.
 #[must_use]
 pub fn root() -> Option<Principal> {
     ROOT.get()
@@ -241,6 +241,7 @@ pub fn open_shard(
         );
         let root = Principal::try_from_slice(root.get()).expect("retained routing Root");
         topology::attach_role_calls(root);
+        ROOT.set(Some(root));
         DIRECTORY.set(Some(match &parts {
             Some((binding, _)) => Index::install_child(&host, &directory, binding),
             None => Index::open(&host, &directory),

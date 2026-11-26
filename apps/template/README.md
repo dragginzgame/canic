@@ -5,7 +5,7 @@ Edit [src/lib.rs](src/lib.rs). It is also the actor that `canic app init --sourc
 From this directory, build just the application with the installed CLI and Rust Wasm target:
 
 ```sh
-canic app build --canister ex-template
+canic app build --canister template
 canic artifact inspect artifacts/app.wasm
 ```
 

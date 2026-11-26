@@ -82,7 +82,7 @@ fn build_row(label: String, item: &BuiltCanister) -> [String; 7] {
         if item.modules.is_empty() {
             "—".into()
         } else {
-            item.modules.join(", ")
+            item.modules.join(",")
         },
         format!(
             "{}.{:02} s",

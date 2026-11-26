@@ -7,10 +7,10 @@ use ic_platform_runtime as runtime;
 // Execute the controller's bound snapshot operation and retain its outcome.
 // guard  : Root controller
 // limits : backup::LIMITS (1,081,344 bytes each way)
-canic::__canic_inspect!(wire, "snapshot_execute", update, canic_management_protocol::backup::EXECUTE, Request, Result<Record, Error>, LIMITS, LIMITS);
+canic::__canic_inspect!(wire, "execute_snapshot_step", update, canic_management_protocol::backup::EXECUTE, Request, Result<Record, Error>, LIMITS, LIMITS);
 #[runtime::update(
     runtime = runtime,
-    name = "snapshot_execute",
+    name = "execute_snapshot_step",
     guard = canic::guard::require_controller,
     decode = decode::<Request, 80>,
     encode = encode::<Result<Record, Error>, 80>,
@@ -25,10 +25,10 @@ async fn execute(request: Request) -> Result<Record, Error> {
 // Observe the original snapshot operation by its exact binding.
 // guard  : Root controller
 // limits : 4,096-byte request, backup::LIMITS reply
-canic::__canic_inspect!(wire, "snapshot_lookup", update, canic_management_protocol::backup::LOOKUP, Binding, Result<Record, Error>, ic_wire::Limits { bytes: 4096, ..LIMITS }, LIMITS);
+canic::__canic_inspect!(wire, "lookup_snapshot_step", update, canic_management_protocol::backup::LOOKUP, Binding, Result<Record, Error>, ic_wire::Limits { bytes: 4096, ..LIMITS }, LIMITS);
 #[runtime::update(
     runtime = runtime,
-    name = "snapshot_lookup",
+    name = "lookup_snapshot_step",
     guard = canic::guard::require_controller,
     decode = decode::<Binding, 81>,
     encode = encode::<Result<Record, Error>, 81>,

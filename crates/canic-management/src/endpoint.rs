@@ -22,7 +22,6 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
     if crate::sharding::occupied() && !placement_admits(private, _method) {
         return Err("shard pool custody required".into());
     }
-    #[cfg(feature = "backup")]
     if private && crate::backup::occupied() {
         return Err("snapshot custody fences ordinary management".into());
     }
@@ -36,7 +35,7 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
 fn placement_admits(private: bool, method: u64) -> bool {
     use protocol::{application, children, publication, store_maintenance, stored};
     match method {
-        children::STATUS | children::UPGRADE_STATUS | store_maintenance::STATUS => true,
+        children::READ_STATUS | store_maintenance::STATUS => true,
         children::INJECT => private && cfg!(feature = "fault-injection"),
         children::STAGE
         | application::STAGE_CHILD_CREATION
@@ -93,11 +92,8 @@ pub const fn declared_response_limits(method: u64) -> wire::Limits {
     }
     if matches!(
         method,
-        protocol::store_maintenance::STAGE
-            | protocol::store_maintenance::ADVANCE
+        protocol::store_maintenance::MAINTAIN
             | protocol::store_maintenance::READ_ATTEMPT
-            | protocol::store_maintenance::INSTALL
-            | protocol::store_maintenance::ACTIVATE
             | protocol::store_maintenance::STATUS
             | protocol::store_maintenance::RECOVER
     ) {

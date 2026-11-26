@@ -37,10 +37,7 @@ fn metrics(request: Request) -> Report {
             #[cfg(not(feature = "timers"))]
             timers: None,
         }),
-        #[cfg(feature = "endpoint-metrics")]
         Request::Endpoints(after) => Report::Endpoints(super::performance::page(after.as_deref())),
-        #[cfg(not(feature = "endpoint-metrics"))]
-        Request::Endpoints(_) => Report::Unavailable,
         #[cfg(feature = "blob")]
         Request::Blob => blob(),
         #[cfg(feature = "db-store")]

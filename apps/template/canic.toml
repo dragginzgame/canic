@@ -1,7 +1,7 @@
-[apps.ex-template]
+[apps.template]
 
-[apps.ex-template.canisters.ex-template]
+[apps.template.canisters.template]
 role = "app"
 parent = "root"
 wasm = "artifacts/app.wasm"
-build = { manifest = "../../Cargo.toml", package = "ex-template" }
+build = { manifest = "../../Cargo.toml", package = "example-template" }

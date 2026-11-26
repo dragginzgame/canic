@@ -53,8 +53,7 @@ the application hook runs.
 ## Direct Root enrollment
 
 The additional `auth-enrollment` feature uses the supplier engine to validate
-and install a complete, authenticated Root snapshot. Root's optional `auth`
-feature mounts `configure_auth`, `revoke_auth`, `auth_enrollment` and
+and install a complete, authenticated Root snapshot. Root mounts `grant_auth_access`, `revoke_auth_access`, `fetch_auth_enrollment` and
 `refresh_auth_receiver`. Its existing
 controller guard admits configuration and revocation; the snapshot is bound to
 the actual configured receiver. No controller gains browser identity or user
@@ -74,14 +73,12 @@ and host entry replacement in the same callback. Snapshot freshness is at most
 existing session. Remote clock differences can cause conservative refusal.
 
 The installed witness now uses this actual Root path, replacing its earlier
-fixed-enrollment shortcut. Root or receiver upgrades lose volatile Auth safety
-state and remain closed. Root management custody still reopens independently;
-its ordinary maintenance receipt does not claim Auth preservation. Default fleet
-recipes do not enable Root's `auth` feature; managed Auth preservation is pending.
+fixed-enrollment shortcut. After a grant, upgrading Root or a volatile receiver closes its Auth state. Root management custody still reopens independently;
+its ordinary maintenance receipt does not claim Auth preservation. Granting receiver authority requires explicit operator approval.
 
 ## Approve a fleet grant
 
-For an already installed Auth-enabled Root and receiver, add an optional `auth`
+For an installed Root and Auth receiver, add an optional `auth`
 table under `apps.APP.fleets.FLEET` in the existing config. It has these fields:
 
 | Fields | Required meaning |
@@ -657,7 +654,7 @@ The test builds through the same public artifact owner used by applications:
 
 ```sh
 canic artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --output target/auth/receiver.wasm
-canic artifact build --package canic-root --features auth --output target/auth/root.wasm
+canic artifact build --package canic-root --output target/auth/root.wasm
 canic artifact inspect target/auth/receiver.wasm
 ```
 
@@ -665,9 +662,9 @@ This uses PocketIC and synthetic cycles. It opens no browser and deploys nothing
 to mainnet. The qualification-only canister is a separate application artifact,
 not another shipped adapter package or default Canic dependency.
 
-An upgraded Auth-enabled placement Root has unknown receiver-grant history.
-Worker reset, released-child retirement and standby imports stay fenced for
-the lifetime of that installation, including when no grants preceded the upgrade.
+A Root that never issued a grant reopens its empty grant history after upgrade.
+After its first grant, an upgrade closes enrollment, worker reset, released-child
+retirement and standby imports because the detailed grant history was volatile.
 
 ## Inputs and limits
 

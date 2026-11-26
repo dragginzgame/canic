@@ -15,7 +15,7 @@ suites have additional prerequisites in their respective guides.
 | Placement, reserve and worker reuse | `make miner-test`, `bash scripts/dev/test-store.sh sharding`, `bash scripts/dev/test-store.sh directory` |
 | Provisioning and role-authorized calls | `bash scripts/dev/test-store.sh user-directory`, `bash scripts/dev/test-store.sh db-roles` |
 | Auth enrollment, issuer and browser sessions | `make auth-test`, `make auth-profile-test` |
-| Blob, DB and Backup composition | `make blob-test`, `make db-test`, `make backup-signer-test` |
+| Blob and DB composition | `make blob-test`, `make db-test` |
 | Wire ABI, endpoint guards and reply rollback | `make check-wire-endpoints`, `make endpoint-test` |
 | Creation, funding and retained artifact experiments | `make effect-test`, `make artifact-custody-test` |
 | Profile ownership and autonomous growth regressions | `make profile-test`, `make growth-test` |
@@ -29,7 +29,7 @@ inputs. Each runner selects its own cases and features.
 `make miner-test` exercises the miner’s batch replay across an upgrade and the
 installed pool’s growth, parking and reuse under one Root. The Host planner
 binds the simulator identities to the example’s named `worker_pools` grant.
-The fixture also checks the built worker/reserve exports. A candidate Root without worker operations must refuse to reopen a retained worker grant. The original Root must still handle that grant after the failed upgrade.
+The fixture also checks the built worker/reserve exports. The standard Root reopens a retained worker grant across upgrade.
 The witness checks production across hub and Root upgrades, outsider refusal
 and the four-worker ceiling. A qualification-only Root traps the uninstall callback
 after management applies it. The normal Root reopens the issued intent and
@@ -79,7 +79,7 @@ The same suite covers shared-shard drain, expiry and copied proofs.
 `make check-wire-endpoints` builds the default User Directory hub and shard
 from their app recipes. Linux PR CI, local CI and release admission use this target to check each actor’s mounted names and call
 modes against the callable Wasm exports, then compares the generated per-method
-Wire manifests with the [reviewed hub and shard baselines](../apps/examples/user-directory/wire-baseline/ex-user-directory/contracts.json).
+Wire manifests with the [reviewed hub and shard baselines](../apps/examples/user-directory/wire-baseline/user-directory/contracts.json).
 These include the routing ID and both request and reply schema graphs. Optional
 role-service builds are outside this baseline.
 
@@ -141,7 +141,7 @@ The installed directory participant contributes one stable key to its existing
 bootstrap, initializes IC Timers and opens `canic_management::funding`. The
 parent mounts configure, stop and request. The child mounts the balance watcher.
 Root forwards the operator's exact grant to the managed parent. Use the Root
-client's `stop-child-funding CHILD --parent PARENT` for revocation. The directory suite checks the built funding exports and codec for baseline and role-enabled Roots. Installed upgrades must preserve cancellation for a parent-held grant.
+client's `stop-child-funding CHILD --parent PARENT` for revocation. The directory suite checks the built funding exports and codec for the standard Root. Installed upgrades must preserve cancellation for a parent-held grant.
 
 `bash scripts/dev/test-store.sh directory` exercises Root availability with two
 installed hubs. Each hub requests its first shard while Root is stopped. After
@@ -234,10 +234,10 @@ The test also upgrades a populated volatile shard under its actual Root controll
 The database bytes and hub route survive. The shard refuses the previous session,
 a freshly signed admission and a controller-triggered enrollment refresh.
 
-## Optional Root snapshot executor
+## Root snapshot executor
 
-`bash scripts/dev/test-root.sh snapshot::` qualifies Canic #6's optional fresh Root
-layout against an actual Root-created persistent counter. It covers exact
+`bash scripts/dev/test-root.sh snapshot::` qualifies the standard fresh Root against a Root-created persistent counter.
+Only the injected callback-failure cases install the fault-injection build. It covers exact
 execute/lookup replay, one-MiB transfer, upload/load with stopped completion,
 populated stable-byte preservation, authority and argument refusal, expiry,
 call-cost admission and callback-evidence loss across Root upgrade. Protocol and
@@ -247,14 +247,13 @@ execute and lookup with `Exchange::decode_response`. A response for another
 method, a changed original binding or an oversized inner result fails closed.
 The decoder accepts payloads only after the caller authenticates the outer ingress.
 
-The separate Backup integration below exercises the public Host consumer. Canic #7 owns application fencing and reopening. No
-mainnet work or existing-Root layout migration is qualified. The ordinary Root
-build keeps its existing two-record layout; `backup` adds a third bounded record.
+The installed directory suite exercises native reader grants and revocation on existing snapshots. Canic #7 owns application fencing and reopening. No
+mainnet work or existing-Root layout migration is qualified. Every fresh Root allocates a bounded record for snapshot custody.
 
 ## Storage 0.80 adoption
 
 Both workspaces select Storage 0.80.0. Auth 0.50.0, Blob Storage 0.111.0
-and DB 0.31.0 consume leases from the same application bootstrap. The
+and DB 0.32.0 consume leases from the same application bootstrap. The
 separate Wasm Store 0.10.0 uses the same Storage release. Stable Auth
 receivers and the qualification issuer pass the IC canister version to
 the supplier when sealing and reopening their checkpoints.
@@ -281,76 +280,6 @@ The DB suite checks populated and refused upgrades and damaged storage. The Blob
 suite checks fresh composition, the managed fleet journey and refusal to upgrade
 the populated 0.100.6 catalog. The predecessor retains its stable bytes, management
 report and surviving asset. [Storage decision](https://github.com/dragginzgame/ic-storage/issues/8)
-
-## Backup integration boundary
-
-The optional `canic-host/backup` adapter connects IC Backup 0.106.0 to
-Tooling's published `ic-host-sign` 0.1.0. It passes the original management
-arguments or status request ID, sender, effective target, exact expiry, deadline
-and spending limits. Backup commits to the adapter version, provider, identity and
-configuration at approval. Tooling owns key access and process cleanup. Backup
-owns signing reservations, signed bytes, transport and observation.
-
-On Linux with ICP CLI, D-Bus and GNOME Keyring installed, run:
-
-```sh
-make qualification-setup
-make backup-signer-setup
-make backup-signer-test
-```
-
-The fixture creates its own session bus, keyring, secp256k1 identity and stopped
-canister. It drops the response to a real snapshot take, reopens the journal and
-reconstructs the signer. Changing its public manifest path refuses recovery.
-The original configuration permits one explicit status observation. The fixture
-checks the snapshot count, journal bytes and signature spending, verifies the
-completed capture offline, overwrites the fixture's stable bytes, restores and
-checks the bytes and stopped status.
-
-The managed case installs a fresh Backup-enabled Root and its persistent counter.
-The signer controls Root, and Root is the counter’s sole controller. Supply
-`canic_host::backup::SnapshotCodec` to Backup’s `with_root_manager` connection
-and `with_root_codec` store. The codec binds each step to its original management
-arguments and checks the returned binding before exposing the retained result.
-The fixture drops the take and load replies, reopens the operations, uses one
-explicit lookup apiece, restores the original bytes and checks stopped completion.
-Root fences and stops the counter for each operation. The app checkpoints value
-1 under fence 1, advances to value 2, and closes under fence 2 before rewind.
-Host derives operator calls with `canic_host::backup::recovery_request`.
-Its `CounterRecoveryGuard` checks authenticated Root receipts locally. Root
-checks its ledger at dispatch. Allocation and load need separate operator
-admissions. After start, the restored counter reports value 1 and fence 1.
-Replaying the old successful opening leaves writes closed. The operator accepts
-generation 3, verifies the counter is still fenced, then opens it explicitly.
-Only then does the next public increment succeed. The fixture reconstructs
-guard evidence by looking up the original requests. It discards the ingress
-handles for restore start, acceptance and opening and observes Root's retained
-results. Changing Root's controller after acceptance removes the original
-operator's lookup and execution authority. The replacement controller cannot
-use the original plan to open the counter. With the gateway stopped, reopening
-the journal yields the exact restore receipt and unchanged signature, network
-and observation spending.
-
-The test uses Testkit operator ingress for these lifecycle calls and the
-external signer for Backup's snapshot procedure. The one-capture/one-restore
-ledger has no reusable generation slots. Unresolved callbacks stay blocked.
-The snapshot fault test also exercises application rejection and a child fence
-whose acknowledgement was lost across a Root upgrade. The app has no timers,
-outbound work or other participants to reconcile.
-
-These are local Linux qualification routes. The provider requires a
-keyring-backed identity. Password-encrypted ICP identities use a different
-storage contract. The same test exercises partial and oversized signer output,
-provider death, deadline expiry and cancellation after launch. Each failed capture
-retains one signing reservation, sends zero replica requests and refuses to sign
-again after journal reopen. Real signed envelopes also exercise method, argument,
-expiry, sender and original-status binding checks for [Canic #5](https://github.com/dragginzgame/canic/issues/5).
-For an original-request status lookup, the adapter returns the exact signed
-envelope when the request matches. It rejects a different request ID and also
-rejects a one-nanosecond change to the requested ingress expiry.
-Root-managed execution and application fencing/reopening have their own
-acceptance in [Canic #6](https://github.com/dragginzgame/canic/issues/6) and
-[Canic #7](https://github.com/dragginzgame/canic/issues/7).
 
 ## Qualified baseline
 

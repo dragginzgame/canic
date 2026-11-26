@@ -6,7 +6,6 @@
 mod tests;
 
 pub mod application;
-#[cfg(feature = "backup")]
 pub mod backup;
 pub mod children;
 pub mod custody;
@@ -144,7 +143,7 @@ pub struct Status {
     pub observed_module: Option<Vec<u8>>,
     /// Current physical stable page use.
     pub stable_pages: u64,
-    /// Distinct executable marker for the maintenance rehearsal.
+    /// Historical qualification marker retained in the Wire and journal formats.
     pub maintenance_candidate: bool,
 }
 

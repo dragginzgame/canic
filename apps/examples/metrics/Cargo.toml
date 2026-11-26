@@ -1,5 +1,5 @@
 [package]
-name = "ex-metrics"
+name = "example-metrics"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,7 +19,7 @@ crate-type = ["cdylib", "rlib"]
 
 # Native codec launched by the Canic CLI for named fleet calls.
 [[bin]]
-name = "ex-metrics-client"
+name = "example-metrics-client"
 path = "client/main.rs"
 
 [dependencies]

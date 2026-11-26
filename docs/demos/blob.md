@@ -7,9 +7,9 @@ qualification workspace. It is a finite local catalog example, not a provider
 client or a production deployment recipe.
 
 The published 0.111.0 Service accepts the application’s Storage 0.80 lease.
-Use `canic::blob::open_service` on install and reopen to attach the selected
+Use `canic::blob::open_service` on install and reopen to attach the
 Canic metrics store and log sink. Custom lifecycle hooks call
-`canic::lifecycle::initialize_diagnostics()` first when logging is enabled.
+`canic::lifecycle::initialize_diagnostics()` first.
 Use fresh backing for this Storage generation. The historical 0.100.6 catalog retains its original executable. [Storage #8](https://github.com/dragginzgame/ic-storage/issues/8)
 
 The [Asset Library walkthrough](../../apps/examples/asset-library/DESIGN.md) builds the same actor without the qualification fault endpoint and installs it for a two-user exercise.
@@ -244,10 +244,9 @@ initialization explicitly names Root as manager; its real installation principal
 owns both stores. Arguments are not inferred from controller or parent roles.
 
 For an upgrade, the app supplies its method-bound upgrade frame and the operator
-selects `--blob-attempt N`. Root must be built with its optional `blob` feature:
+selects `--blob-attempt N`. Every production Root supports this operation.
 
 ```sh
-canic artifact build --package canic-root --features blob
 canic fleet plan --canister catalog --root-module ROOT_HASH --release PUBLICATION \
   --target CANISTER --previous-module OLD_HASH --install-args catalog-upgrade.bin \
   --blob-attempt 1 --identity canic-mainnet

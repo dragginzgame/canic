@@ -1,7 +1,7 @@
-[apps.ex-metrics]
+[apps.metrics]
 
-[apps.ex-metrics.canisters.ex-metrics]
+[apps.metrics.canisters.metrics]
 role = "app"
 parent = "root"
 wasm = "artifacts/app.wasm"
-build = { manifest = "../../../Cargo.toml", package = "ex-metrics", features = ["canic/endpoint-metrics"], client = "ex-metrics-client" }
+build = { manifest = "../../../Cargo.toml", package = "example-metrics", client = "example-metrics-client" }

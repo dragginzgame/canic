@@ -23,7 +23,7 @@ pub(crate) fn app_canisters(path: &Path, app: Option<&str>, json: bool) -> Resul
         let item = &definition.canisters[name];
         [
             format!("{prefix}{name}"),
-            item.role.clone().unwrap_or_else(|| "—".into()),
+            crate::topology::role_label(item.role.as_deref().unwrap_or("—")).into(),
             item.wasm
                 .as_ref()
                 .map_or_else(|| "—".into(), |path| path.display().to_string()),
@@ -77,7 +77,7 @@ pub(crate) fn canisters(
         let config = &canisters[slot];
         [
             format!("{prefix}{slot}"),
-            config.role.clone().unwrap_or_else(|| "—".into()),
+            crate::topology::role_label(config.role.as_deref().unwrap_or("—")).into(),
             config.id.clone().unwrap_or_else(|| "—".into()),
         ]
     })

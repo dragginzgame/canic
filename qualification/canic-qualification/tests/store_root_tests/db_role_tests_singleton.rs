@@ -28,11 +28,9 @@ async fn paid_singleton_reopens_its_parent_bound_receiver() {
     let url = instance.client_mut().make_live(None).await;
     instance.client_mut().stop_live().await;
     let pic = instance.client();
-    let (root, store) = readiness_tests::fixture_with_root(
-        pic,
-        std::fs::read(dir.join("db-role-root.wasm")).unwrap(),
-    )
-    .await;
+    let (root, store) =
+        readiness_tests::fixture_with_root(pic, std::fs::read(dir.join("root.wasm")).unwrap())
+            .await;
     let project_wasm = std::fs::read(dir.join("db-role-project.wasm")).unwrap();
     store.publish_named("project", "1", &project_wasm).await;
     store.publish_named("ledger", "1", &ledger_wasm).await;

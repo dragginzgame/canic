@@ -177,7 +177,7 @@ async fn installed_browser_profiles_preserve_identity_recovery_and_logout() {
             "revoke": enrollment_frame(enrollment::REVOKE, ic_wire::Direction::Request, &grant),
         }));
         let result = pic
-            .update_call(*root, installer, "configure_auth", bytes)
+            .update_call(*root, installer, "grant_auth_access", bytes)
             .await
             .unwrap();
         let reply: Result<(), enrollment::Error> = ic_wire::decode(

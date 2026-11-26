@@ -379,7 +379,7 @@ async function qualify() {
       const root = canicProfile.Principal.fromText(selected.canister), controller = canicProfile.key(13);
       await flow.coordinator.ensureSession(target);
       const before = Array.from(await flow.get(target, flow.config.frames.getA));
-      const revoked = Array.from(await flow.raw('revoke_auth', root, controller, selected.revoke));
+      const revoked = Array.from(await flow.raw('revoke_auth_access', root, controller, selected.revoke));
       // Root revocation is not instantly visible across canisters. Refresh through
       // the receiver's existing direct authority pull before asserting closure.
       const refreshed = Array.from(await flow.raw(flow.config.frames.refreshMethod, target, controller, flow.config.frames.refresh));
@@ -387,7 +387,7 @@ async function qualify() {
       const read = Array.from(await flow.get(target, flow.config.frames.getA));
       const write = Array.from(await flow.write(target, flow.config.frames.putA));
       const afterAdmissions = flow.counts.admit;
-      const retry = Array.from(await flow.raw('configure_auth', root, controller, selected.configure));
+      const retry = Array.from(await flow.raw('grant_auth_access', root, controller, selected.configure));
       const retried = Array.from(await flow.raw(flow.config.frames.refreshMethod, target, controller, flow.config.frames.refresh));
       const stillClosed = Array.from(await flow.get(target, flow.config.frames.getA));
       const other = Array.from(await flow.get(flow.targets[0], flow.config.frames.getA));

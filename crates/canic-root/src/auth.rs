@@ -21,21 +21,21 @@ fn controller<const ID: u64>() -> Result<(), String> {
     transport::admit::<ID>()
 }
 
-// configure_auth
+// grant_auth_access
 // Approve one receiver grant or confirm an exact retry.
 // guard  : Root controller
 // limits : enrollment::LIMITS (8,192 bytes each way)
-canic::__canic_inspect!(wire, "configure_auth", update, enrollment::CONFIGURE, Grant, Result<(), Error>, enrollment::LIMITS, enrollment::LIMITS);
+canic::__canic_inspect!(wire, "grant_auth_access", update, enrollment::CONFIGURE, Grant, Result<(), Error>, enrollment::LIMITS, enrollment::LIMITS);
 #[runtime::update(
     runtime = runtime,
     guard = controller::<{enrollment::CONFIGURE}>,
     decode = transport::decode::<Grant, {enrollment::CONFIGURE}>,
     max_bytes = 8192,
     on_error = endpoint_error,
-    name = "configure_auth",
+    name = "grant_auth_access",
     encode = transport::encode::<Result<(), Error>, {enrollment::CONFIGURE}>,
 )]
-fn configure_auth(grant: Grant) -> Result<(), Error> {
+fn grant_auth_access(grant: Grant) -> Result<(), Error> {
     STATE.with_borrow_mut(|state| {
         let grants = state.as_mut().ok_or(Error::Closed)?;
         if let Some(authority) = grants.get(&grant.receiver) {
@@ -47,27 +47,30 @@ fn configure_auth(grant: Grant) -> Result<(), Error> {
         if grants.len() >= enrollment::MAX_RECEIVERS {
             return Err(Error::Capacity);
         }
-        grants.insert(grant.receiver, Authority::new(grant, api::time())?);
+        let receiver = grant.receiver;
+        let authority = Authority::new(grant, api::time())?;
+        canic_management::record_auth_grant();
+        grants.insert(receiver, authority);
         Ok(())
     })
 }
 
-// revoke_auth
+// revoke_auth_access
 // Close the matching receiver grant while preserving grants for other receivers.
 // guard  : Root controller
 // limits : enrollment::LIMITS (8,192 bytes each way)
-canic::__canic_inspect!(wire, "revoke_auth", update, enrollment::REVOKE, Grant, Result<(), Error>, enrollment::LIMITS, enrollment::LIMITS);
+canic::__canic_inspect!(wire, "revoke_auth_access", update, enrollment::REVOKE, Grant, Result<(), Error>, enrollment::LIMITS, enrollment::LIMITS);
 #[runtime::update(
     runtime = runtime,
     guard = controller::<{enrollment::REVOKE}>,
     decode = transport::decode::<Grant, {enrollment::REVOKE}>,
     max_bytes = 8192,
     on_error = endpoint_error,
-    name = "revoke_auth",
+    name = "revoke_auth_access",
     encode = transport::encode::<Result<(), Error>, {enrollment::REVOKE}>,
 )]
 #[allow(clippy::needless_pass_by_value)]
-fn revoke_auth(grant: Grant) -> Result<(), Error> {
+fn revoke_auth_access(grant: Grant) -> Result<(), Error> {
     STATE.with_borrow_mut(|state| {
         let authority = state
             .as_mut()
@@ -78,21 +81,21 @@ fn revoke_auth(grant: Grant) -> Result<(), Error> {
     })
 }
 
-// auth_enrollment
+// fetch_auth_enrollment
 // Return the snapshot for the calling receiver and its requested binding.
 // guard  : transport::admit (enrollment frame)
 // limits : enrollment::LIMITS (8,192 bytes each way)
-canic::__canic_inspect!(wire, "auth_enrollment", update, enrollment::SNAPSHOT, Request, Result<Snapshot, Error>, enrollment::LIMITS, enrollment::LIMITS);
+canic::__canic_inspect!(wire, "fetch_auth_enrollment", update, enrollment::SNAPSHOT, Request, Result<Snapshot, Error>, enrollment::LIMITS, enrollment::LIMITS);
 #[runtime::update(
     runtime = runtime,
     guard = transport::admit::<{enrollment::SNAPSHOT}>,
     decode = transport::decode::<Request, {enrollment::SNAPSHOT}>,
     max_bytes = 8192,
     on_error = endpoint_error,
-    name = "auth_enrollment",
+    name = "fetch_auth_enrollment",
     encode = transport::encode::<Result<Snapshot, Error>, {enrollment::SNAPSHOT}>,
 )]
-fn auth_enrollment(request: Request) -> Result<Snapshot, Error> {
+fn fetch_auth_enrollment(request: Request) -> Result<Snapshot, Error> {
     let caller = api::caller();
     STATE.with_borrow_mut(|state| {
         let grants = state.as_mut().ok_or(Error::Closed)?;

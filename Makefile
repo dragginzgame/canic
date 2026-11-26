@@ -32,8 +32,6 @@ help:
 	  'make deps-list               List product and qualification package versions' \
 	  'make deps-update             Update product and qualification dependencies' \
 	  'make ci                      Run all repository checks (aggregate)' \
-	  'make backup-signer-setup     Prepare the external signer for local qualification' \
-	  'make backup-signer-test      Exercise direct Backup recovery with a disposable keyring' \
 	  'make qualification-setup     Explicitly prepare the shared PocketIC server' \
 	  'make effect-test             Run effect-boundary and owner-maintenance experiments' \
 	  'make effect-maintenance-test Rehearse owner upgrade and failed-upgrade recovery' \
@@ -67,12 +65,12 @@ counter-test:
 	bash scripts/dev/test-counter.sh
 
 counter-clippy:
-	cargo clippy --locked -p ex-counter --all-targets -- -D warnings
-	cargo clippy --locked -p ex-counter --lib --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked -p example-counter --all-targets -- -D warnings
+	cargo clippy --locked -p example-counter --lib --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test counter -- -D warnings
 
 counter-doc:
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p ex-counter --lib --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p example-counter --lib --target wasm32-unknown-unknown --no-deps
 
 check:
 	cargo check --locked -p canic
@@ -108,7 +106,7 @@ notebook-test:
 .PHONY: metrics-test
 metrics-test:
 	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/metrics/canic.toml --canister root
-	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/metrics/canic.toml --canister ex-metrics
+	cargo run --locked --quiet -p canic-cli -- app build --config apps/examples/metrics/canic.toml --canister metrics
 	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test metrics_example
 
 CI_TEST_TARGETS := check-wire-endpoints metrics-test notebook-test test effect-test artifact-custody-test journey-test counter-test profile-test growth-test root-test endpoint-test store-test publication-test blob-test auth-test db-test
@@ -142,14 +140,14 @@ ci-native:
 
 ci-wasm:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-greeting-witness --lib --target wasm32-unknown-unknown --all-features -- -D warnings
-	cargo clippy --locked -p canic -p canic-dormant -p ex-counter -p ex-metrics -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
+	cargo clippy --locked -p canic -p canic-dormant -p example-counter -p example-metrics -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --target wasm32-unknown-unknown --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features blob,auth --target wasm32-unknown-unknown --no-deps
 
 # Match the mounted Wire contracts to the two built Wasms and the reviewed API.
 .PHONY: check-wire-endpoints
 check-wire-endpoints:
-	bash vendor/toko-tooling/scripts/ci/check-api-baseline.sh apps/examples/user-directory/wire-baseline/ex-user-directory -- \
+	bash vendor/toko-tooling/scripts/ci/check-api-baseline.sh apps/examples/user-directory/wire-baseline/user-directory -- \
 		cargo run --locked --quiet --manifest-path qualification/Cargo.toml -p canic-qualification --features inspection --example user_directory_manifests --
 	cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features inspection --test inspection
 	bash scripts/dev/test-wire-starter.sh
@@ -188,14 +186,13 @@ journey-test:
 
 journey-clippy:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-greeting-witness --all-targets -- -D warnings
-	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features backup --test backup -- -D warnings
-	cargo clippy --locked -p canic-macros -p canic -p canic-host -p canic-cli --features canic-host/backup --all-targets -- -D warnings
+	cargo clippy --locked -p canic-macros -p canic -p canic-host -p canic-cli --all-targets -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-greeting-witness --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --lib --example demo --test journey --test publication -- -D warnings
 
 journey-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-greeting-witness --no-deps
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-macros -p canic -p canic-host --features canic-host/backup --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-macros -p canic -p canic-host --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-qualification --no-deps
 
 .PHONY: profile-test profile-clippy profile-doc
@@ -226,13 +223,13 @@ root-test:
 
 root-clippy:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-directory-witness --target wasm32-unknown-unknown -- -D warnings
-	cargo clippy --locked -p canic-management-protocol -p canic-management -p canic-root --features backup,canic-management/sharding --all-targets -- -D warnings
+	cargo clippy --locked -p canic-management-protocol -p canic-management -p canic-root --features canic-management/sharding --all-targets -- -D warnings
 	cargo clippy --locked -p canic-management -p canic-root --lib --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test root --test endpoints -- -D warnings
 
 root-doc:
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management-protocol -p canic-management -p canic-root --features backup --no-deps
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --features backup,sharding --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management-protocol -p canic-management -p canic-root --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-management --features sharding --target wasm32-unknown-unknown --no-deps
 
 .PHONY: store-test store-readiness-test store-clippy publication-test
 publication-test:
@@ -265,8 +262,8 @@ auth-test:
 	bash scripts/dev/test-auth.sh
 
 auth-clippy:
-	cargo clippy --locked -p canic -p canic-root --features canic/auth-receiver-stable,canic/auth-issuer-stable,canic/auth-browser,canic-root/auth --all-targets -- -D warnings
-	cargo clippy --locked -p canic -p canic-root --features canic/auth-enrollment,canic-root/auth --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked -p canic -p canic-root --features canic/auth-receiver-stable,canic/auth-issuer-stable,canic/auth-browser --all-targets -- -D warnings
+	cargo clippy --locked -p canic -p canic-root --lib --features canic/auth-enrollment --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --features profile --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --features damaged-checkpoint --target wasm32-unknown-unknown -- -D warnings
@@ -287,13 +284,13 @@ blob-test:
 
 blob-clippy:
 	cargo clippy --locked -p canic --features blob --all-targets -- -D warnings
-	cargo clippy --locked -p canic-root --features blob --target wasm32-unknown-unknown -- -D warnings
+	cargo clippy --locked -p canic-root --lib --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-asset-catalog --target wasm32-unknown-unknown --all-features -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features profile-state --test blob -- -D warnings
 
 blob-doc:
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features blob --target wasm32-unknown-unknown --no-deps
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-root -p canic-management --features canic-root/blob --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic-root -p canic-management --lib --target wasm32-unknown-unknown --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-asset-catalog --no-deps
 
 .PHONY: db-test db-clippy
@@ -309,11 +306,3 @@ db-clippy:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features incompatible-schema -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --lib --target wasm32-unknown-unknown --features managed-fixture,fault-injection -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-db-witness --test installed -- -D warnings
-
-.PHONY: backup-signer-setup backup-signer-test
-backup-signer-setup:
-	umask 077 && cargo install --locked ic-host-sign --version 0.1.0 --features provider --root target/backup-sign-tools
-	chmod 700 target/backup-sign-tools/bin/ic-sign
-
-backup-signer-test:
-	bash scripts/dev/test-backup-signer.sh

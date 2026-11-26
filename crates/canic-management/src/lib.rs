@@ -3,7 +3,6 @@
 //! one controller-approved subnet ceiling. Canisters own endpoints and lifecycle.
 //! Host consumers use canic-management-protocol without this runtime.
 
-#[cfg(feature = "backup")]
 pub mod backup;
 
 pub mod endpoint;
@@ -23,7 +22,9 @@ mod storage;
 #[cfg(feature = "sharding")]
 mod placement;
 
-pub use engine::{bootstrap, custody, open};
+#[cfg(feature = "auth")]
+pub use engine::{auth_grant_issued, record_auth_grant};
+pub use engine::{bootstrap, configure_snapshot_readers, custody, open};
 #[cfg(feature = "fault-injection")]
 pub use single::inject_fault;
 
@@ -86,7 +87,5 @@ pub mod application {
 /// Root-owned Store maintenance custody, mounted explicitly by Root.
 
 pub mod store_maintenance {
-    pub use crate::engine::store_maintenance::{
-        activate, advance, install, observe, observe_attempt, recover, stage,
-    };
+    pub use crate::engine::store_maintenance::{maintain, observe, observe_attempt, recover};
 }

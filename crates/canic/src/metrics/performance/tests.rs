@@ -19,14 +19,14 @@ fn full_page_with_maximum_names_fits_both_wire_contracts() {
     };
     use crate::{
         method::Contract,
-        metrics::{ChildMetrics, ReadMetrics, Report, Request},
+        metrics::{ObserveChildMetrics, ReadMetrics, Report, Request},
     };
     let request =
-        ChildMetrics::encode_request(&(0, Request::Endpoints(page.next.clone()))).unwrap();
-    ChildMetrics::decode_request(&request).unwrap();
+        ObserveChildMetrics::encode_request(&(256, Request::Endpoints(page.next.clone()))).unwrap();
+    ObserveChildMetrics::decode_request(&request).unwrap();
     let report = Report::Endpoints(page);
     let bytes = ReadMetrics::encode_reply(&report).unwrap();
     ReadMetrics::decode_reply(&bytes).unwrap();
-    let bytes = ChildMetrics::encode_reply(&report).unwrap();
-    ChildMetrics::decode_reply(&bytes).unwrap();
+    let bytes = ObserveChildMetrics::encode_reply(&report).unwrap();
+    ObserveChildMetrics::decode_reply(&bytes).unwrap();
 }

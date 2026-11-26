@@ -105,12 +105,12 @@ async fn journey(revoke_shard: bool) {
     let shard_grant = grant(shard, now);
     for (method, id, request) in [
         (
-            "configure_auth",
+            "grant_auth_access",
             enrollment::CONFIGURE,
             enrollment_request(enrollment::CONFIGURE, &shard_grant),
         ),
         (
-            "revoke_auth",
+            "revoke_auth_access",
             enrollment::REVOKE,
             enrollment_request(enrollment::REVOKE, &shard_grant),
         ),
@@ -134,7 +134,7 @@ async fn journey(revoke_shard: bool) {
             .update_call(
                 f.root,
                 f.installer,
-                "configure_auth",
+                "grant_auth_access",
                 enrollment_request(enrollment::CONFIGURE, &approval),
             )
             .await
@@ -176,7 +176,7 @@ async fn journey(revoke_shard: bool) {
         .update_call(
             f.root,
             f.installer,
-            "revoke_auth",
+            "revoke_auth_access",
             enrollment_request(enrollment::REVOKE, &revoked),
         )
         .await
@@ -217,26 +217,30 @@ async fn full_root_retains_revoked_slots_and_exact_approvals() {
     };
     for n in 0..enrollment::MAX_RECEIVERS {
         let target = CanisterId::self_authenticating(n.to_be_bytes());
-        submit("configure_auth", enrollment::CONFIGURE, grant(target, now))
-            .await
-            .unwrap();
-    }
-    let first = grant(CanisterId::self_authenticating(0_usize.to_be_bytes()), now);
-    submit("revoke_auth", enrollment::REVOKE, first.clone())
+        submit(
+            "grant_auth_access",
+            enrollment::CONFIGURE,
+            grant(target, now),
+        )
         .await
         .unwrap();
-    submit("configure_auth", enrollment::CONFIGURE, first.clone())
+    }
+    let first = grant(CanisterId::self_authenticating(0_usize.to_be_bytes()), now);
+    submit("revoke_auth_access", enrollment::REVOKE, first.clone())
+        .await
+        .unwrap();
+    submit("grant_auth_access", enrollment::CONFIGURE, first.clone())
         .await
         .unwrap();
     let mut conflict = first;
     conflict.expires_at_ns += 1;
     assert_eq!(
-        submit("configure_auth", enrollment::CONFIGURE, conflict).await,
+        submit("grant_auth_access", enrollment::CONFIGURE, conflict).await,
         Err(enrollment::Error::Conflict)
     );
     assert_eq!(
         submit(
-            "configure_auth",
+            "grant_auth_access",
             enrollment::CONFIGURE,
             grant(f.target, now)
         )

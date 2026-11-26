@@ -30,7 +30,7 @@ async fn register() -> Result<Progress, ProvisionRefusal> {
     }
     let assignment = match provisioning::place::<Users>(
         &auth,
-        canic::shard_pool!("ex-user-directory-shard"),
+        canic::shard_pool!("shard"),
         existing.as_ref().map(|row| row.shard),
     )
     .await

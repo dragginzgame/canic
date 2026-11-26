@@ -125,6 +125,18 @@ pub fn prepare(
     request: Request,
 ) -> Result<(String, Plan)> {
     let canister = target(root, fleet, slot)?;
+    prepare_for_target(root, fleet, slot, canister, caller, command, request)
+}
+
+pub(crate) fn prepare_for_target(
+    root: &Path,
+    fleet: &SelectedFleet,
+    slot: &str,
+    canister: String,
+    caller: String,
+    command: Vec<String>,
+    request: Request,
+) -> Result<(String, Plan)> {
     let now = crate::now()?;
     let plan = Plan {
         version: 7,

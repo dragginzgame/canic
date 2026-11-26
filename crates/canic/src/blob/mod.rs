@@ -18,7 +18,6 @@ use supplier::{
     protocol::Installation,
 };
 
-#[cfg(feature = "metrics")]
 impl crate::metrics::store::Source for supplier::metrics::MetricsStorage {
     type Storage = Self;
 }
@@ -36,24 +35,12 @@ pub fn open_service<M: Memory>(
     installation: Principal,
     fresh: Option<Installation>,
 ) -> Result<Service<M>, OpenError> {
-    #[cfg(feature = "metrics")]
-    let service = {
-        let metrics = crate::metrics::store::open::<supplier::metrics::MetricsStorage>();
-        match fresh {
-            Some(input) => Service::create_with_metrics(memory, installation, input, metrics),
-            None => Service::open_with_metrics(memory, installation, metrics),
-        }
-    }?;
-    #[cfg(not(feature = "metrics"))]
+    let metrics = crate::metrics::store::open::<supplier::metrics::MetricsStorage>();
     let service = match fresh {
-        Some(input) => Service::create(memory, installation, input),
-        None => Service::open(memory, installation),
+        Some(input) => Service::create_with_metrics(memory, installation, input, metrics),
+        None => Service::open_with_metrics(memory, installation, metrics),
     }?;
-
-    #[cfg(feature = "logging")]
-    let service = service.with_logging(crate::logging::record);
-
-    Ok(service)
+    Ok(service.with_logging(crate::logging::record_blob))
 }
 
 /// Request and reply budgets defined by the Blob protocol.

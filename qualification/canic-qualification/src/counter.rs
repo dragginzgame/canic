@@ -1,6 +1,6 @@
 //! Call the installed demo through its application-owned Wire contract.
 use canic::method::Contract;
-use ex_counter::{CounterMethod, Error, Request, Snapshot};
+use example_counter::{CounterMethod, Error, Request, Snapshot};
 use ic_testkit::pocket_ic::{CanisterId, nonblocking::PocketIc};
 
 /// Send the application-owned counter request as the selected caller.

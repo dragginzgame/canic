@@ -107,7 +107,10 @@ impl TryFrom<PlanRecord> for Plan {
             }
             PlanAction::Call(value)
         } else if let Some(value) = auth {
-            if version != 5 || has_deployment_fields || removal.is_some() {
+            if !matches!(version, 5 | super::AUTH_ACCESS_VERSION)
+                || has_deployment_fields
+                || removal.is_some()
+            {
                 return Err(invalid());
             }
             PlanAction::Auth(value)
@@ -117,7 +120,7 @@ impl TryFrom<PlanRecord> for Plan {
             }
             PlanAction::Remove(value)
         } else if let Some(root) = store_upgrade_root {
-            if !matches!(version, 2 | 9)
+            if !matches!(version, 2 | 9 | super::STORE_MAINTENANCE_VERSION)
                 || creation_cycles != 0
                 || store_root.is_some()
                 || management.is_some()

@@ -71,7 +71,7 @@ pub(super) async fn exercise(root: &Client<'_>, target: CanisterId, sibling: Can
     canic_qualification::upgrade_stopped(
         pic,
         root.id,
-        std::fs::read(artifacts().join("baseline-root.wasm")).unwrap(),
+        std::fs::read(artifacts().join("root.wasm")).unwrap(),
         vec![],
         Some(root.operator),
     )

@@ -24,3 +24,11 @@ fn pending_allocations_stop_growth_at_the_default_ceiling() {
     });
     assert!(matches!(pools.acquisition(), Ok(Acquisition::Create)));
 }
+
+#[test]
+#[should_panic(expected = "permanent service reservation")]
+fn permanent_claim_without_journal_approval_refuses_reopen() {
+    let mut pools = Pools::default();
+    pools.permanent.insert(super::ChildId::FIRST);
+    super::validate_subnet_claims(&pools, &Default::default(), 0);
+}

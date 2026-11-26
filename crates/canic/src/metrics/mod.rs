@@ -3,11 +3,11 @@
 #[cfg(all(test, feature = "method"))]
 mod tests;
 
-#[cfg(feature = "metrics")]
+#[cfg(feature = "method")]
 mod endpoint;
-#[cfg(feature = "metrics")]
+#[cfg(feature = "method")]
 pub use endpoint::set_guard;
-#[cfg(all(feature = "metrics", feature = "timers"))]
+#[cfg(feature = "timers")]
 pub(crate) use endpoint::start_timer_window;
 
 #[cfg(feature = "method")]
@@ -15,7 +15,7 @@ pub mod performance;
 #[cfg(feature = "method")]
 mod protocol;
 #[cfg(feature = "method")]
-pub use protocol::{BlobCommand, BlobSizes, ChildMetrics, ReadMetrics, Report, Request};
+pub use protocol::{BlobCommand, BlobSizes, ObserveChildMetrics, ReadMetrics, Report, Request};
 
 pub mod store;
 
@@ -47,7 +47,7 @@ impl ic_wire::typescript::Wire for Counter {
     }
 }
 
-#[cfg(feature = "metrics")]
+#[cfg(feature = "method")]
 impl From<ic_metrics::MeasurementCounter> for Counter {
     fn from(counter: ic_metrics::MeasurementCounter) -> Self {
         Self {

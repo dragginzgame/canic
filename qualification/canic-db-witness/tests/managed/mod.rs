@@ -30,31 +30,35 @@ async fn progress(pic: &PocketIc) {
 }
 
 async fn status(pic: &PocketIc, root: Principal) -> upgrade::Status {
+    use canic_management_protocol::children;
     let bytes = pic
         .query_call(
             root,
             Principal::anonymous(),
-            "child_upgrade_status",
+            "child_status",
             frame(
-                children::UPGRADE_STATUS,
-                &children::Request {
+                children::READ_STATUS,
+                &children::StatusRequest::Upgrade(children::Request {
                     slot: children::ChildId::FIRST,
                     value: None::<upgrade::Approval>,
-                },
+                }),
                 ic_wire::Direction::Request,
             ),
         )
         .await
         .unwrap();
-    ic_wire::decode(
+    let children::ObservedStatus::Upgrade(status) = ic_wire::decode(
         &bytes,
         ic_wire::Encoding::Frame {
-            method: children::UPGRADE_STATUS,
+            method: children::READ_STATUS,
             direction: ic_wire::Direction::Response,
         },
         canic_management_protocol::LIMITS,
     )
-    .unwrap()
+    .unwrap() else {
+        panic!("expected Upgrade status")
+    };
+    status
 }
 
 #[tokio::test]

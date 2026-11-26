@@ -72,7 +72,7 @@ even after a new installation. A new worker can claim the same principal
 with a fresh generation. The installed tests exercise both origins with Root and Store. A directly created worker still consumes its original creation budget after release, reset and reuse.
 
 The hub uses `canic::worker_pool!("miner")` for assignment and lookup. Each additional worker component
-gets its own `[[apps.ex-miner-pool.fleets.local.worker_pools]]` table. A second
+gets its own `[[apps.miner-pool.fleets.local.worker_pools]]` table. A second
 pool under the same parent starts at ordinal zero with its own grant. Root
 charges both pools against the same subnet limit.
 
@@ -89,14 +89,14 @@ ceiling, add the optional table below to `canic.toml`. Select an absolute
 spending deadline in Unix nanoseconds. The example timestamp is illustrative.
 
 ```toml
-[apps.ex-miner-pool.fleets.local.standby_pool]
+[apps.miner-pool.fleets.local.standby_pool]
 root = "root"
 min_available_spares = 2
 maximum_creations = 3
 expires_at_ns = 1_800_000_000_000_000_000
 minimum_import_cycles = 500_000_000_000
 
-[[apps.ex-miner-pool.fleets.local.standby_pool.imports]]
+[[apps.miner-pool.fleets.local.standby_pool.imports]]
 network = "local"
 principals = ["<first-canister-principal>", "<second-canister-principal>"]
 ```

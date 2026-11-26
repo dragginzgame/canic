@@ -208,24 +208,27 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         ),
     ] {
         let frame = |direction| ic_wire::Encoding::Frame {
-            method: children::UPGRADE_STATUS,
+            method: children::READ_STATUS,
             direction,
         };
         let args = ic_wire::encode(
-            &Request {
+            &children::StatusRequest::Upgrade(Request {
                 slot: ChildId::FIRST,
-                value: selector,
-            },
+                value: selector.cloned(),
+            }),
             frame(ic_wire::Direction::Request),
             LIMITS,
         )
         .unwrap();
         let bytes = pic
-            .query_call(root, CanisterId::anonymous(), "child_upgrade_status", args)
+            .query_call(root, CanisterId::anonymous(), "child_status", args)
             .await
             .unwrap();
-        let status: upgrade::Status =
-            ic_wire::decode(&bytes, frame(ic_wire::Direction::Response), LIMITS).unwrap();
+        let children::ObservedStatus::Upgrade(status) =
+            ic_wire::decode(&bytes, frame(ic_wire::Direction::Response), LIMITS).unwrap()
+        else {
+            panic!("expected upgrade status")
+        };
         assert_eq!(&status, expected);
     }
 

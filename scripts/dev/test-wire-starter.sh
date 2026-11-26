@@ -49,14 +49,8 @@ if grep -Fq '__ic_scheduling_once' generated/*.ts; then
     echo "Timer executor leaked into the generated client" >&2
     exit 1
 fi
-# An optional query mounted in a dependency must appear in both the Wasm and manifest.
-sed -i.bak '/^package = "starter-app"$/a\
-features = ["canic/endpoint-metrics"]
-' canic.toml
-generated=$(candidate)
-jq -e '.app.metrics.mode == "query" and (.app.metrics.reply.schema | length > 1)' "$generated" >/dev/null
-cp "$generated" "$baseline"
-check
+# The mandatory reader has a typed reply in the starter baseline.
+jq -e '.app.logs.mode == "update" and .app.metrics.mode == "query" and (.app.metrics.reply.schema | length > 1)' "$baseline" >/dev/null
 # Field-only change in a disposable actor. Every export name, mode and ID must survive.
 sed -i.bak 's/pub message: String/pub message: String, pub revision: u32/;s/message: format!/revision: 1, message: format!/' starter-app/src/lib.rs
 generated=$(candidate)

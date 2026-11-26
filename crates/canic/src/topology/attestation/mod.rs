@@ -156,7 +156,7 @@ impl Contract for PrepareRoleKey {
 /// One replicated request by the actual shard for a proof addressed to a receiver.
 pub struct Issue;
 impl Contract for Issue {
-    const NAME: &'static str = "issue_role";
+    const NAME: &'static str = "issue_role_proof";
     const ID: u64 = wire::method_id(Self::NAME);
     type Input = Principal;
     type Output = Result<Proof, RoleError>;

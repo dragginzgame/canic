@@ -3,7 +3,7 @@ use super::*;
 use canic::method::Contract;
 use canic::sharding::standby::ReserveError;
 use canic_host::application::codec;
-use ex_miner_pool_hub::{PoolReport, Tick};
+use example_miner_pool_hub::{PoolReport, Tick};
 
 #[tokio::test(flavor = "current_thread")]
 async fn growth_park_reuse_and_capacity() {
@@ -132,21 +132,6 @@ async fn growth_park_reuse_and_capacity() {
         .unwrap();
     assert!(status.module_hash.is_none());
     assert_eq!(status.settings.controllers, [root.id]);
-    let rejection = canic_qualification::upgrade_stopped(
-        pic,
-        root.id,
-        std::fs::read(artifacts().join("baseline-root.wasm")).unwrap(),
-        vec![],
-        Some(root.operator),
-    )
-    .await
-    .unwrap_err();
-    assert!(
-        rejection
-            .reject_message
-            .contains("retained Root approval requires reserve-pool"),
-        "{rejection:?}"
-    );
     canic_qualification::upgrade_stopped(
         pic,
         root.id,
@@ -366,7 +351,7 @@ async fn growth_park_reuse_and_capacity() {
     assert!(parked.workers.iter().all(|w| w.status == "parked"));
     assert_eq!(parked.workers.iter().map(|w| w.attempts).sum::<u64>(), 22);
     use canic::sharding::{ShardTarget, standby::WorkerReleased};
-    use ex_miner_pool_hub::Release;
+    use example_miner_pool_hub::Release;
     let last = parked.workers.last().unwrap();
     let target = ShardTarget {
         shard: last.principal,
@@ -684,7 +669,7 @@ async fn return_and_reuse(prepaid: bool) {
         LookupPlacement, Placement, ShardTarget,
         standby::{Asset, ConfirmRelease, Refill, RefillStandby, ResetPhase, ResetWorker},
     };
-    use ex_miner_pool_hub::Release;
+    use example_miner_pool_hub::Release;
     let base =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../apps/examples/miner-pool/artifacts");
     let (mut server, mut owner) = support::instance_with_lifetime(
@@ -925,7 +910,34 @@ async fn return_and_reuse(prepaid: bool) {
             1
         );
     }
+    let check_full = async || {
+        let response = pic
+            .update_call(
+                root.id,
+                root.operator,
+                RefillStandby::NAME,
+                RefillStandby::encode_request(&Refill {
+                    root: root.id.as_slice().try_into().unwrap(),
+                    sequence: 1,
+                    cycles: management::CREATION_CYCLES,
+                    expires_at_ns: deadline,
+                })
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(
+            RefillStandby::decode_reply(&response).unwrap(),
+            Err(ReserveError::Capacity("no approved subnet capacity".into()))
+        );
+    };
+    if prepaid {
+        check_full().await;
+    }
     reopen().await;
+    if prepaid {
+        check_full().await;
+    }
     // Duplicate growth requests must converge on the retained winner.
     for _ in 0..2 {
         pic.submit_call(

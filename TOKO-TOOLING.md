@@ -1058,8 +1058,8 @@ versions within explicit release groups where contracts need independent
 releases. Independent product groups all use explicit package versions and
 `releases/<group>/CHANGELOG.md`; the root has no shared version and its changelog
 is an index. Require explicit group selection for releases and publication.
-Use `make deps-list` to view every local package's version and release group,
-including the separate qualification workspace. Keep root `Cargo.toml` dependency
+Use `make deps-list` for root workspace versions and release groups. Add
+`DEPENDENCY_MANIFEST=qualification/Cargo.toml` to include qualification packages. Keep root `Cargo.toml` dependency
 declarations for actual member usage, not display-only package entries. Remove an
 unused alias from its group's dependency roster when removing its declaration;
 retain the package in the group's member roster. Private product dependencies

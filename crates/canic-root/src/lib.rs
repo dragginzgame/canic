@@ -2,9 +2,8 @@
 //! Fleet bootstrap bounds permanent service slots. Placement has eight shared-shard
 //! identities and eight dedicated-instance identities under the approved subnet ceiling.
 //! Bounded serial child upgrades and journal-preserving maintenance; no reset or arbitrary adoption.
-//! Optional `auth` enables explicitly approved per-receiver volatile grants; upgrade closes it.
+//! Root admits per-receiver grants explicitly and records first use across upgrades.
 
-#[cfg(feature = "auth")]
 mod auth;
 
 mod canister;

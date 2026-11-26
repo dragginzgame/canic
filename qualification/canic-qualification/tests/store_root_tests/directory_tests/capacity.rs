@@ -108,7 +108,7 @@ pub(super) async fn exercise(
     hub: CanisterId,
     project: CanisterId,
     limit: u8,
-    module: &str,
+    key_limit: u32,
 ) {
     let args = |parent: CanisterId| {
         management::application::Arguments::new(
@@ -128,7 +128,6 @@ pub(super) async fn exercise(
         )
         .unwrap()
     };
-    let key_limit = if module == "role-root.wasm" { 3 } else { 1 };
     crate::store_root_tests::configure_routes(root, hub, "users", key_limit)
         .await
         .unwrap();
@@ -243,7 +242,7 @@ pub(super) async fn exercise(
     canic_qualification::upgrade_stopped(
         root.pic,
         root.id,
-        std::fs::read(artifacts().join(module)).unwrap(),
+        std::fs::read(artifacts().join("root.wasm")).unwrap(),
         vec![],
         Some(root.operator),
     )
@@ -325,7 +324,7 @@ pub(super) async fn exercise(
         canic_qualification::upgrade_stopped(
             root.pic,
             root.id,
-            std::fs::read(artifacts().join(module)).unwrap(),
+            std::fs::read(artifacts().join("root.wasm")).unwrap(),
             vec![],
             Some(root.operator),
         )

@@ -36,13 +36,7 @@ async fn observe(root: &Client<'_>) -> Option<Status> {
 }
 
 async fn advance(root: &Client<'_>, approval: &Approval) -> Status {
-    root.update(
-        "advance_store_maintenance",
-        wire::ADVANCE,
-        approval,
-        wire::LIMITS,
-    )
-    .await
+    super::maintenance_tests::advance(root, approval).await
 }
 
 pub(super) async fn child_stage(
@@ -117,9 +111,9 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     .unwrap();
     let input = approval(&root, &supplier).await;
     let stage_frame = ic_wire::encode(
-        &input,
+        &wire::Request::Stage(input.clone()),
         ic_wire::Encoding::Frame {
-            method: wire::STAGE,
+            method: wire::MAINTAIN,
             direction: ic_wire::Direction::Request,
         },
         wire::LIMITS,
@@ -129,14 +123,19 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
         pic.update_call(
             root.id,
             CanisterId::anonymous(),
-            "stage_store_maintenance",
+            "maintain_store",
             stage_frame
         )
         .await
         .is_err()
     );
     let reserved: Result<Status, management::Refusal> = root
-        .update("stage_store_maintenance", wire::STAGE, &input, wire::LIMITS)
+        .update(
+            "maintain_store",
+            wire::MAINTAIN,
+            &wire::Request::Stage(input.clone()),
+            wire::LIMITS,
+        )
         .await;
     let reserved = reserved.unwrap();
     assert_eq!(reserved.phase, Phase::Reserved);
@@ -194,23 +193,18 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     );
     inject(&root, 13).await;
     let frame = ic_wire::encode(
-        &input,
+        &wire::Request::Advance(input.clone()),
         ic_wire::Encoding::Frame {
-            method: wire::ADVANCE,
+            method: wire::MAINTAIN,
             direction: ic_wire::Direction::Request,
         },
         wire::LIMITS,
     )
     .unwrap();
     assert!(
-        pic.update_call(
-            root.id,
-            root.operator,
-            "advance_store_maintenance",
-            frame.clone()
-        )
-        .await
-        .is_err()
+        pic.update_call(root.id, root.operator, "maintain_store", frame.clone())
+            .await
+            .is_err()
     );
     assert_eq!(observe(&root).await.unwrap().phase, Phase::Closing);
     inject(&root, 0).await;
@@ -252,7 +246,7 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     let closed_store = pic.get_stable_memory(supplier.id).await;
     inject(&root, 14).await;
     assert!(
-        pic.update_call(root.id, root.operator, "advance_store_maintenance", frame)
+        pic.update_call(root.id, root.operator, "maintain_store", frame)
             .await
             .is_err()
     );
@@ -272,7 +266,12 @@ async fn root_retains_closure_and_stop_intent_across_lost_callbacks_and_root_upg
     let mut wrong = input.clone();
     wrong.attempt.operation[0] ^= 1;
     let refused: Result<Status, management::Refusal> = root
-        .update("stage_store_maintenance", wire::STAGE, &wrong, wire::LIMITS)
+        .update(
+            "maintain_store",
+            wire::MAINTAIN,
+            &wire::Request::Stage(wrong.clone()),
+            wire::LIMITS,
+        )
         .await;
     assert_eq!(refused, Err(management::Refusal::Occupied));
     assert!(
@@ -314,16 +313,21 @@ async fn maintenance_refuses_unfinished_children_and_checks_live_store_authority
     child_stage(&busy, &supplier, &manifest).await.unwrap();
     let input = approval(&busy, &supplier).await;
     let refused: Result<Status, management::Refusal> = busy
-        .update("stage_store_maintenance", wire::STAGE, &input, wire::LIMITS)
+        .update(
+            "maintain_store",
+            wire::MAINTAIN,
+            &wire::Request::Stage(input.clone()),
+            wire::LIMITS,
+        )
         .await;
     assert_eq!(refused, Err(management::Refusal::Occupied));
     assert!(observe(&busy).await.is_none());
     let (root, supplier) = readiness_tests::fixture(pic).await;
     let input = approval(&root, &supplier).await;
     root.update::<_, Result<Status, management::Refusal>>(
-        "stage_store_maintenance",
-        wire::STAGE,
-        &input,
+        "maintain_store",
+        wire::MAINTAIN,
+        &wire::Request::Stage(input.clone()),
         wire::LIMITS,
     )
     .await

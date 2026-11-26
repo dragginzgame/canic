@@ -1,11 +1,15 @@
-[apps.ex-counter]
+[apps.counter]
 
-[apps.ex-counter.canisters.ex-counter]
+[apps.counter.canisters.counter]
 role = "app"
 parent = "root"
 wasm = "artifacts/app.wasm"
-build = { manifest = "../../../Cargo.toml", package = "ex-counter", features = ["canic/endpoint-metrics"], client = "ex-counter-client" }
+build = { manifest = "../../../Cargo.toml", package = "example-counter", client = "example-counter-client" }
 
-[apps.ex-counter.fleets.mainnet]
+[apps.counter.fleets.mainnet]
 network = { kind = "Mainnet" }
 canisters = {}
+
+[apps.counter.fleets.local]
+network = { kind = "Local" }
+lifetime = "ephemeral"

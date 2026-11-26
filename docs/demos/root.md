@@ -3,8 +3,8 @@
 ## Build the published Root and its operator client
 
 Every Canic app gets a Root and a separate Wasm Store automatically. Build it with `canic app build --canister root`.
-Canic writes `artifacts/root.wasm` and `artifacts/root.client` and enables the
-Root capabilities used by the app's fleet policies.
+Canic writes `artifacts/root.wasm` and `artifacts/root.client` for every fleet. Auth grants, role keys, reserve pools and Blob maintenance
+are configured or approved when used.
 
 Canic uses the common workspace manifest of the app's build recipes. When they
 span multiple workspaces, or the app has no recipes, it uses `Cargo.toml`
@@ -15,9 +15,9 @@ generated with `--canic-source` builds Root and its client from that checkout
 using the checkout’s lockfile.
 
 Fresh Root builds address each child by its slot, including the first. The public
-`child_upgrade_status` query takes the slot and an optional approval. Omit the
-approval to read the latest upgrade or supply it to retrieve the exact retained
-outcome. Controllers call `observe_child_status` to read a slot’s creation status or the status of an exact upgrade approval as a replicated update. Controller updates stage and reconcile an explicit slot. Root keeps
+`child_status` query selects creation or upgrade evidence for that slot. For
+upgrades, omit the approval to read the latest entry or supply it to retrieve
+the exact retained outcome. Controllers call `observe_child_status` to read a slot’s creation status or the status of an exact upgrade approval as a replicated update. Controller updates stage and reconcile an explicit slot. Root keeps
 custody reads separate from application observations. Host retains the original
 method names and frames for historical plans with an implicit first slot.
 
@@ -29,16 +29,15 @@ reaches `management_completion("create_canister", …)` and awaits Platform’s
 `SubmitError::OutsideCanister`; reading the message caller requires IC execution.
 The installed child suite exercises these paths with real simulator principals.
 
-The optional `backup` build exposes authenticated snapshot execute/lookup for a
-fresh Root. It uses one surviving original-result ledger alongside the existing
+Every fresh Root exposes the controller-only `execute_snapshot_step` and
+`lookup_snapshot_step` updates. It uses one surviving original-result ledger alongside the existing
 Storage records. After admitting snapshot work it fences ordinary private
 management endpoints; it never starts or activates a restored application.
 See the [executor contract](../design/canic-system-design.md#backup-signing-and-execution-ownership).
 The installed local witness is `bash scripts/dev/test-root.sh snapshot::` after simulator
 preparation. This is not yet a Backup CLI workflow or an upgrade for existing fleets.
 
-Ordinary fleet plans add permanent services under the fleet ceiling. A Root built with
-`sharding` accepts a positive 32-bit fleet backstop. Its placement lists currently hold eight shared shards and eight dedicated instances or workers. The fleet owner sets `subnet_child_limit` and approves the shared ceiling
+Ordinary fleet plans add permanent services under the fleet ceiling. Root accepts a positive 32-bit fleet backstop. Its placement lists currently hold eight shared shards and eight dedicated instances or workers. The fleet owner sets `subnet_child_limit` and approves the shared ceiling
 on Root before raising either pool above two. Existing fleets keep their grants
 until the controller explicitly raises them. Root-created infrastructure consumes a child slot. The starter’s Store is created
 by the operator and subsequently handed to Root, so it consumes no Root creation slot.
@@ -57,8 +56,7 @@ Root's controller is the external operator identity. The application's sole
 controller is Root. External identities appear as controller metadata, never as
 nodes above the canister tree.
 
-The development Root uses two named Storage 0.78 cells on one backing.
-The Backup build adds a third cell for snapshot custody. Fresh installs and compatible new executables
+Root stores the management journal, artifacts and snapshot custody in named cells on one backing. Fresh installs and compatible new executables
 are locally qualified. Root now uses journal schema 2 and accepts only an explicit
 `Ready` response. Schema-1 greeting and existing 0.74 fleet images must keep their qualified old
 Root; the new executable refuses those images. A failed Host maintenance install
@@ -263,7 +261,7 @@ To inspect/build the inputs yourself:
 
 ```sh
 canic artifact build --package canic-root
-canic artifact build --package ex-template
+canic artifact build --package example-template
 canic artifact inspect target/root/root.wasm
 ```
 
@@ -514,11 +512,10 @@ need separate approvals; pending, failed or uncertain child work blocks maintena
 
 For a generated `starter` project directly under this checkout, with a completed
 fleet created using the current custody-capable Root, build a reviewed replacement
-from the Canic checkout. This example selects the qualified maintenance marker;
-it does not enable fault injection:
+from the Canic checkout at the intended replacement revision. Build the standard Root and review its module hash.
 
 ```sh
-canic artifact build --package canic-root --features maintenance-candidate --output starter/artifacts/root.wasm
+canic artifact build --package canic-root --output starter/artifacts/root.wasm
 canic fleet plan --app starter --identity canic-mainnet
 canic fleet status MAINTENANCE_OPERATION --app starter
 ```

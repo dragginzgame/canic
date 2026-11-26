@@ -11,7 +11,7 @@ mod notebook;
 use canic::{
     logging::Logs,
     method::Contract,
-    metrics::{ChildMetrics, ReadMetrics, Report},
+    metrics::{ObserveChildMetrics, ReadMetrics, Report},
 };
 use clap::{Parser, ValueEnum};
 use ic_host_process::{Input, Ownership, Policy, Stderr, run};
@@ -121,7 +121,7 @@ async fn session(
         cli(&example, &["app", "build"])?;
         Ok(example.join("artifacts"))
     };
-    let (name, slot, first, second, app_commands) = match app_name {
+    let (name, first, second, app_commands) = match app_name {
         App::MinerPool => {
             return miner::session(owner, &build_example("miner-pool")?, seconds).await;
         }
@@ -133,20 +133,8 @@ async fn session(
             )
             .await;
         }
-        App::Counter => (
-            "counter",
-            "ex-counter",
-            "increment",
-            "read",
-            "increment, read",
-        ),
-        App::Metrics => (
-            "metrics",
-            "ex-metrics",
-            "ping",
-            "checksum",
-            "ping [text], checksum TEXT",
-        ),
+        App::Counter => ("counter", "increment", "read", "increment, read"),
+        App::Metrics => ("metrics", "ping", "checksum", "ping [text], checksum TEXT"),
     };
     let url = owner.client_mut().make_live(None).await.to_string();
     let key = owner
@@ -173,7 +161,7 @@ async fn session(
     std::fs::create_dir(&directory)?;
     let example = repo.join("apps/examples").join(name);
     let mut config: toml::Table = std::fs::read_to_string(example.join("canic.toml"))?.parse()?;
-    let app = config["apps"][slot]
+    let app = config["apps"][name]
         .as_table_mut()
         .ok_or("missing example app")?;
     app.remove("fleets");
@@ -211,7 +199,7 @@ async fn session(
         "Local {name} fleet · synthetic cycles · {}",
         directory.display()
     );
-    println!("Building and deploying Root, Store and {slot}…");
+    println!("Building and deploying Root, Store and {name}…");
     let built = cli(&directory, &["app", "build"])?;
     let components = built["canisters"]
         .as_array()
@@ -230,8 +218,8 @@ async fn session(
         .any(|row| row["canister"] == "root" && row["client"].is_string());
     let root_command = |name| codec && root.iter().any(|e| e.name == name && e.mode == "update");
     let logs = root_command(Logs::NAME);
-    let metrics = root_command(ChildMetrics::NAME)
-        && exports(slot)?
+    let metrics = root_command(ObserveChildMetrics::NAME)
+        && exports(name)?
             .iter()
             .any(|e| e.name == ReadMetrics::NAME && e.mode == "query");
     let plan = cli(&directory, &["fleet", "plan", "--identity", "anonymous"])?;
@@ -240,7 +228,7 @@ async fn session(
     let child_slot = fleet
         .children
         .iter()
-        .find(|child| child.deployment.canister == slot)
+        .find(|child| child.deployment.canister == name)
         .ok_or("missing demo child in fleet approval")?
         .slot
         .index()
@@ -254,11 +242,11 @@ async fn session(
         )?;
         let child = applied["children"]
             .as_array()
-            .and_then(|children| children.iter().find(|child| child["name"] == slot))
+            .and_then(|children| children.iter().find(|child| child["name"] == name))
             .ok_or("missing planned child")?;
         let outcome = &child["outcome"];
         if let Some(id) = outcome["canister"].as_str() {
-            println!("{slot} deployed at {id}");
+            println!("{name} deployed at {id}");
             break;
         }
         let status = &outcome["status"];
@@ -298,14 +286,14 @@ async fn session(
             return Ok(serde_json::to_string_pretty(&fleet_call(
                 &directory,
                 "root",
-                &["child-metrics", child_slot.as_str(), rest.trim()],
+                &["observe-child-metrics", child_slot.as_str(), rest.trim()],
             )?)?);
         }
         if metrics && line == "metrics" {
             let mut rows = Vec::new();
             let mut after = None::<String>;
             loop {
-                let mut args = vec!["child-metrics", child_slot.as_str(), "endpoints"];
+                let mut args = vec!["observe-child-metrics", child_slot.as_str(), "endpoints"];
                 args.extend(after.as_deref());
                 let report = serde_json::from_value(fleet_call(&directory, "root", &args)?)?;
                 let Report::Endpoints(page) = report else {
@@ -332,7 +320,7 @@ async fn session(
             args.push(rest.trim_start());
         }
         Ok(serde_json::to_string_pretty(&fleet_call(
-            &directory, slot, &args,
+            &directory, name, &args,
         )?)?)
     };
     run_prompt(name, seconds, async |line: &str| command(line)).await

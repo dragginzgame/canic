@@ -24,8 +24,9 @@ serde.workspace = true
 sha2.workspace = true
 
 [dev-dependencies]
-ex-miner-pool-hub.workspace = true
-ex-user-directory-hub = { workspace = true, features = ["role-service"] }
+example-miner-pool-hub.workspace = true
+example-user-directory-hub = { workspace = true, features = ["role-service"] }
+example-user-directory-shard = { workspace = true, features = ["role-service"] }
 toko-tooling.workspace = true
 
 [[example]]
@@ -34,6 +35,10 @@ crate-type = ["cdylib"]
 
 [[example]]
 name = "registry-payer"
+crate-type = ["cdylib"]
+
+[[example]]
+name = "attested-shard"
 crate-type = ["cdylib"]
 
 [lints]

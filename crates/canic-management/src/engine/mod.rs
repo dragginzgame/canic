@@ -133,7 +133,6 @@ pub(crate) struct State {
     artifact: Artifacts,
     journal_cell: StableCell<Vec<u8>>,
     artifact_cell: StableCell<Vec<u8>>,
-    #[cfg(feature = "backup")]
     backup_cell: StableCell<Vec<u8>>,
     #[cfg(feature = "sharding")]
     pool: StableCell<Vec<u8>>,
@@ -143,12 +142,34 @@ pub(crate) struct State {
     worker_history: ic_storage::adapter::StableBTreeMap<[u8; 32], Vec<u8>>,
     #[cfg(feature = "role-issuer")]
     role_key: StableCell<Vec<u8>>,
+    #[cfg(feature = "auth")]
+    auth_history: StableCell<Vec<u8>>,
     readiness: Readiness,
-    #[cfg(feature = "backup")]
     pub(crate) backup: crate::backup::Ledger,
 }
+/// Whether this Root has issued a receiver grant since fresh installation.
+/// # Panics
+/// Requires an opened management state.
+#[cfg(feature = "auth")]
+#[must_use]
+pub fn auth_grant_issued() -> bool {
+    STATE.with_borrow(|s| s.as_ref().expect("open manager").auth_history.get() == &[1])
+}
+
+/// Record the first successful grant in the same message as admission.
+/// # Panics
+/// Requires an opened management state.
+#[cfg(feature = "auth")]
+pub fn record_auth_grant() {
+    STATE.with_borrow_mut(|s| {
+        let history = &mut s.as_mut().expect("open manager").auth_history;
+        if history.get() == &[0] {
+            history.set(vec![1]);
+        }
+    });
+}
+
 impl State {
-    #[cfg(feature = "backup")]
     pub(crate) fn save_backup(&mut self) {
         let bytes = self.backup.encode();
         self.backup_cell.set(bytes);
@@ -213,7 +234,6 @@ pub fn open(fresh: bool, readiness: Readiness) {
                 .into_owned()
         }),
     );
-    #[cfg(feature = "backup")]
     let backup_cell = canic::storage::cell(
         &runtime,
         "manager.snapshot.v1",
@@ -238,7 +258,21 @@ pub fn open(fresh: bool, readiness: Readiness) {
             ic_storage::adapter::StableBTreeMap::load(lease)
         }
     };
+    #[cfg(feature = "auth")]
+    let auth_history = canic::storage::cell(
+        &runtime,
+        crate::storage::AUTH_HISTORY_KEY,
+        1,
+        fresh.then(|| vec![0]),
+    );
+    #[cfg(feature = "auth")]
+    assert!(
+        matches!(auth_history.get().as_slice(), [0] | [1]),
+        "invalid grant history"
+    );
     let mut state = State {
+        #[cfg(feature = "auth")]
+        auth_history,
         journal,
         artifact: Artifacts::from_bytes(artifact_cell.get().as_slice().into())
             .expect("artifact custody"),
@@ -253,9 +287,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
         #[cfg(feature = "sharding")]
         pool,
         artifact_cell,
-        #[cfg(feature = "backup")]
         backup: crate::backup::Ledger::open(backup_cell.get()),
-        #[cfg(feature = "backup")]
         backup_cell,
         readiness,
     };
@@ -510,7 +542,8 @@ fn resume_after_reconciliation(slot: ChildId) {
 pub fn status(slot: ChildId) -> Status {
     let mut value = snapshot(slot);
     value.stable_pages = ic_platform_runtime::raw::stable64_size();
-    value.maintenance_candidate = cfg!(feature = "maintenance-candidate");
+    // Historical status frames include this build marker. Current executables never set it.
+    value.maintenance_candidate = false;
     value
 }
 
@@ -766,6 +799,49 @@ fn issue(slot: ChildId, index: usize, phase: Phase, bytes: &[u8]) {
 
 fn worker(s: &Status) -> Principal {
     Principal::from_text(s.worker.as_ref().expect("retained principal")).expect("valid principal")
+}
+
+/// Set native download rights for an exact ready permanent child.
+///
+/// # Errors
+/// Refuses invalid readers, a foreign or unready target, or a failed management call.
+pub async fn configure_snapshot_readers(input: stored::SnapshotReaders) -> Result<(), Failure> {
+    if !api::is_controller(&api::caller())
+        || input.root != api::canister_self()
+        || !stored::valid_snapshot_readers(&input.readers)
+    {
+        return Err(Failure::Mismatch);
+    }
+    let target = input.child.to_text();
+    let ready = STATE.with_borrow(|state| {
+        state.as_ref().is_some_and(|s| {
+            s.journal.0.iter().any(|(slot, j)| {
+                slot.service_index().is_some()
+                    && j.0.phase == Phase::Ready
+                    && j.0.worker.as_ref() == Some(&target)
+            })
+        })
+    });
+    if !ready {
+        return Err(Failure::Mismatch);
+    }
+    let visibility = if input.readers.is_empty() {
+        mgmt::SnapshotVisibility::Controllers
+    } else {
+        mgmt::SnapshotVisibility::AllowedViewers(input.readers)
+    };
+    let args = mgmt::UpdateSettingsArgs {
+        canister_id: input.child,
+        settings: CanisterSettings {
+            snapshot_visibility: Some(visibility),
+            ..Default::default()
+        },
+        sender_canister_version: Some(api::canister_version()),
+    }
+    .encode(4096)
+    .map_err(|_| Failure::Mismatch)?;
+    let reply = management("update_settings", args, 0).await?;
+    mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)
 }
 
 fn create_args() -> Vec<u8> {
@@ -1050,7 +1126,6 @@ pub(crate) fn reserved_cycles() -> u128 {
     })
 }
 
-#[cfg(feature = "backup")]
 pub(crate) fn snapshot_idle() -> bool {
     OBSERVING.with_borrow(BTreeSet::is_empty)
 }

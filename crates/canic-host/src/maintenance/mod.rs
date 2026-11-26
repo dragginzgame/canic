@@ -137,7 +137,7 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
     }
     for expected in expected {
         let creation = expected.creation.approval.as_ref().ok_or_else(invalid)?;
-        if plan.version != 2
+        if !matches!(plan.version, 2 | crate::plan::CHUNKED_ROOT_VERSION)
             || target.canister != creation.manager
             || target.module == plan.artifact.sha256
             || expected.creation.phase != Phase::Ready

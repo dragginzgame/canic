@@ -40,21 +40,19 @@ canic-profile-worker = { path = "canic-profile-worker", default-features = false
 canic-qualification = { path = "canic-qualification" }
 canic-root = { path = "../crates/canic-root" }
 clap = { version = "4.6.7", features = ["derive"] }
-ex-counter = { path = "../apps/examples/counter" }
-ex-miner-pool-hub = { path = "../apps/examples/miner-pool/hub" }
-ex-user-directory-hub = { path = "../apps/examples/user-directory/hub" }
-ex-user-directory-schema = { path = "../apps/examples/user-directory/schema" }
-ex-user-directory-shard = { path = "../apps/examples/user-directory/shard" }
+example-counter = { path = "../apps/examples/counter" }
+example-miner-pool-hub = { path = "../apps/examples/miner-pool/hub" }
+example-user-directory-hub = { path = "../apps/examples/user-directory/hub" }
+example-user-directory-schema = { path = "../apps/examples/user-directory/schema" }
+example-user-directory-shard = { path = "../apps/examples/user-directory/shard" }
 ic-auth = { version = "0.50.0", features = ["receiver-memory", "ed25519-verification"] }
 ic-auth-protocol-types = "0.44.1"
-ic-backup = "0.106.0"
-ic-db = "0.31.0"
+ic-db = "0.32.0"
 ic-host-artifacts = { version = "0.80.3", default-features = false }
 ic-host-fs = { version = "0.80.3", default-features = false }
 ic-host-process = { version = "0.81.0", default-features = false }
-ic-host-sign = "0.1.0"
 ic-platform-crypto = { package = "ic-platform", version = "0.35.1", default-features = false, features = ["ed25519"] }
-ic-platform-protocol = { version = "0.3.10", default-features = false }
+ic-platform-protocol = { version = "0.3.11", default-features = false }
 ic-platform-runtime = { version = "0.23.27", default-features = false, features = ["entrypoint-macros", "system-raw"] }
 ic-platform-types = { version = "0.21.5", default-features = false }
 ic-storage = "0.80.0"
@@ -69,7 +67,7 @@ serde_json = "1.0.154"
 sha2 = "0.11.1"
 tempfile = { version = "3.27.0", default-features = false }
 tokio = { version = "1.54.1", features = ["macros", "rt", "time"] }
-toko-tooling = "=0.46.4"
+toko-tooling = "=0.46.5"
 toml = "1.2.1"
 wasmparser = { version = "0.263.0", default-features = false, features = ["std", "validate", "features"] }
 wat = "1.263.0"

@@ -1,45 +1,38 @@
 //! Explicit install and strict empty-argument reopen hooks.
 
-#[cfg(all(feature = "metrics", feature = "db-store"))]
+#[cfg(feature = "db-store")]
 impl crate::metrics::store::Source for ic_db::metrics::MetricsStorage {
     type Storage = Self;
 }
 
-#[cfg(all(feature = "metrics", feature = "entropy"))]
+#[cfg(feature = "entropy")]
 impl crate::metrics::store::Source for ic_entropy::MetricsStorage {
     type Storage = Self;
 }
 
-#[cfg(all(feature = "metrics", feature = "jobs"))]
+#[cfg(feature = "jobs")]
 impl crate::metrics::store::Source for ic_jobs::MetricsStorage {
     type Storage = Self;
 }
 
-#[cfg(all(feature = "metrics", feature = "timers"))]
+#[cfg(feature = "timers")]
 impl crate::metrics::store::Source for ic_timers::MetricsStorage {
     type Storage = Self;
 }
 
 /// Initialize this canister's timer runtime before binding timers or restoring jobs.
-/// With `metrics`, Timers writes to the shared metrics store. Repeated calls in
+/// Timers writes to the shared metrics store. Repeated calls in
 /// the same incarnation reuse its recorder. No callback or job is bound here.
 ///
 /// # Errors
 /// Propagates the timer provider's initialization error, including a conflicting recorder.
 #[cfg(feature = "timers")]
 pub fn initialize_timers() -> Result<(), ic_timers::Error> {
-    #[cfg(feature = "metrics")]
-    {
-        use ic_timers::{MetricsStorage, initialize_with_metrics};
+    use ic_timers::{MetricsStorage, initialize_with_metrics};
 
-        initialize_with_metrics(crate::metrics::store::open::<MetricsStorage>())?;
-        crate::metrics::start_timer_window();
-        Ok(())
-    }
-    #[cfg(not(feature = "metrics"))]
-    {
-        ic_timers::initialize()
-    }
+    initialize_with_metrics(crate::metrics::store::open::<MetricsStorage>())?;
+    crate::metrics::start_timer_window();
+    Ok(())
 }
 
 /// Attach the selected suppliers to this canister’s diagnostics before application work.
@@ -49,29 +42,28 @@ pub fn initialize_timers() -> Result<(), ic_timers::Error> {
 /// # Panics
 /// Traps if an enabled supplier has already selected a different recorder or log sink.
 pub fn initialize_diagnostics() {
-    #[cfg(feature = "logging")]
     crate::logging::initialize();
 
-    #[cfg(all(feature = "logging", feature = "db-store"))]
+    #[cfg(feature = "db-store")]
     ic_db::logging::initialize_with_logger(crate::logging::record).expect("attach DB log sink");
 
-    #[cfg(all(feature = "metrics", feature = "db-store"))]
+    #[cfg(feature = "db-store")]
     {
         use ic_db::metrics::{MetricsStorage, initialize_with_metrics};
         initialize_with_metrics(crate::metrics::store::open::<MetricsStorage>())
             .expect("attach DB metrics");
     }
 
-    #[cfg(all(feature = "logging", feature = "entropy"))]
+    #[cfg(feature = "entropy")]
     ic_entropy::set_log_sink(Some(crate::logging::record)).expect("attach Entropy log sink");
 
-    #[cfg(all(feature = "metrics", feature = "entropy"))]
+    #[cfg(feature = "entropy")]
     ic_entropy::initialize_with_metrics(crate::metrics::store::open::<
         ic_entropy::MetricsStorage,
     >())
     .expect("attach Entropy metrics");
 
-    #[cfg(all(feature = "metrics", feature = "jobs"))]
+    #[cfg(feature = "jobs")]
     ic_jobs::initialize_with_metrics(crate::metrics::store::open::<ic_jobs::MetricsStorage>())
         .expect("attach Jobs metrics");
 }

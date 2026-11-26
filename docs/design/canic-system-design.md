@@ -245,10 +245,16 @@ Use direct functions and domain modules first. A module may contain its transiti
 
 ### Infrastructure roles
 
-The operator bootstraps Root. Root installs every other canister in its managed
+The design calls for the operator to bootstrap Root and for Root to install every other canister in its managed
 fleet, including the Wasm Store, service hubs and dynamically allocated children.
 A hub can request a shard and remain its application parent while Root performs
 and records the installation.
+
+The current Host implementation has one bootstrap exception. Host installs
+Store from its local Wasm and hands control to Root. During fresh fleet apply,
+Host publishes the approved releases for the application children. Root uses those releases to install the children.
+
+Root maintenance qualification checks the installed module hash and the retained child and Store evidence. The public status format keeps its historical qualification field for decoding prior records.
 
 The generated managed starter has one Root/management owner controlling a Wasm Store and one application canister. The Store is an infrastructure role, separate from application allocation cardinality. Retain an explicit external controller for Root's maintenance and recovery; show that principal as controller metadata outside the canister tree. Qualify the exact graph before deployment. Across subnets, globally scarce budgets and membership changes may justify a coordination owner, while executors retain local custody and finite delegated authority. A Coordinator, when selected, must not be needed for every continuation of previously admitted local work.
 
@@ -306,9 +312,8 @@ local control; the subsequent fleet witness qualifies Root's readiness contract
 with Store-backed artifacts. Neither qualifies Backup integration or grants a
 Root endpoint for arbitrary application calls/fencing/activation.
 
-Fresh Root grants management two named cells, `manager.journal.v2` and
-`manager.artifacts.v1`. The optional Backup composition also grants
-`manager.snapshot.v1`. Reopen requires the exact selected membership. Keep the
+Fresh Root always grants management the named cells `manager.journal.v2`,
+`manager.artifacts.v1` and `manager.snapshot.v1`. Reopen requires the exact selected membership. Keep the
 existing payload versions and semantic validation; the physical backing is a
 hard cut, not an importer for 0.74 leases. Known old payload decoders remain
 codec compatibility evidence, not proof of physical-image migration. Commit
@@ -1229,6 +1234,11 @@ children to every canister. Local reads return the last committed revision,
 including while a recipient is behind; before first delivery they are unavailable.
 Root tracks delivery separately. No local lookup establishes current permission.
 
+Every directory recipient can resolve all 256 named services. Store direct-child
+bindings, acknowledgements and withdrawn installations as separately keyed
+records with no topology child-count limit. This fresh-install layout preserves
+the parent, generation and delayed-replay checks from legacy `377fbce` above.
+
 The first one-hop publisher reads the named service and role from the exact
 Store-backed installation arguments. Only ordinary permanent slots with committed
 readiness contribute. For this append-only set the number of published services
@@ -1345,38 +1355,38 @@ Do not assume synchronized cross-canister clocks. Preserve upstream signed deadl
 | Auth | Credential/session engine and protocol | Fleet enrollment, endpoint guards and runtime composition |
 | Blob | Upload/storage/accounting/certification and service semantics | Explicit service mounting, memory grants, lifecycle and funding bindings |
 | IcyDB | Data model, database consistency, persistence and database readiness | Host lifecycle, endpoint admission, memory and entropy integration |
-| Backup | Snapshot artifacts, transfer/custody machinery and generic capture/restore progression | Fleet membership freeze, controller authority and application acceptance |
+| Native IC snapshots | Subnet snapshot storage and management calls | Root admission, effect custody and application recovery authority |
 | IC Relay (optional) | Durable channels, batching, acknowledgements, bounded request/result primitives and selected worker orchestration | Endpoint composition, admitted peer/route bindings, lifecycle participation and application workload authority |
 | Metrics and logging | Shared measurement and log machinery | Bounded labels, role-specific collectors and operator presentation |
 | Build/query/host utilities | Generic platform and host mechanics | Product artifact selection, trust, plan and deployment semantics |
 | ICRC | Required external standards and representations | Explicitly selected application adapter and guards |
 
-Root and its management engine share one heap-backed `ic-logging` log per
+Each Canic actor owns one heap-backed `ic-logging` log per
 installed incarnation. Root records successful install/reopen and management
 records child outcomes. The controller reads up to eight entries at a time
-through `logs`. The log retains up to 128 entries and 8 KiB of text.
+through `logs`. The log budgets 512 KiB per incarnation, charging
+96 bytes per row plus retained UTF-8 text. IC Logging evicts the oldest rows
+until the next entry fits and reports accounted bytes in constant time.
 Upgrade starts a new log. Durable operation evidence stays in the journal.
 The legacy managed lifecycle probe at `377fbce`
 (`qualification/canisters/test/managed_lifecycle_probe/src/logging/mod.rs`)
 checked that reading logs did not add entries or rearm timers. The reader
 preserves that property and reports the initialization version for pagination.
 
-Supplier diagnostics are composed per canister package. Selecting `metrics` with
+Supplier diagnostics follow the selected runtime. Enabling
 `db-store` or `jobs` attaches the supplier’s typed recorder to
-Canic’s metrics store. Selecting `logging` with either DB integration forwards
+Canic’s metrics store. The DB store forwards
 DB failures to the canister’s bounded log. The Canic lifecycle mount does this
 before install/reopen application code. A custom lifecycle calls
 `canic::lifecycle::initialize_diagnostics()` once at the same boundary.
 Select `timers` for standalone timers or `jobs` for a job runtime that uses them.
 Both use `canic::lifecycle::initialize_timers()` before binding timers or
-restoring jobs. With `metrics`, this attaches the timer recorder. Initializing
+restoring jobs. This attaches the timer recorder. Initializing
 diagnostics alone leaves timers stopped. Each producer retains its own counters.
 Packages selecting `entropy` can call `canic::entropy::supplier::fresh_seed()`.
-With `metrics` or `logging`, the lifecycle attaches the supplier's recorder or
-sink. Its fresh source admits one pending request per canister with a fixed
+The lifecycle attaches its recorder and log sink. Its fresh source admits one pending request per canister with a fixed
 300-second wait. Root key preparation and Auth keep independent Platform
-requests and their existing deadlines. These bypass the supplier recorder. Endpoint instruction measurements are selected
-independently with `endpoint-metrics`.
+requests and their existing deadlines. These bypass the supplier recorder. Canic automatically samples instructions for completed synchronous Canic update handlers.
 
 Qualify the selected service arrangement, embedded or separately deployed. If both arrangements are eventually supported, they must use the same independently owned service engine, with each arrangement qualified for its actual composition boundaries. Supplier packages remain usable without Canic. Direct supplier types are preferred where identity is shared; duplicate DTOs require an actual boundary. Pin and qualify type/runtime identities that must agree. Do not force unrelated tools and product packages to advance as one dependency generation.
 
@@ -1393,7 +1403,7 @@ The data-only credential envelope is not an endpoint; no legacy export aliases
 or automatic enrollment, storage, timer or activation hooks are selected.
 
 The installed qualification application uses the real volatile `MemoryReceiver`
-and pulls a protected grant from an actual Root. Root's optional `auth` feature
+and pulls a protected grant from an actual Root. Root
 admits up to 32 receiver principals under its existing controller boundary, matching
 the fleet slot limit. Each receiver owns one immutable audience/issuer/Ed25519-key/role/scope
 grant and its own snapshot history. Revocation retains that slot. Configuration
@@ -1513,7 +1523,7 @@ upgrade until activation of the exact attempt; readiness never activates it.
 Configured Store-backed children bind bounded application arguments into their
 existing plan, Store pin and Root artifact lease. Versioned complete custody
 includes those arguments; older observations refuse rather than omit them.
-Root's optional `blob` feature extends the existing child upgrade owner with
+Root extends the existing child upgrade owner with
 the exact supplier attempt and drain/stop/start/activation request commitments.
 The actual Root principal must be the child's explicitly configured Blob manager.
 Drain inspection commits before stop; stopped execution precedes ordinary upgrade;
@@ -1859,6 +1869,8 @@ database incarnation derivation. Readiness reports successful storage attachment
 only. An upgrade reopens application data and leaves the volatile receiver
 closed. This extends the retained-store predecessor review and the qualified
 parent binding without introducing a new allocation or recovery authority.
+After install and reopen, an attested shard exposes its retained routing Root through
+`canic::role::root()`. Its immediate parent remains the principal used for parent admission.
 The child mount derives the parent allocation key by appending `hub.v1` to the
 declared storage prefix. A predecessor with another allocation name supplies
 that exact `parent_storage_key`. The approved install context supplies the
@@ -1904,8 +1916,8 @@ and unconfirmed deliveries have distinct Wire replies. The payment owner and chi
 identify a `stop_child_funding` request on Root. Root handles its own approvals locally and
 verifies the retained application parent before forwarding a stop to that owner.
 The controller's shard and standby observations and the former Root's standby handoff
-observation are replicated calls. Snapshot lookup retains the installed Backup consumer's
-method name and frame for recovery of signed operations.
+observation are replicated calls. Fresh Roots expose `execute_snapshot_step` and `lookup_snapshot_step` with
+the existing snapshot frames. Signed calls retain their original method names.
 
 
 A hub without a database can mount the retained role and Auth receiver lifecycle
@@ -2087,7 +2099,8 @@ application descendant in its declared tree, including a ledger beneath a projec
 An occupied placement pool or a full child allowance permits publication and
 read-only Store observations. Publication consumes no child slot and leaves
 install authority, pool artifact pins, and maintenance admission in their existing owners.
-On an occupied placement Root, public child, child-upgrade and Store maintenance
+On an occupied placement Root, public child creation and upgrade evidence share
+the `child_status` query. Child and Store maintenance
 status remain readable. Their replicated observations still require a controller.
 Publication, deployment evidence and approved Store-backed child operations retain
 their existing authority. Ordinary inline creation requires declared capacity.
@@ -2095,10 +2108,17 @@ The mixed Store admission endpoint (including its observe variant), removal,
 maintenance effects, inline upgrades and full Root maintenance custody stay
 fenced. Their approvals omit live placement custody. A query or observation cannot authorize those effects.
 
-An Auth-enabled Root loses its volatile receiver-grant history on upgrade, even
-when it previously issued zero grants. Worker reset, released-child retirement
-and reserve imports then refuse recycling. Only a fresh installation starts
-with known-empty history.
+Root records its first successful grant in a dedicated stable lease. A Root
+that has never issued a grant reopens its empty authority map. After any grant,
+upgrade loses the volatile receiver history and fences recycling and enrollment.
+
+Every production Root includes Auth, role issuance, standby reserves and Blob
+maintenance. The fleet selects operations and grants at runtime. This storage
+layout requires a fresh fleet. Root create and maintenance approvals over
+1,900,000 bytes use a distinct signed plan domain (version 12). Host uploads
+ordered one-MiB chunks to the target Root's IC chunk store and installs by the
+approved whole-module hash. The journal retains the original signed arguments,
+deadline and reply per upload and install. Host never clears unrelated chunks.
 Legacy `377fbce` distinguished per-project singleton ledgers from globally indexed
 Root services in `docs/design/archive/0.64-service-singleton-topology/0.64-design.md`.
 The descendant's logical parent determines its singleton scope; publication binds
@@ -2205,6 +2225,14 @@ and the selected recovery export. Store maintenance preserves catalog, payloads,
 staged uploads and pins across two executables; Root retains the maintenance
 journal outside Store. A Store outage blocks dependent installation, not normal
 application calls or access to Root's retained operation status.
+
+Root accepts four explicit commands through `maintain_store`: Stage retains
+the approval, Advance continues it, Install supplies the approved Wasm, and
+Activate reopens admission after verification. Host signs the selected command.
+`observe_store_maintenance` reads retained evidence, `recover_store_maintenance`
+resolves issued effects, and `store_maintenance_status` serves the public query.
+New Store upgrade plans have their own digest domain. Retained plans keep their
+original endpoint names, frames and deadlines.
 
 The first preservation observation is a bounded replicated read of one release's
 progress and all retention obligations on its shared artifact. It uses existing
@@ -2518,7 +2546,7 @@ The initial restore boundary is application-only while its control plane remains
 
 Before checkpoint support, classify each authoritative field by rollback set, surviving witness and retention horizon. If evidence needed to distinguish post-checkpoint completed work has expired, that checkpoint cannot reopen the affected authority. Application-owned external effects require their own surviving reconciliation evidence; Canic cannot infer them from infrastructure records. Retained checkpoint lifetimes and receipt retention must agree.
 
-The legacy Canic live backup CLI was unavailable in the research baseline; the new design must not imply it can be copied as a working baseline. Canic consumes the upstream engine and qualifies its production provider. Backup, release upgrade, destructive reinstall and disaster recovery remain distinct operations with explicit authority.
+The legacy Canic live backup CLI was unavailable in the research baseline; the new design must not imply it can be copied as a working baseline. Canic uses native IC snapshots for on-subnet rollback. Backup, release upgrade, destructive reinstall and disaster recovery remain distinct operations with explicit authority.
 
 #### Backup signing and execution ownership
 
@@ -2536,90 +2564,94 @@ lookup-only on replay. Reuse the legacy failed-callback and checkpoint research
 in qualification history at revision `377fbceb3994c9d1f3033979ef4e4ce9e6b85801`.
 This profile covers one counter with no external producers.
 
-The first signer integration is a direct-controller local qualification, not a
-manager-route fallback. [Canic #5](https://github.com/dragginzgame/canic/issues/5)
-owns a small adapter in Host; [Canic #1](https://github.com/dragginzgame/canic/issues/1)
-retains the complete managed recovery acceptance. Platform supplies exact offline
-update and original-request status envelopes; IC Tooling supplies the external
-signer and bounded credential/process lifecycle. Private keys stay outside Canic.
-Backup owns the approved operation, finite signing/transport allowances, retained
-signed bytes, submission and explicit original-result observation. Do not wrap
-Canic's complete deployment signing/submission workflow or introduce another
-Backup journal, key store or generic executor.
+The native Root snapshot executor retains each approved management
+request and its outcome. Callers can observe the original effect after
+interruption. The local counter regression covers stopped capture and restore.
+See the [executor qualification](../../qualification/README.md#root-snapshot-executor).
 
-The adapter preserves the approved sender and signer configuration, management
-recipient versus effective target, original method/argument bytes or request ID,
-exact nanosecond expiry, signing deadline and complete-envelope/network ceilings.
-An observation signs only the original request-status path. Rounded expiry,
-additional paths, anonymous fallback and replacement signatures after uncertain
-output do not satisfy this contract. Platform/Tooling qualification must cover
-the actual selected identity algorithm and provider, not just a fixture key.
+#### Root-managed rolling snapshots
 
-Backup can drop the signing future at its preparation deadline. Tooling therefore
-retains process/group cleanup custody across future cancellation; dropping a
-completion observer does not establish termination or successful reaping. Canic
-consumes the supplier's explicit cleanup outcome and cannot infer permission for
-another invocation from a timeout. No detached worker or consumer-owned process
-supervisor is introduced to bypass that boundary.
+The maintainer selected on-subnet rollback for individual managed canisters.
+Root remains the sole controller of enrolled children and owns recurring snapshot
+scheduling and execution. The freshness target is a confirmed recovery point
+less than 48 hours old for each enrolled child. Restore requires explicit
+operator approval. Each snapshot represents that child's state at capture time.
+Subnet-loss recovery and a coordinated restore across tens of thousands of
+independently changing canisters are deferred.
 
-The independent manager route remains with
-[Canic #6](https://github.com/dragginzgame/canic/issues/6) and
-[Backup #1](https://github.com/dragginzgame/ic-backup/issues/1): authenticate the
-outer host call and retained inner management outcome separately, preserve both
-hops' liabilities, and never replace an unresolved effect. A host operator is not
-implicitly a controller of Root's child. Application fencing and explicit reopening
-remain [Canic #7](https://github.com/dragginzgame/canic/issues/7); neither a valid
-signature nor a stopped restore receipt proves application recovery.
+Every Root build includes snapshot execution, lookup and native snapshot reader configuration. Fresh installs include the snapshot lease. Roots with an older layout missing that lease require a fresh install. The planned recurring scheduler will also be included in every Root build. The separate history canister and Host IC Backup integration have been retired.
 
-On 2026-11-17 the maintainer accepted Backup 0.105.4's bounded execute-once /
-original-result lookup proposal for Canic #6 and limited source changes to Canic.
-Root owns the surviving inner-effect ledger; Backup owns the host journal,
-fixed capture/restore procedure and authentication of outer evidence. Use the
-existing passive management protocol and an optional `backup` Root feature,
-not a new executor package or a runtime dependency in Backup. Backup 0.105.5 supplies the Host route. Canic’s optional Host codec binds its fixed steps to this executor.
+**Proposed initial fleet policy**
 
-The initial executor is a finite qualification profile: two operations, 64 total
-effect slots, 1 MiB extents plus framing and 16 MiB reserved result custody.
-Operation ID and kind select the original operation; approval, target, caller,
-manager and authority generation are immutable values, never replacement keys.
-Each fixed step/ordinal permits one inner call. Keep original argument commitment,
-absolute dispatch deadline, cycle liability and exact bounded reply/rejection.
-The call liability separately names attachment and an upper bound for Platform's
-system call cost plus attachment (at most 1T per slot). Root checks both the bound
-and its surviving reserve before enqueue; no refund restores a consumed slot.
-This does not bound snapshot storage charges against the child; the Backup
-consumer's admitted resource/target funding policy must cover those charges.
-Lookup and duplicate execution return retained evidence without issuing another
-call. Unretained outcomes remain pending. The operator approves each step; Backup
-still owns deriving steps, snapshot identity and geometry from its fixed procedure.
+```toml
+[apps.user-directory.fleets.local.snapshots]
+enabled = true
+roles = ["user_shard"]
+download_principals = [] # Optional. Empty keeps reads controller-only.
+```
 
-The optional ledger joins Root's one Storage bootstrap with an explicit fresh
-layout; existing Root images are not implicitly migrated. A forward upgrade must
-retain that layout and all records. Once snapshot work is admitted, ordinary
-management mutation is fenced in this first profile; the existing Host Root
-maintenance contract cannot yet represent this custody. No slot recycling,
-Root rollback, application reopening or live Backup CLI is introduced. Reuse the
-legacy intent-before-dispatch, original-byte and failed-callback/upgrade research
-recorded under **First Root-owned child upgrade** in qualification history;
-legacy's retired live backup path is not a snapshot executor to transplant.
+Use one fleet-scoped policy table. `enabled = false` pauses all automatic
+captures while retaining the role selection. With snapshots enabled, omitting
+`roles` includes every eligible application child, including children without a
+declared role. A supplied list selects only the named application roles. Reject
+empty lists, duplicate names, undeclared roles and infrastructure roles during
+planning. The proposed default for a newly approved fleet is enabled with all
+eligible roles. Host shows the effective policy in the fleet plan. Root retains
+the approved policy across upgrades. An existing fleet without an approved
+policy starts scheduling only after its operator applies one.
 
-The implemented optional mounts are `snapshot_execute` (Wire method 80) and
-`snapshot_lookup` (81), with passive types in `canic-management-protocol::backup`.
-Execution receives Platform's portable typed arguments plus the approved raw
-argument hash and length. Root re-encodes and compares them before dispatch;
-the Host keeps the original raw bytes. This avoids duplicating a one-MiB upload
-inside the outer envelope. The response binds the whole request and retains its
-exact inner bytes, including a distinct management rejection. Lookup is an
-authenticated update, not an uncertified diagnostic query. Current controllers
-may look up old evidence; new effects also require the original operator.
-The initial authority generation is fixed at 1; rotation/reuse is unsupported.
-After Backup verifies a successful outer ingress, its Canic adapter can call
-`Exchange::decode_response` with the locally derived original binding and the
-authenticated response bytes. It checks the response frame, every binding field
-and the original result reservation. Only a retained inner reply or rejection
-can settle the management result. Backup retains original host evidence and
-checks that later observations preserve previously retained terminal outcomes.
-Backup owns certificate replay and finite host observations. Its normal capture and restore consumer uses the same Canic codec for live dispatch and offline verification.
+The implemented `download_principals` list names identities allowed to read
+snapshot contents. Use one list for one or more readers. Omission and an empty
+list both select controller-only access. For native IC snapshot visibility,
+validate at most ten distinct authenticated principals and reject anonymous
+access. The IC applies `allowed_viewers` to all retained snapshots of a
+canister, including earlier and manual captures. It permits listing and reading
+metadata and data. Restore and deletion remain controller operations. The
+publication of a child's backup time carries no download authority.
+
+Today the `snapshots` table accepts `roles` and `download_principals`. The
+`enabled` field above belongs to the planned automatic scheduler. Apply the
+reviewed list to each ready permanent child with the controller's signed
+`configure_snapshot_readers` call. Root verifies the target against retained
+creation evidence before changing its native snapshot visibility. Reapply after
+editing the list or removing a role to revoke the previous access.
+[IC snapshot visibility](https://docs.internetcomputer.org/references/ic-interface-spec/management-canister/#ic-method-update_settings)
+
+Root schedules one rolling snapshot per selected active, ready application
+child under its custody. Use the role from Root's retained installation evidence
+for the current child incarnation, including future instances of a selected
+pool component. Recheck eligibility before dispatch. On role removal, stop
+admitting captures for those children and preserve their existing snapshots.
+Root, Wasm Store,
+unassigned spares and retired children are outside automatic capture. Spread
+work across the day, aim for a 24-hour cadence and report recovery points aged
+48 hours or more. Report children without a first snapshot separately. Bound
+concurrency and coordinate with upgrades, recycling and application fencing.
+Every rolling capture requires a stopped child. Under the child's lifecycle
+reservation, Root records its initial status. For a running child, Root retains
+its stop attempt, requests the stop and waits for confirmed stopped status so
+outstanding callbacks can finish before capture. A child already stopping
+remains under its original stop owner's control. A child already stopped stays
+stopped after capture.
+
+Track capture and restart independently. After a successful capture or a
+confirmed capture failure, restart a child only when this operation stopped it.
+After an uncertain result or Root upgrade, reconcile the retained attempt
+before issuing a conflicting effect. Replace only the snapshot ID retained for
+that child by the scheduler.
+
+Publish each installation's recurring backup timing along its own topology
+path. The terminal recipient retains its advisory timing for local reads. The
+published UTC time is the planned start of a service interruption. Its duration
+depends on draining outstanding calls, taking the snapshot and restarting.
+Sibling installations of the same role can have different times. Role selection
+and capture authority stay with Root. A scheduling hint never proves a capture,
+a stopped canister or a confirmed recovery point.
+
+When disabled, stop admitting scheduled captures, finish or reconcile work
+already issued, and retain snapshots for explicitly approved restore or
+deletion. Re-enabling schedules the oldest or missing recovery points first
+within the same concurrency limits.
 
 ### Release to reusable capacity
 
@@ -2888,7 +2920,7 @@ Physical deletion is separate, explicit and irreversible. It requires a disposit
 
 Keep Observatory, rendering, comparisons and aggregation on the host. Canisters expose bounded facts, counters, operation summaries and paged inventory. Separate public metrics from protected authority, topology, logs and treasury details. Certificate or authenticated-update requirements depend on whether a result is merely displayed or used to authorize an effect.
 
-Each canister selecting metrics exports one bounded query named `metrics`.
+Each Canic actor exports one bounded query named `metrics`.
 A typed request selects timers, Blob command outcomes or a page of synchronous
 endpoint performance. One application-selected guard covers all sources and
 runs before decoding. The default checks the actual IC controller. The app
@@ -2910,7 +2942,7 @@ remain open until an installed upgrade demonstrates preservation.
 Historical time series and additional provider families need their own admitted
 consumer. Mounting a reader starts no sampler or storage lifecycle work.
 
-The [metrics fleet](../../apps/examples/metrics/DESIGN.md) also admits per-handler instruction summaries for synchronous Canic updates. The application build recipe selects volatile instrumentation through the Cargo dependency feature `canic/endpoint-metrics`. Canic supplies the reader and its guard. Host checks the module marker and query export in the finished Wasm before publishing the artifact. Supplier callbacks and authority checks remain typed Rust. Only its actual controller reads the paged report. A Root controller can request one page for a ready managed child slot through the fixed child metrics method.
+The [metrics fleet](../../apps/examples/metrics/DESIGN.md) also admits per-handler instruction summaries for synchronous Canic updates. Every synchronous Canic update records volatile instruction measurements. Canic supplies the reader and its guard. Host checks the module marker and query export in the finished Wasm before publishing the artifact. Supplier callbacks and authority checks remain typed Rust. Only its actual controller reads the paged report. A Root controller can request one page for a ready managed child slot through the built-in `observe_child_metrics` update on every Root.
 
 Every status states observation age/generation and completeness. An unreachable subnet is unknown, not empty or healthy. Dynamic inventory must include autonomous children. A terminal initial deployment plan is not a perpetual inventory source. Correlate plans, local operations, remote effects and readiness with durable operation IDs.
 
@@ -2964,7 +2996,7 @@ Tests should prove user-visible behavior and recovery boundaries, not preserve t
 
 The OpenChat-class workload is the strategic qualification target, not a chat product to implement. Include shared MultiUser-style workers, user indexes, groups and communities, mixed tenancy, multiple subnets, sustained growth, local funding and governed effects. Exclude the legacy one-User-canister model from this target, following the retained developer feedback. Reported estate sizes and fees in the old idea are historical input, not current benchmark facts.
 
-Use a small synthetic fixture for failure injection and topology, alongside a named application consumer. On 2026-11-17 the maintainer selected a **persistent counter in the fresh Canic demo**, replacing the profile app because the latter obscured the hands-on journey. The counter owns its value and recovery admission; Storage owns retained records. Capture and restore are explicit operator maintenance operations. Restore leaves writes fenced until the operator explicitly accepts and reopens the application. Pin the real inputs and measure the standalone baseline before expanding managed composition. The counter now has an installed Storage 0.78.0 preservation and fencing witness. Managed creation/upgrade and named counter calls now have a Root/Store CLI witness; the interactive local session prepares that managed counter fleet. The Backup witness restores a stopped Root-controlled counter. Its installed recovery path starts fenced and requires separate operator acceptance and opening through Root. Toko deployment remains deferred. Passing a synthetic fixture alone does not establish the hands-on application's adoption or complete M2.
+Use a small synthetic fixture for failure injection and topology, alongside a named application consumer. On 2026-11-17 the maintainer selected a **persistent counter in the fresh Canic demo**, replacing the profile app because the latter obscured the hands-on journey. The counter owns its value and recovery admission; Storage owns retained records. Capture and restore are explicit operator maintenance operations. Restore leaves writes fenced until the operator explicitly accepts and reopens the application. Pin the real inputs and measure the standalone baseline before expanding managed composition. The counter now has an installed Storage 0.78.0 preservation and fencing witness. Managed creation/upgrade and named counter calls now have a Root/Store CLI witness; the interactive local session prepares that managed counter fleet. The Root snapshot witness restores a stopped Root-controlled counter. Its installed recovery path starts fenced and requires separate operator acceptance and opening through Root. Toko deployment remains deferred. Passing a synthetic fixture alone does not establish the hands-on application's adoption or complete M2.
 
 The retired profile packages are private fixtures in the separate qualification workspace, preserving the existing ownership, discovery, Auth/Blob composition and management regressions until those cases have qualified replacement owners. They are not the new demo or an additional product requirement. Their recorded mainnet identities and original journal stay available for explicit historical inspection; retirement grants no deletion, controller change or state reset.
 
@@ -3082,7 +3114,7 @@ A future architectural home does not move a Consumer-gated row into the backlog.
 | Host Observatory, costs and reports | Host-only aggregation, section 14 | Consumer-gated — broader aggregation | Partial results never become complete |
 | Blob service and embedded/dedicated adapters | Independent engine and explicit composition, section 11 | Supplier-owned — Blob integration when needed | Real provider/application integration |
 | IcyDB integration | Database owns semantics; explicit host composition, section 11 | Supplier-owned — integrate only for a demonstrated database need; the demo counter uses IC Storage | Database readiness and lifecycle recovery |
-| Backup/checkpoint/authority snapshots | Future production adapter to IC Backup, section 13 | Consumer-gated — consistent application restoration | Multi-participant consistent restore |
+| Backup/checkpoint/authority snapshots | Root-managed rolling snapshots, section 13 | Per-canister on-subnet rollback | Subnet-loss recovery and multi-participant consistent restore |
 | ICRC standards | Explicit external adapter only, section 11 | Consumer-gated — named standard requirement | Required external schema and guard tests |
 | Build tools, generated packages and caches | Delegate mechanics; bind exact artifacts, section 12 | Supplier-owned — build mechanics; artifact binding required | Cold/warm, mutation and concurrent publication |
 | Evidence envelopes and policy gates | Passive inspection plus explicit approval, sections 5, 12 | Required — canonical approval and evidence | A report cannot authorize mutation |

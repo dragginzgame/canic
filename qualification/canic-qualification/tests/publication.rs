@@ -244,11 +244,16 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         .join("target/publication")
         .join(format!("fleet-{}", std::process::id()));
     std::fs::create_dir(&dir).unwrap();
+    let root_bytes = padded(std::fs::read(assets.join("root.wasm")).unwrap());
+    assert!(root_bytes.len() > 2 * 1024 * 1024);
+    let root_uploads = root_bytes.len().div_ceil(1024 * 1024);
+    let root_path = dir.join("root.wasm");
+    std::fs::write(&root_path, root_bytes).unwrap();
     let app_bytes = padded(std::fs::read(assets.join("app.wasm")).unwrap());
     std::fs::write(dir.join("app.wasm"), &app_bytes).unwrap();
     std::fs::write(dir.join("worker.wasm"), &app_bytes).unwrap();
     let mut config = json!({"apps":{"demo":{
-        "canisters":{"root":{"role":"root","wasm":assets.join("root.wasm")},
+        "canisters":{"root":{"role":"root","wasm":root_path},
             "store":{"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")},
             "app":{"role":"app","parent":"root","wasm":dir.join("app.wasm")},
             "worker":{"role":"worker","parent":"root","wasm":dir.join("worker.wasm")}},
@@ -294,6 +299,21 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     assert!(text.contains("Total operator debit ceiling: 5T"));
     assert!(text.contains("Store release: app /"));
     let signer = repo.join(".tools/ic/bin/icp");
+    let pause_upload = dir.join("pause-root-upload");
+    std::fs::write(&pause_upload, "#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */root/upload-1/arguments.bin) exit 70;; esac\ndone\nexec \"$CANIC_REAL_SIGNER\" \"$@\"\n").unwrap();
+    std::fs::set_permissions(&pause_upload, std::fs::Permissions::from_mode(0o700)).unwrap();
+    let paused_upload = Command::new(std::env::var_os("CANIC_CLI").unwrap())
+        .args(["fleet", "apply", id, "--json", "--config"])
+        .arg(dir.join("canic.toml"))
+        .args(["--identity", "anonymous", "--icp-bin"])
+        .arg(&pause_upload)
+        .env("CANIC_REAL_SIGNER", &signer)
+        .output()
+        .unwrap();
+    assert!(!paused_upload.status.success());
+    let first_upload = path.join("root/upload-0/signed.json");
+    let first_signature = std::fs::read(&first_upload).unwrap();
+    assert!(!path.join("root/install/signed.json").exists());
     let paused = dir.join("pause-store-ready");
     std::fs::write(&paused, "#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */store/store-observe/0/arguments.bin) exit 71;; esac\ndone\nexec \"$CANIC_REAL_SIGNER\" \"$@\"\n").unwrap();
     std::fs::set_permissions(&paused, std::fs::Permissions::from_mode(0o700)).unwrap();
@@ -311,6 +331,14 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         "{}",
         String::from_utf8_lossy(&stopped.stderr)
     );
+    assert_eq!(std::fs::read(first_upload).unwrap(), first_signature);
+    for index in 0..root_uploads {
+        assert!(
+            path.join("root")
+                .join(format!("upload-{index}/reply.bin"))
+                .is_file()
+        );
+    }
     for leaf in ["child", "sibling"] {
         assert!(!path.join(leaf).join("plan.json").exists());
     }
@@ -651,11 +679,11 @@ async fn observe_stopped_store(
         .update_call(
             root,
             CanisterId::anonymous(),
-            "stage_store_maintenance",
+            "maintain_store",
             ic_wire::encode(
-                &approval,
+                &wire::Request::Stage(approval.clone()),
                 ic_wire::Encoding::Frame {
-                    method: wire::STAGE,
+                    method: wire::MAINTAIN,
                     direction: ic_wire::Direction::Request,
                 },
                 wire::LIMITS,
@@ -668,7 +696,7 @@ async fn observe_stopped_store(
         ic_wire::decode::<Result<wire::Status, canic_management_protocol::Refusal>>(
             &refused,
             ic_wire::Encoding::Frame {
-                method: wire::STAGE,
+                method: wire::MAINTAIN,
                 direction: ic_wire::Direction::Response
             },
             wire::LIMITS
@@ -692,11 +720,11 @@ async fn observe_stopped_store(
         .update_call(
             root,
             operator,
-            "stage_store_maintenance",
+            "maintain_store",
             ic_wire::encode(
-                &approval,
+                &wire::Request::Stage(approval.clone()),
                 ic_wire::Encoding::Frame {
-                    method: wire::STAGE,
+                    method: wire::MAINTAIN,
                     direction: ic_wire::Direction::Request,
                 },
                 wire::LIMITS,
@@ -708,7 +736,7 @@ async fn observe_stopped_store(
     ic_wire::decode::<Result<wire::Status, canic_management_protocol::Refusal>>(
         &response,
         ic_wire::Encoding::Frame {
-            method: wire::STAGE,
+            method: wire::MAINTAIN,
             direction: ic_wire::Direction::Response,
         },
         wire::LIMITS,
@@ -721,11 +749,11 @@ async fn observe_stopped_store(
             .update_call(
                 root,
                 operator,
-                "advance_store_maintenance",
+                "maintain_store",
                 ic_wire::encode(
-                    &approval,
+                    &wire::Request::Advance(approval.clone()),
                     ic_wire::Encoding::Frame {
-                        method: wire::ADVANCE,
+                        method: wire::MAINTAIN,
                         direction: ic_wire::Direction::Request,
                     },
                     wire::LIMITS,
@@ -734,16 +762,16 @@ async fn observe_stopped_store(
             )
             .await
             .unwrap();
-        let status: wire::Status = ic_wire::decode(
+        let status = ic_wire::decode::<Result<wire::Status, canic_management_protocol::Refusal>>(
             &response,
             ic_wire::Encoding::Frame {
-                method: wire::ADVANCE,
+                method: wire::MAINTAIN,
                 direction: ic_wire::Direction::Response,
             },
             wire::LIMITS,
         )
         .unwrap();
-        if status.phase == wire::Phase::Stopped {
+        if status.unwrap().phase == wire::Phase::Stopped {
             stopped = true;
             break;
         }

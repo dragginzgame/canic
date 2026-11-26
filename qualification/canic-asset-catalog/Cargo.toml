@@ -23,7 +23,7 @@ maintenance-candidate = []
 profile = ["dep:canic-profile-worker", "dep:canic-profile-protocol"]
 
 [dependencies]
-canic = { workspace = true, features = ["blob", "logging", "metrics", "readiness"] }
+canic = { workspace = true, features = ["blob", "lifecycle", "readiness"] }
 canic-profile-protocol = { workspace = true, optional = true }
 canic-profile-worker = { workspace = true, optional = true }
 ic-platform-runtime.workspace = true

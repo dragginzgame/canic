@@ -1,8 +1,8 @@
-[apps.ex-asset-library.canisters.library]
+[apps.asset-library.canisters.library]
 role = "app"
 parent = "root"
 wasm = "artifacts/library.wasm"
 build = { manifest = "../../../qualification/Cargo.toml", package = "canic-asset-catalog" }
 
-[apps.ex-asset-library.fleets.local]
+[apps.asset-library.fleets.local]
 network = { kind = "Local" }

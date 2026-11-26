@@ -6,12 +6,15 @@ Canic selects the same locked crates.io protocol in both Cargo workspaces and
 the matching runtime as a Host artifact input. `canic artifact build --package ic-wasm-store`
 builds that registry archive with its packaged lockfile. Both selections and the
 archive's protocol must match; Git/path overrides are refused. No sibling
-checkout is needed.
+checkout is needed. Host selects the toolchain in the consumer workspace, then runs
+Cargo for the published archive outside the consumer’s local Cargo configuration.
 
 Every app automatically includes Root and its Wasm Store.
 
-Application children refer to `parent = "root"`. The operator bootstraps Root.
-Root installs the separate `store` slot from `artifacts/wasm_store.wasm`.
+Application children refer to `parent = "root"`. During fresh fleet bootstrap,
+Host uses the operator's signer to install Root from its local Wasm and the
+separate `store` slot from `artifacts/wasm_store.wasm`. Host then hands
+control of Store to Root.
 Each fleet binds its own principals. Builds reject explicit Root, Store and Coordinator definitions. When removing them, ensure the application build workspace's Cargo.lock
 selects both supplier packages and the matching Store protocol.
 
@@ -156,7 +159,8 @@ canic fleet apply FLEET_OPERATION --app starter --fleet mainnet --identity canic
 
 Apply spends the reviewed creation budget: 4T total for Root, Store and one app,
 or 5T with two apps. It creates Root/Store, hands Store to Root, publishes every
-selected child release, then admits children using exact references. Application
+selected child release, then admits children using exact references. The whole-fleet approval covers publication and child installation. Root uses
+native IC snapshots on the subnet. Application
 artifacts can be up to 8 MiB each, subject to Store quota. Identical content under
 different application names reuses bytes. Root's scheduled work can continue
 after the operator leaves. New plans dispatch when approved prerequisites are ready,
@@ -283,7 +287,7 @@ them locally; its test controller still performs Store installation explicitly.
 Store record migration and downgrade restrictions are owned by the supplier's
 [settings codec](https://github.com/dragginzgame/ic-wasm-store/blob/05755252817fdaff23455ab6550d98695fe3a169/crates/ic-wasm-store/src/state/records.rs).
 
-Root's `stage_store_maintenance`, `advance_store_maintenance` and
+Root's `maintain_store` (Stage, Advance, Install or Activate) and
 `observe_store_maintenance` mounts now qualify the next boundary under sole Root
 control. Root retains each immutable approval and stop-request commitment outside
 Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
@@ -306,7 +310,7 @@ concurrent replies cannot count it twice. This does not scan payload bytes or
 commit management-cache contents. The current Root refuses the old CUJ5 backing. The predecessor retains its original stop and scan evidence.
 Older Stores lacking this endpoint cannot complete the new pre-stop scan.
 
-The explicit `install_store_maintenance` mount accepts the approved raw replacement
+The explicit `maintain_store` Install request accepts the approved raw replacement
 (at most 1 MiB for this first infrastructure path). Root uploads it once to Store's
 management chunk cache, records exact upload/install commitments, and installs it
 through Platform's existing chunked management contract. Host keeps the durable
@@ -316,8 +320,8 @@ Issued effects are never repeated, including after Root replacement.
 
 The continuation starts the replacement with admission closed, repeats the same
 catalog scan, and requires complete matching preservation before Verified.
-`advance_store_maintenance` never activates implicitly. Only explicit
-`activate_store_maintenance` issues the matching Store activation; lost replies
+The Advance request leaves admission closed. Only an explicit
+Activate request issues the matching Store activation; lost replies
 recover by observation. Ready is retained historical completion, not a fresh
 readiness guarantee. It releases child/publication fences while retaining the
 operation. Every new effect retains the original deadline; observation after
@@ -361,7 +365,7 @@ For Host reconciliation, Root mounts a distinct controller-only
 post-install catalog verification, retaining that evidence locally. It never
 issues a fresh close, stop, upload, install, start or activation, even with a live
 approval. It retains the original operator and deadline; expired dispatch may
-still be observed. Generic `advance_store_maintenance` can dispatch new effects
+still be observed. The Advance request to `maintain_store` can dispatch new effects
 and must not be used as observation-only recovery. The existing fleet commands
 use these explicit contracts for bounded repeat Store replacements.
 
@@ -487,8 +491,8 @@ An unfinished step still needs its original live authority. Observation history
 is bounded to 32 attempts; exhaustion blocks without deleting evidence.
 
 Publication, artifact building and inspection accept up to 8 MiB, within Store’s
-bounded chunk contract. Direct-install plans have a 1,900,000-byte transport bound,
-and inline child plans retain their smaller custody limits. No measured deployment
+bounded chunk contract. Host installs Root modules up to 8 MiB, switching from direct ingress to journaled
+chunked installation above 1,900,000 bytes. Inline children retain their own custody limits. No measured deployment
 speedup is claimed. Whole-fleet release selection and Root maintenance with full
 Store custody use the workflows above, including repeat Store replacement.
 Existing-fleet migration remains pending.

@@ -59,7 +59,7 @@ fn render(report: &FleetPlacements) -> String {
         };
         vec![
             label,
-            slot.role.clone().unwrap_or_else(|| "—".into()),
+            crate::topology::role_label(slot.role.as_deref().unwrap_or("—")).into(),
             slot.canister_id.clone().unwrap_or_else(|| "—".into()),
             subnet,
             state,

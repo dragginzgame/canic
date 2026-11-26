@@ -1,4 +1,4 @@
-//! One public scratch note for the local Backup walkthrough.
+//! One public scratch note for the local snapshot restore walkthrough.
 
 mod endpoints;
 

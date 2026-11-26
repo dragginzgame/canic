@@ -11,7 +11,7 @@ async fn pin_delivery_resumes_before_stage() {
     let url = owner.client_mut().make_live(None).await.to_string();
     let pic = owner.client();
     let config = json!({"apps":{"demo":{
-        "canisters":{"root":{"role":"root","wasm":assets.join("role-root.wasm")},
+        "canisters":{"root":{"role":"root","wasm":assets.join("root.wasm")},
             "store":{"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")},
             "hub":{"role":"accounts","parent":"root","wasm":assets.join("role-hub.wasm")}},
         "fleets":{"local":{"network":{"kind":"Local","url":url,"root_key":hex(&pic.root_key().await.unwrap()),"root_subnet":pic.topology().await.get_nns().unwrap().to_text(),"routing_canister":routing.to_text()},"journal":"journal","canisters":{},"role_receivers":["hub"]}}

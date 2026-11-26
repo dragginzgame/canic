@@ -73,9 +73,26 @@ pub struct PlanInput {
     pub creation_cycles: u64,
 }
 
+/// Large Root deployment approvals commit to ordered uploads and a chunked install.
+pub(crate) const CHUNKED_ROOT_VERSION: u32 = 12;
+pub(crate) const CHILD_ACTIVATION_VERSION: u32 = 15;
+pub(crate) const PLACEMENT_CHILD_ACTIVATION_VERSION: u32 = 16;
+pub(crate) const STORE_MAINTENANCE_VERSION: u32 = 14;
+pub(crate) const AUTH_ACCESS_VERSION: u32 = 13;
+
+pub(crate) const fn root_install_version(bytes: usize, direct_version: u32) -> u32 {
+    if bytes > artifact::MAX_WASM {
+        CHUNKED_ROOT_VERSION
+    } else {
+        direct_version
+    }
+}
+
 impl Plan {
     pub(crate) fn artifact_limit(&self) -> usize {
-        if self.store_upgrade_root().is_some() {
+        if self.version == CHUNKED_ROOT_VERSION {
+            artifact::MAX_ARTIFACT_BYTES
+        } else if self.store_upgrade_root().is_some() {
             canic_management_protocol::store_maintenance::MAX_MODULE_BYTES
         } else if self.publication().is_some()
             || self.removal().is_some()
@@ -104,6 +121,13 @@ impl Plan {
                 | (9, true)
                 | (10, true)
                 | (11, true)
+                | (CHUNKED_ROOT_VERSION, true)
+                | (AUTH_ACCESS_VERSION, true)
+                | (STORE_MAINTENANCE_VERSION, true)
+                | (
+                    CHILD_ACTIVATION_VERSION | PLACEMENT_CHILD_ACTIVATION_VERSION,
+                    true
+                )
         ) || (self.version == 10
             && !matches!(
                 self.action,
@@ -112,16 +136,31 @@ impl Plan {
                     ..
                 }
             ))
+            || (self.version == STORE_MAINTENANCE_VERSION && self.store_upgrade_root().is_none())
             || (self.version == 9
                 && self.store_root().is_none()
                 && self.store_upgrade_root().is_none())
             || (self.version == 3) != self.publication().is_some()
             || matches!(self.version, 4 | 11) != self.removal().is_some()
-            || (self.version == 5) != self.auth().is_some()
-            || (self.version != 8
-                && (self.version == 6) != self.management().is_some_and(|m| m.arguments.is_some()))
-            || (self.version == 8 && !self.management().is_some_and(|m| m.source.is_some()))
+            || matches!(self.version, 5 | AUTH_ACCESS_VERSION) != self.auth().is_some()
+            || (matches!(
+                self.version,
+                CHILD_ACTIVATION_VERSION | PLACEMENT_CHILD_ACTIVATION_VERSION
+            ) && !self
+                .management()
+                .is_some_and(|owner| owner.blob_attempt.is_some()))
+            || (!matches!(self.version, 8 | PLACEMENT_CHILD_ACTIVATION_VERSION)
+                && matches!(self.version, 6 | CHILD_ACTIVATION_VERSION)
+                    != self.management().is_some_and(|m| m.arguments.is_some()))
+            || (matches!(self.version, 8 | PLACEMENT_CHILD_ACTIVATION_VERSION)
+                && !self.management().is_some_and(|m| m.source.is_some()))
             || (self.version == 7) != self.application_call().is_some()
+            || (self.version == CHUNKED_ROOT_VERSION
+                && (self.artifact.bytes <= artifact::MAX_WASM
+                    || !matches!(
+                        self.action,
+                        PlanAction::Create { .. } | PlanAction::MaintainRoot { .. }
+                    )))
             || self.artifact.bytes > self.artifact_limit()
             || self.artifact.sha256.len() != 64
             || self.expires_at_ns <= self.created_at_ns
@@ -169,9 +208,11 @@ impl Plan {
             {
                 return Err(Error::Invalid("invalid child upgrade target".into()));
             }
-            if !matches!(self.version, 2 | 6 | 8)
-                || (managed.source.is_none()
-                    && self.artifact.bytes > canic_management_protocol::MAX_WASM)
+            if !matches!(
+                self.version,
+                2 | 6 | 8 | CHILD_ACTIVATION_VERSION | PLACEMENT_CHILD_ACTIVATION_VERSION
+            ) || (managed.source.is_none()
+                && self.artifact.bytes > canic_management_protocol::MAX_WASM)
                 || crate::unhex(&managed.root_module)?.len() != 32
                 || root == principal("aaaaa-aa")?
                 || root == principal("2vxsx-fae")?
@@ -210,7 +251,7 @@ impl Plan {
                 let maximum = (u64::from(policy.services) + 2)
                     .saturating_mul(1_000_000_000_000)
                     .max(5_000_000_000_000);
-                if self.version != 2
+                if !matches!(self.version, 2 | CHUNKED_ROOT_VERSION)
                     || !policy.valid()
                     || !(500_000_000_000..=maximum).contains(cycles)
                 {
@@ -311,7 +352,9 @@ pub(crate) fn prepare(
     management: Option<ManagedOwner>,
     now: u64,
 ) -> Result<(Plan, Vec<u8>)> {
-    let limit = if management.as_ref().is_some_and(|m| m.source.is_some()) {
+    let limit = if management.as_ref().is_some_and(|m| m.source.is_some())
+        || (deployment.is_some() && management.is_none() && input.target.is_none())
+    {
         artifact::MAX_ARTIFACT_BYTES
     } else {
         artifact::MAX_WASM

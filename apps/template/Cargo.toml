@@ -1,5 +1,5 @@
 [package]
-name = "ex-template"
+name = "example-template"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -22,7 +22,7 @@ serde.workspace = true
 toko-tooling.workspace = true
 
 [[example]]
-name = "ex-template-wire"
+name = "example-template-wire"
 path = "examples/wire.rs"
 required-features = ["inspection"]
 

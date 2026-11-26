@@ -100,6 +100,9 @@ pub struct Service {
     pub canister: Principal,
 }
 
+/// Maximum published service names shared by a fleet.
+pub const MAX_SERVICES: usize = 256;
+
 /// Complete service directory for one revision. Child allocation tables stay with their owners.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Directory {
@@ -114,7 +117,7 @@ impl Directory {
     /// # Errors
     /// Refuses invalid names, canister identities, ordering or revision.
     pub fn validate(&self) -> Result<(), &'static str> {
-        if self.revision == 0 || self.services.len() > 32 {
+        if self.revision == 0 || self.services.len() > MAX_SERVICES {
             return Err("invalid directory revision or service count");
         }
         let mut principals = std::collections::BTreeSet::new();
@@ -215,11 +218,23 @@ pub struct Hop {
     pub generation: [u8; 32],
 }
 
+/// Root's advisory daily capture timing for one installation.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
+pub struct BackupTiming {
+    /// Monotonic assignment revision, independent of directory changes.
+    pub revision: u64,
+    /// Planned interruption start in seconds since midnight UTC. Absent when inactive.
+    pub daily_at_utc_secs: Option<u32>,
+}
+
 /// Parent-authenticated directory delivery. The first hop is its intended receiver.
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Delivery {
     /// Shared services at the selected revision.
     pub directory: Directory,
+    /// Assignment for the final hop only. Absence leaves its last assignment intact.
+    pub backup_timing: Option<BackupTiming>,
     /// Exact branch remaining for this delivery.
     pub path: Vec<Hop>,
 }
@@ -259,11 +274,23 @@ pub struct ReceiveDirectory;
 #[cfg(feature = "method")]
 impl crate::method::Contract for ReceiveDirectory {
     const NAME: &'static str = "receive_directory";
-    const ID: u64 = ic_wire::method_id("canic.topology.receive_directory.v1");
+    const ID: u64 = ic_wire::method_id("canic.topology.deliver_installation.v1");
     const REQUEST: ic_wire::Limits = DIRECTORY_LIMITS;
     const REPLY: ic_wire::Limits = crate::method::LIMITS;
     type Input = Delivery;
     type Output = Result<(), DirectoryError>;
+}
+
+/// Query this installation's last published backup assignment.
+#[cfg(feature = "method")]
+pub struct ReadBackupTiming;
+
+#[cfg(feature = "method")]
+impl crate::method::Contract for ReadBackupTiming {
+    const NAME: &'static str = "backup_timing";
+    const ID: u64 = ic_wire::method_id("canic.topology.backup_timing.v1");
+    type Input = ();
+    type Output = Option<BackupTiming>;
 }
 
 /// Withdraw one exact child installation before its principal can be recycled.
@@ -285,6 +312,12 @@ impl crate::method::Contract for WithdrawChild {
 #[macro_export]
 macro_rules! mount_service_directory {
     () => {
+        #[$crate::query(contract = $crate::topology::directory::ReadBackupTiming)]
+        fn backup_timing((): ()) -> Option<$crate::topology::directory::BackupTiming> {
+            $crate::topology::directory::retained::DIRECTORY
+                .with_borrow(|index| index.as_ref()?.backup_timing())
+        }
+
         #[$crate::update(contract = $crate::topology::directory::ReceiveDirectory)]
         async fn receive_directory(
             update: $crate::topology::directory::Delivery,
@@ -304,9 +337,9 @@ macro_rules! mount_service_directory {
 
 /// Bounded directory frames and retained records.
 pub const DIRECTORY_LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: 10 * 1024,
-    allocation: 262_144,
-    nodes: 4096,
+    bytes: 64 * 1024,
+    allocation: 2 * 1024 * 1024,
+    nodes: 65_536,
     depth: 8,
 };
 
@@ -315,7 +348,7 @@ pub const DIRECTORY_LIMITS: ic_wire::Limits = ic_wire::Limits {
 pub mod retained {
     use super::DirectoryError;
     use super::{DIRECTORY_LIMITS, Delivery, Directory, Hop, Principal, check_name};
-    use ic_storage::{MemoryBacking, MemoryRuntime, adapter::StableCell};
+    use ic_storage::{MemoryBacking, MemoryRuntime, StableKey, adapter::StableBTreeMap};
 
     #[derive(Clone, serde::Deserialize, serde::Serialize)]
     struct Child {
@@ -328,20 +361,27 @@ pub mod retained {
         publisher: Principal,
         role: String,
         generation: Option<[u8; 32]>,
-        children: Vec<Child>,
         current: Option<Directory>,
-        withdrawn: Vec<(Principal, [u8; 32])>,
+        backup_timing: Option<super::BackupTiming>,
     }
 
     /// A recipient's retained publisher and service directory.
     pub struct Index<M: MemoryBacking> {
-        cell: StableCell<Vec<u8>, M>,
+        rows: StableBTreeMap<Vec<u8>, Vec<u8>, M>,
         record: Record,
+    }
+
+    fn child_key(id: Principal) -> Vec<u8> {
+        [&[1][..], id.as_slice()].concat()
+    }
+
+    fn withdrawn_key(id: Principal, generation: [u8; 32]) -> Vec<u8> {
+        [&[2][..], id.as_slice(), &generation].concat()
     }
 
     // Keep old index bytes distinguishable even when neither layout contains children.
     const INDEX_FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
-        method: ic_wire::method_id("canic.topology.directory_index.v1"),
+        method: ic_wire::method_id("canic.topology.directory_header.v1"),
         direction: ic_wire::Direction::Response,
     };
 
@@ -383,14 +423,17 @@ pub mod retained {
                 publisher,
                 role: role.to_owned(),
                 generation: None,
-                children: Vec::new(),
                 current: None,
-                withdrawn: Vec::new(),
+                backup_timing: None,
             };
             let bytes = ic_wire::encode(&record, INDEX_FRAME, DIRECTORY_LIMITS)
                 .expect("encode initial directory");
-            let cell = crate::storage::cell(runtime, key, DIRECTORY_LIMITS.bytes, Some(bytes));
-            Self { cell, record }
+            let lease = runtime
+                .open_memory(&StableKey::parse(key).expect("index key"))
+                .expect("index lease");
+            let mut rows = StableBTreeMap::create(lease);
+            rows.insert(vec![0], bytes);
+            Self { rows, record }
         }
 
         /// Reopen the directory and the authority retained at install.
@@ -398,8 +441,12 @@ pub mod retained {
         /// Traps on missing storage, malformed state or invalid retained authority.
         #[must_use]
         pub fn open(runtime: &MemoryRuntime<M>, key: &str) -> Self {
-            let cell = crate::storage::cell(runtime, key, DIRECTORY_LIMITS.bytes, None);
-            let record: Record = ic_wire::decode(cell.get(), INDEX_FRAME, DIRECTORY_LIMITS)
+            let lease = runtime
+                .open_memory(&StableKey::parse(key).expect("index key"))
+                .expect("index lease");
+            let rows = StableBTreeMap::<Vec<u8>, Vec<u8>, M>::load(lease);
+            let bytes = rows.get(&vec![0]).expect("missing directory header");
+            let record: Record = ic_wire::decode(&bytes, INDEX_FRAME, DIRECTORY_LIMITS)
                 .expect("retained service directory");
             assert_eq!(
                 record.publisher.as_slice().last(),
@@ -412,31 +459,12 @@ pub mod retained {
                 record.current.is_some(),
                 "invalid directory generation"
             );
-            assert!(record.children.len() <= 16, "invalid retained child count");
-            let mut seen = std::collections::BTreeSet::new();
-            for child in &record.children {
-                check_name(&child.hop.role).expect("invalid retained child role");
-                assert!(
-                    child
-                        .hop
-                        .shard_pool
-                        .as_ref()
-                        .is_none_or(|pool| !pool.is_empty() && pool.len() <= 64)
-                        && child.hop.canister.as_slice().last() == Some(&1)
-                        && child.hop.canister != record.publisher
-                        && seen.insert(child.hop.canister)
-                        && record.current.as_ref().is_some_and(|d| child
-                            .acknowledged
-                            .is_none_or(|r| r > 0 && r <= d.revision)),
-                    "invalid retained directory child"
-                );
-            }
             if let Some(directory) = &record.current {
                 directory
                     .validate()
                     .expect("invalid retained service directory");
             }
-            Self { cell, record }
+            Self { rows, record }
         }
 
         /// Immediate publisher retained at installation.
@@ -451,20 +479,55 @@ pub mod retained {
             self.record.current.as_ref()
         }
 
+        /// Last timing assigned to this exact installation.
+        #[must_use]
+        pub const fn backup_timing(&self) -> Option<super::BackupTiming> {
+            self.record.backup_timing
+        }
+
         /// Role retained independently of service directory membership.
         #[must_use]
         pub fn role(&self) -> &str {
             &self.record.role
         }
 
+        fn decode_child(&self, key: &[u8], bytes: &[u8]) -> Child {
+            let child: Child = ic_wire::decode(bytes, ic_wire::Encoding::Payload, DIRECTORY_LIMITS)
+                .expect("retained directory child");
+            check_name(&child.hop.role).expect("retained directory child role");
+            assert!(
+                key == child_key(child.hop.canister)
+                    && child.hop.canister.as_slice().last() == Some(&1)
+                    && child.hop.canister != self.publisher()
+                    && child
+                        .hop
+                        .shard_pool
+                        .as_ref()
+                        .is_none_or(|p| !p.is_empty() && p.len() <= 64)
+                    && self.current().is_some_and(|d| child
+                        .acknowledged
+                        .is_none_or(|r| r > 0 && r <= d.revision)),
+                "invalid retained directory child"
+            );
+            child
+        }
+
         /// Last confirmed delivery for a known direct child. An absent revision is pending.
+        /// # Panics
+        /// Traps on a malformed retained child row or mismatched principal.
         #[must_use]
-        pub fn child_delivery(&self, child: Principal) -> Option<(&Hop, Option<u64>)> {
-            self.record
-                .children
-                .iter()
-                .find(|entry| entry.hop.canister == child)
-                .map(|entry| (&entry.hop, entry.acknowledged))
+        pub fn child_delivery(&self, child: Principal) -> Option<(Hop, Option<u64>)> {
+            let key = child_key(child);
+            self.rows.get(&key).map(|bytes| {
+                let entry = self.decode_child(&key, &bytes);
+                (entry.hop, entry.acknowledged)
+            })
+        }
+
+        fn children(&self) -> impl Iterator<Item = Child> + '_ {
+            self.rows
+                .range(vec![1]..vec![2])
+                .map(|entry| self.decode_child(entry.key(), &entry.value()))
         }
 
         /// Direct children of this role that confirmed at least one directory delivery.
@@ -473,7 +536,7 @@ pub mod retained {
             &'a self,
             role: &'a str,
         ) -> impl Iterator<Item = Principal> + 'a {
-            self.record.children.iter().filter_map(move |child| {
+            self.children().filter_map(move |child| {
                 (child.hop.role == role && child.acknowledged.is_some())
                     .then_some(child.hop.canister)
             })
@@ -484,7 +547,7 @@ pub mod retained {
             &'a self,
             pool: &'a str,
         ) -> impl Iterator<Item = Principal> + 'a {
-            self.record.children.iter().filter_map(move |child| {
+            self.children().filter_map(move |child| {
                 (child.acknowledged.is_some() && child.hop.shard_pool.as_deref() == Some(pool))
                     .then_some(child.hop.canister)
             })
@@ -521,7 +584,12 @@ pub mod retained {
                     return Err(DirectoryError::InvalidDelivery);
                 }
             }
-            self.apply(&update.directory, first.generation, update.path.get(1))
+            self.apply(
+                &update.directory,
+                first.generation,
+                update.path.get(1),
+                update.backup_timing,
+            )
         }
 
         #[cfg(feature = "method")]
@@ -534,15 +602,14 @@ pub mod retained {
             if self.current() != Some(directory) {
                 return Err(DirectoryError::RevisionConflict);
             }
-            let mut record = self.record.clone();
-            let entry = record
-                .children
-                .iter_mut()
-                .find(|entry| &entry.hop == child)
+            let (stored, acknowledged) = self
+                .child_delivery(child.canister)
                 .ok_or(DirectoryError::GenerationChanged)?;
-            if entry.acknowledged != Some(rev) {
-                entry.acknowledged = Some(rev);
-                self.save(record)?;
+            if &stored != child {
+                return Err(DirectoryError::GenerationChanged);
+            }
+            if acknowledged != Some(rev) {
+                self.store_child(child, Some(rev));
             }
             Ok(())
         }
@@ -551,21 +618,34 @@ pub mod retained {
             &mut self,
             target: (Principal, [u8; 32]),
         ) -> Result<(), DirectoryError> {
-            if self.record.withdrawn.contains(&target) {
-                return Ok(());
+            if self
+                .child_delivery(target.0)
+                .is_some_and(|(hop, _)| hop.generation == target.1)
+            {
+                self.rows.remove(&child_key(target.0));
             }
-            let mut record = self.record.clone();
-            record
-                .children
-                .retain(|entry| (entry.hop.canister, entry.hop.generation) != target);
-            record.withdrawn.push(target);
-            self.save(record)
+            self.rows
+                .insert(withdrawn_key(target.0, target.1), Vec::new());
+            Ok(())
+        }
+
+        fn store_child(&mut self, hop: &Hop, acknowledged: Option<u64>) {
+            let bytes = ic_wire::encode(
+                &Child {
+                    hop: hop.clone(),
+                    acknowledged,
+                },
+                ic_wire::Encoding::Payload,
+                DIRECTORY_LIMITS,
+            )
+            .expect("encode validated child");
+            self.rows.insert(child_key(hop.canister), bytes);
         }
 
         fn save(&mut self, record: Record) -> Result<(), DirectoryError> {
             let bytes = ic_wire::encode(&record, INDEX_FRAME, DIRECTORY_LIMITS)
                 .map_err(|_| DirectoryError::Capacity)?;
-            self.cell.set(bytes);
+            self.rows.insert(vec![0], bytes);
             self.record = record;
             Ok(())
         }
@@ -575,6 +655,7 @@ pub mod retained {
             next: &Directory,
             generation: [u8; 32],
             child: Option<&Hop>,
+            assignment: Option<super::BackupTiming>,
         ) -> Result<(), DirectoryError> {
             next.validate()
                 .map_err(|_| DirectoryError::InvalidDelivery)?;
@@ -600,34 +681,50 @@ pub mod retained {
             {
                 return Err(DirectoryError::RevisionConflict);
             }
-            let mut record = self.record.clone();
-            record.generation = Some(generation);
+            let mut insert = None;
             if let Some(child) = child {
-                if record
-                    .withdrawn
-                    .contains(&(child.canister, child.generation))
+                if self
+                    .rows
+                    .contains_key(&withdrawn_key(child.canister, child.generation))
                 {
                     return Err(DirectoryError::Withdrawn);
                 }
-                if let Some((stored, _)) = self.child_delivery(child.canister) {
-                    if stored != child {
+                match self.child_delivery(child.canister) {
+                    Some((stored, _)) if &stored != child => {
                         return Err(DirectoryError::GenerationChanged);
                     }
-                } else {
-                    if record.children.len() >= 16 {
-                        return Err(DirectoryError::Capacity);
-                    }
-                    record.children.push(Child {
-                        hop: child.clone(),
-                        acknowledged: None,
-                    });
+                    None => insert = Some(child),
+                    _ => {}
                 }
             }
-            if self.current() == Some(next) && self.record.children.len() == record.children.len() {
-                return Ok(());
+            let timing = if child.is_none() {
+                assignment.or(self.record.backup_timing)
+            } else {
+                self.record.backup_timing
+            };
+            if let Some(timing) = timing {
+                if timing.revision == 0 || timing.daily_at_utc_secs.is_some_and(|s| s >= 86_400) {
+                    return Err(DirectoryError::InvalidDelivery);
+                }
+                if self
+                    .record
+                    .backup_timing
+                    .is_some_and(|old| old != timing && old.revision >= timing.revision)
+                {
+                    return Err(DirectoryError::RevisionConflict);
+                }
             }
-            record.current = Some(next.clone());
-            self.save(record)
+            if self.current() != Some(next) || self.record.backup_timing != timing {
+                let mut record = self.record.clone();
+                record.generation = Some(generation);
+                record.current = Some(next.clone());
+                record.backup_timing = timing;
+                self.save(record)?;
+            }
+            if let Some(child) = insert {
+                self.store_child(child, None);
+            }
+            Ok(())
         }
     }
 

@@ -245,7 +245,8 @@ pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Res
     }
     let plan: Plan = store::json(&dir.join("plan.json"))?;
     if matches!(plan.action, crate::PlanAction::Upgrade(_))
-        || (matches!(plan.action, crate::PlanAction::Create { .. }) && plan.version != 10)
+        || (matches!(plan.action, crate::PlanAction::Create { .. })
+            && !matches!(plan.version, 10 | plan::CHUNKED_ROOT_VERSION))
     {
         return Err(Error::Blocked("direct deployment approvals from before mandatory fleet Stores require their original Host".into()));
     }
@@ -458,6 +459,30 @@ async fn apply_operation(
             }
             crate::maintenance::runtime(dir, &plan, false, identity, icp, &client).await?;
         }
+        if plan.version == plan::CHUNKED_ROOT_VERSION {
+            let install_prepared = dir
+                .join("install/signed.json")
+                .try_exists()
+                .map_err(supplier)?;
+            for (index, chunk) in wasm.chunks(INSTALL_CHUNK_BYTES).enumerate() {
+                let call = upload_call(chunk, canister)?;
+                let path = dir.join(format!("upload-{index}"));
+                let reply = if install_prepared {
+                    signed::validate_retained(&path, &plan, &call)?;
+                    store::read(&path.join("reply.bin"), 1024)?
+                } else {
+                    signed::execute(&path, &plan, &call, identity, icp, &client).await?
+                };
+                let uploaded =
+                    ic_platform_protocol::management_chunks::decode_upload_chunk(&reply, DECODE)
+                        .map_err(Error::Decode)?;
+                if uploaded.hash != canic_management_protocol::digest(chunk) {
+                    return Err(Error::Blocked(
+                        "uploaded chunk hash differs from the approved Root".into(),
+                    ));
+                }
+            }
+        }
         let call = install_call(&plan, &wasm, canister)?;
         let reply =
             signed::execute(&dir.join("install"), &plan, &call, identity, icp, &client).await?;
@@ -482,34 +507,71 @@ async fn apply_operation(
     Ok(ApplyOutcome::Complete(receipt))
 }
 
+const INSTALL_CHUNK_BYTES: usize = 1024 * 1024;
+
+fn upload_call(chunk: &[u8], canister: Principal) -> Result<Call<'static>> {
+    Ok(Call {
+        canister: Principal::management_canister(),
+        effective: canister,
+        method: "upload_chunk",
+        args: ic_platform_protocol::management_chunks::encode_upload_chunk(
+            canister,
+            chunk,
+            INSTALL_CHUNK_BYTES + 1024,
+        )
+        .map_err(supplier)?,
+    })
+}
+
 fn install_call(plan: &Plan, wasm: &[u8], canister: Principal) -> Result<Call<'static>> {
-    let args = mgmt::InstallCodeArgs {
-        mode: if plan.target().is_some() {
-            mgmt::InstallMode::Upgrade(None)
-        } else {
-            mgmt::InstallMode::Install
-        },
-        canister_id: canister,
-        wasm_module: wasm.to_vec(),
-        arg: match plan.action {
-            crate::PlanAction::Create {
-                bootstrap: Some(policy),
-                ..
-            } => ic_wire::encode(
-                &policy,
-                ic_wire::Encoding::Payload,
-                canic_management_protocol::LIMITS,
-            )
-            .map_err(crate::supplier)?,
-            _ => Vec::new(),
-        },
-        sender_canister_version: None,
+    let mode = if plan.target().is_some() {
+        mgmt::InstallMode::Upgrade(None)
+    } else {
+        mgmt::InstallMode::Install
+    };
+    let arg = match plan.action {
+        crate::PlanAction::Create {
+            bootstrap: Some(policy),
+            ..
+        } => ic_wire::encode(
+            &policy,
+            ic_wire::Encoding::Payload,
+            canic_management_protocol::LIMITS,
+        )
+        .map_err(supplier)?,
+        _ => Vec::new(),
+    };
+    let (method, args) = if plan.version == plan::CHUNKED_ROOT_VERSION {
+        let args = mgmt::InstallChunkedCodeArgs {
+            mode,
+            target_canister: canister,
+            store_canister: None,
+            chunk_hashes_list: wasm
+                .chunks(INSTALL_CHUNK_BYTES)
+                .map(|chunk| ic_platform_protocol::management_chunks::ChunkHash {
+                    hash: canic_management_protocol::digest(chunk).to_vec(),
+                })
+                .collect(),
+            wasm_module_hash: crate::unhex(&plan.artifact.sha256)?,
+            arg,
+            sender_canister_version: None,
+        };
+        ("install_chunked_code", args.encode(8192))
+    } else {
+        let args = mgmt::InstallCodeArgs {
+            mode,
+            canister_id: canister,
+            wasm_module: wasm.to_vec(),
+            arg,
+            sender_canister_version: None,
+        };
+        ("install_code", args.encode(2 * 1024 * 1024))
     };
     Ok(Call {
         canister: Principal::management_canister(),
         effective: canister,
-        method: "install_code",
-        args: args.encode(2 * 1024 * 1024).map_err(Error::Encode)?,
+        method,
+        args: args.map_err(Error::Encode)?,
     })
 }
 
@@ -618,6 +680,12 @@ pub(crate) fn status_loaded(
         crate::PlanAction::Upgrade(_) => vec!["stop", "stopped", "install", "start"],
         crate::PlanAction::CreateStore { .. } => vec!["create", "install", "handover"],
     };
+    if plan.version == plan::CHUNKED_ROOT_VERSION {
+        for index in 0..bytes.len().div_ceil(INSTALL_CHUNK_BYTES) {
+            let step = format!("upload-{index}");
+            effects.insert(step.clone(), attempt_state(&dir.join(step))?.into());
+        }
+    }
     for effect in effect_names {
         let path = dir.join(effect);
         effects.insert(effect.into(), attempt_state(&path)?.into());

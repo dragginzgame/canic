@@ -238,6 +238,10 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         wasm,
     } = fixture(false).await;
     let pic = owner.client();
+    // Reopening a never-used grant ledger must still allow the first enrollment.
+    canic_qualification::upgrade_stopped(pic, root, root_wasm.clone(), vec![], Some(installer))
+        .await
+        .unwrap();
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
     let (browser, input) = input(now);
     let frame = EstablishSession::encode_request(&input).unwrap();
@@ -245,12 +249,12 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     let grant = grant(target, now);
     let configure = enrollment_request(enrollment::CONFIGURE, &grant);
     assert!(
-        pic.update_call(root, browser, "configure_auth", configure.clone())
+        pic.update_call(root, browser, "grant_auth_access", configure.clone())
             .await
             .is_err()
     );
     let response = pic
-        .update_call(root, installer, "configure_auth", configure.clone())
+        .update_call(root, installer, "grant_auth_access", configure.clone())
         .await
         .unwrap();
     assert_eq!(
@@ -265,7 +269,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         .update_call(
             root,
             browser,
-            "auth_enrollment",
+            "fetch_auth_enrollment",
             enrollment_request(enrollment::SNAPSHOT, &forged),
         )
         .await
@@ -550,7 +554,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         .update_call(
             root,
             installer,
-            "revoke_auth",
+            "revoke_auth_access",
             enrollment_request(enrollment::REVOKE, &grant),
         )
         .await
@@ -568,7 +572,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     assert!(revoked.generation > refreshed.generation);
     // An exact approval retry cannot reenable a retired key.
     let response = pic
-        .update_call(root, installer, "configure_auth", configure.clone())
+        .update_call(root, installer, "grant_auth_access", configure.clone())
         .await
         .unwrap();
     assert_eq!(
@@ -589,7 +593,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         .await
         .unwrap();
     let response = pic
-        .update_call(root, installer, "configure_auth", configure)
+        .update_call(root, installer, "grant_auth_access", configure)
         .await
         .unwrap();
     assert_eq!(

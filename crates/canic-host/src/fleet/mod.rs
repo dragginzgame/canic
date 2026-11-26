@@ -427,6 +427,35 @@ fn validate_upgrade_order(operations: &[&FleetOperation]) -> Result<()> {
     Ok(())
 }
 
+async fn query_status<I: serde::Serialize, O: serde::de::DeserializeOwned>(
+    network: &Network,
+    manager: &str,
+    name: &str,
+    method: u64,
+    input: &I,
+) -> Result<O> {
+    let frame = |direction| ic_wire::Encoding::Frame { method, direction };
+    let args = ic_wire::encode(
+        input,
+        frame(ic_wire::Direction::Request),
+        canic_management_protocol::LIMITS,
+    )
+    .map_err(supplier)?;
+    let reply = network::query(
+        &network.client()?,
+        network::principal(manager)?,
+        name,
+        &args,
+    )
+    .await?;
+    ic_wire::decode(
+        &reply,
+        frame(ic_wire::Direction::Response),
+        canic_management_protocol::LIMITS,
+    )
+    .map_err(supplier)
+}
+
 async fn observe_upgrade(
     operations: &[FleetOperation],
     network_id: &str,
@@ -447,49 +476,33 @@ async fn observe_upgrade(
         ))
     } else {
         tokio::time::timeout_at(deadline, async {
-            let client = network.client()?;
-            let (method, id, bytes) = if let Some(slot) = slot {
-                (
-                    "child_upgrade_status",
-                    children::UPGRADE_STATUS,
-                    ic_wire::encode(
-                        &children::Request {
-                            slot,
-                            value: Some(approval),
-                        },
-                        ic_wire::Encoding::Frame {
-                            method: children::UPGRADE_STATUS,
-                            direction: ic_wire::Direction::Request,
-                        },
-                        canic_management_protocol::LIMITS,
-                    ),
+            let report = if let Some(slot) = slot {
+                let selector = children::StatusRequest::Upgrade(children::Request {
+                    slot,
+                    value: Some(approval.clone()),
+                });
+                let children::ObservedStatus::Upgrade(report) = query_status(
+                    network,
+                    manager,
+                    "child_status",
+                    children::READ_STATUS,
+                    &selector,
                 )
+                .await?
+                else {
+                    return Err(Error::Invalid("expected child upgrade status".into()));
+                };
+                report
             } else {
-                (
+                query_status(
+                    network,
+                    manager,
                     "upgrade_status",
                     canic_management_protocol::upgrade::STATUS,
-                    ic_wire::encode(
-                        &(),
-                        ic_wire::Encoding::Frame {
-                            method: canic_management_protocol::upgrade::STATUS,
-                            direction: ic_wire::Direction::Request,
-                        },
-                        canic_management_protocol::LIMITS,
-                    ),
+                    &(),
                 )
+                .await?
             };
-            let bytes = bytes.map_err(supplier)?;
-            let response =
-                network::query(&client, network::principal(manager)?, method, &bytes).await?;
-            let report = ic_wire::decode(
-                &response,
-                ic_wire::Encoding::Frame {
-                    method: id,
-                    direction: ic_wire::Direction::Response,
-                },
-                canic_management_protocol::LIMITS,
-            )
-            .map_err(supplier)?;
             check_upgrade_report(approval, &report)?;
             Ok(report)
         })
@@ -763,46 +776,29 @@ pub async fn fleet_with_config(
                 .saturating_duration_since(tokio::time::Instant::now())
                 .min(Duration::from_secs(5));
             let report = tokio::time::timeout(budget, async {
-                let client = network.client()?;
-                let (method, id, bytes) = if let Some(slot) = slot {
-                    (
+                let report = if let Some(slot) = slot {
+                    let children::ObservedStatus::Creation(report) = query_status(
+                        &network,
+                        &manager,
                         "child_status",
-                        children::STATUS,
-                        ic_wire::encode(
-                            &slot,
-                            ic_wire::Encoding::Frame {
-                                method: children::STATUS,
-                                direction: ic_wire::Direction::Request,
-                            },
-                            canic_management_protocol::LIMITS,
-                        ),
+                        children::READ_STATUS,
+                        &children::StatusRequest::Creation(slot),
                     )
+                    .await?
+                    else {
+                        return Err(Error::Invalid("expected child creation status".into()));
+                    };
+                    report
                 } else {
-                    (
+                    query_status(
+                        &network,
+                        &manager,
                         "status",
                         canic_management_protocol::STATUS,
-                        ic_wire::encode(
-                            &(),
-                            ic_wire::Encoding::Frame {
-                                method: canic_management_protocol::STATUS,
-                                direction: ic_wire::Direction::Request,
-                            },
-                            canic_management_protocol::LIMITS,
-                        ),
+                        &(),
                     )
+                    .await?
                 };
-                let bytes = bytes.map_err(supplier)?;
-                let response =
-                    network::query(&client, network::principal(&manager)?, method, &bytes).await?;
-                let report: canic_management_protocol::Status = ic_wire::decode(
-                    &response,
-                    ic_wire::Encoding::Frame {
-                        method: id,
-                        direction: ic_wire::Direction::Response,
-                    },
-                    canic_management_protocol::LIMITS,
-                )
-                .map_err(supplier)?;
                 check_report(&operations, &network_id, &manager, slot, &report)?;
                 Ok::<_, Error>(report)
             })

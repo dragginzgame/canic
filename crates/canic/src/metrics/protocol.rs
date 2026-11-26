@@ -145,17 +145,17 @@ impl crate::method::Contract for ReadMetrics {
 }
 
 ///
-/// ChildMetrics
+/// ObserveChildMetrics
 /// Root controller reads one source from a ready managed child slot.
 ///
 
-pub struct ChildMetrics;
+pub struct ObserveChildMetrics;
 
-impl crate::method::Contract for ChildMetrics {
-    const NAME: &'static str = "child_metrics";
+impl crate::method::Contract for ObserveChildMetrics {
+    const NAME: &'static str = "observe_child_metrics";
     const ID: u64 = ic_wire::method_id(Self::NAME);
     const REQUEST: ic_wire::Limits = ReadMetrics::REQUEST;
     const REPLY: ic_wire::Limits = ReadMetrics::REPLY;
-    type Input = (u8, Request);
+    type Input = (u32, Request);
     type Output = Report;
 }

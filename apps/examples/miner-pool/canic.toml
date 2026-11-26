@@ -1,23 +1,23 @@
-[apps.ex-miner-pool]
+[apps.miner-pool]
 
-[apps.ex-miner-pool.canisters.pool]
+[apps.miner-pool.canisters.pool]
 role = "pool"
 parent = "root"
 wasm = "artifacts/pool.wasm"
-build = { manifest = "../../../Cargo.toml", package = "ex-miner-pool-hub", client = "ex-miner-pool-client" }
+build = { manifest = "../../../Cargo.toml", package = "example-miner-pool-hub", client = "example-miner-pool-client" }
 
-[apps.ex-miner-pool.canisters.miner]
+[apps.miner-pool.canisters.miner]
 role = "miner"
 parent = "pool"
 wasm = "artifacts/miner.wasm"
-build = { manifest = "../../../Cargo.toml", package = "ex-miner-pool-miner" }
+build = { manifest = "../../../Cargo.toml", package = "example-miner-pool-miner" }
 
-[apps.ex-miner-pool.fleets.local]
+[apps.miner-pool.fleets.local]
 network = { kind = "Local" }
 
 subnet_child_limit = 5
 
-[[apps.ex-miner-pool.fleets.local.worker_pools]]
+[[apps.miner-pool.fleets.local.worker_pools]]
 component = "miner"
 root = "root"
 store = "store"

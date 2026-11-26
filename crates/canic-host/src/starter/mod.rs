@@ -91,11 +91,12 @@ fn files(app: &str, source: &Path) -> Result<BTreeMap<PathBuf, Vec<u8>>> {
             serde_json::to_value(dependency).map_err(supplier)?,
         );
     }
-    selected.insert("canic".into(), json!({"path":source.join("crates/canic")}));
-    selected.insert(
-        "canic-root".into(),
-        json!({"path":source.join("crates/canic-root")}),
-    );
+    for name in ["canic", "canic-root"] {
+        selected.insert(
+            name.into(),
+            json!({"path":source.join("crates").join(name)}),
+        );
+    }
     selected.insert(
         "ic-wasm-store".into(),
         serde_json::to_value(&dependencies["ic-wasm-store"]).map_err(supplier)?,

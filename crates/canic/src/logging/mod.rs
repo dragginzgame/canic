@@ -5,15 +5,19 @@ mod tests;
 
 use crate::method::{Contract, wire};
 pub use ic_logging::Level;
-use ic_logging::{EntryInput, Filter, Limits, Log, PageRequest};
+use ic_logging::{EntryInput, Filter, Log, PageRequest, RetainedByteLimits};
 use serde::{Deserialize, Serialize};
-use std::{cell::RefCell, num::NonZeroUsize};
+use std::{
+    cell::{OnceCell, RefCell},
+    num::NonZeroUsize,
+};
 
 ///
 /// Entry
 /// Operator-visible row from the current incarnation.
 ///
 
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct Entry {
     /// Sequence within this incarnation.
@@ -35,6 +39,7 @@ pub struct Entry {
 /// Newest-first slice of the current heap log.
 ///
 
+#[cfg_attr(feature = "inspection", derive(ic_wire::typescript::Wire))]
 #[derive(Debug, Deserialize, PartialEq, Serialize)]
 pub struct Page {
     /// Canister version at initialization. Restart pagination if this changes.
@@ -47,7 +52,7 @@ pub struct Page {
 
 ///
 /// Logs
-/// Root controller's operational log reader.
+/// Controller's operational log reader.
 ///
 
 pub struct Logs;
@@ -65,63 +70,81 @@ impl Contract for Logs {
     type Output = Page;
 }
 
-const LOG_LIMITS: Limits = Limits {
-    max_entries: NonZeroUsize::new(128).unwrap(),
+const DEFAULT_LOG_BYTES: usize = 512 * 1024;
+const LOG_LIMITS: RetainedByteLimits = RetainedByteLimits {
+    max_retained_bytes: DEFAULT_LOG_BYTES,
     max_label_bytes: 32,
     max_message_bytes: 160,
-    max_text_bytes: 8192,
 };
 
+type ActorLog = Log<RetainedByteLimits>;
+
 thread_local! {
-    static LOG: RefCell<Option<(u64, Log)>> = const { RefCell::new(None) };
+    static LOG: OnceCell<(u64, RefCell<ActorLog>)> = const { OnceCell::new() };
 }
 
-/// Start the log during install or reopen. Repeated initialization preserves current rows.
-pub(crate) fn initialize() {
-    LOG.with_borrow_mut(|slot| {
-        slot.get_or_insert_with(|| {
+fn with_log<T>(read: impl FnOnce(u64, &RefCell<ActorLog>) -> T) -> T {
+    LOG.with(|slot| {
+        let (version, log) = slot.get_or_init(|| {
             (
                 ic_platform_runtime::system::canister_version(),
-                Log::new(LOG_LIMITS),
+                RefCell::new(Log::with_retained_byte_limit(LOG_LIMITS)),
             )
+        });
+        read(*version, log)
+    })
+}
+
+/// Open the log at the lifecycle boundary. Custom actors can also open it on first use.
+#[cfg(feature = "lifecycle")]
+pub(crate) fn initialize() {
+    with_log(|_, _| ());
+}
+
+/// Append a sanitized diagnostic. The first write opens the log for actors with custom lifecycle hooks.
+pub fn record(level: Level, source: &'static str, message: &str) {
+    with_log(|_, log| {
+        let _ = log.borrow_mut().append(EntryInput {
+            created_at_secs: ic_platform_runtime::system::time() / 1_000_000_000,
+            level,
+            source,
+            topic: None,
+            message,
         });
     });
 }
 
-/// Append a sanitized diagnostic. Supplier refusal or an unopened log leaves the operation alone.
-pub fn record(level: Level, source: &'static str, message: &str) {
-    LOG.with_borrow_mut(|slot| {
-        if let Some((_, log)) = slot {
-            let _ = log.append(EntryInput {
-                created_at_secs: ic_platform_runtime::system::time() / 1_000_000_000,
-                level,
-                source,
-                topic: None,
-                message,
-            });
-        }
-    });
+// Blob 0.111 supplies ic-logging 0.25 severity values.
+#[cfg(feature = "blob")]
+pub(crate) fn record_blob(level: ic_logging_supplier::Level, source: &'static str, message: &str) {
+    use ic_logging_supplier::Level as SupplierLevel;
+    let level = match level {
+        SupplierLevel::Debug => Level::Debug,
+        SupplierLevel::Info => Level::Info,
+        SupplierLevel::Ok => Level::Ok,
+        SupplierLevel::Warn => Level::Warn,
+        SupplierLevel::Error => Level::Error,
+    };
+    record(level, source, message);
 }
 
 /// Read without altering the supplier or scheduling work.
-/// # Panics
-/// Requires the owning actor to have initialized logging.
 #[must_use]
 pub fn page(before: Option<u64>) -> Page {
-    LOG.with_borrow(|slot| {
-        let limit = NonZeroUsize::new(8).unwrap();
-        let (started_at_version, log) = slot.as_ref().expect("initialized log");
+    with_log(|started_at_version, log| {
+        const LIMIT: NonZeroUsize = NonZeroUsize::new(8).unwrap();
+        let log = log.borrow();
         let page = log.page(
             Filter::default(),
             PageRequest {
                 before,
-                max_results: limit,
-                max_scanned: limit,
+                max_results: LIMIT,
+                max_scanned: LIMIT,
             },
         );
 
         Page {
-            started_at_version: *started_at_version,
+            started_at_version,
             next_before: page.next_before,
             entries: page
                 .entries
@@ -137,4 +160,15 @@ pub fn page(before: Option<u64>) -> Page {
                 .collect(),
         }
     })
+}
+
+/// Accounted row metadata and retained text bytes, in constant time.
+#[must_use]
+pub fn retained_bytes() -> usize {
+    with_log(|_, log| log.borrow().retained_bytes())
+}
+
+#[crate::update(contract = Logs, guard = crate::guard::require_controller)]
+fn logs(before: Option<u64>) -> Page {
+    page(before)
 }

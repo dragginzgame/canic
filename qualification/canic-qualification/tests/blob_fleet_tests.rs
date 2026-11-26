@@ -569,7 +569,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
             .update_call(
                 root,
                 CanisterId::anonymous(),
-                "activate_application_upgrade",
+                "activate_child_upgrade",
                 frame(application::ACTIVATE, &changed)
             )
             .await
@@ -583,7 +583,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
             .update_call(
                 root,
                 CanisterId::anonymous(),
-                "activate_application_upgrade",
+                "activate_child_upgrade",
                 malformed
             )
             .await
@@ -607,7 +607,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
             .update_call(
                 root,
                 actor(9),
-                "activate_application_upgrade",
+                "activate_child_upgrade",
                 frame(application::ACTIVATE, &upgrade_request)
             )
             .await
@@ -794,7 +794,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
             .update_call(
                 root,
                 CanisterId::anonymous(),
-                "activate_application_upgrade",
+                "activate_child_upgrade",
                 frame(application::ACTIVATE, &upgrade_request)
             )
             .await

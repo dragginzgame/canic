@@ -168,45 +168,6 @@ impl Pools {
         &ChildId::INSTANCES[..usize::from(count)]
     }
 
-    fn occupied_slots(&self) -> usize {
-        // A returned allocation remains in its original claim history.
-        self.used() + self.held() - self.returns.len()
-    }
-
-    fn used(&self) -> usize {
-        self.permanent.len()
-            + self.projects.len()
-            + self.workers.values().map(|w| w.claims.len()).sum::<usize>()
-            + self
-                .shards
-                .values()
-                .map(|l| l.generations.iter().flatten().count())
-                .sum::<usize>()
-    }
-
-    fn held(&self) -> usize {
-        self.standby
-            .iter()
-            .filter(|(_, asset)| {
-                matches!(
-                    asset,
-                    canic::sharding::standby::Asset::Transfer(
-                        _,
-                        _,
-                        _,
-                        canic::sharding::standby::TransferPhase::Reserved
-                            | canic::sharding::standby::TransferPhase::ControllersIssued
-                    ) | canic::sharding::standby::Asset::Empty(_)
-                        | canic::sharding::standby::Asset::Available(..)
-                        | canic::sharding::standby::Asset::AwaitingRelease(_)
-                        | canic::sharding::standby::Asset::AwaitingHandoff(_)
-                        | canic::sharding::standby::Asset::Quarantined(..)
-                        | canic::sharding::standby::Asset::Issued
-                )
-            })
-            .count()
-    }
-
     pub(super) fn standby_claim(&self, slot: ChildId) -> Option<Principal> {
         use canic::sharding::standby::{Asset, Source};
         for (origin, asset) in &self.standby {
@@ -245,14 +206,6 @@ impl Pools {
                 standby::released_binding(asset).is_some_and(|(_, a)| a.slot == slot.index() as u32)
             })
     }
-
-    pub(super) fn capacity_approved(&self) -> bool {
-        self.capacity.is_some()
-    }
-
-    pub(super) fn full(&self) -> bool {
-        self.occupied_slots() >= self.subnet_limit() as usize
-    }
 }
 
 fn valid_limits(a: &ShardPool) -> bool {
@@ -268,24 +221,6 @@ fn check_shard_topology(grant: &ShardPool) -> Result<(), Refusal> {
         return Err(Refusal::Binding);
     }
     Ok(())
-}
-
-/// Whether retained standby custody requires the reserve endpoints after upgrade.
-/// # Panics
-/// Requires an opened Root.
-#[must_use]
-pub fn requires_reserve_pool() -> bool {
-    use canic::sharding::standby::{Asset, Source};
-    STATE.with_borrow(|state| {
-        let pools = &state.as_ref().expect("open Root").pools;
-        pools.reserve_policy.is_some()
-            || pools.standby.iter().any(|(source, asset)| {
-                matches!(
-                    source,
-                    Source::Imported(_) | Source::Automatic(_) | Source::Refill(_)
-                ) || matches!(asset, Asset::Transfer(..))
-            })
-    })
 }
 
 pub(crate) fn occupied() -> bool {
@@ -439,7 +374,6 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
 // An explicit backstop accounts for existing ordinary reservations. Historical
 // grants without that backstop retain their placement-only layout.
 fn admit_pool_change(admitting_capacity: bool) -> Result<(), Refusal> {
-    #[cfg(feature = "backup")]
     if crate::backup::occupied() {
         return Err(Refusal::Occupied);
     }
@@ -741,6 +675,25 @@ fn create(
     Some(generation)
 }
 
+fn validate_subnet_claims(pools: &Pools, journal: &super::Journals, archived_workers: u64) {
+    for &slot in journal.0.keys().filter(|s| s.service_index().is_some()) {
+        assert_eq!(
+            pools.permanent.contains(&slot),
+            journal.0[&slot].0.approval.is_some() && pools.shard_at(slot).is_none(),
+            "permanent service reservation"
+        );
+    }
+    assert_eq!(
+        pools.used() - usize::try_from(archived_workers).expect("bounded worker history"),
+        journal
+            .0
+            .values()
+            .filter(|entry| entry.0.approval.is_some())
+            .count(),
+        "subnet reservation custody"
+    );
+}
+
 pub(super) fn validate_claims(state: &super::State) {
     #[cfg(feature = "role-issuer")]
     super::role_issuer::validate_closures(state, |p, g| {
@@ -788,29 +741,7 @@ pub(super) fn validate_claims(state: &super::State) {
     }
     assert_eq!(archived_workers, state.worker_history.len());
     if pools.capacity.is_some() {
-        for &slot in state
-            .journal
-            .0
-            .keys()
-            .filter(|s| s.service_index().is_some())
-        {
-            assert_eq!(
-                pools.permanent.contains(&slot),
-                state.journal.0[&slot].0.approval.is_some() && pools.shard_at(slot).is_none(),
-                "permanent service reservation"
-            );
-        }
-        assert_eq!(
-            pools.used()
-                - usize::try_from(state.worker_history.len()).expect("bounded worker history"),
-            state
-                .journal
-                .0
-                .values()
-                .filter(|entry| entry.0.approval.is_some())
-                .count(),
-            "subnet reservation custody"
-        );
+        validate_subnet_claims(pools, &state.journal, archived_workers);
     } else {
         assert_eq!(
             state

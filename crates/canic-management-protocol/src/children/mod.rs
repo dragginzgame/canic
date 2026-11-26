@@ -5,8 +5,17 @@ mod tests;
 
 use serde::{Deserialize, Serialize};
 
-/// Public query for the latest or an exact upgrade in one explicit slot.
-pub const UPGRADE_STATUS: u64 = ic_wire::method_id("child_upgrade_status");
+/// Public query for creation or upgrade evidence in a selected slot.
+pub const READ_STATUS: u64 = ic_wire::method_id("canic.root.child_status.v1");
+
+/// Select the public child journal. An absent upgrade approval selects its latest entry.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum StatusRequest {
+    /// Current creation evidence for a service or placement allocation.
+    Creation(ChildId),
+    /// Latest or exact upgrade evidence for a permanent service.
+    Upgrade(Request<Option<crate::upgrade::Approval>>),
+}
 
 /// Controller update to read one creation or exact upgrade journal.
 pub const OBSERVE_STATUS: u64 = ic_wire::method_id("canic.root.observe_child_status.v1");

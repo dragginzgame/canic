@@ -198,7 +198,7 @@ impl FleetPlan {
                     ))
             || !matches!(self.root.action, crate::PlanAction::Create { .. })
             || matches!(self.root.action, crate::PlanAction::Create {bootstrap: Some(policy), ..} if policy.services as usize != self.children.len())
-            || self.root.version != 2
+            || !matches!(self.root.version, 2 | plan::CHUNKED_ROOT_VERSION)
             || self.root.creation_cycles() / 1_000_000_000_000 <= self.children.len() as u64
             || self
                 .root
@@ -524,13 +524,13 @@ pub fn plan_fleet(
     }
     let root_bytes = store::read(
         &selected.wasm_path(config_path, root_name, None)?,
-        artifact::MAX_WASM,
+        artifact::MAX_ARTIFACT_BYTES,
     )?;
     let methods = artifact::exported_methods(&root_bytes)?;
     if !selected.config.role_receivers.is_empty()
         && [
             "prepare_role_key",
-            "issue_role",
+            "issue_role_proof",
             "close_role_issuance",
             "observe_child_deployments",
         ]
@@ -542,7 +542,7 @@ pub fn plan_fleet(
         })
     {
         return Err(Error::Invalid(
-            "build the selected Root with role-issuer before planning role receivers".into(),
+            "the selected Root is missing required role issuance endpoints".into(),
         ));
     }
     let mut child_bytes: Vec<_> = children
@@ -568,10 +568,10 @@ pub fn plan_fleet(
         canister: slot.into(),
     };
     let root = Plan {
-        version: 2,
+        version: plan::root_install_version(root_bytes.len(), 2),
         network: selected.config.network.clone(),
         controller: controller.into(),
-        artifact: artifact::admit(&root_bytes)?,
+        artifact: artifact::admit_bounded(&root_bytes, artifact::MAX_ARTIFACT_BYTES)?,
         action: crate::PlanAction::Create {
             bootstrap: (selected.config.subnet_child_limit.is_some() || children.len() > 3)
                 .then_some(canic_management_protocol::stored::RootBootstrap {

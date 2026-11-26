@@ -63,6 +63,7 @@ async fn refused_delivery(
     directory: Directory,
 ) -> canic::topology::directory::DirectoryError {
     let update = Delivery {
+        backup_timing: None,
         directory,
         path: vec![Hop {
             shard_pool: None,
@@ -81,6 +82,89 @@ async fn refused_delivery(
         .await
         .unwrap();
     ReceiveDirectory::decode_reply(&reply).unwrap().unwrap_err()
+}
+
+async fn snapshot_readers(root: &Client<'_>, child: CanisterId) {
+    use ic_platform_protocol::management_snapshots as snapshots;
+    use ic_testkit::pocket_ic::common::rest::RawEffectivePrincipal;
+    let pic = root.pic;
+    let alice = CanisterId::self_authenticating(b"first snapshot reader");
+    let bob = CanisterId::self_authenticating(b"second snapshot reader");
+    pic.stop_canister(child, Some(root.id)).await.unwrap();
+    let snapshot = pic
+        .take_canister_snapshot(child, Some(root.id), None)
+        .await
+        .unwrap();
+    pic.start_canister(child, Some(root.id)).await.unwrap();
+    let target = child.to_text().parse().unwrap();
+    let read = async |viewer| {
+        pic.update_call_with_effective_principal(
+            CanisterId::management_canister(),
+            RawEffectivePrincipal::CanisterId(child.as_slice().to_vec()),
+            viewer,
+            "read_canister_snapshot_data",
+            snapshots::ReadDataArgs {
+                canister_id: target,
+                snapshot_id: snapshot.id.clone(),
+                kind: snapshots::ReadKind::WasmModule(snapshots::Extent { offset: 0, size: 4 }),
+            }
+            .encode(4096)
+            .unwrap(),
+        )
+        .await
+    };
+    let grant = stored::SnapshotReaders {
+        root: root.id.to_text().parse().unwrap(),
+        child: target,
+        readers: [alice, bob]
+            .into_iter()
+            .map(|p| p.to_text().parse().unwrap())
+            .collect(),
+    };
+    let configure = async |input: &stored::SnapshotReaders| -> Result<(), management::Failure> {
+        root.update(
+            stored::ConfigureSnapshotReaders::NAME,
+            stored::ConfigureSnapshotReaders::ID,
+            input,
+            stored::ConfigureSnapshotReaders::REQUEST,
+        )
+        .await
+    };
+    assert!(read(alice).await.is_err());
+    assert!(
+        pic.update_call(
+            root.id,
+            alice,
+            stored::ConfigureSnapshotReaders::NAME,
+            stored::ConfigureSnapshotReaders::encode_request(&grant).unwrap()
+        )
+        .await
+        .is_err()
+    );
+    configure(&grant).await.unwrap();
+    for viewer in [alice, bob] {
+        assert_eq!(
+            pic.list_canister_snapshots(child, Some(viewer))
+                .await
+                .unwrap()
+                .len(),
+            1
+        );
+        assert!(read(viewer).await.is_ok());
+    }
+    assert!(
+        pic.delete_canister_snapshot(child, Some(alice), snapshot.id.clone())
+            .await
+            .is_err()
+    );
+    configure(&stored::SnapshotReaders {
+        readers: vec![],
+        ..grant
+    })
+    .await
+    .unwrap();
+    assert!(read(alice).await.is_err());
+    assert!(read(root.id).await.is_ok());
 }
 
 mod capacity;
@@ -195,22 +279,7 @@ async fn installed_publication(scenario: Scenario) {
         Scenario::Retirement { from_spare } => Some(if from_spare { 4 } else { 3 }),
         _ => None,
     };
-    let module = if matches!(scenario, Scenario::RoleProof | Scenario::Retirement { .. }) {
-        "role-root.wasm"
-    } else if matches!(
-        scenario,
-        Scenario::ThreeServices
-            | Scenario::ProjectLedgers
-            | Scenario::Descendant
-            | Scenario::Funding
-            | Scenario::Capacity(_)
-            | Scenario::StoppedChild
-            | Scenario::StoppedHub
-    ) {
-        "pool-root.wasm"
-    } else {
-        "root.wasm"
-    };
+    let module = "root.wasm";
     let (mut server, instance) = support::instance(&canic_qualification::server_directory()).await;
     let pic = instance.client();
     let (root, supplier) =
@@ -349,6 +418,26 @@ async fn installed_publication(scenario: Scenario) {
     pic.advance_time(Duration::from_secs(11)).await;
     let user = ready(ChildId::FIRST).await;
     assert_eq!(resolve(pic, user).await, Some((1, vec![user])));
+    use canic::topology::directory::{BackupTiming, ReadBackupTiming};
+    let reply = pic
+        .query_call(
+            user,
+            CanisterId::anonymous(),
+            ReadBackupTiming::NAME,
+            ReadBackupTiming::encode_request(&()).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        ReadBackupTiming::decode_reply(&reply).unwrap(),
+        Some(BackupTiming {
+            revision: 1,
+            daily_at_utc_secs: None,
+        })
+    );
+    if matches!(scenario, Scenario::BothHubs) {
+        snapshot_readers(&root, user).await;
+    }
     type Single = Option<(u64, Result<CanisterId, String>)>;
     let unique =
         async |hub, role: &str| -> Single { query_service(pic, hub, "unique_service", role).await };
@@ -706,7 +795,12 @@ async fn installed_publication(scenario: Scenario) {
         );
     }
     if let Some(limit) = capacity {
-        capacity::exercise(&root, &source, user, project, limit, module).await;
+        let key_limit = if matches!(scenario, Scenario::RoleProof | Scenario::Retirement { .. }) {
+            3
+        } else {
+            1
+        };
+        capacity::exercise(&root, &source, user, project, limit, key_limit).await;
         if prefilled {
             let counts = capacity::counts(&root).await;
             assert_eq!((counts.ready, counts.creations_used), (0, 4));

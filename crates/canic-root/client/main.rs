@@ -1,10 +1,8 @@
 //! Native codec for controller operations on Root.
 
 use canic::method::Contract;
-#[cfg(feature = "child-metrics")]
-use canic::metrics::{ChildMetrics, Request};
+use canic::metrics::{ObserveChildMetrics, Request};
 
-#[cfg(feature = "role-issuer")]
 use canic::topology::attestation::CloseRoleIssuance;
 use clap::{Parser, Subcommand};
 use ic_platform_types::Principal;
@@ -32,25 +30,23 @@ enum Command {
     /// Read Root diagnostics, newest first, optionally before a sequence in this incarnation.
     Logs { before: Option<u64> },
     /// Read one metrics source from a ready child.
-    #[cfg(feature = "child-metrics")]
-    ChildMetrics {
-        slot: u8,
+    ObserveChildMetrics {
+        slot: u32,
         #[command(subcommand)]
         source: Source,
     },
     /// Retain this Root’s role-verification key for approving DB receivers.
-    #[cfg(feature = "role-issuer")]
     PrepareRoleKey,
     /// End proof renewal once this exact shard generation is drained and empty.
-    #[cfg(feature = "role-issuer")]
     CloseRoleIssuance {
         shard: Principal,
         #[arg(value_parser = generation)]
         generation: [u8; 32],
     },
     /// Advance an exact shard retirement using its approved Store release and balance floor (JSON).
-    #[cfg(feature = "role-issuer")]
     RetireReleasedChild { approval: String },
+    /// Apply the reviewed snapshot download list to one permanent child.
+    ConfigureSnapshotReaders { approval: String },
     /// Approve the subnet ceiling from the reviewed fleet plan.
     ConfigureSubnetCapacity { approval: String },
     /// Approve a creation grant for the named requester.
@@ -60,27 +56,22 @@ enum Command {
     /// Stop future deposits to the named child.
     StopChildFunding { child: Principal },
     /// Approve the reserve policy from the reviewed fleet plan.
-    #[cfg(feature = "reserve-pool")]
     ConfigureStandby { approval: String },
     /// Hand a claimable spare to the exact destination Root.
-    #[cfg(feature = "reserve-pool")]
     ExportStandby {
         principal: Principal,
         destination: Principal,
         expires_at_ns: u64,
     },
     /// Observe an exact external handoff and verify its proof quarantine.
-    #[cfg(feature = "reserve-pool")]
     ImportStandby { principal: Principal },
     /// Observe the standby inventory and the exact worker allocation holding each spare.
-    #[cfg(feature = "reserve-pool")]
     ObserveStandby,
     /// Confirm the hub release of this exact worker target (JSON).
     ConfirmWorkerRelease { target: String },
     /// Stop and uninstall an exact released worker. Resume with the original deadline.
     ResetWorker { target: String, expires_at_ns: u64 },
     /// Authorize one new empty canister. Repeat the exact request to inspect its result.
-    #[cfg(feature = "reserve-pool")]
     RefillStandby {
         root: Principal,
         sequence: u8,
@@ -89,7 +80,6 @@ enum Command {
     },
 }
 
-#[cfg(feature = "child-metrics")]
 #[derive(Subcommand)]
 enum Source {
     Db,
@@ -100,7 +90,6 @@ enum Source {
     Endpoints { after: Option<String> },
 }
 
-#[cfg(feature = "role-issuer")]
 fn generation(value: &str) -> Result<[u8; 32], String> {
     if value.len() != 64 || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
         return Err("generation must contain 64 hex digits".into());
@@ -125,27 +114,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Action::Encode {
             command: Command::Logs { before },
         } => request::<canic::logging::Logs>(&before)?,
-        #[cfg(feature = "role-issuer")]
+
         Action::Encode {
             command: Command::PrepareRoleKey,
         } => request::<canic::topology::attestation::PrepareRoleKey>(&())?,
-        #[cfg(feature = "role-issuer")]
+
         Action::Encode {
             command: Command::CloseRoleIssuance { shard, generation },
         } => request::<CloseRoleIssuance>(&(
             shard,
             ic_wire::Bytes::new(generation.to_vec()).expect("32-byte generation"),
         ))?,
-        #[cfg(feature = "role-issuer")]
+
         Action::Encode {
             command: Command::RetireReleasedChild { approval },
         } => request::<canic_management_protocol::stored::RetireReleasedChild>(
             &serde_json::from_str(&approval)?,
         )?,
-        #[cfg(feature = "child-metrics")]
         Action::Encode {
-            command: Command::ChildMetrics { slot, source },
-        } => request::<ChildMetrics>(&(
+            command: Command::ObserveChildMetrics { slot, source },
+        } => request::<ObserveChildMetrics>(&(
             slot,
             match source {
                 Source::Db => Request::Db,
@@ -170,6 +158,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             expires_at_ns,
         ))?,
         Action::Encode {
+            command: Command::ConfigureSnapshotReaders { approval },
+        } => request::<canic_management_protocol::stored::ConfigureSnapshotReaders>(
+            &serde_json::from_str(&approval)?,
+        )?,
+        Action::Encode {
             command: Command::ConfigureSubnetCapacity { approval },
         } => request::<canic_management_protocol::stored::ConfigureSubnetCapacity>(
             &serde_json::from_str(&approval)?,
@@ -187,13 +180,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Action::Encode {
             command: Command::StopChildFunding { child },
         } => request::<canic_management_protocol::stored::StopChildFunding>(&child)?,
-        #[cfg(feature = "reserve-pool")]
+
         Action::Encode {
             command: Command::ConfigureStandby { approval },
         } => request::<canic_management_protocol::stored::ConfigureStandby>(
             &serde_json::from_str(&approval)?,
         )?,
-        #[cfg(feature = "reserve-pool")]
+
         Action::Encode {
             command:
                 Command::ExportStandby {
@@ -206,15 +199,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             destination,
             expires_at_ns,
         ))?,
-        #[cfg(feature = "reserve-pool")]
+
         Action::Encode {
             command: Command::ImportStandby { principal },
         } => request::<canic::sharding::standby::ImportStandby>(&principal)?,
-        #[cfg(feature = "reserve-pool")]
+
         Action::Encode {
             command: Command::ObserveStandby,
         } => request::<canic::sharding::standby::ObserveStandby>(&())?,
-        #[cfg(feature = "reserve-pool")]
+
         Action::Encode {
             command:
                 Command::RefillStandby {
@@ -246,32 +239,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn reply_limit() -> usize {
-    let limit = canic::logging::Logs::REPLY.bytes;
-    #[cfg(feature = "child-metrics")]
-    let limit = limit.max(ChildMetrics::REPLY.bytes);
-    #[cfg(feature = "reserve-pool")]
-    let limit = canic::sharding::standby::ObserveStandby::REPLY
+    canic::logging::Logs::REPLY
         .bytes
+        .max(ObserveChildMetrics::REPLY.bytes)
+        .max(canic::sharding::standby::ObserveStandby::REPLY.bytes)
         .max(canic::sharding::LIMITS.bytes)
-        .max(limit);
-    limit
 }
 
 fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     if let Ok(page) = canic::logging::Logs::decode_reply(bytes) {
         return Ok(serde_json::to_value(page)?);
     }
-    #[cfg(feature = "child-metrics")]
-    if let Ok(page) = ChildMetrics::decode_reply(bytes) {
+    if let Ok(page) = ObserveChildMetrics::decode_reply(bytes) {
         return Ok(serde_json::to_value(page)?);
     }
-    #[cfg(feature = "role-issuer")]
+
     if let Ok(reply) = canic::topology::attestation::PrepareRoleKey::decode_reply(bytes) {
         return Ok(json!({"issuer_key": reply?.into_vec()}));
     }
-    #[cfg(feature = "role-issuer")]
+
     if let Ok(reply) = CloseRoleIssuance::decode_reply(bytes) {
         return Ok(json!({"proof_deadline_ns": reply?.to_string()}));
+    }
+    if let Ok(reply) =
+        canic_management_protocol::stored::ConfigureSnapshotReaders::decode_reply(bytes)
+    {
+        reply.map_err(|e| format!("snapshot reader update: {e:?}"))?;
+        return Ok(json!({"configured":true}));
     }
     if let Ok(reply) =
         canic_management_protocol::stored::ConfigureSubnetCapacity::decode_reply(bytes)
@@ -291,24 +285,24 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     if let Ok(reply) = canic_management_protocol::stored::StopChildFunding::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "reserve-pool")]
+
     if let Ok(reply) = canic_management_protocol::stored::ConfigureStandby::decode_reply(bytes) {
         reply?;
         return Ok(json!({"approved":true}));
     }
-    #[cfg(feature = "reserve-pool")]
+
     if let Ok(reply) = canic::sharding::standby::ExportStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "reserve-pool")]
+
     if let Ok(reply) = canic::sharding::standby::ImportStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply?)?);
     }
-    #[cfg(feature = "reserve-pool")]
+
     if let Ok(reply) = canic::sharding::standby::ObserveStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply)?);
     }
-    #[cfg(feature = "reserve-pool")]
+
     if let Ok(reply) = canic::sharding::standby::RefillStandby::decode_reply(bytes) {
         return Ok(serde_json::to_value(reply?)?);
     }
@@ -319,7 +313,7 @@ fn decode(bytes: &[u8]) -> Result<Value, Box<dyn std::error::Error>> {
     if let Ok(reply) = canic::sharding::standby::ResetWorker::decode_reply(bytes) {
         return Ok(json!({"reset": reply?}));
     }
-    #[cfg(feature = "role-issuer")]
+
     if let Ok(reply) = canic_management_protocol::stored::RetireReleasedChild::decode_reply(bytes) {
         return Ok(json!({"retirement":reply?}));
     }
@@ -331,14 +325,18 @@ mod tests {
     use super::*;
 
     #[test]
-    fn child_metrics_command_and_decoder_follow_the_mount() {
-        let selected = cfg!(feature = "child-metrics");
-        let command =
-            Args::try_parse_from(["root-client", "encode", "child-metrics", "0", "timers"]);
-        assert_eq!(command.is_ok(), selected);
+    fn baseline_client_supports_observe_child_metrics() {
+        let command = Args::try_parse_from([
+            "root-client",
+            "encode",
+            "observe-child-metrics",
+            "256",
+            "timers",
+        ]);
+        command.unwrap();
         let reply =
-            canic::metrics::ChildMetrics::encode_reply(&canic::metrics::Report::Unavailable)
+            canic::metrics::ObserveChildMetrics::encode_reply(&canic::metrics::Report::Unavailable)
                 .unwrap();
-        assert_eq!(decode(&reply).is_ok(), selected);
+        decode(&reply).unwrap();
     }
 }

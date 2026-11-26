@@ -1,4 +1,4 @@
-//! Finite snapshot executor exchange. Backup owns procedure admission and host evidence.
+//! Controller-approved snapshot operations executed by Root.
 //! Platform owns inner DTOs/codecs; the manager owns original effect/result custody.
 
 #[cfg(test)]
@@ -45,7 +45,7 @@ pub enum Kind {
 /// Fixed procedure positions, not arbitrary method dispatch.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Step {
-    /// Explicit stop, if the controller requests it before Backup's procedure.
+    /// Explicit stop, if the controller requests it before capture.
     Stop,
     /// Original stopped-state/controller observation.
     InitialStatus,
@@ -83,11 +83,11 @@ pub enum Step {
 /// Immutable values under (kind, operation ID), not additional namespaces.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Operation {
-    /// Backup's original 16-byte ID.
+    /// Original 16-byte operation ID.
     pub id: [u8; 16],
     /// Fixed procedure.
     pub kind: Kind,
-    /// Exact Backup approval digest.
+    /// Exact snapshot operation approval digest.
     pub approval: [u8; 32],
     /// Host-selected network/trust commitment; the manager cannot discover a trust root.
     pub network: [u8; 32],
@@ -134,7 +134,7 @@ pub struct Request {
     pub step: Step,
     /// Typed external arguments for independent manager admission.
     pub effect: Effect,
-    /// SHA-256 of the original external bytes approved by Backup.
+    /// SHA-256 of the original external bytes bound to the approval.
     pub arguments_hash: [u8; 32],
     /// Exact original external byte count.
     pub arguments_bytes: u32,

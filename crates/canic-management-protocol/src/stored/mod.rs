@@ -529,6 +529,41 @@ impl canic::method::Contract for StopChildFunding {
     type Output = Result<ChildFundingStatus, FundingError>;
 }
 
+/// Replace native snapshot visibility for one permanent installation.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SnapshotReaders {
+    /// Root that owns this installation.
+    pub root: ic_platform_types::Principal,
+    /// Exact child principal from the selected fleet.
+    pub child: ic_platform_types::Principal,
+    /// Distinct additional readers. Empty restores controller-only visibility.
+    pub readers: Vec<ic_platform_types::Principal>,
+}
+
+/// IC snapshot visibility admits up to ten authenticated additional readers.
+#[must_use]
+pub fn valid_snapshot_readers(readers: &[ic_platform_types::Principal]) -> bool {
+    use ic_platform_types::Principal;
+    readers.len() <= 10
+        && readers.iter().enumerate().all(|(i, reader)| {
+            *reader != Principal::anonymous()
+                && *reader != Principal::management_canister()
+                && !readers[..i].contains(reader)
+        })
+}
+
+/// Set only snapshot visibility, using the IC management canister.
+#[cfg(feature = "standby")]
+pub struct ConfigureSnapshotReaders;
+#[cfg(feature = "standby")]
+impl canic::method::Contract for ConfigureSnapshotReaders {
+    const NAME: &'static str = "configure_snapshot_readers";
+    const ID: u64 = ic_wire::method_id("canic.root.configure_snapshot_readers.v1");
+    type Input = SnapshotReaders;
+    type Output = Result<(), crate::Failure>;
+}
+
 /// Operator-approved settings for a fresh Root installation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub struct RootBootstrap {

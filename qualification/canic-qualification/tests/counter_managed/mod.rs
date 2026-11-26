@@ -1,7 +1,7 @@
 //! The actual fleet CLI publishes and installs a counter through separate Root/Store owners.
 use super::*;
 use canic_management_protocol::{Phase, stored};
-use ex_counter::{Error, Request};
+use example_counter::{Error, Request};
 use ic_testkit::pocket_ic::nonblocking::PocketIc;
 use ic_wire::{Direction, Encoding};
 
@@ -96,7 +96,7 @@ async fn fleet_counter_preserves_value_and_never_treats_fenced_as_ready() {
                 "root":{"role":"root","wasm":assets.join("root.wasm")},
                 "store":{"role":"wasm-store","parent":"root","wasm":assets.join("store.wasm")},
                 "app":{"role":"app","parent":"root","wasm":dir.join("app.wasm"),
-                    "build":{"manifest":repo.join("Cargo.toml"),"package":"ex-counter","client":"ex-counter-client"}}
+                    "build":{"manifest":repo.join("Cargo.toml"),"package":"example-counter","client":"example-counter-client"}}
             },
             "fleets":{"local":{"network":{"kind":"Local","url":url,
                 "root_key":hex(&owner.client().root_key().await.unwrap()),

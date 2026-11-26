@@ -29,13 +29,94 @@ struct Package {
     manifest_path: PathBuf,
 }
 
-pub(crate) fn manifest(workspace_manifest: &Path, name: &str) -> Result<PathBuf> {
-    if !matches!(name, "canic-root" | "ic-wasm-store") {
-        return Ok(workspace_manifest.into());
+#[derive(Debug)]
+pub(crate) struct BuildSource {
+    pub(crate) manifest: PathBuf,
+    directory: PathBuf,
+    toolchain: Option<PathBuf>,
+}
+
+impl BuildSource {
+    fn workspace(manifest: &Path) -> Result<Self> {
+        let manifest = manifest.canonicalize().map_err(supplier)?;
+        let directory = manifest
+            .parent()
+            .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?
+            .into();
+        Ok(Self {
+            manifest,
+            directory,
+            toolchain: None,
+        })
     }
-    let workspace = metadata(workspace_manifest)?;
-    if name == "canic-root" {
-        return root_manifest(workspace_manifest, &workspace);
+
+    fn archive(&self, manifest: &Path) -> Result<Self> {
+        let sysroot = crate::process::capture(
+            Command::new("rustc")
+                .current_dir(&self.directory)
+                .args(["--print", "sysroot"]),
+            65536,
+            65536,
+            Duration::from_secs(30),
+        )
+        .map_err(cargo_failure)?;
+        let sysroot = Path::new(std::str::from_utf8(&sysroot).map_err(supplier)?.trim_end());
+        if !sysroot.is_absolute() {
+            return Err(Error::Invalid(
+                "expected an absolute Rust toolchain sysroot".into(),
+            ));
+        }
+        // Discover no consumer-local Cargo configuration, even for a nested registry cache.
+        let directory = manifest
+            .ancestors()
+            .last()
+            .filter(|p| p.is_absolute())
+            .ok_or_else(|| Error::Invalid("expected an absolute archive manifest".into()))?
+            .into();
+        Ok(Self {
+            manifest: manifest.into(),
+            directory,
+            toolchain: Some(sysroot.into()),
+        })
+    }
+
+    pub(crate) fn cargo(&self) -> Command {
+        let mut command = Command::new("cargo");
+        command.current_dir(&self.directory);
+        if let Some(toolchain) = &self.toolchain {
+            command.env("RUSTUP_TOOLCHAIN", toolchain);
+        }
+        command
+    }
+
+    fn metadata(&self) -> Result<Metadata> {
+        let output = crate::process::capture(
+            self.cargo()
+                .args([
+                    "metadata",
+                    "--locked",
+                    "--format-version",
+                    "1",
+                    "--manifest-path",
+                ])
+                .arg(&self.manifest),
+            8 * 1024 * 1024,
+            1024 * 1024,
+            Duration::from_secs(120),
+        )
+        .map_err(cargo_failure)?;
+        serde_json::from_slice(&output).map_err(supplier)
+    }
+}
+
+pub(crate) fn manifest(workspace_manifest: &Path, name: &str) -> Result<BuildSource> {
+    let consumer = BuildSource::workspace(workspace_manifest)?;
+    if !matches!(name, "canic-root" | "ic-wasm-store") {
+        return Ok(consumer);
+    }
+    let workspace = consumer.metadata()?;
+    if name != "ic-wasm-store" {
+        return canic_manifest(consumer, &workspace, name);
     }
     let runtime = selected(&workspace)?;
     if !runtime.manifest_path.with_file_name("Cargo.lock").is_file() {
@@ -45,59 +126,48 @@ pub(crate) fn manifest(workspace_manifest: &Path, name: &str) -> Result<PathBuf>
     }
     // The standalone build uses the archive's lock, not the consumer's graph.
     // Refuse a protocol mismatch instead of silently resolving another version.
-    let build = metadata(&runtime.manifest_path)?;
+    let archive = consumer.archive(&runtime.manifest_path)?;
+    let build = archive.metadata()?;
     let protocol = package(&build, "ic-wasm-store-protocol")?;
     if protocol.source.as_deref() != Some(REGISTRY) || protocol.version != runtime.version {
         return Err(Error::Invalid(
             "Store archive lock selects a different protocol".into(),
         ));
     }
-    Ok(runtime.manifest_path.clone())
+    Ok(archive)
 }
 
-fn root_manifest(workspace_manifest: &Path, workspace: &Metadata) -> Result<PathBuf> {
-    let root = package(workspace, "canic-root")?;
+fn canic_manifest(
+    mut consumer: BuildSource,
+    workspace: &Metadata,
+    name: &str,
+) -> Result<BuildSource> {
+    let root = package(workspace, name)?;
     if workspace.workspace_members.contains(&root.id) {
-        return Ok(workspace_manifest.into());
+        return Ok(consumer);
     }
     // A source starter selects both packages from the same Canic checkout.
     // Build the selected Root under that checkout’s locked workspace.
     if root.source.is_none() {
         let runtime = package(workspace, "canic")?;
         if runtime.source.is_none() && root.version == runtime.version {
-            let owner = metadata(&root.manifest_path)?;
+            consumer.manifest.clone_from(&root.manifest_path);
+            let owner = consumer.metadata()?;
             if owner.workspace_members.contains(&root.id)
                 && owner.workspace_members.contains(&runtime.id)
             {
-                return Ok(root.manifest_path.clone());
+                return Ok(consumer);
             }
         }
     }
     if root.source.as_deref() != Some(REGISTRY)
         || !root.manifest_path.with_file_name("Cargo.lock").is_file()
     {
-        return Err(Error::Invalid("Root build requires a workspace member, a Root from the selected local Canic workspace, or a locked crates.io Root with its packaged Cargo.lock".into()));
+        return Err(Error::Invalid(format!(
+            "{name} requires a workspace member, a package from the selected Canic workspace, or a locked registry archive"
+        )));
     }
-    Ok(root.manifest_path.clone())
-}
-
-fn metadata(manifest: &Path) -> Result<Metadata> {
-    let output = crate::process::capture(
-        Command::new("cargo")
-            .args([
-                "metadata",
-                "--locked",
-                "--format-version",
-                "1",
-                "--manifest-path",
-            ])
-            .arg(manifest),
-        8 * 1024 * 1024,
-        1024 * 1024,
-        Duration::from_secs(120),
-    )
-    .map_err(cargo_failure)?;
-    serde_json::from_slice(&output).map_err(supplier)
+    consumer.archive(&root.manifest_path)
 }
 
 fn package<'a>(metadata: &'a Metadata, name: &str) -> Result<&'a Package> {

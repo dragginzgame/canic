@@ -216,6 +216,7 @@ async fn attempt_delivery() -> Principal {
         target,
         5,
         &Delivery {
+            backup_timing: None,
             directory: Directory {
                 revision: 1,
                 services: Vec::new(),

@@ -358,7 +358,7 @@ async fn approval_journey(operator_owned: bool) {
         .update_call(
             root,
             operator,
-            "revoke_auth",
+            "revoke_auth_access",
             enrollment_request(enrollment::REVOKE, &wrong),
         )
         .await

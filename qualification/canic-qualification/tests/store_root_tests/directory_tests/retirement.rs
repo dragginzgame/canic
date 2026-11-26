@@ -391,7 +391,7 @@ pub(super) async fn exercise(
         canic_qualification::upgrade_stopped(
             pic,
             root.id,
-            std::fs::read(artifacts().join("role-root.wasm")).unwrap(),
+            std::fs::read(artifacts().join("root.wasm")).unwrap(),
             vec![],
             Some(root.operator),
         )
@@ -407,7 +407,7 @@ pub(super) async fn exercise(
         )
         .await
     };
-    let codec = artifacts().join("role-root.client");
+    let codec = artifacts().join("root.client");
     let command = [
         "retire-released-child".into(),
         serde_json::to_string(&input).unwrap(),

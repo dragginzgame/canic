@@ -17,6 +17,10 @@ pub(crate) fn infrastructure_badge(role: &str) -> Option<&'static str> {
     }
 }
 
+pub(crate) fn role_label(role: &str) -> &str {
+    infrastructure_badge(role).unwrap_or(role)
+}
+
 /// Order report records by declared parent, retaining context for filtered builds.
 pub(crate) fn labeled<'a, T>(
     records: &'a [T],

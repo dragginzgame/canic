@@ -92,19 +92,19 @@ fn fail(error: impl std::fmt::Debug) -> ! {
 // Create or recover the same Root verifying key for receiver setup.
 // guard  : Root controller
 // limits : default
-#[cfg(feature = "role-issuer")]
+
 #[canic::update(contract = canic::topology::attestation::PrepareRoleKey, guard = require_controller)]
 async fn prepare_role_key() -> Result<ic_wire::Bytes<32>, canic::topology::attestation::RoleError> {
     canic_management::role_issuer::prepare().await
 }
 
-// issue_role
+// issue_role_proof
 // Issue a two-hour receiver-bound credential for a ready shard, instance or named service.
 // guard  : ready caller with an assigned role
 // limits : default
-#[cfg(feature = "role-issuer")]
+
 #[canic::update(contract = canic::topology::attestation::Issue)]
-fn issue_role(
+fn issue_role_proof(
     receiver: ic_platform_types::Principal,
 ) -> Result<canic::topology::attestation::Proof, canic::topology::attestation::RoleError> {
     canic_management::role_issuer::issue(receiver)
@@ -123,7 +123,7 @@ fn release_child_allocation(
 // Return the original proof deadline for an empty, drained allocation.
 // guard  : Root controller
 // limits : default
-#[cfg(feature = "role-issuer")]
+
 #[canic::update(
     contract = canic::topology::attestation::CloseRoleIssuance,
     guard = require_controller,
@@ -138,7 +138,7 @@ fn close_role_issuance(
 // Report the proof deadline and live placement count for this closed generation.
 // guard  : Root controller
 // limits : default
-#[cfg(feature = "role-issuer")]
+
 #[canic::query(guard = require_controller)]
 fn retirement_status(
     (subject, generation): (ic_platform_types::Principal, ic_wire::Bytes<32>),
@@ -150,7 +150,7 @@ fn retirement_status(
 // Create one empty canister under the exact expiring refill approval.
 // guard  : Root controller
 // limits : default Wire
-#[cfg(feature = "reserve-pool")]
+
 #[canic::update(contract = canic::sharding::standby::RefillStandby, guard = require_controller)]
 async fn refill_standby(
     input: canic::sharding::standby::Refill,
@@ -162,7 +162,7 @@ async fn refill_standby(
 // Read original refill, allocation and transfer custody.
 // guard  : Root controller
 // limits : default request, 16384-byte reply
-#[cfg(feature = "reserve-pool")]
+
 #[canic::update(contract = canic::sharding::standby::ObserveStandby, guard = require_controller)]
 fn observe_standby() -> Vec<(
     canic::sharding::standby::Source,
@@ -190,10 +190,7 @@ async fn confirm_worker_release(
 async fn reset_worker(
     (target, deadline): (canic::sharding::ShardTarget, u64),
 ) -> Result<canic::sharding::standby::ResetPhase, canic::sharding::standby::ReserveError> {
-    #[cfg(feature = "auth")]
     let admit_receiver = crate::auth::require_no_worker_grant;
-    #[cfg(not(feature = "auth"))]
-    let admit_receiver = |_| Ok(());
     sharding::standby::reset(target, deadline, admit_receiver).await
 }
 
@@ -201,15 +198,12 @@ async fn reset_worker(
 // Advance the approved dormant installation or verify return after proof expiry.
 // guard  : Root controller
 // limits : stored request limits, default reply
-#[cfg(feature = "role-issuer")]
+
 #[canic::update(contract = stored::RetireReleasedChild, guard = require_controller)]
 async fn retire_released_child(
     input: stored::Stage<stored::ChildRetirement>,
 ) -> Result<stored::RetirementPhase, canic::sharding::standby::ReserveError> {
-    #[cfg(feature = "auth")]
     let grant = crate::auth::require_no_worker_grant;
-    #[cfg(not(feature = "auth"))]
-    let grant = |_| Ok(());
     sharding::standby::retire(input, grant).await
 }
 
@@ -217,12 +211,11 @@ async fn retire_released_child(
 // Retain the reserve policy and start bounded fill.
 // guard  : Root controller
 // limits : stored request, default reply
-#[cfg(feature = "reserve-pool")]
+
 #[canic::update(contract = stored::ConfigureStandby, guard = require_controller)]
 fn configure_standby(
     policy: stored::StandbyPolicy,
 ) -> Result<(), canic::sharding::standby::ReserveError> {
-    #[cfg(feature = "auth")]
     for text in &policy.imports {
         crate::auth::require_no_worker_grant(text.principal.parse().map_err(|_| {
             canic::sharding::standby::ReserveError::InvalidApproval(text.principal.clone())
@@ -236,7 +229,7 @@ fn configure_standby(
 // Observe an approved external handoff or finish its proof quarantine.
 // guard  : controller or declared former Root; exact principal checked in handler
 // limits : default Wire
-#[cfg(feature = "reserve-pool")]
+
 #[canic::update(contract = canic::sharding::standby::ImportStandby, guard = sharding::standby::policy::import_caller)]
 async fn import_standby(
     id: ic_platform_types::Principal,
@@ -248,7 +241,7 @@ async fn import_standby(
 // Reserve one empty spare and hand it to its named destination Root.
 // guard  : Root controller
 // limits : default Wire
-#[cfg(feature = "reserve-pool")]
+
 #[canic::update(contract = canic::sharding::standby::ExportStandby, guard = require_controller)]
 async fn export_standby(
     input: (
@@ -264,7 +257,7 @@ async fn export_standby(
 // Report the destination's retained import state to its declared former Root.
 // guard  : exact former Root for this principal
 // limits : default Wire
-#[cfg(feature = "reserve-pool")]
+
 #[canic::update(contract = canic::sharding::standby::ObserveStandbyHandoff, guard = sharding::standby::policy::import_caller)]
 fn observe_standby_handoff(
     id: ic_platform_types::Principal,
@@ -276,7 +269,7 @@ fn observe_standby_handoff(
 // Report the subnet fleet's aggregate ready count, target and refill availability.
 // guard  : public
 // limits : default Wire
-#[cfg(feature = "reserve-pool")]
+
 #[canic::query(contract = stored::ReadStandbyStatus)]
 fn standby_status() -> Option<stored::SpareCounts> {
     sharding::standby::policy::spare_counts()

@@ -230,7 +230,7 @@ pub(super) fn plan(
         let version = if arguments.is_some() {
             if source.is_some() { 8 } else { 6 }
         } else {
-            desired.root.version
+            2
         };
         let addition = Plan {
             version,
@@ -299,8 +299,14 @@ pub(super) fn plan(
             }
         }
         let selected = desired.store.as_ref().ok_or_else(invalid)?;
+        if !crate::artifact::exported_methods(bytes.0)?
+            .iter()
+            .any(|entry| entry.mode == "update" && entry.name == "maintain_store")
+        {
+            return Err(Error::Blocked("the approved Root lacks maintain_store; upgrade Root before planning a new Store replacement".into()));
+        }
         let upgrade = Plan {
-            version: if desired.version >= 7 { 9 } else { 2 },
+            version: plan::STORE_MAINTENANCE_VERSION,
             artifact: selected.artifact.clone(),
             deployment: Some(selected.deployment.clone()),
             action: PlanAction::UpgradeStore {

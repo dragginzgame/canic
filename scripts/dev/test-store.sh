@@ -33,21 +33,21 @@ build() {
     "$cli" artifact build --package "$package" "$@" --json > "target/store/$name.json"
     cp -- "$(jq -r .wasm "target/store/$name.json")" "target/store/$name.wasm"
 }
-build_payer() {
+build_hub_example() {
     local name=$1
     cargo build --locked --release --target wasm32-unknown-unknown --manifest-path qualification/Cargo.toml -p canic-shard-hub --example "$name" --message-format=json-render-diagnostics > "$records"
     cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact") | .filenames[] | select(endswith(".wasm"))] | last' "$records")" "target/store/$name.wasm"
 }
+build root canic-root
 if [[ "$scope" == all || "$scope" == miner ]]; then
     "$cli" app build --config apps/examples/miner-pool/canic.toml
     "$cli" --json artifact endpoints apps/examples/miner-pool/artifacts/root.wasm |
         jq -e '[.endpoints[].name] | contains(["acquire_placement","lookup_placement","refill_standby"]) and (index("assign_shard") == null) and (index("assign_instance") == null)' >/dev/null
-    build_payer miner-payer
-    build baseline-root canic-root
+    build_hub_example miner-payer
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test miner
 fi
 if [[ "$scope" == miner ]]; then
-    build pool-faults canic-root --features reserve-pool,fault-injection
+    build pool-faults canic-root --features fault-injection
     CANIC_CLI="$cli" CANIC_STORE_APP_DIRECTORY="$root/target/store" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
     exit
 fi
@@ -60,12 +60,12 @@ if [[ "$scope" == all || "$scope" == db-roles ]]; then
         any(.request.schema[]; .k == "array" and .max == 16)' target/store/db-role-wire.json >/dev/null
     "$cli" --json artifact endpoints target/store/db-role-schema.wasm |
         jq -e 'any(.endpoints[]; .name == "echo_id" and .mode == "query")' >/dev/null
-    build_payer registry-payer
-    build db-role-root canic-root --features auth,role-issuer,reserve-pool
+    build_hub_example registry-payer
     build db-role-project canic-directory-witness --manifest qualification/Cargo.toml --features funding
     cp -- target/store/registry-payer.wasm target/store/db-role-hub.wasm
     build hub canic-shard-hub --manifest qualification/Cargo.toml
-    build db-role-shard ex-user-directory-shard --features role-service
+    build_hub_example attested-shard
+    cp -- target/store/attested-shard.wasm target/store/db-role-shard.wasm
     cp -- apps/examples/user-directory/shard-nonce.bin target/store/db-role-nonce.bin
 fi
 if [[ "$scope" == db-roles ]]; then
@@ -74,31 +74,23 @@ if [[ "$scope" == db-roles ]]; then
     exit
 fi
 if [[ "$scope" == all || "$scope" == directory ]]; then
-    role_features=role-issuer,reserve-pool
-    cargo build --locked --release -p canic-root --features "$role_features" --bin canic-root-client --message-format=json-render-diagnostics > "$records"
-    cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic-root-client" and .executable != null) | .executable] | if length == 1 then .[0] else error("expected role-enabled Root client") end' "$records")" target/store/role-root.client
-    cargo build --locked -p ex-user-directory-hub --features operator-client --bin ex-user-directory-hub-client --message-format=json-render-diagnostics > "$records"
-    cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "ex-user-directory-hub-client") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected hub codec") end' "$records")" target/store/hub.client
-    build recycled-miner ex-miner-pool-miner
+    cargo build --locked --release -p canic-root --bin canic-root-client --message-format=json-render-diagnostics > "$records"
+    cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic-root-client" and .executable != null) | .executable] | if length == 1 then .[0] else error("expected role-enabled Root client") end' "$records")" target/store/root.client
+    cargo build --locked -p example-user-directory-hub --features operator-client --bin example-user-directory-hub-client --message-format=json-render-diagnostics > "$records"
+    cp -- "$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "example-user-directory-hub-client") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected hub codec") end' "$records")" target/store/hub.client
+    build recycled-miner example-miner-pool-miner
     build dormant canic-dormant
-    # Both the baseline and role-enabled builds own creation and top-ups.
-    build baseline-root canic-root
-    build role-root canic-root --features "$role_features"
-    for variant in baseline-root role-root; do
-        "$cli" --json artifact endpoints "target/store/$variant.wasm" |
-            jq -e '[.endpoints[].name] as $names |
-                ($names | contains(["acquire_placement", "approve_child_creation", "configure_subnet_capacity", "increase_pool_limit", "configure_child_funding", "stop_child_funding"])) and
-                all("configure_capacity", "increase_pool", "configure_shard_routes", "observe_shard", "begin_shard_drain", "configure_shards", "configure_instances", "configure_workers", "configure_singleton", "stop_application_child_funding"; . as $name | ($names | index($name) == null))' >/dev/null
-    done
-    help=$(cargo run --quiet --locked -p canic-root --features operator-client --bin canic-root-client -- encode --help)
+    "$cli" --json artifact endpoints "target/store/root.wasm" |
+        jq -e '[.endpoints[].name] as $names |
+            ($names | contains(["acquire_placement", "approve_child_creation", "configure_subnet_capacity", "increase_pool_limit", "configure_child_funding", "stop_child_funding"])) and
+            all("configure_capacity", "increase_pool", "configure_shard_routes", "observe_shard", "begin_shard_drain", "configure_shards", "configure_instances", "configure_workers", "configure_singleton", "stop_application_child_funding"; . as $name | ($names | index($name) == null))' >/dev/null
+    help=$(cargo run --quiet --locked -p canic-root --bin canic-root-client -- encode --help)
     for action in configure-child-funding stop-child-funding approve-child-creation configure-subnet-capacity; do
         grep -qw -- "$action" <<<"$help"
     done
     build directory canic-directory-witness --manifest qualification/Cargo.toml --features placement,role-probe,funding
 fi
 if [[ "$scope" == directory ]]; then
-    build pool-root canic-root --features reserve-pool
-    build root canic-root
     build original ic-wasm-store
     CANIC_STORE_APP_DIRECTORY="$root/target/store" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
     exit
@@ -108,7 +100,7 @@ if [[ "$scope" == all || "$scope" == user-directory ]]; then
     "$cli" --json artifact endpoints apps/examples/user-directory/artifacts/user_hub.wasm |
         jq -e '[.endpoints[].name] | contains(["configure_shard_routes","observe_shard","begin_shard_drain"]) and (index("approve_child_creation") == null)' >/dev/null
     "$cli" --json artifact endpoints apps/examples/user-directory/artifacts/root.wasm |
-        jq -e '[.endpoints[].name] | contains(["acquire_placement"]) and (index("assign_shard") == null) and (index("lookup_shard") == null) and (index("release_shard") == null) and (index("assign_worker") == null) and (index("refill_standby") == null)' >/dev/null
+        jq -e '[.endpoints[].name] | contains(["acquire_placement"]) and (index("assign_shard") == null) and (index("lookup_shard") == null) and (index("release_shard") == null) and (index("assign_worker") == null) and (index("refill_standby") != null)' >/dev/null
 fi
 if [[ "$scope" == user-directory ]]; then
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
@@ -119,12 +111,11 @@ if [[ "$scope" == all || "$scope" == sharding ]]; then
     cargo test --locked -p canic --features sharding,storage sharding::
     cargo test --locked -p canic-management --features sharding placement::
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-db-witness --features managed-fixture --output target/store/pool-db.wasm --json > target/store/pool-db.json
-    build pool-root canic-root --features reserve-pool
-    build pool-faults canic-root --features reserve-pool,fault-injection
+    build pool-faults canic-root --features fault-injection
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-shard-hub --output target/store/hub.wasm --json > target/store/hub.json
 fi
 build original ic-wasm-store
-build root-maintenance canic-root --features maintenance-candidate
+bash scripts/dev/prepare-root-maintenance-fixture.sh target/store/root.wasm target/store/root-maintenance.wasm
 build root-faults canic-root --features fault-injection
 if [[ "$scope" == all || "$scope" == root-maintenance ]]; then
     records=$(mktemp target/store/host-tests.XXXXXX.jsonl)
@@ -133,7 +124,6 @@ if [[ "$scope" == all || "$scope" == root-maintenance ]]; then
     export CANIC_HOST_CUSTODY_TEST
 fi
 if [[ "$scope" == all || "$scope" == sharding || "$scope" == publication || "$scope" == dispatch || "$scope" == root-maintenance ]]; then
-    build root canic-root
     build app canic-greeting-witness --manifest qualification/Cargo.toml
     build app-v2 canic-greeting-witness --manifest qualification/Cargo.toml --features greeting-v2
 fi

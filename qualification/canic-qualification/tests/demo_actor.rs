@@ -1,4 +1,4 @@
-//! Installed fixed greeting and optional metrics composition, with no persistent owner.
+//! Installed fixed greeting and shared metrics reader, with no persistent owner.
 use canic::{
     method::Contract,
     metrics::{ReadMetrics, Report, Request},
@@ -61,7 +61,7 @@ pub async fn check(pic: &PocketIc, canister: CanisterId, greeting: &str) {
         assert!(snapshot.observed_at_ns > 0);
         assert_eq!(snapshot.timers, None, "no provider is not zero counters");
     }
-    for source in [Request::Endpoints(None), Request::Blob] {
+    let read_source = async |source| {
         let bytes = pic
             .query_call(
                 canister,
@@ -71,11 +71,20 @@ pub async fn check(pic: &PocketIc, canister: CanisterId, greeting: &str) {
             )
             .await
             .unwrap();
-        assert!(matches!(
-            ReadMetrics::decode_reply(&bytes).unwrap(),
-            Report::Unavailable
-        ));
-    }
+        ReadMetrics::decode_reply(&bytes).unwrap()
+    };
+    let Report::Endpoints(page) = read_source(Request::Endpoints(None)).await else {
+        panic!("expected endpoint measurements")
+    };
+    assert!(
+        page.measurements
+            .iter()
+            .any(|row| row.endpoint == "probe" && row.calls >= 1)
+    );
+    assert!(matches!(
+        read_source(Request::Blob).await,
+        Report::Unavailable
+    ));
     for invalid in [
         vec![],
         vec![0; ReadMetrics::REQUEST.bytes + 1],

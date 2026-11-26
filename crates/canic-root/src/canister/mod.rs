@@ -1,4 +1,3 @@
-#[cfg(feature = "backup")]
 mod backup;
 mod placement;
 
@@ -23,7 +22,7 @@ fn init(policy: Option<canic_management_protocol::stored::RootBootstrap>) {
         management::bootstrap(policy);
     }
     canic::logging::record(canic::logging::Level::Info, "root", "installed");
-    #[cfg(feature = "auth")]
+
     crate::auth::fresh();
 }
 
@@ -40,8 +39,8 @@ fn init(policy: Option<canic_management_protocol::stored::RootBootstrap>) {
 )]
 fn post_upgrade((): ()) {
     management::open(false, readiness());
-    if !cfg!(feature = "reserve-pool") && management::sharding::requires_reserve_pool() {
-        runtime::system::trap("retained Root approval requires reserve-pool");
+    if !management::auth_grant_issued() {
+        crate::auth::fresh();
     }
     canic::logging::record(
         canic::logging::Level::Info,
@@ -52,26 +51,15 @@ fn post_upgrade((): ()) {
 
 management::mount_endpoints! {
     publish_store_artifact, observe_store, change_store_admission, remove_store_artifact,
-    stage_store_maintenance, advance_store_maintenance, observe_store_maintenance,
-    install_store_maintenance, activate_store_maintenance, store_maintenance_status, recover_store_maintenance,
+    maintain_store, observe_store_maintenance, store_maintenance_status, recover_store_maintenance,
     observe_root_custody, observe_child_deployments,
     stage_child_creation, reconcile_child_creation,
     stage_child_upgrade, reconcile_child_upgrade,
-    child_status, observe_child_status, child_upgrade_status,
+    child_status, observe_child_status,
 }
 
-#[cfg(feature = "blob")]
 management::mount_endpoints! {
-    activate_application_upgrade,
-}
-
-// logs
-// Read one page of Root diagnostics using the operator’s signed call.
-// guard  : Root controller
-// limits : default request, Logs::REPLY (4,096 bytes)
-#[canic::update(contract = canic::logging::Logs, guard = canic::guard::require_controller)]
-fn logs(before: Option<u64>) -> canic::logging::Page {
-    canic::logging::page(before)
+    activate_child_upgrade,
 }
 
 // redeliver_directory_revision
@@ -86,18 +74,17 @@ async fn redeliver_directory_revision(
     management::application::redeliver_directory_revision(&name, revision).await
 }
 
-// child_metrics
+// observe_child_metrics
 // Read bounded performance observations from an installed, ready child of this Root.
 // guard  : Root controller
-// limits : ChildMetrics::REQUEST and ChildMetrics::REPLY (4,096-byte reply)
-#[cfg(feature = "child-metrics")]
-#[canic::update(contract = canic::metrics::ChildMetrics, guard = canic::guard::require_controller)]
-async fn child_metrics(request: (u8, canic::metrics::Request)) -> canic::metrics::Report {
+// limits : ObserveChildMetrics::REQUEST and ObserveChildMetrics::REPLY (4,096-byte reply)
+#[canic::update(contract = canic::metrics::ObserveChildMetrics, guard = canic::guard::require_controller)]
+async fn observe_child_metrics(request: (u32, canic::metrics::Request)) -> canic::metrics::Report {
     use canic::metrics::ReadMetrics;
     use canic_management_protocol::{Phase, children::ChildId};
     let (slot, source) = request;
-    let slot = ChildId::new(usize::from(slot))
-        .unwrap_or_else(|| runtime::system::trap("unknown child slot"));
+    let slot =
+        ChildId::new(slot as usize).unwrap_or_else(|| runtime::system::trap("unknown child slot"));
     let status = management::children::status(slot);
     if status.phase != Phase::Ready {
         runtime::system::trap("child is not ready");
@@ -152,6 +139,13 @@ fn readiness() -> Readiness {
 
 #[cfg(feature = "fault-injection")]
 management::mount_endpoints! { inject_child_fault }
+
+#[canic::update(contract = canic_management_protocol::stored::ConfigureSnapshotReaders, guard = canic::guard::require_controller)]
+async fn configure_snapshot_readers(
+    input: canic_management_protocol::stored::SnapshotReaders,
+) -> Result<(), canic_management_protocol::Failure> {
+    management::configure_snapshot_readers(input).await
+}
 
 fn endpoint_error(error: impl std::fmt::Debug) -> ! {
     ic_platform_runtime::system::trap(&format!("endpoint refused: {error:?}"))

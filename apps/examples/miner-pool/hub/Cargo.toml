@@ -1,5 +1,5 @@
 [package]
-name = "ex-miner-pool-hub"
+name = "example-miner-pool-hub"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -18,7 +18,7 @@ category = "examples"
 crate-type = ["cdylib", "rlib"]
 
 [[bin]]
-name = "ex-miner-pool-client"
+name = "example-miner-pool-client"
 path = "client/main.rs"
 
 [dependencies]

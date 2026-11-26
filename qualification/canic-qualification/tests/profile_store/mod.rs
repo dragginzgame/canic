@@ -153,18 +153,19 @@ async fn info(pic: &PocketIc, child: CanisterId) -> Info {
 }
 
 async fn upgrade_status(pic: &PocketIc, root: CanisterId) -> upgrade::Status {
+    use canic_management_protocol::children;
     let reply = pic
         .query_call(
             root,
             CanisterId::anonymous(),
-            "child_upgrade_status",
+            "child_status",
             ic_wire::encode(
-                &canic_management_protocol::children::Request {
-                    slot: canic_management_protocol::children::ChildId::FIRST,
+                &children::StatusRequest::Upgrade(children::Request {
+                    slot: children::ChildId::FIRST,
                     value: None::<upgrade::Approval>,
-                },
+                }),
                 ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::children::UPGRADE_STATUS,
+                    method: children::READ_STATUS,
                     direction: ic_wire::Direction::Request,
                 },
                 canic_management_protocol::LIMITS,
@@ -173,15 +174,18 @@ async fn upgrade_status(pic: &PocketIc, root: CanisterId) -> upgrade::Status {
         )
         .await
         .unwrap();
-    ic_wire::decode(
+    let children::ObservedStatus::Upgrade(status) = ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: canic_management_protocol::children::UPGRADE_STATUS,
+            method: children::READ_STATUS,
             direction: ic_wire::Direction::Response,
         },
         canic_management_protocol::LIMITS,
     )
-    .unwrap()
+    .unwrap() else {
+        panic!("expected Upgrade status")
+    };
+    status
 }
 
 #[tokio::test]

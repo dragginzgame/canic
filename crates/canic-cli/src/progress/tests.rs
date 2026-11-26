@@ -137,7 +137,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
         },
         parent: Some("user_hub".into()),
         endpoint_count: 7,
-        modules: vec!["DB", "Auth"],
+        modules: vec!["auth", "db"],
         build_ms: 2_340,
         client: None,
     };
@@ -149,7 +149,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
     assert!(table.contains("user_shard.wasm"));
     assert!(!table.contains("artifacts/"));
     assert!(table.contains("934.27 KiB"));
-    assert!(table.contains("DB, Auth"));
+    assert!(table.contains("auth,db"));
     assert!(table.contains("2.34 s"));
     assert!(!table.contains("COMMAND CODEC"));
 
@@ -199,7 +199,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
     }
     store.canister = "artifacts".into();
     store.role = Some("wasm-store".into());
-    store.modules = vec!["DB", "Auth"];
+    store.modules = vec!["auth", "db"];
     assert_eq!(
         serde_json::to_value(&hub).unwrap()["client"],
         "artifacts/user_shard.codec"
@@ -209,7 +209,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
         .lines()
         .find(|row| row.starts_with("├─ [WASM_STORE]"))
         .unwrap();
-    assert!(row.find("KiB").unwrap() < row.find("DB, Auth").unwrap());
+    assert!(row.find("KiB").unwrap() < row.find("auth,db").unwrap());
     assert!(row.contains("0.8.0"));
     assert!(row.contains("wasm_store.wasm"));
     assert_eq!(row.matches("[WASM_STORE]").count(), 1);

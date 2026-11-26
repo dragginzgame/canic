@@ -1,5 +1,5 @@
 [package]
-name = "ex-counter"
+name = "example-counter"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -19,7 +19,7 @@ crate-type = ["cdylib", "rlib"]
 
 # Native codec launched by the Canic CLI for named fleet calls.
 [[bin]]
-name = "ex-counter-client"
+name = "example-counter-client"
 path = "client/main.rs"
 
 [features]

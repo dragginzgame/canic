@@ -28,7 +28,7 @@ async fn configure(f: &super::Fixture) -> enrollment::Grant {
         .update_call(
             f.root,
             f.installer,
-            "configure_auth",
+            "grant_auth_access",
             enrollment_request(enrollment::CONFIGURE, &grant),
         )
         .await
@@ -62,8 +62,8 @@ async fn held_authenticated_replies_keep_receiver_bindings_and_revocation_isolat
     .await;
     let second_grant = grant(second, pic.get_time().await.as_nanos_since_unix_epoch());
     for (method, id) in [
-        ("configure_auth", enrollment::CONFIGURE),
-        ("revoke_auth", enrollment::REVOKE),
+        ("grant_auth_access", enrollment::CONFIGURE),
+        ("revoke_auth_access", enrollment::REVOKE),
     ] {
         let bytes = pic
             .update_call(
@@ -557,7 +557,7 @@ async fn expired_held_response_cannot_clear_newer_pending_or_committed_revocatio
             .update_call(
                 f.root,
                 f.installer,
-                "revoke_auth",
+                "revoke_auth_access",
                 enrollment_request(enrollment::REVOKE, &grant),
             )
             .await

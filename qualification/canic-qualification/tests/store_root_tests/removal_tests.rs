@@ -186,9 +186,9 @@ async fn root_removal_keeps_pins_labels_and_exact_identity_before_expired_author
         canic_management_protocol::store_maintenance::Status,
         canic_management_protocol::Refusal,
     >>(
-        "stage_store_maintenance",
-        canic_management_protocol::store_maintenance::STAGE,
-        &approval,
+        "maintain_store",
+        canic_management_protocol::store_maintenance::MAINTAIN,
+        &canic_management_protocol::store_maintenance::Request::Stage(approval.clone()),
         canic_management_protocol::store_maintenance::LIMITS,
     )
     .await

@@ -12,7 +12,7 @@ mkdir -p target/auth
 records=$(mktemp target/auth/build.XXXXXX.jsonl)
 cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$records"
 cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected one CLI") end' "$records")
-"$cli" artifact build --package canic-root --features auth --output target/auth/root.wasm --json > target/auth/root.json
+"$cli" artifact build --package canic-root --output target/auth/root.wasm --json > target/auth/root.json
 if [[ "$browser" == true ]]; then
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-auth-witness --features profile --output target/auth/profile.wasm --json > target/auth/profile.json
     cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features profile-state --test auth_browser "$@" -- --ignored --nocapture

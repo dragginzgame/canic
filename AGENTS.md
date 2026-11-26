@@ -69,8 +69,8 @@ installer, never by editing installed bytes.
   fence report. Observing readiness cannot activate or reopen application writes.
   The counter's local persistence/upgrade witness uses Storage named cells. Managed
   creation/upgrade through separate Root/Store now has a local installed CLI witness;
-  named counter commands use an optional app-owned native codec. Backup qualifies local restoration of a stopped counter.
-  Root mediates separate acceptance and reopening for the installed Backup counter witness. `fleet call` signs as the selected user, never proxies through
+  named counter commands use an optional app-owned native codec. Root qualifies local restoration of a stopped counter through native snapshots.
+  Root mediates separate acceptance and reopening for the installed snapshot counter witness. `fleet call` signs as the selected user, never proxies through
   Root and never treats controller membership as application permission. Calls
   retain exact request bytes in the existing journal; resumed signed calls are
   observation-only, and uncertainty blocks replacement calls to that target.
@@ -144,8 +144,9 @@ persistent-actor work.
 Keep the root virtual Cargo workspace, products under `crates/`, fleet components
 under `apps/`, and the separate qualification workspace under `qualification/`.
 The maintainer-selected exception to package directory matching applies to examples
-and the app template. Use `ex-` in Cargo package names for discoverability, keep
-a single-crate example in its fleet directory, and use short component directories
+and the app template. Use `example-` for their Cargo package names. Give apps
+unprefixed names and canister slots short names in `canic.toml`. Keep a
+single-crate example in its fleet directory, and use short component directories
 such as `hub/`, `shard/` and `schema/` in a multi-crate example.
 Use Rust 1.100.0 and inherited workspace lints. Runtime and Host dependency graphs
 remain separate; do not pull optional supplier runtimes into default applications.
@@ -217,9 +218,9 @@ current journeys and remaining gates; do not substitute sibling working trees.
   reply rollback. Mounts grant no enrollment, storage or timer authority. Lost
   volatile replay/revocation state stays closed; fresh enrollment is not recovery.
   A receiver grant allows application upgrades. Volatile receivers stay closed
-  afterward. Stable receivers require a fresh Root refresh. An Auth-enabled Root loses
-  volatile grant history on upgrade, even with zero prior grants.
-  Worker reset, retirement and reserve imports stay fenced afterward.
+  afterward. Stable receivers require a fresh Root refresh. Root records first grant use durably.
+  A never-used Root reopens with empty grant history. After any grant has been
+  issued, volatile history loss fences worker reset, retirement and reserve imports.
 - Issuers own intents/renewal/results/pruning; reconciliation is lookup-only.
   Local signers do not qualify production keys or external signing recovery.
   Logout passes the captured caller; account fields are selectors. Browser code

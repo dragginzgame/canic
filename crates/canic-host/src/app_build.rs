@@ -207,17 +207,17 @@ pub fn build_app(
 
 fn build_client(
     workspace: &Path,
-    manifest: &Path,
+    source: &crate::artifact::BuildSource,
     package: &str,
     client: &str,
     features: &[String],
     children: &str,
     destination: &Path,
 ) -> Result<PathBuf> {
-    let mut command = Command::new("cargo");
+    let manifest = &source.manifest;
+    let mut command = source.cargo();
     command
         .env(format!("CANIC_APP_CHILDREN_{package}"), children)
-        .current_dir(workspace)
         .args([
             "build",
             "--locked",
@@ -227,9 +227,6 @@ fn build_client(
         ])
         .arg(manifest)
         .args(["--package", package, "--bin", client]);
-    if package == "canic-root" && client == "canic-root-client" {
-        command.args(["--features", "operator-client"]);
-    }
     if package == "canic-root" && !manifest.starts_with(workspace) {
         command
             .arg("--target-dir")

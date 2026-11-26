@@ -47,12 +47,33 @@ fn store_maintenance_evidence_fits_its_scoped_metadata_budget() {
         verification: status.preservation.clone(),
         activation_request: Some([255; 32]),
     });
-    let input = Install {
+    let input = Request::Install(Install {
         approval: status.approval.clone(),
         wasm: vec![255; MAX_MODULE_BYTES],
-    };
+    });
     let bytes = ic_wire::encode(
         &input,
+        ic_wire::Encoding::Frame {
+            method: MAINTAIN,
+            direction: ic_wire::Direction::Request,
+        },
+        INSTALL_LIMITS,
+    )
+    .unwrap();
+    let Request::Install(decoded) = ic_wire::decode::<Request>(
+        &bytes,
+        ic_wire::Encoding::Frame {
+            method: MAINTAIN,
+            direction: ic_wire::Direction::Request,
+        },
+        INSTALL_LIMITS,
+    )
+    .unwrap() else {
+        panic!("expected installation")
+    };
+    assert_eq!(decoded.wasm, vec![255; MAX_MODULE_BYTES]);
+    let old_install = ic_wire::encode(
+        &decoded,
         ic_wire::Encoding::Frame {
             method: INSTALL,
             direction: ic_wire::Direction::Request,
@@ -60,24 +81,44 @@ fn store_maintenance_evidence_fits_its_scoped_metadata_budget() {
         INSTALL_LIMITS,
     )
     .unwrap();
-    assert_eq!(
-        ic_wire::decode::<Install>(
-            &bytes,
+    assert!(
+        ic_wire::decode::<Request>(
+            &old_install,
             ic_wire::Encoding::Frame {
-                method: INSTALL,
+                method: MAINTAIN,
                 direction: ic_wire::Direction::Request
             },
             INSTALL_LIMITS
         )
-        .unwrap()
-        .wasm,
-        input.wasm
+        .is_err()
     );
+    for retired in [STAGE, ADVANCE, ACTIVATE] {
+        let original = ic_wire::encode(
+            &status.approval,
+            ic_wire::Encoding::Frame {
+                method: retired,
+                direction: ic_wire::Direction::Request,
+            },
+            LIMITS,
+        )
+        .unwrap();
+        assert!(
+            ic_wire::decode::<Request>(
+                &original,
+                ic_wire::Encoding::Frame {
+                    method: MAINTAIN,
+                    direction: ic_wire::Direction::Request
+                },
+                INSTALL_LIMITS
+            )
+            .is_err()
+        );
+    }
     assert!(
-        ic_wire::decode::<Install>(
+        ic_wire::decode::<Request>(
             &bytes,
             ic_wire::Encoding::Frame {
-                method: INSTALL,
+                method: MAINTAIN,
                 direction: ic_wire::Direction::Request
             },
             crate::STAGE_LIMITS
@@ -88,7 +129,7 @@ fn store_maintenance_evidence_fits_its_scoped_metadata_budget() {
     let bytes = ic_wire::encode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: STAGE,
+            method: MAINTAIN,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,
@@ -98,7 +139,7 @@ fn store_maintenance_evidence_fits_its_scoped_metadata_budget() {
         ic_wire::decode::<Result<Status, crate::Refusal>>(
             &bytes,
             ic_wire::Encoding::Frame {
-                method: STAGE,
+                method: MAINTAIN,
                 direction: ic_wire::Direction::Response
             },
             LIMITS

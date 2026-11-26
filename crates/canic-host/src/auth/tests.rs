@@ -51,13 +51,13 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
     (dir, selected)
 }
 
-fn retained_reply(dir: &Path, plan: &Plan) -> std::path::PathBuf {
+fn retained_reply(dir: &Path, plan: &Plan, method: &str) -> std::path::PathBuf {
     let approval = plan.auth().unwrap();
     let root = crate::network::principal(&approval.root.canister).unwrap();
     let call = crate::signed::Call {
         canister: root,
         effective: root,
-        method: "configure_auth",
+        method,
         args: ic_wire::encode(
             &approval.grant,
             ic_wire::Encoding::Frame {
@@ -186,7 +186,18 @@ fn auth_receipts_require_exact_retained_call_and_revocation_does_not_consume_mut
         &crate::signed::tests::controller(),
     )
     .unwrap();
-    let path = retained_reply(&dir, &plan);
+    assert_eq!(plan.version, crate::plan::AUTH_ACCESS_VERSION);
+    let mut legacy = plan.clone();
+    legacy.version = 5;
+    assert_ne!(legacy.digest().unwrap(), id);
+    let legacy_path = retained_reply(&dir.join("legacy-fixture"), &legacy, "configure_auth");
+    assert!(
+        execution::receipt(legacy_path.parent().unwrap(), &legacy)
+            .unwrap()
+            .is_some()
+    );
+    assert!(execution::receipt(legacy_path.parent().unwrap(), &plan).is_err());
+    let path = retained_reply(&dir, &plan, "grant_auth_access");
     assert!(execution::receipt(&dir.join(&id), &plan).unwrap().is_some());
     selected.config.auth.first_mut().unwrap().issuer = "ryjl3-tyaaa-aaaaa-aaaba-cai".into();
     let (revoked, revocation) = create_auth_revocation(&dir, &id, &selected).unwrap();
@@ -272,7 +283,7 @@ fn operator_controller_is_bound_into_the_plan_and_retained_for_revocation() {
     same_times.created_at_ns = legacy.created_at_ns;
     same_times.expires_at_ns = legacy.expires_at_ns;
     assert_ne!(legacy.digest().unwrap(), same_times.digest().unwrap());
-    retained_reply(&dir, &plan);
+    retained_reply(&dir, &plan, "grant_auth_access");
     selected
         .config
         .auth

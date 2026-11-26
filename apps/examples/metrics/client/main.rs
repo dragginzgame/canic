@@ -2,7 +2,7 @@
 
 use canic::method::Contract;
 use clap::{Parser, Subcommand};
-use ex_metrics::{Checksum, Payload, Ping};
+use example_metrics::{Checksum, Payload, Ping};
 use serde_json::json;
 use std::io::Read as _;
 

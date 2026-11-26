@@ -1,22 +1,22 @@
-[apps.ex-user-directory]
+[apps.user-directory]
 
-[apps.ex-user-directory.canisters.ex-user-directory-hub]
+[apps.user-directory.canisters.hub]
 role = "user_hub"
 wasm = "artifacts/user_hub.wasm"
-build = { manifest = "../../../Cargo.toml", package = "ex-user-directory-hub", features = ["operator-client"], client = "ex-user-directory-hub-client" }
+build = { manifest = "../../../Cargo.toml", package = "example-user-directory-hub", features = ["operator-client"], client = "example-user-directory-hub-client" }
 
-[apps.ex-user-directory.canisters.ex-user-directory-shard]
+[apps.user-directory.canisters.shard]
 role = "user_shard"
-parent = "ex-user-directory-hub"
+parent = "hub"
 wasm = "artifacts/user_shard.wasm"
-build = { manifest = "../../../Cargo.toml", package = "ex-user-directory-shard" }
+build = { manifest = "../../../Cargo.toml", package = "example-user-directory-shard" }
 
-[apps.ex-user-directory.fleets.local]
+[apps.user-directory.fleets.local]
 # Bind the simulator and installed principals before approving placement.
 network = { kind = "Local" }
 
-[[apps.ex-user-directory.fleets.local.shard_pools]]
-component = "ex-user-directory-shard"
+[[apps.user-directory.fleets.local.shard_pools]]
+component = "shard"
 root = "root"
 store = "store"
 release = { name = "user_shard", version = "1" }
@@ -26,7 +26,7 @@ keys_per_shard = 1
 max_shards = 2
 creation_budget = 2_000_000_000_000
 
-[apps.ex-user-directory.fleets.local.receiver_policy]
+[apps.user-directory.fleets.local.receiver_policy]
 # Choose on fresh install. Stable receivers require a Root refresh after upgrade.
 storage = "volatile"
 root = "root"

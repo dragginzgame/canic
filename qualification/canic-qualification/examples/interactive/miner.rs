@@ -2,7 +2,7 @@
 use super::{Result, miner_pool_fixture, run_live_prompt};
 use canic::method::Contract;
 use canic_management_protocol::{self as management, stored};
-use ex_miner_pool_hub::{PoolReport, Report, Tick};
+use example_miner_pool_hub::{PoolReport, Report, Tick};
 use ic_testkit::{pocket_ic::CanisterId, server::Instance};
 use std::{fmt::Write, path::Path, time::Duration};
 

@@ -48,13 +48,13 @@ pub use ic_jobs as jobs;
 pub mod lifecycle;
 
 /// Bounded operational diagnostics owned by the hosting canister.
-#[cfg(feature = "logging")]
+#[cfg(feature = "method")]
 pub mod logging;
 
 #[cfg(any(feature = "method", feature = "sharding"))]
 pub mod method;
 
-/// Passive operational reports. The optional `metrics` feature exports one guarded reader.
+/// Passive operational reports. Canic actors export one guarded reader.
 pub mod metrics;
 
 /// Application-owned readiness; the optional feature enables an explicit replicated mount.

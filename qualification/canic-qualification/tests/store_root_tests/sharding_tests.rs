@@ -29,7 +29,7 @@ async fn project(
 async fn large_subnet_requires_exact_controller_opt_in() {
     let (mut server, owner) = support::instance(&canic_qualification::server_directory()).await;
     let pic = owner.client();
-    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let wasm = std::fs::read(artifacts().join("root.wasm")).unwrap();
     let (root, _) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
     let grant = |max_children, allow_large_subnet| stored::SubnetCapacity {
         root: root.id.to_text(),
@@ -113,10 +113,7 @@ async fn check_occupied_placement_endpoints(root: &Client<'_>) {
         ("observe_root_custody", true),
         ("change_store_admission", true),
         ("remove_store_artifact", true),
-        ("stage_store_maintenance", true),
-        ("advance_store_maintenance", true),
-        ("install_store_maintenance", true),
-        ("activate_store_maintenance", true),
+        ("maintain_store", true),
         ("recover_store_maintenance", true),
         ("observe_child_status", false),
         ("observe_store_maintenance", false),
@@ -166,15 +163,21 @@ async fn check_occupied_placement_endpoints(root: &Client<'_>) {
         "{denied:?}"
     );
     for (name, args) in [
-        ("child_status", frame(children::STATUS, &ChildId::FIRST)),
         (
-            "child_upgrade_status",
+            "child_status",
             frame(
-                children::UPGRADE_STATUS,
-                &children::Request {
+                children::READ_STATUS,
+                &children::StatusRequest::Creation(ChildId::FIRST),
+            ),
+        ),
+        (
+            "child_status",
+            frame(
+                children::READ_STATUS,
+                &children::StatusRequest::Upgrade(children::Request {
                     slot: ChildId::FIRST,
-                    value: None::<management::upgrade::Approval>,
-                },
+                    value: None,
+                }),
             ),
         ),
         (
@@ -186,22 +189,27 @@ async fn check_occupied_placement_endpoints(root: &Client<'_>) {
             .await
             .unwrap();
     }
-    let status = frame(children::STATUS, &ChildId::FIRST);
+    let status = frame(
+        children::READ_STATUS,
+        &children::StatusRequest::Creation(ChildId::FIRST),
+    );
     let outsider = CanisterId::anonymous();
     let public = pic
         .query_call(root.id, outsider, "child_status", status.clone())
         .await
         .unwrap();
     let replicated = root.observe_creation(ChildId::FIRST).await;
-    let public: management::Status = ic_wire::decode(
+    let children::ObservedStatus::Creation(public) = ic_wire::decode(
         &public,
         ic_wire::Encoding::Frame {
-            method: children::STATUS,
+            method: children::READ_STATUS,
             direction: ic_wire::Direction::Response,
         },
         management::LIMITS,
     )
-    .unwrap();
+    .unwrap() else {
+        panic!("expected creation status")
+    };
     assert_eq!(public, replicated);
     let status = frame(
         children::OBSERVE_STATUS,
@@ -241,7 +249,7 @@ async fn exercise_pool(toko_wasm: Option<PathBuf>, inline: Option<PathBuf>) {
     // Advance replica time explicitly once the fleet has its gateway address.
     owner.client_mut().stop_live().await;
     let pic = owner.client();
-    let root_wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let root_wasm = std::fs::read(artifacts().join("root.wasm")).unwrap();
     let initial = inline
         .as_ref()
         .map_or_else(|| root_wasm.clone(), |old| std::fs::read(old).unwrap());
@@ -986,7 +994,7 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
     let pic = owner.client();
     let (root, store) = readiness_tests::fixture_with_root(
         pic,
-        std::fs::read(artifacts().join("pool-root.wasm")).unwrap(),
+        std::fs::read(artifacts().join("root.wasm")).unwrap(),
     )
     .await;
     let hub = pic.create_canister().await;
@@ -1333,7 +1341,7 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
-    let (root, supplier, mut input, second) = fixture_with_module(pic, "pool-root.wasm").await;
+    let (root, supplier, mut input, second) = fixture_with_module(pic, "root.wasm").await;
     root.update::<_, Result<(), management::Refusal>>(
         "configure_subnet_capacity",
         stored::CONFIGURE_SUBNET_CAPACITY,
@@ -1497,7 +1505,7 @@ async fn approved_hub_recovers_its_first_growth_ordinal() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
-    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let wasm = std::fs::read(artifacts().join("root.wasm")).unwrap();
     let (root, store) = readiness_tests::fixture_with_root(pic, wasm).await;
     let (hub, mut grant) = fresh_user_shard_grant(&root, &store).await;
     grant.max_shards = 1;
@@ -1613,7 +1621,7 @@ async fn ten_thousand_keys_per_shard_survive_rollover_and_hub_reopen() {
     )
     .await;
     let pic = owner.client();
-    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let wasm = std::fs::read(artifacts().join("root.wasm")).unwrap();
     let (root, store) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
     let (hub, approval) = fresh_user_shard_grant(&root, &store).await;
 
@@ -1707,7 +1715,7 @@ async fn registry_reimburses_root_once_on_a_reserve_hit_and_a_miss() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
-    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let wasm = std::fs::read(artifacts().join("root.wasm")).unwrap();
     let (root, store) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
     let (hub, shared) = fresh_user_shard_grant(&root, &store).await;
     let mut grant = instance_grant(root.id, hub, shared.reference, shared.expires_at_ns);
@@ -1937,7 +1945,7 @@ async fn hub_commits_routes_locally_and_requests_capacity_once_per_ordinal() {
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
-    let wasm = std::fs::read(artifacts().join("pool-root.wasm")).unwrap();
+    let wasm = std::fs::read(artifacts().join("root.wasm")).unwrap();
     let (root, store) = readiness_tests::fixture_with_root(pic, wasm.clone()).await;
     let (hub, grant) = grant_with_child(&root, &store, "hub.wasm").await;
     use canic::{

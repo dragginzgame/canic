@@ -367,6 +367,14 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     serde_json::json!({"config_path":path,"configuration":selected,"deployed":false}),
                 )
             }
+            CanisterCommand::PlanSnapshotReaders { name, selection } => {
+                let path = selection.config.path(selection.app.as_deref())?;
+                let fleet = canic_host::load_config(&path)?
+                    .select(selection.app.as_deref(), selection.fleet.as_deref())?;
+                Ok(serde_json::json!(
+                    fleet.snapshot_readers(&fleet.journal_path(&path), name)?
+                ))
+            }
             CanisterCommand::PlanFunding {
                 name,
                 budget_cycles,

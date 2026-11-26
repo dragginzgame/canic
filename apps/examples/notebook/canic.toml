@@ -1,8 +1,8 @@
-[apps.ex-notebook.canisters.notebook]
+[apps.notebook.canisters.notebook]
 role = "app"
 parent = "root"
 wasm = "artifacts/notebook.wasm"
-build = { manifest = "../../../Cargo.toml", package = "ex-notebook" }
+build = { manifest = "../../../Cargo.toml", package = "example-notebook" }
 
-[apps.ex-notebook.fleets.local]
+[apps.notebook.fleets.local]
 network = { kind = "Local" }

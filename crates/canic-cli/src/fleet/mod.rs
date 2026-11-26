@@ -144,7 +144,9 @@ fn render(snapshot: &Fleet, routes: &str) -> String {
                 "<li><strong style=\"white-space:pre\">{}{}</strong> · role: {} · {}</li>",
                 escape(&prefix),
                 escape(slot),
-                escape(config.config.canisters[slot].role.as_deref().unwrap_or("—")),
+                escape(crate::topology::role_label(
+                    config.config.canisters[slot].role.as_deref().unwrap_or("—")
+                )),
                 escape(&slot_status(snapshot, slot))
             )
             .expect("writing to String");

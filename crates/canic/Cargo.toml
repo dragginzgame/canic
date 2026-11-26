@@ -12,7 +12,7 @@ description = "Small Canic contracts and optional actor adapters"
 ignored = ["toko-tooling"]
 
 [features]
-auth = ["dep:ic-auth-protocol-types", "dep:ic-auth-wire", "dep:ic-platform-runtime"]
+auth = ["method", "dep:ic-auth-protocol-types", "dep:ic-auth-wire"]
 auth-browser = ["auth", "ic-auth-wire/typescript"]
 auth-enrollment = [
     "auth",
@@ -24,16 +24,10 @@ auth-enrollment = [
 ]
 auth-receiver-stable = ["auth-enrollment", "ic-auth/receiver-stable", "storage"]
 auth-issuer-stable = ["auth", "ic-auth/issuer-stable"]
-blob = [
-    "dep:ic-blob-storage",
-    "dep:ic-platform-runtime",
-    "dep:ic-platform-types",
-    "dep:ic-storage",
-]
-db = ["dep:ic-platform-runtime"]
-db-store = ["dep:ic-db", "dep:sha2", "storage"]
-endpoint-metrics = ["metrics"]
-entropy = ["dep:ic-entropy", "raw-rand"]
+blob = ["dep:ic-logging-supplier", "method", "dep:ic-blob-storage", "dep:ic-storage"]
+db = ["method"]
+db-store = ["lifecycle", "dep:ic-db", "dep:sha2", "storage"]
+entropy = ["lifecycle", "dep:ic-entropy", "raw-rand"]
 inspection = [
     "dep:inventory",
     "dep:serde_json",
@@ -43,25 +37,17 @@ inspection = [
     "ic-db?/wire",
 ]
 jobs = ["dep:ic-jobs", "timers"]
-lifecycle = ["dep:ic-platform-runtime"]
-logging = [
-    "method",
-    "lifecycle",
+lifecycle = ["method"]
+method = [
     "dep:ic-logging",
     "ic-blob-storage?/logging",
     "ic-db?/logging",
     "ic-entropy?/logging",
-]
-method = [
+    "dep:ic-metrics",
     "dep:canic-macros",
     "dep:ic-platform-runtime",
     "ic-platform-runtime/call-ic0",
     "dep:ic-platform-types",
-]
-metrics = [
-    "dep:ic-metrics",
-    "method",
-    "lifecycle",
     "ic-blob-storage?/metrics",
     "ic-db?/metrics",
     "ic-entropy?/metrics",
@@ -76,15 +62,15 @@ provisioning = [
     "stateful-role",
     "method",
 ]
-readiness = ["dep:ic-platform-runtime"]
+readiness = ["method"]
 role-attestation = ["role-verification", "storage"]
 role-verification = ["topology", "method", "dep:ic-platform"]
-sharding = ["dep:ic-platform-runtime", "dep:ic-platform-types", "dep:sha2"]
+sharding = ["method", "dep:sha2"]
 receiver-role = ["method", "auth-receiver-stable", "readiness", "sharding", "topology"]
 stateful-role = ["receiver-role", "db-store"]
 storage = ["dep:ic-storage"]
 timers = ["dep:ic-timers", "lifecycle"]
-topology = ["dep:canic-macros", "dep:ic-platform-types", "dep:ic-platform-runtime"]
+topology = ["method"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 inventory = { workspace = true, optional = true }
@@ -99,6 +85,7 @@ ic-db = { workspace = true, optional = true }
 ic-entropy = { workspace = true, optional = true }
 ic-jobs = { workspace = true, optional = true, features = ["execution"] }
 ic-logging = { workspace = true, optional = true }
+ic-logging-supplier = { workspace = true, optional = true }
 ic-metrics = { workspace = true, optional = true }
 ic-platform = { workspace = true, optional = true, features = ["ed25519"] }
 ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }

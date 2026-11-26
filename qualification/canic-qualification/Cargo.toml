@@ -16,38 +16,35 @@ category = "tests"
 inspection = [
     "canic/inspection",
     "canic/role-verification",
-    "ex-user-directory-schema/inspection",
+    "example-user-directory-schema/inspection",
 ]
-backup = ["canic-host/backup", "dep:ic-backup", "dep:ic-host-sign"]
 profile-state = ["canic-auth-witness/profile", "dep:canic-profile-worker", "dep:ic-storage"]
 
 [dependencies]
 canic = { workspace = true, features = ["method"] }
 canic-profile-worker = { workspace = true, optional = true }
-ex-counter.workspace = true
-ic-backup = { workspace = true, optional = true }
+example-counter.workspace = true
 ic-host-artifacts.workspace = true
-ic-host-sign = { workspace = true, optional = true }
 ic-storage = { workspace = true, optional = true }
 ic-testkit.workspace = true
 ic-wire.workspace = true
 wasmparser.workspace = true
 
 [dev-dependencies]
-canic = { workspace = true, features = ["db", "logging", "recovery", "sharding", "topology"] }
+canic = { workspace = true, features = ["db", "lifecycle", "recovery", "sharding", "topology"] }
 canic-artifact-probe.workspace = true
 canic-asset-catalog.workspace = true
 canic-auth-witness.workspace = true
 canic-effect-probe.workspace = true
 canic-greeting-witness.workspace = true
 canic-host.workspace = true
-canic-management-protocol = { workspace = true, features = ["backup"] }
+canic-management-protocol.workspace = true
 canic-profile-protocol.workspace = true
 clap.workspace = true
-ex-miner-pool-hub.workspace = true
-ex-user-directory-hub.workspace = true
-ex-user-directory-schema.workspace = true
-ex-user-directory-shard.workspace = true
+example-miner-pool-hub.workspace = true
+example-user-directory-hub.workspace = true
+example-user-directory-schema.workspace = true
+example-user-directory-shard.workspace = true
 ic-auth.workspace = true
 ic-auth-protocol-types.workspace = true
 ic-host-process.workspace = true
@@ -73,11 +70,6 @@ name = "auth"
 [[test]]
 name = "auth_browser"
 required-features = ["profile-state"]
-
-[[test]]
-name = "backup"
-path = "tests/backup/mod.rs"
-required-features = ["backup"]
 
 [[test]]
 name = "blob"

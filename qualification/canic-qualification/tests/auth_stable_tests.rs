@@ -81,7 +81,7 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
         .update_call(
             f.root,
             f.installer,
-            "configure_auth",
+            "grant_auth_access",
             enrollment_request(enrollment::CONFIGURE, &grant),
         )
         .await
@@ -285,7 +285,7 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
         .update_call(
             f.root,
             f.installer,
-            "revoke_auth",
+            "revoke_auth_access",
             enrollment_request(enrollment::REVOKE, &grant),
         )
         .await

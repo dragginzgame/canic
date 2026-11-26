@@ -1,8 +1,7 @@
 //! Controller observations of completed synchronous application updates.
 
-#[cfg(feature = "endpoint-metrics")]
 mod recorder;
-#[cfg(all(test, feature = "endpoint-metrics"))]
+#[cfg(test)]
 mod tests;
 
 use serde::{Deserialize, Serialize};
@@ -43,24 +42,11 @@ pub struct Page {
     pub next: Option<String>,
 }
 
-#[cfg(feature = "endpoint-metrics")]
 #[doc(hidden)]
 pub use recorder::measure;
-#[cfg(feature = "endpoint-metrics")]
 pub(super) use recorder::page;
 
-/// Expand directly to the handler when measurement is disabled.
-#[cfg(not(feature = "endpoint-metrics"))]
-#[doc(hidden)]
-#[macro_export]
-macro_rules! __canic_measure_update {
-    ($name:expr, $call:expr) => {
-        $call
-    };
-}
-
 /// Time the handler after admission and decoding.
-#[cfg(feature = "endpoint-metrics")]
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_measure_update {

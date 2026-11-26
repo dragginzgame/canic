@@ -3,12 +3,12 @@ set -euo pipefail
 root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root"
 prepare_snapshot() {
-    cargo test --locked -p canic-management --features backup --lib
-    cargo test --locked -p canic-management-protocol --features backup backup::tests
+    cargo test --locked -p canic-management-protocol backup::tests
     mkdir -p target/backup
-    "$1" artifact build --package canic-root --features backup,fault-injection --output target/backup/root.wasm --json > target/backup/root.json
+    "$1" artifact build --package canic-root --output target/backup/root.wasm --json > target/backup/root.json
+    "$1" artifact build --package canic-root --features fault-injection --output target/backup/root-fault.wasm --json > target/backup/root-fault.json
     "$1" artifact build --package ic-wasm-store --output target/backup/store.wasm --json > target/backup/store.json
-    "$1" artifact build --package ex-counter --output target/backup/app.wasm --json > target/backup/app.json
+    "$1" artifact build --package example-counter --output target/backup/app.wasm --json > target/backup/app.json
 }
 if [[ $# == 1 && $1 == snapshot:: ]]; then
     prepare_snapshot canic
@@ -36,8 +36,7 @@ cp -- "$scratch/project/artifacts/root.wasm" target/root/root.wasm
 cp -- "$scratch/project/artifacts/wasm_store.wasm" target/root/store.wasm
 "$cli" artifact build --json --package ic-wasm-store --features maintenance-candidate > target/root/store-maintenance.json
 cp -- "$(jq -r .wasm target/root/store-maintenance.json)" target/root/store-maintenance.wasm
-"$cli" artifact build --json --package canic-root --features maintenance-candidate > target/root/maintenance.json
-cp -- "$(jq -r .wasm target/root/maintenance.json)" target/root/maintenance.wasm
+bash scripts/dev/prepare-root-maintenance-fixture.sh target/root/root.wasm target/root/maintenance.wasm
 "$cli" artifact build --json --package canic-root --features fault-injection > target/root/faults.json
 cp -- "$(jq -r .wasm target/root/faults.json)" target/root/faults.wasm
 "$cli" artifact build --package canic-directory-witness --manifest qualification/Cargo.toml --output target/root/directory.wasm --json > target/root/directory.json

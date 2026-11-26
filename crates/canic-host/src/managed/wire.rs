@@ -21,7 +21,11 @@ impl Method {
     }
 
     fn contract(self, plan: &Plan) -> (&'static str, u64) {
-        if plan.version == 8 && matches!(self, Self::Observe | Self::ObserveUpgrade) {
+        if matches!(
+            plan.version,
+            8 | crate::plan::PLACEMENT_CHILD_ACTIVATION_VERSION
+        ) && matches!(self, Self::Observe | Self::ObserveUpgrade)
+        {
             return (
                 "observe_child_deployments",
                 protocol::application::CHILD_EVIDENCE,
@@ -42,6 +46,15 @@ impl Method {
                 ),
                 Self::Observe | Self::ObserveUpgrade => {
                     ("observe_root_custody", application::CUSTODY)
+                }
+                Self::ActivateUpgrade
+                    if matches!(
+                        plan.version,
+                        crate::plan::CHILD_ACTIVATION_VERSION
+                            | crate::plan::PLACEMENT_CHILD_ACTIVATION_VERSION
+                    ) =>
+                {
+                    ("activate_child_upgrade", application::ACTIVATE)
                 }
                 Self::ActivateUpgrade => ("activate_application_upgrade", application::ACTIVATE),
             };

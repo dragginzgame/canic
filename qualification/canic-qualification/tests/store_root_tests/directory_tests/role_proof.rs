@@ -313,7 +313,12 @@ pub(super) async fn exercise(
         id: issuer.id,
         operator: unrelated,
     }
-    .update("issue_role", id("issue_role"), &receiver.id, limits)
+    .update(
+        "issue_role_proof",
+        id("issue_role_proof"),
+        &receiver.id,
+        limits,
+    )
     .await;
     assert_eq!(
         denied.err().unwrap(),
@@ -602,7 +607,7 @@ pub(super) async fn exercise(
     canic_qualification::upgrade_stopped(
         pic,
         issuer.id,
-        std::fs::read(artifacts().join("role-root.wasm")).unwrap(),
+        std::fs::read(artifacts().join("root.wasm")).unwrap(),
         vec![],
         Some(owner),
     )
@@ -621,7 +626,7 @@ pub(super) async fn exercise(
         child.id.to_text(),
         observed["generation"].as_str().unwrap().into(),
     ];
-    let closed = command(issuer.id, "role-root.client", close_request.clone()).await;
+    let closed = command(issuer.id, "root.client", close_request.clone()).await;
     let deadline: u64 = closed["proof_deadline_ns"]
         .as_str()
         .unwrap()
@@ -631,14 +636,14 @@ pub(super) async fn exercise(
     canic_qualification::upgrade_stopped(
         pic,
         issuer.id,
-        std::fs::read(artifacts().join("role-root.wasm")).unwrap(),
+        std::fs::read(artifacts().join("root.wasm")).unwrap(),
         vec![],
         Some(owner),
     )
     .await
     .unwrap();
     assert_eq!(
-        command(issuer.id, "role-root.client", close_request).await,
+        command(issuer.id, "root.client", close_request).await,
         closed
     );
     assert_eq!(renew(&child).await, Err("role issuance closed".into()));
@@ -704,7 +709,7 @@ pub(super) async fn exercise(
     canic_qualification::upgrade_stopped(
         pic,
         issuer.id,
-        std::fs::read(artifacts().join("role-root.wasm")).unwrap(),
+        std::fs::read(artifacts().join("root.wasm")).unwrap(),
         vec![],
         Some(owner),
     )

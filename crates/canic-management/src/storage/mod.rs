@@ -73,16 +73,19 @@ pub(super) const ARTIFACT_KEY: &str = "manager.artifacts.v1";
 pub(super) const SHARDS_KEY: &str = "manager.shards.v2";
 #[cfg(feature = "sharding")]
 pub(super) const WORKER_HISTORY_KEY: &str = "manager.worker_history.v1";
+#[cfg(feature = "auth")]
+pub(super) const AUTH_HISTORY_KEY: &str = "manager.auth_history.v1";
 pub(super) const KEYS: &[&str] = &[
     #[cfg(feature = "role-issuer")]
     super::role_issuer::KEY,
+    #[cfg(feature = "auth")]
+    AUTH_HISTORY_KEY,
     JOURNAL_KEY,
     ARTIFACT_KEY,
     #[cfg(feature = "sharding")]
     SHARDS_KEY,
     #[cfg(feature = "sharding")]
     WORKER_HISTORY_KEY,
-    #[cfg(feature = "backup")]
     "manager.snapshot.v1",
 ];
 const JOURNAL_LIMITS: ic_wire::Limits = ic_wire::Limits {

@@ -1,5 +1,5 @@
 [package]
-name = "ex-user-directory-shard"
+name = "example-user-directory-shard"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -13,19 +13,19 @@ category = "examples"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-inspection = ["canic/inspection", "ex-user-directory-schema/inspection"]
-role-service = ["canic/role-attestation", "ex-user-directory-schema/role-service"]
+inspection = ["canic/inspection", "example-user-directory-schema/inspection"]
+role-service = ["canic/role-attestation", "example-user-directory-schema/role-service"]
 
 [dependencies]
 canic = { workspace = true, features = ["provisioning"] }
-ex-user-directory-schema.workspace = true
+example-user-directory-schema.workspace = true
 ic-db.workspace = true
 
 [dev-dependencies]
 toko-tooling.workspace = true
 
 [[example]]
-name = "ex-user-directory-shard-wire"
+name = "example-user-directory-shard-wire"
 path = "examples/wire.rs"
 required-features = ["inspection"]
 

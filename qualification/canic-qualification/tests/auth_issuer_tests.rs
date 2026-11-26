@@ -179,7 +179,7 @@ async fn issuer_real_calls_bind_accounts_renewals_and_exact_results() {
         .update_call(
             f.root,
             f.installer,
-            "configure_auth",
+            "grant_auth_access",
             enrollment_request(enrollment::CONFIGURE, &approved),
         )
         .await

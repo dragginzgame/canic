@@ -25,7 +25,7 @@ pub(super) async fn enroll(
         ..grant.clone()
     };
     root.update::<_, Result<(), enrollment::Error>>(
-        "configure_auth",
+        "grant_auth_access",
         enrollment::CONFIGURE,
         &grant,
         enrollment::LIMITS,
@@ -136,7 +136,7 @@ async fn directory(revoke: bool, stable: bool) {
     let mut config = canic_host::load_config(&dir.join("canic.toml")).unwrap();
     let local = config
         .apps
-        .get_mut("ex-user-directory")
+        .get_mut("user-directory")
         .unwrap()
         .fleets
         .get_mut("local")
@@ -154,11 +154,7 @@ async fn directory(revoke: bool, stable: bool) {
         routing_canister: root.id.to_text(),
     });
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    for (name, id) in [
-        ("root", root.id),
-        ("store", store.id),
-        ("ex-user-directory-hub", hub),
-    ] {
+    for (name, id) in [("root", root.id), ("store", store.id), ("hub", hub)] {
         local.canisters.insert(
             name.into(),
             canic_host::CanisterBinding {
@@ -183,7 +179,7 @@ async fn directory(revoke: bool, stable: bool) {
     let fleet = config.select(None, None).unwrap().config;
     let pool = fleet
         .shard_pool_approval(
-            "ex-user-directory-shard",
+            "shard",
             manifest,
             management::application::Arguments::new(nonce).unwrap(),
         )
@@ -192,14 +188,10 @@ async fn directory(revoke: bool, stable: bool) {
         .await
         .unwrap();
     let service = fleet
-        .bind_hub_operator(
-            "ex-user-directory-hub",
-            &root.operator.to_text(),
-            vec![5; 16],
-        )
+        .bind_hub_operator("hub", &root.operator.to_text(), vec![5; 16])
         .unwrap();
     let args = fleet
-        .receiver_install_args("ex-user-directory-hub", &pool.root, service)
+        .receiver_install_args("hub", &pool.root, service)
         .unwrap();
     let install = canic::auth::install::Install::decode(&args).unwrap();
     pic.set_controllers(hub, Some(root.operator), vec![root.operator, root.id])
@@ -296,10 +288,7 @@ async fn directory(revoke: bool, stable: bool) {
                     hub,
                     canic::sharding::payment::AcquirePlacement::NAME,
                     crate::store_root_tests::placement_request(
-                        canic::sharding::payment::Demand::ShardCapacity(
-                            "ex-user-directory-shard".into(),
-                            0,
-                        ),
+                        canic::sharding::payment::Demand::ShardCapacity("shard".into(), 0),
                     ),
                 )
                 .await
@@ -768,7 +757,7 @@ async fn check_receipts(
         {
             owner
                 .update::<_, Result<(), enrollment::Error>>(
-                    "revoke_auth",
+                    "revoke_auth_access",
                     enrollment::REVOKE,
                     grant,
                     enrollment::LIMITS,

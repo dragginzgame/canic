@@ -333,7 +333,13 @@ id = "{manager}"
     assert_eq!(preserved.requests, ready.requests);
     assert_eq!(preserved.creation_refund, ready.creation_refund);
     assert_eq!(preserved.observed_module, ready.observed_module);
-    assert!(preserved.maintenance_candidate);
+    assert_eq!(
+        pic.canister_status(manager, None)
+            .await
+            .unwrap()
+            .module_hash,
+        Some(digest(&maintenance_wasm).to_vec())
+    );
     assert_eq!(count(pic, manager).await, original_count + 1);
     pic.auto_progress().await;
     let replay = client(&args);

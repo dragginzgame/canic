@@ -13,8 +13,6 @@ pub use wire_export::export_wire;
 pub mod application;
 mod artifact;
 mod auth;
-#[cfg(feature = "backup")]
-pub mod backup;
 mod config;
 #[cfg(feature = "ephemeral")]
 pub mod ephemeral;
@@ -52,10 +50,10 @@ pub use canic_management_protocol::Phase as ManagementPhase;
 pub use config::{
     AppConfig, BuildInput, CanisterBinding, CanisterConfig, CanisterDefinition, ChildTopUp, Config,
     DeploymentName, DiscoveredConfig, FleetConfig, FleetDeclaration, FleetLifetime, FleetNetwork,
-    PoolGrant, RegistryConfig, SelectedFleet, ShardPoolConfig, SingletonConfig, StandbyImports,
-    StandbyPoolConfig, UnboundLocal, WorkerPoolConfig, add_app_canister, bind_canister,
-    create_configured_plan, discover_configs, init_app, init_config, init_fleet, load_config,
-    resolve_config_path,
+    PoolGrant, RegistryConfig, SelectedFleet, ShardPoolConfig, SingletonConfig, SnapshotConfig,
+    StandbyImports, StandbyPoolConfig, UnboundLocal, WorkerPoolConfig, add_app_canister,
+    bind_canister, create_configured_plan, discover_configs, init_app, init_config, init_fleet,
+    load_config, resolve_config_path,
 };
 pub use fleet::{
     Fleet, FleetCanister, FleetManager, FleetMetrics, FleetOperation, FleetStoreMaintenance,

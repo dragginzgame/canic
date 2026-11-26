@@ -23,6 +23,11 @@ canic-root = "=0.253.0"
 TOML
 cat > canic.toml <<'TOML'
 [apps.consumer]
+# This fixture pins a historical release whose Root still had build switches.
+[apps.consumer.canisters.root]
+role = "root"
+wasm = "artifacts/root.wasm"
+build = { manifest = "Cargo.toml", package = "canic-root", features = ["auth", "role-issuer"], client = "canic-root-client" }
 [apps.consumer.canisters.hub]
 role = "hub"
 parent = "root"

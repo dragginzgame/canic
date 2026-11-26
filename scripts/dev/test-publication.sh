@@ -13,8 +13,7 @@ for entry in root:canic-root store:ic-wasm-store; do
     cp -- "$(jq -r .wasm "target/publication/$name.json")" "target/publication/$name.wasm"
 done
 "$cli" artifact build --manifest qualification/Cargo.toml --package canic-greeting-witness --output target/publication/app.wasm --json > target/publication/app.json
-"$cli" artifact build --package canic-root --features maintenance-candidate --json > target/publication/root-maintenance.json
-cp -- "$(jq -r .wasm target/publication/root-maintenance.json)" target/publication/root-maintenance.wasm
+bash scripts/dev/prepare-root-maintenance-fixture.sh target/publication/root.wasm target/publication/root-maintenance.wasm
 for entry in root-faults:canic-root:fault-injection store-candidate:ic-wasm-store:maintenance-candidate; do
     name=${entry%%:*}
     rest=${entry#*:}
@@ -22,18 +21,17 @@ for entry in root-faults:canic-root:fault-injection store-candidate:ic-wasm-stor
     cp -- "$(jq -r .wasm "target/publication/$name.json")" "target/publication/$name.wasm"
 done
 if [[ $# == 0 || "${1:-}" == role_fleet* ]]; then
-    "$cli" artifact build --package canic-root --features role-issuer --output target/publication/role-root.wasm --json > target/publication/role-root.json
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-directory-witness --features role-probe --output target/publication/role-hub.wasm --json > target/publication/role-hub.json
 fi
 if [[ $# == 0 || "${1:-}" == counter_managed:: ]]; then
-    "$cli" app build --config apps/examples/counter/canic.toml --canister ex-counter --json > target/publication/counter-client.json
+    "$cli" app build --config apps/examples/counter/canic.toml --canister counter --json > target/publication/counter-client.json
     for variant in v1 v2 fenced; do
         features=()
         case "$variant" in
             v2) features=(--features counter-v2) ;;
             fenced) features=(--features initially-fenced) ;;
         esac
-        "$cli" artifact build --package ex-counter "${features[@]}" --output "target/publication/counter-$variant.wasm" --json > "target/publication/counter-$variant.json"
+        "$cli" artifact build --package example-counter "${features[@]}" --output "target/publication/counter-$variant.wasm" --json > "target/publication/counter-$variant.json"
     done
 fi
 CANIC_CLI="$cli" CANIC_PUBLICATION_ARTIFACTS="$root/target/publication" \

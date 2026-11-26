@@ -53,18 +53,18 @@ fn published_bindings_survive_growth_reopen_and_late_delivery() {
         let mut index =
             retained::Index::create(&runtime, key, Principal::from_slice(&[8, 1]), "hub");
         assert!(index.current().is_none());
-        index.apply(&before, [7; 32], None).unwrap();
-        index.apply(&after, [7; 32], None).unwrap();
+        index.apply(&before, [7; 32], None, None).unwrap();
+        index.apply(&after, [7; 32], None, None).unwrap();
     }
     let runtime = open(false);
     let mut index = retained::Index::open(&runtime, key);
     assert_eq!(index.publisher(), Principal::from_slice(&[8, 1]));
-    index.apply(&after, [7; 32], None).unwrap();
+    index.apply(&after, [7; 32], None, None).unwrap();
     assert_eq!(
-        index.apply(&after, [8; 32], None),
+        index.apply(&after, [8; 32], None, None),
         Err(DirectoryError::GenerationChanged)
     );
-    assert!(index.apply(&before, [7; 32], None).is_err());
+    assert!(index.apply(&before, [7; 32], None, None).is_err());
     for services in [
         vec![service("one", 3), service("two", 2)],
         vec![service("two", 2)],
@@ -81,6 +81,7 @@ fn published_bindings_survive_growth_reopen_and_late_delivery() {
                     services
                 },
                 [7; 32],
+                None,
                 None
             ),
             Err(DirectoryError::RevisionConflict)
@@ -93,7 +94,7 @@ fn published_bindings_survive_growth_reopen_and_late_delivery() {
 fn full_directory_fits_and_bad_publications_are_refused() {
     let mut directory = Directory {
         revision: u64::MAX,
-        services: (0..32)
+        services: (0..=255u8)
             .map(|id| Service {
                 name: format!("{id:064}"),
                 role: "a".repeat(64),
@@ -106,6 +107,25 @@ fn full_directory_fits_and_bad_publications_are_refused() {
             .collect(),
     };
     directory.validate().unwrap();
+    use crate::method::Contract;
+    let message = Delivery {
+        directory: directory.clone(),
+        path: vec![Hop {
+            canister: Principal::from_slice(&[9, 1]),
+            generation: [7; 32],
+            shard_pool: None,
+            role: "hub".into(),
+        }],
+        backup_timing: Some(BackupTiming {
+            revision: 1,
+            daily_at_utc_secs: Some(86_399),
+        }),
+    };
+    let frame = ReceiveDirectory::encode_request(&message).unwrap();
+    assert_eq!(
+        ReceiveDirectory::decode_request(&frame).unwrap().directory,
+        directory
+    );
     // Exercise the same encode and strict reopen budgets used by installed actors.
     #[cfg(feature = "storage")]
     {
@@ -113,11 +133,12 @@ fn full_directory_fits_and_bad_publications_are_refused() {
         let key = "app.services.v1";
         let open = |fresh| crate::storage::bootstrap(memory.clone(), fresh, "app", &[key], 16);
         let publisher = Principal::from_slice(&[99, 1]);
-        // The local index retains child bindings alongside all named services.
-        let children: Vec<_> = (32..48)
+        // Child rows grow independently of the full shared directory.
+        let children: Vec<_> = (32..96)
             .map(|id| {
                 let mut bytes = [1; 29];
                 bytes[0] = id;
+                bytes[1] = 2;
                 Hop {
                     shard_pool: Some("p".repeat(64)),
                     canister: Principal::from_slice(&bytes),
@@ -129,14 +150,17 @@ fn full_directory_fits_and_bad_publications_are_refused() {
         let runtime = open(true);
         let mut index = retained::Index::create(&runtime, key, publisher, "hub");
         for child in &children {
-            index.apply(&directory, [7; 32], Some(child)).unwrap();
+            index.apply(&directory, [7; 32], Some(child), None).unwrap();
         }
         drop(index);
         drop(runtime);
         let reopened = retained::Index::open(&open(false), key);
         assert_eq!(reopened.current(), Some(&directory));
         for child in &children {
-            assert_eq!(reopened.child_delivery(child.canister), Some((child, None)));
+            assert_eq!(
+                reopened.child_delivery(child.canister),
+                Some((child.clone(), None))
+            );
         }
     }
     directory.services.push(service("overflow", 32));
@@ -269,10 +293,10 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
         let runtime = open(true);
         let mut index =
             retained::Index::create(&runtime, key, Principal::from_slice(&[8, 1]), "hub");
-        index.apply(&directory, [7; 32], None).unwrap();
+        index.apply(&directory, [7; 32], None, None).unwrap();
         assert_eq!(index.acknowledged_shards("wallets").count(), 0);
         for child in &children {
-            index.apply(&directory, [7; 32], Some(child)).unwrap();
+            index.apply(&directory, [7; 32], Some(child), None).unwrap();
         }
         for child in [&children[0], &children[1], &children[3], &children[4]] {
             index.acknowledge(&directory, child).unwrap();
@@ -285,7 +309,7 @@ fn acknowledged_children_include_only_confirmed_direct_children_of_the_role_afte
             revision: 2,
             ..directory
         };
-        index.apply(&newer, [7; 32], None).unwrap();
+        index.apply(&newer, [7; 32], None, None).unwrap();
         assert_eq!(
             index.acknowledged_shards("wallets").collect::<Vec<_>>(),
             expected[..2]
@@ -336,7 +360,9 @@ fn withdrawn_generation_refuses_delayed_delivery_and_ack_after_reopen() {
     };
     let mut index =
         retained::Index::create(&open(true), key, Principal::from_slice(&[8, 1]), "hub");
-    index.apply(&directory, [9; 32], Some(&child)).unwrap();
+    index
+        .apply(&directory, [9; 32], Some(&child), None)
+        .unwrap();
     index.withdraw((child.canister, child.generation)).unwrap();
     drop(index);
     let mut index = retained::Index::open(&open(false), key);
@@ -345,14 +371,77 @@ fn withdrawn_generation_refuses_delayed_delivery_and_ack_after_reopen() {
         ..child.clone()
     };
     index
-        .apply(&directory, [9; 32], Some(&replacement))
+        .apply(&directory, [9; 32], Some(&replacement), None)
         .unwrap();
     index.acknowledge(&directory, &replacement).unwrap();
     index.withdraw((child.canister, child.generation)).unwrap();
-    assert!(index.apply(&directory, [9; 32], Some(&child)).is_err());
+    assert!(
+        index
+            .apply(&directory, [9; 32], Some(&child), None)
+            .is_err()
+    );
     assert!(index.acknowledge(&directory, &child).is_err());
     assert_eq!(
         index.child_delivery(child.canister),
-        Some((&replacement, Some(1)))
+        Some((replacement, Some(1)))
     );
+}
+
+#[cfg(feature = "storage")]
+#[test]
+fn backup_assignment_reaches_only_the_target_and_survives_reopen() {
+    use crate::method::Contract;
+    let key = "app.services.v1";
+    let memory = ic_storage::VectorMemory::default();
+    let open = |fresh| crate::storage::bootstrap(memory.clone(), fresh, "app", &[key], 16);
+    let mut index =
+        retained::Index::create(&open(true), key, Principal::from_slice(&[8, 1]), "hub");
+    let directory = Directory {
+        revision: 1,
+        services: vec![service("user_hub", 1)],
+    };
+    let child = Hop {
+        canister: Principal::from_slice(&[2, 1]),
+        role: "shard".into(),
+        generation: [3; 32],
+        shard_pool: None,
+    };
+    let day = BackupTiming {
+        revision: 1,
+        daily_at_utc_secs: Some(42),
+    };
+    index
+        .apply(&directory, [7; 32], Some(&child), Some(day))
+        .unwrap();
+    assert_eq!(index.backup_timing(), None);
+    index.apply(&directory, [7; 32], None, Some(day)).unwrap();
+    let paused = BackupTiming {
+        revision: 2,
+        daily_at_utc_secs: None,
+    };
+    index
+        .apply(&directory, [7; 32], None, Some(paused))
+        .unwrap();
+    drop(index);
+    let mut index = retained::Index::open(&open(false), key);
+    assert_eq!(
+        index.apply(&directory, [7; 32], None, Some(day)),
+        Err(DirectoryError::RevisionConflict)
+    );
+    assert_eq!(
+        index.apply(&directory, [0; 32], None, Some(day)),
+        Err(DirectoryError::GenerationChanged)
+    );
+    index.apply(&directory, [7; 32], None, None).unwrap();
+    assert_eq!(index.backup_timing(), Some(paused));
+    let old = ic_wire::encode(
+        &(directory, vec![child]),
+        ic_wire::Encoding::Frame {
+            method: ic_wire::method_id("canic.topology.receive_directory.v1"),
+            direction: ic_wire::Direction::Request,
+        },
+        DIRECTORY_LIMITS,
+    )
+    .unwrap();
+    assert!(ReceiveDirectory::decode_request(&old).is_err());
 }

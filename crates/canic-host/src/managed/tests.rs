@@ -883,6 +883,38 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         stored::upgraded(&plan, &encode(&custody)).unwrap(),
         upgraded
     );
+    for (old, current, observe_method) in [
+        (
+            6,
+            crate::plan::CHILD_ACTIVATION_VERSION,
+            "observe_root_custody",
+        ),
+        (
+            8,
+            crate::plan::PLACEMENT_CHILD_ACTIVATION_VERSION,
+            "observe_child_deployments",
+        ),
+    ] {
+        let mut blob = plan.clone();
+        let crate::PlanAction::UpgradeChild { owner, .. } = &mut blob.action else {
+            panic!("expected child upgrade")
+        };
+        owner.arguments = Some(vec![1]);
+        owner.blob_attempt = Some(1);
+        blob.version = old;
+        let original = blob.digest().unwrap();
+        assert_eq!(
+            Method::ActivateUpgrade.call(&blob).unwrap().method,
+            "activate_application_upgrade"
+        );
+        blob.version = current;
+        assert_ne!(blob.digest().unwrap(), original);
+        assert_eq!(
+            Method::ActivateUpgrade.call(&blob).unwrap().method,
+            "activate_child_upgrade"
+        );
+        assert_eq!(observation(&blob).unwrap().method, observe_method);
+    }
     let mut mixed = plan.clone();
     mixed.version = 8;
     mixed.validate().unwrap();

@@ -23,11 +23,8 @@ both rows unchanged. An upgrade clears the measurements.
 
 ## Use it in an application
 
-Select `features = ["canic/endpoint-metrics"]` in the **application canister's build
-recipe** in `canic.toml`. Remove that entry to build the same actor without
-instrumentation or a reader. All fleets using this artifact share the selection.
-
-Canic supplies the controller query and recorder. Write ordinary handlers:
+Canic automatically samples completed synchronous `#[canic::update]` handlers
+and mounts the controller-guarded `metrics` query. Write ordinary handlers:
 
 ```rust
 // double
@@ -40,8 +37,7 @@ fn double(value: u32) -> u32 {
 ```
 
 `canic app build` verifies the endpoint instrumentation marker and shared query export in the built
-Wasm before replacing the previous output. Its modules column shows
-`Endpoint Metrics` on enabled builds.
+Wasm before replacing the previous output. The endpoint count includes the standard metrics query. The modules column lists optional mounts. Available readings depend on runtime initialization.
 
 After the first successful call, `double` appears in the shared `metrics`
 query when requested with `canic::metrics::Request::Endpoints(None)`.
@@ -55,18 +51,15 @@ and reopen. Supply a synchronous `fn() -> Result<(), &'static str>` that
 checks the actual caller.
 
 The recorder and endpoint need no initialization, stable memory, timer, or
-per-handler labels. The child checks its actual IC controller. For a managed
-child, enable `child-metrics` and the `canic-root-client` codec in Root's build
-recipe, as in [canic.toml](canic.toml). The operator can call
-`canic fleet call --canister root --identity IDENTITY child-metrics 0 endpoints` for
+per-handler labels. The child checks its actual IC controller. Every Root exposes `observe_child_metrics` for ready managed children. Its controller can call
+`canic fleet call --canister root --identity IDENTITY observe-child-metrics 0 endpoints` for
 ordinary managed child slot zero. Pass the returned cursor after `endpoints` for another page, or select a supplier by name (`blob`, `db`, `entropy`, `jobs` or `timers`).
 
 Run `make metrics-test` with a prepared simulator to qualify the installed actor.
 
 ## Timers and Jobs
 
-Select `canic/timers` for timers or `canic/jobs` for jobs. Add `canic/metrics`
-to record supplier counters. In your install and reopen handlers, start the
+Select `canic/timers` for timers or `canic/jobs` for jobs. Both contribute supplier counters. In your install and reopen handlers, start the
 runtime before binding timers or restoring jobs:
 
 ```rust

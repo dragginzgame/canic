@@ -97,11 +97,58 @@ async fn inject(
     .unwrap();
 }
 
-fn pause(dir: &Path, signer: &Path, method: &str) -> PathBuf {
-    let path = dir.join(format!("pause-{method}"));
-    std::fs::write(&path, format!("#!/bin/sh\nfor arg in \"$@\"; do\n if [ \"$arg\" = '{method}' ]; then exit 73; fi\ndone\nexec {} \"$@\"\n", quoted(signer))).unwrap();
+fn pause(dir: &Path, signer: &Path, name: &str, request: &wire::Request) -> PathBuf {
+    let path = dir.join(format!("pause-{name}"));
+    let blocked = dir.join(format!("{name}.bin"));
+    std::fs::write(
+        &blocked,
+        ic_wire::encode(
+            request,
+            ic_wire::Encoding::Frame {
+                method: wire::MAINTAIN,
+                direction: ic_wire::Direction::Request,
+            },
+            wire::INSTALL_LIMITS,
+        )
+        .unwrap(),
+    )
+    .unwrap();
+    std::fs::write(&path, format!("#!/bin/sh\nif [ \"$4\" = maintain_store ] && [ \"$5\" = --args-file ] && cmp -s \"$6\" {}; then exit 73; fi\nexec {} \"$@\"\n", quoted(&blocked), quoted(signer))).unwrap();
     std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o700)).unwrap();
     path
+}
+
+fn pause_replacement(
+    dir: &Path,
+    signer: &Path,
+    planned: &Value,
+    wasm: Vec<u8>,
+) -> (PathBuf, PathBuf) {
+    fn digest(value: &str) -> [u8; 32] {
+        std::array::from_fn(|i| u8::from_str_radix(&value[i * 2..i * 2 + 2], 16).unwrap())
+    }
+    let plan: canic_host::Plan = serde_json::from_value(planned["plan"].clone()).unwrap();
+    let approval = wire::Approval {
+        store: plan.target().unwrap().clone(),
+        module_hash: ic_wasm_store_protocol::digest(&wasm),
+        previous_module: digest(plan.previous_module().unwrap()),
+        expires_at_ns: plan.expires_at_ns,
+        attempt: ic_wasm_store_protocol::MaintenanceAttempt {
+            sequence: plan.store_upgrade_sequence().unwrap(),
+            operation: digest(planned["operation"].as_str().unwrap()),
+        },
+    };
+    let install = pause(
+        dir,
+        signer,
+        "install",
+        &wire::Request::Install(wire::Install {
+            approval: approval.clone(),
+            wasm,
+        }),
+    );
+    let activate = pause(dir, signer, "activate", &wire::Request::Activate(approval));
+    (install, activate)
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -315,7 +362,12 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         .success()
     );
     assert!(!operation.join("stage/signed.json").exists());
-    let stop_before_install = pause(&dir, &signer, "install_store_maintenance");
+    let (stop_before_install, stop_before_activation) = pause_replacement(
+        &dir,
+        &signer,
+        &planned,
+        std::fs::read(assets.join("store-candidate.wasm")).unwrap(),
+    );
     assert!(
         !run(
             &dir,
@@ -373,7 +425,6 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         call(&dir, "reconcile", id, &signer)["store_maintenance"]["phase"],
         "Uploaded"
     );
-    let stop_before_activation = pause(&dir, &signer, "activate_store_maintenance");
     assert!(
         !run(
             &dir,
@@ -439,6 +490,12 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     write_config(&dir, &config);
     let second = cli(&dir, &["fleet", "plan", "--controller", &controller]);
     assert_eq!(second["plan"]["store_upgrade_sequence"], 2);
+    let (stop_before_install, stop_before_activation) = pause_replacement(
+        &dir,
+        &signer,
+        &second,
+        std::fs::read(assets.join("store.wasm")).unwrap(),
+    );
     let second_id = second["operation"].as_str().unwrap();
     assert!(
         !run(

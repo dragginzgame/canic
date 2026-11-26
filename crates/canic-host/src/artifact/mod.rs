@@ -1,6 +1,6 @@
 mod source_layout;
 mod supplier_source;
-pub(crate) use supplier_source::manifest as build_manifest;
+pub(crate) use supplier_source::{BuildSource, manifest as build_manifest};
 #[cfg(test)]
 mod tests;
 
@@ -275,7 +275,7 @@ pub fn build_report(
 
 pub(crate) fn build_for_role(
     workspace_manifest: &Path,
-    manifest: &Path,
+    source: &BuildSource,
     package: &str,
     features: &[String],
     destination: Option<&Path>,
@@ -286,14 +286,13 @@ pub(crate) fn build_for_role(
     let workspace = workspace_manifest
         .parent()
         .ok_or_else(|| Error::Invalid("manifest has no parent".into()))?;
-    let manifest = manifest.canonicalize().map_err(supplier)?;
+    let manifest = &source.manifest;
     // Dependencies can also emit cdylib artifacts. Resolve Cargo's exact selected
     // package identity instead of treating every Wasm in the build as ours.
-    let mut identity = Command::new("cargo");
+    let mut identity = source.cargo();
     identity
-        .current_dir(workspace)
         .args(["pkgid", "--locked", "--manifest-path"])
-        .arg(&manifest)
+        .arg(manifest)
         .args(["-p", package]);
     let package_id =
         crate::process::capture(&mut identity, 65536, 1024 * 1024, Duration::from_secs(60))
@@ -353,13 +352,8 @@ pub(crate) fn build_for_role(
         .prefix(".cargo-")
         .tempdir_in(&outputs)
         .map_err(supplier)?;
-    let mut command = Command::new("cargo");
+    let mut command = source.cargo();
     command
-        .current_dir(
-            // Registry archives have no rust-toolchain.toml. Keep the consumer's
-            // toolchain selection even when building the standalone Store manifest.
-            workspace,
-        )
         .args([
             "build",
             "--lib",
@@ -370,13 +364,13 @@ pub(crate) fn build_for_role(
             "--message-format=json-render-diagnostics",
             "--manifest-path",
         ])
-        .arg(&manifest)
+        .arg(manifest)
         .args(["-p", package]);
     command
         .arg("--target-dir")
         .arg(private.path())
         .env("CARGO_BUILD_BUILD_DIR", cache);
-    // Every Root includes the placement engine and must fit direct installation.
+    // Optimize the common Root and its management engine for deployment size.
     if package == "canic-root" {
         command.args([
             "--config",
@@ -412,12 +406,7 @@ pub(crate) fn build_for_role(
     let path = selected_wasm(&output, package_id)?;
     let bytes = crate::store::read(&path, MAX_ARTIFACT_BYTES)?;
     let artifact = admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
-    let (modules, endpoint_count) = compiled_metadata(
-        &bytes,
-        features
-            .iter()
-            .any(|feature| feature == "canic/endpoint-metrics"),
-    )?;
+    let (modules, endpoint_count) = compiled_metadata(&bytes)?;
     let wasm = match destination {
         Some(path) => path.to_owned(),
         None => outputs.join(&artifact.sha256).join(
@@ -442,24 +431,28 @@ pub(crate) fn build_for_role(
 }
 
 // Verify the selected metrics build before publishing the exact bytes we inspected.
-fn compiled_metadata(bytes: &[u8], endpoint_metrics: bool) -> Result<(Vec<&'static str>, usize)> {
+fn compiled_metadata(bytes: &[u8]) -> Result<(Vec<&'static str>, usize)> {
     use wasmparser::{Parser, Payload};
 
-    let mut has_db = false;
-    let mut has_auth = false;
-    let mut has_blob = false;
-    let mut mount = false;
+    let mut modules = std::collections::BTreeSet::new();
+    let mut recorder = false;
     let mut query = false;
     let mut endpoint_count = 0;
     for payload in Parser::new(0).parse_all(bytes) {
         match payload.map_err(supplier)? {
-            Payload::CustomSection(section) => match section.name() {
-                "canic:module:db" => has_db = true,
-                "canic:module:auth" => has_auth = true,
-                "canic:module:blob" => has_blob = true,
-                "canic:module:endpoint-metrics" => mount = true,
-                _ => {}
-            },
+            Payload::CustomSection(section) => {
+                let name = match section.name() {
+                    "canic:module:auth" => "auth",
+                    "canic:module:blob" => "blob",
+                    "canic:module:db" => "db",
+                    "canic:module:endpoint-metrics" => {
+                        recorder = true;
+                        continue;
+                    }
+                    _ => continue,
+                };
+                modules.insert(name);
+            }
             Payload::ExportSection(exports) => {
                 for export in exports {
                     if let Some(method) = callable_export(export.map_err(supplier)?) {
@@ -471,24 +464,12 @@ fn compiled_metadata(bytes: &[u8], endpoint_metrics: bool) -> Result<(Vec<&'stat
             _ => {}
         }
     }
-    if endpoint_metrics && !(mount && query) {
-        return Err(Error::Invalid("canic/endpoint-metrics was selected but the built Wasm is missing the Canic metrics marker or shared metrics query".into()));
+    if recorder && !query {
+        return Err(Error::Invalid(
+            "endpoint instrumentation requires the shared metrics query".into(),
+        ));
     }
-    if !endpoint_metrics && mount {
-        return Err(Error::Invalid("endpoint metrics compiled without an explicit selection; select canic/endpoint-metrics in the build recipe or remove the dependency feature".into()));
-    }
-    Ok((
-        [
-            ("DB", has_db),
-            ("Auth", has_auth),
-            ("Blob", has_blob),
-            ("Endpoint Metrics", mount),
-        ]
-        .into_iter()
-        .filter_map(|(name, present)| present.then_some(name))
-        .collect(),
-        endpoint_count,
-    ))
+    Ok((modules.into_iter().collect(), endpoint_count))
 }
 
 fn selected_wasm(output: &[u8], package_id: &str) -> Result<PathBuf> {

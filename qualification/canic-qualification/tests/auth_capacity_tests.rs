@@ -46,7 +46,7 @@ async fn known_login_capacity_survives_checkpoint() {
         .update_call(
             f.root,
             f.installer,
-            "configure_auth",
+            "grant_auth_access",
             enrollment_request(enrollment::CONFIGURE, &grant),
         )
         .await

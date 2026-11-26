@@ -286,9 +286,12 @@ pub fn create_managed_plan(
         }),
         now,
     )?;
-    if pool_child_evidence {
-        plan.version = 8;
-    }
+    plan.version = match (blob_attempt, pool_child_evidence) {
+        (Some(_), true) => plan::PLACEMENT_CHILD_ACTIVATION_VERSION,
+        (Some(_), false) => plan::CHILD_ACTIVATION_VERSION,
+        (None, true) => 8,
+        (None, false) => plan.version,
+    };
     plan::retain_locked(&store::Store::open(journal)?, plan, &bytes)
 }
 

@@ -129,15 +129,19 @@ async fn controller_queries_preserve_state_and_upgrade_resets_only_diagnostics()
     }
     assert_eq!(pic.get_stable_memory(root).await, stable);
     assert_eq!(status(pic, root).await, complete);
-    canic_qualification::upgrade_stopped(
-        pic,
-        root,
-        children::artifact("maintenance.wasm"),
-        vec![],
-        None,
-    )
-    .await
-    .unwrap();
+    let candidate = children::artifact("maintenance.wasm");
+    let candidate_hash = canic_management_protocol::digest(&candidate).to_vec();
+    assert_ne!(
+        pic.canister_status(root, None)
+            .await
+            .unwrap()
+            .module_hash
+            .as_ref(),
+        Some(&candidate_hash)
+    );
+    canic_qualification::upgrade_stopped(pic, root, candidate, vec![], None)
+        .await
+        .unwrap();
     let reset = read(pic, root, CanisterId::anonymous())
         .await
         .timers
@@ -146,11 +150,11 @@ async fn controller_queries_preserve_state_and_upgrade_resets_only_diagnostics()
     assert!(reset.started_at_ns >= timers.started_at_ns);
     assert_eq!(reset.accepted.total, 0);
     assert_eq!(reset.completed.total, 0);
-    let mut after = status(pic, root).await;
-    assert!(after.maintenance_candidate);
-    // The replacement intentionally changes only this executable marker.
-    after.maintenance_candidate = complete.maintenance_candidate;
-    assert_eq!(after, complete);
+    assert_eq!(
+        pic.canister_status(root, None).await.unwrap().module_hash,
+        Some(candidate_hash)
+    );
+    assert_eq!(status(pic, root).await, complete);
     assert_eq!(pic.get_stable_memory(root).await, stable);
     let reopened = logs(None).await;
     assert!(reopened.started_at_version > ready.started_at_version);

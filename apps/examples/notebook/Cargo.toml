@@ -1,11 +1,11 @@
 [package]
-name = "ex-notebook"
+name = "example-notebook"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license-file.workspace = true
 publish = false
-description = "A persistent scratch note for the local Backup example"
+description = "A persistent scratch note for the local snapshot restore example"
 
 [package.metadata.toko-tooling.loc]
 category = "examples"

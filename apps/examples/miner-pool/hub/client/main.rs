@@ -1,7 +1,7 @@
 //! Native codec for one operator tick on the installed miner pool.
 use canic::method::Contract;
 use clap::{Parser, Subcommand};
-use ex_miner_pool_hub::{PoolReport, Release, Tick};
+use example_miner_pool_hub::{PoolReport, Release, Tick};
 use std::io::Read as _;
 
 #[derive(Parser)]

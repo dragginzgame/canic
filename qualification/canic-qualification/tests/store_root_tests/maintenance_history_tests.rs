@@ -11,9 +11,9 @@ async fn history(root: &Client<'_>) -> custody::RootHistory {
 
 async fn stage(root: &Client<'_>, approval: &wire::Approval) -> Result<wire::Status, Refusal> {
     root.update(
-        "stage_store_maintenance",
-        wire::STAGE,
-        approval,
+        "maintain_store",
+        wire::MAINTAIN,
+        &wire::Request::Stage(approval.clone()),
         wire::LIMITS,
     )
     .await
@@ -238,11 +238,11 @@ async fn root_retains_store_successors_across_upgrade_and_refuses_stale_authorit
                 pic.update_call(
                     root.id,
                     root.operator,
-                    "install_store_maintenance",
+                    "maintain_store",
                     ic_wire::encode(
-                        &input,
+                        &wire::Request::Install(input.clone()),
                         ic_wire::Encoding::Frame {
-                            method: wire::INSTALL,
+                            method: wire::MAINTAIN,
                             direction: ic_wire::Direction::Request
                         },
                         wire::INSTALL_LIMITS

@@ -132,6 +132,22 @@ fn direct_root_installation_has_ingress_headroom_and_a_finite_plan_ceiling() {
     assert!(call.args.windows(bytes.len()).any(|window| window == bytes));
     plan.artifact.bytes += 1;
     assert!(plan.validate().is_err());
+    plan.deployment = Some(crate::DeploymentName {
+        app: "app".into(),
+        fleet: "local".into(),
+        canister: "root".into(),
+    });
+    plan.version = crate::plan::CHUNKED_ROOT_VERSION;
+    plan.validate().unwrap();
+    plan.artifact.bytes = crate::artifact::MAX_ARTIFACT_BYTES;
+    plan.validate().unwrap();
+    plan.artifact.bytes += 1;
+    assert!(plan.validate().is_err());
+    plan.artifact.bytes = crate::artifact::MAX_WASM;
+    assert!(
+        plan.validate().is_err(),
+        "small approvals keep their direct transport"
+    );
 }
 
 #[test]
