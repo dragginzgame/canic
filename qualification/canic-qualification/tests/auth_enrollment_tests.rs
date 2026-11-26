@@ -380,7 +380,8 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
             .await
             .unwrap();
         let session = EstablishSession::decode_response(&bytes).unwrap().unwrap();
-        assert_eq!(session.expires_at_ns, retained.expires_at_ns);
+        // Enrollment freshness gates every use independently of the session lifetime.
+        assert!(session.expires_at_ns > retained.expires_at_ns);
         let original = observe(pic, f.target).await;
         let initial = refresh_state(pic, f.target).await;
 

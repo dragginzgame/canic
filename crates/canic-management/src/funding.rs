@@ -1,4 +1,5 @@
 //! Opt-in ongoing payments between an application parent and its direct children.
+pub(crate) mod receipts;
 use canic::{
     method::{self, Contract},
     topology::directory::retained::DIRECTORY,
@@ -8,6 +9,7 @@ use canic_management_protocol::stored::{ChildFunding, ChildFundingStatus};
 use ic_platform_runtime::{raw, system};
 use ic_platform_types::Principal;
 use ic_storage::{DefaultMemoryImpl, MemoryRuntime, adapter::StableCell};
+use receipts::History;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::BTreeMap};
 
@@ -46,6 +48,8 @@ struct Grant {
 
 #[derive(Default, Serialize, Deserialize)]
 struct Book {
+    #[serde(skip)]
+    history: History,
     operator: Option<Principal>,
     children: BTreeMap<Principal, Grant>,
     incoming: Option<Incoming>,
@@ -63,10 +67,14 @@ type Cell = StableCell<Vec<u8>, DefaultMemoryImpl>;
 thread_local! { static CELL: RefCell<Option<Cell>> = const {RefCell::new(None)}; }
 
 fn encode(book: &Book) -> Vec<u8> {
-    ic_wire::encode(book, BOOK, LIMITS).expect("bounded funding ledger")
+    book.history
+        .wrap(ic_wire::encode(book, BOOK, LIMITS).expect("bounded funding ledger"))
 }
 fn load(cell: &Cell) -> Book {
-    ic_wire::decode(cell.get(), BOOK, LIMITS).expect("retained funding ledger")
+    let (history, bytes) = History::split(cell.get());
+    let mut book: Book = ic_wire::decode(bytes, BOOK, LIMITS).expect("retained funding ledger");
+    book.history = history;
+    book
 }
 fn change<T>(f: impl FnOnce(&mut Book) -> T) -> T {
     CELL.with_borrow_mut(|c| {
@@ -95,7 +103,7 @@ pub fn open(
     let cell = canic::storage::cell(
         runtime,
         key,
-        LIMITS.bytes,
+        LIMITS.bytes + receipts::EXTRA_BYTES,
         install.map(|operator| {
             encode(&Book {
                 operator,
@@ -104,6 +112,8 @@ pub fn open(
         }),
     );
     let book = load(&cell);
+    book.history
+        .validate(|child| book.children.get(&child).map(|grant| grant.paid));
     for (child, grant) in book.children {
         let rule = grant.rule;
         let status = grant.status;
@@ -319,6 +329,7 @@ pub async fn request((sequence, balance): (u64, u128)) -> Result<u64, FundingErr
             g.status.refund_cycles = refund;
             if success {
                 g.paid = sequence;
+                b.history.record(child, sequence, system::time());
             }
         });
         if !success {
@@ -394,4 +405,15 @@ pub async fn check() -> Result<bool, FundingError> {
         i.paid = i.paid.max(seq);
     });
     Ok(true)
+}
+
+/// Read a child's settled operating grants from this application's own funding ledger.
+/// # Panics
+/// Requires the payer's funding lease to be open.
+#[must_use]
+pub fn receipts(child: Principal) -> Option<canic::funding::FundingReceipts> {
+    read(|book| {
+        let grant = book.children.get(&child)?;
+        Some(book.history.report(&grant.rule, &grant.status, grant.paid))
+    })
 }

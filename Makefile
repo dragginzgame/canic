@@ -262,7 +262,7 @@ auth-test:
 	bash scripts/dev/test-auth.sh
 
 auth-clippy:
-	cargo clippy --locked -p canic -p canic-root --features canic/auth-receiver-stable,canic/auth-issuer-stable,canic/auth-browser --all-targets -- -D warnings
+	cargo clippy --locked -p canic -p canic-root --features canic/auth-enrollment,canic/auth-issuer-stable,canic/auth-browser --all-targets -- -D warnings
 	cargo clippy --locked -p canic -p canic-root --lib --features canic/auth-enrollment --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --target wasm32-unknown-unknown -- -D warnings
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --features profile --target wasm32-unknown-unknown -- -D warnings
@@ -270,7 +270,7 @@ auth-clippy:
 	cargo clippy --locked --manifest-path qualification/Cargo.toml -p canic-qualification --features profile-state --test auth --test auth_browser -- -D warnings
 
 auth-doc:
-	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features auth-receiver-stable,auth-issuer-stable --target wasm32-unknown-unknown --no-deps
+	RUSTDOCFLAGS="-D warnings" cargo doc --locked -p canic --features auth-enrollment,auth-issuer-stable --target wasm32-unknown-unknown --no-deps
 	RUSTDOCFLAGS="-D warnings" cargo doc --locked --manifest-path qualification/Cargo.toml -p canic-auth-witness --no-deps
 
 .PHONY: asset-library-test

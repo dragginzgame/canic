@@ -103,14 +103,14 @@ async fn stable_sessions_reopen_database_roles_after_root_refresh() {
     directory(false, true).await;
 }
 
-async fn directory(revoke: bool, stable: bool) {
+async fn directory(revoke: bool, upgrade_after_first: bool) {
     let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../apps/examples/user-directory");
     let wasm = |name: &str| std::fs::read(dir.join(format!("artifacts/{name}.wasm"))).unwrap();
     let initial_roles = std::env::var_os("CANIC_PREDECESSOR_DIRECTORY_ROLES")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| dir.join("artifacts"));
     let initial_role = |name: &str| {
-        let path = if stable {
+        let path = if upgrade_after_first {
             dir.join("artifacts").join(format!("{name}.wasm"))
         } else {
             initial_roles.join(format!("{name}.wasm"))
@@ -162,9 +162,6 @@ async fn directory(revoke: bool, stable: bool) {
                 profile_manager: false,
             },
         );
-    }
-    if stable {
-        local.receiver_policy.as_mut().unwrap().storage = canic::auth::install::Storage::Stable;
     }
     let policy = local.shard_pools.first_mut().unwrap();
     policy.expires_at_ns = Some(now + 600_000_000_000);
@@ -278,7 +275,7 @@ async fn directory(revoke: bool, stable: bool) {
         }
         assert_eq!(register().await, Ok(Progress::PlacementPending));
         super::settle(pic).await;
-        if stable {
+        if upgrade_after_first {
             assert_eq!(register().await, Ok(Progress::Ready));
         } else if device == 9 {
             use canic::method::Contract;
@@ -445,7 +442,7 @@ async fn directory(revoke: bool, stable: bool) {
             .await
             .unwrap()
             .unwrap();
-        if stable {
+        if upgrade_after_first {
             for (target, role, controller) in [
                 (hub, "user_hub", root.operator),
                 (shard, "user_shard", root.id),
@@ -511,23 +508,11 @@ async fn directory(revoke: bool, stable: bool) {
         assigned.push((shard, id));
     }
     assert_eq!(assigned.len(), 2);
-    // A populated volatile shard must reopen its rows without renewing lost Auth authority.
-    let (second, _) = assigned[1];
-    let retained = pic.get_stable_memory(second).await;
+    // Reopen the populated shard, then require a fresh Root enrollment.
+    let (second, second_id) = assigned[1];
     canic_qualification::upgrade_stopped(pic, second, wasm("user_shard"), vec![], Some(root.id))
         .await
         .unwrap();
-    assert!(pic.get_stable_memory(second).await == retained);
-    assert_eq!(
-        root.update::<_, Result<(), enrollment::Error>>(
-            "refresh_auth_receiver",
-            enrollment::TRIGGER_REFRESH,
-            &Principal::from_slice(second.as_slice()),
-            enrollment::LIMITS,
-        )
-        .await,
-        Err(enrollment::Error::Closed)
-    );
     let (browser, fresh) = crate::credential::signed(
         pic.get_time().await.as_nanos_since_unix_epoch(),
         10,
@@ -566,11 +551,21 @@ async fn directory(revoke: bool, stable: bool) {
             .unwrap(),
         Some(Principal::from_slice(second.as_slice()))
     );
-    let hub_memory = pic.get_stable_memory(hub).await;
+    refresh(&root, second, true).await;
+    assert_eq!(
+        query::<Option<[u8; 16]>>(&reader, "my_id").await.unwrap(),
+        Some(second_id)
+    );
     canic_qualification::upgrade_stopped(pic, hub, wasm("user_hub"), vec![], Some(root.operator))
         .await
         .unwrap();
-    assert!(pic.get_stable_memory(hub).await == hub_memory);
+    refresh(&root, hub, false).await;
+    assert_eq!(
+        query::<Option<Principal>>(&Client { id: hub, ..reader }, "my_shard")
+            .await
+            .unwrap(),
+        Some(Principal::from_slice(second.as_slice()))
+    );
     let (snapshot, browser) = replay_snapshot.unwrap();
     pic.stop_canister(hub, Some(root.operator)).await.unwrap();
     pic.load_canister_snapshot(hub, Some(root.operator), snapshot)

@@ -28,7 +28,6 @@ creation_budget = 2_000_000_000_000
 
 [apps.user-directory.fleets.local.receiver_policy]
 # Choose on fresh install. Stable receivers require a Root refresh after upgrade.
-storage = "volatile"
 root = "root"
 roles = ["user_hub", "user_shard"]
 # Replace the local fixture issuer with the installed test issuer before planning.

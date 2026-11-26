@@ -54,6 +54,9 @@ pub mod logging;
 #[cfg(any(feature = "method", feature = "sharding"))]
 pub mod method;
 
+#[cfg(feature = "method")]
+pub mod funding;
+
 /// Passive operational reports. Canic actors export one guarded reader.
 pub mod metrics;
 

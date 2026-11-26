@@ -17,7 +17,7 @@ pub mod issuer;
 #[doc(hidden)]
 pub mod endpoint;
 
-/// Volatile enrolled session adapter with application-selected limits and role.
+/// Stable enrolled session adapter with application-selected limits and role.
 #[cfg(feature = "auth-enrollment")]
 pub mod session;
 
@@ -32,7 +32,7 @@ pub use ic_auth_wire as protocol;
 /// remain ordinary replies, preserving applicable failed-attempt charges.
 ///
 /// This mounts no credential/issuer endpoint, enrollment or lifecycle hook.
-/// The application must keep a lost volatile receiver closed after upgrade;
+/// The application must refuse a missing receiver checkpoint on upgrade;
 /// fresh enrollment cannot reconstruct its replay or revocation evidence.
 ///
 /// ```ignore

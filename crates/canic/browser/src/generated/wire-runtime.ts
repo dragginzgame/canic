@@ -3,6 +3,7 @@
 // Generated metadata is trusted; allowances do not bound the JS engine heap.
 export const schemaFormat = 'ic-wire-json';
 export class WireError extends Error {
+  override name = 'WireError';
   constructor(readonly code: 'limit' | 'malformed' | 'identity' | 'value') { super(`wire ${code}`); }
 }
 type Field = { name: string; value: Schema };

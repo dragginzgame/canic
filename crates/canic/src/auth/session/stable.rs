@@ -1,6 +1,6 @@
 //! Explicit checkpoint lifecycle for the standard Ed25519 receiver.
-use super::{Engine, STATE, actor::configuration, initialize_with};
-use crate::auth::install::{Install, Storage};
+use super::{STATE, actor::configuration, initialize_with};
+use crate::auth::install::Install;
 use ic_auth::receiver_memory::StableReceiver;
 use ic_platform_runtime::system as api;
 use ic_storage::{DefaultMemoryImpl, MemoryRuntime, StableKey, adapter::StableCell};
@@ -18,36 +18,16 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
 };
 
 const HOST_FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
-    method: 0x4341_5554_4848,
+    method: ic_wire::method_id("canic.auth.stable_host.v1"),
     direction: ic_wire::Direction::Request,
 };
 
 pub(super) fn decode_host(bytes: &[u8]) -> (Install, Option<crate::auth::enrollment::Receiver>) {
-    // The old payload starts with Storage::Stable (variant 1).
-    if bytes.first() == Some(&1) {
-        let (old, saved): (Install<crate::auth::install::PreviousLimits>, _) =
-            ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS)
-                .expect("previous Auth host record");
-        return (old.into_current(), saved);
-    }
     ic_wire::decode(bytes, HOST_FRAME, LIMITS).expect("retained Auth installation")
 }
 
 thread_local! {
     static HOST: RefCell<Option<StableCell<Vec<u8>>>> = const { RefCell::new(None) };
-}
-
-pub(crate) fn layout(runtime: &MemoryRuntime<DefaultMemoryImpl>) -> Storage {
-    let exists = |name| {
-        runtime
-            .allocation_id(&StableKey::parse(name).expect("Auth key"))
-            .is_some()
-    };
-    match (exists(ENGINE_KEY), exists(HOST_KEY)) {
-        (true, true) => Storage::Stable,
-        (false, false) => Storage::Volatile,
-        _ => panic!("incomplete Auth receiver storage"),
-    }
 }
 
 /// Open the receiver using leases from the application's one bootstrap.
@@ -70,16 +50,6 @@ pub fn open_with_login_limit(
     install: Option<&Install>,
     max_login_secs: Option<u64>,
 ) {
-    let mode = layout(runtime);
-    if let Some(input) = install {
-        assert_eq!(mode, input.storage, "approved Auth receiver storage");
-    }
-    if mode == Storage::Volatile {
-        if let Some(input) = install {
-            super::install_with_login_limit(input, max_login_secs);
-        }
-        return;
-    }
     let initial = install.map(|input| {
         ic_wire::encode(
             &(input, None::<&crate::auth::enrollment::Receiver>),
@@ -95,11 +65,6 @@ pub fn open_with_login_limit(
         install.is_some(),
         "Auth host checkpoint lifecycle"
     );
-    assert_eq!(
-        input.storage,
-        Storage::Stable,
-        "stable Auth installation required"
-    );
     let lease = runtime
         .open_memory(&StableKey::parse(ENGINE_KEY).expect("engine key"))
         .expect("Auth receiver lease");
@@ -111,9 +76,8 @@ pub fn open_with_login_limit(
         } else {
             StableReceiver::reopen(lease, config, now, api::canister_version())
         };
-        Engine::Stable(engine.unwrap_or_else(|error| {
-            api::trap(&format!("open Auth receiver checkpoint: {error:?}"))
-        }))
+        engine
+            .unwrap_or_else(|error| api::trap(&format!("open Auth receiver checkpoint: {error:?}")))
     });
     if let Some(saved) = saved {
         STATE.with_borrow_mut(|s| {
@@ -131,15 +95,10 @@ pub fn open_with_login_limit(
 /// # Panics
 /// A failed seal must trap so the IC rolls back the upgrade.
 pub fn seal() {
-    if HOST.with_borrow(Option::is_none) {
-        return;
-    }
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().expect("open Auth receiver");
-        let Engine::Stable(engine) = &mut state.receiver else {
-            panic!("expected stable receiver")
-        };
-        engine
+        state
+            .receiver
             .seal(api::canister_version())
             .expect("seal Auth receiver");
         HOST.with_borrow_mut(|slot| {

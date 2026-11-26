@@ -13,7 +13,7 @@ make auth-browser-test
 ```
 
 Preparation reads `../ic-auth` only through `git archive` at
-`d5382b197ec794b9f30943a3beb978cbaffe8321` (Auth 0.49.0). Dirty supplier source,
+`8c7abf8243cd5fc9c6bf72bd2dd248087b805e01` (Auth 0.51.0). Dirty supplier source,
 including qualification work, is excluded. `prepare-auth-browser.sh PATH` accepts
 another checkout containing that commit. The private npm package is not assumed
 published: its deterministic tarball lives in `target/auth-browser/`, with its

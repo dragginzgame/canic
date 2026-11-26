@@ -1,7 +1,7 @@
 //! Public stable receiver lifecycle through two upgrades of a live receiver.
 use super::*;
 use auth_single_root_tests::{admit, read};
-use canic::auth::install::{Install, LimitsPolicy, Storage};
+use canic::auth::install::{Install, LimitsPolicy};
 
 #[tokio::test]
 async fn stable_session_and_logout_survive_fresh_root_pulls() {
@@ -27,7 +27,6 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
     )
     .unwrap();
     let args = Install {
-        storage: Storage::Stable,
         root: Principal::from_slice(f.root.as_slice()),
         issuer: grant.issuer,
         audience: grant.audience.fleet_id,
@@ -40,7 +39,7 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
             max_sessions: None,
             max_admitted_logins: None,
         },
-        application: ic_wire::encode(&Storage::Stable, ic_wire::Encoding::Payload, LIMITS).unwrap(),
+        application: vec![],
     }
     .encode()
     .unwrap();

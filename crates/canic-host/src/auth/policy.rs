@@ -9,9 +9,6 @@ use std::collections::{BTreeMap, BTreeSet};
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ReceiverPolicy {
-    /// Receiver storage lifetime. Omitted selects volatile.
-    #[serde(default)]
-    pub storage: canic::auth::install::Storage,
     /// Configured enrollment authority slot.
     pub root: String,
     /// Application canister roles selecting this policy.
@@ -264,7 +261,6 @@ impl FleetConfig {
             return Err(invalid("receiver needs a Root canister"));
         }
         Install {
-            storage: policy.storage,
             root,
             issuer: principal(&policy.issuer)?,
             network: hex32(&policy.network_id)?,

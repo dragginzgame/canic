@@ -324,19 +324,14 @@ fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
         .receiver_install_args("receiver", root, vec![5, 4])
         .unwrap();
     let decoded = canic::auth::install::Install::decode(&args).unwrap();
-    use canic::auth::install::Storage;
-    assert_eq!(decoded.storage, Storage::Volatile);
-    config.receiver_policy.as_mut().unwrap().storage = Storage::Stable;
-    let stable_args = config
-        .receiver_install_args("receiver", root, vec![5, 4])
-        .unwrap();
-    assert_ne!(args, stable_args);
-    assert_eq!(
-        canic::auth::install::Install::decode(&stable_args)
+    for stale in ["stable", "volatile"] {
+        let mut value = toml::Value::try_from(config.receiver_policy.as_ref().unwrap()).unwrap();
+        value
+            .as_table_mut()
             .unwrap()
-            .storage,
-        Storage::Stable
-    );
+            .insert("storage".into(), stale.into());
+        assert!(value.try_into::<ReceiverPolicy>().is_err());
+    }
     assert_eq!(decoded.root.to_text(), root);
     assert_eq!(decoded.limits.max_sessions, Some(7));
     assert_eq!(decoded.limits.max_admitted_logins, Some(10_000));
@@ -414,7 +409,6 @@ fn receiver_grant_inherits_only_install_identity_and_preserves_its_own_authority
     config.canisters.get_mut("receiver").unwrap().role = Some("hub".into());
     let original = config.auth[0].clone();
     config.receiver_policy = Some(ReceiverPolicy {
-        storage: canic::auth::install::Storage::Volatile,
         root: original.root.clone(),
         roles: vec!["hub".into()],
         issuer: original.issuer.clone(),

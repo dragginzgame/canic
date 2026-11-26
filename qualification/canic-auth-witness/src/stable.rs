@@ -31,8 +31,7 @@ thread_local! {
     static RESTORED: std::cell::Cell<Option<bool>> = const { std::cell::Cell::new(None) };
 }
 
-fn on_init(input: &Install) {
-    assert_eq!(input.storage, canic::auth::install::Storage::Stable);
+fn on_init(_: &Install) {
     RESTORED.set(Some(false));
 }
 
@@ -75,19 +74,6 @@ fn open(input: Option<&Install>) -> MemoryRuntime<DefaultMemoryImpl> {
             .open_memory(&StableKey::parse(stable::ENGINE_KEY).unwrap())
             .unwrap()
             .write(0, &[0; 16]);
-    }
-    if let Some(input) = input {
-        let storage: canic::auth::install::Storage = ic_wire::decode(
-            &input.application,
-            ic_wire::Encoding::Payload,
-            crate::LIMITS,
-        )
-        .expect("issuer storage choice");
-        assert_eq!(
-            storage,
-            canic::auth::install::Storage::Stable,
-            "stable issuer fixture"
-        );
     }
     crate::issuer::open(&runtime, input.is_some());
     runtime

@@ -114,20 +114,6 @@ pub fn record(level: Level, source: &'static str, message: &str) {
     });
 }
 
-// Blob 0.111 supplies ic-logging 0.25 severity values.
-#[cfg(feature = "blob")]
-pub(crate) fn record_blob(level: ic_logging_supplier::Level, source: &'static str, message: &str) {
-    use ic_logging_supplier::Level as SupplierLevel;
-    let level = match level {
-        SupplierLevel::Debug => Level::Debug,
-        SupplierLevel::Info => Level::Info,
-        SupplierLevel::Ok => Level::Ok,
-        SupplierLevel::Warn => Level::Warn,
-        SupplierLevel::Error => Level::Error,
-    };
-    record(level, source, message);
-}
-
 /// Read without altering the supplier or scheduling work.
 #[must_use]
 pub fn page(before: Option<u64>) -> Page {

@@ -16,15 +16,15 @@ auth = ["method", "dep:ic-auth-protocol-types", "dep:ic-auth-wire"]
 auth-browser = ["auth", "ic-auth-wire/typescript"]
 auth-enrollment = [
     "auth",
-    "ic-auth/receiver-memory",
+    "ic-auth/receiver-stable",
+    "storage",
     "ic-auth/ed25519-verification",
     "raw-rand",
     "lifecycle",
     "dep:sha2",
 ]
-auth-receiver-stable = ["auth-enrollment", "ic-auth/receiver-stable", "storage"]
 auth-issuer-stable = ["auth", "ic-auth/issuer-stable"]
-blob = ["dep:ic-logging-supplier", "method", "dep:ic-blob-storage", "dep:ic-storage"]
+blob = ["method", "dep:ic-blob-storage", "dep:ic-storage"]
 db = ["method"]
 db-store = ["lifecycle", "dep:ic-db", "dep:sha2", "storage"]
 entropy = ["lifecycle", "dep:ic-entropy", "raw-rand"]
@@ -66,7 +66,7 @@ readiness = ["method"]
 role-attestation = ["role-verification", "storage"]
 role-verification = ["topology", "method", "dep:ic-platform"]
 sharding = ["method", "dep:sha2"]
-receiver-role = ["method", "auth-receiver-stable", "readiness", "sharding", "topology"]
+receiver-role = ["method", "auth-enrollment", "readiness", "sharding", "topology"]
 stateful-role = ["receiver-role", "db-store"]
 storage = ["dep:ic-storage"]
 timers = ["dep:ic-timers", "lifecycle"]
@@ -85,7 +85,6 @@ ic-db = { workspace = true, optional = true }
 ic-entropy = { workspace = true, optional = true }
 ic-jobs = { workspace = true, optional = true, features = ["execution"] }
 ic-logging = { workspace = true, optional = true }
-ic-logging-supplier = { workspace = true, optional = true }
 ic-metrics = { workspace = true, optional = true }
 ic-platform = { workspace = true, optional = true, features = ["ed25519"] }
 ic-platform-runtime = { workspace = true, optional = true, features = ["entrypoint-macros", "system-raw"] }

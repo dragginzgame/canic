@@ -1,7 +1,25 @@
 //! Direct service replenishment keeps one lifetime budget through retries.
 use super::*;
-use canic::method::Contract;
+use canic::{
+    funding::{FundingReceipts, ObserveChildFunding},
+    method::Contract,
+};
 use stored::{ChildFunding, ChildFundingStatus, ConfigureChildFunding, StopChildFunding};
+
+async fn receipts(payer: &Client<'_>, caller: CanisterId) -> Option<FundingReceipts> {
+    Client {
+        pic: payer.pic,
+        id: payer.id,
+        operator: caller,
+    }
+    .update(
+        ObserveChildFunding::NAME,
+        ObserveChildFunding::ID,
+        &(),
+        ObserveChildFunding::REPLY,
+    )
+    .await
+}
 
 pub(super) async fn exercise(root: &Client<'_>, target: CanisterId, sibling: CanisterId) {
     let pic = root.pic;
@@ -68,6 +86,19 @@ pub(super) async fn exercise(root: &Client<'_>, target: CanisterId, sibling: Can
         (2, rule.budget_cycles)
     );
     assert!(!spent.issued);
+    let history = receipts(root, target).await.unwrap();
+    assert_eq!((history.payer, history.child), (rule.parent, rule.child));
+    assert_eq!((history.unavailable_through, history.unresolved), (0, None));
+    assert_eq!(
+        history
+            .receipts
+            .iter()
+            .map(|r| (r.sequence, r.amount_cycles))
+            .collect::<Vec<_>>(),
+        [(1, amount), (2, amount)]
+    );
+    assert!(history.receipts[0].confirmed_at_ns < history.receipts[1].confirmed_at_ns);
+    assert_eq!(receipts(root, sibling).await, None);
     canic_qualification::upgrade_stopped(
         pic,
         root.id,
@@ -77,6 +108,7 @@ pub(super) async fn exercise(root: &Client<'_>, target: CanisterId, sibling: Can
     )
     .await
     .unwrap();
+    assert_eq!(receipts(root, target).await.unwrap(), history);
     assert_eq!(configure(&rule).await.unwrap(), spent);
     let closed = root
         .update::<_, Result<ChildFundingStatus, stored::FundingError>>(
@@ -187,7 +219,15 @@ pub(super) async fn application_parent(
         id: parent,
         operator: child,
     };
+    let first = receipts(&payer, child).await.unwrap();
+    assert_eq!(first.receipts.len(), 1);
+    assert_eq!(
+        (first.receipts[0].sequence, first.receipts[0].amount_cycles),
+        (1, amount)
+    );
+    assert_eq!(receipts(&payer, root.operator).await, None);
     assert_eq!(request(&client, 1).await, Ok(1));
+    assert_eq!(receipts(&payer, child).await.unwrap(), first);
     assert_eq!(configure(&rule).await.unwrap(), paid);
     let wasm = std::fs::read(artifacts().join("directory.wasm")).unwrap();
     canic_qualification::upgrade_stopped(pic, parent, wasm.clone(), vec![], Some(root.id))
@@ -199,6 +239,10 @@ pub(super) async fn application_parent(
     advance().await;
     let second = configure(&rule).await.unwrap();
     assert_eq!((second.attempts, second.charged_cycles), (2, 2 * amount));
+    let history = receipts(&payer, child).await.unwrap();
+    assert_eq!(history.receipts.len(), 2);
+    assert_eq!(history.receipts[0], first.receipts[0]);
+    assert_eq!(history.receipts[1].sequence, 2);
     // External funding lifts the child's balance above its trigger.
     pic.add_cycles(child, u128::from(8 * amount)).await;
     advance().await;
@@ -217,4 +261,5 @@ pub(super) async fn application_parent(
     assert_eq!(request(&client, 3).await, Err(stored::FundingError::Closed));
     assert_eq!(configure(&rule).await.unwrap(), closed);
     assert!(request(&client, 3).await.is_err());
+    assert_eq!(receipts(&payer, child).await.unwrap(), history);
 }

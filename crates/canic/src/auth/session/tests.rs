@@ -14,7 +14,13 @@ fn repeated_receiver_initialization_preserves_logout_evidence_and_capacity() {
         session_ttl: SessionTtlPolicy::new(5, 10).unwrap(),
         max_proof_ttl_ns: 1000,
     };
-    session::initialize(memory_config(), policy(), grant.receiver, 1);
+    session::initialize_with(
+        memory_config(),
+        policy(),
+        grant.receiver,
+        1,
+        crate::auth::enrollment::tests::fresh_engine,
+    );
     let mut root = enrollment::Authority::new(grant.clone(), 1).unwrap();
     STATE.with_borrow_mut(|slot| {
         let s = slot.as_mut().unwrap();
@@ -29,11 +35,12 @@ fn repeated_receiver_initialization_preserves_logout_evidence_and_capacity() {
     );
     for receiver in [Principal::anonymous(), grant.receiver] {
         assert!(
-            std::panic::catch_unwind(|| session::initialize(
+            std::panic::catch_unwind(|| session::initialize_with(
                 memory_config(),
                 policy(),
                 receiver,
-                3
+                3,
+                crate::auth::enrollment::tests::fresh_engine
             ))
             .is_err()
         );
@@ -46,41 +53,30 @@ fn repeated_receiver_initialization_preserves_logout_evidence_and_capacity() {
 }
 
 #[test]
-fn predecessor_receiver_envelope_keeps_the_supplier_login_limit() {
-    use crate::auth::install::{Install, Storage};
+fn pre_cut_receiver_frames_are_refused() {
     let grant = grant();
-    let old = (
-        Storage::Stable,
-        grant.receiver,
-        grant.issuer,
-        [1u8; 32],
-        [2u8; 32],
-        "user",
-        (60u64, 300u64, 500u64, Some(7u32)),
-        vec![9u8, 4],
-    );
-    let frame = ic_wire::Encoding::Frame {
-        method: 0x4341_5554_4807,
-        direction: ic_wire::Direction::Request,
-    };
-    let bytes = ic_wire::encode(&old, frame, enrollment::LIMITS).unwrap();
-    let install = Install::decode(&bytes).unwrap();
-    assert_eq!(install.limits.max_sessions, Some(7));
-    assert_eq!(install.limits.max_admitted_logins, None);
-    assert_eq!(install.application, [9, 4]);
-    assert_eq!(install.encode().unwrap(), bytes);
-    #[cfg(feature = "auth-receiver-stable")]
-    {
-        let enrollment =
-            enrollment::Receiver::new(memory_config().enrollment, grant.audience(), 1).unwrap();
+    for method in [0x4341_5554_4807, 0x4341_5554_4808] {
+        let frame = ic_wire::Encoding::Frame {
+            method,
+            direction: ic_wire::Direction::Request,
+        };
         let bytes = ic_wire::encode(
-            &(old, Some(enrollment)),
-            ic_wire::Encoding::Payload,
+            &(
+                1_u8,
+                grant.receiver,
+                grant.issuer,
+                [1_u8; 32],
+                [2_u8; 32],
+                "user",
+                (60_u64, 300_u64, 500_u64, Some(7_u32)),
+                vec![9_u8, 4],
+            ),
+            frame,
             enrollment::LIMITS,
         )
         .unwrap();
-        let (saved, receiver) = stable::decode_host(&bytes);
-        assert_eq!(saved.encode().unwrap(), install.encode().unwrap());
-        assert!(receiver.is_some());
+        #[cfg(feature = "topology")]
+        assert!(crate::topology::Install::approved(&bytes).is_err());
+        assert!(crate::auth::install::Install::decode(&bytes).is_err());
     }
 }

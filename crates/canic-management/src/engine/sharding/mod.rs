@@ -51,6 +51,8 @@ impl Ledger {
 
 #[derive(Default, Serialize, Deserialize)]
 pub(super) struct Pools {
+    #[serde(skip)]
+    receipts: crate::funding::receipts::History,
     evacuated: std::collections::BTreeSet<ChildId>,
     funding: BTreeMap<ChildId, funding::Grant>,
     quotes: BTreeMap<payment::Owner, payment::Reservation>,

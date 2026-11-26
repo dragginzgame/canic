@@ -87,36 +87,38 @@ fn authority_retains_exact_windows_and_terminal_revocation() {
 #[test]
 fn expired_pending_work_cannot_renew_or_replace_newer_admission() {
     let (mut receiver, mut engine, mut authority) = receiver_engine();
-    let first = response(&mut receiver, &mut engine, &mut authority, 2, 1);
+    let first = response(&mut receiver, engine.state(), &mut authority, 2, 1);
     let late = duplicate(&first);
     let after_commit = duplicate(&first);
     assert_eq!(receiver.begin(3), Err(Error::Busy));
     assert_eq!(
-        receiver.finish(&mut engine, first, RECEIPT_NS + 2),
+        receiver.finish(engine.state(), first, RECEIPT_NS + 2),
         Err(Error::Expired)
     );
     assert!(engine.enrollment().is_none());
     authority.revoke(RECEIPT_NS + 3).unwrap();
     let next = response(
         &mut receiver,
-        &mut engine,
+        engine.state(),
         &mut authority,
         RECEIPT_NS + 3,
         2,
     );
     assert_eq!(
-        receiver.finish(&mut engine, late, RECEIPT_NS + 4),
+        receiver.finish(engine.state(), late, RECEIPT_NS + 4),
         Err(Error::Conflict)
     );
     assert!(engine.enrollment().is_none());
-    receiver.finish(&mut engine, next, RECEIPT_NS + 4).unwrap();
+    receiver
+        .finish(engine.state(), next, RECEIPT_NS + 4)
+        .unwrap();
     let retained = receiver.current(RECEIPT_NS + 4).unwrap().clone();
     let metadata = engine.enrollment().unwrap();
     assert_eq!(metadata.challenge, [2; 32]);
     assert!(retained.revoked);
     assert_eq!(retained.request.receipt_deadline_ns, 2 * RECEIPT_NS + 3);
     assert_eq!(
-        receiver.finish(&mut engine, after_commit, RECEIPT_NS + 5),
+        receiver.finish(engine.state(), after_commit, RECEIPT_NS + 5),
         Err(Error::Conflict)
     );
     assert_eq!(engine.enrollment(), Some(metadata));
@@ -125,13 +127,13 @@ fn expired_pending_work_cannot_renew_or_replace_newer_admission() {
 
 fn receiver_engine() -> (
     Receiver,
-    supplier::receiver_memory::MemoryReceiver,
+    supplier::receiver_memory::StableReceiver,
     Authority,
 ) {
     let grant = grant();
     let memory = memory_config();
     let binding = memory.enrollment;
-    let engine = supplier::receiver_memory::MemoryReceiver::new_fresh(memory, 1).unwrap();
+    let engine = fresh_engine(memory);
     (
         Receiver::new(binding, grant.audience(), 1).unwrap(),
         engine,
@@ -180,7 +182,7 @@ fn complete_reply_validation_precedes_atomic_metadata_and_entry_installation() {
     // construction. Public callers can only obtain one from a direct IC call.
     for fault in 0..9 {
         let (mut receiver, mut engine, mut authority) = receiver_engine();
-        let mut reply = response(&mut receiver, &mut engine, &mut authority, 2, 1);
+        let mut reply = response(&mut receiver, engine.state(), &mut authority, 2, 1);
         match fault {
             0 => reply.pull.authority = Principal::from_slice(&[4]),
             1 => reply.snapshot.grant.receiver = Principal::from_slice(&[4]),
@@ -200,37 +202,40 @@ fn complete_reply_validation_precedes_atomic_metadata_and_entry_installation() {
             _ => unreachable!(),
         }
         assert!(
-            receiver.finish(&mut engine, reply, 2).is_err(),
+            receiver.finish(engine.state(), reply, 2).is_err(),
             "fault {fault}"
         );
         assert!(engine.enrollment().is_none());
         assert_eq!(receiver.current(2), Err(Error::Closed));
     }
     let (mut receiver, mut engine, mut authority) = receiver_engine();
-    let first = response(&mut receiver, &mut engine, &mut authority, 2, 1);
+    let first = response(&mut receiver, engine.state(), &mut authority, 2, 1);
     let replay = duplicate(&first);
     let late = duplicate(&first);
-    receiver.finish(&mut engine, first, 2).unwrap();
+    receiver.finish(engine.state(), first, 2).unwrap();
     let metadata = engine.enrollment().unwrap();
-    receiver.finish(&mut engine, replay, 3).unwrap();
+    receiver.finish(engine.state(), replay, 3).unwrap();
     assert_eq!(engine.enrollment(), Some(metadata));
-    let newer = response(&mut receiver, &mut engine, &mut authority, 4, 2);
-    assert_eq!(receiver.finish(&mut engine, late, 5), Err(Error::Conflict));
-    receiver.finish(&mut engine, newer, 5).unwrap();
+    let newer = response(&mut receiver, engine.state(), &mut authority, 4, 2);
+    assert_eq!(
+        receiver.finish(engine.state(), late, 5),
+        Err(Error::Conflict)
+    );
+    receiver.finish(engine.state(), newer, 5).unwrap();
     assert_eq!(
         engine.enrollment().unwrap().authority_digest,
         metadata.authority_digest
     );
 
     authority.revoke(6).unwrap();
-    let revoked = response(&mut receiver, &mut engine, &mut authority, 6, 3);
-    receiver.finish(&mut engine, revoked, 6).unwrap();
+    let revoked = response(&mut receiver, engine.state(), &mut authority, 6, 3);
+    receiver.finish(engine.state(), revoked, 6).unwrap();
     let retired = engine.enrollment().unwrap();
-    let mut revived = response(&mut receiver, &mut engine, &mut authority, 7, 4);
+    let mut revived = response(&mut receiver, engine.state(), &mut authority, 7, 4);
     revived.snapshot.revoked = false;
     revived.snapshot.generation += 1;
     assert_eq!(
-        receiver.finish(&mut engine, revived, 7),
+        receiver.finish(engine.state(), revived, 7),
         Err(Error::Conflict)
     );
     assert_eq!(engine.enrollment(), Some(retired));
@@ -275,4 +280,25 @@ pub(in crate::auth) fn memory_config() -> supplier::receiver_memory::MemoryConfi
             refill_interval_ns: 1_000_000_000,
         },
     }
+}
+
+pub(in crate::auth) fn fresh_engine(
+    memory: supplier::receiver_memory::MemoryConfig,
+) -> supplier::receiver_memory::StableReceiver {
+    let key = "auth.receiver.engine.v1";
+    let runtime = crate::storage::bootstrap(
+        ic_storage::DefaultMemoryImpl::default(),
+        true,
+        "auth",
+        &[key],
+        320,
+    );
+    supplier::receiver_memory::StableReceiver::new_fresh(
+        runtime
+            .open_memory(&ic_storage::StableKey::parse(key).unwrap())
+            .unwrap(),
+        memory,
+        1,
+    )
+    .unwrap()
 }

@@ -1,4 +1,4 @@
-use crate::auth::install::{Install, Storage};
+use crate::auth::install::Install;
 use crate::{readiness::State, storage, topology};
 use ic_platform_runtime::system as api;
 use ic_platform_types::Principal;
@@ -34,7 +34,7 @@ thread_local! {
 }
 
 fn bootstrap(
-    mode: Option<Storage>,
+    fresh: bool,
     authority: &str,
     prefix: &str,
     keys: &[&str],
@@ -47,16 +47,12 @@ fn bootstrap(
         allocations: config.allocations.max(keys.len() + auth_keys.len()),
         ..config
     };
-    let fresh = mode.is_some();
     let runtime = storage::open_directory(DefaultMemoryImpl::default(), fresh, config);
-    match mode.unwrap_or_else(|| stable::layout(&runtime)) {
-        Storage::Stable => storage::admit_groups(
-            runtime,
-            fresh,
-            &[application, ("auth", "auth.receiver.", &auth_keys)],
-        ),
-        Storage::Volatile => storage::admit_groups(runtime, fresh, &[application]),
-    }
+    storage::admit_groups(
+        runtime,
+        fresh,
+        &[application, ("auth", "auth.receiver.", &auth_keys)],
+    )
 }
 
 /// Routing Root recovered from this hub’s configuration or this attested shard’s retained binding.
@@ -146,7 +142,7 @@ pub fn open_hub(
     #[cfg(feature = "role-attestation")]
     keys.push(&directory);
     let host = bootstrap(
-        install.map(|input| input.storage),
+        install.is_some(),
         authority,
         prefix,
         &keys,
@@ -215,13 +211,7 @@ pub fn open_shard(
     keys.push(parent_key);
     #[cfg(feature = "role-attestation")]
     keys.extend([directory.as_str(), root_key.as_str()]);
-    let host = bootstrap(
-        install.map(|input| input.storage),
-        authority,
-        prefix,
-        &keys,
-        config,
-    );
+    let host = bootstrap(install.is_some(), authority, prefix, &keys, config);
     let parts = initial.map(ShardConfig::into_parts);
     topology::attach_parent(
         &host,

@@ -4,12 +4,9 @@ use super::{
 };
 use ic_auth::receiver_memory::{EnrollmentBinding, MemoryReceiver};
 
-/// Receiver-owned volatile enrollment projection. The application owns the one
+/// Receiver-owned enrollment projection sealed with its host checkpoint. The application owns the one
 /// real Auth receiver and publishes both in a single IC callback transaction.
-#[cfg_attr(
-    feature = "auth-receiver-stable",
-    derive(serde::Deserialize, serde::Serialize)
-)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct Receiver {
     refreshed: bool,
     binding: EnrollmentBinding,
@@ -65,7 +62,6 @@ impl Receiver {
         })
     }
 
-    #[cfg(feature = "auth-receiver-stable")]
     pub(crate) fn reopen(&mut self, original: Self, now_ns: u64) {
         assert_eq!(
             original.binding, self.binding,

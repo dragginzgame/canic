@@ -191,7 +191,6 @@ fn approved_shard_topology_checks_both_install_envelopes() {
     .encode()
     .unwrap();
     let mut auth = install::Install {
-        storage: install::Storage::Volatile,
         root,
         issuer: parent,
         network: [1; 32],

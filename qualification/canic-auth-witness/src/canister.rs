@@ -5,8 +5,8 @@ use canic::auth::protocol::wire as auth_wire;
 use ic_auth::{
     receiver_memory::{
         AdmissionHost, EnrollmentBinding, LoginLimits, LogoutError, LogoutReceipt, MemoryConfig,
-        MemoryError, MemoryReceiver, SessionAuthority, SessionCapacity, SessionPolicyError,
-        SessionReceipt, UnknownLogoutLimits,
+        MemoryError, SessionAuthority, SessionCapacity, SessionPolicyError, SessionReceipt,
+        StableReceiver, UnknownLogoutLimits,
     },
     session_request::{SessionRequest, SessionTtlPolicy},
     verification::{Ed25519Key, VerificationContext, VerificationCosts, VerificationProfile},
@@ -21,7 +21,7 @@ use std::cell::RefCell;
 
 const SECOND: u64 = 1_000_000_000;
 struct State {
-    receiver: MemoryReceiver,
+    receiver: StableReceiver,
     installer: Principal,
     enrollment: enrollment::Receiver,
     calls: u32,
@@ -47,12 +47,16 @@ fn decode_init(bytes: &[u8]) -> Result<Principal, std::convert::Infallible> {
     on_error = endpoint_error,
 )]
 fn init(authority: Principal) {
+    let runtime = crate::witness_runtime(ic_storage::DefaultMemoryImpl::default(), true);
     #[cfg(feature = "profile")]
-    crate::profile::open(true);
+    crate::profile::create(&runtime);
     let now = api::time();
     let installer = api::caller();
-    crate::issuer::init();
-    let receiver = MemoryReceiver::new_fresh(
+    crate::issuer::open(&runtime, true);
+    let receiver = StableReceiver::new_fresh(
+        runtime
+            .open_memory(&ic_storage::StableKey::parse("auth.receiver.engine.v1").unwrap())
+            .unwrap(),
         MemoryConfig {
             audience: audience(),
             enrollment: EnrollmentBinding {
@@ -196,7 +200,7 @@ async fn refresh() -> Result<(), enrollment::Error> {
         let s = state.as_mut().ok_or(enrollment::Error::Closed)?;
         let pull = s
             .enrollment
-            .prepare(&mut s.receiver, challenge, api::time())?;
+            .prepare(s.receiver.state(), challenge, api::time())?;
         s.refresh.dispatched += 1;
         Ok(pull)
     })?;
@@ -224,7 +228,7 @@ async fn refresh() -> Result<(), enrollment::Error> {
     STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(enrollment::Error::Closed)?;
         s.enrollment
-            .finish(&mut s.receiver, response, api::time())?;
+            .finish(s.receiver.state(), response, api::time())?;
         s.refresh.installed += 1;
         if s.fault {
             api::trap("after supplier metadata and host entry publication");
@@ -317,6 +321,7 @@ fn admit(
         };
         let outcome = s
             .receiver
+            .state()
             .admit(
                 &credential,
                 request,
@@ -399,7 +404,7 @@ fn logout(caller: Principal, now: u64) -> LogoutResult {
             return LogoutResult::Unavailable(LogoutUnavailable::Storage);
         };
         s.calls += 1;
-        let result = match s.receiver.logout(caller, now) {
+        let result = match s.receiver.state().logout(caller, now) {
             Ok(LogoutReceipt::Revoked { deny_until_ns }) => LogoutResult::Revoked(deny_until_ns),
             Ok(LogoutReceipt::Unconfirmed { deny_until_ns }) => {
                 LogoutResult::Unconfirmed(deny_until_ns)

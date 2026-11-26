@@ -6,7 +6,7 @@
 //!
 //! Mount the existing Auth endpoints with `admit`, an application-selected scope
 //! reader and `logout`. Mount `refresh` through the controller-guarded refresh
-//! endpoint. A volatile receiver stays closed after upgrade. A stable receiver
+//! endpoint. The receiver
 //! reopens its checkpoint and requires a fresh Root refresh.
 
 #[cfg(test)]
@@ -14,28 +14,7 @@ mod tests;
 
 mod actor;
 
-#[cfg(feature = "auth-receiver-stable")]
 pub mod stable;
-
-enum Engine {
-    Volatile(MemoryReceiver),
-    #[cfg(feature = "auth-receiver-stable")]
-    Stable(ic_auth::receiver_memory::StableReceiver),
-}
-
-impl Engine {
-    fn state(&mut self) -> &mut MemoryReceiver {
-        match self {
-            Self::Volatile(engine) => engine,
-            #[cfg(feature = "auth-receiver-stable")]
-            Self::Stable(engine) => engine.state(),
-        }
-    }
-}
-
-pub use actor::{
-    Authorization, authorize, init, install, install_with_login_limit, refresh, with_authorization,
-};
 
 use super::{
     enrollment::{
@@ -47,10 +26,11 @@ use super::{
         model::{AdmissionRefusal, LogoutResult, LogoutUnavailable, SessionReadRefusal},
     },
 };
+pub use actor::{Authorization, authorize, refresh, with_authorization};
 use ic_auth::{
     receiver_memory::{
-        AdmissionHost, LogoutError, LogoutReceipt, MemoryConfig, MemoryError, MemoryReceiver,
-        SessionAuthority, SessionPolicyError, SessionReceipt,
+        AdmissionHost, LogoutError, LogoutReceipt, MemoryConfig, MemoryError, SessionAuthority,
+        SessionPolicyError, SessionReceipt,
     },
     session_request::{SessionRequest, SessionTtlPolicy},
     verification::{Ed25519Key, VerificationContext, VerificationProfile},
@@ -59,7 +39,7 @@ use std::cell::RefCell;
 
 struct State {
     enrollment: enrollment::Receiver,
-    receiver: Engine,
+    receiver: ic_auth::receiver_memory::StableReceiver,
     policy: Policy,
     max_login_ttl_ns: u64,
 }
@@ -82,18 +62,12 @@ pub struct Policy {
     pub max_proof_ttl_ns: u64,
 }
 
-pub(super) fn initialize(memory: MemoryConfig, policy: Policy, own_id: Principal, now: u64) {
-    initialize_with(memory, policy, own_id, now, |config| {
-        Engine::Volatile(MemoryReceiver::new_fresh(config, now).expect("fresh session receiver"))
-    });
-}
-
 fn initialize_with(
     memory: MemoryConfig,
     policy: Policy,
     own_id: Principal,
     now: u64,
-    build: impl FnOnce(MemoryConfig) -> Engine,
+    build: impl FnOnce(MemoryConfig) -> ic_auth::receiver_memory::StableReceiver,
 ) {
     assert_eq!(memory.enrollment.receiver, own_id);
     assert_ne!(
@@ -369,8 +343,6 @@ macro_rules! mount_auth_session {
 /// Mount install and upgrade hooks for the selected receiver storage.
 /// With `storage = open`, the application returns its admitted storage directory.
 /// Stable installs require both receiver leases and seal their state before upgrade.
-/// Volatile installs omit both leases and stay closed after upgrade.
-/// The `decode` and `open` form supports volatile-only receivers.
 /// Optional `max_login_secs` sets the absolute login ceiling. Omitting it uses
 /// the IC Auth starting profile. Proof and receiver-session TTLs are independent.
 #[macro_export]
@@ -396,28 +368,6 @@ macro_rules! mount_auth_lifecycle {
             #[runtime::pre_upgrade(runtime = runtime, guard = admit,
                 decode = empty_arguments, max_bytes = 0, on_error = fail)]
             fn __canic_pre_upgrade((): ()) { stable::seal(); $( $pre(); )? }
-        };
-    };
-    (decode = $decode:path, open = $open:path $(, max_login_secs = $seconds:expr)? $(,)?) => {
-        const _: () = {
-            use $crate::auth::{endpoint::fail, install::Install, session};
-
-            $crate::mount_lifecycle!(
-                input = Install,
-                max_bytes = 4096,
-                decode = Install::decode,
-                install = __canic_install_receiver,
-                reopen = __canic_reopen_application,
-            );
-
-            #[allow(clippy::needless_pass_by_value)]
-            fn __canic_install_receiver(input: Install) {
-                let application = $decode(&input).unwrap_or_else(|error| fail(error));
-                session::install_with_login_limit(&input, $crate::mount_auth_lifecycle!(@limit $($seconds)?));
-                $open(Some(application));
-            }
-
-            fn __canic_reopen_application() { $open(None); }
         };
     };
     (@limit) => { None };

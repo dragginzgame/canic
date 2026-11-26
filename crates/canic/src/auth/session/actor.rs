@@ -1,33 +1,8 @@
-//! Install, refresh and authorize the volatile receiver on the IC.
-use super::{Policy, Principal, STATE, SessionReadRefusal, authorized, enrollment, initialize};
+//! Install, refresh and authorize the installed receiver on the IC.
+use super::{Policy, Principal, STATE, SessionReadRefusal, authorized, enrollment};
 use crate::auth::install::Install;
 use ic_auth::{receiver_memory::MemoryConfig, session_request::SessionTtlPolicy};
 use ic_platform_runtime::system as api;
-
-/// Initialize only during fresh installation. Upgrade must leave volatile state closed.
-/// # Panics
-/// Traps on invalid configuration or if an active receiver already exists.
-pub fn init(memory: MemoryConfig, policy: Policy) {
-    initialize(memory, policy, api::canister_self(), api::time());
-}
-
-/// Open Auth's bounded starting profile from the approved fresh-install envelope.
-#[doc(hidden)]
-pub fn install(input: &Install) {
-    install_with_login_limit(input, None);
-}
-
-/// Install the receiver with an optional application-selected absolute login ceiling.
-#[doc(hidden)]
-pub fn install_with_login_limit(input: &Install, max_login_secs: Option<u64>) {
-    assert_eq!(
-        input.storage,
-        crate::auth::install::Storage::Volatile,
-        "stable receiver needs governed leases"
-    );
-    let (memory, policy) = configuration(input, max_login_secs);
-    init(memory, policy);
-}
 
 pub(super) fn configuration(
     input: &Install,

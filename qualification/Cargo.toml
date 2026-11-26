@@ -45,7 +45,7 @@ example-miner-pool-hub = { path = "../apps/examples/miner-pool/hub" }
 example-user-directory-hub = { path = "../apps/examples/user-directory/hub" }
 example-user-directory-schema = { path = "../apps/examples/user-directory/schema" }
 example-user-directory-shard = { path = "../apps/examples/user-directory/shard" }
-ic-auth = { version = "0.50.0", features = ["receiver-memory", "ed25519-verification"] }
+ic-auth = { version = "0.51.0", features = ["receiver-stable", "ed25519-verification"] }
 ic-auth-protocol-types = "0.44.1"
 ic-db = "0.32.0"
 ic-host-artifacts = { version = "0.80.3", default-features = false }

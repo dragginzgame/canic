@@ -40,7 +40,7 @@ pub fn open_service<M: Memory>(
         Some(input) => Service::create_with_metrics(memory, installation, input, metrics),
         None => Service::open_with_metrics(memory, installation, metrics),
     }?;
-    Ok(service.with_logging(crate::logging::record_blob))
+    Ok(service.with_logging(crate::logging::record))
 }
 
 /// Request and reply budgets defined by the Blob protocol.

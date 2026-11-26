@@ -6,7 +6,7 @@ is [canic-asset-catalog](../../qualification/canic-asset-catalog/src/lib.rs), in
 qualification workspace. It is a finite local catalog example, not a provider
 client or a production deployment recipe.
 
-The published 0.111.0 Service accepts the application’s Storage 0.80 lease.
+The published 0.112.0 Service accepts the application’s Storage 0.80 lease.
 Use `canic::blob::open_service` on install and reopen to attach the
 Canic metrics store and log sink. Custom lifecycle hooks call
 `canic::lifecycle::initialize_diagnostics()` first.

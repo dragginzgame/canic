@@ -73,7 +73,7 @@ and host entry replacement in the same callback. Snapshot freshness is at most
 existing session. Remote clock differences can cause conservative refusal.
 
 The installed witness now uses this actual Root path, replacing its earlier
-fixed-enrollment shortcut. After a grant, upgrading Root or a volatile receiver closes its Auth state. Root management custody still reopens independently;
+fixed-enrollment shortcut. After a grant, upgrading Root closes its grant authority. Root management custody still reopens independently;
 its ordinary maintenance receipt does not claim Auth preservation. Granting receiver authority requires explicit operator approval.
 
 ## Approve a fleet grant
@@ -127,8 +127,7 @@ not permission to re-sign or to revoke an unknown configuration through a new
 path. Revocation cannot select a different grant or reopen a retired key.
 Already issued snapshots remain usable only within their original freshness.
 
-A receiver’s Auth enrollment leaves application upgrades available. A volatile
-receiver loses its sessions and stays closed after upgrade. A stable receiver
+A receiver’s Auth enrollment leaves application upgrades available. A receiver
 can resume an unexpired session after reopening and refreshing its Root grant.
 An upgrade approval grants no new Auth authority. Existing approvals and
 revocations keep their original code and controller bindings.
@@ -330,7 +329,7 @@ integration run also exercised a plain finish call from the unrelated key withou
 an II bundle. This covers the local handoff in [#21](https://github.com/dragginzgame/canic/issues/21).
 It uses a disposable issuer and local root of trust.
 
-### Opt-in volatile receiver
+### Opt-in receiver
 
 Select `auth-enrollment` for each participating Wasm (and `method` for named
 application methods). In the fleet config, declare the shared policy once. This
@@ -352,26 +351,23 @@ max_admitted_logins = 10_000
 ```
 
 `roles` selects app canister roles. The singular `role` selects the credential
-role they accept. Both receiver storage modes inherit the IC Auth starting profile. Set
+role they accept. Receivers inherit the IC Auth starting profile. Set
 `limits.max_sessions` for physical sessions and `limits.max_admitted_logins`
-for retained (issuer, account, device slot) rows. Each defaults to 1,024
-independently. Expiry and logout retain the device-generation fence. A full
+for retained (issuer, account, device slot) rows. The supplier defaults are 20,000 sessions and 65,536 device slots. Expiry and logout retain the device-generation fence. A full
 login table refuses a new slot even when the receiver has spare session capacity.
 One issuer with 10,000 accounts using one device slot each needs 10,000 rows.
 Eight used slots per account would need 80,000. The installed test qualified
 10,000 single-slot accounts with at most 32 active sessions. See the
-[checkpoint size and upgrade measurements](../qualification/history.md#auth-known-login-capacity--2026-11-23)
+[0.51 checkpoint measurement](../qualification/history.md#ic-auth-051-stable-receivers--2026-11-26)
 before choosing a larger limit.
 
-A stable upgrade reopens the policy saved at installation. An older receiver
-with no override keeps its 1,024-row policy. Editing fleet TOML only changes
+A stable upgrade reopens the policy saved at installation. Editing fleet TOML only changes
 future installs. Enlarging an existing stable receiver requires a migration
 that preserves every generation fence and revocation. IC Auth currently
 requires exact checkpoint configuration equality. Keep the original receiver
 and policy until such a migration is qualified.
 
-The lower-level `session::init(memory, policy)` accepts the supplier's full custom
-memory configuration. Use the lower-level handler mounts for custom subject admission.
+Use the lower-level handler mounts for custom subject admission.
 
 Each receiver still needs an individual Root grant. Existing explicit declarations
 work. A selected receiver's grant can omit root, issuer, role, network_id and
@@ -386,25 +382,24 @@ whole-fleet bootstrap cannot yet bind an unresolved future Root into an app's
 install envelope. Bootstrap infrastructure first for that arrangement.
 
 Put the callable mount under `src/endpoints/` and the lifecycle mount in
-`src/lifecycle.rs`. The app supplies its existing decoder and store-opening
-function. Fresh install passes `Some(decoded_app_args)`; upgrade with empty
-arguments passes `None`. A failed reopen traps in that hook.
+`src/lifecycle.rs`. The app supplies a storage-opening function. Fresh install passes
+`Some(&Install)`; upgrade with empty arguments passes `None`. A failed reopen traps in that hook.
 
 ```rust
 // src/endpoints/mod.rs
 canic::mount_auth_session!(read = "read");
 
 // src/lifecycle.rs
-canic::mount_auth_lifecycle!(decode = decode_install, open = open);
+canic::mount_auth_lifecycle!(storage = open);
 ```
 
-The decoder receives `&canic::auth::install::Install`. An app that needs only its
+The bootstrap receives the approved install envelope on fresh installation. An app that needs only its
 own bytes reads `input.application`. A hub can validate the app nonce
 alongside the approved Root, issuer and audience before the mount initializes
 the receiver. With a topology-enabled shard pool, decode the inner
 `canic::topology::Install`, call `check_root(input.root)` and use its application
 bytes as the nonce. Attach the parent using the existing bounded principal cell.
-On upgrade the hook accepts empty arguments and reopens only the app's stores.
+On upgrade the hook accepts empty arguments and reopens the app and Auth stores.
 
 Legacy revision `377fbce` checked the observed browser against the actual IC
 caller before applying local scope policy in
@@ -488,24 +483,10 @@ Existing clients still send unit for the read and a string
 for registration. The portable session establishment and read replies still use
 `SessionView`.
 
-Controller refresh pulls the individual
-receiver's grant. Repeated install refuses. A post-upgrade handler may reopen the
-application database, but must leave this volatile receiver closed.
-
-IC Auth 0.48.0 requires the receiver to stay closed after complete loss of its
-volatile state. A live session and a committed logout with a lost acknowledgement
-can leave identical surviving evidence. A controller refresh, a later deadline
-or a newly issued credential cannot distinguish those histories.
-[Supplier decision](https://github.com/dragginzgame/ic-auth/blob/49b3927758828665d887fcb47a280f7e65b56bd6/docs/design/authentication.md#receiver-recovery-after-complete-volatile-loss)
-and [installed witness](https://github.com/dragginzgame/ic-auth/blob/49b3927758828665d887fcb47a280f7e65b56bd6/qualification/ic-auth-host-conformance/README.md#complete-loss-recovery-witness).
-
-The stable Ed25519 receiver already preserves its replay and logout history
-across upgrade and requires a fresh Root refresh. The standard DB hub and shard
-mount currently open the application’s two-key layout with volatile Auth.
-The remaining installed case for [Canic #31](https://github.com/dragginzgame/canic/issues/31)
-is a fresh login on an upgraded stateful role that reaches the same private row
-and rejects a different account. See the stable receiver lifecycle below for
-the existing supplier and adapter qualification.
+Controller refresh pulls the individual receiver's grant. The standard DB hub
+and shard reopen both application data and the Auth checkpoint. The installed
+User Directory qualification checks that private reads stay closed until fresh
+enrollment and recover the original account's row after refresh.
 
 ## Toko signup and private shard reads
 
@@ -668,16 +649,18 @@ retirement and standby imports because the detailed grant history was volatile.
 
 ## Inputs and limits
 
-Both lockfiles select registry engine `ic-auth` 0.50.0, `ic-auth-wire` 0.49.1 and
+Fresh stateful Auth installations use stable leases exclusively. Existing 0.50 owners require their original executables. A receiver upgrade seals the checkpoint and the next executable reopens it before an authenticated Root refresh.
+
+Both lockfiles select registry engine `ic-auth` 0.51.0, `ic-auth-wire` 0.49.1 and
 `ic-auth-protocol-types` 0.44.1. The private browser client is packed from the
-independently qualified supplier revision `d5382b197ec794b9f30943a3beb978cbaffe8321`. Session
+independently qualified supplier revision `8c7abf8243cd5fc9c6bf72bd2dd248087b805e01`. Session
 admission and read replies carry the verified optional `ext` field (up to
 4096 bytes). In a scoped endpoint, `auth.user_id()` returns these verified bytes
 as `Option<&[u8]>`. Pre-registration sessions may have no binding. Toko can
 interpret the bytes as a ULID and still route by `auth.subject()`. The basic `auth` feature selects
-only passive contracts; `auth-enrollment` selects `receiver-memory` and
+only passive contracts; `auth-enrollment` selects `receiver-stable` and
 `ed25519-verification`. Only the qualification application's issuer additionally
-selects `issuer-memory` and Platform's local signing API. No sibling edits, source copies or supplier publication
+selects `issuer-stable` and Platform's local signing API. No sibling edits, source copies or supplier publication
 are required. The exact tested artifact is recorded in
 [qualification history](../qualification/history.md).
 
@@ -699,17 +682,16 @@ shipped in 0.219.0; [Canic #16](https://github.com/dragginzgame/canic/issues/16)
 Production custody and the full application journey remain separate.
 
 The witness has a controller-approved Root grant and a public test signer,
-two session slots and bounded volatile replay/verification state. It
+two session slots and bounded replay/verification state. It
 proves caller mismatch and unauthorized configuration refusal, malformed frames,
 ordinary cryptographic refusal charges, exact retries, current authority reads,
 logout/replay, and actual reply-encoder failure rolling back Auth and application
 state. It also covers a real enrollment callback trap, retained busy admission,
 freshness-only refresh preserving the original session, in-flight revocation,
-and upgrades of both owners staying closed. Native contract cases cover forged
-bindings, stale/expired/conflicting replies and terminal revocation. It provides
-no durable session preservation or complete Fleet login qualification.
+and a deliberately skipped checkpoint leaving the interruption witness closed. Native contract cases cover forged
+bindings, stale/expired/conflicting replies and terminal revocation.
 
-Canic's installed volatile Ed25519 qualification covers the issuer lifecycle in
+Canic's installed Ed25519 qualification covers the issuer lifecycle in
 [#10](https://github.com/dragginzgame/canic/issues/10) and the profile browser
 journey in [#11](https://github.com/dragginzgame/canic/issues/11). Two accounts
 can recover independently after choosing the same issuance operation ID. The
@@ -717,53 +699,29 @@ receiver also returns the original receipt when a renderer loses the admission
 reply and reopens its journal. See the [runnable qualification](../../qualification/README.md)
 for enrollment, recovery, device replacement, logout and upgrade coverage.
 
-Production key custody, certified proofs and durable Auth recovery require separate qualification.
+Production key custody and certified proofs require separate qualification.
 
-## Stable Auth owner selection (#50)
+## Stateful Auth storage
 
-For fresh installs, each owner selects volatile or stable storage explicitly.
-Volatile remains the default. The application contributes distinct Auth leases
-to its existing Storage bootstrap. The receiver keeps the Ed25519 verifier.
-A new install frame identifies the storage choice. An older volatile owner
-whose replay state has been lost stays closed. A fresh stable install and an
-upgrade of an already-stable owner are the admitted transitions.
+Auth is optional. A fleet selecting `receiver_policy` always gets a stable
+receiver. Remove the former `storage` field from the table. Install fresh
+roles built for IC Auth 0.51. Older installation frames and checkpoints are
+refused. Existing 0.50 installations require their original executables.
 
-The receiver seals both its supplier checkpoint and its host configuration and
-challenge sequence. Reopen starts closed until a new authenticated Root pull.
-Root owns grant entries and terminal revocation. Issuers own pending external
-effects and certification contributions. Receiver checkpoint support alone
-does not authorize a Root preservation upgrade or issuer recovery.
+The receiver seals the supplier checkpoint and its own configuration and
+challenge sequence. Reopen requires the successor canister version, matching
+configuration and a fresh authenticated Root pull. Refresh a hub through its
+controller or a Root-controlled shard through `refresh_auth_receiver`.
+Applications using `canic/auth-enrollment` mount
+`mount_auth_lifecycle!(storage = open)`. Their bootstrap supplies
+`session::stable::{ENGINE_KEY, HOST_KEY}` alongside application leases.
+The `storage` macro argument is the bootstrap function. A change to retained
+policy, including the login ceiling, is refused on reopen.
 
-Choose receiver storage in the fleet’s existing `receiver_policy` table on
-fresh install. A DB-backed hub or shard using `mount_receiver_lifecycle!`
-supports both choices in the same Wasm.
-
-| Fleet setting | On application upgrade |
-| --- | --- |
-| `storage = "volatile"` (default) | Session, replay and logout state are lost. Admission stays closed. |
-| `storage = "stable"` | The receiver reopens its checkpoint. Refresh the hub through its controller and the Root-controlled shard through Root’s `refresh_auth_receiver` before using retained sessions. |
-
-The stable layout adds two leases under the exclusive `auth.receiver.` prefix
-to the application's single Storage bootstrap. Upgrade reopens the original
-layout. Changing storage mode needs a migration. The stable checkpoint also
-binds the receiver configuration, including `max_login_secs`. An upgrade
-changing that ceiling traps and the previous installation remains usable.
-
-For a custom receiver, rename the former `stable = open` mount argument to
-`storage = open`. Receivers using `canic/auth-receiver-stable` can mount
-`mount_auth_lifecycle!(storage = open)`. Their application bootstrap declares
-`session::stable::{ENGINE_KEY, HOST_KEY}` together for stable storage and omits
-both for volatile storage. The optional `seal` callback handles additional
-application owners. [Canic #70](https://github.com/dragginzgame/canic/issues/70)
-
-Select `canic/auth-issuer-stable` independently for an issuer. The app binds its
-own storage choice in the app payload, passes its separate lease to
-`auth::issuer::StableIssuer`, and seals its protected signing policy alongside
-the engine. IC Auth limits each encoded owner checkpoint to 8 MiB. The installed
-witness uses local Ed25519 signing. It retains an unresolved renewal through
-restart and checks the original ticket against the restart fence. An issuer with
-a certification tree would also need to retain its contributions and republish
-the root before serving proofs.
+Issuers select `canic/auth-issuer-stable`, pass a dedicated lease to
+`auth::issuer::StableIssuer`, and seal their signing policy with the engine.
+Root retains its own grant and revocation obligations. The installed witness
+uses local Ed25519 signing and checks unresolved operations across restart.
 
 Managed Root upgrades with live or revoked grants remain a roadmap item. The
 release gate is an installed Root transition that preserves all authority entries,

@@ -230,9 +230,9 @@ During a suspended registration a second browser uses its own read scope. A
 late provision acknowledgement after logout or after Root revocation and
 refresh leaves the hub's pending row untouched.
 
-The test also upgrades a populated volatile shard under its actual Root controller.
+The test also upgrades a populated shard under its actual Root controller.
 The database bytes and hub route survive. The shard refuses the previous session,
-a freshly signed admission and a controller-triggered enrollment refresh.
+and a freshly signed admission until a controller-triggered enrollment refresh.
 
 ## Root snapshot executor
 
@@ -252,7 +252,7 @@ mainnet work or existing-Root layout migration is qualified. Every fresh Root al
 
 ## Storage 0.80 adoption
 
-Both workspaces select Storage 0.80.0. Auth 0.50.0, Blob Storage 0.111.0
+Both workspaces select Storage 0.80.6. Auth 0.51.0, Blob Storage 0.112.0
 and DB 0.32.0 consume leases from the same application bootstrap. The
 separate Wasm Store 0.10.0 uses the same Storage release. Stable Auth
 receivers and the qualification issuer pass the IC canister version to
@@ -570,11 +570,9 @@ The [two-store witness](canic-schema-role/src/lib.rs) uses ordinary lifecycle
 hooks. Its installed upgrade and rollback test runs with
 `bash scripts/dev/test-store.sh db-roles`.
 
-The installed User Directory suite exercises both receiver layouts. With
-stable Auth it upgrades the populated hub and shard, checks both refuse reads
+The installed User Directory suite upgrades the populated hub and shard, checks both refuse reads
 before refresh, and reads the same route and ID with their original sessions
-after refreshing each receiver. The volatile case still checks lost sessions
-remain closed. Run `bash scripts/dev/test-store.sh user-directory` after testkit
+after refreshing each receiver. Run `bash scripts/dev/test-store.sh user-directory` after testkit
 setup. [Auth lifecycle](../docs/demos/auth.md)
 
 The User Directory adds a receiver lifecycle beside its database declaration.

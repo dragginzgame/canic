@@ -305,3 +305,10 @@ async fn acquire_placement(
 ) -> Result<canic::sharding::payment::Payment, canic::sharding::payment::Refusal> {
     sharding::payment::acquire_placement(input.0, input.1).await
 }
+
+// observe_child_funding
+// Read only the calling child's settled operating grants.
+#[canic::update(contract = canic::funding::ObserveChildFunding)]
+fn observe_child_funding(_: ()) -> Option<canic::funding::FundingReceipts> {
+    sharding::funding::receipts()
+}

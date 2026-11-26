@@ -1,7 +1,7 @@
 //! Retained generation fences at a populated shard's upgrade boundary.
 use super::*;
 use auth_single_root_tests::admit;
-use canic::auth::install::{Install, LimitsPolicy, Storage};
+use canic::auth::install::{Install, LimitsPolicy};
 
 #[tokio::test]
 async fn known_login_capacity_survives_checkpoint() {
@@ -20,7 +20,6 @@ async fn known_login_capacity_survives_checkpoint() {
     let mut grant = grant(target, now);
     grant.expires_at_ns = now + 86400 * SECOND;
     let install = Install {
-        storage: Storage::Stable,
         root: Principal::from_slice(f.root.as_slice()),
         issuer: grant.issuer,
         audience: grant.audience.fleet_id,
@@ -33,7 +32,7 @@ async fn known_login_capacity_survives_checkpoint() {
             max_sessions: Some(32),
             max_admitted_logins: Some(ROWS),
         },
-        application: ic_wire::encode(&Storage::Stable, ic_wire::Encoding::Payload, LIMITS).unwrap(),
+        application: vec![],
     };
     pic.install_canister(
         target,

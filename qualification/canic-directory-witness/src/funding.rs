@@ -73,3 +73,10 @@ async fn fund_ledger(
 fn ledger() -> Result<ic_platform_types::Principal, canic::topology::SingletonLookupError> {
     canic::topology::acknowledged_singleton("project_ledger")
 }
+
+// observe_child_funding
+// Read only the calling child's settled operating grants.
+#[canic::update(contract = canic::funding::ObserveChildFunding)]
+fn observe_child_funding(_: ()) -> Option<canic::funding::FundingReceipts> {
+    funding::receipts(ic_platform_runtime::system::caller())
+}

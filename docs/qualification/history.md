@@ -7,6 +7,21 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## IC Auth 0.51 stable receivers — 2026-11-26
+
+Both workspaces select IC Auth 0.51.0, Auth Wire 0.49.1 and Auth protocol
+types 0.44.1. The browser witness uses the supplier's 0.51.0 commit
+`8c7abf8243cd5fc9c6bf72bd2dd248087b805e01`. Eleven headless Chromium
+cases exercised admission, identity, logout and recovery. The installed user
+directory and DB-role suites reopened a populated receiver and required a fresh
+Root refresh before the original session could read its row.
+
+With 10,000 retained login slots and a 32-session policy, the checkpoint test
+measured 1,633,580 receiver checkpoint bytes. The next distinct account was
+refused at capacity before upgrade and after reopen and refresh. This measures
+one fixture population. Run `bash scripts/dev/test-auth.sh known_login_capacity`
+to repeat it.
+
 ## Host backup integration retirement — 2026-11-26
 
 The former IC Backup 0.106.0 qualification used an external keyring signer,

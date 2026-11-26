@@ -137,7 +137,6 @@ async fn installed_roles(journey: Journey) {
     });
     let receivers = local.receiver_policy.as_mut().unwrap();
     receivers.roles.push("project_registry".into());
-    receivers.storage = canic::auth::install::Storage::Stable;
     local.role_receivers = vec![HUB.into(), "project_hub".into()];
     for (name, pid) in [("root", root.id), ("store", store.id)] {
         local.canisters.insert(
@@ -609,7 +608,6 @@ async fn dedicated_receiver(
     let receiver = canic::auth::install::Install::decode(approved.arguments.as_slice()).unwrap();
     let topology = canic::topology::Install::decode(&receiver.application).unwrap();
     assert_eq!(receiver.role, "user");
-    assert_eq!(receiver.storage, canic::auth::install::Storage::Stable);
     assert_eq!(topology.role, "user_shard");
     assert_eq!(topology.application, b"local-shard-v001");
     let configure = async |approval: &stored::InstancePool| {

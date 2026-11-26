@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -306,8 +306,7 @@ dependencies = [
  "ic-db",
  "ic-entropy",
  "ic-jobs",
- "ic-logging 0.25.21",
- "ic-logging 0.26.0",
+ "ic-logging",
  "ic-metrics",
  "ic-platform",
  "ic-platform-runtime",
@@ -431,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -462,7 +461,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -472,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -490,7 +489,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -609,7 +608,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -1195,7 +1194,7 @@ dependencies = [
 
 [[package]]
 name = "example-counter"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "canic",
  "clap",
@@ -1209,7 +1208,7 @@ dependencies = [
 
 [[package]]
 name = "example-miner-pool-hub"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "canic",
  "clap",
@@ -1223,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-hub"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "canic",
  "example-user-directory-schema",
@@ -1233,7 +1232,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-schema"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -1243,7 +1242,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-shard"
-version = "0.271.0"
+version = "0.272.0"
 dependencies = [
  "canic",
  "example-user-directory-schema",
@@ -1613,9 +1612,9 @@ dependencies = [
 
 [[package]]
 name = "ic-auth"
-version = "0.50.0"
+version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d33e984a2060200ac2d02403ae8b166cf9d481adebd0fdaa252dcef74a5cb44"
+checksum = "c888a7ec2534509847f03c0fac3124cf80a921b4f74882abeb706c63f052b982"
 dependencies = [
  "ic-auth-protocol-types",
  "ic-platform",
@@ -1648,11 +1647,11 @@ dependencies = [
 
 [[package]]
 name = "ic-blob-storage"
-version = "0.111.0"
+version = "0.112.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4a93f512fa513f8ca38e6343847630f8fb6d38cc74974b11f73972722873c14"
+checksum = "affe83bb2e8fb4e054a2c00dd6076ef7ad8127a51bd912981d60a9258e1531c9"
 dependencies = [
- "ic-logging 0.25.21",
+ "ic-logging",
  "ic-metrics",
  "ic-platform-types",
  "ic-storage",
@@ -1683,7 +1682,7 @@ dependencies = [
  "ethnum",
  "getrandom 0.4.3",
  "ic-db-macros",
- "ic-logging 0.26.0",
+ "ic-logging",
  "ic-metrics",
  "ic-platform-runtime",
  "ic-platform-types",
@@ -1712,7 +1711,7 @@ version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3c5e33829fba1a627310e35ee63f9aa4745fdf56e189c652c3066c0bba96c3c6"
 dependencies = [
- "ic-logging 0.26.0",
+ "ic-logging",
  "ic-metrics",
  "ic-platform-runtime",
  "rand_chacha",
@@ -1772,12 +1771,6 @@ dependencies = [
  "ic-timers",
  "saffron",
 ]
-
-[[package]]
-name = "ic-logging"
-version = "0.25.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4878cc180abd68f4b364f76ea61006c015eeffc865e88ab9ad3efc87209a6b7"
 
 [[package]]
 name = "ic-logging"

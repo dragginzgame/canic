@@ -160,7 +160,7 @@ remain separate; do not pull optional supplier runtimes into default application
 | `qualification/canic-profile-*` | Retained ownership, composition, discovery and autonomous-management fixtures; not a product demo | `make profile-test`, `make profile-clippy`, `make profile-doc` |
 | `ic-wasm-store` supplier; Canic's Root/Host integration | Supplier owns artifacts, pins and admission; Canic owns orchestration | `make store-test`, `make store-clippy`; `make root-doc` covers management contracts |
 | `qualification/canic-asset-catalog` | Installed local Blob/catalog composition | `make blob-test`, `make blob-clippy`, `make blob-doc` |
-| `canic::auth`, `qualification/canic-auth-witness` | Optional issuer/receiver mounts and installed volatile Auth composition | `make auth-test`, `make auth-clippy`, `make auth-doc` |
+| `canic::auth`, `qualification/canic-auth-witness` | Optional issuer/receiver mounts and installed lease-backed Auth composition | `make auth-test`, `make auth-clippy`, `make auth-doc` |
 
 The commands above select scope families; choose their affected cases for ordinary
 changes. `make endpoint-test` owns installed mount/authorization/rollback proofs;
@@ -217,8 +217,8 @@ current journeys and remaining gates; do not substitute sibling working trees.
 - Capture caller/time at ingress; preserve directional budgets and synchronous
   reply rollback. Mounts grant no enrollment, storage or timer authority. Lost
   volatile replay/revocation state stays closed; fresh enrollment is not recovery.
-  A receiver grant allows application upgrades. Volatile receivers stay closed
-  afterward. Stable receivers require a fresh Root refresh. Root records first grant use durably.
+  A receiver grant allows application upgrades. Stateful receivers reopen their
+  stable checkpoint and require a fresh Root refresh. Root records first grant use durably.
   A never-used Root reopens with empty grant history. After any grant has been
   issued, volatile history loss fences worker reset, retirement and reserve imports.
 - Issuers own intents/renewal/results/pruning; reconciliation is lookup-only.

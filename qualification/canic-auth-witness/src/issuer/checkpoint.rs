@@ -57,6 +57,7 @@ pub(crate) fn open(runtime: &MemoryRuntime<DefaultMemoryImpl>, fresh: bool) {
     HOST.with_borrow_mut(|slot| *slot = Some(host));
 }
 
+#[cfg(feature = "session-mount")]
 pub(crate) fn seal() {
     STATE.with_borrow_mut(|slot| {
         let s = slot.as_mut().expect("stable issuer must be open to seal");

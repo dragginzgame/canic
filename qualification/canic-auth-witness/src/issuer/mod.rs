@@ -35,19 +35,9 @@ struct State {
     reply_fault: bool,
 }
 
-fn engine_mut(engine: &mut Engine) -> &mut MemoryIssuer {
-    #[cfg(feature = "stable")]
-    return engine.state();
-    #[cfg(not(feature = "stable"))]
-    engine
-}
-
 impl State {
     fn engine(&self) -> &MemoryIssuer {
-        #[cfg(feature = "stable")]
-        return self.engine.as_ref();
-        #[cfg(not(feature = "stable"))]
-        &self.engine
+        self.engine.as_ref()
     }
 }
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
@@ -67,15 +57,7 @@ fn config() -> IssuerConfig {
     }
 }
 
-#[cfg(not(feature = "stable"))]
-type Engine = MemoryIssuer;
-#[cfg(feature = "stable")]
 type Engine = canic::auth::issuer::StableIssuer;
-
-#[cfg(not(feature = "stable"))]
-pub(crate) fn init() {
-    initialize(MemoryIssuer::new_fresh(config(), api::time()).unwrap());
-}
 
 fn initialize(engine: Engine) {
     let now = api::time();
@@ -118,7 +100,7 @@ pub(crate) fn control(command: u8) -> bool {
             7 => s.reply_fault = false,
             8 => s.allowed = false,
             9 => {
-                engine_mut(&mut s.engine).prune(api::time(), 32).unwrap();
+                s.engine.state().prune(api::time(), 32).unwrap();
             }
             10 if s.authority.generation == 1 => {
                 s.signer = SigningKey::from_bytes(&[17; 32]);
@@ -221,11 +203,11 @@ fn status(value: Option<IssuerStatus<'_>>) -> Status {
     }
 }
 
-#[cfg(feature = "stable")]
 mod checkpoint;
 
-#[cfg(feature = "stable")]
-pub(crate) use checkpoint::{HOST_KEY, KEY, open, seal};
+#[cfg(feature = "session-mount")]
+pub(crate) use checkpoint::seal;
+pub(crate) use checkpoint::{HOST_KEY, KEY, open};
 
 fn retained(s: &State, ticket: IssuerTicket) -> Result<Status, Refusal> {
     s.engine()
@@ -251,7 +233,9 @@ async fn issue(caller: Principal, input: Issue, now: u64) -> Result<Status, Refu
             .reconcile(caller, request.epoch, request.operation_id)
             .map_err(refused)?
             .is_some();
-        let ticket = engine_mut(&mut s.engine)
+        let ticket = s
+            .engine
+            .state()
             .prepare_issue(caller, &request, POLICY, s.authority, now)
             .map_err(refused)?;
         Ok::<_, Refusal>((ticket, existing))
@@ -273,7 +257,9 @@ async fn renew(caller: Principal, input: Renew, now: u64) -> Result<Status, Refu
             .reconcile_renewal(caller, &request)
             .map_err(refused)?
             .is_some();
-        let ticket = engine_mut(&mut s.engine)
+        let ticket = s
+            .engine
+            .state()
             .prepare_renewal(caller, &request, s.authority, now)
             .map_err(refused)?;
         Ok::<_, Refusal>((ticket, existing))
@@ -300,23 +286,28 @@ async fn finish<const ID: u64>(ticket: IssuerTicket, existing: bool) -> Result<S
         let now = api::time();
         let intent = s.engine().intent(ticket).map_err(refused)?;
         permit(s, ticket.account(), intent.grants)?;
-        engine_mut(&mut s.engine)
+        s.engine
+            .state()
             .record_nonce(ticket, s.authority, nonce, now)
             .map_err(refused)?;
         let mut commitment = Sha256::new();
         commitment.update(b"canic-issuer-witness-approved");
         commitment.update(ticket.operation_id());
         commitment.update(nonce);
-        engine_mut(&mut s.engine)
+        s.engine
+            .state()
             .record_approval(ticket, s.authority, commitment.finalize().into(), now)
             .map_err(refused)?;
-        let signing = engine_mut(&mut s.engine)
+        let signing = s
+            .engine
+            .state()
             .dispatch(ticket, s.authority, now)
             .map_err(refused)?;
         // Local test-key signing has no independently committed external effect.
         // Signature, result, counter and reply encoding share this IC transaction.
         let signature = s.signer.sign(&Sha256::digest(signing.claims())).to_bytes();
-        engine_mut(&mut s.engine)
+        s.engine
+            .state()
             .complete(ticket, s.authority, signature, now)
             .expect("atomic local signing completion");
         s.signatures += 1;
@@ -355,7 +346,9 @@ fn reconcile(caller: Principal, input: Lookup, _: u64) -> Result<Status, Refusal
 fn logout(caller: Principal, input: Logout, now: u64) -> Result<Revoked, Refusal> {
     STATE.with_borrow_mut(|state| {
         let s = state.as_mut().ok_or(Refusal::Unavailable)?;
-        let login_deadline_ns = engine_mut(&mut s.engine)
+        let login_deadline_ns = s
+            .engine
+            .state()
             .revoke_browser(
                 caller,
                 input.account,

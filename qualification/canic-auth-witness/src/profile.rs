@@ -11,10 +11,8 @@ thread_local! { static PROFILES: RefCell<Option<State<DefaultMemoryImpl>>> = con
 
 thread_local! { static WRITES: std::cell::Cell<u32> = const { std::cell::Cell::new(0) }; }
 
-pub(crate) fn open(fresh: bool) {
-    PROFILES.with_borrow_mut(|state| {
-        *state = Some(crate::open_profiles(DefaultMemoryImpl::default(), fresh))
-    });
+pub(crate) fn create(runtime: &ic_storage::MemoryRuntime<DefaultMemoryImpl>) {
+    PROFILES.with_borrow_mut(|state| *state = Some(State::create(runtime)));
 }
 
 /// Leave access checks to the individual handlers. Profile reads and writes require a live session.
@@ -43,7 +41,9 @@ fn fail(error: impl std::fmt::Debug) -> ! {
     on_error = fail,
 )]
 fn reopen((): ()) {
-    open(false);
+    PROFILES.with_borrow_mut(|state| {
+        *state = Some(crate::open_profiles(DefaultMemoryImpl::default(), false))
+    });
     // Auth state deliberately stays absent: persistent profile bytes cannot
     // reconstruct lost login/replay authority. No fresh enrollment workaround.
 }

@@ -1402,7 +1402,7 @@ failure traps the same transaction. Ordinary refusals retain applicable charges.
 The data-only credential envelope is not an endpoint; no legacy export aliases
 or automatic enrollment, storage, timer or activation hooks are selected.
 
-The installed qualification application uses the real volatile `MemoryReceiver`
+The installed qualification application uses the lease-backed `StableReceiver`
 and pulls a protected grant from an actual Root. Root
 admits up to 32 receiver principals under its existing controller boundary, matching
 the fleet slot limit. Each receiver owns one immutable audience/issuer/Ed25519-key/role/scope
@@ -1468,7 +1468,7 @@ browser binding are different authorities; request account fields select a login
 but never authenticate it. Complete results retain their original deadlines;
 missing, pruned, pending and unknown evidence remain unresolved.
 
-The installed witness supplies a bounded volatile `MemoryIssuer`, one explicit
+The installed witness supplies a bounded lease-backed `StableIssuer`, one explicit
 application account independent of its controller, and a public local Ed25519
 test key. It reserves before real IC entropy, rechecks application permission on
 the callback, and commits local signing/result publication with reply encoding.
@@ -1488,8 +1488,7 @@ its package, with standalone exports disabled only for that embedding. A protect
 single-issuer namespace supplies the authenticated subject; browser principals,
 controller membership and request fields cannot choose profile ownership. Two
 independently Root-enrolled receivers exercise real HTTP/IndexedDB recovery and
-logout. Profile bytes reopen on upgrade, but missing volatile Auth state remains
-closed. This is a qualified local composition path, not Auth-enabled default
+logout. In the interruption witness, the profile reopens after a deliberately skipped Auth checkpoint and Auth stays closed. This is a qualified local composition path, not Auth-enabled default
 deployment, production key custody or managed Auth preservation. The broader
 [Canic #11](https://github.com/dragginzgame/canic/issues/11) remains separate.
 
@@ -1866,8 +1865,7 @@ for native use and composes install and strict reopen on Wasm. Preserve the
 hub configuration payload and routing Root, the child's bounded parent cell
 and actual-installer check, both original directory policies and the original
 database incarnation derivation. Readiness reports successful storage attachment
-only. An upgrade reopens application data and leaves the volatile receiver
-closed. This extends the retained-store predecessor review and the qualified
+only. An upgrade reopens application data and the stable Auth checkpoint. The receiver stays closed until a fresh authenticated Root refresh. This extends the retained-store predecessor review and the qualified
 parent binding without introducing a new allocation or recovery authority.
 After install and reopen, an attested shard exposes its retained routing Root through
 `canic::role::root()`. Its immediate parent remains the principal used for parent admission.
@@ -2751,6 +2749,24 @@ role-issuance callers use the declared error variants to interpret remote replie
 
 At the grant deadline an unpaid reservation releases the spare and refuses late
 settlement. A charged allocation retains its principal and receipt for recovery.
+
+Operating grant receipts (#115) belong to the payer. Root and application
+parents retain their last 64 confirmed deposits across all children. The
+authenticated child reads its own receipts with the replicated, observation-only
+`observe_child_funding` call. Identity is (payer, child, original attempt
+sequence) on an immutable funding edge. Report the amount in whole cycles,
+payer confirmation time in IC nanoseconds, any unresolved attempt, and the
+last settled sequence whose receipt is unavailable. Older grants retain their
+original spending and recovery state on upgrade. No timestamps are backfilled.
+Toko owns balance sampling, daily history, access control and billing. External
+deposits, reserve changes and execution burn are outside these receipts.
+
+Legacy Canic v0.114.0 separated top-up request metrics
+(`crates/canic-core/src/ops/runtime/metrics/cycles_topup.rs`, history through
+`d704f4d`) from cycle-history and top-up projections. Toko's ledger exposed
+the latter to its parent. Preserve the caller boundary and distinguish a
+successful deposit from a scheduled request. Current payer custody can supply
+that evidence without reviving the legacy balance tracker.
 
 A fleet may declare an ongoing funding edge with
 `top_up_children = [{ child = "project_registry", below_cycles = "10.3T", amount_cycles = "0.1B" }]`.

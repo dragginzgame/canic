@@ -7,24 +7,25 @@ use canic::sharding::standby::Source;
 use canic_management_protocol::{CREATION_CYCLES, children::ChildId, stored};
 use ic_platform_types::Principal;
 
-pub(in crate::engine) const BYTES: usize = 64 * 1024;
+const PLACEMENT_BYTES: usize = 64 * 1024;
+pub(in crate::engine) const BYTES: usize = PLACEMENT_BYTES + crate::funding::receipts::EXTRA_BYTES;
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: BYTES,
-    allocation: BYTES * 16,
-    nodes: BYTES,
+    bytes: PLACEMENT_BYTES,
+    allocation: PLACEMENT_BYTES * 16,
+    nodes: PLACEMENT_BYTES,
     depth: 24,
 };
 
 impl Pools {
     pub(in crate::engine) fn encode(&self) -> Vec<u8> {
         let limits = ic_wire::Limits {
-            bytes: BYTES - 4,
+            bytes: PLACEMENT_BYTES - 4,
             ..LIMITS
         };
         let payload = ic_wire::encode(self, ic_wire::Encoding::Payload, limits);
         let mut bytes = b"PL12".to_vec();
         bytes.extend(payload.expect("bounded placement ledger"));
-        bytes
+        self.receipts.wrap(bytes)
     }
 }
 
@@ -112,11 +113,20 @@ pub(in crate::engine) fn open(bytes: &[u8]) -> Pools {
 }
 
 fn decode(bytes: &[u8]) -> Pools {
+    let (receipts, bytes) = crate::funding::receipts::History::split(bytes);
     let payload = bytes
         .strip_prefix(b"PL12")
         .expect("placement custody requires its original Root");
-    let pools: Pools =
+    let mut pools: Pools =
         ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("placement custody");
+    receipts.validate(|child| {
+        pools
+            .funding
+            .values()
+            .find(|grant| grant.rule.child == child)
+            .map(super::funding::Grant::settled)
+    });
+    pools.receipts = receipts;
     assert!(
         pools
             .evacuated

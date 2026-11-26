@@ -14,26 +14,21 @@ category = "tests"
 crate-type = ["cdylib", "rlib"]
 
 [features]
-changed-login-limit = ["stable"]
-damaged-checkpoint = ["stable"]
-stable = [
-    "canic/method",
-    "canic/auth-receiver-stable",
-    "canic/auth-issuer-stable",
-    "dep:ic-storage",
-]
-profile = ["dep:canic-profile-worker", "dep:canic-profile-protocol", "dep:ic-storage"]
+changed-login-limit = ["session-mount"]
+damaged-checkpoint = ["session-mount"]
+session-mount = []
+profile = ["dep:canic-profile-worker", "dep:canic-profile-protocol"]
 
 [dependencies]
-canic = { workspace = true, features = ["auth-enrollment"] }
+canic = { workspace = true, features = ["auth-enrollment", "auth-issuer-stable"] }
 canic-profile-protocol = { workspace = true, optional = true }
 canic-profile-worker = { workspace = true, optional = true }
-ic-auth = { workspace = true, features = ["issuer-memory"] }
+ic-auth = { workspace = true, features = ["issuer-stable"] }
 ic-auth-protocol-types.workspace = true
 ic-platform-crypto.workspace = true
 ic-platform-runtime.workspace = true
 ic-platform-types.workspace = true
-ic-storage = { workspace = true, optional = true }
+ic-storage.workspace = true
 ic-wire.workspace = true
 serde.workspace = true
 sha2.workspace = true

@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+## [0.272.0] - 2026-11-26
+
+Stateful Auth adopts IC Auth 0.51.0 and always uses stable leases. Remove
+`storage` from `receiver_policy`. Install fresh Auth roles for this cut.
+On subsequent upgrades, refresh the receiver from Root before serving sessions.
+
+```sh
+# From the checkout, validate the example fleet and exercise installed Auth.
+canic fleet canister list --config apps/examples/user-directory/canic.toml
+make auth-test
+```
+
+Canic adopts IC Blob Storage 0.112.0. Blob now sends diagnostics directly to
+Canic’s IC Logging 0.26 recorder. Both workspaces use one logging version.
+
+```sh
+# From the checkout with PocketIC prepared, exercise the installed Blob catalog.
+make blob-test
+```
+
+The private Canic browser adapter uses the IC Auth 0.51.0 client. To rebuild
+the pinned client from the supplier commit and check its transport and codecs:
+
+```sh
+make auth-browser-prepare
+make auth-browser-test
+```
+
+A funded child can call `observe_child_funding` on Root or on an application
+payer that mounts the funding reader. Use the typed
+`canic::funding::ObserveChildFunding` update with a unit request. The payer
+returns only that caller’s confirmed grants, the exact sequence of any unresolved
+deposit, and the prefix of settled sequences whose details are unavailable.
+A payer keeps its latest 64 receipts across all children. Reopening a pre-receipt
+ledger preserves its funding state and reports earlier settlements without dates.
+After the payer writes the new envelope, upgrades require a receipt-aware executable.
+External deposits and balance changes do not produce operating grant receipts.
+
+```sh
+# From the checkout with qualification assets prepared, exercise both payer types.
+bash scripts/dev/test-store.sh directory
+```
+
 ## [0.271.0] - 2026-11-26
 
 ### 🔄 Changed

@@ -86,7 +86,6 @@ creation_budget = 1_000_000_000_000
 [apps.projects.fleets.local.receiver_policy]
 root = "root"
 roles = ["project_ledger"]
-storage = "stable"
 issuer = "{registry}"
 role = "user"
 network_id = "{}"
@@ -241,7 +240,6 @@ limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns
     policy.root = Principal::from_slice(root.id.as_slice());
     policy.application.clone_from(&receiver.application);
     assert_eq!(receiver.encode().unwrap(), policy.encode().unwrap());
-    assert_eq!(receiver.storage, install::Storage::Stable);
     assert_eq!(receiver.role, "user");
     let topology = canic::topology::Install::decode(&receiver.application).unwrap();
     assert_eq!(topology.parent.as_slice(), project.as_slice());

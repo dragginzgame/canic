@@ -15,7 +15,7 @@ const CHECK_NS: u64 = 60_000_000_000;
 
 #[derive(Serialize, Deserialize)]
 pub(super) struct Grant {
-    rule: ChildFunding,
+    pub(super) rule: ChildFunding,
     status: ChildFundingStatus,
 }
 
@@ -29,6 +29,13 @@ impl Grant {
             && r.expires_at_ns > 0
             && self.status.charged_cycles <= r.budget_cycles
             && self.status.attempts.checked_mul(r.amount_cycles) == Some(self.status.charged_cycles)
+    }
+
+    pub(super) fn settled(&self) -> u64 {
+        let status = &self.status;
+        // A failed attempt closes the grant. Only its final attempt can be unsettled.
+        status.attempts
+            - u64::from(status.attempts > 0 && (status.issued || status.refund_cycles != Some(0)))
     }
 
     fn active(&self, now: u64) -> bool {
@@ -196,9 +203,67 @@ async fn deposit(slot: ChildId, rule: &ChildFunding) -> Result<bool, ()> {
         let s = s.as_mut().unwrap();
         let status = &mut s.pools.funding.get_mut(&slot).unwrap().status;
         status.issued = !success && refund != Some(u128::from(rule.amount_cycles));
+        if success {
+            s.pools
+                .receipts
+                .record(rule.child, status.attempts, api::time());
+        }
         status.closed |= !success;
         status.refund_cycles = refund;
         s.pool.set(s.pools.encode());
     });
     if success { Ok(true) } else { Err(()) }
+}
+
+/// Report only the calling child's operating grant receipts.
+/// # Panics
+/// Requires the Root placement ledger to be open.
+#[must_use]
+pub fn receipts() -> Option<canic::funding::FundingReceipts> {
+    STATE.with_borrow(|state| {
+        let pools = &state.as_ref().expect("open Root").pools;
+        let child = api::caller();
+        let grant = pools
+            .funding
+            .values()
+            .find(|grant| grant.rule.child == child)?;
+        Some(
+            pools
+                .receipts
+                .report(&grant.rule, &grant.status, grant.settled()),
+        )
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pre_receipt_settlement_count_excludes_the_last_unconfirmed_or_refunded_attempt() {
+        let mut grant = Grant {
+            rule: ChildFunding {
+                parent: Principal::from_slice(&[1]),
+                child: Principal::from_slice(&[2]),
+                component: "service".into(),
+                below_cycles: 1,
+                amount_cycles: 10,
+                budget_cycles: 30,
+                expires_at_ns: u64::MAX,
+            },
+            status: ChildFundingStatus::default(),
+        };
+        assert_eq!(grant.settled(), 0);
+        grant.status.attempts = 3;
+        for (issued, refund, paid) in [
+            (true, None, 2),
+            (true, Some(0), 2),
+            (false, Some(10), 2),
+            (false, Some(0), 3),
+        ] {
+            grant.status.issued = issued;
+            grant.status.refund_cycles = refund;
+            assert_eq!(grant.settled(), paid);
+        }
+    }
 }
