@@ -1,6 +1,6 @@
 //! Strict opening refuses old/corrupt images and preserves the installed owner.
 use super::*;
-use ic_testkit::pocket_ic::common::rest::BlobCompression;
+use ic_testkit::pocket_ic::{ErrorCode, common::rest::BlobCompression};
 
 #[tokio::test]
 async fn old_and_invalid_backings_refuse_without_initialization() {
@@ -134,58 +134,52 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
         .unwrap();
     assert_eq!(pic.get_stable_memory(fresh).await, stable);
     assert_eq!(status(pic, fresh).await.phase, Phase::Empty);
-    // The prior Store maintenance layout is refused before its payload can be opened.
+    // Give each damaged image its own installed owner and install-instruction budget.
     let mut old = stable.clone();
     let offset = old.windows(4).position(|tag| tag == b"CUJG").unwrap();
     old[offset..offset + 4].copy_from_slice(b"CUJF");
-    pic.set_stable_memory(fresh, old.clone(), BlobCompression::NoCompression)
-        .await;
-    let refusal = canic_qualification::upgrade_stopped(
-        pic,
-        fresh,
-        children::artifact("maintenance.wasm"),
-        vec![],
-        None,
-    )
-    .await
-    .unwrap_err();
-    assert!(
-        refusal
-            .reject_message
-            .contains("unsupported Root journal format"),
-        "{refusal:?}"
-    );
-    pic.advance_time(Duration::from_secs(11)).await;
-    settle(pic).await;
-    assert_eq!(
-        pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
-        count
-    );
-    assert_eq!(
-        pic.canister_status(fresh, None).await.unwrap().module_hash,
-        Some(digest(&current).to_vec())
-    );
-    assert!(pic.get_stable_memory(fresh).await == old);
     let mut corrupt = stable;
     corrupt[0] ^= 0xff;
-    // Administrative fixture injection only; product code has no raw backing path.
-    for damaged in [corrupt, vec![]] {
-        pic.set_stable_memory(fresh, damaged.clone(), BlobCompression::NoCompression)
+    for (damaged, old_journal) in [(old, true), (corrupt, false), (vec![], false)] {
+        let target = pic.create_canister().await;
+        pic.install_canister(target, current.clone(), vec![], None)
             .await;
+        let count = pic.get_subnet_metrics(subnet).await.unwrap().num_canisters;
+        pic.set_stable_memory(target, damaged.clone(), BlobCompression::NoCompression)
+            .await;
+        let refusal = canic_qualification::upgrade_stopped(
+            pic,
+            target,
+            children::artifact("maintenance.wasm"),
+            vec![],
+            None,
+        )
+        .await
+        .unwrap_err();
         assert!(
-            canic_qualification::upgrade_stopped(
-                pic,
-                fresh,
-                children::artifact("maintenance.wasm"),
-                vec![],
-                None,
-            )
-            .await
-            .is_err()
+            matches!(
+                refusal.error_code,
+                ErrorCode::CanisterCalledTrap | ErrorCode::CanisterTrapped
+            ),
+            "{refusal:?}"
         );
-        assert_eq!(pic.get_stable_memory(fresh).await, damaged);
+        if old_journal {
+            assert!(
+                refusal
+                    .reject_message
+                    .contains("unsupported Root journal format"),
+                "{refusal:?}"
+            );
+        }
+        pic.advance_time(Duration::from_secs(11)).await;
+        settle(pic).await;
         assert_eq!(
-            pic.canister_status(fresh, None).await.unwrap().module_hash,
+            pic.get_subnet_metrics(subnet).await.unwrap().num_canisters,
+            count
+        );
+        assert_eq!(pic.get_stable_memory(target).await, damaged);
+        assert_eq!(
+            pic.canister_status(target, None).await.unwrap().module_hash,
             Some(digest(&current).to_vec())
         );
     }
