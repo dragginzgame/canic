@@ -88,8 +88,9 @@ pub(crate) fn canisters(
         &[Alignment::Left; 3],
     );
     let mut output = format!("{title}\n\n{table}\n\n");
-    if !declaration.top_up_children.is_empty() {
+    if !declaration.policy.top_up_children.is_empty() {
         let edges: Vec<_> = declaration
+            .policy
             .top_up_children
             .iter()
             .map(|rule| {

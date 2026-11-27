@@ -12,7 +12,7 @@ fn fixture() -> (std::path::PathBuf, Plan) {
     let wasm = dir.join("root.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
     let (_, mut plan) = create_plan(&dir.join("journal"), &wasm, input()).unwrap();
-    plan.version = 2;
+    plan.version = 1;
     plan.deployment = Some(DeploymentName {
         app: "demo".into(),
         fleet: "mainnet".into(),

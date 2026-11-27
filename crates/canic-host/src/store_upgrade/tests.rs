@@ -3,7 +3,7 @@ use crate::{Artifact, DeploymentName, Network, PlanAction, UpgradeTarget};
 
 fn plan() -> Plan {
     Plan {
-        version: 2,
+        version: crate::plan::APPROVAL_VERSION,
         network: Network::Mainnet,
         controller: crate::tests::input().controller,
         artifact: Artifact {
@@ -11,7 +11,7 @@ fn plan() -> Plan {
             bytes: 8,
         },
         action: PlanAction::UpgradeStore {
-            sequence: None,
+            sequence: 1,
             target: UpgradeTarget {
                 canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
                 module: "22".repeat(32),
@@ -70,18 +70,36 @@ fn store_approval_binds_code_owner_operation_and_original_deadline() {
 }
 
 #[test]
-fn unified_commands_bind_new_plans_and_leave_signed_predecessor_frames_intact() {
-    let mut old = plan();
-    old.version = 9;
-    let mut current = old.clone();
-    current.version = crate::plan::STORE_MAINTENANCE_VERSION;
-    assert_ne!(old.digest().unwrap(), current.digest().unwrap());
+fn current_commands_refuse_superseded_store_approval_versions() {
+    let current = plan();
+    assert_eq!(current.version, 1);
+    let encoded = serde_json::to_vec(&current).unwrap();
+    let domain_digest = |prefix: &[u8]| crate::artifact::digest(&[prefix, &encoded].concat());
+    assert_eq!(
+        current.digest().unwrap(),
+        domain_digest(b"canic:store-maintenance.v1\0")
+    );
+    assert_ne!(
+        current.digest().unwrap(),
+        domain_digest(b"canic:deployment-plan:v1\0")
+    );
+    let mut unnamed = current.clone();
+    unnamed.deployment = None;
+    assert!(unnamed.digest().is_err());
+    assert!(approval(&unnamed).is_err());
+    assert!(serde_json::from_value::<Plan>(serde_json::to_value(unnamed).unwrap()).is_err());
+
     let action = wire::Request::Stage(approval(&current).unwrap());
-    let call = command(&current, &action).unwrap();
-    assert_eq!(call.method, "maintain_store");
-    let original = command(&old, &wire::Request::Stage(approval(&old).unwrap())).unwrap();
-    assert_eq!(original.method, "stage_store_maintenance");
-    assert_ne!(call.args, original.args);
+    assert_eq!(command(&current, &action).unwrap().method, "maintain_store");
+    for version in [2, 9, 14] {
+        let mut old = current.clone();
+        old.version = version;
+        assert!(old.validate().is_err());
+        assert!(command(&old, &action).is_err());
+        assert!(observation(&old).is_err());
+        assert!(recovery(&old).is_err());
+        assert!(serde_json::from_value::<Plan>(serde_json::to_value(old).unwrap()).is_err());
+    }
     assert_eq!(
         observation(&current).unwrap().method,
         "observe_store_maintenance"
@@ -93,35 +111,35 @@ fn unified_commands_bind_new_plans_and_leave_signed_predecessor_frames_intact() 
 }
 
 #[test]
-fn explicit_sequence_binds_exact_observation_without_rewriting_old_approvals() {
-    let historical = plan();
-    let old_bytes = serde_json::to_vec(&historical).unwrap();
-    assert!(
-        serde_json::to_value(&historical)
-            .unwrap()
-            .get("store_upgrade_sequence")
-            .is_none()
-    );
-    let mut next = historical.clone();
+fn later_sequence_has_distinct_approval_and_observes_the_exact_attempt() {
+    let first = plan();
+    let old_bytes = serde_json::to_vec(&first).unwrap();
+    let mut missing_sequence = serde_json::to_value(&first).unwrap();
+    missing_sequence["action"]["approval"]
+        .as_object_mut()
+        .unwrap()
+        .remove("sequence");
+    assert!(serde_json::from_value::<Plan>(missing_sequence).is_err());
+    let mut next = first.clone();
     let PlanAction::UpgradeStore { sequence, .. } = &mut next.action else {
         unreachable!()
     };
-    *sequence = Some(2);
+    *sequence = 2;
     next.validate().unwrap();
-    assert_ne!(next.digest().unwrap(), historical.digest().unwrap());
+    assert_ne!(next.digest().unwrap(), first.digest().unwrap());
     let call = observation(&next).unwrap();
-    assert_eq!(call.method, "observe_store_attempt");
+    assert_eq!(call.method, "observe_store_maintenance");
     assert_eq!(
-        ic_wire::decode::<wire::Approval>(
+        ic_wire::decode::<Option<wire::Approval>>(
             &call.args,
             ic_wire::Encoding::Frame {
-                method: wire::OBSERVE_ATTEMPT,
+                method: wire::READ_ATTEMPT,
                 direction: ic_wire::Direction::Request,
             },
             wire::LIMITS
         )
         .unwrap(),
-        approval(&next).unwrap()
+        Some(approval(&next).unwrap())
     );
     assert_eq!(approval(&next).unwrap().attempt.sequence, 2);
     let roundtrip: Plan = serde_json::from_slice(&serde_json::to_vec(&next).unwrap()).unwrap();
@@ -130,7 +148,7 @@ fn explicit_sequence_binds_exact_observation_without_rewriting_old_approvals() {
         let PlanAction::UpgradeStore { sequence, .. } = &mut next.action else {
             unreachable!()
         };
-        *sequence = Some(invalid);
+        *sequence = invalid;
         assert!(next.validate().is_err());
     }
     let restored: Plan = serde_json::from_slice(&old_bytes).unwrap();
@@ -168,10 +186,10 @@ fn recovery_keeps_expired_effect_authority_and_cannot_select_advance() {
         plan.store_upgrade_root().unwrap().canister
     );
     assert_eq!(read.method, "observe_store_maintenance");
-    ic_wire::decode::<()>(
+    ic_wire::decode::<Option<wire::Approval>>(
         &read.args,
         ic_wire::Encoding::Frame {
-            method: wire::OBSERVE,
+            method: wire::READ_ATTEMPT,
             direction: ic_wire::Direction::Request,
         },
         wire::LIMITS,
@@ -193,7 +211,7 @@ fn recovery_keeps_expired_effect_authority_and_cannot_select_advance() {
         ic_wire::decode::<wire::Approval>(
             &recover.args,
             ic_wire::Encoding::Frame {
-                method: wire::ADVANCE,
+                method: wire::MAINTAIN,
                 direction: ic_wire::Direction::Request
             },
             wire::LIMITS

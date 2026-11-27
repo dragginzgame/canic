@@ -64,8 +64,19 @@ fn frame<T: Serialize>(method: u64, input: &T) -> Vec<u8> {
 struct Client<'a> {
     pic: &'a PocketIc,
     canister: CanisterId,
+    update_method: &'static str,
+    management_method: &'static str,
 }
-impl Client<'_> {
+impl<'a> Client<'a> {
+    fn current(pic: &'a PocketIc, canister: CanisterId) -> Self {
+        Self {
+            pic,
+            canister,
+            update_method: "canic_blob_update",
+            management_method: "canic_blob_management",
+        }
+    }
+
     async fn update<T: Serialize, R: DeserializeOwned>(
         &self,
         caller: CanisterId,
@@ -113,7 +124,7 @@ impl Client<'_> {
     }
 
     async fn command(&self, caller: CanisterId, input: Command) -> Result<Outcome, BlobError> {
-        self.update(caller, "blob_update", blob::UPDATE, &input)
+        self.update(caller, self.update_method, blob::UPDATE, &input)
             .await
     }
 
@@ -144,7 +155,7 @@ impl Client<'_> {
     async fn management(&self) -> ManagementView {
         self.update::<_, Result<ManagementView, BlobError>>(
             actor(8),
-            "blob_management",
+            self.management_method,
             blob::MANAGEMENT,
             &(),
         )
@@ -173,7 +184,7 @@ impl Client<'_> {
     async fn inspect_upload(&self, caller: CanisterId, n: u128) -> Result<Observation, BlobError> {
         self.query(
             caller,
-            "blob_query",
+            "canic_blob_query",
             blob::QUERY,
             &Inspection::Upload(id(n)),
         )
@@ -194,7 +205,7 @@ impl Client<'_> {
 
     async fn ready(&self) -> bool {
         let state: canic::readiness::State = self
-            .update(actor(8), "readiness", canic::readiness::METHOD, &())
+            .update(actor(8), "canic_readiness", canic::readiness::METHOD, &())
             .await;
         state == canic::readiness::State::Ready
     }
@@ -219,7 +230,7 @@ async fn install_bytes(pic: &PocketIc, wasm: Vec<u8>) -> Client<'_> {
         Some(actor(9)),
     )
     .await;
-    Client { pic, canister }
+    Client::current(pic, canister)
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -232,6 +243,11 @@ async fn registry_blob_refuses_incompatible_populated_predecessor() {
         include_bytes!("../fixtures/blob-catalog-01006.wasm").to_vec(),
     )
     .await;
+    let client = Client {
+        update_method: "blob_update",
+        management_method: "blob_management",
+        ..client
+    };
     first(&client).await;
     client
         .authorize(actor(2), &client.draft(2).await)
@@ -390,7 +406,12 @@ async fn captured_users_share_one_object_without_application_authority_leaking()
         Err(BlobError::Denied)
     );
     let denied: Result<Observation, BlobError> = client
-        .query(actor(1), "blob_query", blob::QUERY, &Inspection::Usage)
+        .query(
+            actor(1),
+            "canic_blob_query",
+            blob::QUERY,
+            &Inspection::Usage,
+        )
         .await;
     assert_eq!(denied, Err(BlobError::Denied));
     assert_eq!(pic.get_stable_memory(client.canister).await, before);
@@ -568,19 +589,19 @@ async fn malformed_frames_at_actual_mounts_leave_all_state_unchanged() {
     let before = pic.get_stable_memory(client.canister).await;
     let methods = [
         (
-            "blob_update",
+            "canic_blob_update",
             blob::UPDATE,
             frame(blob::UPDATE, &Command::Release(id(1))),
             false,
         ),
         (
-            "blob_query",
+            "canic_blob_query",
             blob::QUERY,
             frame(blob::QUERY, &Inspection::Upload(id(1))),
             true,
         ),
         (
-            "blob_management",
+            "canic_blob_management",
             blob::MANAGEMENT,
             frame(blob::MANAGEMENT, &()),
             false,

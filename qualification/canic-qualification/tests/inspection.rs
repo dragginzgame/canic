@@ -29,9 +29,9 @@ fn inventory_matches_built_hub_and_shard() {
                 .map(|(&name, m)| (name, m.mode))
                 .collect::<Vec<_>>()
         );
-        assert_eq!(inventory["readiness"].id, canic::readiness::METHOD);
+        assert_eq!(inventory["canic_readiness"].id, canic::readiness::METHOD);
         assert_eq!(
-            inventory["portable_session_read"].id,
+            inventory["canic_portable_session_read"].id,
             canic::auth::protocol::ReadSession::ID
         );
         if role == "hub" {
@@ -59,25 +59,25 @@ fn supplier_mounts_register_their_public_wire_contracts() {
     for (actor, name, mode, id) in [
         (
             "canic_asset_catalog",
-            "blob_update",
+            "canic_blob_update",
             "update",
             canic::blob::UPDATE,
         ),
         (
             "canic_asset_catalog",
-            "blob_query",
+            "canic_blob_query",
             "query",
             canic::blob::QUERY,
         ),
         (
             "canic_asset_catalog",
-            "blob_management",
+            "canic_blob_management",
             "update",
             canic::blob::MANAGEMENT,
         ),
         (
             "canic",
-            "metrics",
+            "canic_metrics",
             "query",
             <canic::metrics::ReadMetrics as canic::method::Contract>::ID,
         ),

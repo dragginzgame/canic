@@ -54,7 +54,7 @@ async fn pool_recovers_exact_blocks_across_lost_reply_and_upgrade() {
         };
         let bytes = ic_wire::encode(&(), frame(Direction::Request), REQUEST_LIMITS).unwrap();
         let reply = pic
-            .update_call(miner, CanisterId::anonymous(), "readiness", bytes)
+            .update_call(miner, CanisterId::anonymous(), "canic_readiness", bytes)
             .await
             .unwrap();
         ic_wire::decode::<State>(&reply, frame(Direction::Response), RESPONSE_LIMITS).unwrap()

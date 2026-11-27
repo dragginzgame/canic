@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -430,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -461,7 +461,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -471,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -489,7 +489,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -608,7 +608,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -628,6 +628,7 @@ dependencies = [
  "canic",
  "ic-db",
  "ic-platform-runtime",
+ "ic-storage",
  "toko-tooling",
 ]
 
@@ -651,9 +652,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.11.3"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02f0e023adb368345ce0ca6cdfc0f24a06554468d0e8503e14a0841de79bfa69"
+checksum = "95e45cf2980b2d467be49a9ed942c9179b701063a7ca3d037de7ee9bd67f8d66"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1194,7 +1195,7 @@ dependencies = [
 
 [[package]]
 name = "example-counter"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "canic",
  "clap",
@@ -1208,7 +1209,7 @@ dependencies = [
 
 [[package]]
 name = "example-miner-pool-hub"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "canic",
  "clap",
@@ -1222,7 +1223,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-hub"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "canic",
  "example-user-directory-schema",
@@ -1232,7 +1233,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-schema"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -1242,7 +1243,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-shard"
-version = "0.274.0"
+version = "0.275.0"
 dependencies = [
  "canic",
  "example-user-directory-schema",
@@ -1283,9 +1284,9 @@ checksum = "64cd1e32ddd350061ae6edb1b082d7c54915b5c672c389143b9a63403a109f24"
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
+checksum = "3e44f110d1777dc6559a51e7d45083945ded4f1bf3305494350f693b6d20b9c8"
 
 [[package]]
 name = "flate2"
@@ -1647,17 +1648,21 @@ dependencies = [
 
 [[package]]
 name = "ic-blob-storage"
-version = "0.113.0"
+version = "0.113.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "451a908de747507a8f15cab68d6ed7f8f271388a92e19d71c2ce61709c765a69"
+checksum = "52c622bfca0dea2c7a275849182882980648f475ee9880e1aa1036e98390d764"
 dependencies = [
  "ic-logging",
  "ic-metrics",
  "ic-platform-types",
  "ic-storage",
  "ic-wire",
+ "proc-macro2",
+ "quote",
  "serde",
+ "serde_json",
  "sha2 0.11.2",
+ "syn 3.0.10",
 ]
 
 [[package]]

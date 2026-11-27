@@ -49,8 +49,8 @@ async fn fleet_reserve_fills_replenishes_and_imports_once() {
     )
     .await;
     let fleet = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
-        fleet.subnet_child_limit = Some(7);
-        let w = fleet.worker_pools.first_mut().unwrap();
+        fleet.policy.subnet_child_limit = Some(7);
+        let w = fleet.policy.worker_pools.first_mut().unwrap();
         w.creation_budget = 15 * management::CREATION_CYCLES;
         let spending_deadline = w.expires_at_ns.unwrap();
         w.expires_at_ns = Some(spending_deadline + 7_200_000_000_000);

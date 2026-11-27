@@ -66,18 +66,25 @@ async fn discovers_nine_children_without_local_deployment_records() {
         "canisters":{"root":{"role":"root"}},
         "fleets":{"local":{
             "network":{"kind":"Local","url":url,"root_key":key,"root_subnet":pic.topology().await.get_nns().unwrap().to_text(),"routing_canister":root.to_text()},
-            "journal":"journal","canisters":{"root":{"id":root.to_text(),"profile_manager":true}}
+            "journal":"journal","canisters":{"root":{"id":root.to_text()}}
         }}
     }}});
     std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
-    let show = |report: &std::path::Path| {
+    let show = |manager: &str, report: &std::path::Path| {
         cli(
             &config,
-            &["fleet", "show", "--html", report.to_str().unwrap()],
+            &[
+                "fleet",
+                "show",
+                "--manager",
+                manager,
+                "--html",
+                report.to_str().unwrap(),
+            ],
         )
     };
     let stable = pic.get_stable_memory(root).await;
-    let empty = show(&directory.join("empty.html"));
+    let empty = show(&root.to_text(), &directory.join("empty.html"));
     assert_eq!(empty["canisters"].as_array().unwrap().len(), 1);
     assert_eq!(empty["managers"].as_array().unwrap().len(), 0);
     assert_eq!(empty["issues"], serde_json::json!([]));
@@ -114,7 +121,7 @@ async fn discovers_nine_children_without_local_deployment_records() {
         let stable = pic.get_stable_memory(root).await;
         pic.auto_progress().await;
         let report = directory.join(format!("after-slot-{}.html", slot.index() + 1));
-        let observed = show(&report);
+        let observed = show(&root.to_text(), &report);
         assert_eq!(observed["operations"], serde_json::json!([]));
         assert_eq!(observed["issues"], serde_json::json!([]));
         assert_eq!(
@@ -149,7 +156,15 @@ async fn discovers_nine_children_without_local_deployment_records() {
         Err(Refusal::Occupied)
     );
     let output = std::process::Command::new(std::env::var_os("CANIC_CLI").unwrap())
-        .args(["fleet", "show", "--color", "never", "--config"])
+        .args([
+            "fleet",
+            "show",
+            "--manager",
+            &root.to_text(),
+            "--color",
+            "never",
+            "--config",
+        ])
         .arg(&config)
         .output()
         .unwrap();
@@ -184,7 +199,7 @@ async fn discovers_nine_children_without_local_deployment_records() {
         serde_json::json!(old.to_text());
     std::fs::write(&config, toml::to_string(&value).unwrap()).unwrap();
     let stable = pic.get_stable_memory(old).await;
-    let unknown = show(&directory.join("older-root.html"));
+    let unknown = show(&old.to_text(), &directory.join("older-root.html"));
     assert_eq!(unknown["canisters"].as_array().unwrap().len(), 1);
     assert_eq!(unknown["managers"].as_array().unwrap().len(), 1);
     assert!(unknown["managers"][0]["reported"].is_object());

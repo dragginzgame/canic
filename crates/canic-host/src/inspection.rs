@@ -67,7 +67,7 @@ impl InspectionClient {
     /// Propagates deadline, transport and signature-verification failures.
     pub async fn inspect(&self, payload: &[u8], timeout: Duration) -> Result<Vec<u8>> {
         let (expiry, time) = network::context()?;
-        let method = "db_inspect";
+        let method = "canic_db_inspect";
         tokio::time::timeout(timeout, async {
             match &self.caller {
                 Caller::Anonymous => {

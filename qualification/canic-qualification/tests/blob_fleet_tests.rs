@@ -182,7 +182,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         ],
     );
     let id = planned["operation"].as_str().unwrap();
-    assert_eq!(planned["plan"]["version"], 6);
+    assert_eq!(planned["plan"]["version"], 1);
     let original_plan = std::fs::read(dir.join("journal").join(id).join("plan.json")).unwrap();
     // Apply consumes the approved record, never rereads this now-corrupt input file.
     std::fs::write(&args_path, [255]).unwrap();
@@ -230,10 +230,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         std::fs::read(dir.join("journal").join(id).join("plan.json")).unwrap(),
         original_plan
     );
-    let client = Client {
-        pic: owner.client(),
-        canister: child,
-    };
+    let client = Client::current(owner.client(), child);
     let draft = client.draft(1).await;
     let entry = client.authorize(actor(1), &draft).await.unwrap();
     assert_eq!(entry.request.uploader.as_slice(), actor(1).as_slice());

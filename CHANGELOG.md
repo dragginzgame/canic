@@ -1,5 +1,69 @@
 # Changelog
 
+## [0.275.0] - 2026-11-27
+
+Canic adopts Blob Storage 0.113.1. Native endpoint inspection uses the
+supplier’s Wire schemas for Blob updates, queries and management observations.
+
+```sh
+# From the checkout, verify the three mounted Blob contracts locally.
+cargo test --locked --manifest-path qualification/Cargo.toml -p canic-asset-catalog --lib blob_mounts_describe_both_wire_directions
+```
+
+All Host approvals now use version 1. The approval digest binds the named
+operation contract, including the whole-fleet plan. Store maintenance also
+binds its exact attempt sequence. Individual plans encode the operation name in
+`action.contract` and its typed fields in `action.approval`. Fleet plans require
+a Wasm Store and a release per child. Child approvals require a Store source
+and a permanent slot. Root maintenance lists child custody in slot order.
+Use a fresh journal for new fleets. Existing
+journals require their original Host to inspect or finish pending operations.
+
+```sh
+# From the checkout, verify that untagged Host and fleet approvals are refused.
+cargo test --locked -p canic-host untagged
+```
+
+Declare Auth grants as `[[apps.APP.fleets.FLEET.auth]]`, including single grants.
+Replace the retired `profile_manager` binding with an explicit `--manager PRINCIPAL`
+on `fleet show`. Other policy keys stay at their existing TOML paths. Native Rust
+consumers access shared fleet settings through `fleet.policy`.
+
+Direct callers of `role::open_hub` and `role::open_shard` pass an application
+`StorageGroup { authority, prefix, keys }` followed by a supplier slice (`&[]`
+when empty). The lifecycle mount supplies these arguments for ordinary roles.
+
+```sh
+# From the checkout with the matching CLI, list bindings without network calls.
+canic fleet canister list --config qualification/fixtures/profile-mainnet.toml
+# Observe the explicitly selected manager on mainnet.
+canic fleet show --config qualification/fixtures/profile-mainnet.toml --manager rk6n2-wyaaa-aaaad-qmoua-cai
+```
+
+Stateful hubs and shards can include supplier-owned storage alongside DB and
+Auth. A matching upgrade reopens the retained keys. Changing the key set
+requires migration.
+
+```sh
+# With qualification-setup complete, exercise DB, Auth and Blob on a local shard.
+bash scripts/dev/test-store.sh db-roles
+```
+
+Canic-supplied application mounts now export `canic_*` names, including
+`canic_readiness`, `canic_metrics`, `canic_logs` and the Auth, DB, Blob
+and directory mounts. Update direct callers and regenerate Wire clients when
+rebuilding fleets. The endpoint frame IDs and payloads are preserved.
+
+The build table shows total callable exports under `EPS` and the included
+Canic mounts in parentheses under the same heading. All Root and Wasm Store endpoints count as supplied, so their rows read
+`52 (52)` and `14 (14)` when their artifacts export 52 and 14 endpoints.
+
+```sh
+# From the checkout with the matching CLI, build the example and inspect its exports.
+canic app build --config apps/examples/metrics/canic.toml
+canic artifact endpoints apps/examples/metrics/artifacts/app.wasm
+```
+
 ## [0.274.0] - 2026-11-26
 
 Both workspaces adopt Toko Tooling 0.46.9 and Wasm Store 0.11.0. Root and

@@ -58,7 +58,7 @@ pub(super) fn require_legacy() {
 /// Refuses changed arguments, invalid authority or exhausted custody.
 /// # Panics
 /// Traps for noncontrollers or failed durable writes.
-pub fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Status, Refusal> {
+fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Status, Refusal> {
     assert!(api::is_controller(&api::caller()), "controller required");
     if super::store_maintenance::active() {
         return Err(Refusal::Occupied);
@@ -184,7 +184,7 @@ pub(super) fn admit_creation(
 /// Reconcile the original complete creation without renewing authority.
 /// # Panics
 /// Traps for noncontrollers or changed bindings.
-pub async fn reconcile(slot: ChildId, input: application::Stage<Approval>) -> Status {
+async fn reconcile(slot: ChildId, input: application::Stage<Approval>) -> Status {
     assert!(api::is_controller(&api::caller()), "controller required");
     assert_eq!(
         lifecycle(slot).expect("application custody").creation,
@@ -249,7 +249,7 @@ pub(super) fn upgrade_matches(slot: ChildId, input: &application::Upgrade) -> bo
 /// # Panics
 /// Traps for noncontrollers and failed durable writes.
 #[cfg(feature = "blob")]
-pub fn stage_upgrade(
+fn stage_upgrade(
     slot: ChildId,
     input: application::Upgrade,
 ) -> Result<canic_management_protocol::upgrade::Status, Refusal> {
@@ -260,7 +260,7 @@ pub fn stage_upgrade(
 /// # Panics
 /// Traps for unauthorized or mismatched input.
 #[cfg(feature = "blob")]
-pub async fn reconcile_upgrade(
+async fn reconcile_upgrade(
     slot: ChildId,
     input: application::Upgrade,
 ) -> canic_management_protocol::upgrade::Status {

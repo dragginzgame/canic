@@ -103,7 +103,7 @@ async fn maintain_root(
     assert_eq!(planned["action"], "maintenance", "{planned}");
     let id = planned["operation"].as_str().unwrap();
     let path = dir.join("journal").join(id);
-    let sources = planned["plan"]["maintenance_store"]["sources"]
+    let sources = planned["plan"]["action"]["approval"]["store"]["sources"]
         .as_array()
         .unwrap();
     assert_eq!(
@@ -280,7 +280,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     let id = planned["operation"].as_str().unwrap();
     let path = dir.join("journal").join(id);
     assert_eq!(
-        planned["fleet_plan"]["root"]["creation_cycles"],
+        planned["fleet_plan"]["root"]["action"]["approval"]["cycles"],
         4_000_000_000_000_u64
     );
     assert_eq!(
@@ -879,8 +879,14 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     );
     let bootstrap_id = bootstrap["operation"].as_str().unwrap();
     let bootstrap_dir = dir.join("journal").join(bootstrap_id);
-    assert_eq!(bootstrap["plan"]["creation_cycles"], 1_000_000_000_000_u64);
-    assert_eq!(bootstrap["plan"]["store_root"]["canister"], root.to_text());
+    assert_eq!(
+        bootstrap["plan"]["action"]["approval"]["cycles"],
+        1_000_000_000_000_u64
+    );
+    assert_eq!(
+        bootstrap["plan"]["action"]["approval"]["root"]["canister"],
+        root.to_text()
+    );
     // Changed Root control must refuse before any creation signing.
     owner
         .client()
@@ -1239,7 +1245,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     let child_id = child_plan["operation"].as_str().unwrap();
     let child_dir = dir.join("journal").join(child_id);
     assert_eq!(
-        child_plan["plan"]["management"]["source"]["manifest"]["release"]["version"],
+        child_plan["plan"]["action"]["approval"]["source"]["manifest"]["release"]["version"],
         "v1"
     );
     // A changed Store controller must fail before child admission is signed.
@@ -1341,7 +1347,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     assert_eq!(status["delivery"]["reference"]["store"], store.to_text());
     assert_eq!(
         status["delivery"]["reference"]["manifest"],
-        status["plan"]["management"]["source"]["manifest"]
+        status["plan"]["action"]["approval"]["source"]["manifest"]
     );
     assert!(status["delivery"]["cache_deadline"].as_u64().is_some());
     let creation_delivery = status["delivery"].clone();
@@ -1395,7 +1401,7 @@ async fn bootstrap_store_then_publish_resume_and_retain_versions() {
     assert_eq!(status["delivery"]["state"], "Retained");
     assert_eq!(
         status["delivery"]["reference"]["manifest"],
-        status["plan"]["management"]["source"]["manifest"]
+        status["plan"]["action"]["approval"]["owner"]["source"]["manifest"]
     );
     assert!(status["delivery"]["cache_deadline"].as_u64().is_some());
     assert_ne!(

@@ -1,5 +1,5 @@
 use super::*;
-use crate::{CanisterConfig, Network, tests::directory};
+use crate::{CanisterConfig, FleetConfig, Network, tests::directory};
 use std::collections::BTreeMap;
 
 fn fixture() -> (std::path::PathBuf, SelectedFleet) {
@@ -49,6 +49,16 @@ fn fixture() -> (std::path::PathBuf, SelectedFleet) {
         expires_at_ns: now + 600_000_000_000,
     }];
     (dir, selected)
+}
+
+#[test]
+fn fleet_toml_requires_an_array_of_receiver_grants() {
+    let (_, fleet) = fixture();
+    let mut value = toml::Value::try_from(&fleet.config).unwrap();
+    let decoded: FleetConfig = value.clone().try_into().unwrap();
+    assert_eq!(decoded.auth, fleet.config.auth);
+    value["auth"] = value["auth"].as_array().unwrap()[0].clone();
+    assert!(value.try_into::<FleetConfig>().is_err());
 }
 
 fn retained_reply(dir: &Path, plan: &Plan, method: &str) -> std::path::PathBuf {
@@ -186,17 +196,11 @@ fn auth_receipts_require_exact_retained_call_and_revocation_does_not_consume_mut
         &crate::signed::tests::controller(),
     )
     .unwrap();
-    assert_eq!(plan.version, crate::plan::AUTH_ACCESS_VERSION);
+    assert_eq!(plan.version, crate::plan::APPROVAL_VERSION);
     let mut legacy = plan.clone();
     legacy.version = 5;
-    assert_ne!(legacy.digest().unwrap(), id);
-    let legacy_path = retained_reply(&dir.join("legacy-fixture"), &legacy, "configure_auth");
-    assert!(
-        execution::receipt(legacy_path.parent().unwrap(), &legacy)
-            .unwrap()
-            .is_some()
-    );
-    assert!(execution::receipt(legacy_path.parent().unwrap(), &plan).is_err());
+    assert!(legacy.digest().is_err());
+    assert!(serde_json::from_value::<Plan>(serde_json::to_value(legacy).unwrap()).is_err());
     let path = retained_reply(&dir, &plan, "grant_auth_access");
     assert!(execution::receipt(&dir.join(&id), &plan).unwrap().is_some());
     selected.config.auth.first_mut().unwrap().issuer = "ryjl3-tyaaa-aaaaa-aaaba-cai".into();
@@ -318,14 +322,15 @@ fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
         application_id = "{}"
         limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns = 60000000000, max_sessions = 7, max_admitted_logins = 10000 }}
     "#, "11".repeat(32), "22".repeat(32))).unwrap();
-    config.receiver_policy = Some(policy);
+    config.policy.receiver_policy = Some(policy);
     let root = "rrkah-fqaaa-aaaaa-aaaaq-cai";
     let args = config
         .receiver_install_args("receiver", root, vec![5, 4])
         .unwrap();
     let decoded = canic::auth::install::Install::decode(&args).unwrap();
     for stale in ["stable", "volatile"] {
-        let mut value = toml::Value::try_from(config.receiver_policy.as_ref().unwrap()).unwrap();
+        let mut value =
+            toml::Value::try_from(config.policy.receiver_policy.as_ref().unwrap()).unwrap();
         value
             .as_table_mut()
             .unwrap()
@@ -343,7 +348,7 @@ fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
             .db_service_install_args("receiver", root, &[5; 16], [7; 32], root)
             .is_err()
     );
-    config.role_receivers.push("receiver".into());
+    config.policy.role_receivers.push("receiver".into());
     for nonce in [&[0; 16][..], &[5; 15][..]] {
         assert!(
             config
@@ -377,19 +382,21 @@ fn fleet_policy_selects_fresh_install_bytes_without_creating_a_grant() {
             .receiver_install_args("receiver", root, vec![0; 4096])
             .is_err()
     );
-    let limits = &mut config.receiver_policy.as_mut().unwrap().limits;
+    let limits = &mut config.policy.receiver_policy.as_mut().unwrap().limits;
     limits.max_admitted_logins = Some(0);
     let error = config
         .receiver_install_args("receiver", root, vec![])
         .unwrap_err();
     assert!(error.to_string().contains("max_admitted_logins = 0"));
     config
+        .policy
         .receiver_policy
         .as_mut()
         .unwrap()
         .limits
         .max_admitted_logins = None;
     config
+        .policy
         .receiver_policy
         .as_mut()
         .unwrap()
@@ -408,7 +415,7 @@ fn receiver_grant_inherits_only_install_identity_and_preserves_its_own_authority
     let config = &mut selected.config;
     config.canisters.get_mut("receiver").unwrap().role = Some("hub".into());
     let original = config.auth[0].clone();
-    config.receiver_policy = Some(ReceiverPolicy {
+    config.policy.receiver_policy = Some(ReceiverPolicy {
         root: original.root.clone(),
         roles: vec!["hub".into()],
         issuer: original.issuer.clone(),

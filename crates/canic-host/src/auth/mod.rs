@@ -27,7 +27,7 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReceiverController {
-    /// Root controls the receiver (the original v5 contract).
+    /// Root controls the receiver.
     #[default]
     Root,
     /// The operator named by the plan controls the receiver independently.
@@ -74,21 +74,6 @@ pub struct AuthConfig {
     pub not_before_ns: u64,
     /// Exclusive authority deadline in Unix nanoseconds.
     pub expires_at_ns: u64,
-}
-
-pub(crate) fn declarations<'de, D: serde::Deserializer<'de>>(
-    input: D,
-) -> std::result::Result<Vec<AuthConfig>, D::Error> {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Declarations {
-        Single(Box<AuthConfig>),
-        Multiple(Vec<AuthConfig>),
-    }
-    Ok(match Declarations::deserialize(input)? {
-        Declarations::Single(grant) => vec![*grant],
-        Declarations::Multiple(grants) => grants,
-    })
 }
 
 fn invalid(message: &str) -> Error {
@@ -281,7 +266,7 @@ pub fn create_receiver_auth_plan(
     let receiver_artifact = artifact::admit_bounded(&receiver_bytes, artifact::MAX_ARTIFACT_BYTES)?;
     let now = crate::now()?;
     let proposed = Plan {
-        version: plan::AUTH_ACCESS_VERSION,
+        version: plan::APPROVAL_VERSION,
         network: selected.config.network.clone(),
         controller: controller.into(),
         action: PlanAction::Auth(Box::new(AuthApproval {

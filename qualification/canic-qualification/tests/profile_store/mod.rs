@@ -427,7 +427,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     let store_upgrade = plan();
     assert_eq!(store_upgrade["action"], "upgrade");
     assert_eq!(
-        store_upgrade["plan"]["store_upgrade_root"]["canister"],
+        store_upgrade["plan"]["action"]["approval"]["root"]["canister"],
         root.to_text()
     );
     let maintained_store = complete(
@@ -468,7 +468,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     let maintenance = plan();
     assert_eq!(maintenance["action"], "maintenance");
     assert_eq!(
-        maintenance["plan"]["maintenance_store"]["sources"][0]["upgrades"]
+        maintenance["plan"]["action"]["approval"]["store"]["sources"][0]["upgrades"]
             .as_array()
             .unwrap()
             .len(),
@@ -535,17 +535,20 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     let next = plan();
     assert_eq!(next["action"], "upgrade");
     assert_ne!(next["operation"], upgrade["operation"]);
-    assert_eq!(next["plan"]["previous_module"], upgraded["module_hash"]);
     assert_eq!(
-        next["plan"]["management"]["root_module"],
+        next["plan"]["action"]["approval"]["target"]["module"],
+        upgraded["module_hash"]
+    );
+    assert_eq!(
+        next["plan"]["action"]["approval"]["owner"]["root_module"],
         maintained["module_hash"]
     );
     assert_eq!(
-        next["plan"]["management"]["source"]["store"]["module"],
+        next["plan"]["action"]["approval"]["owner"]["source"]["store"]["module"],
         maintained_store["module_hash"]
     );
     assert_eq!(
-        next["plan"]["management"]["source"]["maintenance"]["sequence"],
+        next["plan"]["action"]["approval"]["owner"]["source"]["maintenance"]["sequence"],
         1
     );
     let continued = complete(&config, next["operation"].as_str().unwrap(), &signer).await;
@@ -581,7 +584,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
     let addition = plan();
     assert_eq!(addition["action"], "add_child");
-    assert_eq!(addition["plan"]["management"]["slot"], "Second");
+    assert_eq!(addition["plan"]["action"]["approval"]["slot"], "Second");
     let added = complete(&config, addition["operation"].as_str().unwrap(), &signer).await;
     let archive = CanisterId::from_text(added["canister"].as_str().unwrap()).unwrap();
     assert_ne!(archive, child);
@@ -622,7 +625,10 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
     let archive_upgrade = plan();
     assert_eq!(archive_upgrade["action"], "upgrade");
-    assert_eq!(archive_upgrade["plan"]["target"], archive.to_text());
+    assert_eq!(
+        archive_upgrade["plan"]["action"]["approval"]["target"]["canister"],
+        archive.to_text()
+    );
     complete(
         &config,
         archive_upgrade["operation"].as_str().unwrap(),
@@ -651,15 +657,15 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     let maintenance = plan();
     assert_eq!(maintenance["action"], "maintenance");
     assert_eq!(
-        maintenance["plan"]["maintenance"]["creation"]["worker"],
+        maintenance["plan"]["action"]["approval"]["children"][0]["creation"]["worker"],
         child.to_text()
     );
     assert_eq!(
-        maintenance["plan"]["maintenance_sibling"]["creation"]["worker"],
+        maintenance["plan"]["action"]["approval"]["children"][1]["creation"]["worker"],
         archive.to_text()
     );
     assert_eq!(
-        maintenance["plan"]["maintenance_sibling"]["upgrades"]
+        maintenance["plan"]["action"]["approval"]["children"][1]["upgrades"]
             .as_array()
             .unwrap()
             .len(),

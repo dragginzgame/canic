@@ -262,7 +262,7 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
     writeln!(
         output,
         "\nPlanned action: {}\nNetwork: {}\nNetwork binding: {}\nController: {}\nModule: {} ({} bytes)\nCreation debit ceiling: {} cycles\nNew-effect deadline: {} Unix seconds ({})",
-        match plan.action { canic_host::PlanAction::Call(_) => unreachable!("call rendered above"), canic_host::PlanAction::Auth(_) => "configure or revoke exact Auth grant (no deployment)", canic_host::PlanAction::Remove(_) => "remove exact Store release (no deployment)", canic_host::PlanAction::UpgradeStore { .. } => "Root upgrades Store, preserving its closed catalog and pins", canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::Create {..} => "create and install canister" },
+        match plan.action { canic_host::PlanAction::Call(_) => unreachable!("call rendered above"), canic_host::PlanAction::Auth(_) => "configure or revoke exact Auth grant (no deployment)", canic_host::PlanAction::Remove(_) => "remove exact Store release (no deployment)", canic_host::PlanAction::UpgradeStore { .. } => "Root upgrades Store, preserving its closed catalog and pins", canic_host::PlanAction::CreateStore { .. } => "create Store, hand control to Root and verify readiness", canic_host::PlanAction::Publish(_) => "publish artifact to Store (no deployment)", canic_host::PlanAction::MaintainRoot {..} => "upgrade Root, preserving child custody", canic_host::PlanAction::UpgradeChild {..} => "Root upgrades its existing child", canic_host::PlanAction::CreateChild(_) => "Root creates and installs its child", canic_host::PlanAction::Upgrade(_) => "upgrade existing canister", canic_host::PlanAction::BootstrapRoot {..} => "bootstrap fleet Root", canic_host::PlanAction::Create {..} => "create and install canister" },
         escape(&network),
         plan.network.binding_id()?,
         escape(plan.application_controller()),
@@ -377,7 +377,8 @@ pub(crate) fn render(state: &OperationStatus, journal: &Path) -> Result<String> 
             dispatch(plan.created_at_ns, owner.execute_at_ns)
         )
         .expect("writing to String");
-        if let Some(source) = &owner.source {
+        {
+            let source = &owner.source;
             writeln!(
                 output,
                 "Artifact source: Store {}\nStore module: {}\nRelease: {} / {}",
@@ -497,9 +498,10 @@ fn render_fleet(state: &canic_host::FleetStatus, journal: &Path) -> Result<Strin
         }
     };
     let mut rows = vec![["Root".into(), evidence(Some(&state.root))]];
-    if let Some(store) = &state.store {
-        rows.push([store.name.clone(), evidence(store.state.as_ref())]);
-    }
+    rows.push([
+        state.store.name.clone(),
+        evidence(state.store.state.as_ref()),
+    ]);
     for child in &state.children {
         if let Some(publication) = &child.publication {
             rows.push([
@@ -574,7 +576,8 @@ pub(crate) fn fleet_preview(
         format!("{} debit ceiling", cycles(plan.root.creation_cycles())),
     ]];
     let mut modules = format!("Root module: {}\n", plan.root.artifact.sha256);
-    if let Some(store) = &plan.store {
+    {
+        let store = &plan.store;
         rows.push([
             format!("├─ {}", crate::topology::STORE_BADGE),
             format!("{}.result.canister", root.canister),
@@ -636,7 +639,8 @@ pub(crate) fn fleet_preview(
             )
             .expect("String write");
         }
-        if let Some(release) = &child.release {
+        {
+            let release = &child.release;
             writeln!(
                 modules,
                 "  Store release: {} / {} (publication before child admission)",

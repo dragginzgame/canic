@@ -30,7 +30,7 @@ my $checksum;
   defined $checksum or die 'missing registry archive checksum'; }
 close $checksum_fh;
 my @files = map { "$supplier/$_" } qw(Cargo.toml Cargo.toml.orig .cargo_vcs_info.json);
-find({ no_chdir => 1, wanted => sub { push @files, $File::Find::name if -f $_ } }, "$supplier/src");
+find({ no_chdir => 1, wanted => sub { push @files, $File::Find::name if -f $_ } }, "$supplier/src", "$supplier/build");
 my %hashes;
 for my $path (sort @files) {
     open my $fh, '<:raw', $path or die "$path: $!";

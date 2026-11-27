@@ -157,13 +157,10 @@ async fn directory(revoke: bool, upgrade_after_first: bool) {
     for (name, id) in [("root", root.id), ("store", store.id), ("hub", hub)] {
         local.canisters.insert(
             name.into(),
-            canic_host::CanisterBinding {
-                id: id.to_text(),
-                profile_manager: false,
-            },
+            canic_host::CanisterBinding { id: id.to_text() },
         );
     }
-    let policy = local.shard_pools.first_mut().unwrap();
+    let policy = local.policy.shard_pools.first_mut().unwrap();
     policy.expires_at_ns = Some(now + 600_000_000_000);
     let manifest = store
         .publish_named(
@@ -244,7 +241,12 @@ async fn directory(revoke: bool, upgrade_after_first: bool) {
         let auth = EstablishSession::encode_request(&input).unwrap();
         let login = async |id| {
             let reply = pic
-                .update_call(id, browser, "establish_portable_session", auth.clone())
+                .update_call(
+                    id,
+                    browser,
+                    "canic_establish_portable_session",
+                    auth.clone(),
+                )
                 .await
                 .unwrap();
             EstablishSession::decode_response(&reply).unwrap()
@@ -536,7 +538,7 @@ async fn directory(revoke: bool, upgrade_after_first: bool) {
         .update_call(
             second,
             browser,
-            "establish_portable_session",
+            "canic_establish_portable_session",
             EstablishSession::encode_request(&fresh).unwrap(),
         )
         .await
@@ -720,7 +722,7 @@ async fn check_receipts(
                 .update_call(
                     client.id,
                     browser,
-                    "establish_portable_session",
+                    "canic_establish_portable_session",
                     EstablishSession::encode_request(&input).unwrap(),
                 )
                 .await
@@ -776,7 +778,7 @@ async fn check_receipts(
                 .update_call(
                     client.id,
                     client.operator,
-                    "logout_portable_session",
+                    "canic_logout_portable_session",
                     Logout::encode_request(&()).unwrap(),
                 )
                 .await

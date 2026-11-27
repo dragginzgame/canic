@@ -12,7 +12,7 @@ use ic_platform_runtime::system as api;
 /// Refuses changed bindings, invalid metadata, time or capacity.
 /// # Panics
 /// Traps for noncontrollers or failed durable writes.
-pub fn stage(slot: ChildId, input: stored::Stage<Approval>) -> Result<Status, Refusal> {
+pub(super) fn stage(slot: ChildId, input: stored::Stage<Approval>) -> Result<Status, Refusal> {
     assert!(api::is_controller(&api::caller()), "controller required");
     if super::store_maintenance::active() || super::application::lifecycle(slot).is_some() {
         return Err(Refusal::Occupied);
@@ -48,7 +48,7 @@ pub fn stage(slot: ChildId, input: stored::Stage<Approval>) -> Result<Status, Re
 /// Refuses changed bindings, incomplete prior work, time or capacity.
 /// # Panics
 /// Traps for noncontrollers or failed durable writes.
-pub fn stage_upgrade(
+pub(super) fn stage_upgrade(
     slot: ChildId,
     input: stored::Stage<canic_management_protocol::upgrade::Approval>,
 ) -> Result<canic_management_protocol::upgrade::Status, Refusal> {
@@ -78,7 +78,7 @@ pub(super) fn upgrade_source(
 /// Reconcile only the exact admitted Store-backed creation.
 /// # Panics
 /// Traps for noncontrollers or mismatched complete authority.
-pub async fn reconcile(slot: ChildId, input: stored::Stage<Approval>) -> Status {
+pub(super) async fn reconcile(slot: ChildId, input: stored::Stage<Approval>) -> Status {
     assert!(
         super::application::lifecycle(slot).is_none(),
         "application binding required"
@@ -97,7 +97,7 @@ pub async fn reconcile(slot: ChildId, input: stored::Stage<Approval>) -> Status 
 /// Reconcile only the exact admitted Store-backed upgrade, including history lookup.
 /// # Panics
 /// Traps for noncontrollers or mismatched complete authority.
-pub async fn reconcile_upgrade(
+pub(super) async fn reconcile_upgrade(
     slot: ChildId,
     input: stored::Stage<canic_management_protocol::upgrade::Approval>,
 ) -> canic_management_protocol::upgrade::Status {
@@ -123,19 +123,6 @@ pub fn custody() -> stored::Custody {
         "Store maintenance custody required"
     );
     stored_journals()
-}
-
-/// Observe both child slots, all artifact references and the surviving Store operation.
-/// # Panics
-/// Traps if lifecycle has not opened storage.
-#[must_use]
-pub fn root_custody() -> canic_management_protocol::custody::Root {
-    super::application::require_legacy();
-    assert!(
-        STATE.with_borrow(|state| state.as_ref().expect("open engine").journal.2.is_empty()),
-        "complete Store history required"
-    );
-    current_root_custody()
 }
 
 /// Read all child custody and every retained Store maintenance attempt synchronously.

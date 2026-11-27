@@ -14,7 +14,6 @@ fn setup() -> (std::path::PathBuf, SelectedFleet) {
         "app",
         CanisterBinding {
             id: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
-            ..Default::default()
         },
     )
     .unwrap();

@@ -224,7 +224,7 @@ async fn lost_install_callback_preserves_db_and_original_fleet_operation() {
         pic.query_call(
             child,
             root,
-            "db_query",
+            "canic_db_query",
             frame(QUERY, &query, ic_wire::Direction::Request)
         )
         .await

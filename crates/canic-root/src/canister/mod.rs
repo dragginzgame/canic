@@ -107,7 +107,7 @@ async fn observe_child_metrics(request: (u32, canic::metrics::Request)) -> canic
 
 fn readiness() -> Readiness {
     Readiness {
-        method: "readiness",
+        method: "canic_readiness",
         request: ic_wire::encode(
             &(),
             ic_wire::Encoding::Frame {

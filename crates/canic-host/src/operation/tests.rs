@@ -137,7 +137,7 @@ fn direct_root_installation_has_ingress_headroom_and_a_finite_plan_ceiling() {
         fleet: "local".into(),
         canister: "root".into(),
     });
-    plan.version = crate::plan::CHUNKED_ROOT_VERSION;
+    assert!(plan.chunked_root_install());
     plan.validate().unwrap();
     plan.artifact.bytes = crate::artifact::MAX_ARTIFACT_BYTES;
     plan.validate().unwrap();
@@ -145,7 +145,7 @@ fn direct_root_installation_has_ingress_headroom_and_a_finite_plan_ceiling() {
     assert!(plan.validate().is_err());
     plan.artifact.bytes = crate::artifact::MAX_WASM;
     assert!(
-        plan.validate().is_err(),
+        !plan.chunked_root_install(),
         "small approvals keep their direct transport"
     );
 }
@@ -267,7 +267,7 @@ fn only_a_retained_creation_principal_can_advance_installation() {
 }
 
 #[test]
-fn direct_plan_encodings_keep_their_original_digests() {
+fn direct_plan_digest_binds_deployment_name() {
     let mut plan = plan();
     assert!(
         !serde_json::to_value(&plan)
@@ -276,18 +276,11 @@ fn direct_plan_encodings_keep_their_original_digests() {
             .unwrap()
             .contains_key("management")
     );
-    assert_eq!(
-        plan.digest().unwrap(),
-        "9764c46f9d8e48c6b56215dddf2d53a71c8e656d4d8027b295917affe7eff5ba"
-    );
-    plan.version = 2;
+    let unnamed = plan.digest().unwrap();
     plan.deployment = Some(crate::DeploymentName {
         fleet: "mainnet".into(),
         app: "hello".into(),
         canister: "backend".into(),
     });
-    assert_eq!(
-        plan.digest().unwrap(),
-        "6ef3bfb1ec1a4a16885a158003d0c5331607c8e788f029ae60210d1c32b7a8cb"
-    );
+    assert_ne!(plan.digest().unwrap(), unnamed);
 }

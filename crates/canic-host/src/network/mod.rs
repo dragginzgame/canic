@@ -83,7 +83,9 @@ impl Network {
         Ok(())
     }
 
-    pub(crate) fn url(&self) -> &str {
+    /// Provider URL selected for this network's IC calls.
+    #[must_use]
+    pub fn url(&self) -> &str {
         match self {
             Self::Mainnet => "https://icp-api.io/",
             Self::Local { url, .. } => url,

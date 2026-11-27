@@ -19,16 +19,10 @@ fn slot_summaries_expose_network_and_identity_conflicts_without_erasing_evidence
             app: "app".into(),
             fleet: "demo".into(),
             config: FleetConfig {
-                snapshots: None,
-                receiver_policy: None,
-                top_up_children: vec![],
-                role_receivers: vec![],
-                subnet_child_limit: None,
-                allow_large_subnet: false,
-                registry: None,
+                policy: Default::default(),
+
                 standby_pool: None,
-                worker_pools: Vec::new(),
-                shard_pools: Vec::new(),
+
                 auth: Vec::new(),
                 network: network.clone(),
                 journal: None,

@@ -181,12 +181,12 @@ async fn controller_observes_only_committed_updates_in_this_incarnation() {
     );
     let request = canic::logging::Logs::encode_request(&None).unwrap();
     let denied = pic
-        .update_call(id, CanisterId::anonymous(), "logs", request.clone())
+        .update_call(id, CanisterId::anonymous(), "canic_logs", request.clone())
         .await
         .unwrap_err();
     assert!(denied.reject_message.contains("controller required"));
     let reply = pic
-        .update_call(id, installer, "logs", request)
+        .update_call(id, installer, "canic_logs", request)
         .await
         .unwrap();
     assert!(

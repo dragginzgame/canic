@@ -139,7 +139,7 @@ pub(crate) fn prepare_for_target(
 ) -> Result<(String, Plan)> {
     let now = crate::now()?;
     let plan = Plan {
-        version: 7,
+        version: crate::plan::APPROVAL_VERSION,
         network: fleet.config.network.clone(),
         controller: caller,
         artifact: Artifact {

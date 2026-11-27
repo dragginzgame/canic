@@ -440,16 +440,10 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
         app: "profile".into(),
         fleet: "mainnet".into(),
         config: FleetConfig {
-            snapshots: None,
-            receiver_policy: None,
-            top_up_children: vec![],
-            role_receivers: vec![],
-            subnet_child_limit: None,
-            allow_large_subnet: false,
-            registry: None,
+            policy: Default::default(),
+
             standby_pool: None,
-            worker_pools: Vec::new(),
-            shard_pools: Vec::new(),
+
             auth: Vec::new(),
             network: Network::Mainnet,
             journal: None,
@@ -461,7 +455,7 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
                         CanisterConfig {
                             wasm: None,
                             id: Some((*id).into()),
-                            profile_manager: *name == "manager",
+
                             role: Some(
                                 if *name == "entry" {
                                     "entry"

@@ -24,7 +24,7 @@ both rows unchanged. An upgrade clears the measurements.
 ## Use it in an application
 
 Canic automatically samples completed synchronous `#[canic::update]` handlers
-and mounts the controller-guarded `metrics` query. Write ordinary handlers:
+and mounts the controller-guarded `canic_metrics` query. Write ordinary handlers:
 
 ```rust
 // double
@@ -39,7 +39,7 @@ fn double(value: u32) -> u32 {
 `canic app build` verifies the endpoint instrumentation marker and shared query export in the built
 Wasm before replacing the previous output. The endpoint count includes the standard metrics query. The modules column lists optional mounts. Available readings depend on runtime initialization.
 
-After the first successful call, `double` appears in the shared `metrics`
+After the first successful call, `double` appears in the shared `canic_metrics`
 query when requested with `canic::metrics::Request::Endpoints(None)`.
 The same query accepts `Timers`, `Blob`, `Db`, `Jobs` and `Entropy` requests.
 DB reports query and commit totals. Jobs reports scheduled callback outcomes.

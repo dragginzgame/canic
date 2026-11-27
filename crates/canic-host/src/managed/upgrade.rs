@@ -3,7 +3,7 @@ use super::{complete, stage_evidence, wire::Method};
 use crate::{ApplyOutcome, Error, Plan, Result, network::principal, operation, supplier};
 use canic_management_protocol::{
     LIMITS, Refusal,
-    upgrade::{Approval, OBSERVE, Phase, STATUS, Status},
+    upgrade::{Approval, Phase, Status},
 };
 use std::path::Path;
 
@@ -147,21 +147,6 @@ pub(crate) fn evidence_with_source(
                         },
                         LIMITS,
                     )
-                    .or_else(|error| {
-                        // Historical on-disk unit observations remain readable; no live fallback.
-                        if method == OBSERVE {
-                            ic_wire::decode(
-                                bytes,
-                                ic_wire::Encoding::Frame {
-                                    method: STATUS,
-                                    direction: ic_wire::Direction::Response,
-                                },
-                                LIMITS,
-                            )
-                        } else {
-                            Err(error)
-                        }
-                    })
                     .map_err(supplier)?,
                     None,
                 ))

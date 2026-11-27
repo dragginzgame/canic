@@ -9,6 +9,17 @@ use ic_storage::{
     adapter::StableCell,
 };
 
+/// One participant's declared stable keys and the namespace granted by the host.
+#[derive(Clone, Copy, Debug)]
+pub struct StorageGroup<'a> {
+    /// Owner label used for every allocation request in this group.
+    pub authority: &'a str,
+    /// Dot-terminated namespace granted to this authority.
+    pub prefix: &'a str,
+    /// Complete stable key set declared by this participant.
+    pub keys: &'a [&'a str],
+}
+
 /// Admit the exact set of stable names selected by the actor lifecycle.
 /// # Panics
 /// Traps on a fresh/open mismatch, invalid declarations, or incompatible backing.
@@ -49,39 +60,34 @@ pub fn bootstrap_with_prefix<M: MemoryBacking>(
     keys: &[&str],
     config: StorageConfig,
 ) -> MemoryRuntime<M> {
-    bootstrap_groups(memory, fresh, &[(authority, prefix, keys)], config)
+    bootstrap_groups(
+        memory,
+        fresh,
+        &[StorageGroup {
+            authority,
+            prefix,
+            keys,
+        }],
+        config,
+    )
 }
 
 pub(crate) fn bootstrap_groups<M: MemoryBacking>(
     memory: M,
     fresh: bool,
-    groups: &[(&str, &str, &[&str])],
-    config: StorageConfig,
-) -> MemoryRuntime<M> {
-    admit_groups(open_directory(memory, fresh, config), fresh, groups)
-}
-
-pub(crate) fn open_directory<M: MemoryBacking>(
-    memory: M,
-    fresh: bool,
+    groups: &[StorageGroup<'_>],
     config: StorageConfig,
 ) -> MemoryRuntime<M> {
     assert_eq!(memory.size() == 0, fresh, "storage lifecycle mismatch");
-    MemoryRuntime::new_with_config(memory, config).expect("open storage directory")
-}
-
-pub(crate) fn admit_groups<M: MemoryBacking>(
-    mut runtime: MemoryRuntime<M>,
-    fresh: bool,
-    groups: &[(&str, &str, &[&str])],
-) -> MemoryRuntime<M> {
+    let mut runtime =
+        MemoryRuntime::new_with_config(memory, config).expect("open storage directory");
     if !fresh {
         assert_eq!(
             runtime.memory_allocations().expect("directory").len(),
-            groups.iter().map(|(_, _, keys)| keys.len()).sum::<usize>(),
+            groups.iter().map(|group| group.keys.len()).sum::<usize>(),
             "storage membership"
         );
-        for key in groups.iter().flat_map(|(_, _, keys)| *keys) {
+        for key in groups.iter().flat_map(|group| group.keys.iter().copied()) {
             assert!(
                 runtime
                     .allocation_id(&StableKey::parse(key).expect("stable key"))
@@ -92,14 +98,16 @@ pub(crate) fn admit_groups<M: MemoryBacking>(
     }
     let requests = groups
         .iter()
-        .flat_map(|(owner, _, keys)| {
-            keys.iter()
-                .map(|key| MemoryRequest::new(*owner, key).expect("request"))
+        .flat_map(|group| {
+            group
+                .keys
+                .iter()
+                .map(|key| MemoryRequest::new(group.authority, key).expect("request"))
         })
         .collect();
     let grants = groups
         .iter()
-        .map(|(owner, prefix, _)| MemoryAuthority::new(*owner, *prefix).expect("authority"))
+        .map(|group| MemoryAuthority::new(group.authority, group.prefix).expect("authority"))
         .collect();
     runtime
         .bootstrap(

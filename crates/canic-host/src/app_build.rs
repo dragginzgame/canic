@@ -26,6 +26,8 @@ pub struct BuiltCanister {
     pub parent: Option<String>,
     /// Number of callable query, composite query and update exports.
     pub endpoint_count: usize,
+    /// Callable exports explicitly marked by Canic mounts.
+    pub canic_endpoint_count: usize,
     /// Mounts declared by the built Wasm.
     pub modules: Vec<&'static str>,
     /// Elapsed time for the canister recipe, including any native codec.
@@ -164,6 +166,7 @@ pub fn build_app(
             wasm,
             artifact,
             endpoint_count,
+            canic_endpoint_count,
             modules,
         } = crate::artifact::build_for_role(
             &manifest,
@@ -195,6 +198,7 @@ pub fn build_app(
             parent: definition.parent.clone(),
             role: definition.role.clone(),
             endpoint_count,
+            canic_endpoint_count,
             modules,
             build_ms: started.elapsed().as_millis(),
             artifact,

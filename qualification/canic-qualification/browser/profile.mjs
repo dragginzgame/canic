@@ -53,7 +53,7 @@ async function setup(config, { device = 9, accountSeed = 8, operationId = device
     admit: async (...args) => {
       flow.counts.admit++;
       flow.admission = new Uint8Array(args[2]);
-      const bytes = await raw('establish_portable_session')(...args);
+      const bytes = await raw('canic_establish_portable_session')(...args);
       flow.admissionReply = Array.from(bytes);
       if (loseAdmission) { loseAdmission = false; throw new Error('lost admission reply'); }
       return bytes;

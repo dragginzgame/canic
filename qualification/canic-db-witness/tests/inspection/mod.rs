@@ -119,7 +119,7 @@ async fn signed_inspection_tracks_authority_and_admission_across_upgrades() {
         String::from_utf8_lossy(&result.stderr)
     );
     let table = String::from_utf8(result.stdout).unwrap();
-    assert_eq!(table.matches("query call (db_inspect)").count(), 1);
+    assert_eq!(table.matches("query call (canic_db_inspect)").count(), 1);
     assert!(table.contains("Executable schema") && table.contains("Readable"));
     assert_eq!(peer.get_stable_memory(target).await, before);
     peer.stop_live().await;

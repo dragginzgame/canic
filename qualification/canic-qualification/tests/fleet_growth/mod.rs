@@ -146,7 +146,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
     let addition = plan(&dispatch);
     assert_eq!(addition["action"], "add_child", "{addition}");
     assert_eq!(
-        addition["plan"]["management"]["slot"],
+        addition["plan"]["action"]["approval"]["slot"],
         serde_json::to_value(canic_management_protocol::children::ChildId::HISTORICAL_SERVICES[2],)
             .unwrap(),
         "{addition}"
@@ -269,7 +269,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
             args.extend(["--release", &releases[round % 2]]);
             run(&dir, &args)
         };
-        let root_module = addition["plan"]["management"]["root_module"]
+        let root_module = addition["plan"]["action"]["approval"]["root_module"]
             .as_str()
             .unwrap();
         let previous_module = predecessor["module_hash"].as_str().unwrap();
@@ -320,22 +320,25 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
             named_upgrade
         );
         assert_eq!(
-            named_upgrade["plan"]["management"]["source"]["maintenance"]["sequence"],
+            named_upgrade["plan"]["action"]["approval"]["owner"]["source"]["maintenance"]["sequence"],
             1
         );
         save(&config);
         let upgrade = plan(&dispatch);
         assert_eq!(upgrade["action"], "upgrade");
         assert_eq!(upgrade["operation"], named_upgrade["operation"]);
-        assert_eq!(upgrade["plan"]["target"], second);
+        assert_eq!(
+            upgrade["plan"]["action"]["approval"]["target"]["canister"],
+            second
+        );
         assert_eq!(cli(&dir, &["fleet", "artifact", "list"]), publications);
         let upgrade_id = upgrade["operation"].as_str().unwrap();
         assert!(!approvals.iter().any(|(id, _, _)| id == upgrade_id));
         if round == 3 {
             // The code pair matches the second upgrade; the schedule/digest must be new.
             assert_eq!(
-                upgrade["plan"]["previous_module"],
-                approvals[1].1["plan"]["previous_module"]
+                upgrade["plan"]["action"]["approval"]["target"]["module"],
+                approvals[1].1["plan"]["action"]["approval"]["target"]["module"]
             );
             assert_eq!(
                 upgrade["plan"]["artifact"],
@@ -392,14 +395,14 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
     let maintenance = plan(&scheduled(owner.client()).await);
     assert_eq!(maintenance["action"], "maintenance");
     assert_eq!(
-        maintenance["plan"]["maintenance"]["creation"]["worker"],
+        maintenance["plan"]["action"]["approval"]["children"][0]["creation"]["worker"],
         first
     );
     assert_eq!(
-        maintenance["plan"]["maintenance_sibling"]["creation"]["worker"],
+        maintenance["plan"]["action"]["approval"]["children"][1]["creation"]["worker"],
         original["children"][1]["outcome"]["canister"]
     );
-    let added_custody = &maintenance["plan"]["maintenance_additional"][0];
+    let added_custody = &maintenance["plan"]["action"]["approval"]["children"][2];
     assert_eq!(added_custody["creation"]["worker"], second);
     assert_eq!(added_custody["upgrades"].as_array().unwrap().len(), 4);
     let stable = owner.client().get_stable_memory(root).await;

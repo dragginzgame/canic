@@ -418,6 +418,7 @@ impl FleetConfig {
         arguments: canic_management_protocol::application::Arguments,
     ) -> Result<stored::ShardPool> {
         let policy = self
+            .policy
             .shard_pools
             .iter()
             .find(|pool| pool.component == component)
@@ -473,6 +474,7 @@ impl FleetConfig {
             return Ok(arguments);
         }
         if self
+            .policy
             .receiver_policy
             .as_ref()
             .is_none_or(|p| p.root != root_slot)

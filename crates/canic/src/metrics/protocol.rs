@@ -128,8 +128,8 @@ pub enum Report {
 pub struct ReadMetrics;
 
 impl crate::method::Contract for ReadMetrics {
-    const NAME: &'static str = "metrics";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const NAME: &'static str = "canic_metrics";
+    const ID: u64 = ic_wire::method_id("metrics");
     const REQUEST: ic_wire::Limits = ic_wire::Limits {
         bytes: 512,
         allocation: 16_384,

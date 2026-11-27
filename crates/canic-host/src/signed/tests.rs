@@ -54,20 +54,7 @@ pub(crate) fn controller() -> String {
 }
 
 fn child_source() -> crate::StoredArtifact {
-    crate::StoredArtifact {
-        maintenance: None,
-        store: crate::UpgradeTarget {
-            canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
-            module: "22".repeat(32),
-        },
-        manifest: crate::publication::release_manifest(
-            ic_wasm_store_protocol::Release {
-                name: "child".into(),
-                version: "v1".into(),
-            },
-            b"test",
-        ),
-    }
+    crate::tests::stored_source("child", b"test")
 }
 
 fn public_key() -> Vec<u8> {
@@ -123,7 +110,7 @@ fn fixture() -> (Vec<u8>, Plan, Call<'static>) {
 #[tokio::test]
 async fn maintenance_observation_cannot_sign_another_root_or_effect() {
     let (_, mut plan, mut call) = fixture();
-    plan.version = 2;
+    plan.version = 1;
     plan.action = crate::PlanAction::MaintainRoot {
         store: None,
         target: crate::UpgradeTarget {
@@ -199,10 +186,11 @@ async fn maintenance_observation_cannot_sign_another_root_or_effect() {
 async fn recovery_retains_exact_attempt_and_deadline_after_effect_expiry() {
     let (_, mut plan, _) = fixture();
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        child_evidence_only: false,
         arguments: None,
         blob_attempt: None,
-        source: Some(child_source()),
-        slot: None,
+        source: child_source(),
+        slot: canic_management_protocol::children::ChildId::FIRST,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
         execute_at_ns: 1,
@@ -504,10 +492,11 @@ async fn expired_uncertain_attempt_stays_retained_without_a_new_signature() {
 async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
     let (_, mut plan, mut call) = fixture_expiry(false);
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        child_evidence_only: false,
         arguments: None,
         blob_attempt: None,
-        source: Some(child_source()),
-        slot: None,
+        source: child_source(),
+        slot: canic_management_protocol::children::ChildId::FIRST,
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
         execute_at_ns: 1,
@@ -575,13 +564,14 @@ async fn observation_authority_cannot_dispatch_effects_after_approval_expiry() {
 async fn stored_observation_rejects_other_contracts_before_signing() {
     let (_, mut plan, _) = fixture();
     plan.action = crate::PlanAction::CreateChild(crate::ManagedOwner {
+        child_evidence_only: false,
         arguments: None,
         blob_attempt: None,
-        source: Some(child_source()),
+        source: child_source(),
         root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
         root_module: "00".repeat(32),
         execute_at_ns: 1,
-        slot: Some(canic_management_protocol::children::ChildId::SECOND),
+        slot: canic_management_protocol::children::ChildId::SECOND,
     });
     let client = plan.network.client().unwrap();
     let dir = crate::tests::directory();
@@ -608,7 +598,7 @@ async fn stored_observation_rejects_other_contracts_before_signing() {
 async fn publication_read_authority_survives_effect_expiry_without_renewing_mutations() {
     let (_, mut plan, _) = fixture();
     let now = crate::now().unwrap();
-    plan.version = 3;
+    plan.version = 1;
     plan.created_at_ns = now - 3_600_000_000_000;
     plan.expires_at_ns = now - 1;
     plan.deployment = Some(crate::DeploymentName {
@@ -675,7 +665,7 @@ async fn publication_read_authority_survives_effect_expiry_without_renewing_muta
 async fn store_readiness_authority_cannot_change_target_or_renew_handover() {
     let (_, mut plan, _) = fixture();
     let now = crate::now().unwrap();
-    plan.version = 2;
+    plan.version = 1;
     plan.created_at_ns = now - 3_600_000_000_000;
     plan.expires_at_ns = now - 1;
     plan.deployment = Some(crate::DeploymentName {

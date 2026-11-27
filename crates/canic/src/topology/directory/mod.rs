@@ -270,7 +270,7 @@ impl crate::method::Contract for RedeliverDirectoryRevision {
 pub struct ReceiveDirectory;
 
 impl crate::method::Contract for ReceiveDirectory {
-    const NAME: &'static str = "receive_directory";
+    const NAME: &'static str = "canic_receive_directory";
     const ID: u64 = ic_wire::method_id("canic.topology.deliver_installation.v1");
     const REQUEST: ic_wire::Limits = DIRECTORY_LIMITS;
     const REPLY: ic_wire::Limits = crate::method::LIMITS;
@@ -282,7 +282,7 @@ impl crate::method::Contract for ReceiveDirectory {
 pub struct ReadBackupTiming;
 
 impl crate::method::Contract for ReadBackupTiming {
-    const NAME: &'static str = "backup_timing";
+    const NAME: &'static str = "canic_backup_timing";
     const ID: u64 = ic_wire::method_id("canic.topology.backup_timing.v1");
     type Input = ();
     type Output = Option<BackupTiming>;
@@ -292,7 +292,7 @@ impl crate::method::Contract for ReadBackupTiming {
 pub struct WithdrawChild;
 
 impl crate::method::Contract for WithdrawChild {
-    const NAME: &'static str = "withdraw_child";
+    const NAME: &'static str = "canic_withdraw_child";
     const ID: u64 = ic_wire::method_id("canic.withdraw_child.v1");
     const REQUEST: ic_wire::Limits = DIRECTORY_LIMITS;
     type Input = (Principal, [u8; 32]);
@@ -305,13 +305,13 @@ impl crate::method::Contract for WithdrawChild {
 #[macro_export]
 macro_rules! mount_service_directory {
     () => {
-        #[$crate::query(contract = $crate::topology::directory::ReadBackupTiming)]
+        #[$crate::__canic_query(contract = $crate::topology::directory::ReadBackupTiming)]
         fn backup_timing((): ()) -> Option<$crate::topology::directory::BackupTiming> {
             $crate::topology::directory::retained::DIRECTORY
                 .with_borrow(|index| index.as_ref()?.backup_timing())
         }
 
-        #[$crate::update(contract = $crate::topology::directory::ReceiveDirectory)]
+        #[$crate::__canic_update(contract = $crate::topology::directory::ReceiveDirectory)]
         async fn receive_directory(
             update: $crate::topology::directory::Delivery,
         ) -> Result<(), $crate::topology::directory::DirectoryError> {
@@ -319,7 +319,7 @@ macro_rules! mount_service_directory {
             retained::receive(&DIRECTORY, update).await
         }
 
-        #[$crate::update(contract = $crate::topology::directory::WithdrawChild)]
+        #[$crate::__canic_update(contract = $crate::topology::directory::WithdrawChild)]
         fn withdraw_child(
             child: <$crate::topology::directory::WithdrawChild as $crate::method::Contract>::Input,
         ) -> Result<(), $crate::topology::directory::DirectoryError> {

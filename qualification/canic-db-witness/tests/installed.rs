@@ -109,7 +109,7 @@ impl Client<'_> {
     }
 
     async fn inspect(&self) -> Response {
-        self.query("db_inspect", INSPECT, &()).await
+        self.query("canic_db_inspect", INSPECT, &()).await
     }
 
     async fn rows(&self) -> Vec<Row> {
@@ -132,11 +132,11 @@ impl Client<'_> {
     }
 
     async fn page(&self, request: &QueryRequest) -> QueryReply {
-        self.query("db_query", QUERY, request).await
+        self.query("canic_db_query", QUERY, request).await
     }
 
     async fn write(&self, rows: &[Row]) -> WriteReply {
-        self.update("db_write", WRITE, &rows).await
+        self.update("canic_db_write", WRITE, &rows).await
     }
 
     async fn control(&self, command: u8) {
@@ -203,7 +203,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
             pic.query_call(
                 canister,
                 owner,
-                "db_inspect",
+                "canic_db_inspect",
                 frame(
                     ic_wire::method_id(retired),
                     &(),
@@ -225,7 +225,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         .await
         .is_err()
     );
-    for (method, id) in [("db_inspect", INSPECT), ("db_query", QUERY)] {
+    for (method, id) in [("canic_db_inspect", INSPECT), ("canic_db_query", QUERY)] {
         let error = pic
             .query_call(canister, denied, method, vec![0])
             .await
@@ -261,7 +261,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         );
     }
     let error = pic
-        .update_call(canister, denied, "db_write", vec![0])
+        .update_call(canister, denied, "canic_db_write", vec![0])
         .await
         .unwrap_err();
     assert!(format!("{error:?}").contains("denied"));
@@ -272,7 +272,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         vec![0; RPC_LIMITS.bytes + 1],
     ] {
         assert!(
-            pic.update_call(canister, owner, "db_write", bytes)
+            pic.update_call(canister, owner, "canic_db_write", bytes)
                 .await
                 .is_err()
         );
@@ -359,7 +359,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         pic.query_call(
             canister,
             denied,
-            "db_inspect",
+            "canic_db_inspect",
             frame(INSPECT, &(), ic_wire::Direction::Request)
         )
         .await
@@ -394,7 +394,7 @@ async fn typed_application_mount_preserves_authority_pages_and_commit_boundary()
         .update_call(
             canister,
             owner,
-            "db_write",
+            "canic_db_write",
             frame(
                 WRITE,
                 &vec![row(5, 30), row(6, 40)],

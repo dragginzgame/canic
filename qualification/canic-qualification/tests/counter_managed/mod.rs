@@ -226,7 +226,10 @@ async fn fleet_counter_preserves_value_and_never_treats_fenced_as_ready() {
                 call_status["receipt"].is_null(),
                 "application replies are not deployment receipts"
             );
-            assert_eq!(call_status["plan"]["call"]["canister"], child.to_text());
+            assert_eq!(
+                call_status["plan"]["action"]["approval"]["canister"],
+                child.to_text()
+            );
             let call_dir = dir.join("journal").join(call_id).join("call");
             let original_signed = std::fs::read(call_dir.join("signed.json")).unwrap();
             // Deliberately lose only local result custody after the real update committed.

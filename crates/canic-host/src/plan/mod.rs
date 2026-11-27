@@ -1,5 +1,5 @@
 mod action;
-mod record;
+
 #[cfg(test)]
 mod tests;
 
@@ -14,8 +14,7 @@ use serde::{Deserialize, Serialize};
 use std::path::Path;
 
 /// One explicit effect approval, including application calls. No implicit funding conversions.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(try_from = "record::PlanRecord")]
+#[derive(Clone, Debug, Serialize, Eq, PartialEq)]
 pub struct Plan {
     /// Retained format version.
     pub version: u32,
@@ -31,7 +30,7 @@ pub struct Plan {
     pub created_at_ns: u64,
     /// Latest time at which a new effect may be signed under this approval.
     pub expires_at_ns: u64,
-    /// Optional named slot; absent in legacy v1 plans, required in v2 plans.
+    /// Named deployment for fleet operations.
     pub deployment: Option<crate::DeploymentName>,
 }
 
@@ -39,6 +38,8 @@ pub struct Plan {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ManagedOwner {
+    /// Observe permanent child evidence separately from other Root custody.
+    pub child_evidence_only: bool,
     /// Exact application initialization bytes; absent preserves historical empty arguments.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub arguments: Option<Vec<u8>>,
@@ -51,12 +52,10 @@ pub struct ManagedOwner {
     pub root_module: String,
     /// Earliest autonomous dispatch, as Unix nanoseconds.
     pub execute_at_ns: u64,
-    /// Authenticated runtime slot; absent preserves the original one-child contract.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub slot: Option<canic_management_protocol::children::ChildId>,
-    /// Exact published Store content; absent selects the existing inline contract.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<crate::StoredArtifact>,
+    /// Permanent runtime child slot.
+    pub slot: canic_management_protocol::children::ChildId,
+    /// Exact published Store content.
+    pub source: crate::StoredArtifact,
 }
 
 /// Operator-selected inputs for a one-canister plan.
@@ -73,31 +72,78 @@ pub struct PlanInput {
     pub creation_cycles: u64,
 }
 
-/// Large Root deployment approvals commit to ordered uploads and a chunked install.
-pub(crate) const CHUNKED_ROOT_VERSION: u32 = 12;
-pub(crate) const CHILD_ACTIVATION_VERSION: u32 = 15;
-pub(crate) const PLACEMENT_CHILD_ACTIVATION_VERSION: u32 = 16;
-pub(crate) const STORE_MAINTENANCE_VERSION: u32 = 14;
-pub(crate) const AUTH_ACCESS_VERSION: u32 = 13;
+pub(crate) const APPROVAL_VERSION: u32 = 1;
 
-pub(crate) const fn root_install_version(bytes: usize, direct_version: u32) -> u32 {
-    if bytes > artifact::MAX_WASM {
-        CHUNKED_ROOT_VERSION
-    } else {
-        direct_version
+#[derive(Deserialize)]
+#[serde(remote = "Plan", deny_unknown_fields)]
+struct ApprovalRecord {
+    #[serde(deserialize_with = "approval_version")]
+    version: u32,
+    network: Network,
+    controller: String,
+    artifact: Artifact,
+    action: PlanAction,
+    created_at_ns: u64,
+    expires_at_ns: u64,
+    deployment: Option<crate::DeploymentName>,
+}
+
+impl<'de> Deserialize<'de> for Plan {
+    fn deserialize<D: serde::Deserializer<'de>>(decoder: D) -> std::result::Result<Self, D::Error> {
+        let plan = ApprovalRecord::deserialize(decoder)?;
+        if !plan.has_deployment_scope() {
+            return Err(serde::de::Error::custom(
+                "operation requires a named deployment",
+            ));
+        }
+        Ok(plan)
     }
 }
 
+fn approval_version<'de, D: serde::Deserializer<'de>>(
+    decoder: D,
+) -> std::result::Result<u32, D::Error> {
+    let version = u32::deserialize(decoder)?;
+    if version != APPROVAL_VERSION {
+        return Err(serde::de::Error::custom(
+            "unsupported Host approval version",
+        ));
+    }
+    Ok(version)
+}
+
 impl Plan {
+    fn has_deployment_scope(&self) -> bool {
+        self.deployment.is_some()
+            || matches!(
+                self.action,
+                PlanAction::Create {
+                    bootstrap: None,
+                    ..
+                } | PlanAction::Upgrade(_)
+            )
+    }
+
+    pub(crate) fn chunked_root_install(&self) -> bool {
+        self.deployment.is_some()
+            && self.artifact.bytes > artifact::MAX_WASM
+            && matches!(
+                self.action,
+                PlanAction::Create { .. }
+                    | PlanAction::BootstrapRoot { .. }
+                    | PlanAction::MaintainRoot { .. }
+            )
+    }
+
     pub(crate) fn artifact_limit(&self) -> usize {
-        if self.version == CHUNKED_ROOT_VERSION {
+        if self.chunked_root_install() {
             artifact::MAX_ARTIFACT_BYTES
         } else if self.store_upgrade_root().is_some() {
             canic_management_protocol::store_maintenance::MAX_MODULE_BYTES
         } else if self.publication().is_some()
             || self.removal().is_some()
             || self.auth().is_some()
-            || self.management().is_some_and(|m| m.source.is_some())
+            || self.management().is_some()
         {
             artifact::MAX_ARTIFACT_BYTES
         } else {
@@ -108,59 +154,8 @@ impl Plan {
     pub(crate) fn validate(&self) -> Result<()> {
         self.network.validate()?;
         let controller = principal(&self.controller)?;
-        if !matches!(
-            (self.version, self.deployment.is_some()),
-            (1, false)
-                | (2, true)
-                | (3, true)
-                | (4, true)
-                | (5, true)
-                | (6, true)
-                | (7, true)
-                | (8, true)
-                | (9, true)
-                | (10, true)
-                | (11, true)
-                | (CHUNKED_ROOT_VERSION, true)
-                | (AUTH_ACCESS_VERSION, true)
-                | (STORE_MAINTENANCE_VERSION, true)
-                | (
-                    CHILD_ACTIVATION_VERSION | PLACEMENT_CHILD_ACTIVATION_VERSION,
-                    true
-                )
-        ) || (self.version == 10
-            && !matches!(
-                self.action,
-                PlanAction::Create {
-                    bootstrap: None,
-                    ..
-                }
-            ))
-            || (self.version == STORE_MAINTENANCE_VERSION && self.store_upgrade_root().is_none())
-            || (self.version == 9
-                && self.store_root().is_none()
-                && self.store_upgrade_root().is_none())
-            || (self.version == 3) != self.publication().is_some()
-            || matches!(self.version, 4 | 11) != self.removal().is_some()
-            || matches!(self.version, 5 | AUTH_ACCESS_VERSION) != self.auth().is_some()
-            || (matches!(
-                self.version,
-                CHILD_ACTIVATION_VERSION | PLACEMENT_CHILD_ACTIVATION_VERSION
-            ) && !self
-                .management()
-                .is_some_and(|owner| owner.blob_attempt.is_some()))
-            || (!matches!(self.version, 8 | PLACEMENT_CHILD_ACTIVATION_VERSION)
-                && matches!(self.version, 6 | CHILD_ACTIVATION_VERSION)
-                    != self.management().is_some_and(|m| m.arguments.is_some()))
-            || (matches!(self.version, 8 | PLACEMENT_CHILD_ACTIVATION_VERSION)
-                && !self.management().is_some_and(|m| m.source.is_some()))
-            || (self.version == 7) != self.application_call().is_some()
-            || (self.version == CHUNKED_ROOT_VERSION
-                && (self.artifact.bytes <= artifact::MAX_WASM
-                    || !matches!(
-                        self.action,
-                        PlanAction::Create { .. } | PlanAction::MaintainRoot { .. }
-                    )))
+        if self.version != APPROVAL_VERSION
+            || !self.has_deployment_scope()
             || self.artifact.bytes > self.artifact_limit()
             || self.artifact.sha256.len() != 64
             || self.expires_at_ns <= self.created_at_ns
@@ -181,8 +176,7 @@ impl Plan {
         }
         if let Some(root) = self.store_root() {
             let id = principal(&root.canister)?;
-            if !matches!(self.version, 2 | 9)
-                || id.to_text() != root.canister
+            if id.to_text() != root.canister
                 || id == principal("aaaaa-aa")?
                 || id == principal("2vxsx-fae")?
                 || crate::unhex(&root.module)?.len() != 32
@@ -200,20 +194,13 @@ impl Plan {
         }
         if let Some(managed) = self.management() {
             let root = principal(&managed.root)?;
-            if let Some(source) = &managed.source {
-                crate::managed::stored::validate(self, source)?;
-            }
+            crate::managed::stored::validate(self, &managed.source)?;
             if let PlanAction::UpgradeChild { target, .. } = &self.action
                 && (target.module == self.artifact.sha256 || principal(&target.canister)? == root)
             {
                 return Err(Error::Invalid("invalid child upgrade target".into()));
             }
-            if !matches!(
-                self.version,
-                2 | 6 | 8 | CHILD_ACTIVATION_VERSION | PLACEMENT_CHILD_ACTIVATION_VERSION
-            ) || (managed.source.is_none()
-                && self.artifact.bytes > canic_management_protocol::MAX_WASM)
-                || crate::unhex(&managed.root_module)?.len() != 32
+            if crate::unhex(&managed.root_module)?.len() != 32
                 || root == principal("aaaaa-aa")?
                 || root == principal("2vxsx-fae")?
                 || managed.execute_at_ns < self.created_at_ns
@@ -224,7 +211,6 @@ impl Plan {
             if managed.arguments.as_ref().is_some_and(|args| {
                 args.is_empty()
                     || args.len() > canic_management_protocol::application::MAX_ARGUMENT_BYTES
-                    || managed.source.is_none()
             }) {
                 return Err(Error::Invalid(
                     "application arguments require Store-backed management".into(),
@@ -251,10 +237,7 @@ impl Plan {
                 let maximum = (u64::from(policy.services) + 2)
                     .saturating_mul(1_000_000_000_000)
                     .max(5_000_000_000_000);
-                if !matches!(self.version, 2 | CHUNKED_ROOT_VERSION)
-                    || !policy.valid()
-                    || !(500_000_000_000..=maximum).contains(cycles)
-                {
+                if !policy.valid() || !(500_000_000_000..=maximum).contains(cycles) {
                     return Err(Error::Invalid(format!(
                         "Root creation budget {cycles} exceeds the approved range for {} services, or the subnet policy is invalid",
                         policy.services
@@ -265,6 +248,7 @@ impl Plan {
                 cycles,
                 bootstrap: None,
             }
+            | PlanAction::BootstrapRoot { cycles }
             | PlanAction::CreateStore { cycles, .. }
                 if !(500_000_000_000..=5_000_000_000_000).contains(cycles) =>
             {
@@ -281,7 +265,8 @@ impl Plan {
                     ));
                 }
             }
-            PlanAction::Create { .. }
+            PlanAction::BootstrapRoot { .. }
+            | PlanAction::Create { .. }
             | PlanAction::CreateStore { .. }
             | PlanAction::CreateChild(_) => {}
         }
@@ -294,7 +279,8 @@ impl Plan {
     /// Refuses an invalid plan or serialization failure.
     pub fn digest(&self) -> Result<String> {
         self.validate()?;
-        let mut bytes = format!("canic:deployment-plan:v{}\0", self.version).into_bytes();
+        let mut bytes = self.action.contract().as_bytes().to_vec();
+        bytes.push(0);
         bytes.extend(serde_json::to_vec(self).map_err(supplier)?);
         Ok(artifact::digest(&bytes))
     }
@@ -352,7 +338,7 @@ pub(crate) fn prepare(
     management: Option<ManagedOwner>,
     now: u64,
 ) -> Result<(Plan, Vec<u8>)> {
-    let limit = if management.as_ref().is_some_and(|m| m.source.is_some())
+    let limit = if management.is_some()
         || (deployment.is_some() && management.is_none() && input.target.is_none())
     {
         artifact::MAX_ARTIFACT_BYTES
@@ -368,7 +354,7 @@ pub(crate) fn prepare(
                 .checked_add(600_000_000_000)
                 .ok_or_else(|| Error::Invalid("dispatch deadline overflow".into()))
         })?;
-    let action = match (input.target, input.previous_module, management) {
+    let mut action = match (input.target, input.previous_module, management) {
         (None, None, None) => PlanAction::Create {
             bootstrap: None,
             cycles: input.creation_cycles,
@@ -393,26 +379,16 @@ pub(crate) fn prepare(
             ));
         }
     };
-    let role_service = if let PlanAction::CreateChild(owner) = &action
+    if let PlanAction::CreateChild(owner) = &mut action
         && let Some(bytes) = &owner.arguments
     {
-        canic::topology::directory::DbService::from_receiver(bytes, principal(&owner.root)?)
-            .map_err(|e| Error::Invalid(e.into()))?
-            .is_some()
-    } else {
-        false
-    };
+        owner.child_evidence_only |=
+            canic::topology::directory::DbService::from_receiver(bytes, principal(&owner.root)?)
+                .map_err(|e| Error::Invalid(e.into()))?
+                .is_some();
+    }
     let plan = Plan {
-        version: if role_service {
-            8
-        } else if matches!(&action, PlanAction::CreateChild(owner) | PlanAction::UpgradeChild { owner, .. } if owner.arguments.is_some())
-        {
-            6
-        } else if deployment.is_some() {
-            2
-        } else {
-            1
-        },
+        version: APPROVAL_VERSION,
         deployment,
         network: input.network,
         controller: input.controller,
@@ -531,9 +507,7 @@ pub(crate) fn retain_locked(store: &Store, mut plan: Plan, bytes: &[u8]) -> Resu
                 && existing
                     .management()
                     .zip(plan.management())
-                    .is_some_and(|(old, new)| {
-                        old.root == new.root && crate::managed::same_slot(old.slot, new.slot)
-                    })
+                    .is_some_and(|(old, new)| old.root == new.root && old.slot == new.slot)
             {
                 return Err(Error::Blocked(format!(
                     "Root's child slot already belongs to operation {existing_id}"
@@ -558,11 +532,8 @@ pub(crate) fn retain_locked(store: &Store, mut plan: Plan, bytes: &[u8]) -> Resu
                             "upgrade requires its retained predecessor module".into(),
                         ));
                     }
-                    if existing
-                        .management()
-                        .and_then(|m| m.source.as_ref())
-                        .is_some()
-                        != plan.management().and_then(|m| m.source.as_ref()).is_some()
+                    if existing.management().map(|m| &m.source).is_some()
+                        != plan.management().map(|m| &m.source).is_some()
                     {
                         return Err(Error::Blocked("changing an admitted child between inline and Store custody requires qualified migration".into()));
                     }

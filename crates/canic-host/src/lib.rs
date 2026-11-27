@@ -50,10 +50,10 @@ pub use canic_management_protocol::Phase as ManagementPhase;
 pub use config::{
     AppConfig, BuildInput, CanisterBinding, CanisterConfig, CanisterDefinition, ChildTopUp, Config,
     DeploymentName, DiscoveredConfig, FleetConfig, FleetDeclaration, FleetLifetime, FleetNetwork,
-    PoolGrant, RegistryConfig, SelectedFleet, ShardPoolConfig, SingletonConfig, SnapshotConfig,
-    StandbyImports, StandbyPoolConfig, UnboundLocal, WorkerPoolConfig, add_app_canister,
-    bind_canister, create_configured_plan, discover_configs, init_app, init_config, init_fleet,
-    load_config, resolve_config_path,
+    FleetPolicy, PoolGrant, RegistryConfig, SelectedFleet, ShardPoolConfig, SingletonConfig,
+    SnapshotConfig, StandbyImports, StandbyPoolConfig, UnboundLocal, WorkerPoolConfig,
+    add_app_canister, bind_canister, create_configured_plan, discover_configs, init_app,
+    init_config, init_fleet, load_config, resolve_config_path,
 };
 pub use fleet::{
     Fleet, FleetCanister, FleetManager, FleetMetrics, FleetOperation, FleetStoreMaintenance,

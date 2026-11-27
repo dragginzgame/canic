@@ -48,6 +48,8 @@ if [[ "$scope" == all || "$scope" == miner ]]; then
 fi
 if [[ "$scope" == all || "$scope" == db-roles ]]; then
     "$cli" artifact build --manifest qualification/Cargo.toml --package canic-schema-role --output target/store/db-role-schema.wasm --json > target/store/db-role-schema.json
+    build db-role-receiver canic-schema-role --manifest qualification/Cargo.toml --features receiver
+    build db-role-blob-receiver canic-schema-role --manifest qualification/Cargo.toml --features blob-receiver
     cargo run --quiet --locked --manifest-path qualification/Cargo.toml -p canic-schema-role \
         --features inspection --example canic-schema-role-wire > target/store/db-role-wire.json
     jq -e '.echo_id | .mode == "query" and .request == .reply and
@@ -78,7 +80,7 @@ if [[ "$scope" == all || "$scope" == directory ]]; then
     "$cli" --json artifact endpoints "target/store/root.wasm" |
         jq -e '[.endpoints[].name] as $names |
             ($names | contains(["acquire_placement", "approve_child_creation", "configure_subnet_capacity", "increase_pool_limit", "configure_child_funding", "stop_child_funding"])) and
-            all("configure_capacity", "increase_pool", "configure_shard_routes", "observe_shard", "begin_shard_drain", "configure_shards", "configure_instances", "configure_workers", "configure_singleton", "stop_application_child_funding"; . as $name | ($names | index($name) == null))' >/dev/null
+            all("configure_capacity", "increase_pool", "canic_configure_shard_routes", "canic_observe_shard", "canic_begin_shard_drain", "configure_shards", "configure_instances", "configure_workers", "configure_singleton", "stop_application_child_funding"; . as $name | ($names | index($name) == null))' >/dev/null
     help=$(cargo run --quiet --locked -p canic-root --bin canic-root-client -- encode --help)
     for action in configure-child-funding stop-child-funding approve-child-creation configure-subnet-capacity; do
         grep -qw -- "$action" <<<"$help"
@@ -93,7 +95,7 @@ fi
 if [[ "$scope" == all || "$scope" == user-directory ]]; then
     "$cli" app build --config apps/examples/user-directory/canic.toml
     "$cli" --json artifact endpoints apps/examples/user-directory/artifacts/user_hub.wasm |
-        jq -e '[.endpoints[].name] | contains(["configure_shard_routes","observe_shard","begin_shard_drain"]) and (index("approve_child_creation") == null)' >/dev/null
+        jq -e '[.endpoints[].name] | contains(["canic_configure_shard_routes","canic_observe_shard","canic_begin_shard_drain"]) and (index("approve_child_creation") == null)' >/dev/null
     "$cli" --json artifact endpoints apps/examples/user-directory/artifacts/root.wasm |
         jq -e '[.endpoints[].name] | contains(["acquire_placement"]) and (index("assign_shard") == null) and (index("lookup_shard") == null) and (index("release_shard") == null) and (index("assign_worker") == null) and (index("refill_standby") != null)' >/dev/null
 fi

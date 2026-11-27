@@ -234,15 +234,9 @@ pub(super) fn declaration(selected: &SelectedFleet) -> Config {
         .canisters
         .iter()
         .filter_map(|(name, slot)| {
-            slot.id.as_ref().map(|id| {
-                (
-                    name.clone(),
-                    CanisterBinding {
-                        id: id.clone(),
-                        profile_manager: slot.profile_manager,
-                    },
-                )
-            })
+            slot.id
+                .as_ref()
+                .map(|id| (name.clone(), CanisterBinding { id: id.clone() }))
         })
         .collect();
     Config {
@@ -253,17 +247,11 @@ pub(super) fn declaration(selected: &SelectedFleet) -> Config {
                 fleets: BTreeMap::from([(
                     selected.fleet.clone(),
                     FleetDeclaration {
-                        snapshots: None,
+                        policy: Default::default(),
                         lifetime: None,
-                        receiver_policy: None,
-                        top_up_children: vec![],
-                        role_receivers: vec![],
-                        subnet_child_limit: None,
-                        allow_large_subnet: false,
-                        registry: None,
+
                         standby_pool: None,
-                        worker_pools: Vec::new(),
-                        shard_pools: Vec::new(),
+
                         auth: Vec::new(),
                         network: FleetNetwork::Bound(selected.config.network.clone()),
                         journal: selected.config.journal.clone(),
@@ -287,7 +275,6 @@ fn reusable_app_definitions_resolve_across_fleets_without_copying_bindings() {
         "backend",
         CanisterBinding {
             id: "aaaaa-aa".into(),
-            ..Default::default()
         },
     )
     .unwrap();
@@ -412,7 +399,6 @@ fn existing_id_declarations_are_network_scoped_and_do_not_authorize_creation() {
     add_app_canister(&path, "hello", "other", CanisterDefinition::default()).unwrap();
     let binding = || CanisterBinding {
         id: "aaaaa-aa".into(),
-        ..Default::default()
     };
     let selected = bind_canister(&path, "hello", "demo", "backend", binding()).unwrap();
     let before = std::fs::read(&path).unwrap();
@@ -489,7 +475,11 @@ fn named_plans_retain_identity_and_never_renew_expired_or_conflicting_authority(
     let journal = root.join("state");
     let (id, plan) =
         create_configured_plan(&journal, &wasm, input(), &bootstrap_config(), "root").unwrap();
-    assert_eq!(plan.version, 10);
+    assert_eq!(plan.version, 1);
+    assert!(matches!(
+        plan.action,
+        crate::PlanAction::BootstrapRoot { .. }
+    ));
     assert_eq!(plan.deployment.as_ref().unwrap().app, "hello");
     let mut described = bootstrap_config();
     described
@@ -538,16 +528,19 @@ fn named_plans_retain_identity_and_never_renew_expired_or_conflicting_authority(
 }
 
 #[test]
-fn legacy_plan_bytes_and_digests_remain_unchanged() {
+fn direct_approval_binds_its_named_contract() {
     let root = directory();
     let wasm = root.join("hello.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
     let (id, plan) = crate::create_plan(&root, &wasm, input()).unwrap();
     let json = serde_json::to_vec(&plan).unwrap();
-    assert!(!String::from_utf8_lossy(&json).contains("deployment"));
+    assert_eq!(
+        serde_json::to_value(&plan).unwrap()["action"]["contract"],
+        "canic:deployment-create.v1"
+    );
     let mut legacy = b"canic:deployment-plan:v1\0".to_vec();
     legacy.extend(&json);
-    assert_eq!(crate::artifact::digest(&legacy), id);
+    assert_ne!(crate::artifact::digest(&legacy), id);
     let decoded: Plan = serde_json::from_slice(&json).unwrap();
     assert_eq!(decoded.digest().unwrap(), id);
 }
@@ -569,7 +562,7 @@ async fn existing_id_adoption_preserves_legacy_evidence_and_blocks_creation() {
     adopted.config.journal = Some("../retained".into());
     let slot = adopted.config.canisters.get_mut("backend").unwrap();
     slot.id = Some("aaaaa-aa".into());
-    slot.profile_manager = true;
+
     let legacy_input = PlanInput {
         network: adopted.config.network.clone(),
         target: Some("aaaaa-aa".into()),
@@ -656,9 +649,6 @@ fn existing_declarations_validate_identity_and_journal_selection() {
         declaration.journal_path(config_path),
         Path::new("project/.canic")
     );
-    let slot = declaration.config.canisters.get_mut("backend").unwrap();
-    slot.profile_manager = true;
-    assert!(declaration.validate().is_err());
     declaration.config.canisters.get_mut("backend").unwrap().id = Some("invalid".into());
     assert!(declaration.validate().is_err());
     let slot = declaration.config.canisters.get_mut("backend").unwrap();
@@ -944,14 +934,19 @@ expires_at_ns = 1800000000000000000
         Some("wasm-store")
     );
     let mut fleet = selected.config;
-    let release = fleet.shard_pools.first().unwrap().release.clone();
+    let release = fleet.policy.shard_pools.first().unwrap().release.clone();
     let manifest = crate::publication::release_manifest(release, b"\0asm\x01\0\0\0");
     let nonce = canic_management_protocol::application::Arguments::new(vec![7; 16]).unwrap();
     let old = fleet
         .shard_pool_approval("shard", manifest.clone(), nonce.clone())
         .unwrap();
     assert_eq!(old.arguments, nonce);
-    fleet.shard_pools.first_mut().unwrap().install_topology = true;
+    fleet
+        .policy
+        .shard_pools
+        .first_mut()
+        .unwrap()
+        .install_topology = true;
     let mut missing_role = fleet.clone();
     missing_role.canisters.get_mut("shard").unwrap().role = None;
     let refusal = missing_role
@@ -1319,8 +1314,8 @@ fn registry_and_workers_share_infrastructure_but_require_separate_parents() {
     project.parent = Some("registry".into());
     app.canisters.insert("project".into(), project);
     let fleet = app.fleets.get_mut("local").unwrap();
-    let worker = &fleet.worker_pools[0];
-    fleet.registry = Some(RegistryConfig {
+    let worker = &fleet.policy.worker_pools[0];
+    fleet.policy.registry = Some(RegistryConfig {
         singleton: None,
         component: "project".into(),
         root: worker.root.clone(),
@@ -1350,7 +1345,7 @@ fn registry_and_workers_share_infrastructure_but_require_separate_parents() {
     ] {
         let mut invalid = config.clone();
         let app = invalid.apps.get_mut("miner-pool").unwrap();
-        let worker = &mut app.fleets.get_mut("local").unwrap().worker_pools[0];
+        let worker = &mut app.fleets.get_mut("local").unwrap().policy.worker_pools[0];
         match field {
             "root" => worker.root = "other".into(),
             "store" => worker.store = "other".into(),
@@ -1379,28 +1374,24 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
         ("store", "ryjl3-tyaaa-aaaaa-aaaba-cai"),
         ("pool", "r7inp-6aaaa-aaaaa-aaabq-cai"),
     ] {
-        fleet.canisters.insert(
-            name.into(),
-            CanisterBinding {
-                id: id.into(),
-                profile_manager: false,
-            },
-        );
+        fleet
+            .canisters
+            .insert(name.into(), CanisterBinding { id: id.into() });
     }
-    fleet.worker_pools[0].expires_at_ns = Some(u64::MAX);
-    let mut other = fleet.worker_pools[0].clone();
+    fleet.policy.worker_pools[0].expires_at_ns = Some(u64::MAX);
+    let mut other = fleet.policy.worker_pools[0].clone();
     other.component = "auxiliary".into();
-    fleet.worker_pools.push(other);
+    fleet.policy.worker_pools.push(other);
     // The same hub may own both kinds of grant and more than one of each.
     for name in ["profiles", "accounts"] {
         let mut child = app.canisters["miner"].clone();
         child.wasm = Some("artifacts/shard.wasm".into());
         app.canisters.insert(name.into(), child);
-        fleet.shard_pools.push(ShardPoolConfig {
+        fleet.policy.shard_pools.push(ShardPoolConfig {
             component: name.into(),
             root: "root".into(),
             store: "store".into(),
-            release: fleet.worker_pools[0].release.clone(),
+            release: fleet.policy.worker_pools[0].release.clone(),
             max_shards: 1,
             keys_per_shard: 3,
             creation_budget: 0,
@@ -1410,8 +1401,8 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
             increase_from: None,
         });
     }
-    fleet.shard_pools[1].max_shards = 2;
-    fleet.shard_pools[1].increase_from = Some(1);
+    fleet.policy.shard_pools[1].max_shards = 2;
+    fleet.policy.shard_pools[1].increase_from = Some(1);
     let mut selected = config.select(None, None).unwrap();
     let header = b"\0asm\x01\0\0\0";
     let mut hub = header.to_vec();
@@ -1466,7 +1457,7 @@ fn worker_pools_plan_separately_and_require_the_declared_hub() {
             .to_string()
             .contains("hub \"miner\" requires worker pool \"auxiliary\"")
     );
-    selected.config.worker_pools.pop();
+    selected.config.policy.worker_pools.pop();
     assert!(
         plan(&selected)
             .unwrap_err()
@@ -1530,8 +1521,8 @@ creation_budget = 2000000000000
     assert_eq!(child.approval.registry, project.approval.hub);
     assert_eq!(child.approval.role, "project_ledger");
     assert!(child.approval.receiver.is_none());
-    assert_eq!(fleet.config.top_up_children.len(), 1);
-    assert_eq!(fleet.config.top_up_children[0].child(), "ledger");
+    assert_eq!(fleet.config.policy.top_up_children.len(), 1);
+    assert_eq!(fleet.config.policy.top_up_children[0].child(), "ledger");
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -1552,7 +1543,7 @@ top_up_children = ["project_registry"]
     std::fs::write(&path, text).unwrap();
     let selected = load_config(&path).unwrap().select(None, None).unwrap();
     assert_eq!(
-        selected.config.top_up_children[0].child(),
+        selected.config.policy.top_up_children[0].child(),
         "project_registry"
     );
     assert!(

@@ -21,26 +21,38 @@ pub struct StoreMaintenance {
     /// Original creation and every upgrade delivery, in permanent child-slot order.
     pub sources: Vec<Option<canic_management_protocol::stored::Sources>>,
     /// Exact surviving Store operation; selects complete Root custody when present.
-    /// Absence preserves the original child-only observation contract and plan digest.
+    /// Absence selects child-only observation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operation: Option<canic_management_protocol::store_maintenance::Status>,
-    /// Completed Store predecessors, oldest first. Omission preserves historical plan bytes.
+    /// Completed Store predecessors, oldest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub history: Vec<canic_management_protocol::store_maintenance::Status>,
 }
 
 /// One operation with all and only the authority it needs.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, serde::Deserialize, serde::Serialize)]
+#[serde(tag = "contract", content = "approval", deny_unknown_fields)]
 pub enum PlanAction {
     /// One direct user application update; grants no management authority.
+    #[serde(rename = "canic:application-call.v1")]
     Call(crate::application::Approval),
     /// Configure or revoke one exact Auth grant; grants no installation authority.
+    #[serde(rename = "canic:auth-access.v1")]
     Auth(Box<crate::AuthApproval>),
     /// Publish immutable artifact bytes through Root; grants no installation authority.
+    #[serde(rename = "canic:artifact-publication.v1")]
     Publish(crate::Publication),
     /// Remove one exact release through Root; no installation or replacement authority.
+    #[serde(rename = "canic:artifact-removal.v1")]
     Remove(crate::PublicationRemoval),
+    /// Standalone creation of the selected fleet Root.
+    #[serde(rename = "canic:root-bootstrap.v1")]
+    BootstrapRoot {
+        /// Exact creation debit ceiling.
+        cycles: u64,
+    },
     /// Direct creation and installation, funded by the operator.
+    #[serde(rename = "canic:deployment-create.v1")]
     Create {
         /// Bound install and funding policy for a fresh fleet Root.
         bootstrap: Option<canic_management_protocol::stored::RootBootstrap>,
@@ -48,6 +60,7 @@ pub enum PlanAction {
         cycles: u64,
     },
     /// Create/install a Store, then hand sole control to the approved Root.
+    #[serde(rename = "canic:store-bootstrap.v1")]
     CreateStore {
         /// Exact creation debit ceiling.
         cycles: u64,
@@ -55,19 +68,23 @@ pub enum PlanAction {
         root: UpgradeTarget,
     },
     /// Upgrade a directly controlled canister.
+    #[serde(rename = "canic:deployment-upgrade.v1")]
     Upgrade(UpgradeTarget),
     /// Root replaces its separate Store under one retained maintenance attempt.
+    #[serde(rename = "canic:store-maintenance.v1")]
     UpgradeStore {
         /// Existing Store and its predecessor executable.
         target: UpgradeTarget,
         /// Sole Store controller and enduring effect owner.
         root: UpgradeTarget,
-        /// Explicit sequence selects exact-attempt observations. Absence is the historical first upgrade.
-        sequence: Option<u64>,
+        /// Sequence of this exact Store maintenance attempt.
+        sequence: u64,
     },
     /// Root creates its permanently assigned child with the protocol's fixed grant.
+    #[serde(rename = "canic:child-creation.v1")]
     CreateChild(ManagedOwner),
     /// Root upgrades its existing child.
+    #[serde(rename = "canic:child-upgrade.v1")]
     UpgradeChild {
         /// Existing child and predecessor code.
         target: UpgradeTarget,
@@ -75,6 +92,7 @@ pub enum PlanAction {
         owner: ManagedOwner,
     },
     /// Upgrade Root while preserving every admitted child's complete custody.
+    #[serde(rename = "canic:root-maintenance.v1")]
     MaintainRoot {
         /// Existing Root and predecessor code.
         target: UpgradeTarget,
@@ -113,11 +131,11 @@ impl super::Plan {
         }
     }
 
-    /// Explicit Store maintenance sequence, absent in historical first-upgrade plans.
+    /// Sequence for a Store upgrade. Other actions have no maintenance sequence.
     #[must_use]
     pub fn store_upgrade_sequence(&self) -> Option<u64> {
         match self.action {
-            PlanAction::UpgradeStore { sequence, .. } => sequence,
+            PlanAction::UpgradeStore { sequence, .. } => Some(sequence),
             _ => None,
         }
     }
@@ -167,7 +185,8 @@ impl super::Plan {
             | PlanAction::UpgradeStore { target, .. }
             | PlanAction::UpgradeChild { target, .. }
             | PlanAction::MaintainRoot { target, .. } => Some(target),
-            PlanAction::Create { .. }
+            PlanAction::BootstrapRoot { .. }
+            | PlanAction::Create { .. }
             | PlanAction::CreateStore { .. }
             | PlanAction::CreateChild(_)
             | PlanAction::Remove(_)
@@ -181,7 +200,9 @@ impl super::Plan {
     #[must_use]
     pub fn creation_cycles(&self) -> u64 {
         match self.action {
-            PlanAction::Create { cycles, .. } | PlanAction::CreateStore { cycles, .. } => cycles,
+            PlanAction::BootstrapRoot { cycles }
+            | PlanAction::Create { cycles, .. }
+            | PlanAction::CreateStore { cycles, .. } => cycles,
             PlanAction::CreateChild(_) => canic_management_protocol::CREATION_CYCLES,
             _ => 0,
         }
@@ -211,6 +232,27 @@ impl super::Plan {
         match &self.action {
             PlanAction::MaintainRoot { store, .. } => store.as_deref(),
             _ => None,
+        }
+    }
+}
+
+pub(super) const ROOT_BOOTSTRAP: &str = "canic:root-bootstrap.v1";
+
+impl PlanAction {
+    pub(super) const fn contract(&self) -> &'static str {
+        match self {
+            Self::Call(_) => "canic:application-call.v1",
+            Self::Auth(_) => "canic:auth-access.v1",
+            Self::Publish(_) => "canic:artifact-publication.v1",
+            Self::Remove(_) => "canic:artifact-removal.v1",
+            Self::Create { .. } => "canic:deployment-create.v1",
+            Self::BootstrapRoot { .. } => ROOT_BOOTSTRAP,
+            Self::Upgrade(_) => "canic:deployment-upgrade.v1",
+            Self::CreateStore { .. } => "canic:store-bootstrap.v1",
+            Self::UpgradeStore { .. } => "canic:store-maintenance.v1",
+            Self::CreateChild(_) => "canic:child-creation.v1",
+            Self::UpgradeChild { .. } => "canic:child-upgrade.v1",
+            Self::MaintainRoot { .. } => "canic:root-maintenance.v1",
         }
     }
 }

@@ -62,7 +62,6 @@ fn toml_edits_preserve_comments_and_existing_values_in_supported_table_forms() {
             "app",
             CanisterBinding {
                 id: "aaaaa-aa".into(),
-                profile_manager: false,
             },
         )
         .unwrap();
@@ -177,7 +176,6 @@ fn app_and_fleet_initialization_preserve_evidence_and_refuse_conflicts() {
             "backend",
             CanisterBinding {
                 id: "aaaaa-aa".into(),
-                ..Default::default()
             }
         )
         .is_err()

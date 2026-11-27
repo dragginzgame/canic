@@ -2,10 +2,7 @@
 mod mount;
 
 mod actor;
-pub use actor::{
-    HubConfig, ShardConfig, decode_hub, decode_shard, hub_readiness, open_hub, open_shard, root,
-    shard_readiness,
-};
+pub use actor::{hub_readiness, open_hub, open_shard, root, shard_readiness};
 
 // Select the directory inside the role mount so linking Canic alone adds no endpoint.
 #[cfg(feature = "role-attestation")]

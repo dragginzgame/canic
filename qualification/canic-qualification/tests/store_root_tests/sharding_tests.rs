@@ -970,7 +970,7 @@ async fn check_db_owner(pic: &PocketIc, id: CanisterId, hub: CanisterId, operato
     };
     let request = ic_wire::encode(&(), frame(ic_wire::Direction::Request), RPC_LIMITS).unwrap();
     let bytes = pic
-        .query_call(id, hub, "db_inspect", request.clone())
+        .query_call(id, hub, "canic_db_inspect", request.clone())
         .await
         .unwrap();
     let reply: inspection::Response =
@@ -980,7 +980,7 @@ async fn check_db_owner(pic: &PocketIc, id: CanisterId, hub: CanisterId, operato
         inspection::Admission::Readable { .. }
     ));
     assert!(
-        pic.query_call(id, operator, "db_inspect", request)
+        pic.query_call(id, operator, "canic_db_inspect", request)
             .await
             .is_err()
     );

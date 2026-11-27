@@ -63,7 +63,7 @@ pub fn create_store_plan(
     let bytes = store::read(wasm, artifact::MAX_WASM)?;
     let now = crate::now()?;
     let plan = Plan {
-        version: 9,
+        version: crate::plan::APPROVAL_VERSION,
         network: input.network,
         controller: input.controller,
         artifact: artifact::admit(&bytes)?,
@@ -183,22 +183,14 @@ pub(crate) fn observation(
         expires_at_ns: deadline,
     };
     let frame = ic_wire::Encoding::Frame {
-        method: if plan.version == 9 {
-            wire::OBSERVATION
-        } else {
-            wire::INFO
-        },
+        method: wire::OBSERVATION,
         direction: ic_wire::Direction::Request,
     };
-    let args = if plan.version == 9 {
-        ic_wire::encode(
-            &wire::ObservationRequest::Info(request),
-            frame,
-            canic_management_protocol::LIMITS,
-        )
-    } else {
-        ic_wire::encode(&request, frame, canic_management_protocol::LIMITS)
-    }
+    let args = ic_wire::encode(
+        &wire::ObservationRequest::Info(request),
+        frame,
+        canic_management_protocol::LIMITS,
+    )
     .map_err(supplier)?;
     Ok(signed::Call {
         canister: id,
@@ -215,25 +207,18 @@ struct Readiness {
     info: Info,
 }
 
-fn decode(plan: &Plan, bytes: &[u8]) -> Result<Info> {
+fn decode(bytes: &[u8]) -> Result<Info> {
     let frame = ic_wire::Encoding::Frame {
-        method: if plan.version == 9 {
-            wire::OBSERVATION
-        } else {
-            wire::INFO
-        },
+        method: wire::OBSERVATION,
         direction: ic_wire::Direction::Response,
     };
-    let result: wire::InfoReply = if plan.version == 9 {
+    let result: wire::InfoReply =
         ic_wire::decode::<wire::ObservationReply>(bytes, frame, wire::RESPONSE_LIMITS)
             .map_err(supplier)?
             .and_then(|v| match v {
                 wire::Observation::Info(info) => Ok(info),
                 _ => Err(wire::Error::Uncertain),
-            })
-    } else {
-        ic_wire::decode(bytes, frame, wire::RESPONSE_LIMITS).map_err(supplier)?
-    };
+            });
     result.map_err(|error| {
         Error::Blocked(format!(
             "Store readiness returned {error:?}; retain evidence and reconcile"
@@ -252,7 +237,7 @@ pub(crate) fn retained(dir: &Path, plan: &Plan, canister: Principal) -> Result<(
         plan,
         canister,
     )?;
-    if decode(plan, &reply)? != value.info {
+    if decode(&reply)? != value.info {
         return Err(Error::Invalid(
             "Store readiness differs from retained observation".into(),
         ));
@@ -315,7 +300,7 @@ pub(crate) async fn finish(
         Error::Blocked("Store readiness observation budget exhausted; retain evidence".into())
     })?;
     let reply = signed::observe_store(&path, plan, canister, identity, icp, client).await?;
-    let info = decode(plan, &reply)?;
+    let info = decode(&reply)?;
     store::put_json(
         &dir.join("store-ready.json"),
         &Readiness {

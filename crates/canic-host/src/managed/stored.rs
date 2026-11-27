@@ -112,7 +112,7 @@ pub(super) fn select(
 }
 
 pub(super) async fn verify(plan: &Plan, client: &ReadClient) -> Result<()> {
-    if let Some(source) = plan.management().and_then(|m| m.source.as_ref()) {
+    if let Some(source) = plan.management().map(|m| &m.source) {
         verify_store(client, plan.application_controller(), &source.store).await?;
     }
     Ok(())
@@ -145,16 +145,14 @@ fn stage<A>(plan: &Plan, approval: A) -> Result<wire::Stage<A>> {
         approval,
         reference: plan
             .management()
-            .and_then(|m| m.source.as_ref())
+            .map(|m| &m.source)
             .ok_or_else(invalid)?
             .reference(),
     })
 }
 
-fn slot(plan: &Plan) -> ChildId {
-    plan.management()
-        .and_then(|m| m.slot)
-        .unwrap_or(ChildId::FIRST)
+fn slot(plan: &Plan) -> Result<ChildId> {
+    plan.management().map(|m| m.slot).ok_or_else(invalid)
 }
 
 pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
@@ -163,7 +161,7 @@ pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
         method,
         direction: ic_wire::Direction::Request,
     };
-    let slot = slot(plan);
+    let slot = slot(plan)?;
     let configured = plan.management().is_some_and(|m| m.arguments.is_some());
     match method {
         application::ACTIVATE => ic_wire::encode(
@@ -202,13 +200,13 @@ pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
 fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
     let source = plan
         .management()
-        .and_then(|owner| owner.source.as_ref())
+        .map(|owner| &owner.source)
         .ok_or_else(invalid)?;
     let value = {
         let value = crate::root_custody::decode(super::Method::Observe.id(plan), bytes)?;
         let lifecycle = value
             .applications
-            .get(slot(plan).service_index().ok_or_else(invalid)?)
+            .get(slot(plan)?.service_index().ok_or_else(invalid)?)
             .ok_or_else(invalid)?;
         if let Some(lifecycle) = lifecycle {
             if plan.target().is_none() {
@@ -222,7 +220,7 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
                 .current
                 .stored
                 .children
-                .get(slot(plan).service_index().ok_or_else(invalid)?)
+                .get(slot(plan)?.service_index().ok_or_else(invalid)?)
                 .ok_or_else(invalid)?
                 .upgrades
                 .iter()
@@ -243,7 +241,7 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
                 .current
                 .stored
                 .children
-                .get(slot(plan).service_index().ok_or_else(invalid)?)
+                .get(slot(plan)?.service_index().ok_or_else(invalid)?)
                 .ok_or_else(invalid)?
                 .creation
                 != Status::default()
@@ -333,7 +331,7 @@ pub(super) fn maintenance(plan: &Plan, bytes: &[u8]) -> Result<Option<applicatio
         .current
         .stored
         .children
-        .get(slot(plan).service_index().ok_or_else(invalid)?)
+        .get(slot(plan)?.service_index().ok_or_else(invalid)?)
         .ok_or_else(invalid)?
         .upgrades
         .iter()
@@ -342,7 +340,7 @@ pub(super) fn maintenance(plan: &Plan, bytes: &[u8]) -> Result<Option<applicatio
         .map(|i| {
             value
                 .applications
-                .get(slot(plan).service_index().ok_or_else(invalid)?)
+                .get(slot(plan)?.service_index().ok_or_else(invalid)?)
                 .ok_or_else(invalid)?
                 .as_ref()
                 .and_then(|l| l.upgrades.get(i))
@@ -435,7 +433,7 @@ pub(super) fn creation_evidence(
     bytes: &[u8],
 ) -> Result<(Status, Option<wire::Delivery>)> {
     let value = custody(plan, bytes)?;
-    let child = value.child(slot(plan))?;
+    let child = value.child(slot(plan)?)?;
     let status = &child.journal.creation;
     if status == &Status::default() && child.sources.is_none() {
         return Ok((status.clone(), None));
@@ -444,7 +442,7 @@ pub(super) fn creation_evidence(
     if plan.management().is_some_and(|m| m.arguments.is_some()) {
         let expected = application_stage(plan, super::approval(plan)?)?;
         if source.creation.reference != expected.source.reference
-            || source.creation.pin() != expected.pin(application::STAGE, slot(plan))
+            || source.creation.pin() != expected.pin(application::STAGE, slot(plan)?)
             || (status.phase == canic_management_protocol::Phase::Ready
                 && source.creation.state != wire::PinState::Retained)
         {
@@ -452,7 +450,7 @@ pub(super) fn creation_evidence(
         }
     } else {
         delivery(
-            slot(plan),
+            slot(plan)?,
             &stage(plan, super::approval(plan)?)?,
             wire::STAGE,
             &source.creation,
@@ -471,7 +469,7 @@ pub(super) fn upgrade_evidence(
     bytes: &[u8],
 ) -> Result<(upgrade::Status, Option<wire::Delivery>)> {
     let value = custody(plan, bytes)?;
-    let child = value.child(slot(plan))?;
+    let child = value.child(slot(plan)?)?;
     let journal = &child.journal;
     let expected = super::upgrade::approval(plan)?;
     let Some(position) = journal
@@ -488,7 +486,7 @@ pub(super) fn upgrade_evidence(
     let status = &journal.upgrades[position];
     if plan.management().is_some_and(|m| m.arguments.is_some()) {
         let expected = application_upgrade(plan)?;
-        if sources.upgrades[position].pin() != expected.pin(slot(plan))
+        if sources.upgrades[position].pin() != expected.pin(slot(plan)?)
             || sources.upgrades[position].reference != expected.source.source.reference
             || (status.phase == upgrade::Phase::Ready
                 && sources.upgrades[position].state != wire::PinState::Retained)
@@ -497,7 +495,7 @@ pub(super) fn upgrade_evidence(
         }
     } else {
         delivery(
-            slot(plan),
+            slot(plan)?,
             &stage(plan, expected)?,
             wire::STAGE_UPGRADE,
             &sources.upgrades[position],

@@ -35,7 +35,7 @@ async fn readiness(pic: &PocketIc, id: CanisterId) -> readiness::State {
     )
     .unwrap();
     let bytes = pic
-        .update_call(id, CanisterId::anonymous(), "readiness", request)
+        .update_call(id, CanisterId::anonymous(), "canic_readiness", request)
         .await
         .unwrap();
     ic_wire::decode(

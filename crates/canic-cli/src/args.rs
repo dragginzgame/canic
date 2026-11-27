@@ -92,6 +92,55 @@ pub(super) struct FleetScope {
     pub(super) no_config: bool,
 }
 
+impl FleetScope {
+    pub(super) fn resolve(
+        &self,
+    ) -> canic_host::Result<(PathBuf, Option<canic_host::SelectedFleet>, PathBuf)> {
+        let config_path = if self.no_config {
+            PathBuf::from("canic.toml")
+        } else {
+            canic_host::resolve_config_path(
+                std::path::Path::new(""),
+                self.config.as_deref(),
+                self.app.as_deref(),
+            )?
+        };
+        let selected = if !self.no_config
+            && (self.config.is_some()
+                || config_path
+                    .try_exists()
+                    .map_err(|error| canic_host::Error::Supplier(Box::new(error)))?)
+        {
+            Some(
+                canic_host::load_config(&config_path)?
+                    .select(self.app.as_deref(), self.fleet.as_deref())?,
+            )
+        } else {
+            if self.app.is_some() || self.fleet.is_some() {
+                return Err(canic_host::Error::Invalid(
+                    "app/fleet selection requires a config".into(),
+                ));
+            }
+            None
+        };
+        let journal = self.state_dir.clone().unwrap_or_else(|| {
+            selected.as_ref().map_or_else(
+                || PathBuf::from(".canic"),
+                |fleet| fleet.journal_path(&config_path),
+            )
+        });
+        Ok((config_path, selected, journal))
+    }
+
+    pub(super) fn operation_dir(&self, digest: &str) -> canic_host::Result<PathBuf> {
+        let (_, selected, journal) = self.resolve()?;
+        if let Some(fleet) = selected {
+            fleet.check_operation(&journal, digest)?;
+        }
+        Ok(journal)
+    }
+}
+
 #[derive(Subcommand)]
 pub(super) enum AppCommand {
     /// Build app canisters from their declared Cargo recipes; deploys nothing.
@@ -404,24 +453,27 @@ pub(super) enum FleetCommand {
         open: bool,
     },
     /// Execute an app-owned command directly as the selected user; retain uncertain outcomes.
-    Call {
-        #[command(flatten)]
-        selection: CanisterConfigArgs,
-        /// Override the selected fleet's application-call journal.
-        #[arg(long)]
-        state_dir: Option<PathBuf>,
-        /// Select an app definition with a built native command codec.
-        #[arg(long)]
-        canister: String,
-        /// User identity; being a controller grants no application permission.
-        #[arg(long)]
-        identity: String,
-        #[command(flatten)]
-        signer: SignerArgs,
-        /// Named command and arguments interpreted by the application's codec.
-        #[arg(required = true, num_args = 1..)]
-        command: Vec<String>,
-    },
+    Call(CallArgs),
+}
+
+#[derive(Args)]
+pub(super) struct CallArgs {
+    #[command(flatten)]
+    pub(super) selection: CanisterConfigArgs,
+    /// Override the selected fleet's application-call journal.
+    #[arg(long)]
+    pub(super) state_dir: Option<PathBuf>,
+    /// Select an app definition with a built native command codec.
+    #[arg(long)]
+    pub(super) canister: String,
+    /// User identity; being a controller grants no application permission.
+    #[arg(long)]
+    pub(super) identity: String,
+    #[command(flatten)]
+    pub(super) signer: SignerArgs,
+    /// Named command and arguments interpreted by the application's codec.
+    #[arg(required = true, num_args = 1..)]
+    pub(super) command: Vec<String>,
 }
 
 #[derive(Args)]
@@ -437,13 +489,20 @@ pub(super) struct CanisterConfigArgs {
 }
 
 impl CanisterConfigArgs {
+    pub(super) fn resolve(
+        &self,
+    ) -> canic_host::Result<(PathBuf, canic_host::Config, canic_host::SelectedFleet)> {
+        let path = self.config.path(self.app.as_deref())?;
+        let config = canic_host::load_config(&path)?;
+        let selected = config.select(self.app.as_deref(), self.fleet.as_deref())?;
+        Ok((path, config, selected))
+    }
+
     pub(super) fn resolve_journal(
         &self,
         state_dir: Option<&std::path::Path>,
     ) -> canic_host::Result<(PathBuf, canic_host::SelectedFleet, PathBuf)> {
-        let path = self.config.path(self.app.as_deref())?;
-        let selected =
-            canic_host::load_config(&path)?.select(self.app.as_deref(), self.fleet.as_deref())?;
+        let (path, _, selected) = self.resolve()?;
         let journal = state_dir.map_or_else(
             || selected.journal_path(&path),
             std::path::Path::to_path_buf,
@@ -502,15 +561,7 @@ impl FleetCommand {
             | Self::Reconcile { scope, .. }
             | Self::Status { scope, .. }
             | Self::Show { scope, .. } => Some(scope),
-            Self::CompareSubnets { .. }
-            | Self::Call { .. }
-            | Self::Artifact(_)
-            | Self::Auth(_)
-            | Self::Placements { .. }
-            | Self::Canister(_)
-            | Self::Init { .. }
-            | Self::List { .. }
-            | Self::View { .. } => None,
+            _ => None,
         }
     }
 }

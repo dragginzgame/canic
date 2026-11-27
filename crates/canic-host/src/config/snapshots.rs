@@ -81,7 +81,7 @@ impl SelectedFleet {
                     "snapshot target {child:?} must be an application child"
                 ))
             })?;
-        let readers = match &self.config.snapshots {
+        let readers = match &self.config.policy.snapshots {
             Some(policy)
                 if policy.roles.as_ref().is_none_or(|roles| {
                     slot.role.as_ref().is_some_and(|role| roles.contains(role))

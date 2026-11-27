@@ -98,7 +98,7 @@ pub const MAX_KEYS_PER_SHARD: u32 = 100_000;
 /// Install an immutable routing policy at the owning hub.
 pub struct ConfigureShardRoutes;
 impl crate::method::Contract for ConfigureShardRoutes {
-    const NAME: &'static str = "configure_shard_routes";
+    const NAME: &'static str = "canic_configure_shard_routes";
     const ID: u64 = ic_wire::method_id("canic.hub.configure_shard_routes.v1");
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = (String, u32);
@@ -109,7 +109,7 @@ impl crate::method::Contract for ConfigureShardRoutes {
 pub struct ObserveShard;
 
 impl crate::method::Contract for ObserveShard {
-    const NAME: &'static str = "observe_shard";
+    const NAME: &'static str = "canic_observe_shard";
     const ID: u64 = ic_wire::method_id("canic.hub.observe_shard.v1");
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = ic_platform_types::Principal;
@@ -120,7 +120,7 @@ impl crate::method::Contract for ObserveShard {
 pub struct BeginShardDrain;
 
 impl crate::method::Contract for BeginShardDrain {
-    const NAME: &'static str = "begin_shard_drain";
+    const NAME: &'static str = "canic_begin_shard_drain";
     const ID: u64 = ic_wire::method_id("canic.hub.begin_shard_drain.v1");
     const REQUEST: ic_wire::Limits = LIMITS;
     type Input = ShardTarget;

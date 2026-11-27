@@ -14,12 +14,15 @@ category = "tests"
 crate-type = ["cdylib", "rlib"]
 
 [features]
+blob-receiver = ["receiver", "canic/blob"]
+receiver = ["canic/stateful-role", "canic/role-attestation"]
 inspection = ["canic/inspection"]
 
 [dependencies]
 canic = { workspace = true, features = ["db-store"] }
 ic-db.workspace = true
 ic-platform-runtime.workspace = true
+ic-storage.workspace = true
 
 [build-dependencies]
 ic-db = { workspace = true, features = ["build"] }

@@ -60,8 +60,8 @@ pub struct Page {
 pub struct Logs;
 
 impl Contract for Logs {
-    const NAME: &'static str = "logs";
-    const ID: u64 = wire::method_id(Self::NAME);
+    const NAME: &'static str = "canic_logs";
+    const ID: u64 = wire::method_id("logs");
     const REPLY: wire::Limits = wire::Limits {
         bytes: 4096,
         nodes: 4096,
@@ -155,7 +155,7 @@ pub fn retained_bytes() -> usize {
     with_log(|_, log| log.borrow().retained_bytes())
 }
 
-#[crate::update(contract = Logs, guard = crate::guard::require_controller)]
+#[crate::__canic_update(contract = Logs, guard = crate::guard::require_controller)]
 fn logs(before: Option<u64>) -> Page {
     page(before)
 }

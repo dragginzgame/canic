@@ -115,17 +115,11 @@ pub fn init_fleet(path: &Path, app: &str, fleet: &str, network: Network) -> Resu
             definition.fleets.insert(
                 fleet.into(),
                 FleetDeclaration {
-                    snapshots: None,
+                    policy: Default::default(),
                     lifetime: None,
-                    receiver_policy: None,
-                    top_up_children: vec![],
-                    role_receivers: vec![],
-                    subnet_child_limit: None,
-                    allow_large_subnet: false,
-                    registry: None,
+
                     standby_pool: None,
-                    worker_pools: Vec::new(),
-                    shard_pools: Vec::new(),
+
                     auth: Vec::new(),
                     network: FleetNetwork::Bound(network),
                     journal: None,

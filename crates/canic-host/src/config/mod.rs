@@ -87,9 +87,6 @@ pub struct BuildInput {
 pub struct CanisterBinding {
     /// Existing identity for observation; does not prove existence or control.
     pub id: String,
-    /// Select the profile demo's read-only status adapter for this identity.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub profile_manager: bool,
 }
 
 /// A local simulator can be declared before it has an address or trust anchor.
@@ -119,16 +116,13 @@ pub enum FleetLifetime {
     Ephemeral,
 }
 
-/// Deployment inputs for one instance of an app's shared definitions.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// Fleet policy copied unchanged when resolving a deployment configuration.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct FleetDeclaration {
+pub struct FleetPolicy {
     /// Per-fleet snapshot download policy for application canisters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub snapshots: Option<SnapshotConfig>,
-    /// Opt in to a run-owned local simulator and temporary journal.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub lifetime: Option<FleetLifetime>,
     /// Optional install-time policy for explicitly selected application roles.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receiver_policy: Option<crate::ReceiverPolicy>,
@@ -147,21 +141,29 @@ pub struct FleetDeclaration {
     /// Registry assigning one dedicated child per application key.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registry: Option<RegistryConfig>,
-    /// Subnet standby pool maintenance and unassigned external candidates.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub standby_pool: Option<StandbyPoolConfig>,
     /// Named worker allowances, each bound to its component and parent hub.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub worker_pools: Vec<WorkerPoolConfig>,
     /// Independent grants for named shared-shard components.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub shard_pools: Vec<ShardPoolConfig>,
-    /// Exact receiver enrollments. A historical single table is also accepted.
-    #[serde(
-        default,
-        deserialize_with = "crate::auth::declarations",
-        skip_serializing_if = "Vec::is_empty"
-    )]
+}
+
+/// Deployment inputs for one instance of an app's shared definitions.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetDeclaration {
+    /// Policies shared by the declaration and the resolved fleet.
+    #[serde(flatten)]
+    pub policy: FleetPolicy,
+    /// Opt in to a run-owned local simulator and temporary journal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifetime: Option<FleetLifetime>,
+    /// Subnet standby pool maintenance and unassigned external candidates.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub standby_pool: Option<StandbyPoolConfig>,
+    /// Exact receiver enrollments.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub auth: Vec<crate::AuthConfig>,
     /// Explicit deployment network and trust anchor.
     pub network: FleetNetwork,
@@ -177,42 +179,14 @@ pub struct FleetDeclaration {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetConfig {
-    /// Per-fleet snapshot download policy for application canisters.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub snapshots: Option<SnapshotConfig>,
-    /// Optional install-time policy for explicitly selected application roles.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub receiver_policy: Option<crate::ReceiverPolicy>,
-    /// Direct child components eligible for subsequent top-ups by their declared parent.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub top_up_children: Vec<ChildTopUp>,
-    /// Named permanent services whose installation pins the fleet Root's role key.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub role_receivers: Vec<String>,
-    /// Fleet-wide limit on occupied child and reserve slots on this managed subnet.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub subnet_child_limit: Option<u32>,
-    /// Explicit opt-in for a numbered ceiling above the default subnet backstop.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub allow_large_subnet: bool,
-    /// Registry assigning one dedicated child per application key.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub registry: Option<RegistryConfig>,
+    /// Policies shared by the declaration and the resolved fleet.
+    #[serde(flatten)]
+    pub policy: FleetPolicy,
     /// Subnet standby pool maintenance and unassigned external candidates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub standby_pool: Option<canic_management_protocol::stored::StandbyPolicy>,
-    /// Named worker allowances, each bound to its component and parent hub.
+    /// Exact receiver enrollments.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub worker_pools: Vec<WorkerPoolConfig>,
-    /// Independent grants for named shared-shard components.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub shard_pools: Vec<ShardPoolConfig>,
-    /// Exact receiver enrollments. A historical single table is also accepted.
-    #[serde(
-        default,
-        deserialize_with = "crate::auth::declarations",
-        skip_serializing_if = "Vec::is_empty"
-    )]
     pub auth: Vec<crate::AuthConfig>,
     /// Explicit deployment network and trust anchor.
     pub network: Network,
@@ -251,9 +225,6 @@ pub struct CanisterConfig {
     /// App-owned Wasm input, relative to the configuration file.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wasm: Option<PathBuf>,
-    /// Select the profile demo's read-only manager status adapter.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub profile_manager: bool,
 }
 
 /// Names retained inside the approved deployment plan.
@@ -355,7 +326,7 @@ impl Config {
                     }
                     other => other,
                 };
-                if let Some(policy) = &config.snapshots {
+                if let Some(policy) = &config.policy.snapshots {
                     policy.validate().map_err(context)?;
                 }
                 if config.lifetime.is_some()
@@ -376,21 +347,23 @@ impl Config {
                     }
                     let slots = definition.resolve_slots(config).map_err(context)?;
                     validate_canisters(&slots).map_err(context)?;
-                    if let Some(policy) = &config.snapshots {
+                    if let Some(policy) = &config.policy.snapshots {
                         policy.validate_roles(&slots).map_err(context)?;
                     }
-                    validate_top_up_children(&slots, &config.top_up_children).map_err(context)?;
-                    validate_role_receivers(&slots, &config.role_receivers).map_err(context)?;
-                    if let Some(policy) = &config.receiver_policy {
+                    validate_top_up_children(&slots, &config.policy.top_up_children)
+                        .map_err(context)?;
+                    validate_role_receivers(&slots, &config.policy.role_receivers)
+                        .map_err(context)?;
+                    if let Some(policy) = &config.policy.receiver_policy {
                         policy.validate(&slots).map_err(context)?;
                     }
                     sharding::validate_pools(
                         &slots,
-                        config.subnet_child_limit,
-                        config.allow_large_subnet,
-                        &config.shard_pools,
-                        config.registry.as_ref(),
-                        &config.worker_pools,
+                        config.policy.subnet_child_limit,
+                        config.policy.allow_large_subnet,
+                        &config.policy.shard_pools,
+                        config.policy.registry.as_ref(),
+                        &config.policy.worker_pools,
                         config.standby_policy().map_err(context)?.as_ref(),
                     )
                     .map_err(context)?;
@@ -497,16 +470,8 @@ impl AppConfig {
             ));
         };
         let mut config = FleetConfig {
-            snapshots: fleet.snapshots.clone(),
-            receiver_policy: fleet.receiver_policy.clone(),
-            top_up_children: fleet.top_up_children.clone(),
-            role_receivers: fleet.role_receivers.clone(),
-            subnet_child_limit: fleet.subnet_child_limit,
-            allow_large_subnet: fleet.allow_large_subnet,
-            registry: fleet.registry.clone(),
+            policy: fleet.policy.clone(),
             standby_pool: fleet.standby_policy()?,
-            worker_pools: fleet.worker_pools.clone(),
-            shard_pools: fleet.shard_pools.clone(),
             auth: fleet.auth.clone(),
             network: network.clone(),
             journal: fleet.journal.clone(),
@@ -527,7 +492,7 @@ impl AppConfig {
         if let Some(policy) = &fleet.standby_pool
             && !canisters
                 .get(&policy.root)
-                .is_some_and(|slot| slot.role.as_deref() == Some("root") && !slot.profile_manager)
+                .is_some_and(|slot| slot.role.as_deref() == Some("root"))
         {
             return Err(Error::Invalid(format!(
                 "standby_pool.root = {:?} requires the fleet Root",
@@ -561,7 +526,6 @@ impl AppConfig {
                         role: definition.role.clone(),
                         parent: definition.parent.clone(),
                         wasm: definition.wasm.clone(),
-                        profile_manager: binding.is_some_and(|binding| binding.profile_manager),
                     },
                 )
             })
@@ -599,22 +563,22 @@ fn select<'a, T>(
 
 impl FleetConfig {
     fn validate(&self) -> Result<()> {
-        if let Some(policy) = &self.snapshots {
+        if let Some(policy) = &self.policy.snapshots {
             policy.validate()?;
             policy.validate_roles(&self.canisters)?;
         }
-        validate_top_up_children(&self.canisters, &self.top_up_children)?;
-        validate_role_receivers(&self.canisters, &self.role_receivers)?;
-        if let Some(policy) = &self.receiver_policy {
+        validate_top_up_children(&self.canisters, &self.policy.top_up_children)?;
+        validate_role_receivers(&self.canisters, &self.policy.role_receivers)?;
+        if let Some(policy) = &self.policy.receiver_policy {
             policy.validate(&self.canisters)?;
         }
         sharding::validate_pools(
             &self.canisters,
-            self.subnet_child_limit,
-            self.allow_large_subnet,
-            &self.shard_pools,
-            self.registry.as_ref(),
-            &self.worker_pools,
+            self.policy.subnet_child_limit,
+            self.policy.allow_large_subnet,
+            &self.policy.shard_pools,
+            self.policy.registry.as_ref(),
+            &self.policy.worker_pools,
             self.standby_pool.as_ref(),
         )?;
         if self.auth.len() > canic::auth::enrollment::MAX_RECEIVERS {
@@ -656,7 +620,11 @@ impl FleetConfig {
             below_cycles,
             amount_cycles,
             ..
-        }) = self.top_up_children.iter().find(|r| r.child() == name)
+        }) = self
+            .policy
+            .top_up_children
+            .iter()
+            .find(|r| r.child() == name)
         else {
             return Err(Error::Invalid(format!(
                 "no top-up amount and threshold declared for {name:?}"
@@ -780,7 +748,6 @@ fn validate_canisters(canisters: &BTreeMap<String, CanisterConfig>) -> Result<()
         )));
     }
     let mut identities = std::collections::BTreeSet::new();
-    let mut managers = 0;
     for (slot, declaration) in canisters {
         name(slot)?;
         if let Some(path) = &declaration.wasm
@@ -819,19 +786,6 @@ fn validate_canisters(canisters: &BTreeMap<String, CanisterConfig>) -> Result<()
                 )));
             }
         }
-        if declaration.profile_manager {
-            if declaration.id.is_none() {
-                return Err(Error::Invalid(format!(
-                    "canisters.{slot}.profile_manager = true requires an existing canister id"
-                )));
-            }
-            managers += 1;
-        }
-    }
-    if managers > 16 {
-        return Err(Error::Invalid(format!(
-            "fleet declares {managers} profile managers; maximum is 16"
-        )));
     }
     Ok(())
 }
@@ -1089,7 +1043,9 @@ pub fn create_configured_plan(
         None,
         crate::now()?,
     )?;
-    plan.version = plan::root_install_version(bytes.len(), 10);
+    plan.action = crate::PlanAction::BootstrapRoot {
+        cycles: plan.creation_cycles(),
+    };
     plan.validate()?;
     plan::retain_locked(&store::Store::open(root)?, plan, &bytes)
 }

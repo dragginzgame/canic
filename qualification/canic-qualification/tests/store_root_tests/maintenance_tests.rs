@@ -58,7 +58,7 @@ pub(super) async fn observe(root: &Client<'_>) -> Status {
 pub(super) async fn predecessor_observation(root: &Client<'_>) -> Status {
     root.update::<_, Option<Status>>(
         "observe_store_maintenance",
-        wire::OBSERVE,
+        super::predecessor_store::OBSERVE,
         &(),
         wire::LIMITS,
     )
@@ -110,16 +110,26 @@ pub(super) async fn command(
     if uses_legacy_maintenance(root).await {
         return match request {
             wire::Request::Stage(a) => {
-                root.update("stage_store_maintenance", wire::STAGE, a, wire::LIMITS)
-                    .await
+                root.update(
+                    "stage_store_maintenance",
+                    super::predecessor_store::STAGE,
+                    a,
+                    wire::LIMITS,
+                )
+                .await
             }
             wire::Request::Advance(a) => Ok(root
-                .update("advance_store_maintenance", wire::ADVANCE, a, wire::LIMITS)
+                .update(
+                    "advance_store_maintenance",
+                    super::predecessor_store::ADVANCE,
+                    a,
+                    wire::LIMITS,
+                )
                 .await),
             wire::Request::Activate(a) => Ok(root
                 .update(
                     "activate_store_maintenance",
-                    wire::ACTIVATE,
+                    super::predecessor_store::ACTIVATE,
                     a,
                     wire::LIMITS,
                 )
@@ -127,7 +137,7 @@ pub(super) async fn command(
             wire::Request::Install(i) => {
                 root.update(
                     "install_store_maintenance",
-                    wire::INSTALL,
+                    super::predecessor_store::INSTALL,
                     i,
                     wire::INSTALL_LIMITS,
                 )
@@ -362,7 +372,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
                 ic_wire::encode(
                     &input,
                     ic_wire::Encoding::Frame {
-                        method: wire::INSTALL,
+                        method: super::predecessor_store::INSTALL,
                         direction: ic_wire::Direction::Request,
                     },
                     wire::INSTALL_LIMITS,

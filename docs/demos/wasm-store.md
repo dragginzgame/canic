@@ -50,6 +50,12 @@ replaying that old request then fails. An injected lost Root reply demonstrates
 why observing absence cannot replace a receipt. Root does not deduplicate freshly
 signed repeats or renew deadlines; Host owns those restrictions.
 
+The current Host accepts Store upgrade plan version 1 with an explicit attempt sequence. Root receives changes
+through `maintain_store`, reports the exact attempt through
+`observe_store_maintenance`, and reconciles an issued effect through
+`recover_store_maintenance`. Host refuses superseded Store upgrade approvals
+before dispatch. A refusal leaves the original attempt and deadline intact.
+
 ## Removal and exact restoration
 
 Use one canonical fleet journal and the current Root/Store executables. Removal
@@ -530,8 +536,7 @@ Root stages and reconciles Store-backed creation through `stage_child_creation`
 and `reconcile_child_creation`. Code upgrades use `stage_child_upgrade`
 and `reconcile_child_upgrade`. Both operations bind the exact lifecycle
 inputs when supplied. `observe_root_custody` returns the complete maintenance
-record. These contracts live in `canic-management-protocol::application`. Existing effect approvals retain their old
-encoding; each new request binds that approval, child slot and exact Store
+record. These contracts live in `canic-management-protocol::application`. Each new request binds the v1 Host approval, child slot and exact Store
 reference into a domain-separated operation digest. Store pins are acquired before
 child creation or upgrade preparation. The pin callback commits before subsequent
 management work. Root retains one cache request deadline and one dispatch; it

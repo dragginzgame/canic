@@ -99,13 +99,10 @@ pub(crate) async fn install<'a>(
     for (name, id) in [("root", root.id), ("store", store.id), ("pool", pool)] {
         fleet.canisters.insert(
             name.into(),
-            canic_host::CanisterBinding {
-                id: id.to_text(),
-                profile_manager: false,
-            },
+            canic_host::CanisterBinding { id: id.to_text() },
         );
     }
-    let worker_pool = fleet.worker_pools.first_mut().unwrap();
+    let worker_pool = fleet.policy.worker_pools.first_mut().unwrap();
     worker_pool.expires_at_ns = Some(deadline);
     configure(fleet);
     let selected = config.select(None, None).unwrap();

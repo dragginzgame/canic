@@ -8,8 +8,13 @@ use model::{Hub, Project, Route};
 
 canic::mount_db!(schema = Hub);
 
+#[cfg(feature = "receiver")]
+mod receiver;
+
+#[cfg(not(feature = "receiver"))]
 canic::mount_lifecycle!(install = install, reopen = reopen);
 
+#[cfg(not(feature = "receiver"))]
 fn install() {
     // Fixed nonce for this disposable fixture.
     open(Some((
@@ -18,10 +23,12 @@ fn install() {
     )));
 }
 
+#[cfg(not(feature = "receiver"))]
 fn reopen() {
     open(None);
 }
 
+#[cfg(not(feature = "receiver"))]
 fn open(install: Option<([u8; 16], ic_db::Principal)>) {
     let host = canic::storage::bootstrap(
         Default::default(),

@@ -173,7 +173,7 @@ async fn historical_scan_keeps_its_refusal_and_digest_after_refused_root_upgrade
     approval.previous_module = store::digest(include_bytes!("../../fixtures/store-0.7.0.wasm"));
     root.update::<_, Result<wire::Status, management::Refusal>>(
         "stage_store_maintenance",
-        wire::STAGE,
+        super::predecessor_store::STAGE,
         &approval,
         wire::LIMITS,
     )

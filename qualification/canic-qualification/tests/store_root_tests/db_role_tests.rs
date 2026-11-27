@@ -135,21 +135,18 @@ async fn installed_roles(journey: Journey) {
             .map(|b| format!("{b:02x}"))
             .collect(),
     });
-    let receivers = local.receiver_policy.as_mut().unwrap();
+    let receivers = local.policy.receiver_policy.as_mut().unwrap();
     receivers.roles.push("project_registry".into());
-    local.role_receivers = vec![HUB.into(), "project_hub".into()];
+    local.policy.role_receivers = vec![HUB.into(), "project_hub".into()];
     for (name, pid) in [("root", root.id), ("store", store.id)] {
         local.canisters.insert(
             name.into(),
-            canic_host::CanisterBinding {
-                id: pid.to_text(),
-                profile_manager: false,
-            },
+            canic_host::CanisterBinding { id: pid.to_text() },
         );
     }
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
     let deadline = now + 600_000_000_000;
-    local.shard_pools.first_mut().unwrap().expires_at_ns = Some(deadline);
+    local.policy.shard_pools.first_mut().unwrap().expires_at_ns = Some(deadline);
     let mut fleet = config.select(None, None).unwrap().config;
     let pin: Result<ic_wire::Bytes<32>, canic::topology::attestation::RoleError> = root
         .update(
@@ -309,7 +306,7 @@ async fn installed_roles(journey: Journey) {
             .update_call(
                 id,
                 browser,
-                "establish_portable_session",
+                "canic_establish_portable_session",
                 EstablishSession::encode_request(&credential).unwrap(),
             )
             .await
@@ -512,7 +509,7 @@ async fn installed_roles(journey: Journey) {
         .update_call(
             project,
             browser,
-            "logout_portable_session",
+            "canic_logout_portable_session",
             Logout::encode_request(&()).unwrap(),
         )
         .await
@@ -561,8 +558,8 @@ async fn dedicated_receiver(
     use ic_auth_protocol_types::Principal;
     let pic = root.pic;
     let mut config = fleet.clone();
-    config.subnet_child_limit = Some(4);
-    config.shard_pools.clear();
+    config.policy.subnet_child_limit = Some(4);
+    config.policy.shard_pools.clear();
     for slot in config.canisters.values_mut() {
         slot.wasm = None;
     }
@@ -571,7 +568,7 @@ async fn dedicated_receiver(
     slot.parent = Some("project_hub".into());
     slot.wasm = Some("db-role-shard.wasm".into());
     config.canisters.insert("dedicated".into(), slot);
-    config.registry = Some(canic_host::RegistryConfig {
+    config.policy.registry = Some(canic_host::RegistryConfig {
         singleton: None,
         component: "dedicated".into(),
         root: "root".into(),
@@ -711,7 +708,7 @@ async fn dedicated_receiver(
             .update_call(
                 child,
                 browser,
-                "establish_portable_session",
+                "canic_establish_portable_session",
                 EstablishSession::encode_request(&proof).unwrap(),
             )
             .await
@@ -786,6 +783,98 @@ async fn schema_mount_reopens_two_stores_by_entity() {
     );
     assert_eq!(pic.get_stable_memory(id).await, before);
     assert_eq!(values().await.unwrap(), (7, 20));
+    assert_eq!(
+        instance.close(Duration::from_secs(10)).await,
+        ic_testkit::server::Deletion::Attempted
+    );
+    assert!(server.stop().unwrap().process.cleanup.is_empty());
+}
+
+#[tokio::test]
+async fn shard_reopens_db_and_blob_and_refuses_changes_to_its_supplier_group() {
+    use canic::auth::install::{Install, LimitsPolicy};
+
+    let (mut server, instance) = support::instance(&canic_qualification::server_directory()).await;
+    let pic = instance.client();
+    let root = pic.create_canister().await;
+    let parent = pic.create_canister().await;
+    let principal = |id: CanisterId| ic_auth_protocol_types::Principal::from_slice(id.as_slice());
+    let input = Install {
+        root: principal(root),
+        issuer: principal(root),
+        role: "shard".into(),
+        network: [1; 32],
+        audience: [2; 32],
+        limits: LimitsPolicy {
+            default_session_secs: 60,
+            max_session_secs: 300,
+            max_proof_ttl_ns: 60_000_000_000,
+            max_sessions: Some(32),
+            max_admitted_logins: Some(64),
+        },
+        application: canic::topology::Install {
+            root: principal(root),
+            parent: principal(parent),
+            role: "shard".into(),
+            application: vec![3; 16],
+        }
+        .encode()
+        .unwrap(),
+    }
+    .encode()
+    .unwrap();
+    let blob = std::fs::read(artifacts().join("db-role-blob-receiver.wasm")).unwrap();
+    let plain = std::fs::read(artifacts().join("db-role-receiver.wasm")).unwrap();
+    for (original, changed) in [(&blob, &plain), (&plain, &blob)] {
+        let id = pic.create_canister_with_settings(Some(root), None).await;
+        pic.add_cycles(id, 3_000_000_000_000).await;
+        pic.install_canister(id, original.clone(), input.clone(), Some(root))
+            .await;
+        let client = Client {
+            pic,
+            id,
+            operator: parent,
+        };
+        client
+            .update::<_, ()>(
+                "seed",
+                ic_wire::method_id("seed"),
+                &(),
+                canic::method::LIMITS,
+            )
+            .await;
+
+        // Refuse both dropping and adding Blob before any new lease is admitted.
+        let before = pic.get_stable_memory(id).await;
+        let refusal =
+            canic_qualification::upgrade_stopped(pic, id, changed.clone(), vec![], Some(root))
+                .await
+                .unwrap_err();
+        assert_eq!(
+            refusal.error_code,
+            ic_testkit::pocket_ic::ErrorCode::CanisterTrapped
+        );
+        assert_eq!(pic.get_stable_memory(id).await, before);
+
+        canic_qualification::upgrade_stopped(pic, id, original.clone(), vec![], Some(root))
+            .await
+            .unwrap();
+        assert_eq!(
+            user_directory_tests::query::<(u64, u64)>(&client, "values")
+                .await
+                .unwrap(),
+            (7, 19)
+        );
+        assert_eq!(
+            user_directory_tests::query::<(
+                Option<ic_auth_protocol_types::Principal>,
+                Option<String>
+            )>(&client, "receiver_binding")
+            .await
+            .unwrap(),
+            (Some(principal(parent)), Some("shard".into()))
+        );
+    }
     assert_eq!(
         instance.close(Duration::from_secs(10)).await,
         ic_testkit::server::Deletion::Attempted

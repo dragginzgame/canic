@@ -1,6 +1,6 @@
 {
   "hub": {
-    "begin_shard_drain": {
+    "canic_begin_shard_drain": {
       "id": "0xda3756e109a75cd7",
       "mode": "update",
       "reply": {
@@ -153,7 +153,7 @@
         "nodes": 1024
       }
     },
-    "configure_shard_routes": {
+    "canic_configure_shard_routes": {
       "id": "0x8c0fce1786d45eba",
       "mode": "update",
       "reply": {
@@ -261,7 +261,7 @@
         "nodes": 1024
       }
     },
-    "establish_portable_session": {
+    "canic_establish_portable_session": {
       "id": "0x0000415554480012",
       "mode": "update",
       "reply": {
@@ -1189,7 +1189,7 @@
         "nodes": 65536
       }
     },
-    "logout_portable_session": {
+    "canic_logout_portable_session": {
       "id": "0x0000415554480014",
       "mode": "update",
       "reply": {
@@ -1299,7 +1299,7 @@
         "nodes": 8
       }
     },
-    "logs": {
+    "canic_logs": {
       "id": "0x2183955139ce40a5",
       "mode": "update",
       "reply": {
@@ -1443,7 +1443,7 @@
         "nodes": 4096
       }
     },
-    "metrics": {
+    "canic_metrics": {
       "id": "0x7bea4b7278ea6feb",
       "mode": "query",
       "reply": {
@@ -2076,59 +2076,7 @@
         "nodes": 256
       }
     },
-    "my_shard": {
-      "id": "0x3c047cd858b871a3",
-      "mode": "query",
-      "reply": {
-        "rust": "core::option::Option<ic_platform_types::principal::Principal>",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire_Option_bf68a6e7a54dd5ec"
-          },
-          "Wire_Bytes_ceafa818703233a0": {
-            "k": "bytes",
-            "max": 29
-          },
-          "Wire_Option_bf68a6e7a54dd5ec": {
-            "item": {
-              "k": "ref",
-              "name": "Wire_Principal_f14095eb1cc0831f"
-            },
-            "k": "option"
-          },
-          "Wire_Principal_f14095eb1cc0831f": {
-            "k": "ref",
-            "name": "Wire_Bytes_ceafa818703233a0"
-          }
-        }
-      },
-      "reply_limits": {
-        "allocation": 393216,
-        "bytes": 16384,
-        "depth": 16,
-        "nodes": 4096
-      },
-      "request": {
-        "rust": "()",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire____07e11f07b4a6665a"
-          },
-          "Wire____07e11f07b4a6665a": {
-            "k": "unit"
-          }
-        }
-      },
-      "request_limits": {
-        "allocation": 393216,
-        "bytes": 16384,
-        "depth": 16,
-        "nodes": 4096
-      }
-    },
-    "observe_shard": {
+    "canic_observe_shard": {
       "id": "0x6026ef51323d518b",
       "mode": "update",
       "reply": {
@@ -2315,7 +2263,7 @@
         "nodes": 1024
       }
     },
-    "portable_session_read": {
+    "canic_portable_session_read": {
       "id": "0x0000415554480013",
       "mode": "query",
       "reply": {
@@ -2467,7 +2415,7 @@
         "nodes": 8
       }
     },
-    "readiness": {
+    "canic_readiness": {
       "id": "0x0000000000000003",
       "mode": "update",
       "reply": {
@@ -2530,7 +2478,7 @@
         "nodes": 4
       }
     },
-    "refresh_auth": {
+    "canic_refresh_auth": {
       "id": "0x0000434155544805",
       "mode": "update",
       "reply": {
@@ -2649,6 +2597,58 @@
         "nodes": 2048
       }
     },
+    "my_shard": {
+      "id": "0x3c047cd858b871a3",
+      "mode": "query",
+      "reply": {
+        "rust": "core::option::Option<ic_platform_types::principal::Principal>",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Option_bf68a6e7a54dd5ec"
+          },
+          "Wire_Bytes_ceafa818703233a0": {
+            "k": "bytes",
+            "max": 29
+          },
+          "Wire_Option_bf68a6e7a54dd5ec": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_Principal_f14095eb1cc0831f"
+            },
+            "k": "option"
+          },
+          "Wire_Principal_f14095eb1cc0831f": {
+            "k": "ref",
+            "name": "Wire_Bytes_ceafa818703233a0"
+          }
+        }
+      },
+      "reply_limits": {
+        "allocation": 393216,
+        "bytes": 16384,
+        "depth": 16,
+        "nodes": 4096
+      },
+      "request": {
+        "rust": "()",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire____07e11f07b4a6665a"
+          },
+          "Wire____07e11f07b4a6665a": {
+            "k": "unit"
+          }
+        }
+      },
+      "request_limits": {
+        "allocation": 393216,
+        "bytes": 16384,
+        "depth": 16,
+        "nodes": 4096
+      }
+    },
     "register": {
       "id": "0x51caf4676f4d4bd7",
       "mode": "update",
@@ -2758,7 +2758,7 @@
     }
   },
   "shard": {
-    "establish_portable_session": {
+    "canic_establish_portable_session": {
       "id": "0x0000415554480012",
       "mode": "update",
       "reply": {
@@ -3686,7 +3686,7 @@
         "nodes": 65536
       }
     },
-    "logout_portable_session": {
+    "canic_logout_portable_session": {
       "id": "0x0000415554480014",
       "mode": "update",
       "reply": {
@@ -3796,7 +3796,7 @@
         "nodes": 8
       }
     },
-    "logs": {
+    "canic_logs": {
       "id": "0x2183955139ce40a5",
       "mode": "update",
       "reply": {
@@ -3940,7 +3940,7 @@
         "nodes": 4096
       }
     },
-    "metrics": {
+    "canic_metrics": {
       "id": "0x7bea4b7278ea6feb",
       "mode": "query",
       "reply": {
@@ -4573,63 +4573,7 @@
         "nodes": 256
       }
     },
-    "my_id": {
-      "id": "0x29a64b254dfbd608",
-      "mode": "query",
-      "reply": {
-        "rust": "core::option::Option<[u8; 16]>",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire_Option_e2e6947d909a04cd"
-          },
-          "Wire_Option_e2e6947d909a04cd": {
-            "item": {
-              "k": "ref",
-              "name": "Wire__u8__16__94e8f1a4f22bb392"
-            },
-            "k": "option"
-          },
-          "Wire__u8__16__94e8f1a4f22bb392": {
-            "item": {
-              "k": "ref",
-              "name": "Wire_u8_08c48207b56753d8"
-            },
-            "k": "array",
-            "max": 16
-          },
-          "Wire_u8_08c48207b56753d8": {
-            "bits": 8,
-            "k": "u"
-          }
-        }
-      },
-      "reply_limits": {
-        "allocation": 393216,
-        "bytes": 16384,
-        "depth": 16,
-        "nodes": 4096
-      },
-      "request": {
-        "rust": "()",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire____07e11f07b4a6665a"
-          },
-          "Wire____07e11f07b4a6665a": {
-            "k": "unit"
-          }
-        }
-      },
-      "request_limits": {
-        "allocation": 393216,
-        "bytes": 16384,
-        "depth": 16,
-        "nodes": 4096
-      }
-    },
-    "portable_session_read": {
+    "canic_portable_session_read": {
       "id": "0x0000415554480013",
       "mode": "query",
       "reply": {
@@ -4779,6 +4723,244 @@
         "bytes": 11,
         "depth": 4,
         "nodes": 8
+      }
+    },
+    "canic_readiness": {
+      "id": "0x0000000000000003",
+      "mode": "update",
+      "reply": {
+        "rust": "canic::readiness::State",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_State_5225ede4bbc26fc0"
+          },
+          "Wire_State_5225ede4bbc26fc0": {
+            "k": "enum",
+            "variants": [
+              {
+                "id": 0,
+                "name": "Unavailable",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 1,
+                "name": "Fenced",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 2,
+                "name": "Ready",
+                "value": {
+                  "k": "unit"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "reply_limits": {
+        "allocation": 256,
+        "bytes": 32,
+        "depth": 4,
+        "nodes": 4
+      },
+      "request": {
+        "rust": "()",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire____07e11f07b4a6665a"
+          },
+          "Wire____07e11f07b4a6665a": {
+            "k": "unit"
+          }
+        }
+      },
+      "request_limits": {
+        "allocation": 256,
+        "bytes": 32,
+        "depth": 4,
+        "nodes": 4
+      }
+    },
+    "canic_refresh_auth": {
+      "id": "0x0000434155544805",
+      "mode": "update",
+      "reply": {
+        "rust": "core::result::Result<(), canic::auth::enrollment::Error>",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Result_5824804541328377"
+          },
+          "Wire_Error_e19012fe2e51d84f": {
+            "k": "enum",
+            "variants": [
+              {
+                "id": 0,
+                "name": "Closed",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 1,
+                "name": "Busy",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 2,
+                "name": "Binding",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 3,
+                "name": "Expired",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 4,
+                "name": "Invalid",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 5,
+                "name": "Conflict",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 6,
+                "name": "Unavailable",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 7,
+                "name": "Refused",
+                "value": {
+                  "k": "unit"
+                }
+              },
+              {
+                "id": 8,
+                "name": "Capacity",
+                "value": {
+                  "k": "unit"
+                }
+              }
+            ]
+          },
+          "Wire_Result_5824804541328377": {
+            "err": {
+              "k": "ref",
+              "name": "Wire_Error_e19012fe2e51d84f"
+            },
+            "k": "result",
+            "ok": {
+              "k": "ref",
+              "name": "Wire____07e11f07b4a6665a"
+            }
+          },
+          "Wire____07e11f07b4a6665a": {
+            "k": "unit"
+          }
+        }
+      },
+      "reply_limits": {
+        "allocation": 131072,
+        "bytes": 8192,
+        "depth": 12,
+        "nodes": 2048
+      },
+      "request": {
+        "rust": "()",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire____07e11f07b4a6665a"
+          },
+          "Wire____07e11f07b4a6665a": {
+            "k": "unit"
+          }
+        }
+      },
+      "request_limits": {
+        "allocation": 131072,
+        "bytes": 8192,
+        "depth": 12,
+        "nodes": 2048
+      }
+    },
+    "my_id": {
+      "id": "0x29a64b254dfbd608",
+      "mode": "query",
+      "reply": {
+        "rust": "core::option::Option<[u8; 16]>",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Option_e2e6947d909a04cd"
+          },
+          "Wire_Option_e2e6947d909a04cd": {
+            "item": {
+              "k": "ref",
+              "name": "Wire__u8__16__94e8f1a4f22bb392"
+            },
+            "k": "option"
+          },
+          "Wire__u8__16__94e8f1a4f22bb392": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_u8_08c48207b56753d8"
+            },
+            "k": "array",
+            "max": 16
+          },
+          "Wire_u8_08c48207b56753d8": {
+            "bits": 8,
+            "k": "u"
+          }
+        }
+      },
+      "reply_limits": {
+        "allocation": 393216,
+        "bytes": 16384,
+        "depth": 16,
+        "nodes": 4096
+      },
+      "request": {
+        "rust": "()",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire____07e11f07b4a6665a"
+          },
+          "Wire____07e11f07b4a6665a": {
+            "k": "unit"
+          }
+        }
+      },
+      "request_limits": {
+        "allocation": 393216,
+        "bytes": 16384,
+        "depth": 16,
+        "nodes": 4096
       }
     },
     "provision_user": {
@@ -5000,188 +5182,6 @@
         "bytes": 1024,
         "depth": 12,
         "nodes": 1024
-      }
-    },
-    "readiness": {
-      "id": "0x0000000000000003",
-      "mode": "update",
-      "reply": {
-        "rust": "canic::readiness::State",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire_State_5225ede4bbc26fc0"
-          },
-          "Wire_State_5225ede4bbc26fc0": {
-            "k": "enum",
-            "variants": [
-              {
-                "id": 0,
-                "name": "Unavailable",
-                "value": {
-                  "k": "unit"
-                }
-              },
-              {
-                "id": 1,
-                "name": "Fenced",
-                "value": {
-                  "k": "unit"
-                }
-              },
-              {
-                "id": 2,
-                "name": "Ready",
-                "value": {
-                  "k": "unit"
-                }
-              }
-            ]
-          }
-        }
-      },
-      "reply_limits": {
-        "allocation": 256,
-        "bytes": 32,
-        "depth": 4,
-        "nodes": 4
-      },
-      "request": {
-        "rust": "()",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire____07e11f07b4a6665a"
-          },
-          "Wire____07e11f07b4a6665a": {
-            "k": "unit"
-          }
-        }
-      },
-      "request_limits": {
-        "allocation": 256,
-        "bytes": 32,
-        "depth": 4,
-        "nodes": 4
-      }
-    },
-    "refresh_auth": {
-      "id": "0x0000434155544805",
-      "mode": "update",
-      "reply": {
-        "rust": "core::result::Result<(), canic::auth::enrollment::Error>",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire_Result_5824804541328377"
-          },
-          "Wire_Error_e19012fe2e51d84f": {
-            "k": "enum",
-            "variants": [
-              {
-                "id": 0,
-                "name": "Closed",
-                "value": {
-                  "k": "unit"
-                }
-              },
-              {
-                "id": 1,
-                "name": "Busy",
-                "value": {
-                  "k": "unit"
-                }
-              },
-              {
-                "id": 2,
-                "name": "Binding",
-                "value": {
-                  "k": "unit"
-                }
-              },
-              {
-                "id": 3,
-                "name": "Expired",
-                "value": {
-                  "k": "unit"
-                }
-              },
-              {
-                "id": 4,
-                "name": "Invalid",
-                "value": {
-                  "k": "unit"
-                }
-              },
-              {
-                "id": 5,
-                "name": "Conflict",
-                "value": {
-                  "k": "unit"
-                }
-              },
-              {
-                "id": 6,
-                "name": "Unavailable",
-                "value": {
-                  "k": "unit"
-                }
-              },
-              {
-                "id": 7,
-                "name": "Refused",
-                "value": {
-                  "k": "unit"
-                }
-              },
-              {
-                "id": 8,
-                "name": "Capacity",
-                "value": {
-                  "k": "unit"
-                }
-              }
-            ]
-          },
-          "Wire_Result_5824804541328377": {
-            "err": {
-              "k": "ref",
-              "name": "Wire_Error_e19012fe2e51d84f"
-            },
-            "k": "result",
-            "ok": {
-              "k": "ref",
-              "name": "Wire____07e11f07b4a6665a"
-            }
-          },
-          "Wire____07e11f07b4a6665a": {
-            "k": "unit"
-          }
-        }
-      },
-      "reply_limits": {
-        "allocation": 131072,
-        "bytes": 8192,
-        "depth": 12,
-        "nodes": 2048
-      },
-      "request": {
-        "rust": "()",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire____07e11f07b4a6665a"
-          },
-          "Wire____07e11f07b4a6665a": {
-            "k": "unit"
-          }
-        }
-      },
-      "request_limits": {
-        "allocation": 131072,
-        "bytes": 8192,
-        "depth": 12,
-        "nodes": 2048
       }
     }
   }

@@ -244,11 +244,11 @@ pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Res
         return crate::fleet_plan::execute(&dir, digest, identity, icp, false).await;
     }
     let plan: Plan = store::json(&dir.join("plan.json"))?;
-    if matches!(plan.action, crate::PlanAction::Upgrade(_))
-        || (matches!(plan.action, crate::PlanAction::Create { .. })
-            && !matches!(plan.version, 10 | plan::CHUNKED_ROOT_VERSION))
-    {
-        return Err(Error::Blocked("direct deployment approvals from before mandatory fleet Stores require their original Host".into()));
+    if matches!(
+        plan.action,
+        crate::PlanAction::Upgrade(_) | crate::PlanAction::Create { .. }
+    ) {
+        return Err(Error::Blocked("standalone deployment requires a configured Root bootstrap or a fleet-managed operation".into()));
     }
     apply_at(root, &dir, digest, identity, icp).await
 }
@@ -459,7 +459,7 @@ async fn apply_operation(
             }
             crate::maintenance::runtime(dir, &plan, false, identity, icp, &client).await?;
         }
-        if plan.version == plan::CHUNKED_ROOT_VERSION {
+        if plan.chunked_root_install() {
             let install_prepared = dir
                 .join("install/signed.json")
                 .try_exists()
@@ -541,7 +541,7 @@ fn install_call(plan: &Plan, wasm: &[u8], canister: Principal) -> Result<Call<'s
         .map_err(supplier)?,
         _ => Vec::new(),
     };
-    let (method, args) = if plan.version == plan::CHUNKED_ROOT_VERSION {
+    let (method, args) = if plan.chunked_root_install() {
         let args = mgmt::InstallChunkedCodeArgs {
             mode,
             target_canister: canister,
@@ -674,13 +674,13 @@ pub(crate) fn status_loaded(
             .chain(["stop", "stopped", "install", "start"])
             .collect(),
         crate::PlanAction::CreateChild(_) | crate::PlanAction::UpgradeChild { .. } => vec!["stage"],
-        crate::PlanAction::Create { .. } => {
+        crate::PlanAction::Create { .. } | crate::PlanAction::BootstrapRoot { .. } => {
             vec!["create", "install"]
         }
         crate::PlanAction::Upgrade(_) => vec!["stop", "stopped", "install", "start"],
         crate::PlanAction::CreateStore { .. } => vec!["create", "install", "handover"],
     };
-    if plan.version == plan::CHUNKED_ROOT_VERSION {
+    if plan.chunked_root_install() {
         for index in 0..bytes.len().div_ceil(INSTALL_CHUNK_BYTES) {
             let step = format!("upload-{index}");
             effects.insert(step.clone(), attempt_state(&dir.join(step))?.into());
@@ -721,10 +721,7 @@ pub(crate) fn status_loaded(
     };
     let (management, delivery) =
         evidence.map_or((None, None), |(status, delivery)| (Some(status), delivery));
-    let detail = if plan
-        .management()
-        .is_some_and(|owner| owner.source.is_some())
-    {
+    let detail = if plan.management().is_some() {
         StatusDetail::StoredChild {
             delivery: delivery.map(Box::new),
             maintenance: crate::managed::stored::maintenance_evidence(dir, &plan)?.map(Box::new),

@@ -311,7 +311,10 @@ async fn cli_removal_restoration_retains_attempts_and_blocks_lost_results() {
     );
     expire(deadline).await;
     let restoration = cli(&dir, &["fleet", "artifact", "plan-restoration", &removal]);
-    assert_eq!(restoration["plan"]["publication"]["after_removal"], removal);
+    assert_eq!(
+        restoration["plan"]["action"]["approval"]["after_removal"],
+        removal
+    );
     let restored = restoration["operation"].as_str().unwrap();
     assert_ne!(restored, original);
     apply(&dir, restored);

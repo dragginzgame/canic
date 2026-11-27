@@ -69,13 +69,12 @@ pub(crate) fn permits_upgrade(
     if owner.root != history.root
         || owner.root_module != history.root_module
         || owner.slot != old.slot
-        || owner.source.is_some() != old.source.is_some()
-        || owner.source.as_ref().map(|s| &s.store)
-            != old.source.as_ref().and(history.store_binding.as_ref())
+        || owner.source.store != history.store_binding
     {
         return Ok(None);
     }
-    if let Some(source) = &mut owner.source {
+    {
+        let source = &mut owner.source;
         let maintenance = history
             .store_operation
             .as_ref()
@@ -105,7 +104,6 @@ pub(crate) fn permits_upgrade(
         check_upgrade(
             &history.children,
             index,
-            proposed.artifact.bytes,
             proposed.management().ok_or_else(invalid)?.execute_at_ns,
         )?;
     }
@@ -124,37 +122,7 @@ pub(crate) fn permits_upgrade(
     ))
 }
 
-pub(super) fn check_upgrade(
-    children: &[Child],
-    index: usize,
-    bytes: usize,
-    dispatch: u64,
-) -> Result<()> {
-    let custody_bytes: usize = children
-        .iter()
-        .enumerate()
-        .map(|(i, child)| {
-            if child
-                .plan
-                .management()
-                .is_some_and(|owner| owner.source.is_some())
-            {
-                0
-            } else {
-                child.plan.artifact.bytes
-                    + if i == index {
-                        bytes
-                    } else {
-                        child.upgrade_bytes
-                    }
-            }
-        })
-        .sum();
-    if custody_bytes > canic_management_protocol::children::MAX_ARTIFACT_BYTES {
-        return Err(Error::Invalid(
-            "combined creation/current-upgrade artifacts exceed Root custody capacity".into(),
-        ));
-    }
+pub(super) fn check_upgrade(children: &[Child], index: usize, dispatch: u64) -> Result<()> {
     let child = &children[index];
     if child.custody.upgrades.len() >= canic_management_protocol::upgrade::MAX_UPGRADES {
         return Err(Error::Blocked(
@@ -173,7 +141,7 @@ pub(super) struct History {
     pub(super) children: Vec<Child>,
     pub(super) root: String,
     pub(super) root_module: String,
-    pub(super) store_binding: Option<UpgradeTarget>,
+    pub(super) store_binding: UpgradeTarget,
     pub(super) store_operation: Option<canic_management_protocol::store_maintenance::Status>,
     pub(super) store_history: Vec<canic_management_protocol::store_maintenance::Status>,
     pub(super) last_created: u64,
@@ -244,20 +212,17 @@ pub(super) struct Child {
     pub(super) plan: Plan,
     pub(super) receipt: Receipt,
     pub(super) custody: canic_management_protocol::custody::Custody,
-    sources: Option<canic_management_protocol::stored::Sources>,
+    sources: canic_management_protocol::stored::Sources,
     pub(super) module: String,
     pub(super) dispatch: u64,
     version: Option<u64>,
-    pub(super) upgrade_bytes: usize,
 }
 
 impl Child {
     fn retained(dir: &Path, plan: Plan, receipt: Receipt) -> Result<Self> {
         let (mut creation, source) =
             managed::evidence_with_source(dir, &plan)?.ok_or_else(invalid)?;
-        if source.is_some() != plan.management().is_some_and(|o| o.source.is_some()) {
-            return Err(invalid());
-        }
+        let creation_source = source.ok_or_else(invalid)?;
         creation.stable_pages = 0;
         creation.maintenance_candidate = false;
         Ok(Self {
@@ -268,13 +233,12 @@ impl Child {
                 creation,
                 upgrades: Vec::new(),
             },
-            sources: source.map(|creation| canic_management_protocol::stored::Sources {
-                creation,
+            sources: canic_management_protocol::stored::Sources {
+                creation: creation_source,
                 upgrades: Vec::new(),
-            }),
+            },
             dispatch: 0,
             version: None,
-            upgrade_bytes: 0,
         })
     }
 }
@@ -287,9 +251,9 @@ pub(super) fn load(
     individual: &[(String, Plan)],
 ) -> Result<Option<History>> {
     let dir = store.operation(id)?;
-    if fleet.store.is_some() && super::store_receipt(&dir, fleet)?.is_none() {
+    let Some(store_receipt) = super::store_receipt(&dir, fleet)? else {
         return Ok(None);
-    }
+    };
     let mut children = Vec::new();
     for definition in &fleet.children {
         let Some((child, receipt)) = child_completion(&dir, fleet, definition.slot)? else {
@@ -303,10 +267,10 @@ pub(super) fn load(
     }
     let root = root_receipt(&dir, fleet)?.ok_or_else(invalid)?.canister;
     let mut root_module = fleet.root.artifact.sha256.clone();
-    let mut store_binding = super::store_receipt(&dir, fleet)?.map(|receipt| UpgradeTarget {
-        canister: receipt.canister,
-        module: receipt.module_hash,
-    });
+    let mut store_binding = UpgradeTarget {
+        canister: store_receipt.canister,
+        module: store_receipt.module_hash,
+    };
     let mut store_operation: Option<canic_management_protocol::store_maintenance::Status> = None;
     let mut store_history = Vec::new();
     let mut ordered: Vec<_> = individual.iter().collect();
@@ -323,17 +287,17 @@ pub(super) fn load(
             let name = value.deployment.as_ref().ok_or_else(invalid)?;
             if owner.root != root
                 || owner.root_module != root_module
-                || owner.slot != ChildId::service(children.len())
+                || Some(owner.slot) != ChildId::service(children.len())
                 || !fleet.reserves(name)
                 || value.deployment == fleet.root.deployment
-                || fleet.store.as_ref().is_some_and(|s| s.deployment == *name)
+                || fleet.store.deployment == *name
                 || children
                     .iter()
                     .any(|c| c.plan.deployment == value.deployment)
                 || value.network != fleet.root.network
                 || value.controller != fleet.root.controller
-                || owner.source.as_ref().map(|s| &s.store) != store_binding.as_ref()
-                || owner.source.as_ref().and_then(|s| s.maintenance.as_ref())
+                || owner.source.store != store_binding
+                || owner.source.maintenance.as_ref()
                     != store_operation.as_ref().map(|s| &s.approval.attempt)
             {
                 return Err(invalid());
@@ -348,14 +312,14 @@ pub(super) fn load(
             break;
         }
         if let Some(owner) = value.store_upgrade_root() {
-            let binding = store_binding.as_mut().ok_or_else(invalid)?;
-            if value.store_upgrade_sequence().unwrap_or(1)
+            let binding = &mut store_binding;
+            if value.store_upgrade_sequence().ok_or_else(invalid)?
                 != (store_history.len() + usize::from(store_operation.is_some()) + 1) as u64
                 || owner.canister != root
                 || owner.module != root_module
                 || value.target() != Some(&binding.canister)
                 || value.previous_module() != Some(&binding.module)
-                || value.deployment.as_ref() != fleet.store.as_ref().map(|s| &s.deployment)
+                || value.deployment.as_ref() != Some(&fleet.store.deployment)
                 || value.network != fleet.root.network
                 || value.controller != fleet.root.controller
             {
@@ -376,13 +340,12 @@ pub(super) fn load(
         }
         if let Some(expected) = value.maintenance() {
             if value.maintenance_store()
-                != store_custody(
+                != Some(&store_custody(
                     &children,
-                    store_binding.as_ref(),
+                    &store_binding,
                     store_operation.as_ref(),
                     &store_history,
-                )?
-                .as_ref()
+                ))
                 || !expected
                     .iter()
                     .eq(children.iter().map(|child| &child.custody))
@@ -418,14 +381,9 @@ pub(super) fn load(
                     new.root == old.root
                         && new.root_module == root_module
                         && new.slot == old.slot
-                        && new.source.as_ref().map(|s| &s.store)
-                            == old.source.as_ref().and(store_binding.as_ref())
-                        && new.source.as_ref().and_then(|s| s.maintenance.as_ref())
-                            == old
-                                .source
-                                .as_ref()
-                                .and(store_operation.as_ref())
-                                .map(|s| &s.approval.attempt)
+                        && new.source.store == store_binding
+                        && new.source.maintenance.as_ref()
+                            == store_operation.as_ref().map(|s| &s.approval.attempt)
                         && new.execute_at_ns > child.dispatch
                 })
             || value.previous_module() != Some(&child.module)
@@ -449,13 +407,8 @@ pub(super) fn load(
         child.module = value.artifact.sha256.clone();
         child.dispatch = value.management().expect("validated owner").execute_at_ns;
         child.version = evidence.and_then(|s| s.observed_version);
-        child.upgrade_bytes = value.artifact.bytes;
         let (evidence, source) = retained.ok_or_else(invalid)?;
-        match (&mut child.sources, source) {
-            (Some(sources), Some(source)) => sources.upgrades.push(source),
-            (None, None) => {}
-            _ => return Err(invalid()),
-        }
+        child.sources.upgrades.push(source.ok_or_else(invalid)?);
         child.custody.upgrades.push(evidence);
         latest_id = operation.clone();
     }
@@ -482,19 +435,16 @@ pub(super) fn load(
 
 pub(super) fn store_custody(
     children: &[Child],
-    binding: Option<&UpgradeTarget>,
+    binding: &UpgradeTarget,
     operation: Option<&canic_management_protocol::store_maintenance::Status>,
     history: &[canic_management_protocol::store_maintenance::Status],
-) -> Result<Option<crate::StoreMaintenance>> {
-    if children.iter().all(|c| c.sources.is_none()) && operation.is_none() {
-        return Ok(None);
-    }
-    Ok(Some(crate::StoreMaintenance {
+) -> crate::StoreMaintenance {
+    crate::StoreMaintenance {
         operation: operation.cloned(),
         history: history.to_vec(),
-        store: binding.ok_or_else(invalid)?.clone(),
+        store: binding.clone(),
         sources: (0..children.len().max(ChildId::HISTORICAL_SERVICES.len()))
-            .map(|i| children.get(i).and_then(|c| c.sources.clone()))
+            .map(|i| children.get(i).map(|c| c.sources.clone()))
             .collect(),
-    }))
+    }
 }

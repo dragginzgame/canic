@@ -90,7 +90,7 @@ impl ReceiverPolicy {
 
 impl FleetConfig {
     pub(crate) fn resolve_receiver_grants(&mut self) -> Result<()> {
-        let Some(policy) = &self.receiver_policy else {
+        let Some(policy) = &self.policy.receiver_policy else {
             return Ok(());
         };
         for grant in &mut self.auth {
@@ -126,14 +126,16 @@ impl FleetConfig {
             .get(name)
             .and_then(|s| s.role.as_ref())
             .is_some_and(|role| {
-                self.receiver_policy
+                self.policy
+                    .receiver_policy
                     .as_ref()
                     .is_some_and(|policy| policy.roles.contains(role))
             })
     }
 
     pub(crate) fn route_operator_role(&self, name: &str) -> Option<&str> {
-        self.shard_pools
+        self.policy
+            .shard_pools
             .iter()
             .any(|pool| {
                 self.canisters
@@ -146,7 +148,8 @@ impl FleetConfig {
     }
 
     pub(crate) fn funding_operator_role(&self, name: &str) -> Option<&str> {
-        self.top_up_children
+        self.policy
+            .top_up_children
             .iter()
             .any(|edge| {
                 self.canisters
@@ -203,7 +206,12 @@ impl FleetConfig {
         operator: &str,
     ) -> Result<Vec<u8>> {
         use canic::topology::directory::{DbService, ServiceInstall};
-        if !self.role_receivers.iter().any(|service| service == name) {
+        if !self
+            .policy
+            .role_receivers
+            .iter()
+            .any(|service| service == name)
+        {
             return Err(invalid("DB service must be selected for role verification"));
         }
         let role = self
@@ -244,6 +252,7 @@ impl FleetConfig {
         application: Vec<u8>,
     ) -> Result<Vec<u8>> {
         let policy = self
+            .policy
             .receiver_policy
             .as_ref()
             .filter(|_| self.receiver_selected(name))

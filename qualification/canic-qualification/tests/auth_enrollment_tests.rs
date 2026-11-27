@@ -374,7 +374,7 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
             .update_call(
                 f.target,
                 browser,
-                "establish_portable_session",
+                "canic_establish_portable_session",
                 frame.clone(),
             )
             .await
@@ -434,7 +434,12 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
         // round setting. Commit a round before checking each query boundary.
         pic.tick().await;
         let bytes = pic
-            .query_call(f.target, browser, "portable_session_read", read.clone())
+            .query_call(
+                f.target,
+                browser,
+                "canic_portable_session_read",
+                read.clone(),
+            )
             .await
             .unwrap();
         assert_eq!(ReadSession::decode_response(&bytes).unwrap(), Ok(session));
@@ -442,7 +447,12 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
             pic.set_time(Time::from_nanos_since_unix_epoch(now)).await;
             pic.tick().await;
             let bytes = pic
-                .query_call(f.target, browser, "portable_session_read", read.clone())
+                .query_call(
+                    f.target,
+                    browser,
+                    "canic_portable_session_read",
+                    read.clone(),
+                )
                 .await
                 .unwrap();
             assert_eq!(
@@ -451,7 +461,7 @@ async fn authority_loss_cannot_renew_snapshot_or_session_deadlines() {
             );
         }
         let bytes = pic
-            .update_call(f.target, browser, "establish_portable_session", frame)
+            .update_call(f.target, browser, "canic_establish_portable_session", frame)
             .await
             .unwrap();
         assert_eq!(

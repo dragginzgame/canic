@@ -85,16 +85,16 @@ export function issuerAdapter(binding: IssuerBinding, update: IssuerUpdate): Iss
   return {
     transport: {
       issue: async (identity, signal) => result(issueCodec.decodeResponse(await send(
-        'issue_portable_credential', identity, account, new Uint8Array(issueBytes), signal))),
+        'canic_issue_portable_credential', identity, account, new Uint8Array(issueBytes), signal))),
       renew: async (identity, sequence, signal) => result(renewCodec.decodeResponse(await send(
-        'renew_portable_credential', identity, browser,
+        'canic_renew_portable_credential', identity, browser,
         renewCodec.encodeRequest(renewal(sequence)), signal))),
       reconcile: async (identity, sequence, signal) => {
         const request = sequence === 0n
           ? lookupCodec.encodeRequest({ tag: 'Issue', value: {
             epoch: intent.epoch, operation_id: intent.operation_id } })
           : lookupCodec.encodeRequest({ tag: 'Renew', value: renewal(sequence) });
-        return result(lookupCodec.decodeResponse(await send('reconcile_portable_credential',
+        return result(lookupCodec.decodeResponse(await send('canic_reconcile_portable_credential',
           identity, sequence === 0n ? account : browser, request, signal)));
       },
     },
@@ -104,11 +104,11 @@ export function issuerAdapter(binding: IssuerBinding, update: IssuerUpdate): Iss
       if (target.toText() !== issuer) {
         // Auth's journal supplies the admitted receiver. No application permission
         // is inferred here, and its original unit request/reply stay unchanged.
-        const reply = await update('logout_portable_session', target, identity, request, signal);
+        const reply = await update('canic_logout_portable_session', target, identity, request, signal);
         check(identity, browser, signal);
         return reply;
       }
-      const reply = logoutCodec.decodeResponse(await send('revoke_portable_login', identity,
+      const reply = logoutCodec.decodeResponse(await send('canic_revoke_portable_login', identity,
         browser, logoutCodec.encodeRequest(selectors), signal));
       if ('err' in reply) throw new IssuerError('refused');
       if (reply.ok.login_deadline_ns === 0n) throw new IssuerError('deadline');
@@ -124,8 +124,8 @@ export function issuerAdapter(binding: IssuerBinding, update: IssuerUpdate): Iss
 export function httpIssuerAdapter(binding: IssuerBinding,
   options: Omit<HttpUpdateOptions, 'methodName'>): IssuerAdapter {
   // Capture transport trust now, not from a mutable object during a later call.
-  const methods = new Map(['issue_portable_credential', 'renew_portable_credential',
-    'reconcile_portable_credential', 'revoke_portable_login', 'logout_portable_session']
+  const methods = new Map(['canic_issue_portable_credential', 'canic_renew_portable_credential',
+    'canic_reconcile_portable_credential', 'canic_revoke_portable_login', 'canic_logout_portable_session']
     .map(methodName => [methodName, httpUpdateTransport({ ...options, methodName })]));
   return issuerAdapter(binding, (method, target, identity, request, signal) => {
     const transport = methods.get(method);

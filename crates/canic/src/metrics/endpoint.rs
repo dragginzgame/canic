@@ -27,7 +27,7 @@ fn admit() -> Result<(), &'static str> {
 // Read one selected source from this canister without initializing a recorder.
 // guard  : application metrics guard (controller by default)
 // limits : ReadMetrics::REQUEST and ReadMetrics::REPLY
-#[crate::query(contract = ReadMetrics, guard = admit)]
+#[crate::__canic_query(contract = ReadMetrics, guard = admit)]
 fn metrics(request: Request) -> Report {
     match request {
         Request::Timers => Report::Timers(Snapshot {

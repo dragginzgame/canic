@@ -43,7 +43,7 @@ pub(super) async fn admit(
         .update_call(
             receiver,
             browser,
-            "establish_portable_session",
+            "canic_establish_portable_session",
             frame.to_vec(),
         )
         .await
@@ -60,7 +60,7 @@ pub(super) async fn read(
         .query_call(
             receiver,
             browser,
-            "portable_session_read",
+            "canic_portable_session_read",
             ReadSession::encode_request(&()).unwrap(),
         )
         .await

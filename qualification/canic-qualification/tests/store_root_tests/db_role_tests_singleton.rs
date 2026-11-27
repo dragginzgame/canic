@@ -297,7 +297,7 @@ limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns
         .update_call(
             ledger,
             browser,
-            "establish_portable_session",
+            "canic_establish_portable_session",
             EstablishSession::encode_request(&proof).unwrap(),
         )
         .await

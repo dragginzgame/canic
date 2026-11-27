@@ -77,7 +77,7 @@ async fn call(a: &Approval, method: &str, args: Vec<u8>) -> Result<Vec<u8>, Fail
 }
 
 async fn inspect(a: &Approval) -> Result<(ManagementView, Arguments), Failure> {
-    let bytes = call(a, "blob_management", frame(blob::MANAGEMENT, &())).await?;
+    let bytes = call(a, "canic_blob_management", frame(blob::MANAGEMENT, &())).await?;
     let view: Result<ManagementView, Error> = ic_wire::decode(
         &bytes,
         ic_wire::Encoding::Frame {
@@ -130,7 +130,7 @@ async fn command(slot: ChildId, a: &Approval, activate: bool) -> Result<(), Fail
         if activate { 3 } else { 0 },
         &bytes,
     );
-    let bytes = call(a, "blob_update", bytes).await?;
+    let bytes = call(a, "canic_blob_update", bytes).await?;
     super::fault(slot, if activate { 23 } else { 20 });
     let result: Result<Outcome, Error> = ic_wire::decode(
         &bytes,

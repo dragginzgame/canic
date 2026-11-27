@@ -99,9 +99,9 @@ pub(super) async fn call(
     input: &impl Serialize,
 ) -> Result<Status, Refusal> {
     let name = match id {
-        issuer::ISSUE => "issue_portable_credential",
-        issuer::RENEW => "renew_portable_credential",
-        issuer::RECONCILE => "reconcile_portable_credential",
+        issuer::ISSUE => "canic_issue_portable_credential",
+        issuer::RENEW => "canic_renew_portable_credential",
+        issuer::RECONCILE => "canic_reconcile_portable_credential",
         _ => unreachable!(),
     };
     let bytes = f
@@ -211,7 +211,7 @@ async fn issuer_real_calls_bind_accounts_renewals_and_exact_results() {
         .submit_call(
             f.target,
             account(),
-            "issue_portable_credential",
+            "canic_issue_portable_credential",
             frame(issuer::ISSUE, &input),
         )
         .await
@@ -229,7 +229,7 @@ async fn issuer_real_calls_bind_accounts_renewals_and_exact_results() {
         .submit_call(
             f.target,
             account(),
-            "issue_portable_credential",
+            "canic_issue_portable_credential",
             frame(issuer::ISSUE, &input),
         )
         .await
@@ -276,7 +276,7 @@ async fn issuer_real_calls_bind_accounts_renewals_and_exact_results() {
         .update_call(
             f.target,
             caller,
-            "establish_portable_session",
+            "canic_establish_portable_session",
             EstablishSession::encode_request(&admission).unwrap(),
         )
         .await
@@ -361,7 +361,7 @@ async fn issuer_callback_failures_and_changed_permission_stay_unresolved() {
             .submit_call(
                 f.target,
                 account(),
-                "issue_portable_credential",
+                "canic_issue_portable_credential",
                 frame(issuer::ISSUE, &input),
             )
             .await
@@ -421,17 +421,17 @@ async fn issuer_bounds_expiry_and_pruning_never_create_replacement_results() {
     let before = observe(&f).await;
     for (method, id, bytes) in [
         (
-            "issue_portable_credential",
+            "canic_issue_portable_credential",
             issuer::ISSUE,
             frame(issuer::ISSUE, &input),
         ),
         (
-            "renew_portable_credential",
+            "canic_renew_portable_credential",
             issuer::RENEW,
             frame(issuer::RENEW, &renew(&input, 1)),
         ),
         (
-            "reconcile_portable_credential",
+            "canic_reconcile_portable_credential",
             issuer::RECONCILE,
             frame(issuer::RECONCILE, &lookup(&input)),
         ),
@@ -515,7 +515,7 @@ async fn issuer_entropy_completion_respects_the_original_exclusive_deadline() {
             .submit_call(
                 f.target,
                 account(),
-                "issue_portable_credential",
+                "canic_issue_portable_credential",
                 frame(issuer::ISSUE, &input),
             )
             .await
@@ -576,7 +576,7 @@ async fn issuer_rotation_fences_pending_renewal_and_preserves_original_issue() {
         .submit_call(
             f.target,
             caller,
-            "renew_portable_credential",
+            "canic_renew_portable_credential",
             frame(issuer::RENEW, &renewal),
         )
         .await

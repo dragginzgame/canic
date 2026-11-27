@@ -1,30 +1,19 @@
 //! Bind approved future Store outputs to the existing publication and child effect owners.
-use super::{ChildId, FleetChild, FleetPlan, invalid, record, root_receipt, store_receipt};
+use super::{ChildId, FleetPlan, invalid, record, root_receipt, store_receipt};
 use crate::{
     ApplyOutcome, Plan, PlanAction, Publication, Receipt, Result, StoredArtifact, UpgradeTarget,
     artifact, operation, plan, publication, store, supplier,
 };
 use std::path::{Path, PathBuf};
 
-impl FleetChild {
-    pub(super) fn artifact_limit(&self) -> usize {
-        if self.release.is_some() {
-            artifact::MAX_ARTIFACT_BYTES
-        } else {
-            canic_management_protocol::MAX_WASM
-        }
-    }
-}
 impl FleetPlan {
     pub(super) fn source(
         &self,
         root: &Receipt,
         store: Option<&Receipt>,
         slot: ChildId,
-    ) -> Result<Option<StoredArtifact>> {
-        let Some(manifest) = &self.child(slot)?.release else {
-            return Ok(None);
-        };
+    ) -> Result<StoredArtifact> {
+        let manifest = &self.child(slot)?.release;
         let receipt = store.ok_or_else(invalid)?;
         let expected = self.store_plan(root)?;
         if receipt.operation != expected.digest()?
@@ -33,22 +22,19 @@ impl FleetPlan {
         {
             return Err(invalid());
         }
-        Ok(Some(StoredArtifact {
+        Ok(StoredArtifact {
             store: UpgradeTarget {
                 canister: receipt.canister.clone(),
                 module: receipt.module_hash.clone(),
             },
             manifest: manifest.clone(),
             maintenance: None,
-        }))
+        })
     }
 
     fn publication(&self, root: &Receipt, store: Option<&Receipt>, slot: ChildId) -> Result<Plan> {
         let child = self.child_plan(root, store, slot)?;
-        let source = child
-            .management()
-            .and_then(|o| o.source.as_ref())
-            .ok_or_else(invalid)?;
+        let source = child.management().map(|o| &o.source).ok_or_else(invalid)?;
         publication_plan(&child, source)
     }
 }
@@ -57,7 +43,7 @@ impl FleetPlan {
 pub(super) fn publication_plan(child: &Plan, source: &StoredArtifact) -> Result<Plan> {
     let owner = child.management().ok_or_else(invalid)?;
     let value = Plan {
-        version: 3,
+        version: crate::plan::APPROVAL_VERSION,
         action: PlanAction::Publish(Publication {
             after_removal: None,
             root: UpgradeTarget {
@@ -77,9 +63,7 @@ pub(super) fn validate(dir: &Path, fleet: &FleetPlan, slot: ChildId, bytes: &[u8
     let child = dir.join(record::child_leaf(slot));
     let path = child.join("publication");
     if !path.join("plan.json").try_exists().map_err(supplier)? {
-        if fleet.child(slot)?.release.is_some()
-            && child.join("plan.json").try_exists().map_err(supplier)?
-        {
+        if child.join("plan.json").try_exists().map_err(supplier)? {
             return Err(invalid());
         }
         return Ok(());
@@ -112,12 +96,12 @@ pub(super) async fn apply(
         let value = fleet.publication(root, Some(store), slot)?;
         let child_dir = dir.join(record::child_leaf(slot));
         let path = child_dir.join("publication");
-        let bytes = store::read(&child_dir.join("module.wasm"), child.artifact_limit())?;
+        let bytes = store::read(&child_dir.join("module.wasm"), artifact::MAX_ARTIFACT_BYTES)?;
         if !path.join("plan.json").try_exists().map_err(supplier)? {
             let directory = crate::output_publication::prepare(&path, 0o700)?;
             let module = path.join("module.wasm");
             if module.try_exists().map_err(supplier)? {
-                if store::read(&module, child.artifact_limit())? != bytes {
+                if store::read(&module, artifact::MAX_ARTIFACT_BYTES)? != bytes {
                     return Err(invalid());
                 }
             } else {
@@ -131,13 +115,7 @@ pub(super) async fn apply(
             operation::apply_at(dir.parent().ok_or_else(invalid)?, &path, &id, identity, icp)
                 .await?,
             ApplyOutcome::Publication { .. }
-        ) || publication::receipt(
-            &path,
-            &value,
-            &id,
-            child.release.as_ref().ok_or_else(invalid)?,
-        )?
-        .is_none()
+        ) || publication::receipt(&path, &value, &id, &child.release)?.is_none()
         {
             return Err(invalid());
         }
@@ -177,10 +155,7 @@ pub(super) fn inventory(
     fleet: &FleetPlan,
 ) -> Result<Vec<crate::FleetArtifact>> {
     let mut result = Vec::new();
-    for (slot, _) in fleet
-        .children()
-        .filter(|(_, child)| child.release.is_some())
-    {
+    for (slot, _) in fleet.children() {
         let Some((path, expected)) = retained_publication(dir, fleet, slot)? else {
             continue;
         };
@@ -199,7 +174,7 @@ pub(super) async fn reconcile(
     identity: &str,
     icp: &Path,
 ) -> Result<()> {
-    for (slot, _) in fleet.children().filter(|(_, c)| c.release.is_some()) {
+    for (slot, _) in fleet.children() {
         if let Some((path, value)) = retained_publication(dir, fleet, slot)? {
             operation::reconcile_at(
                 dir.parent().ok_or_else(invalid)?,
@@ -215,10 +190,7 @@ pub(super) async fn reconcile(
 }
 
 pub(super) fn quiesce(dir: &Path, fleet: &FleetPlan, selected: &Plan) -> Result<()> {
-    for (slot, _) in fleet
-        .children()
-        .filter(|(_, child)| child.release.is_some())
-    {
+    for (slot, _) in fleet.children() {
         let Some((path, expected)) = retained_publication(dir, fleet, slot)? else {
             continue;
         };

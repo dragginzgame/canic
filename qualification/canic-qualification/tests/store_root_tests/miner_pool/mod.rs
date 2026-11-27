@@ -25,7 +25,12 @@ async fn growth_park_reuse_and_capacity() {
         workers,
         ..
     } = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
-        fleet.worker_pools.first_mut().unwrap().creation_budget = 4 * management::CREATION_CYCLES
+        fleet
+            .policy
+            .worker_pools
+            .first_mut()
+            .unwrap()
+            .creation_budget = 4 * management::CREATION_CYCLES
     })
     .await;
     let pic = root.pic;
@@ -681,8 +686,8 @@ async fn return_and_reuse(prepaid: bool) {
     )
     .await;
     let fleet = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
-        fleet.subnet_child_limit = Some(if prepaid { 2 } else { 3 });
-        let w = fleet.worker_pools.first_mut().unwrap();
+        fleet.policy.subnet_child_limit = Some(if prepaid { 2 } else { 3 });
+        let w = fleet.policy.worker_pools.first_mut().unwrap();
         w.max_workers = 1;
         w.creation_budget = 5 * management::CREATION_CYCLES;
         w.minimum_reuse_cycles = std::num::NonZeroU64::new(2 * management::CREATION_CYCLES);
@@ -1006,7 +1011,7 @@ async fn one_hub_recovers_ordinal_zero_independently_in_two_worker_pools() {
     )
     .await;
     let fleet = crate::miner_pool_fixture::install(&mut owner, &base, |fleet| {
-        fleet.worker_pools[0].max_workers = 1;
+        fleet.policy.worker_pools[0].max_workers = 1;
     })
     .await;
     let root = fleet.root;

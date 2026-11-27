@@ -55,11 +55,11 @@ test('original selectors, signer roles, canonical bytes and deadlines survive lo
   const original = issue.encodeRequest(selected.intent);
   const update: IssuerUpdate = async (method, target, identity, bytes, abort) => {
     calls.push(method); assert.equal(target.toText(), issuer.toText()); assert.ok(abort);
-    if (method === 'issue_portable_credential') {
+    if (method === 'canic_issue_portable_credential') {
       assert.equal(identity, account); assert.deepEqual(bytes, original);
       return issue.encodeResponse(issued);
     }
-    if (method === 'renew_portable_credential') {
+    if (method === 'canic_renew_portable_credential') {
       assert.equal(identity, browser);
       const request = renew.decodeRequest(bytes);
       assert.equal(request.sequence, 1n); assert.equal(request.login_epoch, 3n);
@@ -104,7 +104,7 @@ test('lost, unresolved, refused and malformed evidence never triggers issuance f
   let response = lookup.encodeResponse({ ok: { tag: 'Unresolved', value: null } });
   const { transport } = issuerAdapter(binding(), async method => {
     methods.push(method);
-    if (method === 'issue_portable_credential') throw new Error('lost reply');
+    if (method === 'canic_issue_portable_credential') throw new Error('lost reply');
     return response;
   });
   await assert.rejects(transport.issue(account, signal()), /lost reply/);
@@ -117,7 +117,7 @@ test('lost, unresolved, refused and malformed evidence never triggers issuance f
     response = bytes;
     await assert.rejects(transport.reconcile(account, 0n, signal()));
   }
-  assert.equal(methods.filter(m => m === 'issue_portable_credential').length, 1);
+  assert.equal(methods.filter(m => m === 'canic_issue_portable_credential').length, 1);
   response = lookup.encodeResponse(issued);
   assert.equal((await transport.reconcile(account, 0n, signal())).untilNs, 800n);
   const badClock = issuerAdapter({ ...binding(), deadlineOffsetNs: -901n }, async () => issue.encodeResponse(issued));
@@ -145,7 +145,7 @@ test('logout binds original login and preserves the receiver unit protocol', asy
   assert.deepEqual(await revoke(receiverId, browser, unit, signal()), receiverReply);
   await assert.rejects(revoke(issuer, account, unit, signal()), code('binding'));
   await assert.rejects(revoke(issuer, browser, new Uint8Array([0]), signal()));
-  assert.deepEqual(seen, ['revoke_portable_login', 'logout_portable_session']);
+  assert.deepEqual(seen, ['canic_revoke_portable_login', 'canic_logout_portable_session']);
 });
 
 test('cancellation fences both sides of the update', async () => {
@@ -169,7 +169,7 @@ test('real Auth HTTP transport signs the selected method once and keeps lost rep
       assert.equal(init?.signal, abort); assert.equal(init?.redirect, 'error');
       const inspected = inspectCallIngress(new Uint8Array(init!.body as ArrayBuffer));
       assert.equal(inspected.sender.toText(), account.getPrincipal().toText());
-      assert.equal(inspected.methodName, 'issue_portable_credential');
+      assert.equal(inspected.methodName, 'canic_issue_portable_credential');
       assert.deepEqual(inspected.arg, issue.encodeRequest(binding().intent));
       throw new Error('lost HTTP reply');
     },

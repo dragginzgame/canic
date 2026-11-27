@@ -55,7 +55,7 @@ macro_rules! mount_readiness_endpoint {
             use $crate::readiness::{State, endpoint};
 
             $crate::__canic_builtin! {
-                wire, $crate::readiness::METHOD, ($crate::readiness::REQUEST_LIMITS, $crate::readiness::RESPONSE_LIMITS), runtime::update, "readiness", (
+                wire, $crate::readiness::METHOD, ($crate::readiness::REQUEST_LIMITS, $crate::readiness::RESPONSE_LIMITS), runtime::update, "canic_readiness", (
                     runtime = runtime,
                     guard = endpoint::admit,
                     decode = endpoint::decode,

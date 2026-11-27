@@ -65,7 +65,21 @@ pub(crate) fn next(
     format!("\nNext:\n{}\n", escape(&parts.join(" ")))
 }
 
-fn build_row(label: String, item: &BuiltCanister) -> [String; 7] {
+fn parenthesized_count(item: &BuiltCanister) -> Option<usize> {
+    match item.role.as_deref() {
+        Some("root" | "wasm-store") => Some(item.endpoint_count),
+        Some("coordinator") => None,
+        _ => (item.canic_endpoint_count > 0).then_some(item.canic_endpoint_count),
+    }
+}
+
+fn build_row(label: String, item: &BuiltCanister, mount_width: usize) -> [String; 7] {
+    let total = item.endpoint_count;
+    let endpoints = match parenthesized_count(item) {
+        Some(count) => format!("{total} ({count:>mount_width$})"),
+        None if mount_width > 0 => format!("{total}{:width$}", "", width = mount_width + 3),
+        None => total.to_string(),
+    };
     [
         label,
         item.version.clone(),
@@ -78,7 +92,7 @@ fn build_row(label: String, item: &BuiltCanister) -> [String; 7] {
             "{:.2} KiB",
             f64::from(u32::try_from(item.artifact.bytes).expect("bounded Wasm size")) / 1024.0
         ),
-        item.endpoint_count.to_string(),
+        endpoints,
         if item.modules.is_empty() {
             "—".into()
         } else {
@@ -104,19 +118,18 @@ pub(crate) fn built(built: &[BuiltCanister]) -> String {
                 .and_then(crate::topology::infrastructure_badge)
         },
     );
+    let mount_width = built
+        .iter()
+        .filter_map(parenthesized_count)
+        .max()
+        .map_or(0, |n| n.to_string().len());
     let rows: Vec<_> = ordered
         .into_iter()
-        .map(|(label, item)| build_row(label, item))
+        .map(|(label, item)| build_row(label, item, mount_width))
         .collect();
     let table = plain_table(
         &[
-            "CANISTER",
-            "VERSION",
-            "WASM",
-            "SIZE",
-            "EPS",
-            "MODULES",
-            "BUILD TIME",
+            "CANISTER", "VERSION", "WASM", "SIZE", "EPS", "MODS", "BUILD",
         ],
         &rows,
         &[Left, Left, Left, Right, Right, Left, Right],

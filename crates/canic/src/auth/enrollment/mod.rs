@@ -42,7 +42,7 @@ pub const TRIGGER_REFRESH: u64 = 0x4341_5554_4804;
 /// Controller-only receiver endpoint. Takes unit and replies with a typed result.
 pub const REFRESH: u64 = 0x4341_5554_4805;
 /// Fixed receiver method used by the controller; never supplied by an operator.
-pub const REFRESH_METHOD: &str = "refresh_auth";
+pub const REFRESH_METHOD: &str = "canic_refresh_auth";
 /// Maximum receivers, including revoked slots, retained by a fresh Root.
 pub const MAX_RECEIVERS: usize = 32;
 /// Snapshot exported by an explicitly selected authority.
@@ -243,7 +243,7 @@ pub enum Error {
     Capacity,
 }
 
-/// Mount the optional controller-triggered `refresh_auth` update. The application's
+/// Mount the optional controller-triggered `canic_refresh_auth` update. The application's
 /// async handler owns its existing receiver, reservation, pull and installation.
 /// Mounting does not refresh, create state or authorize application sessions.
 ///
@@ -264,7 +264,7 @@ macro_rules! mount_auth_refresh_endpoint {
             };
 
             $crate::__canic_builtin! {
-                wire, REFRESH, ($crate::auth::enrollment::LIMITS, $crate::auth::enrollment::LIMITS), runtime::update, "refresh_auth", (
+                wire, REFRESH, ($crate::auth::enrollment::LIMITS, $crate::auth::enrollment::LIMITS), runtime::update, "canic_refresh_auth", (
                     runtime = runtime,
                     guard = transport::admit::<REFRESH>,
                     decode = transport::decode::<(), REFRESH>,

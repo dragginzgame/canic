@@ -22,8 +22,10 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
     let target = plan.target().ok_or_else(invalid)?;
     let root_id = principal(&root.canister)?;
     let target_id = principal(target)?;
-    if !matches!(plan.version, 2 | 9 | crate::plan::STORE_MAINTENANCE_VERSION)
-        || !(1..=wire::MAX_UPGRADES as u64).contains(&plan.store_upgrade_sequence().unwrap_or(1))
+    if plan.deployment.is_none()
+        || plan.version != crate::plan::APPROVAL_VERSION
+        || !(1..=wire::MAX_UPGRADES as u64)
+            .contains(&plan.store_upgrade_sequence().ok_or_else(invalid)?)
         || plan.controller == "2vxsx-fae"
         || root_id.to_text() != root.canister
         || target_id.to_text() != *target
@@ -59,7 +61,7 @@ pub(crate) fn approval(plan: &Plan) -> Result<wire::Approval> {
         previous_module: hash(plan.previous_module().ok_or_else(invalid)?)?,
         module_hash: hash(&plan.artifact.sha256)?,
         attempt: ic_wasm_store_protocol::MaintenanceAttempt {
-            sequence: plan.store_upgrade_sequence().unwrap_or(1),
+            sequence: plan.store_upgrade_sequence().ok_or_else(invalid)?,
             operation: hash(&plan.digest()?)?,
         },
         expires_at_ns: plan.expires_at_ns,
@@ -90,74 +92,37 @@ fn call<T: serde::Serialize>(
     })
 }
 
-// The plan version binds the exact method and frame originally approved.
+// Validate the exact attempt before constructing the signed command.
 fn command(plan: &Plan, request: &wire::Request) -> Result<signed::Call<'static>> {
-    if plan.version == crate::plan::STORE_MAINTENANCE_VERSION {
-        return call(
-            plan,
-            "maintain_store",
-            wire::MAINTAIN,
-            request,
-            wire::INSTALL_LIMITS,
-        );
-    }
-    match request {
-        wire::Request::Stage(a) => call(
-            plan,
-            "stage_store_maintenance",
-            wire::STAGE,
-            a,
-            wire::LIMITS,
-        ),
-        wire::Request::Advance(a) => call(
-            plan,
-            "advance_store_maintenance",
-            wire::ADVANCE,
-            a,
-            wire::LIMITS,
-        ),
-        wire::Request::Install(i) => call(
-            plan,
-            "install_store_maintenance",
-            wire::INSTALL,
-            i,
-            wire::INSTALL_LIMITS,
-        ),
-        wire::Request::Activate(a) => call(
-            plan,
-            "activate_store_maintenance",
-            wire::ACTIVATE,
-            a,
-            wire::LIMITS,
-        ),
-    }
+    validate(plan)?;
+    call(
+        plan,
+        "maintain_store",
+        wire::MAINTAIN,
+        request,
+        wire::INSTALL_LIMITS,
+    )
+}
+
+fn command_reply(bytes: &[u8]) -> Result<Status> {
+    ic_wire::decode::<std::result::Result<Status, canic_management_protocol::Refusal>>(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: wire::MAINTAIN,
+            direction: ic_wire::Direction::Response,
+        },
+        wire::LIMITS,
+    )
+    .map_err(supplier)?
+    .map_err(|r| Error::Blocked(format!("Root refused Store maintenance: {r:?}")))
 }
 
 pub(crate) fn observation(plan: &Plan) -> Result<signed::Call<'static>> {
-    validate(plan)?;
-    if matches!(plan.version, 9 | crate::plan::STORE_MAINTENANCE_VERSION) {
-        return call(
-            plan,
-            "observe_store_maintenance",
-            wire::READ_ATTEMPT,
-            &Some(approval(plan)?),
-            wire::LIMITS,
-        );
-    }
-    if plan.store_upgrade_sequence().is_some() {
-        return call(
-            plan,
-            "observe_store_attempt",
-            wire::OBSERVE_ATTEMPT,
-            &approval(plan)?,
-            wire::LIMITS,
-        );
-    }
     call(
         plan,
         "observe_store_maintenance",
-        wire::OBSERVE,
-        &(),
+        wire::READ_ATTEMPT,
+        &Some(approval(plan)?),
         wire::LIMITS,
     )
 }
@@ -183,13 +148,7 @@ fn decode(plan: &Plan, bytes: &[u8]) -> Result<Option<Status>> {
     let value: Option<Status> = ic_wire::decode(
         bytes,
         ic_wire::Encoding::Frame {
-            method: if matches!(plan.version, 9 | crate::plan::STORE_MAINTENANCE_VERSION) {
-                wire::READ_ATTEMPT
-            } else if plan.store_upgrade_sequence().is_some() {
-                wire::OBSERVE_ATTEMPT
-            } else {
-                wire::OBSERVE
-            },
+            method: wire::READ_ATTEMPT,
             direction: ic_wire::Direction::Response,
         },
         wire::LIMITS,
@@ -315,7 +274,6 @@ pub(crate) async fn apply(
     }
     let approval = approval(plan)?;
     let stage = command(plan, &wire::Request::Stage(approval.clone()))?;
-    let unified = plan.version == crate::plan::STORE_MAINTENANCE_VERSION;
     if read_only
         && !dir
             .join("stage/signed.json")
@@ -338,21 +296,7 @@ pub(crate) async fn apply(
         }
         let reply =
             signed::execute(&dir.join("stage"), plan, &stage, identity, icp, &client).await?;
-        let staged: std::result::Result<Status, canic_management_protocol::Refusal> =
-            ic_wire::decode(
-                &reply,
-                ic_wire::Encoding::Frame {
-                    method: if unified { wire::MAINTAIN } else { wire::STAGE },
-                    direction: ic_wire::Direction::Response,
-                },
-                wire::LIMITS,
-            )
-            .map_err(supplier)?;
-        admit(
-            plan,
-            &staged
-                .map_err(|r| Error::Blocked(format!("Root refused Store maintenance: {r:?}")))?,
-        )?;
+        admit(plan, &command_reply(&reply)?)?;
         (index, current) = observe(dir, plan, identity, icp, &client).await?;
     }
     // A matching remote record cannot invent the local operator's signed admission custody.
@@ -386,45 +330,17 @@ pub(crate) async fn apply(
             .map_err(supplier)?;
             admit(plan, &result)?;
         } else {
-            let (action_request, legacy_id) = match next {
-                StoreContinuation::Install => (
-                    wire::Request::Install(wire::Install {
-                        approval: approval.clone(),
-                        wasm: wasm.to_vec(),
-                    }),
-                    wire::INSTALL,
-                ),
-                StoreContinuation::Activate => {
-                    (wire::Request::Activate(approval.clone()), wire::ACTIVATE)
-                }
-                _ => (wire::Request::Advance(approval.clone()), wire::ADVANCE),
+            let action_request = match next {
+                StoreContinuation::Install => wire::Request::Install(wire::Install {
+                    approval: approval.clone(),
+                    wasm: wasm.to_vec(),
+                }),
+                StoreContinuation::Activate => wire::Request::Activate(approval.clone()),
+                _ => wire::Request::Advance(approval.clone()),
             };
             let request = command(plan, &action_request)?;
-            let id = if unified { wire::MAINTAIN } else { legacy_id };
             let reply = signed::execute(&action, plan, &request, identity, icp, &client).await?;
-            let value: Status = if unified || legacy_id == wire::INSTALL {
-                ic_wire::decode::<std::result::Result<Status, canic_management_protocol::Refusal>>(
-                    &reply,
-                    ic_wire::Encoding::Frame {
-                        method: id,
-                        direction: ic_wire::Direction::Response,
-                    },
-                    wire::LIMITS,
-                )
-                .map_err(supplier)?
-                .map_err(|r| Error::Blocked(format!("Root refused Store maintenance: {r:?}")))?
-            } else {
-                ic_wire::decode(
-                    &reply,
-                    ic_wire::Encoding::Frame {
-                        method: id,
-                        direction: ic_wire::Direction::Response,
-                    },
-                    wire::LIMITS,
-                )
-                .map_err(supplier)?
-            };
-            admit(plan, &value)?;
+            admit(plan, &command_reply(&reply)?)?;
         }
         let (observed_index, observed) = observe(dir, plan, identity, icp, &client).await?;
         let observed = observed.ok_or_else(invalid)?;

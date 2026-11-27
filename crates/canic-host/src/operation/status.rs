@@ -114,9 +114,8 @@ pub struct FleetStatus {
     pub root: CanisterStatus,
     /// Retained revocation before effect preparation, if present.
     pub cancellation: Option<Cancellation>,
-    /// Optional infrastructure, outside application slots.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub store: Option<FleetStepStatus>,
+    /// Wasm Store step, outside application slots.
+    pub store: FleetStepStatus,
     /// Application steps in permanent slot order.
     pub children: Vec<FleetChildStatus>,
 }

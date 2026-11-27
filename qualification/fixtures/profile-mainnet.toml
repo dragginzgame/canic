@@ -23,7 +23,6 @@ id = "4pkhu-oaaaa-aaaai-ra2ta-cai"
 
 [apps.profile.fleets.mainnet.canisters.manager]
 id = "rk6n2-wyaaa-aaaad-qmoua-cai"
-profile_manager = true
 
 [apps.profile.fleets.mainnet.canisters.managed-worker]
 id = "rn7lo-3aaaa-aaaad-qmouq-cai"

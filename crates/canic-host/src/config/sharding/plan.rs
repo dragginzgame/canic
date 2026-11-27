@@ -83,8 +83,8 @@ pub(crate) fn preview(
     use canic::{method::Contract, sharding::ConfigureShardRoutes};
     let mut routes = BTreeMap::new();
     let mut increases = Vec::new();
-    let mut shards = Vec::with_capacity(fleet.shard_pools.len());
-    for pool in &fleet.shard_pools {
+    let mut shards = Vec::with_capacity(fleet.policy.shard_pools.len());
+    for pool in &fleet.policy.shard_pools {
         let manifest = manifest(selected, config_path, &pool.component, &pool.release)?;
         let args = install_args(config_path, pool.install_args.as_deref())?;
         let approval = fleet.approve_shard_policy(pool, manifest, args)?;
@@ -109,7 +109,7 @@ pub(crate) fn preview(
             stored::ChildCreationGrant::Shared,
         )?);
     }
-    let instances = if let Some(pool) = &fleet.registry {
+    let instances = if let Some(pool) = &fleet.policy.registry {
         let instance = registry_grant(
             controller,
             pool,
@@ -130,6 +130,7 @@ pub(crate) fn preview(
         None
     };
     let workers = fleet
+        .policy
         .worker_pools
         .iter()
         .map(|p| worker_grant(p, selected, config_path, deadlines[p.component.as_str()]))
@@ -147,13 +148,14 @@ pub(crate) fn preview(
         .or_else(|| shards.first().map(|g| &g.approval.root))
         .ok_or_else(|| Error::Invalid("no placement pools".into()))?;
     let max_children = fleet
+        .policy
         .subnet_child_limit
         .unwrap_or(stored::DEFAULT_SUBNET_CHILD_LIMIT);
     let capacity = Some(grant(
         stored::SubnetCapacity {
             root: root.clone(),
             max_children,
-            allow_large_subnet: fleet.allow_large_subnet,
+            allow_large_subnet: fleet.policy.allow_large_subnet,
         },
         stored::CONFIGURE_SUBNET_CAPACITY,
     )?);
@@ -177,7 +179,7 @@ pub(crate) fn preview(
             approval: Box::new(approval),
         });
     }
-    let singleton = if let (Some(policy), Some(registry)) = (&fleet.registry, &instances)
+    let singleton = if let (Some(policy), Some(registry)) = (&fleet.policy.registry, &instances)
         && let Some(rule) = &policy.singleton
     {
         let receiver = fleet
@@ -245,14 +247,17 @@ fn check_inputs<'a>(
     let now = crate::now()?;
     let mut deadlines = BTreeMap::new();
     let shards = fleet
+        .policy
         .shard_pools
         .iter()
         .map(|p| ("shard_pool", &p.component, p.expires_at_ns));
     let registry = fleet
+        .policy
         .registry
         .iter()
         .map(|p| ("registry", &p.component, p.expires_at_ns));
     let workers = fleet
+        .policy
         .worker_pools
         .iter()
         .map(|p| ("worker_pool", &p.component, p.expires_at_ns));
@@ -416,11 +421,13 @@ pub(crate) fn check_pool_requirements(
         let declared = match kind {
             "shard" => fleet
                 .config
+                .policy
                 .shard_pools
                 .iter()
                 .any(|pool| pool.component == component),
             "worker" => fleet
                 .config
+                .policy
                 .worker_pools
                 .iter()
                 .any(|pool| pool.component == component),

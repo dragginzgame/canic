@@ -252,7 +252,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         1_000_000_000_000_u64
     );
     assert_eq!(
-        initial["fleet_plan"]["root"]["creation_cycles"],
+        initial["fleet_plan"]["root"]["action"]["approval"]["cycles"],
         3_000_000_000_000_u64
     );
     assert_eq!(
@@ -339,8 +339,9 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     write_config(&dir, &config);
     let planned = cli(&dir, &["fleet", "plan", "--controller", &controller]);
     assert_eq!(planned["action"], "upgrade");
+    assert_eq!(planned["plan"]["version"], 1);
     assert_eq!(
-        planned["plan"]["store_upgrade_root"]["canister"],
+        planned["plan"]["action"]["approval"]["root"]["canister"],
         root.to_text()
     );
     let id = planned["operation"].as_str().unwrap();
@@ -489,7 +490,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     config["apps"]["demo"]["canisters"]["store"]["wasm"] = json!(assets.join("store.wasm"));
     write_config(&dir, &config);
     let second = cli(&dir, &["fleet", "plan", "--controller", &controller]);
-    assert_eq!(second["plan"]["store_upgrade_sequence"], 2);
+    assert_eq!(second["plan"]["action"]["approval"]["sequence"], 2);
     let (stop_before_install, stop_before_activation) = pause_replacement(
         &dir,
         &signer,
@@ -575,11 +576,11 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     let maintenance = cli(&dir, &["fleet", "plan", "--controller", &controller]);
     assert_eq!(maintenance["action"], "maintenance");
     assert_eq!(
-        maintenance["plan"]["maintenance_store"]["history"],
+        maintenance["plan"]["action"]["approval"]["store"]["history"],
         serde_json::to_value(vec![first_outcome]).unwrap()
     );
     assert_eq!(
-        maintenance["plan"]["maintenance_store"]["operation"]["phase"],
+        maintenance["plan"]["action"]["approval"]["store"]["operation"]["phase"],
         "Ready"
     );
     call(
@@ -649,16 +650,16 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
     let started = Instant::now();
     let child = cli(&dir, &["fleet", "plan", "--controller", &controller]);
     assert_eq!(
-        child["plan"]["management"]["execute_at_ns"],
+        child["plan"]["action"]["approval"]["owner"]["execute_at_ns"],
         child["plan"]["created_at_ns"]
     );
     assert_eq!(child["action"], "upgrade");
     assert_eq!(
-        child["plan"]["management"]["source"]["store"]["module"],
+        child["plan"]["action"]["approval"]["owner"]["source"]["store"]["module"],
         completed["module_hash"]
     );
     assert_eq!(
-        child["plan"]["management"]["source"]["maintenance"]["sequence"],
+        child["plan"]["action"]["approval"]["owner"]["source"]["maintenance"]["sequence"],
         2
     );
     let mut ready = Value::Null;
@@ -693,7 +694,7 @@ async fn fleet_store_upgrade_retains_authority_recovers_and_feeds_root_and_child
         json!(assets.join("store-candidate.wasm"));
     write_config(&dir, &config);
     let third = cli(&dir, &["fleet", "plan", "--controller", &controller]);
-    assert_eq!(third["plan"]["store_upgrade_sequence"], 3);
+    assert_eq!(third["plan"]["action"]["approval"]["sequence"], 3);
     owner.client_mut().stop_live().await;
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,

@@ -522,7 +522,7 @@ pub async fn begin_shard_drain(target: ShardTarget) -> Result<u32, super::ShardE
 #[macro_export]
 macro_rules! mount_hub_routes {
     () => {
-        #[$crate::update(contract = $crate::sharding::ConfigureShardRoutes)]
+        #[$crate::__canic_update(contract = $crate::sharding::ConfigureShardRoutes)]
         fn configure_shard_routes(
             input: (String, u32),
         ) -> Result<(), $crate::sharding::ShardError> {
@@ -532,13 +532,13 @@ macro_rules! mount_hub_routes {
                 input.1,
             )
         }
-        #[$crate::update(contract = $crate::sharding::ObserveShard)]
+        #[$crate::__canic_update(contract = $crate::sharding::ObserveShard)]
         fn observe_shard(
             shard: $crate::sharding::routes::Principal,
         ) -> Result<$crate::sharding::ShardStatus, $crate::sharding::ShardError> {
             $crate::sharding::routes::observe_shard(shard)
         }
-        #[$crate::update(contract = $crate::sharding::BeginShardDrain)]
+        #[$crate::__canic_update(contract = $crate::sharding::BeginShardDrain)]
         async fn begin_shard_drain(
             target: $crate::sharding::ShardTarget,
         ) -> Result<u32, $crate::sharding::ShardError> {

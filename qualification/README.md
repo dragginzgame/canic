@@ -96,6 +96,11 @@ change. Custom Serde layouts still require application byte fixtures.
 
 ## Database-backed role calls
 
+The `db-roles` suite also installs a stateful Auth receiver with two DB stores
+and Blob’s control lease. A matching upgrade reopens the databases, parent
+binding and drained Blob service. Adding or removing the Blob key on ordinary
+upgrade is refused and leaves stable memory byte-for-byte intact.
+
 `bash scripts/dev/test-store.sh db-roles` installs two DB hubs and one shared
 shard through Root and Store. An enrolled browser registers, then requests a
 project from its shard. The shard checks the browser’s write permission and
@@ -173,7 +178,7 @@ allocations. The hub retains each account's shard. Sharding Roots using the
 old account index require a fresh install.
 The fixture adds a project registry with a `[registry]` placement declaration to the same fleet, reruns
 `canic fleet plan`, and checks that the original shard request is byte-identical.
-The controller submits the CLI-generated project creation grant to Root’s `approve_child_creation`. The hub receives its routing limit directly through `configure_shard_routes`.
+The controller submits the CLI-generated project creation grant to Root’s `approve_child_creation`. The hub receives its routing limit directly through `canic_configure_shard_routes`.
 The fixture checks the topology frame, conflicting grants, unauthorized calls,
 upgrade with both grants and refusal to downgrade to the selected predecessor.
 With both user slots full, one user submits two project keys through the project
@@ -252,7 +257,7 @@ mainnet work or existing-Root layout migration is qualified. Every fresh Root al
 
 ## Storage 0.80 adoption
 
-Both workspaces select Wire 0.31.1 and Storage 0.80.6. Auth 0.51.1, Blob Storage 0.113.0
+Both workspaces select Wire 0.31.1 and Storage 0.80.6. Auth 0.51.1, Blob Storage 0.113.1
 and DB 0.33.0 consume leases from the same application bootstrap. The
 separate Wasm Store 0.11.0 uses the same Storage release. Stable Auth
 receivers and the qualification issuer pass the IC canister version to
@@ -502,7 +507,7 @@ documentation checks are `make profile-clippy` and `make profile-doc`.
 
 ## Typed database composition
 
-The installed DB witness also exercises the shared `metrics` query. It reads
+The installed DB witness also exercises the shared `canic_metrics` query. It reads
 commit and failure counts before upgrade and observes the reset after reopen.
 In the supplier-enabled fixture it observes one completed one-shot job and two
 fresh entropy requests (one success and one refusal while suspended). Run

@@ -739,3 +739,12 @@ fn fixture_maximum(demand: &canic::sharding::payment::Demand) -> u128 {
         _ => 5_000_000_000_000,
     }
 }
+
+// Frame IDs exported only by the frozen predecessor Wasms used in refusal tests.
+mod predecessor_store {
+    pub(super) const STAGE: u64 = 50;
+    pub(super) const ADVANCE: u64 = 51;
+    pub(super) const OBSERVE: u64 = 52;
+    pub(super) const INSTALL: u64 = 53;
+    pub(super) const ACTIVATE: u64 = 54;
+}

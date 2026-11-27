@@ -75,7 +75,7 @@ fn store_maintenance_evidence_fits_its_scoped_metadata_budget() {
     let old_install = ic_wire::encode(
         &decoded,
         ic_wire::Encoding::Frame {
-            method: INSTALL,
+            method: 53,
             direction: ic_wire::Direction::Request,
         },
         INSTALL_LIMITS,
@@ -92,7 +92,7 @@ fn store_maintenance_evidence_fits_its_scoped_metadata_budget() {
         )
         .is_err()
     );
-    for retired in [STAGE, ADVANCE, ACTIVATE] {
+    for retired in [50, 51, 54] {
         let original = ic_wire::encode(
             &status.approval,
             ic_wire::Encoding::Frame {
@@ -147,7 +147,7 @@ fn store_maintenance_evidence_fits_its_scoped_metadata_budget() {
         .unwrap(),
         reply
     );
-    for method in [OBSERVE, STATUS] {
+    for method in [READ_ATTEMPT, STATUS] {
         let bytes = ic_wire::encode(
             &Some(status.clone()),
             ic_wire::Encoding::Frame {

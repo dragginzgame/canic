@@ -71,17 +71,14 @@ pub(super) async fn run(options: &Options, json: bool) -> canic_host::Result<cra
         .await
         .and_then(|bytes| decode(&bytes));
     let timing = format!(
-        "query call (db_inspect): {:.2} sec, cycles unavailable",
+        "query call (canic_db_inspect): {:.2} sec, cycles unavailable",
         start.elapsed().as_secs_f64()
     );
     if json || result.is_err() {
         eprintln!("{timing}");
     }
     let response = result?;
-    let provider = match &network {
-        canic_host::Network::Mainnet => "https://icp-api.io/",
-        canic_host::Network::Local { url, .. } => url,
-    };
+    let provider = network.url();
     if json {
         Ok(crate::Output::Json(
             serde_json::json!({"provider":provider, "canister":options.canister, "caller":client.caller().to_text(), "inspection":response}),

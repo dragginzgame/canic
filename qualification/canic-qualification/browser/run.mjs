@@ -209,7 +209,7 @@ async function qualify() {
     assert.equal(finished.phase, 'finished'); assert.deepEqual(finished.confirmed, [true, true, true]);
     assert.deepEqual(finished.refused, config.frames.unauthGet);
     assert.deepEqual(await a.evaluate(async frame => Array.from(await flow.raw(
-      'establish_portable_session', flow.targets[0], flow.browser, frame)), retainedProof), config.frames.revoked);
+      'canic_establish_portable_session', flow.targets[0], flow.browser, frame)), retainedProof), config.frames.revoked);
     assert.deepEqual(await b.evaluate(async () => Array.from(await flow.get(flow.targets[0], flow.config.frames.getA))), config.frames.profileAGet);
   });
   await check('wrong-scope admission and real Unconfirmed logout remain visible through the cleanup deadline', async () => {

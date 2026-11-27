@@ -116,7 +116,7 @@ async fn controller_queries_preserve_state_and_upgrade_resets_only_diagnostics()
         trailing,
     ] {
         assert!(
-            pic.query_call(root, CanisterId::anonymous(), "metrics", bytes)
+            pic.query_call(root, CanisterId::anonymous(), "canic_metrics", bytes)
                 .await
                 .is_err()
         );

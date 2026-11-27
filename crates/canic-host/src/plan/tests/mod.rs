@@ -19,7 +19,7 @@ fn numeric_child_identity_keeps_retained_json_names() {
 
 fn named_creation() -> Plan {
     Plan {
-        version: 2,
+        version: 1,
         network: Network::Mainnet,
         controller: crate::tests::input().controller,
         artifact: artifact::admit(WASM).unwrap(),
@@ -39,7 +39,7 @@ fn named_creation() -> Plan {
 
 fn publication() -> Plan {
     Plan {
-        version: 3,
+        version: 1,
         action: PlanAction::Publish(crate::Publication {
             after_removal: None,
             root: UpgradeTarget {
@@ -69,13 +69,14 @@ fn replanning_refuses_conflicting_and_duplicate_reservations_in_either_directory
         };
         if kind == 2 {
             first.action = PlanAction::CreateChild(ManagedOwner {
+                child_evidence_only: false,
                 arguments: None,
                 blob_attempt: None,
                 root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
                 root_module: "01".repeat(32),
                 execute_at_ns: 100,
-                slot: None,
-                source: None,
+                slot: canic_management_protocol::children::ChildId::FIRST,
+                source: crate::tests::stored_source("app", b"\0asm\x01\0\0\0"),
             });
         }
         let mut second = first.clone();
@@ -88,7 +89,8 @@ fn replanning_refuses_conflicting_and_duplicate_reservations_in_either_directory
                 let PlanAction::CreateChild(owner) = &mut second.action else {
                     unreachable!()
                 };
-                owner.slot = Some(canic_management_protocol::children::ChildId::FIRST);
+                owner.slot = canic_management_protocol::children::ChildId::FIRST;
+                owner.source.manifest.release.name = "other".into();
                 owner.execute_at_ns += 1;
                 second.expires_at_ns += 1;
             }
@@ -175,31 +177,60 @@ fn replanning_checks_later_corruption_and_inventory_bound_before_reusing_a_match
 }
 
 #[test]
-fn retained_actions_preserve_approval_digests() {
-    #[derive(Deserialize)]
-    struct Fixture {
-        digest: String,
-        plan: Plan,
-    }
-    let fixtures: Vec<Fixture> =
+fn untagged_host_approvals_are_refused_even_at_version_one() {
+    let fixtures: Vec<serde_json::Value> =
         serde_json::from_str(include_str!("fixtures/retained.json")).unwrap();
     for fixture in fixtures {
-        assert_eq!(fixture.plan.digest().unwrap(), fixture.digest);
-        if let Some(owner) = fixture.plan.management() {
-            assert!(owner.execute_at_ns > fixture.plan.created_at_ns);
-            assert_eq!(
-                admission_deadline(
-                    fixture.plan.created_at_ns,
-                    owner.execute_at_ns,
-                    fixture.plan.expires_at_ns
-                ),
-                owner.execute_at_ns
-            );
-        }
-        let encoded = serde_json::to_vec(&fixture.plan).unwrap();
-        let decoded: Plan = serde_json::from_slice(&encoded).unwrap();
-        assert_eq!(decoded, fixture.plan);
+        let mut old = fixture["plan"].clone();
+        assert!(serde_json::from_value::<Plan>(old.clone()).is_err());
+        old["version"] = 1.into();
+        assert!(serde_json::from_value::<Plan>(old).is_err());
     }
+}
+
+#[tokio::test]
+async fn a_superseded_or_substituted_contract_cannot_start_an_attempt() {
+    let directory = crate::tests::directory();
+    let plan = publication();
+    let id = {
+        let journal = Store::open(&directory).unwrap();
+        publish_locked(&journal, plan.clone(), WASM).unwrap().0
+    };
+    let path = directory.join(&id);
+    for (version, contract) in [
+        (3, Some("canic:artifact-publication.v1")),
+        (1, None),
+        (1, Some("canic:artifact-removal.v1")),
+    ] {
+        let mut record = serde_json::to_value(&plan).unwrap();
+        record["version"] = version.into();
+        match contract {
+            Some(name) => record["action"]["contract"] = name.into(),
+            None => {
+                record["action"].as_object_mut().unwrap().remove("contract");
+            }
+        }
+        let bytes = serde_json::to_vec(&record).unwrap();
+        std::fs::write(path.join("plan.json"), &bytes).unwrap();
+        assert!(serde_json::from_slice::<Plan>(&bytes).is_err());
+        assert!(
+            crate::apply(&directory, &id, "anonymous", Path::new("unused"))
+                .await
+                .is_err()
+        );
+        assert_eq!(std::fs::read_dir(&path).unwrap().count(), 2);
+    }
+}
+
+#[test]
+fn flat_named_v1_approval_requires_its_original_host() {
+    let mut record = serde_json::to_value(named_creation()).unwrap();
+    let action = record.as_object_mut().unwrap().remove("action").unwrap();
+    record["contract"] = action["contract"].clone();
+    record["creation_cycles"] = action["approval"]["cycles"].clone();
+    record["target"] = serde_json::Value::Null;
+    record["previous_module"] = serde_json::Value::Null;
+    assert!(serde_json::from_value::<Plan>(record).is_err());
 }
 
 #[test]
@@ -210,38 +241,32 @@ fn ready_admission_ends_at_original_expiry_and_scheduled_admission_stays_earlier
 
 #[test]
 fn incomplete_or_conflicting_record_authority_is_rejected_at_decode() {
-    let records: Vec<serde_json::Value> =
-        serde_json::from_str(include_str!("fixtures/retained.json")).unwrap();
-    let upgrade = &records[0]["plan"];
-    let maintenance = records
-        .iter()
-        .find(|r| !r["plan"]["maintenance"].is_null())
-        .unwrap()["plan"]
-        .clone();
-    let creation = records
-        .iter()
-        .find(|r| r["plan"]["target"].is_null())
-        .unwrap()["plan"]
-        .clone();
-    for (field, value) in [
-        ("target", serde_json::Value::Null),
-        ("previous_module", serde_json::Value::Null),
-        ("creation_cycles", serde_json::json!(1)),
-        ("maintenance", maintenance["maintenance"].clone()),
-        (
-            "maintenance_sibling",
-            maintenance["maintenance_sibling"].clone(),
-        ),
-    ] {
-        let mut record = upgrade.clone();
-        record[field] = value;
-        assert!(serde_json::from_value::<Plan>(record).is_err(), "{field}");
+    let mut plan = named_creation();
+    plan.action = PlanAction::CreateChild(ManagedOwner {
+        slot: canic_management_protocol::children::ChildId::FIRST,
+        source: crate::tests::stored_source("app", WASM),
+        root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        root_module: "01".repeat(32),
+        execute_at_ns: 100,
+        arguments: None,
+        blob_attempt: None,
+        child_evidence_only: false,
+    });
+    let original = serde_json::to_value(&plan).unwrap();
+    assert_eq!(
+        serde_json::from_value::<Plan>(original.clone()).unwrap(),
+        plan
+    );
+    for field in ["slot", "source"] {
+        let mut record = original.clone();
+        record["action"]["approval"]
+            .as_object_mut()
+            .unwrap()
+            .remove(field);
+        assert!(serde_json::from_value::<Plan>(record).is_err());
     }
-    let mut record = creation;
-    record["creation_cycles"] = serde_json::json!(canic_management_protocol::CREATION_CYCLES + 1);
-    assert!(serde_json::from_value::<Plan>(record).is_err());
-    let mut record = maintenance;
-    record["maintenance"] = serde_json::Value::Null;
+    let mut record = original;
+    record["action"]["approval"]["target"] = "aaaaa-aa".into();
     assert!(serde_json::from_value::<Plan>(record).is_err());
 }
 
@@ -271,7 +296,7 @@ fn historical_scan_json_keeps_approval_fields_while_entries_are_explicit() {
 }
 
 #[tokio::test]
-async fn historical_direct_approvals_remain_readable_but_cannot_start_effects() {
+async fn direct_approvals_cannot_start_standalone_effects() {
     for mut legacy in [
         named_creation(),
         Plan {
@@ -292,7 +317,7 @@ async fn historical_direct_approvals_remain_readable_but_cannot_start_effects() 
         assert_eq!(load(&path, &id).unwrap().0, legacy);
         assert!(
             matches!(crate::apply(&directory, &id, "anonymous", Path::new("unused")).await,
-            Err(Error::Blocked(message)) if message.contains("original Host"))
+            Err(Error::Blocked(message)) if message.contains("configured Root bootstrap"))
         );
         assert!(!path.join("create").exists());
     }

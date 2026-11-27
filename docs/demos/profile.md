@@ -36,7 +36,7 @@ read-only inspection from the repository root:
 
 ```sh
 canic fleet canister list --config qualification/fixtures/profile-mainnet.toml
-canic fleet show --config qualification/fixtures/profile-mainnet.toml
+canic fleet show --config qualification/fixtures/profile-mainnet.toml --manager rk6n2-wyaaa-aaaad-qmoua-cai
 ```
 
 No canister has been stopped, deleted, reassigned or reinstalled by retirement.

@@ -1,23 +1,18 @@
 //! App command context requires a declared fleet; there is no legacy journal-only mode.
-use crate::args::FleetCommand;
+use crate::args::CallArgs;
 use canic_host::{Error, Result, application::codec};
 use std::path::Path;
 
-pub(crate) async fn run(command: &FleetCommand) -> Result<serde_json::Value> {
-    let FleetCommand::Call {
+pub(crate) async fn run(args: &CallArgs) -> Result<serde_json::Value> {
+    let CallArgs {
         selection,
         state_dir,
         canister,
         identity,
         signer,
         command,
-    } = command
-    else {
-        unreachable!("application command selected")
-    };
-    let config_path = selection.config.path(selection.app.as_deref())?;
-    let config = canic_host::load_config(&config_path)?;
-    let selected = config.select(selection.app.as_deref(), selection.fleet.as_deref())?;
+    } = args;
+    let (config_path, config, selected) = selection.resolve()?;
     let journal = state_dir
         .clone()
         .unwrap_or_else(|| selected.journal_path(&config_path));

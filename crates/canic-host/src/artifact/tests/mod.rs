@@ -242,7 +242,14 @@ fn source_layout_requires_real_source_directory_and_regular_rust_files() {
 #[test]
 fn build_modules_read_custom_sections_from_the_artifact() {
     let mut wasm = b"\0asm\x01\0\0\0".to_vec();
-    assert!(compiled_metadata(&wasm).unwrap() == (vec![], 0));
+    assert_eq!(
+        compiled_metadata(&wasm).unwrap(),
+        CompiledMetadata {
+            modules: vec![],
+            endpoint_count: 0,
+            canic_endpoint_count: 0
+        }
+    );
     for name in [
         "canic:module:auth",
         "canic:module:blob",
@@ -259,7 +266,11 @@ fn build_modules_read_custom_sections_from_the_artifact() {
     }
     assert_eq!(
         compiled_metadata(&wasm).unwrap(),
-        (vec!["auth", "blob", "db"], 0)
+        CompiledMetadata {
+            modules: vec!["auth", "blob", "db"],
+            endpoint_count: 0,
+            canic_endpoint_count: 0
+        }
     );
     wasm.pop();
     assert!(compiled_metadata(&wasm).is_err());
@@ -275,10 +286,40 @@ fn endpoint_recorder_requires_the_shared_query() {
     wasm.extend(marker.bytes());
     wasm.push(1);
     assert!(compiled_metadata(&wasm).is_err());
-    let name = b"canister_query metrics";
+    let name = b"canister_query canic_metrics";
     let len = u8::try_from(name.len()).unwrap();
     wasm.extend([7, len + 4, 1, len]);
     wasm.extend(name);
     wasm.extend([0, 0]); // Function export at index zero.
-    assert_eq!(compiled_metadata(&wasm).unwrap(), (vec![], 1));
+    // Even a canic_-prefixed export counts as application code without its marker.
+    assert_eq!(
+        compiled_metadata(&wasm).unwrap(),
+        CompiledMetadata {
+            modules: vec![],
+            endpoint_count: 1,
+            canic_endpoint_count: 0
+        }
+    );
+    let marker = b"canic:mount:v1:query:canic_metrics";
+    let len = u8::try_from(marker.len()).unwrap();
+    wasm.extend([0, len + 2, len]);
+    wasm.extend(marker);
+    wasm.push(1);
+    assert_eq!(
+        compiled_metadata(&wasm).unwrap(),
+        CompiledMetadata {
+            modules: vec![],
+            endpoint_count: 1,
+            canic_endpoint_count: 1
+        }
+    );
+    // Change only the marker's mode. An update cannot claim the query export.
+    let mut wrong = wasm;
+    wrong.truncate(wrong.len() - usize::from(len) - 4);
+    let marker = b"canic:mount:v1:update:canic_metrics";
+    let len = u8::try_from(marker.len()).unwrap();
+    wrong.extend([0, len + 2, len]);
+    wrong.extend(marker);
+    wrong.push(1);
+    assert!(compiled_metadata(&wrong).is_err());
 }

@@ -152,7 +152,7 @@ fn provider_refusals_report_one_failed_call() {
         let error = String::from_utf8(output.stderr).unwrap();
         assert!(error.contains(reason), "{error}");
         assert_eq!(
-            error.matches("query call (db_inspect)").count(),
+            error.matches("query call (canic_db_inspect)").count(),
             1,
             "{error}"
         );

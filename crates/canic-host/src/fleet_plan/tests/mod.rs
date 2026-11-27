@@ -116,56 +116,27 @@ fn stored_fleet_admits_full_manifests_and_rejects_retained_inline_delivery() {
         fleet_plan
             .children
             .iter()
-            .all(|c| c.release.as_ref().unwrap().chunks.len()
-                == ic_wasm_store_protocol::MAX_CHUNKS)
+            .all(|c| c.release.chunks.len() == ic_wasm_store_protocol::MAX_CHUNKS)
     );
+    let record = serde_json::to_value(&fleet_plan).unwrap();
     let mut wrong = fleet_plan.clone();
-    wrong.children[0].release.as_mut().unwrap().hash[0] ^= 1;
+    wrong.children[0].release.hash[0] ^= 1;
     assert!(wrong.digest().is_err());
     wrong = fleet_plan;
-    wrong.children[0].release.as_mut().unwrap().release.name = "another-app".into();
+    wrong.children[0].release.release.name = "another-app".into();
     assert!(wrong.digest().is_err());
     cancel_fleet_plan(&dir.join("journal"), &operation).unwrap();
 
-    // Model a retained 0.206 Store + inline-child approval. Replanning cannot silently migrate it.
-    std::fs::write(dir.join("app.wasm"), b"\0asm\x01\0\0\0").unwrap();
-    let FleetPlanning::Create {
-        operation,
-        mut fleet_plan,
-    } = plan_fleet(
-        &dir.join("journal"),
-        &dir.join("canic.toml"),
-        &selected,
-        &input().controller,
-        None,
-        None,
-    )
-    .unwrap()
-    else {
-        panic!("creation");
-    };
-    for child in &mut fleet_plan.children {
-        child.release = None;
+    for key in ["store", "release"] {
+        let mut invalid = record.clone();
+        let object = if key == "store" {
+            &mut invalid
+        } else {
+            &mut invalid["children"][0]
+        };
+        object.as_object_mut().unwrap().remove(key);
+        assert!(serde_json::from_value::<FleetPlan>(invalid).is_err());
     }
-    let old_id = fleet_plan.digest().unwrap();
-    let path = dir.join("journal").join(&operation);
-    std::fs::write(
-        path.join("fleet.json"),
-        serde_json::to_vec(&fleet_plan).unwrap(),
-    )
-    .unwrap();
-    std::fs::rename(path, dir.join("journal").join(&old_id)).unwrap();
-    assert!(matches!(
-        plan_fleet(
-            &dir.join("journal"),
-            &dir.join("canic.toml"),
-            &selected,
-            &input().controller,
-            None,
-            None
-        ),
-        Err(Error::Blocked(_))
-    ));
 }
 
 #[test]
@@ -204,7 +175,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
     assert_eq!(value.children.len(), 2);
     assert_eq!(value.creation_cycles(), 5_000_000_000_000);
     assert_eq!(value.root.creation_cycles(), 4_000_000_000_000);
-    let store = value.store.as_ref().unwrap();
+    let store = &value.store;
     assert_eq!(store.parent.operation, value.root.digest().unwrap());
     assert_eq!(
         plan().unwrap(),
@@ -245,15 +216,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
         .child_plan(&receipt, Some(&store_receipt), ChildId::FIRST)
         .unwrap();
     assert_eq!(
-        child
-            .management()
-            .unwrap()
-            .source
-            .as_ref()
-            .unwrap()
-            .manifest
-            .release
-            .version,
+        child.management().unwrap().source.manifest.release.version,
         child.artifact.sha256
     );
     let mut wrong = store_receipt;
@@ -266,7 +229,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
     assert!(path.join("store/module.wasm").exists());
     assert!(!path.join("store/plan.json").exists());
     let mut invalid = value.clone();
-    invalid.store.as_mut().unwrap().parent.operation = "00".repeat(32);
+    invalid.store.parent.operation = "00".repeat(32);
     assert!(invalid.digest().is_err());
     // Altering/removing infrastructure cannot be treated as an application upgrade.
     let mut changed = selected.clone();
@@ -448,7 +411,7 @@ fn fleet_child_bound_is_explicit_before_artifact_reads_or_journal_creation() {
     for with_store in [false, true] {
         for count in [0, ChildId::HISTORICAL_SERVICES.len() + 1] {
             let (dir, mut selected) = fixture();
-            selected.config.subnet_child_limit = Some(8);
+            selected.config.policy.subnet_child_limit = Some(8);
             let child = selected.config.canisters.remove("app").unwrap();
             for index in 0..count {
                 selected
@@ -539,7 +502,7 @@ async fn expired_unsubmitted_fleet_cannot_start_root_or_renew_its_schedule() {
         value.children[0].execute_at_ns = dispatch;
         value.root.expires_at_ns = 600_000_000_000 + dispatch;
         value.children[0].parent.operation = value.root.digest().unwrap();
-        value.store.as_mut().unwrap().parent.operation = value.root.digest().unwrap();
+        value.store.parent.operation = value.root.digest().unwrap();
         let id = value.digest().unwrap();
         let path = journal.join(&id);
         for leaf in ["root", "store", "child"] {
@@ -617,24 +580,13 @@ async fn cancellation_retains_evidence_and_permanently_revokes_only_unprepared_w
 }
 
 #[test]
-fn existing_fleet_approval_keeps_its_original_digest() {
-    // Public approval from the retained 0.204.1 demo; contains no signed envelopes.
-    let fleet: FleetPlan = serde_json::from_str(include_str!("fixtures/v1.json")).unwrap();
-    assert_eq!(
-        fleet.digest().unwrap(),
-        "a92356c7cfbeae5a2b380666093d7eae551f09f417e4264a0319729a76e9a1ab"
-    );
-    assert_eq!(
-        fleet.root.digest().unwrap(),
-        fleet.children[0].parent.operation
-    );
-    assert!(
-        !serde_json::to_value(&fleet)
-            .unwrap()
-            .as_object()
-            .unwrap()
-            .contains_key("sibling")
-    );
+fn untagged_historical_fleet_approvals_are_refused() {
+    for old in [
+        include_str!("fixtures/v1.json"),
+        include_str!("fixtures/v2.json"),
+    ] {
+        assert!(serde_json::from_str::<FleetPlan>(old).is_err());
+    }
 }
 
 #[test]
@@ -644,7 +596,7 @@ fn two_child_approval_retains_slot_mapping_and_cancels_only_before_preparation()
     sibling.wasm = Some("app.wasm".into());
     selected.config.canisters.insert("worker".into(), sibling);
     let (id, fleet) = create(&dir, &selected).unwrap();
-    assert_eq!(fleet.version, 9);
+    assert_eq!(fleet.version, 1);
     assert_eq!(fleet.children[0].deployment.canister, "app");
     assert_eq!(fleet.children[1].deployment.canister, "worker");
     assert_eq!(create(&dir, &selected).unwrap().0, id);
@@ -662,11 +614,11 @@ fn two_child_approval_retains_slot_mapping_and_cancels_only_before_preparation()
         .unwrap();
     assert_eq!(
         first.management().unwrap().slot,
-        Some(canic_management_protocol::children::ChildId::FIRST)
+        canic_management_protocol::children::ChildId::FIRST
     );
     assert_eq!(
         second.management().unwrap().slot,
-        Some(canic_management_protocol::children::ChildId::SECOND)
+        canic_management_protocol::children::ChildId::SECOND
     );
     assert_ne!(first.digest().unwrap(), second.digest().unwrap());
     let mut renamed = selected.clone();
@@ -686,12 +638,11 @@ fn two_child_approval_retains_slot_mapping_and_cancels_only_before_preparation()
 }
 
 #[test]
-fn retained_two_child_approval_preserves_digest_and_rejects_slot_reassignment() {
-    let fleet: FleetPlan = serde_json::from_str(include_str!("fixtures/v2.json")).unwrap();
-    assert_eq!(
-        fleet.digest().unwrap(),
-        "50b59c920abc1f3b3986e423623a38c2a4fe37ae0b77c52c77ad518e736a476f"
-    );
+fn two_child_approval_rejects_slot_reassignment() {
+    let (dir, mut selected) = fixture();
+    let sibling = selected.config.canisters["app"].clone();
+    selected.config.canisters.insert("worker".into(), sibling);
+    let (_, fleet) = create(&dir, &selected).unwrap();
     let encoded = serde_json::to_vec(&fleet).unwrap();
     assert_eq!(
         serde_json::from_slice::<FleetPlan>(&encoded).unwrap(),

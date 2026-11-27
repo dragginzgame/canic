@@ -248,89 +248,23 @@ async fn run(cli: &Cli) -> canic_host::Result<Output> {
 }
 
 async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Output> {
-    if matches!(command, FleetCommand::Call { .. }) {
-        return application::run(command).await.map(Output::Json);
-    }
-    if let FleetCommand::Auth(command) = command {
-        return auth::run(command, cli.json);
-    }
-    if let FleetCommand::Artifact(command) = command {
-        return artifacts::run(command, cli.json);
-    }
-    if let FleetCommand::CompareSubnets {
-        selection,
-        left,
-        right,
-    } = command
-    {
-        let path = selection.config.path(selection.app.as_deref())?;
-        let selected = canic_host::load_config(&path)?
-            .select(selection.app.as_deref(), selection.fleet.as_deref())?;
-        let report = canic_host::subnet_comparison::observe(&selected, left, right).await?;
-        return Ok(subnet_comparison::output(&report, cli.json));
-    }
-    if let FleetCommand::Placements { selection } = command {
-        let path = selection.config.path(selection.app.as_deref())?;
-        let selected = canic_host::load_config(&path)?
-            .select(selection.app.as_deref(), selection.fleet.as_deref())?;
-        let report = canic_host::placements::observe(&selected).await?;
-        return Ok(placements::output(&report, cli.json));
-    }
-    let scope = command.scope();
-    let config_path = match scope {
-        Some(scope) if !scope.no_config => canic_host::resolve_config_path(
-            std::path::Path::new(""),
-            scope.config.as_deref(),
-            scope.app.as_deref(),
-        )?,
-        _ => PathBuf::from("canic.toml"),
-    };
-    let configuration = if let Some(scope) = scope
-        && !scope.no_config
-        && (scope.config.is_some()
-            || config_path
-                .try_exists()
-                .map_err(|error| Error::Supplier(Box::new(error)))?)
-    {
-        Some(
-            canic_host::load_config(&config_path)?
-                .select(scope.app.as_deref(), scope.fleet.as_deref())?,
-        )
-    } else {
-        None
-    };
-    if let Some(scope) = scope
-        && configuration.is_none()
-        && (scope.app.is_some() || scope.fleet.is_some())
-    {
-        return Err(Error::Invalid(
-            "app/fleet selection requires a config".into(),
-        ));
-    }
-    let state_dir = scope
-        .and_then(|scope| scope.state_dir.clone())
-        .unwrap_or_else(|| {
-            configuration.as_ref().map_or_else(
-                || PathBuf::from(".canic"),
-                |config| config.journal_path(&config_path),
-            )
-        });
-    if let Some(config) = &configuration
-        && let FleetCommand::Apply { digest, .. }
-        | FleetCommand::Activate { digest, .. }
-        | FleetCommand::Reconcile { digest, .. }
-        | FleetCommand::Cancel { digest, .. }
-        | FleetCommand::Status { digest, .. } = command
-    {
-        config.check_operation(&state_dir, digest)?;
-    }
     let result = match command {
-        FleetCommand::Auth(_)
-        | FleetCommand::Call { .. }
-        | FleetCommand::Artifact(_)
-        | FleetCommand::CompareSubnets { .. }
-        | FleetCommand::Placements { .. } => {
-            unreachable!("artifact and observation commands handled before deployment resolution")
+        FleetCommand::Call(args) => return application::run(args).await.map(Output::Json),
+        FleetCommand::Auth(command) => return auth::run(command, cli.json),
+        FleetCommand::Artifact(command) => return artifacts::run(command, cli.json),
+        FleetCommand::CompareSubnets {
+            selection,
+            left,
+            right,
+        } => {
+            let (_, _, selected) = selection.resolve()?;
+            let report = canic_host::subnet_comparison::observe(&selected, left, right).await?;
+            return Ok(subnet_comparison::output(&report, cli.json));
+        }
+        FleetCommand::Placements { selection } => {
+            let (_, _, selected) = selection.resolve()?;
+            let report = canic_host::placements::observe(&selected).await?;
+            return Ok(placements::output(&report, cli.json));
         }
         FleetCommand::Canister(command) => match command {
             CanisterCommand::Bind {
@@ -338,18 +272,13 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 id,
                 selection,
             } => {
-                let path = selection.config.path(selection.app.as_deref())?;
-                let scope = canic_host::load_config(&path)?
-                    .select(selection.app.as_deref(), selection.fleet.as_deref())?;
+                let (path, _, scope) = selection.resolve()?;
                 let selected = canic_host::bind_canister(
                     &path,
                     &scope.app,
                     &scope.fleet,
                     name,
-                    canic_host::CanisterBinding {
-                        id: id.clone(),
-                        ..Default::default()
-                    },
+                    canic_host::CanisterBinding { id: id.clone() },
                 )?;
                 if !cli.json {
                     return Ok(Output::Text(format!(
@@ -368,9 +297,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 )
             }
             CanisterCommand::PlanSnapshotReaders { name, selection } => {
-                let path = selection.config.path(selection.app.as_deref())?;
-                let fleet = canic_host::load_config(&path)?
-                    .select(selection.app.as_deref(), selection.fleet.as_deref())?;
+                let (path, _, fleet) = selection.resolve()?;
                 Ok(serde_json::json!(
                     fleet.snapshot_readers(&fleet.journal_path(&path), name)?
                 ))
@@ -381,9 +308,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                 expires_at_ns,
                 selection,
             } => {
-                let path = selection.config.path(selection.app.as_deref())?;
-                let fleet = canic_host::load_config(&path)?
-                    .select(selection.app.as_deref(), selection.fleet.as_deref())?;
+                let (_, _, fleet) = selection.resolve()?;
                 let approval = fleet
                     .config
                     .child_funding(name, *budget_cycles, *expires_at_ns)?;
@@ -434,8 +359,9 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             publication,
             execute_at,
             cycles,
-            ..
+            scope,
         } => {
+            let (config_path, configuration, state_dir) = scope.resolve()?;
             let config = configuration.as_ref().ok_or_else(|| {
                 Error::Invalid(
                     "fleet plan requires an app and fleet with Root and Wasm Store".into(),
@@ -588,8 +514,9 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             digest,
             identity,
             signer,
-            ..
+            scope,
         } => {
+            let state_dir = scope.operation_dir(digest)?;
             let outcome =
                 canic_host::activate(&state_dir, digest, identity, &signer.icp_bin).await?;
             if !cli.json {
@@ -601,8 +528,9 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             digest,
             identity,
             signer,
-            ..
+            scope,
         } => {
+            let state_dir = scope.operation_dir(digest)?;
             let outcome = canic_host::apply(&state_dir, digest, identity, &signer.icp_bin).await?;
             if !cli.json {
                 return Ok(Output::Text(progress::applied(&outcome, command)));
@@ -613,8 +541,9 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             digest,
             identity,
             signer,
-            ..
+            scope,
         } => {
+            let state_dir = scope.operation_dir(digest)?;
             let outcome =
                 canic_host::reconcile(&state_dir, digest, identity, &signer.icp_bin).await?;
             if !cli.json {
@@ -622,7 +551,8 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             }
             Ok(serde_json::json!(outcome))
         }
-        FleetCommand::Cancel { digest, .. } => {
+        FleetCommand::Cancel { digest, scope } => {
+            let state_dir = scope.operation_dir(digest)?;
             let cancelled = canic_host::cancel_fleet_plan(&state_dir, digest)?;
             if !cli.json {
                 return Ok(Output::Text(format!(
@@ -631,7 +561,8 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             }
             Ok(serde_json::json!(cancelled))
         }
-        FleetCommand::Status { digest, .. } => {
+        FleetCommand::Status { digest, scope } => {
+            let state_dir = scope.operation_dir(digest)?;
             let state = canic_host::status(&state_dir, digest)?;
             if !cli.json {
                 return status::render(&state, &state_dir).map(Output::Text);
@@ -653,8 +584,9 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             manager,
             wallet,
             watch,
-            ..
+            scope,
         } => {
+            let (_, configuration, state_dir) = scope.resolve()?;
             let snapshot = fleet::collect(
                 &state_dir,
                 manager,

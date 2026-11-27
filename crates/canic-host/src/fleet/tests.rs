@@ -93,10 +93,11 @@ pub(super) fn root_operation(network: Network) -> FleetOperation {
             canister: "app".into(),
         }),
         Some(crate::ManagedOwner {
+            child_evidence_only: false,
             arguments: None,
             blob_attempt: None,
-            source: None,
-            slot: None,
+            source: crate::tests::stored_source("app", b"\0asm\x01\0\0\0"),
+            slot: canic_management_protocol::children::ChildId::FIRST,
             root: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
             root_module: "01".repeat(32),
             execute_at_ns: crate::now().unwrap() + 600_000_000_000,
@@ -161,26 +162,26 @@ fn root_reports_cannot_substitute_another_approval_or_a_self_child() {
     let operations = [operation];
     let before = serde_json::to_value(&operations).unwrap();
     let mut report = canic_management_protocol::Status::default();
-    assert!(check_report(&operations, &network, &root, None, &report).is_ok());
+    assert!(check_report(&operations, &network, &root, ChildId::FIRST, &report).is_ok());
     report.phase = canic_management_protocol::Phase::Scheduled;
-    assert!(check_report(&operations, &network, &root, None, &report).is_err());
+    assert!(check_report(&operations, &network, &root, ChildId::FIRST, &report).is_err());
     report.approval = Some(approval.clone());
-    assert!(check_report(&operations, &network, &root, None, &report).is_ok());
+    assert!(check_report(&operations, &network, &root, ChildId::FIRST, &report).is_ok());
     report.approval.as_mut().unwrap().module_hash = [9; 32];
-    assert!(check_report(&operations, &network, &root, None, &report).is_err());
+    assert!(check_report(&operations, &network, &root, ChildId::FIRST, &report).is_err());
     report.approval = Some(approval);
     report.worker = Some(root.clone());
-    assert!(check_report(&operations, &network, &root, None, &report).is_err());
+    assert!(check_report(&operations, &network, &root, ChildId::FIRST, &report).is_err());
     report.worker = Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into());
-    assert!(check_report(&operations, &network, &root, None, &report).is_ok());
+    assert!(check_report(&operations, &network, &root, ChildId::FIRST, &report).is_ok());
     assert_eq!(serde_json::to_value(&operations).unwrap(), before);
     assert!(operations[0].canister.is_none());
     assert!(!operations[0].receipt_retained);
 }
 
 #[test]
-fn first_slot_observations_share_legacy_creation_and_upgrade_constraints() {
-    for mut operation in [
+fn single_slot_root_reports_check_the_explicit_first_slot() {
+    for operation in [
         root_operation(Network::Mainnet),
         upgrade_operation(Network::Mainnet),
     ] {
@@ -198,23 +199,11 @@ fn first_slot_observations_share_legacy_creation_and_upgrade_constraints() {
             }),
             ..Default::default()
         };
-        for retained in [None, Some(ChildId::FIRST)] {
-            operation.slot = retained;
+        {
             let operations = std::slice::from_ref(&operation);
             let before = serde_json::to_value(operations).unwrap();
-            for observed in [None, Some(ChildId::FIRST)] {
-                assert!(check_report(operations, &network, &manager, observed, &report).is_err());
-            }
-            assert!(
-                check_report(
-                    operations,
-                    &network,
-                    &manager,
-                    Some(ChildId::SECOND),
-                    &report
-                )
-                .is_ok()
-            );
+            assert!(check_report(operations, &network, &manager, ChildId::FIRST, &report).is_err());
+            assert!(check_report(operations, &network, &manager, ChildId::SECOND, &report).is_ok());
             assert_eq!(serde_json::to_value(operations).unwrap(), before);
         }
     }
@@ -346,13 +335,13 @@ fn upgrade_target_also_constrains_creation_report_inventory() {
         ..Default::default()
     };
     let operations = [operation];
-    assert!(check_report(&operations, &network, &manager, None, &report).is_ok());
+    assert!(check_report(&operations, &network, &manager, ChildId::FIRST, &report).is_ok());
     report.approval.as_mut().unwrap().module_hash = [8; 32];
-    assert!(check_report(&operations, &network, &manager, None, &report).is_err());
+    assert!(check_report(&operations, &network, &manager, ChildId::FIRST, &report).is_err());
     report.approval.as_mut().unwrap().module_hash =
         operations[0].upgrade.as_ref().unwrap().previous_module;
     report.worker = Some("r7inp-6aaaa-aaaaa-aaabq-cai".into());
-    assert!(check_report(&operations, &network, &manager, None, &report).is_err());
+    assert!(check_report(&operations, &network, &manager, ChildId::FIRST, &report).is_err());
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -363,7 +352,7 @@ async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
     let id = operation.network_id.clone();
     let future = tokio::time::Instant::now() + Duration::from_secs(5);
     assert!(
-        observe_upgrade(&[], &id, &root, None, &network, future)
+        observe_upgrade(&[], &id, &root, ChildId::FIRST, &network, future)
             .await
             .is_none()
     );
@@ -373,7 +362,7 @@ async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
             &operations,
             "another-network",
             &root,
-            None,
+            ChildId::FIRST,
             &network,
             future
         )
@@ -381,16 +370,23 @@ async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
         .is_none()
     );
     assert!(
-        observe_upgrade(&operations, &id, "another-root", None, &network, future)
-            .await
-            .is_none()
+        observe_upgrade(
+            &operations,
+            &id,
+            "another-root",
+            ChildId::FIRST,
+            &network,
+            future
+        )
+        .await
+        .is_none()
     );
     let before = serde_json::to_value(&operations).unwrap();
     let expired = observe_upgrade(
         &operations,
         &id,
         &root,
-        None,
+        ChildId::FIRST,
         &network,
         tokio::time::Instant::now(),
     )
@@ -401,7 +397,7 @@ async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
     assert_eq!(serde_json::to_value(&operations).unwrap(), before);
     let [operation] = operations;
     let ambiguous = [operation, upgrade_operation(network.clone())];
-    let unknown = observe_upgrade(&ambiguous, &id, &root, None, &network, future)
+    let unknown = observe_upgrade(&ambiguous, &id, &root, ChildId::FIRST, &network, future)
         .await
         .unwrap();
     assert!(unknown.reported.is_none());

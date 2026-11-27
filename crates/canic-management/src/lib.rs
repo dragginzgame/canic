@@ -65,20 +65,16 @@ pub struct Readiness {
 /// Store-bound operations, mounted explicitly by the owning canister.
 
 pub mod stored {
-    pub use crate::engine::stored_api::{
-        custody, reconcile, reconcile_upgrade, root_custody, root_history, stage, stage_upgrade,
-    };
+    pub use crate::engine::stored_api::{custody, root_history};
 }
 
 /// Exact application lifecycle bindings, mounted explicitly by Root.
 
 pub mod application {
     pub use crate::engine::application::{
-        child_evidence, custody, reconcile, reconcile_child_creation, reconcile_child_upgrade,
-        stage, stage_child_creation, stage_child_upgrade,
+        child_evidence, custody, reconcile_child_creation, reconcile_child_upgrade,
+        stage_child_creation, stage_child_upgrade,
     };
-    #[cfg(feature = "blob")]
-    pub use crate::engine::application::{reconcile_upgrade, stage_upgrade};
     #[cfg(feature = "blob")]
     pub use crate::engine::blob::activate;
     pub use crate::engine::directory::redeliver_directory_revision;

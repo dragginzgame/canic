@@ -24,22 +24,10 @@ pub enum Request {
     Activate(Approval),
 }
 
-/// Retain one immutable maintenance approval before remote effects.
-pub const STAGE: u64 = 50;
-/// Advance only the exact retained attempt; issued stop effects are observed, never repeated.
-pub const ADVANCE: u64 = 51;
-/// Read the surviving Root journal without resuming work.
-pub const OBSERVE: u64 = 52;
-/// Explicitly install the approved bytes once, then permit restart with admission closed.
-pub const INSTALL: u64 = 53;
-/// Explicitly activate only the verified replacement and exact retained Store attempt.
-pub const ACTIVATE: u64 = 54;
 /// Public diagnostic query; never authenticated completion custody or current Store readiness.
 pub const STATUS: u64 = 55;
 /// Reconcile already-issued effects by observation; never issue fresh maintenance effects.
 pub const RECOVER: u64 = 56;
-/// Read one exact retained approval, including completed historical attempts.
-pub const OBSERVE_ATTEMPT: u64 = 59;
 /// Read the latest attempt (None) or one exact retained approval (Some).
 pub const READ_ATTEMPT: u64 = ic_wire::method_id("observe_store_maintenance");
 /// Retained Store upgrades, including the current attempt. History is never evicted.

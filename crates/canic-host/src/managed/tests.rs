@@ -3,7 +3,7 @@ use crate::{
     CanisterConfig, Network,
     tests::{directory, input},
 };
-use canic_management_protocol::{STAGE, children::STATUS};
+
 use std::collections::BTreeMap;
 
 fn selection() -> SelectedFleet {
@@ -31,8 +31,8 @@ fn selection() -> SelectedFleet {
     )
 }
 
-// Historical record for testing retained evidence independently of fresh planning.
-fn inline_record(dir: &Path, wasm: &Path) -> (String, Plan) {
+// Retain a Store-backed approval independently of network setup.
+fn child_record(dir: &Path, wasm: &Path) -> (String, Plan) {
     let at = crate::now().unwrap();
     plan::retain(
         dir,
@@ -44,13 +44,14 @@ fn inline_record(dir: &Path, wasm: &Path) -> (String, Plan) {
             canister: "app".into(),
         }),
         Some(ManagedOwner {
+            child_evidence_only: false,
             root: selection().config.canisters["root"].id.clone().unwrap(),
             root_module: "01".repeat(32),
             execute_at_ns: at,
-            slot: Some(ChildId::FIRST),
+            slot: ChildId::FIRST,
             arguments: None,
             blob_attempt: None,
-            source: None,
+            source: crate::tests::stored_source("app", b"\0asm\x01\0\0\0"),
         }),
         at,
     )
@@ -62,14 +63,17 @@ async fn recovery_requires_retained_admission_and_never_bootstraps_work() {
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let (id, plan) = inline_record(&dir, &wasm);
+    let (id, plan) = child_record(&dir, &wasm);
     let before = plan.clone();
     let result = crate::reconcile(&dir, &id, "must-not-run", Path::new("must-not-run")).await;
     assert!(matches!(result, Err(Error::Blocked(_))));
     assert!(!dir.join(&id).join("observe").exists());
     assert!(!dir.join(&id).join("stage").exists());
     assert_eq!(plan::load(&dir.join(&id), &id).unwrap().0, before);
-    assert!(matches!(recovery::call(&plan), Err(Error::Blocked(_))));
+    assert_eq!(
+        recovery::call(&plan).unwrap().method,
+        "reconcile_child_creation"
+    );
     let mut unmanaged = plan;
     unmanaged.action = crate::PlanAction::Create {
         bootstrap: None,
@@ -84,7 +88,7 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let (id, plan) = inline_record(&dir, &wasm);
+    let (id, plan) = child_record(&dir, &wasm);
     let operation = dir.join(&id);
     let slot = operation.join("observe/0");
     crate::output_publication::prepare(&slot.join("reconcile"), 0o700).unwrap();
@@ -102,7 +106,7 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
         &ic_wire::encode(
             &retained,
             ic_wire::Encoding::Frame {
-                method: canic_management_protocol::children::RECONCILE,
+                method: canic_management_protocol::application::RECONCILE_CHILD_CREATION,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -121,12 +125,14 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
         phase: Phase::Scheduled,
         ..Default::default()
     };
+    let next = operation.join("observe/1/reconcile");
+    crate::output_publication::prepare(&next, 0o700).unwrap();
     store::put(
-        &slot.join("reply.bin"),
+        &next.join("reply.bin"),
         &ic_wire::encode(
             &earlier,
             ic_wire::Encoding::Frame {
-                method: STATUS,
+                method: canic_management_protocol::application::RECONCILE_CHILD_CREATION,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -134,7 +140,10 @@ fn recovery_evidence_survives_before_observation_and_rejects_later_regression() 
         .unwrap(),
     )
     .unwrap();
-    assert!(evidence(&operation, &plan).is_err());
+    assert!(matches!(
+        evidence(&operation, &plan),
+        Err(Error::Invalid(_))
+    ));
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -159,7 +168,7 @@ fn managed_plan_reuses_authority_and_refuses_direct_child_or_root_drift() {
     )
     .unwrap_err();
     assert!(refusal.to_string().contains("--release"));
-    let (id, plan) = inline_record(&dir, &wasm);
+    let (id, plan) = child_record(&dir, &wasm);
     assert_eq!(plan.management().unwrap().execute_at_ns, plan.created_at_ns);
     assert_eq!(plan.expires_at_ns - plan.created_at_ns, 600_000_000_000);
     assert_eq!(
@@ -204,7 +213,7 @@ fn managed_reply_preserves_binding_child_and_attempt_evidence() {
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let (_, plan) = inline_record(&dir, &wasm);
+    let (_, plan) = child_record(&dir, &wasm);
     let scheduled = Status {
         approval: Some(approval(&plan).unwrap()),
         phase: Phase::Scheduled,
@@ -244,12 +253,12 @@ fn managed_reply_preserves_binding_child_and_attempt_evidence() {
 #[test]
 fn upgrade_requires_creation_receipt_and_keeps_both_approvals_immutable() {
     use canic_management_protocol::children::ChildId;
-    for slot in [None, Some(ChildId::FIRST), Some(ChildId::SECOND)] {
+    for slot in [ChildId::FIRST, ChildId::SECOND] {
         check_named_upgrade_custody(slot);
     }
 }
 
-fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children::ChildId>) {
+fn check_named_upgrade_custody(slot: canic_management_protocol::children::ChildId) {
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
@@ -267,13 +276,14 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
                 canister: "app".into(),
             }),
             Some(ManagedOwner {
+                child_evidence_only: false,
                 arguments: None,
                 blob_attempt: None,
                 slot,
                 root: selected.config.canisters["root"].id.clone().unwrap(),
                 root_module: root_hash.clone(),
                 execute_at_ns: now,
-                source: None,
+                source: crate::tests::stored_source("app", b"\0asm\x01\0\0\0"),
             }),
             now,
         )
@@ -322,11 +332,7 @@ fn check_named_upgrade_custody(slot: Option<canic_management_protocol::children:
         &ic_wire::encode(
             &Ok::<_, Refusal>(ready),
             ic_wire::Encoding::Frame {
-                method: if slot.is_some() {
-                    canic_management_protocol::children::STAGE
-                } else {
-                    STAGE
-                },
+                method: canic_management_protocol::application::STAGE_CHILD_CREATION,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -394,7 +400,7 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
     let dir = directory();
     let wasm = dir.join("app.wasm");
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let (_, mut plan) = inline_record(&dir, &wasm);
+    let (_, mut plan) = child_record(&dir, &wasm);
     plan.action = crate::PlanAction::UpgradeChild {
         target: crate::UpgradeTarget {
             canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
@@ -402,11 +408,6 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
         },
         owner: plan.management().unwrap().clone(),
     };
-    let evidence_dir = dir.join("evidence");
-    let staged = evidence_dir.join("stage/reply.bin");
-    let observed = evidence_dir.join("observe/0/reply.bin");
-    std::fs::create_dir_all(staged.parent().unwrap()).unwrap();
-    std::fs::create_dir_all(observed.parent().unwrap()).unwrap();
     let installed = wire::Status {
         approval: Some(upgrade::approval(&plan).unwrap()),
         phase: wire::Phase::InstallIssued,
@@ -415,19 +416,6 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
         previous_version: Some(7),
         ..Default::default()
     };
-    std::fs::write(
-        staged,
-        ic_wire::encode(
-            &Ok::<_, Refusal>(&installed),
-            ic_wire::Encoding::Frame {
-                method: canic_management_protocol::children::STAGE_UPGRADE,
-                direction: ic_wire::Direction::Response,
-            },
-            LIMITS,
-        )
-        .unwrap(),
-    )
-    .unwrap();
     let ready = wire::Status {
         phase: wire::Phase::Ready,
         observed_version: Some(8),
@@ -479,57 +467,13 @@ fn upgrade_observations_require_version_proof_and_monotonic_custody() {
                 invalid.requests[1] = None;
             }
         }
-        std::fs::write(
-            &observed,
-            ic_wire::encode(
-                &invalid,
-                ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::children::OBSERVE_UPGRADE,
-                    direction: ic_wire::Direction::Response,
-                },
-                LIMITS,
-            )
-            .unwrap(),
-        )
-        .unwrap();
         assert!(
-            upgrade::evidence(&evidence_dir, &plan).is_err(),
+            upgrade::validate(&plan, Some(&installed), &invalid).is_err(),
             "case {kind}"
         );
     }
-    std::fs::write(
-        &observed,
-        ic_wire::encode(
-            &ready,
-            ic_wire::Encoding::Frame {
-                method: canic_management_protocol::children::OBSERVE_UPGRADE,
-                direction: ic_wire::Direction::Response,
-            },
-            LIMITS,
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    assert_eq!(
-        upgrade::evidence(&evidence_dir, &plan).unwrap(),
-        Some(ready)
-    );
-    let regression = evidence_dir.join("observe/1/reply.bin");
-    std::fs::create_dir_all(regression.parent().unwrap()).unwrap();
-    std::fs::write(
-        regression,
-        ic_wire::encode(
-            &installed,
-            ic_wire::Encoding::Frame {
-                method: canic_management_protocol::children::OBSERVE_UPGRADE,
-                direction: ic_wire::Direction::Response,
-            },
-            LIMITS,
-        )
-        .unwrap(),
-    )
-    .unwrap();
-    assert!(upgrade::evidence(&evidence_dir, &plan).is_err());
+    upgrade::validate(&plan, Some(&installed), &ready).unwrap();
+    assert!(upgrade::validate(&plan, Some(&ready), &installed).is_err());
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -541,7 +485,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     let wasm = dir.join("app.wasm");
     let bytes = b"\0asm\x01\0\0\0";
     std::fs::write(&wasm, bytes).unwrap();
-    let (_, mut plan) = inline_record(&dir, &wasm);
+    let (_, mut plan) = child_record(&dir, &wasm);
     let source = crate::StoredArtifact {
         maintenance: None,
         store: crate::UpgradeTarget {
@@ -561,7 +505,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
         panic!("creation")
     };
-    owner.source = Some(source.clone());
+    owner.source = source.clone();
     plan.validate().unwrap();
     let digest = plan.digest().unwrap();
     let call = Method::Stage.call(&plan).unwrap();
@@ -725,7 +669,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         let crate::PlanAction::CreateChild(owner) = &mut successor.action else {
             unreachable!()
         };
-        owner.source.as_mut().unwrap().maintenance = Some(attempt.clone());
+        owner.source.maintenance = Some(attempt.clone());
         assert_ne!(successor.digest().unwrap(), digest);
         assert_eq!(
             observation(&successor).unwrap().method,
@@ -825,15 +769,15 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
         panic!("creation")
     };
-    owner.source.as_mut().unwrap().manifest.release.version = "v2".into();
+    owner.source.manifest.release.version = "v2".into();
     assert_ne!(plan.digest().unwrap(), digest);
     let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
         panic!("creation")
     };
-    owner.source.as_mut().unwrap().manifest.hash[0] ^= 1;
+    owner.source.manifest.hash[0] ^= 1;
     assert!(plan.validate().is_err());
     let mut owner = plan.management().unwrap().clone();
-    owner.source = Some(source);
+    owner.source = source;
     plan.action = crate::PlanAction::UpgradeChild {
         owner,
         target: crate::UpgradeTarget {
@@ -883,17 +827,9 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         stored::upgraded(&plan, &encode(&custody)).unwrap(),
         upgraded
     );
-    for (old, current, observe_method) in [
-        (
-            6,
-            crate::plan::CHILD_ACTIVATION_VERSION,
-            "observe_root_custody",
-        ),
-        (
-            8,
-            crate::plan::PLACEMENT_CHILD_ACTIVATION_VERSION,
-            "observe_child_deployments",
-        ),
+    for (child_evidence_only, observe_method) in [
+        (false, "observe_root_custody"),
+        (true, "observe_child_deployments"),
     ] {
         let mut blob = plan.clone();
         let crate::PlanAction::UpgradeChild { owner, .. } = &mut blob.action else {
@@ -901,14 +837,8 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         };
         owner.arguments = Some(vec![1]);
         owner.blob_attempt = Some(1);
-        blob.version = old;
-        let original = blob.digest().unwrap();
-        assert_eq!(
-            Method::ActivateUpgrade.call(&blob).unwrap().method,
-            "activate_application_upgrade"
-        );
-        blob.version = current;
-        assert_ne!(blob.digest().unwrap(), original);
+        owner.child_evidence_only = child_evidence_only;
+        blob.validate().unwrap();
         assert_eq!(
             Method::ActivateUpgrade.call(&blob).unwrap().method,
             "activate_child_upgrade"
@@ -916,7 +846,10 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         assert_eq!(observation(&blob).unwrap().method, observe_method);
     }
     let mut mixed = plan.clone();
-    mixed.version = 8;
+    let crate::PlanAction::UpgradeChild { owner, .. } = &mut mixed.action else {
+        unreachable!()
+    };
+    owner.child_evidence_only = true;
     mixed.validate().unwrap();
     assert_eq!(
         observation(&mixed).unwrap().method,
@@ -974,7 +907,7 @@ fn assert_application_arguments(
         custody::{Root, RootHistory},
     };
     let mut plan = original.clone();
-    plan.version = 6;
+    plan.version = 1;
     let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
         panic!("creation")
     };
@@ -1058,14 +991,14 @@ fn assert_application_arguments(
         .unwrap()
     };
     assert_eq!(
-        decode_observation(&plan, application::CUSTODY, &encode(&value)).unwrap(),
+        stored::creation(&plan, &encode(&value)).unwrap(),
         custody.children[0].creation
     );
     value.applications[0].as_mut().unwrap().creation =
         application::Arguments::new(named(2)).unwrap();
-    assert!(decode_observation(&plan, application::CUSTODY, &encode(&value)).is_err());
+    assert!(stored::creation(&plan, &encode(&value)).is_err());
     value.applications[0] = None;
-    assert!(decode_observation(&plan, application::CUSTODY, &encode(&value)).is_err());
+    assert!(stored::creation(&plan, &encode(&value)).is_err());
     let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
         unreachable!()
     };
@@ -1237,7 +1170,7 @@ fn adding_discovery_preserves_two_earlier_named_creation_approvals() {
     ] {
         assert_eq!(
             permanent_slot(&children, name, reserved.into_iter()).unwrap(),
-            Some(expected)
+            expected
         );
     }
 }

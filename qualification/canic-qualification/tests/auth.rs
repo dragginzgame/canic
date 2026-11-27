@@ -282,7 +282,12 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         Err(enrollment::Error::Binding)
     );
     let closed = pic
-        .update_call(target, browser, "establish_portable_session", frame.clone())
+        .update_call(
+            target,
+            browser,
+            "canic_establish_portable_session",
+            frame.clone(),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -304,21 +309,21 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     let before = observe(pic, target).await;
     for (name, id, query, valid, budget) in [
         (
-            "establish_portable_session",
+            "canic_establish_portable_session",
             0x415554480012,
             false,
             frame.clone(),
             EstablishSession::REQUEST_LIMITS,
         ),
         (
-            "portable_session_read",
+            "canic_portable_session_read",
             0x415554480013,
             true,
             ReadSession::encode_request(&()).unwrap(),
             ReadSession::REQUEST_LIMITS,
         ),
         (
-            "logout_portable_session",
+            "canic_logout_portable_session",
             0x415554480014,
             false,
             Logout::encode_request(&()).unwrap(),
@@ -367,7 +372,12 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     );
     for caller in [outsider, installer] {
         let mismatch = pic
-            .update_call(target, caller, "establish_portable_session", frame.clone())
+            .update_call(
+                target,
+                caller,
+                "canic_establish_portable_session",
+                frame.clone(),
+            )
             .await
             .unwrap();
         assert_eq!(
@@ -390,7 +400,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         .update_call(
             target,
             browser,
-            "establish_portable_session",
+            "canic_establish_portable_session",
             EstablishSession::encode_request(&bad).unwrap(),
         )
         .await
@@ -411,14 +421,24 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     assert!(control(pic, target, installer, 2).await);
     let before = observe(pic, target).await;
     assert!(
-        pic.update_call(target, browser, "establish_portable_session", frame.clone())
-            .await
-            .is_err()
+        pic.update_call(
+            target,
+            browser,
+            "canic_establish_portable_session",
+            frame.clone()
+        )
+        .await
+        .is_err()
     );
     assert_eq!(observe(pic, target).await, before);
     assert!(control(pic, target, installer, 3).await);
     let admitted = pic
-        .update_call(target, browser, "establish_portable_session", frame.clone())
+        .update_call(
+            target,
+            browser,
+            "canic_establish_portable_session",
+            frame.clone(),
+        )
         .await
         .unwrap();
     let receipt = EstablishSession::decode_response(&admitted)
@@ -429,7 +449,12 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     assert_eq!(observe(pic, target).await.writes, 1);
     let original = observe(pic, target).await;
     let retry = pic
-        .update_call(target, browser, "establish_portable_session", frame.clone())
+        .update_call(
+            target,
+            browser,
+            "canic_establish_portable_session",
+            frame.clone(),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -443,7 +468,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     );
     let read = ReadSession::encode_request(&()).unwrap();
     let bytes = pic
-        .query_call(target, browser, "portable_session_read", read.clone())
+        .query_call(target, browser, "canic_portable_session_read", read.clone())
         .await
         .unwrap();
     assert_eq!(
@@ -451,7 +476,12 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         Ok(receipt.clone())
     );
     let bytes = pic
-        .query_call(target, outsider, "portable_session_read", read.clone())
+        .query_call(
+            target,
+            outsider,
+            "canic_portable_session_read",
+            read.clone(),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -460,7 +490,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     );
     assert!(control(pic, target, installer, 4).await);
     let bytes = pic
-        .query_call(target, browser, "portable_session_read", read.clone())
+        .query_call(target, browser, "canic_portable_session_read", read.clone())
         .await
         .unwrap();
     assert_eq!(
@@ -497,7 +527,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     assert!(refreshed.revision > retained.revision);
     assert_ne!(refreshed.request.challenge, retained.request.challenge);
     let bytes = pic
-        .query_call(target, browser, "portable_session_read", read.clone())
+        .query_call(target, browser, "canic_portable_session_read", read.clone())
         .await
         .unwrap();
     assert_eq!(ReadSession::decode_response(&bytes).unwrap(), Ok(receipt));
@@ -506,14 +536,19 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     assert!(control(pic, target, installer, 2).await);
     let before = observe(pic, target).await;
     assert!(
-        pic.update_call(target, browser, "logout_portable_session", logout.clone())
-            .await
-            .is_err()
+        pic.update_call(
+            target,
+            browser,
+            "canic_logout_portable_session",
+            logout.clone()
+        )
+        .await
+        .is_err()
     );
     assert_eq!(observe(pic, target).await, before);
     assert!(control(pic, target, installer, 3).await);
     let bytes = pic
-        .update_call(target, browser, "logout_portable_session", logout)
+        .update_call(target, browser, "canic_logout_portable_session", logout)
         .await
         .unwrap();
     assert_eq!(
@@ -521,7 +556,12 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         LogoutResult::Revoked(now + 300 * SECOND)
     );
     let bytes = pic
-        .update_call(target, browser, "establish_portable_session", frame.clone())
+        .update_call(
+            target,
+            browser,
+            "canic_establish_portable_session",
+            frame.clone(),
+        )
         .await
         .unwrap();
     assert_eq!(
@@ -529,7 +569,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         Err(AdmissionRefusal::Revoked)
     );
     let bytes = pic
-        .query_call(target, browser, "portable_session_read", read.clone())
+        .query_call(target, browser, "canic_portable_session_read", read.clone())
         .await
         .unwrap();
     assert_eq!(
@@ -582,7 +622,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
     assert!(receiver_refresh(pic, target, installer).await.is_ok());
     assert!(snapshot(pic, target).await.revoked);
     let bytes = pic
-        .query_call(target, browser, "portable_session_read", read.clone())
+        .query_call(target, browser, "canic_portable_session_read", read.clone())
         .await
         .unwrap();
     assert_eq!(
@@ -611,7 +651,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         "enrollment cannot repair volatile safety loss"
     );
     let bytes = pic
-        .update_call(target, browser, "establish_portable_session", frame)
+        .update_call(target, browser, "canic_establish_portable_session", frame)
         .await
         .unwrap();
     assert_eq!(
@@ -619,7 +659,7 @@ async fn receiver_mounts_bind_callers_preserve_refusals_and_rollback() {
         Err(AdmissionRefusal::Unavailable)
     );
     let bytes = pic
-        .query_call(target, browser, "portable_session_read", read)
+        .query_call(target, browser, "canic_portable_session_read", read)
         .await
         .unwrap();
     assert_eq!(

@@ -163,7 +163,7 @@ fn state() -> serde_json::Value {
     serde_json::json!({
         "operation": "a".repeat(64),
         "plan": Plan {
-            version: 2,
+            version: 1,
             network: Network::Mainnet,
             controller: "aaaaa-aa".into(),
             artifact: canic_host::Artifact { sha256: "b".repeat(64), bytes: 8 },
@@ -181,12 +181,10 @@ fn state() -> serde_json::Value {
 
 fn store_state() -> serde_json::Value {
     let mut state = state();
-    state["plan"]["creation_cycles"] = 0.into();
-    state["plan"]["target"] = "ryjl3-tyaaa-aaaaa-aaaba-cai".into();
-    state["plan"]["previous_module"] = "22".repeat(32).into();
-    state["plan"]["store_upgrade_root"] = serde_json::json!({
-        "canister": "rrkah-fqaaa-aaaaa-aaaaq-cai", "module": "11".repeat(32)
-    });
+    state["plan"]["action"] = serde_json::json!({"contract":"canic:store-maintenance.v1","approval":{
+        "sequence":1, "target":{"canister":"ryjl3-tyaaa-aaaaa-aaaba-cai","module":"22".repeat(32)},
+        "root":{"canister":"rrkah-fqaaa-aaaaa-aaaaq-cai","module":"11".repeat(32)}
+    }});
     let plan: Plan = serde_json::from_value(state["plan"].clone()).unwrap();
     state["store_maintenance"] =
         serde_json::to_value(canic_management_protocol::store_maintenance::Status {
@@ -470,9 +468,7 @@ fn retained_replies_and_expiry_never_claim_deployment_success() {
 #[test]
 fn upgrade_summary_keeps_previous_module_and_unexpected_creation_evidence() {
     let mut state = state();
-    state["plan"]["target"] = "aaaaa-aa".into();
-    state["plan"]["previous_module"] = "c".repeat(64).into();
-    state["plan"]["creation_cycles"] = 0.into();
+    state["plan"]["action"] = serde_json::json!({"contract":"canic:deployment-upgrade.v1","approval":{"canister":"aaaaa-aa","module":"c".repeat(64)}});
     let text = render(&state, Path::new("journal")).unwrap();
     assert!(text.contains("Planned action: upgrade existing canister"));
     assert!(text.contains("Upgrade target: aaaaa-aa"));
@@ -508,16 +504,15 @@ fn receipts_are_historical_and_display_escaping_preserves_raw_evidence() {
 
 fn managed_state(upgrade: bool) -> serde_json::Value {
     let mut value = state();
-    value["plan"]["management"] = serde_json::json!({
-        "root": "rrkah-fqaaa-aaaaa-aaaaq-cai", "root_module": "d".repeat(64),
-        "execute_at_ns": 1_500_000_000_u64,
-    });
+    let owner = serde_json::json!({"child_evidence_only":false, "root":"rrkah-fqaaa-aaaaa-aaaaq-cai", "root_module":"d".repeat(64),
+        "execute_at_ns":1_500_000_000_u64, "slot":"First", "source":{
+            "store":{"canister":"aaaaa-aa","module":"f".repeat(64)}, "manifest":{"release":{"name":"worker","version":"v1"},"hash":([1;32]),"bytes":8,"chunks":[([1;32])]}}});
+    value["plan"]["action"] = if upgrade {
+        serde_json::json!({"contract":"canic:child-upgrade.v1","approval":{"owner":owner,"target":{"canister":"ryjl3-tyaaa-aaaaa-aaaba-cai","module":"c".repeat(64)}}})
+    } else {
+        serde_json::json!({"contract":"canic:child-creation.v1","approval":owner})
+    };
     value["effects"] = serde_json::json!({"stage":"reply_retained"});
-    if upgrade {
-        value["plan"]["target"] = "ryjl3-tyaaa-aaaaa-aaaba-cai".into();
-        value["plan"]["previous_module"] = "c".repeat(64).into();
-        value["plan"]["creation_cycles"] = 0.into();
-    }
     value
 }
 

@@ -33,6 +33,7 @@ ic-wire.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+canic = { workspace = true, features = ["inspection"] }
 toko-tooling.workspace = true
 
 [lints]

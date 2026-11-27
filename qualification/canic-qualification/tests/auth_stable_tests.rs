@@ -177,7 +177,7 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
         pic.update_call(
             target,
             issuer_test::browser(&issue),
-            "renew_portable_credential",
+            "canic_renew_portable_credential",
             issuer_test::frame(issuer::RENEW, &renewal)
         )
         .await
@@ -264,7 +264,7 @@ async fn stable_session_and_logout_survive_fresh_root_pulls() {
         .update_call(
             target,
             browser,
-            "logout_portable_session",
+            "canic_logout_portable_session",
             Logout::encode_request(&()).unwrap(),
         )
         .await
@@ -361,7 +361,7 @@ async fn exercise_coordinator(
         .update_call(
             target,
             writer,
-            "logout_portable_session",
+            "canic_logout_portable_session",
             Logout::encode_request(&()).unwrap(),
         )
         .await

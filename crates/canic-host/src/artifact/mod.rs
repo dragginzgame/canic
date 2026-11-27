@@ -249,6 +249,8 @@ pub struct BuildReport {
     #[serde(skip)]
     pub(crate) endpoint_count: usize,
     #[serde(skip)]
+    pub(crate) canic_endpoint_count: usize,
+    #[serde(skip)]
     pub(crate) modules: Vec<&'static str>,
 }
 
@@ -406,7 +408,11 @@ pub(crate) fn build_for_role(
     let path = selected_wasm(&output, package_id)?;
     let bytes = crate::store::read(&path, MAX_ARTIFACT_BYTES)?;
     let artifact = admit_bounded(&bytes, MAX_ARTIFACT_BYTES)?;
-    let (modules, endpoint_count) = compiled_metadata(&bytes)?;
+    let CompiledMetadata {
+        modules,
+        endpoint_count,
+        canic_endpoint_count,
+    } = compiled_metadata(&bytes)?;
     let wasm = match destination {
         Some(path) => path.to_owned(),
         None => outputs.join(&artifact.sha256).join(
@@ -427,20 +433,44 @@ pub(crate) fn build_for_role(
         artifact,
         modules,
         endpoint_count,
+        canic_endpoint_count,
     })
 }
 
-// Verify the selected metrics build before publishing the exact bytes we inspected.
-fn compiled_metadata(bytes: &[u8]) -> Result<(Vec<&'static str>, usize)> {
+#[derive(Debug, Eq, PartialEq)]
+struct CompiledMetadata {
+    modules: Vec<&'static str>,
+    endpoint_count: usize,
+    canic_endpoint_count: usize,
+}
+
+// Read module and endpoint ownership markers from the exact Wasm selected for publication.
+fn compiled_metadata(bytes: &[u8]) -> Result<CompiledMetadata> {
     use wasmparser::{Parser, Payload};
 
     let mut modules = std::collections::BTreeSet::new();
     let mut recorder = false;
-    let mut query = false;
-    let mut endpoint_count = 0;
+    let mut callable = std::collections::BTreeSet::new();
+    let mut mounts = std::collections::BTreeSet::new();
     for payload in Parser::new(0).parse_all(bytes) {
         match payload.map_err(supplier)? {
             Payload::CustomSection(section) => {
+                if let Some(key) = section.name().strip_prefix("canic:mount:v1:") {
+                    let (mode, name) = key
+                        .split_once(':')
+                        .ok_or_else(|| Error::Invalid("invalid Canic endpoint marker".into()))?;
+                    if !name.starts_with("canic_") {
+                        return Err(Error::Invalid(format!(
+                            "Canic mount {name} needs a canic_ endpoint name"
+                        )));
+                    }
+                    if section.data() != [1] || !mounts.insert((mode, name)) {
+                        return Err(Error::Invalid(
+                            "invalid or duplicate Canic endpoint marker".into(),
+                        ));
+                    }
+                    continue;
+                }
                 let name = match section.name() {
                     "canic:module:auth" => "auth",
                     "canic:module:blob" => "blob",
@@ -456,20 +486,28 @@ fn compiled_metadata(bytes: &[u8]) -> Result<(Vec<&'static str>, usize)> {
             Payload::ExportSection(exports) => {
                 for export in exports {
                     if let Some(method) = callable_export(export.map_err(supplier)?) {
-                        endpoint_count += 1;
-                        query |= method == ("query", "metrics");
+                        callable.insert(method);
                     }
                 }
             }
             _ => {}
         }
     }
-    if recorder && !query {
+    if recorder && !callable.contains(&("query", "canic_metrics")) {
         return Err(Error::Invalid(
             "endpoint instrumentation requires the shared metrics query".into(),
         ));
     }
-    Ok((modules.into_iter().collect(), endpoint_count))
+    if let Some((mode, name)) = mounts.difference(&callable).next() {
+        return Err(Error::Invalid(format!(
+            "Canic endpoint marker has no matching {mode} export {name}"
+        )));
+    }
+    Ok(CompiledMetadata {
+        modules: modules.into_iter().collect(),
+        endpoint_count: callable.len(),
+        canic_endpoint_count: mounts.len(),
+    })
 }
 
 fn selected_wasm(output: &[u8], package_id: &str) -> Result<PathBuf> {

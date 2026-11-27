@@ -82,7 +82,7 @@ fn store_report_distinguishes_empty_from_malformed_and_foreign_attempts() {
     let wrong_method = ic_wire::encode(
         &None::<wire::Status>,
         ic_wire::Encoding::Frame {
-            method: wire::OBSERVE,
+            method: wire::READ_ATTEMPT,
             direction: ic_wire::Direction::Response,
         },
         wire::LIMITS,

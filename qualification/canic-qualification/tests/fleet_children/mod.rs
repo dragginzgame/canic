@@ -167,7 +167,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         ],
     );
     let id = planned["operation"].as_str().unwrap();
-    assert_eq!(planned["fleet_plan"]["version"], 9);
+    assert_eq!(planned["fleet_plan"]["version"], 1);
     assert_eq!(
         planned["fleet_plan"]["children"][0]["deployment"]["canister"],
         "app"
@@ -414,8 +414,11 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         if name == "app" {
             assert_eq!(upgrade["action"], "upgrade");
         }
-        assert_eq!(upgrade["plan"]["management"]["slot"], slot);
-        assert_eq!(upgrade["plan"]["target"], child);
+        assert_eq!(upgrade["plan"]["action"]["approval"]["owner"]["slot"], slot);
+        assert_eq!(
+            upgrade["plan"]["action"]["approval"]["target"]["canister"],
+            child
+        );
         let operation = upgrade["operation"].as_str().unwrap();
         let apply = ["fleet", "apply", operation, "--identity", "anonymous"];
         assert_eq!(cli(&config, &apply)["upgrade"]["phase"], "Scheduled");
@@ -456,14 +459,14 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     let maintenance = cli(&config, &["fleet", "plan", "--identity", "anonymous"]);
     assert_eq!(maintenance["action"], "maintenance");
     assert_eq!(
-        maintenance["plan"]["maintenance"]["upgrades"]
+        maintenance["plan"]["action"]["approval"]["children"][0]["upgrades"]
             .as_array()
             .unwrap()
             .len(),
         1
     );
     assert_eq!(
-        maintenance["plan"]["maintenance_sibling"]["upgrades"]
+        maintenance["plan"]["action"]["approval"]["children"][1]["upgrades"]
             .as_array()
             .unwrap()
             .len(),

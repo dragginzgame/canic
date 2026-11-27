@@ -269,7 +269,7 @@ The experimental `canic-root` assigns permanent services stable ordinals on a fr
 using the same bounded management engine as the profile manager. Its controller
 is the external operator; its created application's sole controller is Root.
 Lifecycle mounting and application readiness remain explicit in each canister.
-The supplied fresh Root admits the explicit `readiness` contract below; the profile
+The supplied fresh Root admits the explicit `canic_readiness` contract below; the profile
 fixture manager separately admits profile readiness. The profile manager explicitly mounts the same Store
 protocols and qualifies a Store-backed profile worker with its existing readiness
 decoder. Publication, worker/Store/owner upgrades historically preserved the worker's private
@@ -291,7 +291,7 @@ and target. The selected cutover uses fresh journal schema 2, refusing old
 allocator images and schema-1 records approved under greeting readiness. No
 feature switch, endpoint fallback or reinterpreted historical completion is added.
 The application may keep its independent greeting endpoint; Root calls only
-`readiness` and accepts only a strictly decoded `Ready` response.
+`canic_readiness` and accepts only a strictly decoded `Ready` response.
 
 The demo counter allows public increments; capture, restore and reopening
 remain explicitly operator-controlled. Both greeting and counter actors use the
@@ -330,6 +330,18 @@ creation, independent upgrades, recovery and fleet views. Root maintenance
 compares complete custody for all service slots, including Empty. General trees and
 subtree operations remain unqualified. See the
 [managed-child evidence](../qualification/history.md#managed-child-cli-approval).
+
+Host accepts version 1 approvals with an explicit operation contract. The contract
+also separates approval digests across fleet plans, Root and Store operations,
+child deployment, Auth, artifact publication and removal, and application calls.
+Untagged approvals, including historical v1 records, require the original Host.
+In the Host JSON record, `action.contract` selects the payload in
+`action.approval`. Root maintenance carries an ordered `children` array.
+The fleet approval includes its Store and every child's release manifest before
+bootstrap. After Store readiness, each child approval binds the resolved Store
+identity and its permanent slot. The Store maintenance contract binds the
+attempt sequence before signing or dispatch.
+Frozen predecessor frames are used only by qualification of old installed Wasms.
 
 The maintainer's 2026-11-15 decision selects a separate, dynamic, versioned Wasm Store per managed fleet. Root must not be the durable artifact repository. Root retains approved immutable references, reservations and effect evidence; the Store retains verified bytes, versions and retention pins. This separates artifact growth and release history from Root's authority journal and maintenance. Section 12 owns the contract and migration gates. Direct host bootstrap and passive artifact tools remain usable without installing a fleet. Artifact possession never supplies deployment approval authority.
 
@@ -747,9 +759,8 @@ required authority: direct creation/upgrade, Root-owned child creation/upgrade,
 or Root maintenance with the full ordered child custody. Fleet children form one
 ordered collection of permanent identities. The selected runtime supports up to eight
 direct children; that capacity does not justify separate child/sibling
-branches throughout planning, execution and presentation. Retained-format codecs
-preserve existing approval digests, journal locations and signed attempts while
-the working model changes. Replanning cannot remap names to different slots.
+branches throughout planning, execution and presentation. The v1 fleet approval identifies each child by its permanent slot. The Host
+retains the exact approved digest, journal location and signed attempts for recovery. Replanning cannot remap names to different slots.
 Named replanning must check the complete bounded reservation scope before reusing
 a matching approval. Directory order cannot hide competing ownership, corruption
 or an exceeded inventory bound. Ambiguous retained approvals remain blocked;
@@ -1041,7 +1052,7 @@ hashing the declared Wasm and reading the optional binary init argument relative
 to the config. It does not create an apply operation or verify publication.
 Choose a real deadline and immutable shard release for each approval. The
 operator submits the typed creation grant to Root’s controller-only
-`approve_child_creation` endpoint and the separate `configure_shard_routes`
+`approve_child_creation` endpoint and the separate `canic_configure_shard_routes`
 request to the hub. The fleet plan includes the exact frames for both recipients.
 The application supplies its bounded installation bytes, for example an encoded
 trusted hub principal. Root retains them in its existing application creation
@@ -1364,7 +1375,7 @@ Do not assume synchronized cross-canister clocks. Preserve upstream signed deadl
 Each Canic actor owns one heap-backed `ic-logging` log per
 installed incarnation. Root records successful install/reopen and management
 records child outcomes. The controller reads up to eight entries at a time
-through `logs`. The log budgets 512 KiB per incarnation, charging
+through `canic_logs`. The log budgets 512 KiB per incarnation, charging
 96 bytes per row plus retained UTF-8 text. IC Logging evicts the oldest rows
 until the next entry fits and reports accounted bytes in constant time.
 Upgrade starts a new log. Durable operation evidence stays in the journal.
@@ -1393,8 +1404,8 @@ Qualify the selected service arrangement, embedded or separately deployed. If bo
 ### Optional Auth receiver composition
 
 The `canic::auth` module, behind the optional `auth` feature, mounts
-`establish_portable_session`, `portable_session_read` and
-`logout_portable_session`. Passive IC Auth Wire contracts own numeric IDs,
+`canic_establish_portable_session`, `canic_portable_session_read` and
+`canic_logout_portable_session`. Passive IC Auth Wire contracts own numeric IDs,
 layouts and separate request/response byte, allocation, node and depth limits.
 Canic captures actual caller/time and uses Platform hooks to admit raw size/header
 before copying, then invokes one synchronous application handler. Wire encoding
@@ -1872,6 +1883,13 @@ that exact `parent_storage_key`. The approved install context supplies the
 parent principal and role. Upgrades between role-aware executables strictly reopen the same cell.
 
 ### Endpoint ownership and actor composition
+
+Canic-supplied mounts export `canic_*` names. Applications choose names for
+their own handlers, including handlers declared with `#[canic::query]` or
+`#[canic::update]`. Each Canic mount emits a Wasm marker for its exported
+mode and name. The build table counts matching callable exports. The `EPS` column gives the total
+followed by the included Canic mounts in parentheses. Root and
+Wasm Store show the total in both positions because every endpoint is supplied. This metadata is for local reporting.
 
 ### Placement ownership on fresh fleets
 
@@ -2933,7 +2951,7 @@ Physical deletion is separate, explicit and irreversible. It requires a disposit
 
 Keep Observatory, rendering, comparisons and aggregation on the host. Canisters expose bounded facts, counters, operation summaries and paged inventory. Separate public metrics from protected authority, topology, logs and treasury details. Certificate or authenticated-update requirements depend on whether a result is merely displayed or used to authorize an effect.
 
-Each Canic actor exports one bounded query named `metrics`.
+Each Canic actor exports one bounded query named `canic_metrics`.
 A typed request selects timers, Blob command outcomes or a page of synchronous
 endpoint performance. One application-selected guard covers all sources and
 runs before decoding. The default checks the actual IC controller. The app

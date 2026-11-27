@@ -59,14 +59,6 @@ pub(crate) async fn reconcile(
     icp: &Path,
     client: &ReadClient,
 ) -> Result<ApplyOutcome> {
-    if plan
-        .management()
-        .is_some_and(|owner| owner.source.is_none())
-    {
-        return Err(Error::Blocked(
-            "inline child approvals require their original Root and Host".into(),
-        ));
-    }
     let call = call(plan)?;
     if !dir
         .join("stage/signed.json")

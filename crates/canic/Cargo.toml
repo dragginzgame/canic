@@ -32,6 +32,7 @@ inspection = [
     "ic-wire/derive",
     "ic-wire/platform-types",
     "ic-auth-wire?/typescript",
+    "ic-blob-storage?/inspection",
     "ic-db?/wire",
 ]
 jobs = ["dep:ic-jobs", "timers"]

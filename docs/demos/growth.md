@@ -30,7 +30,7 @@ worker identities remain in the [retired profile declaration](../../qualificatio
 using the unchanged root journal. Explicit read-only inspection is:
 
 ```sh
-canic fleet show --config qualification/fixtures/profile-mainnet.toml
+canic fleet show --config qualification/fixtures/profile-mainnet.toml --manager rk6n2-wyaaa-aaaad-qmoua-cai
 ```
 
 This is historical fleet inspection, not the new demo. No live controller,

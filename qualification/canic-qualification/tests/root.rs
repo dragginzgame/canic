@@ -890,12 +890,18 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     );
     let upgraded = cli(&config, &plan_args);
     assert_eq!(upgraded["action"], "upgrade");
-    assert_eq!(upgraded["plan"]["target"], identities[0].1.to_text());
     assert_eq!(
-        upgraded["plan"]["management"]["root"],
+        upgraded["plan"]["action"]["approval"]["target"]["canister"],
+        identities[0].1.to_text()
+    );
+    assert_eq!(
+        upgraded["plan"]["action"]["approval"]["owner"]["root"],
         identities[0].0.to_text()
     );
-    assert_eq!(upgraded["plan"]["creation_cycles"], 0);
+    assert_eq!(
+        upgraded["plan"]["action"]["contract"],
+        "canic:child-upgrade.v1"
+    );
     assert_eq!(cli(&config, &plan_args), upgraded);
     let id = upgraded["operation"].as_str().unwrap();
     let operation_dir = PathBuf::from(upgraded["state_dir"].as_str().unwrap()).join(id);
@@ -962,9 +968,12 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     .unwrap();
     let maintenance = cli(&config, &plan_args);
     assert_eq!(maintenance["action"], "maintenance");
-    assert_eq!(maintenance["plan"]["target"], identities[0].0.to_text());
     assert_eq!(
-        maintenance["plan"]["maintenance"]["upgrades"]
+        maintenance["plan"]["action"]["approval"]["target"]["canister"],
+        identities[0].0.to_text()
+    );
+    assert_eq!(
+        maintenance["plan"]["action"]["approval"]["children"][0]["upgrades"]
             .as_array()
             .unwrap()
             .len(),
@@ -1185,7 +1194,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
         }
         assert_eq!(next["action"], "upgrade");
         assert_eq!(
-            next["plan"]["management"]["root_module"],
+            next["plan"]["action"]["approval"]["owner"]["root_module"],
             maintained["module_hash"]
         );
         let next_id = next["operation"].as_str().unwrap();

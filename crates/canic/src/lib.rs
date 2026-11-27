@@ -73,6 +73,9 @@ pub mod sharding;
 pub mod topology;
 
 #[cfg(feature = "endpoints")]
+#[doc(hidden)]
+pub use canic_macros::{__canic_query, __canic_update};
+#[cfg(feature = "endpoints")]
 pub use canic_macros::{attested_method, method_descriptor, query, update};
 #[cfg(feature = "endpoints")]
 pub use canic_macros::{shard_pool, worker_pool};
@@ -81,7 +84,7 @@ pub use canic_macros::{shard_pool, worker_pool};
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_report_mount {
-    ($section:literal) => {
+    ($section:expr) => {
         #[cfg(target_arch = "wasm32")]
         const _: () = {
             #[used]
@@ -157,12 +160,22 @@ macro_rules! __canic_inspect {
     ($($tokens:tt)*) => {};
 }
 
+/// Mark the exact callable export supplied by a Canic mount.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_mount_marker {
+    ($mode:ident, $name:literal) => {
+        $crate::__canic_report_mount!(concat!("canic:mount:v1:", stringify!($mode), ":", $name));
+    };
+}
+
 /// Mount a built-in framed endpoint and describe the same signature to an opted-in host.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_builtin {
     ($source:ident, $id:expr, ($request:expr, $reply:expr), $platform:ident :: $mode:ident, $name:literal, ($($options:tt)*),
      [$($async:ident)?] fn $handler:ident($arg:tt : $input:ty $(,)?) -> $output:ty $body:block) => {
+        $crate::__canic_mount_marker!($mode, $name);
         $crate::__canic_inspect!($source, $name, $mode, $id, $input, $output, $request, $reply);
         #[$platform::$mode(name = $name, $($options)*)]
         $($async)? fn $handler($arg: $input) -> $output $body

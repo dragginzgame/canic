@@ -33,15 +33,13 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
 
 #[cfg(feature = "sharding")]
 fn placement_admits(private: bool, method: u64) -> bool {
-    use protocol::{application, children, publication, store_maintenance, stored};
+    use protocol::{application, children, publication, store_maintenance};
     match method {
         children::READ_STATUS | store_maintenance::STATUS => true,
         children::INJECT => private && cfg!(feature = "fault-injection"),
-        children::STAGE
-        | application::STAGE_CHILD_CREATION
-        | application::STAGE
-        | stored::STAGE
-        | children::RECONCILE => private && crate::sharding::has_capacity(),
+        children::STAGE | application::STAGE_CHILD_CREATION | children::RECONCILE => {
+            private && crate::sharding::has_capacity()
+        }
         children::OBSERVE_STATUS
         | store_maintenance::READ_ATTEMPT
         | publication::EXECUTE
@@ -49,11 +47,7 @@ fn placement_admits(private: bool, method: u64) -> bool {
         | application::CHILD_EVIDENCE
         | application::STAGE_CHILD_UPGRADE
         | application::RECONCILE_CHILD_UPGRADE
-        | application::RECONCILE_CHILD_CREATION
-        | stored::STAGE_UPGRADE
-        | stored::RECONCILE_UPGRADE
-        | stored::RECONCILE
-        | application::RECONCILE => private,
+        | application::RECONCILE_CHILD_CREATION => private,
         _ => false,
     }
 }
@@ -86,9 +80,6 @@ pub const fn declared_response_limits(method: u64) -> wire::Limits {
     }
     if method == protocol::custody::ROOT_HISTORY {
         return protocol::custody::ROOT_HISTORY_LIMITS;
-    }
-    if method == protocol::custody::ROOT {
-        return protocol::custody::ROOT_LIMITS;
     }
     if matches!(
         method,

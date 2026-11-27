@@ -86,7 +86,7 @@ macro_rules! mount_blob_endpoints {
             };
 
             $crate::__canic_builtin! {
-                wire, UPDATE, ($crate::blob::RPC_LIMITS, $crate::blob::RPC_LIMITS), runtime::update, "blob_update", (
+                wire, UPDATE, ($crate::blob::RPC_LIMITS, $crate::blob::RPC_LIMITS), runtime::update, "canic_blob_update", (
                     runtime = runtime,
                     guard = endpoint::admit::<UPDATE>,
                     decode = endpoint::decode::<Command, UPDATE>,
@@ -111,7 +111,7 @@ macro_rules! mount_blob_endpoints {
             };
 
             $crate::__canic_builtin! {
-                wire, QUERY, ($crate::blob::RPC_LIMITS, $crate::blob::RPC_LIMITS), runtime::query, "blob_query", (
+                wire, QUERY, ($crate::blob::RPC_LIMITS, $crate::blob::RPC_LIMITS), runtime::query, "canic_blob_query", (
                     runtime = runtime,
                     guard = endpoint::admit::<QUERY>,
                     decode = endpoint::decode::<Inspection, QUERY>,
@@ -133,7 +133,7 @@ macro_rules! mount_blob_endpoints {
             };
 
             $crate::__canic_builtin! {
-                wire, MANAGEMENT, ($crate::blob::RPC_LIMITS, $crate::blob::RPC_LIMITS), runtime::update, "blob_management", (
+                wire, MANAGEMENT, ($crate::blob::RPC_LIMITS, $crate::blob::RPC_LIMITS), runtime::update, "canic_blob_management", (
                     runtime = runtime,
                     guard = endpoint::admit::<MANAGEMENT>,
                     decode = endpoint::decode::<(), MANAGEMENT>,

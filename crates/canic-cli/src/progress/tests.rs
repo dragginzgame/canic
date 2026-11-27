@@ -137,6 +137,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
         },
         parent: Some("user_hub".into()),
         endpoint_count: 7,
+        canic_endpoint_count: 3,
         modules: vec!["auth", "db"],
         build_ms: 2_340,
         client: None,
@@ -144,7 +145,9 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
     let table = built(std::slice::from_ref(&build));
     assert!(!table.contains("PARENT"));
     assert!(table.contains("user_shard (parent: user_hub)"));
-    assert!(table.contains("EPS"));
+    assert!(table.contains("EPS  MODS"));
+    assert!(table.contains("7 (3)  auth,db"));
+    assert_eq!(build_row(String::new(), &build, 2)[4], "7 ( 3)");
     assert!(table.contains("VERSION"));
     assert!(table.contains("user_shard.wasm"));
     assert!(!table.contains("artifacts/"));
@@ -155,6 +158,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
 
     let json = serde_json::to_value(&build).unwrap();
     assert_eq!(json["endpoint_count"], 7);
+    assert_eq!(json["canic_endpoint_count"], 3);
     assert_eq!(json["wasm"], "artifacts/user_shard.wasm");
     assert_eq!(json["version"], "0.7.1");
     assert_eq!(json["artifact"]["bytes"], 956_693);
@@ -172,6 +176,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
         wasm: "shard.wasm".into(),
         artifact: hub.artifact.clone(),
         endpoint_count: 7,
+        canic_endpoint_count: 3,
         modules: vec![],
         build_ms: 0,
         client: None,
@@ -184,6 +189,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
         wasm: "artifacts/wasm_store.wasm".into(),
         artifact: hub.artifact.clone(),
         endpoint_count: 7,
+        canic_endpoint_count: 3,
         modules: vec![],
         build_ms: 0,
         client: None,
@@ -191,6 +197,10 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
     assert!(!built(std::slice::from_ref(&store)).contains("[WASM_STORE]"));
     for (role, badge) in [("root", "[ROOT]"), ("coordinator", "[COORDINATOR]")] {
         store.role = Some(role.into());
+        if role == "root" {
+            store.endpoint_count = 52;
+            assert_eq!(build_row(String::new(), &store, 2)[4], "52 (52)");
+        }
         assert!(
             built(std::slice::from_ref(&store))
                 .lines()
@@ -199,6 +209,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
     }
     store.canister = "artifacts".into();
     store.role = Some("wasm-store".into());
+    store.endpoint_count = 14;
     store.modules = vec!["auth", "db"];
     assert_eq!(
         serde_json::to_value(&hub).unwrap()["client"],
@@ -210,6 +221,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
         .find(|row| row.starts_with("├─ [WASM_STORE]"))
         .unwrap();
     assert!(row.find("KiB").unwrap() < row.find("auth,db").unwrap());
+    assert!(row.contains("14 (14)"));
     assert!(row.contains("0.8.0"));
     assert!(row.contains("wasm_store.wasm"));
     assert_eq!(row.matches("[WASM_STORE]").count(), 1);

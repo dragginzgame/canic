@@ -24,7 +24,7 @@ use canic_management_protocol::{Approval, LIMITS, Phase, Refusal, Status};
 use ic_platform::native::ReadClient;
 use std::path::Path;
 use wire::Method;
-pub(crate) use wire::{observation, same_slot};
+pub(crate) use wire::observation;
 
 pub(crate) const OBSERVATIONS: usize = 32;
 
@@ -67,6 +67,7 @@ pub fn create_managed_plan(
     let role_service = input.target.is_none()
         && selection
             .config
+            .policy
             .role_receivers
             .iter()
             .any(|n| n == canister);
@@ -178,8 +179,7 @@ pub fn create_managed_plan(
     let root = roots
         .pop_first()
         .ok_or_else(|| Error::Invalid("missing Root identity".into()))?;
-    let mut slot = creation.and_then(|(_, slot)| slot);
-    if input.target.is_none() {
+    let slot = if input.target.is_none() {
         let reservations = inventory
             .records
             .iter()
@@ -194,11 +194,16 @@ pub fn create_managed_plan(
             fleet: selection.fleet.clone(),
             canister: canister.into(),
         };
-        slot = permanent_slot(&children, &deployment, reservations)?;
-    }
+        permanent_slot(&children, &deployment, reservations)?
+    } else {
+        creation
+            .and_then(|(_, slot)| slot)
+            .ok_or_else(|| Error::Invalid("missing child slot".into()))?
+    };
     let arguments = if input.target.is_none() && selection.config.receiver_selected(canister) {
         if selection
             .config
+            .policy
             .receiver_policy
             .as_ref()
             .is_none_or(|p| &p.root != parent)
@@ -263,11 +268,11 @@ pub fn create_managed_plan(
     let now = crate::now()?;
     let execute_at_ns = execute_at_ns.unwrap_or(now);
     let fleet = &selection.config;
-    let pool_child_evidence = !fleet.shard_pools.is_empty()
-        || fleet.registry.is_some()
-        || !fleet.worker_pools.is_empty()
+    let pool_child_evidence = !fleet.policy.shard_pools.is_empty()
+        || fleet.policy.registry.is_some()
+        || !fleet.policy.worker_pools.is_empty()
         || fleet.standby_pool.is_some();
-    let (mut plan, bytes) = plan::prepare(
+    let (plan, bytes) = plan::prepare(
         wasm,
         input,
         Some(DeploymentName {
@@ -276,22 +281,17 @@ pub fn create_managed_plan(
             canister: canister.into(),
         }),
         Some(ManagedOwner {
+            child_evidence_only: pool_child_evidence,
             arguments,
             blob_attempt,
             slot,
             root,
-            source: Some(source),
+            source,
             root_module: root_module.into(),
             execute_at_ns,
         }),
         now,
     )?;
-    plan.version = match (blob_attempt, pool_child_evidence) {
-        (Some(_), true) => plan::PLACEMENT_CHILD_ACTIVATION_VERSION,
-        (Some(_), false) => plan::CHILD_ACTIVATION_VERSION,
-        (None, true) => 8,
-        (None, false) => plan.version,
-    };
     plan::retain_locked(&store::Store::open(journal)?, plan, &bytes)
 }
 
@@ -301,7 +301,7 @@ fn permanent_slot<'a>(
     children: &[&str],
     deployment: &DeploymentName,
     reservations: impl Iterator<Item = (Option<ChildId>, Option<&'a DeploymentName>)>,
-) -> Result<Option<ChildId>> {
+) -> Result<ChildId> {
     let mut occupied = std::collections::BTreeSet::new();
     let mut retained = std::collections::BTreeSet::new();
     let mut selected = None;
@@ -313,10 +313,12 @@ fn permanent_slot<'a>(
                     "Root child custody belongs to another fleet or an unnamed approval".into(),
                 )
             })?;
+        let slot =
+            slot.ok_or_else(|| Error::Invalid("missing child slot in reservation".into()))?;
         if name == deployment {
             selected = Some(slot);
         }
-        if !occupied.insert(slot.unwrap_or(ChildId::FIRST)) {
+        if !occupied.insert(slot) {
             return Err(Error::Blocked(
                 "multiple creation approvals claim one Root slot".into(),
             ));
@@ -335,7 +337,7 @@ fn permanent_slot<'a>(
             Error::Invalid(format!("permanent service identity exhausted for {name}"))
         })?;
         if name == deployment.canister {
-            selected = Some(Some(slot));
+            selected = Some(slot);
         }
     }
     selected.ok_or_else(|| Error::Invalid("child missing from permanent slots".into()))
@@ -520,7 +522,7 @@ pub(crate) fn evidence_with_source(
             ) {
                 stored::creation_evidence(plan, bytes)
             } else {
-                Ok((decode_observation(plan, method, bytes)?, None))
+                Ok((decode_observation(method, bytes)?, None))
             }
         },
     )
@@ -596,11 +598,6 @@ pub(crate) async fn apply(
     let owner = plan
         .management()
         .ok_or_else(|| Error::Invalid("expected Root-owned child operation".into()))?;
-    if owner.source.is_none() {
-        return Err(Error::Blocked(
-            "inline child approvals require their original Root and Host".into(),
-        ));
-    }
     let root = principal(&owner.root)?;
     operation::controllers(client, root, &plan.controller).await?;
     if operation::module(client, root).await? != owner.root_module {
@@ -633,7 +630,7 @@ pub(crate) async fn apply(
             async { Ok(()) },
             || Method::Stage.call(plan),
             |bytes| stage_reply(plan, bytes),
-            |bytes| decode_observation(plan, Method::Observe.id(plan), bytes),
+            |bytes| stored::creation(plan, bytes),
             |status| status.phase == Phase::Empty && status.approval.is_none(),
         )
         .await?;
@@ -689,22 +686,14 @@ async fn complete(
     Ok(ApplyOutcome::Complete(receipt))
 }
 
-fn decode_observation(plan: &Plan, method: u64, bytes: &[u8]) -> Result<Status> {
-    if matches!(
-        method,
-        canic_management_protocol::application::CHILD_EVIDENCE
-            | canic_management_protocol::application::CUSTODY
-    ) {
-        stored::creation(plan, bytes)
-    } else {
-        ic_wire::decode(
-            bytes,
-            ic_wire::Encoding::Frame {
-                method,
-                direction: ic_wire::Direction::Response,
-            },
-            LIMITS,
-        )
-        .map_err(supplier)
-    }
+fn decode_observation(method: u64, bytes: &[u8]) -> Result<Status> {
+    ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method,
+            direction: ic_wire::Direction::Response,
+        },
+        LIMITS,
+    )
+    .map_err(supplier)
 }

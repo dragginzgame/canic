@@ -40,7 +40,7 @@ pub enum Operation {
     Write,
 }
 
-/// Mount typed `db_inspect`, `db_query` and `db_write` methods.
+/// Mount typed `canic_db_inspect`, `canic_db_query` and `canic_db_write` methods.
 ///
 /// Inspection uses Canic’s fixed unit request and [inspection::Response].
 /// `protocol` supplies the `QUERY` and `WRITE` IDs and their `QueryRequest/Reply` and `WriteRequest/Reply` types. Those
@@ -57,11 +57,11 @@ macro_rules! mount_db_endpoints {
     (protocol = $protocol:path, authorize = $authorize:path,
      inspect = $inspect:path, query = $query:path, write = $write:path $(,)?) => {
         $crate::mount_db_endpoints!(@method $crate::db::inspection, $authorize, $inspect, Inspect,
-            query, "db_inspect", INSPECT, Request, Response);
+            query, "canic_db_inspect", INSPECT, Request, Response);
         $crate::mount_db_endpoints!(@method $protocol, $authorize, $query, Query,
-            query, "db_query", QUERY, QueryRequest, QueryReply);
+            query, "canic_db_query", QUERY, QueryRequest, QueryReply);
         $crate::mount_db_endpoints!(@method $protocol, $authorize, $write, Write,
-            update, "db_write", WRITE, WriteRequest, WriteReply, time);
+            update, "canic_db_write", WRITE, WriteRequest, WriteReply, time);
     };
     (@method $protocol:path, $authorize:path, $handle:path, $operation:ident,
      $mode:ident, $name:literal, $id:ident, $request:ident, $reply:ident $(, $time:ident)?) => {

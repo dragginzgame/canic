@@ -150,7 +150,7 @@ pub fn create_publication_plan(
     let bytes = store::read(wasm, artifact::MAX_ARTIFACT_BYTES)?;
     let now = crate::now()?;
     let plan = Plan {
-        version: 3,
+        version: crate::plan::APPROVAL_VERSION,
         network: selection.config.network.clone(),
         controller: controller.into(),
         artifact: artifact::admit_bounded(&bytes, artifact::MAX_ARTIFACT_BYTES)?,

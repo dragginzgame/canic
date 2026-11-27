@@ -43,7 +43,7 @@ fn retain_reply(dir: &Path, plan: &Plan, bytes: &[u8], deadline: u64, reply: &wi
         ic_wire::encode(
             reply,
             ic_wire::Encoding::Frame {
-                method: if plan.version == 4 { 60 } else { wire::REMOVE },
+                method: wire::REMOVE,
                 direction: ic_wire::Direction::Response,
             },
             wire::RESPONSE_LIMITS,
@@ -196,28 +196,12 @@ fn publication_observation_does_not_settle_an_ambiguous_mutation() {
     }
 }
 
-#[tokio::test]
-async fn historical_removal_keeps_its_receipt_and_cannot_issue_a_new_call() {
-    let (dir, selection, source, _, bytes) = source();
-    let (id, mut old) =
+#[test]
+fn historical_removal_is_refused_at_decode() {
+    let (dir, selection, source, _, _) = source();
+    let (_, mut old) =
         create_removal_plan(&dir, &source, &selection, wire::Removal::Cancel).unwrap();
-    let deadline = old.expires_at_ns;
     old.version = 4;
-    old.validate().unwrap();
-    let old_id = old.digest().unwrap();
-    assert_ne!(id, old_id);
-    assert_eq!(
-        call(&old, &bytes, deadline).unwrap().method,
-        "store_removal"
-    );
-    let path = dir.join(old_id);
-    let manifest = expected(&old, &bytes).unwrap();
-    retain_reply(&dir, &old, &bytes, deadline, &Ok(manifest.clone()));
-    assert_eq!(
-        receipt(&path, &old, &bytes).unwrap().unwrap().manifest,
-        manifest
-    );
-    assert!(
-        matches!(apply(&path, &old, &bytes, "anonymous", Path::new("unused"), false).await, Err(Error::Blocked(message)) if message.contains("original Host"))
-    );
+    assert!(old.digest().is_err());
+    assert!(serde_json::from_value::<Plan>(serde_json::to_value(old).unwrap()).is_err());
 }

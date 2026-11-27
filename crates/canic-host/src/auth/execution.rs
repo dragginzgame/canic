@@ -10,11 +10,10 @@ fn call(plan: &Plan) -> Result<signed::Call<'static>> {
     Ok(signed::Call {
         canister: root,
         effective: root,
-        method: match (plan.version, approval.revoke) {
-            (5, false) => "configure_auth",
-            (5, true) => "revoke_auth",
-            (_, false) => "grant_auth_access",
-            (_, true) => "revoke_auth_access",
+        method: if approval.revoke {
+            "revoke_auth_access"
+        } else {
+            "grant_auth_access"
         },
         args: ic_wire::encode(
             &approval.grant,

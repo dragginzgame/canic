@@ -387,7 +387,7 @@ async fn cuj5_refused_upgrade_preserves_the_original_maintenance_attempt() {
         let input = approval(&root, &supplier).await;
         root.update::<_, Result<Previous, management::Refusal>>(
             "stage_store_maintenance",
-            wire::STAGE,
+            super::predecessor_store::STAGE,
             &input,
             wire::LIMITS,
         )
@@ -396,7 +396,7 @@ async fn cuj5_refused_upgrade_preserves_the_original_maintenance_attempt() {
         let mut old: Previous = root
             .update(
                 "advance_store_maintenance",
-                wire::ADVANCE,
+                super::predecessor_store::ADVANCE,
                 &input,
                 wire::LIMITS,
             )
@@ -406,7 +406,7 @@ async fn cuj5_refused_upgrade_preserves_the_original_maintenance_attempt() {
             old = root
                 .update(
                     "advance_store_maintenance",
-                    wire::ADVANCE,
+                    super::predecessor_store::ADVANCE,
                     &input,
                     wire::LIMITS,
                 )
@@ -415,7 +415,7 @@ async fn cuj5_refused_upgrade_preserves_the_original_maintenance_attempt() {
             old = root
                 .update(
                     "advance_store_maintenance",
-                    wire::ADVANCE,
+                    super::predecessor_store::ADVANCE,
                     &input,
                     wire::LIMITS,
                 )
@@ -426,7 +426,7 @@ async fn cuj5_refused_upgrade_preserves_the_original_maintenance_attempt() {
         let restored: Option<Previous> = root
             .update(
                 "observe_store_maintenance",
-                wire::OBSERVE,
+                super::predecessor_store::OBSERVE,
                 &(),
                 wire::LIMITS,
             )

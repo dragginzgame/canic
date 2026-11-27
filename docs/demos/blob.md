@@ -6,7 +6,9 @@ is [canic-asset-catalog](../../qualification/canic-asset-catalog/src/lib.rs), in
 qualification workspace. It is a finite local catalog example, not a provider
 client or a production deployment recipe.
 
-The published 0.113.0 Service accepts the application’s Storage 0.80 lease.
+With `canic/inspection` and `canic/blob` enabled, the supplier describes the request and reply schemas for all three mounted Blob endpoints. The default native schema registry can inspect them directly.
+
+The published 0.113.1 Service accepts the application’s Storage 0.80 lease.
 Use `canic::blob::open_service` on install and reopen to attach the
 Canic metrics store and log sink. Custom lifecycle hooks call
 `canic::lifecycle::initialize_diagnostics()` first.
@@ -43,7 +45,7 @@ Fresh installation takes explicit users, manager and Blob limits, binding both
 records to the actual canister. Upgrade uses a method-bound unit argument, opens
 both existing stores, and refuses missing/corrupt/foreign records. It never falls
 back to initialization. Pre-upgrade requires Blob drained; post-upgrade retains
-that state. The replicated `readiness` endpoint reports `Fenced` while drained.
+that state. The replicated `canic_readiness` endpoint reports `Fenced` while drained.
 Only the matching explicit Blob activation can reopen admission. Inspection and
 cleanup remain available under ordinary permissions while drained.
 
@@ -139,7 +141,13 @@ four lifetime catalog slots still permits profile updates and asset cleanup.
 Malformed profile frames and stale revisions preserve all three owners. The
 application admits only two profile users, so this witness does not exercise the
 profile engine's separate 16-owner capacity limit or physical memory exhaustion.
-This is a local composition witness, not an Auth+DB+Blob production recipe.
+For a stateful DB and Auth receiver, declare Blob in the role lifecycle mount
+with `suppliers = crate::receiver::blob::GROUPS => crate::receiver::blob::attach,`.
+The group pairs Blob’s published `STORAGE_AUTHORITY` and `STORAGE_KEY` with
+the `blob.` prefix. The attachment receives the admitted role storage and
+opens the service on that lease. Install input is present only for fresh
+creation. Ordinary upgrades must keep the same set of keys.
+See the [installed receiver example](../../qualification/canic-schema-role/src/receiver.rs).
 
 After `make canic`, build the optional composition without deploying it:
 

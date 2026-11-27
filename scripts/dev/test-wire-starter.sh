@@ -49,14 +49,14 @@ if grep -Fq '__ic_scheduling_once' generated/*.ts; then
     exit 1
 fi
 # The mandatory reader has a typed reply in the starter baseline.
-jq -e '.app.logs.mode == "update" and .app.metrics.mode == "query" and (.app.metrics.reply.schema | length > 1)' "$baseline" >/dev/null
+jq -e '.app.canic_logs.mode == "update" and .app.canic_metrics.mode == "query" and (.app.canic_metrics.reply.schema | length > 1)' "$baseline" >/dev/null
 # Field-only change in a disposable actor. Every export name, mode and ID must survive.
 sed -i.bak 's/pub message: String/pub message: String, pub revision: u32/;s/message: format!/revision: 1, message: format!/' starter-app/src/lib.rs
 generated=$(candidate)
 jq -e --slurp '
   (map(.app | map_values({mode,id})) | .[0] == .[1]) and
   (.[0].app.greet.reply.schema != .[1].app.greet.reply.schema) and
-  (.[0].app.metrics == .[1].app.metrics)
+  (.[0].app.canic_metrics == .[1].app.canic_metrics)
 ' "$baseline" "$generated" >/dev/null
 # An installed-only export missing from native inspection must fail before baseline comparison.
 cat >>starter-app/src/lib.rs <<'RS'

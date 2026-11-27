@@ -41,6 +41,24 @@ pub fn update(options: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
+/// Internal entrypoint for queries supplied by Canic.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn __canic_query(options: TokenStream, item: TokenStream) -> TokenStream {
+    expand_endpoint(Mode::Query, options.into(), item.into(), true)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
+/// Internal entrypoint for updates supplied by Canic.
+#[doc(hidden)]
+#[proc_macro_attribute]
+pub fn __canic_update(options: TokenStream, item: TokenStream) -> TokenStream {
+    expand_endpoint(Mode::Update, options.into(), item.into(), true)
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
 /// Derive the passive typed caller contract from the same inline role endpoint source.
 #[proc_macro_attribute]
 pub fn attested_method(options: TokenStream, item: TokenStream) -> TokenStream {
@@ -66,6 +84,15 @@ enum Mode {
 }
 
 fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
+    expand_endpoint(mode, options, item, false)
+}
+
+fn expand_endpoint(
+    mode: Mode,
+    options: Tokens,
+    item: Tokens,
+    canic_mount: bool,
+) -> syn::Result<Tokens> {
     let mut contract: Option<Path> = None;
     let mut attested_method = false;
     let mut roles: Option<Expr> = None;
@@ -111,12 +138,22 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
     let export = name.unwrap_or_else(|| {
         LitStr::new(handler.to_string().trim_start_matches("r#"), handler.span())
     });
+    let export = if canic_mount {
+        LitStr::new(&format!("canic_{}", export.value()), export.span())
+    } else {
+        export
+    };
     let update = mode == Mode::Update;
     let kind = if update {
         quote!(update)
     } else {
         quote!(query)
     };
+    let marker = canic_mount.then(|| {
+        quote!(
+            ::canic::__canic_mount_marker!(#kind, #export);
+        )
+    });
     let asynchronous = signature.asyncness;
     if asynchronous.is_some() && mode == Mode::Query {
         return Err(syn::Error::new(
@@ -348,6 +385,7 @@ fn expand(mode: Mode, options: Tokens, item: Tokens) -> syn::Result<Tokens> {
         const _: () = {
             use ::canic::method::wire;
 
+            #marker
             #signature_check
             #check
             #checked_request

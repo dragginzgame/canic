@@ -1,59 +1,6 @@
 {
   "app": {
-    "greet": {
-      "id": "0x0000000000000001",
-      "mode": "query",
-      "reply": {
-        "rust": "starter_app::Greeting",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire_Greeting_2b10626c7d38918b"
-          },
-          "Wire_Greeting_2b10626c7d38918b": {
-            "fields": [
-              {
-                "name": "message",
-                "value": {
-                  "k": "ref",
-                  "name": "Wire_String_76e26e9121e02e46"
-                }
-              }
-            ],
-            "fixed": true,
-            "k": "record"
-          },
-          "Wire_String_76e26e9121e02e46": {
-            "k": "text"
-          }
-        }
-      },
-      "reply_limits": {
-        "allocation": 16384,
-        "bytes": 4096,
-        "depth": 8,
-        "nodes": 256
-      },
-      "request": {
-        "rust": "alloc::string::String",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire_String_76e26e9121e02e46"
-          },
-          "Wire_String_76e26e9121e02e46": {
-            "k": "text"
-          }
-        }
-      },
-      "request_limits": {
-        "allocation": 16384,
-        "bytes": 4096,
-        "depth": 8,
-        "nodes": 256
-      }
-    },
-    "logs": {
+    "canic_logs": {
       "id": "0x2183955139ce40a5",
       "mode": "update",
       "reply": {
@@ -197,7 +144,7 @@
         "nodes": 4096
       }
     },
-    "metrics": {
+    "canic_metrics": {
       "id": "0x7bea4b7278ea6feb",
       "mode": "query",
       "reply": {
@@ -830,60 +777,7 @@
         "nodes": 256
       }
     },
-    "probe": {
-      "id": "0x0000000000000001",
-      "mode": "update",
-      "reply": {
-        "rust": "starter_app::Greeting",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire_Greeting_2b10626c7d38918b"
-          },
-          "Wire_Greeting_2b10626c7d38918b": {
-            "fields": [
-              {
-                "name": "message",
-                "value": {
-                  "k": "ref",
-                  "name": "Wire_String_76e26e9121e02e46"
-                }
-              }
-            ],
-            "fixed": true,
-            "k": "record"
-          },
-          "Wire_String_76e26e9121e02e46": {
-            "k": "text"
-          }
-        }
-      },
-      "reply_limits": {
-        "allocation": 16384,
-        "bytes": 4096,
-        "depth": 8,
-        "nodes": 256
-      },
-      "request": {
-        "rust": "alloc::string::String",
-        "schema": {
-          "Root": {
-            "k": "ref",
-            "name": "Wire_String_76e26e9121e02e46"
-          },
-          "Wire_String_76e26e9121e02e46": {
-            "k": "text"
-          }
-        }
-      },
-      "request_limits": {
-        "allocation": 16384,
-        "bytes": 4096,
-        "depth": 8,
-        "nodes": 256
-      }
-    },
-    "readiness": {
+    "canic_readiness": {
       "id": "0x0000000000000003",
       "mode": "update",
       "reply": {
@@ -944,6 +838,112 @@
         "bytes": 32,
         "depth": 4,
         "nodes": 4
+      }
+    },
+    "greet": {
+      "id": "0x0000000000000001",
+      "mode": "query",
+      "reply": {
+        "rust": "starter_app::Greeting",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Greeting_2b10626c7d38918b"
+          },
+          "Wire_Greeting_2b10626c7d38918b": {
+            "fields": [
+              {
+                "name": "message",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_String_76e26e9121e02e46"
+                }
+              }
+            ],
+            "fixed": true,
+            "k": "record"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          }
+        }
+      },
+      "reply_limits": {
+        "allocation": 16384,
+        "bytes": 4096,
+        "depth": 8,
+        "nodes": 256
+      },
+      "request": {
+        "rust": "alloc::string::String",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_String_76e26e9121e02e46"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          }
+        }
+      },
+      "request_limits": {
+        "allocation": 16384,
+        "bytes": 4096,
+        "depth": 8,
+        "nodes": 256
+      }
+    },
+    "probe": {
+      "id": "0x0000000000000001",
+      "mode": "update",
+      "reply": {
+        "rust": "starter_app::Greeting",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_Greeting_2b10626c7d38918b"
+          },
+          "Wire_Greeting_2b10626c7d38918b": {
+            "fields": [
+              {
+                "name": "message",
+                "value": {
+                  "k": "ref",
+                  "name": "Wire_String_76e26e9121e02e46"
+                }
+              }
+            ],
+            "fixed": true,
+            "k": "record"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          }
+        }
+      },
+      "reply_limits": {
+        "allocation": 16384,
+        "bytes": 4096,
+        "depth": 8,
+        "nodes": 256
+      },
+      "request": {
+        "rust": "alloc::string::String",
+        "schema": {
+          "Root": {
+            "k": "ref",
+            "name": "Wire_String_76e26e9121e02e46"
+          },
+          "Wire_String_76e26e9121e02e46": {
+            "k": "text"
+          }
+        }
+      },
+      "request_limits": {
+        "allocation": 16384,
+        "bytes": 4096,
+        "depth": 8,
+        "nodes": 256
       }
     }
   }

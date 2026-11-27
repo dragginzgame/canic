@@ -26,7 +26,7 @@ async fn logout(f: &Fixture, caller: CanisterId, input: &Logout) -> Result<Revok
         .update_call(
             f.target,
             caller,
-            "revoke_portable_login",
+            "canic_revoke_portable_login",
             frame(issuer::LOGOUT, input),
         )
         .await
@@ -127,14 +127,14 @@ async fn logout_fences_inflight_initial_and_renewal_completion() {
         };
         let (method, id, actor, bytes) = if renewal {
             (
-                "renew_portable_credential",
+                "canic_renew_portable_credential",
                 issuer::RENEW,
                 caller,
                 frame(issuer::RENEW, &renew(&input, 1)),
             )
         } else {
             (
-                "issue_portable_credential",
+                "canic_issue_portable_credential",
                 issuer::ISSUE,
                 account(),
                 frame(issuer::ISSUE, &input),
@@ -188,7 +188,7 @@ async fn logout_reply_failure_rolls_back_and_lost_state_never_acknowledges() {
         vec![0; issuer::REQUEST_LIMITS.bytes + 1],
     ] {
         assert!(
-            pic.update_call(f.target, caller, "revoke_portable_login", invalid)
+            pic.update_call(f.target, caller, "canic_revoke_portable_login", invalid)
                 .await
                 .is_err()
         );
@@ -198,7 +198,7 @@ async fn logout_reply_failure_rolls_back_and_lost_state_never_acknowledges() {
         pic.update_call(
             f.target,
             caller,
-            "revoke_portable_login",
+            "canic_revoke_portable_login",
             frame(issuer::LOGOUT, &selected)
         )
         .await

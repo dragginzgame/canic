@@ -52,7 +52,7 @@ pub async fn check(pic: &PocketIc, canister: CanisterId, greeting: &str) {
     let request = ReadMetrics::encode_request(&Request::Timers).unwrap();
     for caller in [caller, CanisterId::anonymous()] {
         let reply = pic
-            .query_call(canister, caller, "metrics", request.clone())
+            .query_call(canister, caller, "canic_metrics", request.clone())
             .await
             .unwrap();
         let Report::Timers(snapshot) = ReadMetrics::decode_reply(&reply).unwrap() else {
@@ -91,7 +91,7 @@ pub async fn check(pic: &PocketIc, canister: CanisterId, greeting: &str) {
         greeting_request(GREET, Direction::Request, "visitor"),
     ] {
         assert!(
-            pic.query_call(canister, caller, "metrics", invalid)
+            pic.query_call(canister, caller, "canic_metrics", invalid)
                 .await
                 .is_err()
         );
@@ -129,13 +129,13 @@ async fn check_readiness(pic: &PocketIc, canister: CanisterId, caller: CanisterI
     for caller in [caller, CanisterId::anonymous()] {
         for invalid in &invalid {
             assert!(
-                pic.update_call(canister, caller, "readiness", invalid.clone())
+                pic.update_call(canister, caller, "canic_readiness", invalid.clone())
                     .await
                     .is_err()
             );
             // An invalid observation cannot replace the application's actual state.
             let reply = pic
-                .update_call(canister, caller, "readiness", request.clone())
+                .update_call(canister, caller, "canic_readiness", request.clone())
                 .await
                 .unwrap();
             assert_eq!(

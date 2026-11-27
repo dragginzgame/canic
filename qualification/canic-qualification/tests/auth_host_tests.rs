@@ -108,12 +108,12 @@ async fn approval_journey(operator_owned: bool) {
     "fleets":{"local":{
         "network":{"kind":"Local", "url":url, "root_key":hex(&owner.client().root_key().await.unwrap()), "root_subnet":owner.client().topology().await.get_nns().unwrap().to_text(), "routing_canister":root.to_text()},
         "journal":"journal", "canisters":{"root":{"id":root.to_text()}, "receiver":{"id":receiver.to_text()}},
-        "auth":{"root":"root", "receiver":"receiver", "issuer":Principal::from_slice(&[1]).to_text(),
+        "auth":[{"root":"root", "receiver":"receiver", "issuer":Principal::from_slice(&[1]).to_text(),
             "key":hex(&KEY), "network_id":hex(&[0x11;32]), "application_id":hex(&[0x22;32]),
-            "role":"user", "scopes":["read"], "not_before_ns":now - SECOND, "expires_at_ns":now + 600 * SECOND}
+            "role":"user", "scopes":["read"], "not_before_ns":now - SECOND, "expires_at_ns":now + 600 * SECOND}]
     }}}}});
     if operator_owned {
-        config["apps"]["demo"]["fleets"]["local"]["auth"]["receiver_controller"] =
+        config["apps"]["demo"]["fleets"]["local"]["auth"][0]["receiver_controller"] =
             json!("operator");
     }
     std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
@@ -241,7 +241,7 @@ async fn approval_journey(operator_owned: bool) {
             json!({"role":"shard","parent":"receiver","wasm":receiver_wasm});
         let fleet = &mut app["fleets"]["local"];
         fleet["canisters"]["shard"] = json!({"id":shard.to_text()});
-        let hub_grant = fleet["auth"].clone();
+        let hub_grant = fleet["auth"][0].clone();
         let mut shard_grant = hub_grant.clone();
         shard_grant["receiver"] = json!("shard");
         shard_grant["receiver_controller"] = json!("root");
@@ -316,7 +316,7 @@ async fn approval_journey(operator_owned: bool) {
     }
     let signed = std::fs::read(effect.join("signed.json")).unwrap();
     // Edited config cannot widen retained authority or change the revocation's target grant.
-    config["apps"]["demo"]["fleets"]["local"]["auth"]["scopes"] = json!(["read", "write"]);
+    config["apps"]["demo"]["fleets"]["local"]["auth"][0]["scopes"] = json!(["read", "write"]);
     std::fs::write(dir.join("canic.toml"), toml::to_string(&config).unwrap()).unwrap();
     assert!(
         !run(
@@ -328,8 +328,8 @@ async fn approval_journey(operator_owned: bool) {
     );
     let revocation = cli(&dir, &["fleet", "auth", "plan-revocation", id]);
     assert_eq!(
-        revocation["plan"]["auth"]["grant"],
-        planned["plan"]["auth"]["grant"]
+        revocation["plan"]["action"]["approval"]["grant"],
+        planned["plan"]["action"]["approval"]["grant"]
     );
     let revoke_id = revocation["operation"].as_str().unwrap();
     assert_eq!(

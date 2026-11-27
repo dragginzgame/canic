@@ -8,9 +8,13 @@ Canic mounts three receiver endpoints behind `canic`'s optional `auth` feature:
 
 | Export | Mode | Passive contract |
 | --- | --- | --- |
-| `establish_portable_session` | Update | `EstablishSession` (`0x415554480012`) |
-| `portable_session_read` | Query | `ReadSession` (`0x415554480013`) |
-| `logout_portable_session` | Update | `Logout` (`0x415554480014`) |
+| `canic_establish_portable_session` | Update | `EstablishSession` (`0x415554480012`) |
+| `canic_portable_session_read` | Query | `ReadSession` (`0x415554480013`) |
+| `canic_logout_portable_session` | Update | `Logout` (`0x415554480014`) |
+
+For Canic receivers, set the browser admission transport's `methodName` to
+`canic_establish_portable_session`. Use the names above for direct calls and
+the IC Auth passive contracts for encoding and decoding the frames.
 
 The application supplies synchronous handlers through `mount_auth_endpoints!`.
 They receive the actual ingress caller and IC time. Input credentials are
@@ -147,10 +151,10 @@ and `mount_auth_issuer_endpoints!` for application handlers:
 
 | Export | Caller contract | Behavior |
 | --- | --- | --- |
-| `issue_portable_credential` | Independently authenticated account | Reserve one exact intent before entropy/signing |
-| `renew_portable_credential` | Browser authenticated against the original login | Preserve grants, login deadline and exact renewal sequence |
-| `reconcile_portable_credential` | Original account or browser signer role | Lookup only; return original completion or unresolved evidence |
-| `revoke_portable_login` | Browser authenticated against the original login | Revoke through Auth's retained binding, retaining original results/deadline |
+| `canic_issue_portable_credential` | Independently authenticated account | Reserve one exact intent before entropy/signing |
+| `canic_renew_portable_credential` | Browser authenticated against the original login | Preserve grants, login deadline and exact renewal sequence |
+| `canic_reconcile_portable_credential` | Original account or browser signer role | Lookup only; return original completion or unresolved evidence |
+| `canic_revoke_portable_login` | Browser authenticated against the original login | Revoke through Auth's retained binding, retaining original results/deadline |
 
 All four are replicated updates. Initial requests cannot supply an account,
 issuer key, policy or deadline. Renewal's account is a selector verified through
@@ -545,7 +549,7 @@ handler. The installer has no residual refresh permission after control transfer
 
 | Update signed by the operator | Destination | Wire request |
 | --- | --- | --- |
-| `refresh_auth` | Operator-controlled hub | `enrollment::REFRESH` with unit |
+| `canic_refresh_auth` | Operator-controlled hub | `enrollment::REFRESH` with unit |
 | `refresh_auth_receiver` | Shard's Root | `enrollment::TRIGGER_REFRESH` with the shard principal |
 
 Both receivers mount `canic::mount_auth_refresh_endpoint!`. A direct caller sends
@@ -556,7 +560,7 @@ frame traps during admission. The receiver contract uses the same method ID and
 limits for either controller topology.
 
 Root accepts the second update only from a controller and only for a registered
-receiver. It sends a single cycle-free `refresh_auth` update to that receiver.
+receiver. It sends a single cycle-free `canic_refresh_auth` update to that receiver.
 The shard sees Root as its controller and calls back to its configured Root for
 its own snapshot. The hub never has to proxy this call. Decode each result as
 `Result<(), enrollment::Error>` with its response method ID. A transport

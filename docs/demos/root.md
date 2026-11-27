@@ -553,7 +553,7 @@ qualification. Existing mainnet demos are unchanged.
 
 `canic-root` mounts its lifecycle and management endpoints explicitly. It uses
 the same `canic-management` engine as the profile fixture manager, with an explicit
-`readiness` request that accepts only `Ready`. Each app owns its prerequisite and
+`canic_readiness` request that accepts only `Ready`. Each app owns its prerequisite and
 fence checks. The independent greeting/probe endpoints remain available to callers;
 Root does not use them to infer readiness.
 

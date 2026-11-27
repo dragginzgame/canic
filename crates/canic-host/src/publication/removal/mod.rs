@@ -183,7 +183,7 @@ pub fn create_restoration_plan(
     publication.after_removal = Some(removal_operation.into());
     let now = crate::now()?;
     let proposed = Plan {
-        version: 3,
+        version: crate::plan::APPROVAL_VERSION,
         action: PlanAction::Publish(publication),
         created_at_ns: now,
         expires_at_ns: now + 3_600_000_000_000,
@@ -253,7 +253,7 @@ pub fn create_removal_plan(
     }
     let now = crate::now()?;
     let removal = Plan {
-        version: 11,
+        version: crate::plan::APPROVAL_VERSION,
         action: PlanAction::Remove(value),
         created_at_ns: now,
         expires_at_ns: now + 3_600_000_000_000,
@@ -308,22 +308,13 @@ pub(crate) fn quiesce_matching(
     Ok(())
 }
 
-// Version 4 receipts authenticate the original signed method and frame.
-fn removal_contract(plan: &Plan) -> (&'static str, u64) {
-    if plan.version == 4 {
-        ("store_removal", 60)
-    } else {
-        ("remove_store_artifact", wire::REMOVE)
-    }
-}
-
 fn call(plan: &Plan, bytes: &[u8], deadline: u64) -> Result<signed::Call<'static>> {
     let value = binding(plan)?;
     let root = crate::network::principal(&value.publication.root.canister)?;
     Ok(signed::Call {
         canister: root,
         effective: root,
-        method: removal_contract(plan).0,
+        method: "remove_store_artifact",
         args: ic_wire::encode(
             &wire::RemovalRequest {
                 store: value.publication.store.canister.clone(),
@@ -332,7 +323,7 @@ fn call(plan: &Plan, bytes: &[u8], deadline: u64) -> Result<signed::Call<'static
                 manifest: expected(plan, bytes)?,
             },
             ic_wire::Encoding::Frame {
-                method: removal_contract(plan).1,
+                method: wire::REMOVE,
                 direction: ic_wire::Direction::Request,
             },
             wire::REMOVAL_LIMITS,
@@ -341,11 +332,11 @@ fn call(plan: &Plan, bytes: &[u8], deadline: u64) -> Result<signed::Call<'static
     })
 }
 
-fn decode(plan: &Plan, reply: &[u8], expected: &ic_wasm_store_protocol::Manifest) -> Result<()> {
+fn decode(reply: &[u8], expected: &ic_wasm_store_protocol::Manifest) -> Result<()> {
     let reply: wire::RemovalReply = ic_wire::decode(
         reply,
         ic_wire::Encoding::Frame {
-            method: removal_contract(plan).1,
+            method: wire::REMOVE,
             direction: ic_wire::Direction::Response,
         },
         wire::RESPONSE_LIMITS,
@@ -374,7 +365,6 @@ pub(crate) fn receipt(dir: &Path, plan: &Plan, bytes: &[u8]) -> Result<Option<Re
     signed::validate_retained(&path, plan, &call(plan, bytes, deadline)?)?;
     let manifest = expected(plan, bytes)?;
     decode(
-        plan,
         &store::read(&path.join("reply.bin"), 2 * 1024 * 1024)?,
         &manifest,
     )?;
@@ -393,11 +383,6 @@ pub(crate) async fn apply(
     icp: &Path,
     reconcile: bool,
 ) -> Result<crate::ApplyOutcome> {
-    if plan.version == 4 {
-        return Err(Error::Blocked(
-            "historical Store removal requires its original Host and Root".into(),
-        ));
-    }
     let path = dir.join("removal");
     let removal = signed::RetainedAttempt {
         plan,

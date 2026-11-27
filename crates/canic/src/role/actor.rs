@@ -1,15 +1,20 @@
-use crate::auth::install::Install;
-use crate::{readiness::State, storage, topology};
+use super::RoleStorage;
+use crate::{
+    auth::install::Install,
+    readiness::State,
+    storage::{self, StorageGroup},
+    topology,
+};
 use ic_platform_runtime::system as api;
 use ic_platform_types::Principal;
-use ic_storage::{DefaultMemoryImpl, MemoryRuntime, StorageConfig};
+use ic_storage::{DefaultMemoryImpl, StorageConfig};
 use serde::{Deserialize, Serialize};
 use std::cell::Cell;
 
 // Field order is the existing hub configuration payload.
 #[doc(hidden)]
 #[derive(Serialize, Deserialize)]
-pub struct HubConfig {
+struct HubConfig {
     operator: Option<Principal>,
     nonce: [u8; 16],
     root: Principal,
@@ -35,24 +40,21 @@ thread_local! {
 
 fn bootstrap(
     fresh: bool,
-    authority: &str,
-    prefix: &str,
-    keys: &[&str],
-    config: StorageConfig,
-) -> MemoryRuntime<DefaultMemoryImpl> {
-    let application = (authority, prefix, keys);
+    application: StorageGroup<'_>,
+    suppliers: &[StorageGroup<'_>],
+    mut config: StorageConfig,
+) -> RoleStorage {
     use crate::auth::session::stable;
-    let auth_keys = [stable::ENGINE_KEY, stable::HOST_KEY];
-    let config = StorageConfig {
-        allocations: config.allocations.max(keys.len() + auth_keys.len()),
-        ..config
+    let auth = StorageGroup {
+        authority: "auth",
+        prefix: "auth.receiver.",
+        keys: &[stable::ENGINE_KEY, stable::HOST_KEY],
     };
-    let runtime = storage::open_directory(DefaultMemoryImpl::default(), fresh, config);
-    storage::admit_groups(
-        runtime,
-        fresh,
-        &[application, ("auth", "auth.receiver.", &auth_keys)],
-    )
+    let mut groups = vec![application, auth];
+    groups.extend_from_slice(suppliers);
+    let required = groups.iter().map(|group| group.keys.len()).sum();
+    config.allocations = config.allocations.max(required);
+    storage::bootstrap_groups(DefaultMemoryImpl::default(), fresh, &groups, config)
 }
 
 /// Routing Root recovered from this hub’s configuration or this attested shard’s retained binding.
@@ -78,13 +80,18 @@ impl HubConfig {
 /// # Errors
 /// Rejects an invalid nonce or invalid routing and issuer principals.
 #[doc(hidden)]
-pub fn decode_hub(input: &Install) -> Result<HubConfig, &'static str> {
+fn decode_hub(input: &Install) -> Result<HubConfig, &'static str> {
     #[cfg(feature = "role-attestation")]
-    let (service, bindings) = {
+    let (operator, nonce, service_role, issuer_key) = {
         crate::guard::require_sender(input.root)?;
         let service = topology::directory::ServiceInstall::decode(&input.application)?;
         let bindings = topology::directory::DbService::decode(&service.application)?;
-        (service, bindings)
+        (
+            service.hub_operator,
+            bindings.nonce,
+            service.role,
+            bindings.issuer_key,
+        )
     };
     #[cfg(not(feature = "role-attestation"))]
     let (operator, nonce) = if input.application.len() == 16 {
@@ -95,18 +102,12 @@ pub fn decode_hub(input: &Install) -> Result<HubConfig, &'static str> {
         (service.hub_operator, nonce(&service.application)?)
     };
     let config = HubConfig {
-        #[cfg(feature = "role-attestation")]
-        operator: service.hub_operator,
-        #[cfg(not(feature = "role-attestation"))]
         operator,
-        #[cfg(not(feature = "role-attestation"))]
         nonce,
         #[cfg(feature = "role-attestation")]
-        nonce: bindings.nonce,
+        service_role,
         #[cfg(feature = "role-attestation")]
-        service_role: service.role,
-        #[cfg(feature = "role-attestation")]
-        issuer_key: bindings.issuer_key,
+        issuer_key,
         root: input.root,
         issuer: input.issuer,
         network: input.network,
@@ -116,26 +117,27 @@ pub fn decode_hub(input: &Install) -> Result<HubConfig, &'static str> {
     Ok(config)
 }
 
-#[doc(hidden)]
-/// Reopen or initialize the hub database and its selected service bindings.
+/// Open the hub's application, Auth and supplier allocations in one directory.
+/// Pass the same declarations on reopen. Use the returned runtime to attach
+/// each supplier, selecting create only on fresh installation.
 /// # Panics
-/// Traps on invalid backing, mismatched membership or failed store admission.
+/// Traps on invalid role bindings, grants or a different retained key set.
 #[must_use]
 pub fn open_hub(
     install: Option<&Install>,
-    authority: &str,
-    prefix: &str,
-    keys: &[&str],
+    application: StorageGroup<'_>,
+    suppliers: &[StorageGroup<'_>],
     config_key: &str,
     pages: u64,
-) -> (MemoryRuntime<DefaultMemoryImpl>, Option<[u8; 16]>) {
+) -> (RoleStorage, Option<[u8; 16]>) {
+    let prefix = application.prefix;
     let initial = install
         .map(decode_hub)
         .transpose()
         .expect("approved role installation");
     #[cfg(feature = "role-attestation")]
     let directory = format!("{prefix}services.v1");
-    let mut keys = keys.to_vec();
+    let mut keys = application.keys.to_vec();
     let roster = format!("{prefix}shard_roster.v1");
     let owners = format!("{prefix}shard_owners.v1");
     keys.extend([config_key, &roster, &owners]);
@@ -143,9 +145,11 @@ pub fn open_hub(
     keys.push(&directory);
     let host = bootstrap(
         install.is_some(),
-        authority,
-        prefix,
-        &keys,
+        StorageGroup {
+            keys: &keys,
+            ..application
+        },
+        suppliers,
         StorageConfig {
             allocations: keys.len(),
             pages,
@@ -183,18 +187,21 @@ pub fn open_hub(
     (host, initial.map(|c| c.nonce))
 }
 
-#[doc(hidden)]
-/// Reopen or initialize the shard database and its selected service bindings. Parent admission checks the real installer.
+/// Open the shard's application, Auth and supplier allocations in one directory.
+/// Pass the same declarations on reopen. Use the returned runtime to attach
+/// each supplier, selecting create only on fresh installation.
 /// # Panics
-/// Traps on invalid storage, parent or database. Never creates on failed reopen.
+/// Traps on invalid role bindings, grants or a different retained key set.
+#[must_use]
 pub fn open_shard(
     install: Option<&Install>,
-    authority: &str,
-    prefix: &str,
-    keys: &[&str],
+    application: StorageGroup<'_>,
+    suppliers: &[StorageGroup<'_>],
     parent_key: &str,
     pages: Option<u64>,
-) -> (MemoryRuntime<DefaultMemoryImpl>, Option<[u8; 16]>) {
+) -> (RoleStorage, Option<[u8; 16]>) {
+    #[cfg(feature = "role-attestation")]
+    let prefix = application.prefix;
     let initial = install
         .map(decode_shard)
         .transpose()
@@ -207,17 +214,21 @@ pub fn open_shard(
     let directory = format!("{prefix}services.v1");
     #[cfg(feature = "role-attestation")]
     let root_key = format!("{prefix}routing_root.v1");
-    let mut keys = keys.to_vec();
+    let mut keys = application.keys.to_vec();
     keys.push(parent_key);
     #[cfg(feature = "role-attestation")]
     keys.extend([directory.as_str(), root_key.as_str()]);
-    let host = bootstrap(install.is_some(), authority, prefix, &keys, config);
-    let parts = initial.map(ShardConfig::into_parts);
-    topology::attach_parent(
-        &host,
-        parent_key,
-        parts.as_ref().map(|(binding, _)| binding),
+    let host = bootstrap(
+        install.is_some(),
+        StorageGroup {
+            keys: &keys,
+            ..application
+        },
+        suppliers,
+        config,
     );
+    let binding = initial.as_ref().map(|config| &config.binding);
+    topology::attach_parent(&host, parent_key, binding);
     #[cfg(feature = "role-attestation")]
     {
         use topology::directory::retained::{DIRECTORY, Index};
@@ -225,19 +236,17 @@ pub fn open_shard(
             &host,
             &root_key,
             29,
-            parts
-                .as_ref()
-                .map(|(binding, _)| binding.root.as_slice().to_vec()),
+            binding.map(|binding| binding.root.as_slice().to_vec()),
         );
         let root = Principal::try_from_slice(root.get()).expect("retained routing Root");
         topology::attach_role_calls(root);
         ROOT.set(Some(root));
-        DIRECTORY.set(Some(match &parts {
-            Some((binding, _)) => Index::install_child(&host, &directory, binding),
+        DIRECTORY.set(Some(match binding {
+            Some(binding) => Index::install_child(&host, &directory, binding),
             None => Index::open(&host, &directory),
         }));
     }
-    (host, parts.map(|(_, nonce)| nonce))
+    (host, initial.map(|config| config.nonce))
 }
 
 #[doc(hidden)]
@@ -271,24 +280,16 @@ fn nonce(bytes: &[u8]) -> Result<[u8; 16], &'static str> {
 }
 
 #[doc(hidden)]
-pub struct ShardConfig {
+struct ShardConfig {
     binding: topology::Install,
     nonce: [u8; 16],
-}
-
-impl ShardConfig {
-    /// Consume the validated installation context and its application nonce.
-    #[must_use]
-    pub fn into_parts(self) -> (topology::Install, [u8; 16]) {
-        (self.binding, self.nonce)
-    }
 }
 
 #[doc(hidden)]
 /// Decode the shard's nested topology and check the outer Auth Root.
 /// # Errors
 /// Rejects a missing frame, conflicting Root or invalid nonce.
-pub fn decode_shard(input: &Install) -> Result<ShardConfig, &'static str> {
+fn decode_shard(input: &Install) -> Result<ShardConfig, &'static str> {
     let binding = topology::Install::decode(&input.application)?;
     binding.check_root(input.root)?;
     Ok(ShardConfig {

@@ -28,19 +28,13 @@ pub(crate) fn selected_fleet(
         app: app.into(),
         fleet: fleet.into(),
         config: crate::FleetConfig {
-            snapshots: None,
+            policy: Default::default(),
             network,
             canisters,
             journal: None,
-            receiver_policy: None,
-            top_up_children: vec![],
-            role_receivers: vec![],
-            subnet_child_limit: None,
-            allow_large_subnet: false,
-            registry: None,
+
             standby_pool: None,
-            worker_pools: Vec::new(),
-            shard_pools: Vec::new(),
+
             auth: Vec::new(),
         },
     }
@@ -224,4 +218,21 @@ fn wire_comparison_excludes_only_the_exact_timer_update() {
     verify_exports("app", &declared, &mixed).unwrap();
     declared.insert(timer.into(), serde_json::json!({"mode": "update"}));
     assert!(verify_exports("app", &declared, &mixed).is_err());
+}
+
+pub(crate) fn stored_source(name: &str, bytes: &[u8]) -> crate::StoredArtifact {
+    crate::StoredArtifact {
+        maintenance: None,
+        store: crate::UpgradeTarget {
+            canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+            module: "22".repeat(32),
+        },
+        manifest: crate::publication::release_manifest(
+            ic_wasm_store_protocol::Release {
+                name: name.into(),
+                version: "v1".into(),
+            },
+            bytes,
+        ),
+    }
 }

@@ -231,7 +231,7 @@ fn local_operation_status(
                 .store_root()
                 .or_else(|| plan.store_upgrade_root())
                 .map(|root| root.canister.clone()),
-            slot: plan.management().and_then(|owner| owner.slot),
+            slot: plan.management().map(|owner| owner.slot),
             upgrade,
             management,
             deployment: plan.deployment,
@@ -316,7 +316,7 @@ fn check_report(
     operations: &[FleetOperation],
     network_id: &str,
     manager: &str,
-    slot: Option<ChildId>,
+    slot: ChildId,
     report: &canic_management_protocol::Status,
 ) -> Result<()> {
     if report
@@ -332,10 +332,7 @@ fn check_report(
     if !empty
         && operations
             .iter()
-            .filter(|operation| {
-                operation.network_id == network_id
-                    && operation.slot.unwrap_or(ChildId::FIRST) == slot.unwrap_or(ChildId::FIRST)
-            })
+            .filter(|operation| operation.network_id == network_id && operation.slot == Some(slot))
             .filter_map(|operation| operation.management.as_ref())
             .filter(|approval| approval.manager == manager)
             .any(|approval| report.approval.as_ref() != Some(approval))
@@ -386,13 +383,13 @@ fn ordered_upgrades<'a>(
     operations: &'a [FleetOperation],
     network_id: &str,
     manager: &str,
-    slot: Option<ChildId>,
+    slot: ChildId,
 ) -> Vec<&'a FleetOperation> {
     let mut matching: Vec<_> = operations
         .iter()
         .filter(|operation| {
             operation.network_id == network_id
-                && operation.slot.unwrap_or(ChildId::FIRST) == slot.unwrap_or(ChildId::FIRST)
+                && operation.slot == Some(slot)
                 && operation
                     .upgrade
                     .as_ref()
@@ -460,7 +457,7 @@ async fn observe_upgrade(
     operations: &[FleetOperation],
     network_id: &str,
     manager: &str,
-    slot: Option<ChildId>,
+    slot: ChildId,
     network: &Network,
     deadline: tokio::time::Instant,
 ) -> Option<FleetUpgrade> {
@@ -476,32 +473,20 @@ async fn observe_upgrade(
         ))
     } else {
         tokio::time::timeout_at(deadline, async {
-            let report = if let Some(slot) = slot {
-                let selector = children::StatusRequest::Upgrade(children::Request {
-                    slot,
-                    value: Some(approval.clone()),
-                });
-                let children::ObservedStatus::Upgrade(report) = query_status(
-                    network,
-                    manager,
-                    "child_status",
-                    children::READ_STATUS,
-                    &selector,
-                )
-                .await?
-                else {
-                    return Err(Error::Invalid("expected child upgrade status".into()));
-                };
-                report
-            } else {
-                query_status(
-                    network,
-                    manager,
-                    "upgrade_status",
-                    canic_management_protocol::upgrade::STATUS,
-                    &(),
-                )
-                .await?
+            let selector = children::StatusRequest::Upgrade(children::Request {
+                slot,
+                value: Some(approval.clone()),
+            });
+            let children::ObservedStatus::Upgrade(report) = query_status(
+                network,
+                manager,
+                "child_status",
+                children::READ_STATUS,
+                &selector,
+            )
+            .await?
+            else {
+                return Err(Error::Invalid("expected child upgrade status".into()));
             };
             check_upgrade_report(approval, &report)?;
             Ok(report)
@@ -700,7 +685,7 @@ pub async fn fleet_with_config(
         }
         operations.push(operation);
     }
-    let mut selected: std::collections::BTreeSet<_> = selected.iter().cloned().collect();
+    let selected: std::collections::BTreeSet<_> = selected.iter().cloned().collect();
     if let Some(config) = configuration {
         let network_id = config.config.network.binding_id()?;
         for (slot, declaration) in &config.config.canisters {
@@ -709,9 +694,6 @@ pub async fn fleet_with_config(
                     (network_id.clone(), id.clone()),
                     config.config.network.clone(),
                 );
-                if declaration.profile_manager {
-                    selected.insert(id.clone());
-                }
                 if operations.iter().any(|operation| {
                     operation.deployment.as_ref().is_some_and(|name| {
                         name.fleet == config.fleet
@@ -760,8 +742,7 @@ pub async fn fleet_with_config(
             .is_ok_and(|result| {
                 result.is_ok_and(|hash| crate::maintenance::implicit_child_root(&hash))
             });
-        let implicit_first = known_single_slot
-            || (retained_slots.contains(&None) && !retained_slots.contains(&Some(ChildId::FIRST)));
+        let implicit_first = known_single_slot;
         for (index, id) in (0..).map_while(ChildId::service).enumerate() {
             if known_single_slot && id != ChildId::FIRST {
                 issues.push(format!("{manager} on {network_id}: historical Root exposes only its original service; other slots cannot be observed"));
@@ -799,7 +780,7 @@ pub async fn fleet_with_config(
                     )
                     .await?
                 };
-                check_report(&operations, &network_id, &manager, slot, &report)?;
+                check_report(&operations, &network_id, &manager, id, &report)?;
                 Ok::<_, Error>(report)
             })
             .await
@@ -845,7 +826,7 @@ pub async fn fleet_with_config(
                 &operations,
                 &network_id,
                 &manager,
-                slot,
+                id,
                 &network,
                 owner_deadline,
             )
