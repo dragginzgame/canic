@@ -18,6 +18,8 @@ pub enum Request {
     Jobs,
     /// Supplier-managed fresh entropy requests for this incarnation.
     Entropy,
+    /// Current canister version and controller-visible cycles.
+    Runtime,
 }
 
 /// Command outcomes observed by the local Blob recorder.
@@ -121,6 +123,13 @@ pub enum Report {
         failed: Counter,
         /// Polled fresh requests dropped before return.
         cancelled: Counter,
+    },
+    /// Current replica version counter and controller-visible cycle balance.
+    Runtime {
+        /// Increments on canister changes according to the IC system API.
+        version: u64,
+        /// Liquid cycles, visible only to an actual controller.
+        liquid_cycles: Option<u128>,
     },
 }
 

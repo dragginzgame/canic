@@ -244,10 +244,7 @@ pub async fn apply(root: &Path, digest: &str, identity: &str, icp: &Path) -> Res
         return crate::fleet_plan::execute(&dir, digest, identity, icp, false).await;
     }
     let plan: Plan = store::json(&dir.join("plan.json"))?;
-    if matches!(
-        plan.action,
-        crate::PlanAction::Upgrade(_) | crate::PlanAction::Create { .. }
-    ) {
+    if matches!(plan.action, crate::PlanAction::Create { .. }) {
         return Err(Error::Blocked("standalone deployment requires a configured Root bootstrap or a fleet-managed operation".into()));
     }
     apply_at(root, &dir, digest, identity, icp).await
@@ -667,17 +664,18 @@ pub(crate) fn status_loaded(
             unreachable!("non-deployment status selected above")
         }
         crate::PlanAction::UpgradeStore { .. } => unreachable!("Store status selected above"),
-        crate::PlanAction::MaintainRoot { .. } => crate::maintenance::observations(&plan, false)
-            .iter()
-            .chain(crate::maintenance::observations(&plan, true))
-            .map(|(step, _)| *step)
-            .chain(["stop", "stopped", "install", "start"])
-            .collect(),
+        crate::PlanAction::MaintainRoot { .. } => vec![
+            crate::maintenance::BEFORE,
+            "stop",
+            "stopped",
+            "install",
+            "start",
+            crate::maintenance::AFTER,
+        ],
         crate::PlanAction::CreateChild(_) | crate::PlanAction::UpgradeChild { .. } => vec!["stage"],
         crate::PlanAction::Create { .. } | crate::PlanAction::BootstrapRoot { .. } => {
             vec!["create", "install"]
         }
-        crate::PlanAction::Upgrade(_) => vec!["stop", "stopped", "install", "start"],
         crate::PlanAction::CreateStore { .. } => vec!["create", "install", "handover"],
     };
     if plan.chunked_root_install() {

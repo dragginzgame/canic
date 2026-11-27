@@ -89,7 +89,7 @@ if [[ "$scope" == all || "$scope" == directory ]]; then
 fi
 if [[ "$scope" == directory ]]; then
     build original ic-wasm-store
-    CANIC_STORE_APP_DIRECTORY="$root/target/store" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
+    CANIC_CLI="$cli" CANIC_STORE_APP_DIRECTORY="$root/target/store" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test store "$filter" -- --nocapture
     exit
 fi
 if [[ "$scope" == all || "$scope" == user-directory ]]; then

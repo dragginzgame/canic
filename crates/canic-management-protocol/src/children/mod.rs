@@ -5,6 +5,32 @@ mod tests;
 
 use serde::{Deserialize, Serialize};
 
+/// Retained creation evidence for one currently assigned child.
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct InstalledChild {
+    /// Slot in this Root's installation journals.
+    pub slot: ChildId,
+    /// Principal returned by the management canister.
+    pub canister: String,
+    /// Assigned service or placement role when supplied at installation.
+    pub role: Option<String>,
+    /// Immediate application parent when the install binding identifies it.
+    pub parent: Option<String>,
+    /// Last recorded creation phase. Current availability requires a separate observation.
+    pub phase: crate::Phase,
+}
+
+/// Controller query over at most 32 journal slots per response.
+#[cfg(feature = "endpoints")]
+pub struct ListChildren;
+#[cfg(feature = "endpoints")]
+impl canic::method::Contract for ListChildren {
+    const NAME: &'static str = "list_children";
+    const ID: u64 = ic_wire::method_id("canic.root.list_children.v1");
+    type Input = Option<ChildId>;
+    type Output = (Vec<InstalledChild>, Option<ChildId>);
+}
+
 /// Public query for creation or upgrade evidence in a selected slot.
 pub const READ_STATUS: u64 = ic_wire::method_id("canic.root.child_status.v1");
 
@@ -204,18 +230,8 @@ fn ordinary_child<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<C
     ChildId::new(slot.index()).ok_or_else(|| serde::de::Error::custom("ordinary child required"))
 }
 
-/// Admit creation in the selected slot.
-pub const STAGE: u64 = 31;
 /// Read the selected creation journal.
 pub const STATUS: u64 = 32;
-/// Reconcile the exact selected creation approval.
-pub const RECONCILE: u64 = 33;
-/// Admit an upgrade in the selected slot.
-pub const STAGE_UPGRADE: u64 = 34;
-/// Read the selected upgrade approval, including its retained history.
-pub const OBSERVE_UPGRADE: u64 = 35;
-/// Reconcile the exact selected upgrade approval.
-pub const RECONCILE_UPGRADE: u64 = 36;
 /// Read every permanent-service journal, including empty slots.
 pub const CUSTODY: u64 = 37;
 /// Test-build-only interruption of one selected child.
@@ -229,7 +245,3 @@ pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     nodes: ChildId::HISTORICAL_SERVICES.len() * super::custody::LIMITS.nodes,
     depth: super::custody::LIMITS.depth + 1,
 };
-
-/// Combined creation/current-upgrade Wasm bytes across permanent slots. The original
-/// two-bucket artifact lease leaves 64 bytes for storage and payload framing.
-pub const MAX_ARTIFACT_BYTES: usize = 1_048_512;

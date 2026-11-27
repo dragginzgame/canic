@@ -30,6 +30,11 @@ fn admit() -> Result<(), &'static str> {
 #[crate::__canic_query(contract = ReadMetrics, guard = admit)]
 fn metrics(request: Request) -> Report {
     match request {
+        Request::Runtime => Report::Runtime {
+            version: system::canister_version(),
+            liquid_cycles: system::is_controller(&system::caller())
+                .then(ic_platform_runtime::raw::liquid_cycle_balance),
+        },
         Request::Timers => Report::Timers(Snapshot {
             observed_at_ns: system::time(),
             #[cfg(feature = "timers")]

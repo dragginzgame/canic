@@ -11,9 +11,10 @@ pub const STAGE: u64 = 61;
 /// Reconcile only that complete configured creation.
 pub const RECONCILE: u64 = 62;
 /// Child-only deployment evidence. Never an input to Root maintenance.
-pub const CHILD_EVIDENCE: u64 = ic_wire::method_id("canic.root.observe_child_deployments.v1");
+pub const CHILD_EVIDENCE: u64 =
+    ic_wire::method_id("canic.root.observe_identified_child_deployments.v1");
 /// Complete Root custody including lifecycle arguments.
-pub const CUSTODY: u64 = ic_wire::method_id("canic.root.observe_root_custody.v1");
+pub const CUSTODY: u64 = ic_wire::method_id("canic.root.observe_identified_root_custody.v1");
 /// Admit an exact Blob maintenance upgrade.
 pub const STAGE_UPGRADE: u64 = 64;
 /// Reconcile that upgrade without issuing a replacement effect.
@@ -179,10 +180,25 @@ impl Maintenance {
 /// Full custody; old observers must refuse rather than omit these bindings.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Custody {
-    /// Existing complete Root evidence.
-    pub root: crate::custody::RootHistory,
-    /// Lifecycle arguments for each permanent slot, absent for legacy children.
-    pub applications: Vec<Option<Lifecycle>>,
+    /// Permanent service slots, including empty slots, in service order.
+    pub children: Vec<ChildCustody>,
+    /// Latest Store operation and earlier attempts in admission order.
+    pub store_operation: Option<crate::store_maintenance::Status>,
+    /// Completed predecessors of the current Store operation.
+    pub store_history: Vec<crate::store_maintenance::Status>,
+}
+
+/// All evidence for one identified service slot.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ChildCustody {
+    /// Permanent service identity.
+    pub slot: ChildId,
+    /// Original creation and upgrade journals.
+    pub journal: crate::custody::Custody,
+    /// Store deliveries for the admitted child.
+    pub sources: Option<crate::stored::Sources>,
+    /// Application-owned lifecycle arguments when configured.
+    pub lifecycle: Option<Lifecycle>,
 }
 
 /// Method identity for `stage_child_creation`.

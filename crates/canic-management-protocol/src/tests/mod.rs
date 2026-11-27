@@ -1,10 +1,7 @@
 mod application;
 mod custody;
 
-use crate::{
-    Approval, CREATION_CYCLES, Failure, LIMITS, MAX_WASM, Phase, Refusal, STAGE, STAGE_LIMITS,
-    STATUS, Stage, Status, digest,
-};
+use crate::{Approval, CREATION_CYCLES, Failure, LIMITS, Phase, Refusal, STATUS, Status};
 
 #[test]
 fn creation_admission_uses_original_expiry_not_earliest_dispatch() {
@@ -114,49 +111,16 @@ fn publication_envelope_carries_a_maximum_chunk_and_bounded_status() {
 }
 
 #[test]
-fn growth_frames_cover_declared_artifact_and_retained_evidence() {
-    let mut wasm = vec![0; MAX_WASM];
-    wasm[..8].copy_from_slice(b"\0asm\x01\0\0\0");
-    let mut input = Stage {
-        approval: Approval {
-            manager: "a".repeat(63),
-            module_hash: digest(&wasm),
-            creation_cycles: CREATION_CYCLES,
-            execute_at_ns: 10,
-            expires_at_ns: 20,
-        },
-        wasm,
+fn creation_evidence_fits_the_response_budget() {
+    let approval = Approval {
+        manager: "a".repeat(63),
+        module_hash: [255; 32],
+        creation_cycles: CREATION_CYCLES,
+        execute_at_ns: 10,
+        expires_at_ns: 20,
     };
-    assert_eq!(input.validate(&input.approval.manager, 0), Ok(()));
-    let frame = ic_wire::encode(
-        &input,
-        ic_wire::Encoding::Frame {
-            method: STAGE,
-            direction: ic_wire::Direction::Request,
-        },
-        STAGE_LIMITS,
-    )
-    .unwrap();
-    let decoded: Stage = ic_wire::decode(
-        &frame,
-        ic_wire::Encoding::Frame {
-            method: STAGE,
-            direction: ic_wire::Direction::Request,
-        },
-        STAGE_LIMITS,
-    )
-    .unwrap();
-    assert_eq!(decoded.wasm, input.wasm);
-    assert_eq!(decoded.approval, input.approval);
-    input.wasm.push(0);
-    input.approval.module_hash = digest(&input.wasm);
-    assert_eq!(
-        input.validate(&input.approval.manager, 0),
-        Err(Refusal::Artifact)
-    );
-
     let status = Status {
-        approval: Some(input.approval),
+        approval: Some(approval),
         phase: Phase::Ready,
         worker: Some("a".repeat(63)),
         attempts: [1; 3],

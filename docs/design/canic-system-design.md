@@ -1139,15 +1139,11 @@ examines every permanent service slot under its observation budget, including
 when Host has no local journal. Placement pools keep their own inventories.
 Historical approvals retain their original positional encoding and digest. Fresh service-only fleets may set the same optional ceiling. Host binds the ceiling and bootstrap service count into the Root creation approval and install bytes. An exact retry of an admitted service consumes no new slot. The 40,000 default is an admission backstop. Aggregate journal, custody and directory budgets remain independent constraints.
 
-The CUJG journal is a fresh-layout hard cut. A Root using CUJF or earlier keeps its
+The CMJ1 journal and CMS1 artifact records require a fresh installation. A Root using CUJG or earlier keeps its
 original executable. On a fresh Root, adding a service preserves the existing
 canister principals, signed attempts, funding approvals and upgrade targets.
 
-Host projects the historical complete Root response formats into one identity-keyed
-view, shared by child recovery and Root maintenance. The projection retains empty
-slots and all supplied Store history; it does not choose or probe a contract.
-The approved operation selects the exact response format, with old array positions
-mapped only at that decoding boundary. Current Root observations cover every permanent slot.
+Root returns the ID, creation and upgrade journal, Store sources and lifecycle evidence together for every permanent slot. Host verifies the service IDs and their order before consuming the selected observation. Empty slots and the current and completed Store operations are explicit. Child recovery and Root maintenance retain distinct observation authorities.
 
 Each pattern's useful journey includes creation, resolution, bounded growth where
 applicable, upgrade and interrupted-operation recovery. Before extending to many
@@ -2116,9 +2112,9 @@ On an occupied placement Root, public child creation and upgrade evidence share
 the `child_status` query. Child and Store maintenance
 status remain readable. Their replicated observations still require a controller.
 Publication, deployment evidence and approved Store-backed child operations retain
-their existing authority. Ordinary inline creation requires declared capacity.
+their existing authority. Permanent child creation requires declared capacity.
 The mixed Store admission endpoint (including its observe variant), removal,
-maintenance effects, inline upgrades and full Root maintenance custody stay
+maintenance effects and full Root maintenance custody stay
 fenced. Their approvals omit live placement custody. A query or observation cannot authorize those effects.
 
 Root records its first successful grant in a dedicated stable lease. A Root
@@ -2173,9 +2169,9 @@ publication completes, replan approves installation separately. A completed
 release remains reusable after reviewed Root maintenance; this does not renew
 unfinished publication authority under different Root code. The existing
 bounded serial upgrade chain retains target, code, source and slot authority.
-Retained inline fleets do not migrate implicitly. Host Root maintenance binds the
+Current Root installations accept only the identified service journal and Store delivery format. Previous images require their original executable. Host Root maintenance binds the
 Store identity/code and every child's original creation and historical upgrade
-delivery, including retention pins and cache deadlines. Replicated full-custody
+delivery, including retention pins and cache deadlines. Both Root observation modes return one record per permanent service ID with its journal, Store source and lifecycle arguments. Empty slots are explicit. Replicated full-custody
 observations must match before and after the original direct install attempt;
 legacy inline observations cannot substitute. Store authority/code/placement and
 child identity/code/controllers are independently checked. Only completed
@@ -2267,7 +2263,7 @@ callback faults qualify recovery through observation without repeating stop.
 Root replacement preserves that record. Stopped status under the approved old
 code and sole Root control establishes the drain boundary, even when observed
 after the dispatch deadline. This does not rely on canister-version arithmetic.
-The CUJG journal retains current and completed attempts in the original checked
+The CMJ1 journal retains current and completed attempts in the original checked
 allocation. Existing child-only reads refuse Store custody; after a second
 attempt, full-history observation is required so Root maintenance cannot omit any
 predecessor. Older executables reject the new journal rather than losing history.
@@ -2289,7 +2285,7 @@ first page; its cursor retains the removed flag, and its digest has a separate
 domain including the entry kind. Historical attempts retain method 113, their
 original digest and name/version ordering, including an existing refusal. Their
 Wire discriminants and Host JSON encodings stay exact. Versioned evidence uses a
-new discriminant rejected by historical readers; CUJG preserves that evidence across supported Root
+new discriminant rejected by historical readers; CMJ1 preserves that evidence across supported Root
 upgrades. Fresh attempts require method 117; missing support blocks before
 stop without falling back.
 
@@ -2793,8 +2789,7 @@ before granting more cycles. [Legacy funding policy and regressions](https://git
 The amounts here are examples. When the observed child balance is strictly below
 the threshold, the parent pays the fixed amount. A balance at the threshold
 requires no payment. Eligibility applies only to that direct edge. The original
-payer and allocation source have no bearing on later top-ups. Name-only entries
-from older configs declare eligibility without specifying an automated payment.
+payer and allocation source have no bearing on later top-ups. Every entry requires a child, a positive threshold and a positive payment amount.
 Root can pay its directly installed named services. The operator binds the
 configured amounts, child principal, lifetime budget and deadline with
 `fleet canister plan-funding`, then submits that approval directly to the named payer. An exact
@@ -2952,8 +2947,9 @@ Physical deletion is separate, explicit and irreversible. It requires a disposit
 Keep Observatory, rendering, comparisons and aggregation on the host. Canisters expose bounded facts, counters, operation summaries and paged inventory. Separate public metrics from protected authority, topology, logs and treasury details. Certificate or authenticated-update requirements depend on whether a result is merely displayed or used to authorize an effect.
 
 Each Canic actor exports one bounded query named `canic_metrics`.
-A typed request selects timers, Blob command outcomes or a page of synchronous
-endpoint performance. One application-selected guard covers all sources and
+A typed request selects runtime information, timers, supplier counters or a page of synchronous
+endpoint performance. Runtime reports include the version. Only an actual child
+controller can see its liquid cycles. One application-selected guard covers all sources and
 runs before decoding. The default checks the actual IC controller. The app
 may install a different guard during install and reopen. A source selector
 confers no additional permission. Root's child observation forwards a request
@@ -2976,6 +2972,14 @@ consumer. Mounting a reader starts no sampler or storage lifecycle work.
 The [metrics fleet](../../apps/examples/metrics/DESIGN.md) also admits per-handler instruction summaries for synchronous Canic updates. Every synchronous Canic update records volatile instruction measurements. Canic supplies the reader and its guard. Host checks the module marker and query export in the finished Wasm before publishing the artifact. Supplier callbacks and authority checks remain typed Rust. Only its actual controller reads the paged report. A Root controller can request one page for a ready managed child slot through the built-in `observe_child_metrics` update on every Root.
 
 Every status states observation age/generation and completeness. An unreachable subnet is unknown, not empty or healthy. Dynamic inventory must include autonomous children. A terminal initial deployment plan is not a perpetual inventory source. Correlate plans, local operations, remote effects and readiness with durable operation IDs.
+
+The operator inspection requested in [#119](https://github.com/dragginzgame/canic/issues/119)
+applies to deployed fleets as well as fleets started by a local harness. Both
+use the same protected, paginated inventory from Root's retained installation
+and placement records. A harness can supply the network and fleet bindings.
+Host displays application parentage when recorded and keeps the time of the
+last observation visible. Root's installation record alone cannot establish
+that a child is running or that the application's frontend is available.
 
 ### Demo fleet visualization from the first multi-canister increment
 
@@ -3055,9 +3059,7 @@ retained completion, not freshly observed network state. A separate Root-only
 maintenance plan now preserves the full completed journal through the direct
 installation owner, then advances the Root binding for future child plans.
 The replacement must support the controller-only full-custody observation.
-One retained single-upgrade predecessor is admitted by exact module hash with
-separate authenticated creation/upgrade preflight reads and the same full-custody
-postflight. Unknown older owners, unfinished work and combined Root/child changes
+Both sides of maintenance must answer the same identified full-custody contract. Unknown older owners, unfinished work and combined Root/child changes
 are refused; a missing endpoint never authorizes a fallback.
 Unbounded upgrade history, existing-fleet adoption and larger trees remain open. `fleet reconcile`
 requests recovery of an exact retained creation/upgrade approval on a compatible

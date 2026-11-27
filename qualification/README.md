@@ -258,7 +258,7 @@ mainnet work or existing-Root layout migration is qualified. Every fresh Root al
 ## Storage 0.80 adoption
 
 Both workspaces select Wire 0.31.1 and Storage 0.80.6. Auth 0.51.1, Blob Storage 0.113.1
-and DB 0.33.0 consume leases from the same application bootstrap. The
+and DB 0.34.0 consume leases from the same application bootstrap. The
 separate Wasm Store 0.11.0 uses the same Storage release. Stable Auth
 receivers and the qualification issuer pass the IC canister version to
 the supplier when sealing and reopening their checkpoints.
@@ -271,9 +271,7 @@ incompatible budgets, missing or extra names, and out-of-prefix refusal.
 including byte-exact replies, caller rejection before decode, wrong direction
 and method, bounded requests, synchronous reply rollback and an async worker check.
 
-The installed children discovery test fills nine service slots, reopens Root, retries the ninth, discovers every principal from an empty Host journal, and refuses a tenth under a nine-child ceiling. The Root journal uses CUJG at every fleet size. The installed `storage_reopen::`
-case injects the predecessor CUJE tag into the current named cell and checks the
-journal-specific refusal, stable bytes, module hash and subnet canister count.
+The installed children discovery test fills nine service slots, reopens Root, retries the ninth, discovers every principal from an empty Host journal, and refuses a tenth under a nine-child ceiling. Root uses the CMJ1 journal and CMS1 Store delivery format at every fleet size. The installed `storage_reopen::` case injects the predecessor CUJG and CUA7 tags independently and checks each refusal, the stable bytes, module hash and subnet canister count.
 The installed sharding journey grows a fresh Root through shared and dedicated
 child allocations and checks their identities after upgrade.
 
@@ -487,23 +485,14 @@ after simulator preparation.
 ## Application-owned growth journey
 
 `make growth-test` composes the real profile worker with a one-slot manager,
-IC Storage and IC Timers. It uses the Canic deployment CLI and native profile
-approval client, then creates and installs one worker without another mutating
-operator command. It exercises authenticated application use, five interruption
-boundaries, a distinct manager executable, exact replay, network binding, expiry
-and insufficient reserve. Subnet counts independently detect duplicate creation.
-Lost creation replies remain blocked; upload/install outcomes can be reconstructed
-by observation, including callback-trap recovery without replacing the manager.
-Abandoned upload/install callbacks remain blocked across further timer
-opportunities before explicit reconciliation. All cycles are synthetic.
+IC Storage, IC Timers and a fleet Wasm Store. The fixture publishes the
+worker module and admits a Store-backed creation. Root creates and installs the worker
+without another operator command. The suite exercises five interrupted creation
+phases, serial upgrades, callback loss, exact replay, expiry and insufficient reserve.
+It verifies the original child identity, retained requests, subnet canister counts
+and private profile state across recovery. All cycles are synthetic.
 
-The test also qualifies maximum artifact/evidence codec budgets and emits a fleet
-snapshot under `target/growth/journey-N/fleet.html`. Serve the selected snapshot
-with `canic fleet view PATH --port 8788 --open`, then use **http://localhost:8788/** in
-the normal desktop browser. Ctrl-C stops the viewer; the replica has already
-closed. See the [growth guide](../docs/demos/growth.md) for the selected topology,
-limits, fresh mainnet instructions and recovery limitations. The focused lint and
-documentation checks are `make profile-clippy` and `make profile-doc`.
+See the [growth guide](../docs/demos/growth.md) for the installed fixture.
 
 ## Typed database composition
 
@@ -521,7 +510,7 @@ explicitly and supplies synchronous inspect/query/write handlers to
 `db-store` for the IC DB engine. The passive `db::inspection` contract is versioned independently as
 `method_id("canic.db.status.v1")`. The unit request returns the executable schema fingerprint
 and ordinary admission status, including the incarnation when readable. The application
-obtains both from IC DB. The witness uses IC DB and its schema macros at 0.27.7.
+obtains both from IC DB. The witness uses IC DB and its schema macros at 0.34.0. Both workspaces resolve one copy of IC DB. The db-roles integration builds a generated schema into the Wasm and checks the Wire description of a DB-owned type.
 
 ```sh
 make qualification-setup

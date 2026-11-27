@@ -153,7 +153,7 @@ impl FleetConfig {
             .iter()
             .any(|edge| {
                 self.canisters
-                    .get(edge.child())
+                    .get(&edge.child)
                     .and_then(|c| c.parent.as_deref())
                     == Some(name)
             })

@@ -199,7 +199,7 @@ fn child_completion(
     let child = fleet.resolved_child(
         dir,
         &root,
-        super::store_receipt(dir, fleet)?.as_ref(),
+        &super::store_receipt(dir, fleet)?.ok_or_else(invalid)?,
         index,
     )?;
     Ok(

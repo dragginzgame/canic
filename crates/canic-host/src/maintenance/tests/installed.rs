@@ -56,7 +56,7 @@ async fn root_maintenance_preserves_store_operation() {
                 )),
             },
             children: vec![input.expected.stored.children[0].clone()],
-            store: Some(Box::new(StoreMaintenance {
+            store: Box::new(StoreMaintenance {
                 history: Vec::new(),
                 store: UpgradeTarget {
                     canister: input.store,
@@ -64,7 +64,7 @@ async fn root_maintenance_preserves_store_operation() {
                 },
                 sources: input.expected.stored.sources.to_vec(),
                 operation: Some(operation.clone()),
-            })),
+            }),
         },
         created_at_ns: now,
         expires_at_ns: now + 3_600_000_000_000,
@@ -76,10 +76,7 @@ async fn root_maintenance_preserves_store_operation() {
     };
     let journal = directory.join("journal");
     let mut altered = plan.clone();
-    let PlanAction::MaintainRoot {
-        store: Some(store), ..
-    } = &mut altered.action
-    else {
+    let PlanAction::MaintainRoot { store, .. } = &mut altered.action else {
         unreachable!()
     };
     store.operation.as_mut().unwrap().approval.attempt.operation[0] ^= 1;
@@ -127,10 +124,14 @@ async fn root_maintenance_preserves_store_operation() {
                 },
                 canic_management_protocol::application::LIMITS
             )
-            .unwrap()
-            .root
-            .current,
-            input.expected
+            .unwrap(),
+            crate::root_custody::fixture(
+                custody::RootHistory {
+                    current: input.expected.clone(),
+                    store_history: vec![]
+                },
+                vec![None; input.expected.stored.children.len()]
+            )
         );
     }
 }

@@ -6,9 +6,7 @@ mkdir -p target/growth
 cargo test --locked -p canic-management-protocol --lib
 records=$(mktemp target/growth/clients.XXXXXX.jsonl)
 cargo build --locked -p canic-cli --message-format=json-render-diagnostics > "$records"
-cargo build --locked --manifest-path qualification/Cargo.toml -p canic-profile-client --message-format=json-render-diagnostics >> "$records"
 cli=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected CLI") end' "$records")
-client=$(jq -sr '[.[] | select(.reason == "compiler-artifact" and .target.name == "canic-profile") | .executable | select(. != null)] | unique | if length == 1 then .[0] else error("expected client") end' "$records")
 "$cli" artifact build --json --manifest qualification/Cargo.toml --package canic-profile-worker > target/growth/worker.json
 cp -- "$(jq -r .wasm target/growth/worker.json)" target/growth/worker.wasm
 for variant in v2 reject; do
@@ -26,4 +24,5 @@ for variant in manager faults maintenance; do
     "$cli" artifact build --json --manifest qualification/Cargo.toml --package canic-profile-manager "${features[@]}" > "target/growth/$variant.json"
     cp -- "$(jq -r .wasm "target/growth/$variant.json")" "target/growth/$variant.wasm"
 done
-CANIC_CLI="$cli" CANIC_PROFILE_CLIENT="$client" cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test growth -- --nocapture
+"$cli" artifact build --package ic-wasm-store --output target/growth/store.wasm --json > target/growth/store.json
+cargo test --locked --manifest-path qualification/Cargo.toml -p canic-qualification --test growth -- --nocapture

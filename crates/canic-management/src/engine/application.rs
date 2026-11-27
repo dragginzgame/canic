@@ -214,10 +214,26 @@ pub fn custody() -> application::Custody {
 /// Requires open Root storage.
 #[must_use]
 pub fn child_evidence() -> application::Custody {
-    application::Custody {
-        root: super::stored_api::root_history_complete(),
-        applications: super::service_slots().into_iter().map(lifecycle).collect(),
-    }
+    STATE.with_borrow(|state| {
+        let state = state.as_ref().expect("open engine");
+        let children = state
+            .journal
+            .0
+            .iter()
+            .filter(|(id, _)| id.service_index().is_some())
+            .map(|(&slot, journal)| application::ChildCustody {
+                slot,
+                journal: journal.custody(),
+                sources: state.artifact.0[&slot].sources().cloned(),
+                lifecycle: lifecycle(slot),
+            })
+            .collect();
+        application::Custody {
+            children,
+            store_operation: state.journal.1.clone(),
+            store_history: state.journal.2.clone(),
+        }
+    })
 }
 
 #[cfg(feature = "blob")]

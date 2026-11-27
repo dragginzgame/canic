@@ -14,8 +14,7 @@ After preparing the simulator explicitly, run from the repository root:
 make growth-test
 ```
 
-The script builds the product CLI and the private profile client from their own
-workspaces, then selects profile Wasm through `qualification/Cargo.toml`. It uses
+The script builds the CLI, the fleet Wasm Store and the profile fixtures. The manager admits an exact published release for each child creation and upgrade. It uses
 synthetic cycles. The Storage 0.78 actors passed the installed growth and child
 upgrade cases, including retained profile ownership after interrupted installs.
 

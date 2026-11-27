@@ -545,97 +545,6 @@ fn direct_approval_binds_its_named_contract() {
     assert_eq!(decoded.digest().unwrap(), id);
 }
 
-#[tokio::test]
-async fn existing_id_adoption_preserves_legacy_evidence_and_blocks_creation() {
-    let root = directory();
-    let config_path = root.join("config/canic.toml");
-    let journal = root.join("retained");
-    let wasm = root.join("app.wasm");
-    std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let mut adopted = config();
-    adopted.config.network = Network::Local {
-        url: "http://127.0.0.1:9".into(),
-        root_key: "00".repeat(133),
-        root_subnet: None,
-        routing_canister: "aaaaa-aa".into(),
-    };
-    adopted.config.journal = Some("../retained".into());
-    let slot = adopted.config.canisters.get_mut("backend").unwrap();
-    slot.id = Some("aaaaa-aa".into());
-
-    let legacy_input = PlanInput {
-        network: adopted.config.network.clone(),
-        target: Some("aaaaa-aa".into()),
-        previous_module: Some("00".repeat(32)),
-        creation_cycles: 0,
-        ..input()
-    };
-    let (id, plan) = crate::create_plan(&journal, &wasm, legacy_input).unwrap();
-    let plan_path = journal.join(&id).join("plan.json");
-    let before = std::fs::read(&plan_path).unwrap();
-    let attempt = journal.join(&id).join("install");
-    std::fs::create_dir(&attempt).unwrap();
-    std::fs::write(attempt.join("signed.json"), "PRIVATE_ATTEMPT").unwrap();
-    init_config(&config_path, &declaration(&adopted)).unwrap();
-    let loaded = load_config(&config_path)
-        .unwrap()
-        .select(None, None)
-        .unwrap();
-    assert_eq!(
-        std::fs::canonicalize(loaded.journal_path(&config_path)).unwrap(),
-        journal
-    );
-    let snapshot = crate::fleet_with_config(&journal, &["aaaaa-aa".into()], Some(&loaded))
-        .await
-        .unwrap();
-    assert_eq!(snapshot.operations.len(), 1);
-    assert_eq!(snapshot.operations[0].operation, id);
-    assert!(snapshot.operations[0].deployment.is_none());
-    assert_eq!(
-        snapshot.operations[0].effects["install"],
-        "signed_attempt_retained_outcome_unknown"
-    );
-    assert_eq!(snapshot.canisters.len(), 1);
-    assert_eq!(snapshot.canisters[0].canister, "aaaaa-aa");
-    assert!(snapshot.canisters[0].observation_error.is_some());
-    assert!(snapshot.managers.is_empty());
-    // An unreachable owner cannot establish occupancy. Duplicate selections
-    // must still result in just one observation of each permanent slot.
-    assert_eq!(
-        snapshot
-            .issues
-            .iter()
-            .filter(|issue| issue.contains("permanent service slot"))
-            .count(),
-        canic_management_protocol::children::ChildId::HISTORICAL_SERVICES.len()
-    );
-    assert!(
-        !serde_json::to_string(&snapshot)
-            .unwrap()
-            .contains("PRIVATE_ATTEMPT")
-    );
-    assert!(
-        create_configured_plan(
-            &journal,
-            &wasm,
-            PlanInput {
-                network: adopted.config.network,
-                ..input()
-            },
-            &loaded,
-            "backend"
-        )
-        .is_err()
-    );
-    assert_eq!(std::fs::read(plan_path).unwrap(), before);
-    assert_eq!(plan.digest().unwrap(), id);
-    assert_eq!(
-        std::fs::read_to_string(attempt.join("signed.json")).unwrap(),
-        "PRIVATE_ATTEMPT"
-    );
-    assert_eq!(std::fs::read_dir(&journal).unwrap().count(), 2);
-}
-
 #[test]
 fn existing_declarations_validate_identity_and_journal_selection() {
     let mut declaration = config();
@@ -763,61 +672,6 @@ async fn one_app_has_multiple_isolated_fleets_and_requires_explicit_selection() 
     assert!(demo.check_operation(&journal, &staging_id).is_err());
     assert!(demo.check_operation(&journal, &other_id).is_err());
     assert_eq!(crate::fleet(&journal).await.unwrap().operations.len(), 3);
-}
-
-#[tokio::test]
-async fn legacy_upgrades_follow_retained_named_identity_without_rewriting_evidence() {
-    let root = directory();
-    let wasm = root.join("app.wasm");
-    std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
-    let mut selected = config();
-    selected.config.network = Network::Local {
-        url: "http://127.0.0.1:9".into(),
-        root_key: "00".repeat(133),
-        root_subnet: None,
-        routing_canister: "aaaaa-aa".into(),
-    };
-    let upgrade = || PlanInput {
-        network: selected.config.network.clone(),
-        target: Some("aaaaa-aa".into()),
-        previous_module: Some("00".repeat(32)),
-        creation_cycles: 0,
-        ..input()
-    };
-    // A retained named target establishes the association; mutable config has no ID.
-    let (named, _) = plan::retain(
-        &root,
-        &wasm,
-        upgrade(),
-        Some(DeploymentName {
-            app: selected.app.clone(),
-            fleet: selected.fleet.clone(),
-            canister: "backend".into(),
-        }),
-        None,
-        crate::now().unwrap(),
-    )
-    .unwrap();
-    let (legacy, _) = crate::create_plan(&root, &wasm, upgrade()).unwrap();
-    let (unassigned, _) = crate::create_plan(&root, &wasm, input()).unwrap();
-    let snapshot = crate::fleet_with_config(&root, &[], Some(&selected))
-        .await
-        .unwrap();
-    assert_eq!(snapshot.operations.len(), 2);
-    assert!(snapshot.operations.iter().any(|op| op.operation == named));
-    assert!(snapshot.operations.iter().any(|op| op.operation == legacy));
-    assert!(
-        snapshot
-            .issues
-            .iter()
-            .any(|issue| issue.contains(&unassigned))
-    );
-    selected.check_operation(&root, &legacy).unwrap();
-    selected.check_target(&root, "aaaaa-aa").unwrap();
-    let mut other = selected.clone();
-    other.fleet = "other".into();
-    assert!(other.check_operation(&root, &legacy).is_err());
-    assert!(other.check_target(&root, "aaaaa-aa").is_err());
 }
 
 #[test]
@@ -1522,7 +1376,7 @@ creation_budget = 2000000000000
     assert_eq!(child.approval.role, "project_ledger");
     assert!(child.approval.receiver.is_none());
     assert_eq!(fleet.config.policy.top_up_children.len(), 1);
-    assert_eq!(fleet.config.policy.top_up_children[0].child(), "ledger");
+    assert_eq!(fleet.config.policy.top_up_children[0].child, "ledger");
     std::fs::remove_dir_all(dir).unwrap();
 }
 
@@ -1541,16 +1395,12 @@ top_up_children = ["project_registry"]
 "#;
     let path = directory().join("canic.toml");
     std::fs::write(&path, text).unwrap();
-    let selected = load_config(&path).unwrap().select(None, None).unwrap();
-    assert_eq!(
-        selected.config.policy.top_up_children[0].child(),
-        "project_registry"
-    );
+    let error = load_config(&path).unwrap_err().to_string();
     assert!(
-        selected
-            .config
-            .child_funding("project_registry", 400, u64::MAX)
-            .is_err()
+        error.contains("project_registry")
+            && error.contains("below_cycles")
+            && error.contains("amount_cycles"),
+        "{error}"
     );
     let bound = text.replace(
         r#"["project_registry"]"#,
@@ -1645,11 +1495,16 @@ project_registry = { id = "ryjl3-tyaaa-aaaaa-aaaba-cai" }
             r#"{ child = "project", below_cycles = "5e3B", amount_cycles = 1 }"#,
             "unsigned decimal",
         ),
-        (r#""missing""#, "unknown component"),
-        (r#""root""#, "no declared parent"),
-        (r#""project", "project""#, "duplicate component"),
         (
-            r#""project", { child = "project", below_cycles = 1, amount_cycles = 1 }"#,
+            r#"{ child="missing", below_cycles=1, amount_cycles=1 }"#,
+            "unknown component",
+        ),
+        (
+            r#"{ child="root", below_cycles=1, amount_cycles=1 }"#,
+            "no declared parent",
+        ),
+        (
+            r#"{ child="project", below_cycles=1, amount_cycles=1 }, { child = "project", below_cycles = 1, amount_cycles = 1 }"#,
             "duplicate component",
         ),
     ] {

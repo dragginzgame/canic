@@ -195,6 +195,8 @@ fn terminal_preserves_unknowns_network_identity_and_uncertain_effects() {
     let mut snapshot = empty();
     for (network, known) in [("trust-a", true), ("trust-b", false)] {
         snapshot.canisters.push(FleetCanister {
+            installation: None,
+            availability: None,
             network_id: network.into(),
             network: "same URL".into(),
             canister: "same-principal".into(),
@@ -367,6 +369,8 @@ fn roles_follow_observed_authority_without_inventing_root_or_crossing_networks()
         ("entry", "b", vec!["other-operator"]),
     ] {
         snapshot.canisters.push(FleetCanister {
+            installation: None,
+            availability: None,
             network_id: network.into(),
             network: "same URL".into(),
             canister: id.into(),
@@ -475,6 +479,8 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
     });
     for (name, id) in declarations {
         snapshot.canisters.push(FleetCanister {
+            installation: None,
+            availability: None,
             network_id: network.clone(),
             network: "ic / mainnet".into(),
             canister: id.into(),

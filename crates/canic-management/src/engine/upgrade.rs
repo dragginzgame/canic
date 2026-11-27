@@ -7,10 +7,7 @@ use canic_management_protocol::{
     Failure, Phase, Refusal,
     children::ChildId,
     digest, stored,
-    upgrade::{
-        Approval, MAX_UPGRADES, Phase as UpgradePhase, Stage as UpgradeStage,
-        Status as UpgradeStatus,
-    },
+    upgrade::{Approval, MAX_UPGRADES, Phase as UpgradePhase, Status as UpgradeStatus},
 };
 use ic_platform_protocol::{
     management::{self as mgmt, CanisterArgs, CanisterStatus, InstallMode},
@@ -174,16 +171,7 @@ fn validate_record(
     }
 }
 
-/// Admit a successor only after Ready, retaining all earlier approvals and outcomes.
-/// # Errors
-/// Refuses incomplete creation, changed authority, invalid bytes/time or inadequate reserve.
-/// # Panics
-/// Traps for noncontrollers, uninitialized storage or failed durable writes.
-pub fn stage(slot: ChildId, input: UpgradeStage) -> Result<UpgradeStatus, Refusal> {
-    stage_input(slot, Input::Inline(input))
-}
 pub(super) enum Input {
-    Inline(UpgradeStage),
     Stored(stored::Stage<Approval>),
     #[cfg(feature = "blob")]
     Application(canic_management_protocol::application::Upgrade),
@@ -191,7 +179,6 @@ pub(super) enum Input {
 impl Input {
     fn approval(&self) -> &Approval {
         match self {
-            Self::Inline(s) => &s.approval,
             Self::Stored(s) => &s.approval,
             #[cfg(feature = "blob")]
             Self::Application(s) => &s.source.source.approval,
@@ -221,7 +208,6 @@ impl Input {
                     &input.source.source.approval.module_hash,
                 )
             }
-            Self::Inline(input) => input.validate(manager, child, previous, now),
             Self::Stored(input) => {
                 input.approval.validate(manager, child, previous, now)?;
                 delivery::admit(&input.reference, &input.approval.module_hash)
@@ -240,9 +226,7 @@ pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, 
     let application = matches!(&input, Input::Application(_));
     #[cfg(not(feature = "blob"))]
     let application = false;
-    if delivery::is_stored(slot) == matches!(&input, Input::Inline(_))
-        || super::application::lifecycle(slot).is_some() != application
-    {
+    if !delivery::is_stored(slot) || super::application::lifecycle(slot).is_some() != application {
         return Err(Refusal::Binding);
     }
     let retained = observe(slot, &approval);
@@ -250,7 +234,6 @@ pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, 
         let matches = match &input {
             #[cfg(feature = "blob")]
             Input::Application(input) => super::application::upgrade_matches(slot, input),
-            Input::Inline(input) => digest(&input.wasm) == approval.module_hash,
             Input::Stored(input) => super::stored_api::upgrade_source(slot, &approval)
                 .is_some_and(|source| source.reference == input.reference),
         };
@@ -335,7 +318,6 @@ pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, 
                     activator: None,
                 });
             }
-            (Artifact::Inline(artifact), Input::Inline(input)) => artifact.1 = input.wasm,
             (Artifact::Stored(sources), Input::Stored(input)) => sources
                 .upgrades
                 .push(delivery::retained(slot, stored::STAGE_UPGRADE, &input)),
@@ -669,21 +651,6 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
         }),
     }
     Ok(())
-}
-
-/// Recover observations and resume only effects that were never issued.
-/// # Panics
-/// Traps for noncontrollers, mismatched approvals, uninitialized storage or failed durable writes.
-pub async fn reconcile(
-    slot: ChildId,
-    expected: canic_management_protocol::upgrade::Approval,
-) -> UpgradeStatus {
-    assert!(api::is_controller(&api::caller()), "controller required");
-    assert!(
-        !delivery::is_stored(slot),
-        "Store-bound reconciliation required"
-    );
-    reconcile_bound(slot, expected).await
 }
 
 pub(super) async fn reconcile_bound(slot: ChildId, expected: Approval) -> UpgradeStatus {

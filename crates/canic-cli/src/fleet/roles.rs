@@ -1,6 +1,17 @@
 use canic_host::{Fleet, FleetCanister};
 
-pub(super) fn role<'a>(snapshot: &'a Fleet, target: &FleetCanister, links: &[String]) -> &'a str {
+pub(super) fn role<'a>(
+    snapshot: &'a Fleet,
+    target: &'a FleetCanister,
+    links: &[String],
+) -> &'a str {
+    if let Some(role) = target
+        .installation
+        .as_ref()
+        .and_then(|row| row.role.as_deref())
+    {
+        return role;
+    }
     if let Some(name) = name(snapshot, &target.network_id, &target.canister)
         && let Some(role) = snapshot
             .configuration

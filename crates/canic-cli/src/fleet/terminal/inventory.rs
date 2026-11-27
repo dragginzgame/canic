@@ -165,6 +165,28 @@ pub(super) fn render(
             writeln!(output, "{line}").expect("writing to String");
         }
     }
+    for target in &canisters {
+        if let Some(availability) = &target.availability {
+            writeln!(
+                output,
+                "  {}  runtime {}",
+                escape(&target.canister),
+                serde_json::json!(availability)
+            )
+            .expect("writing to String");
+        }
+        if let Some(child) = &target.installation {
+            writeln!(
+                output,
+                "  {}  role={}  application parent={}  creation={:?}",
+                escape(&target.canister),
+                escape(child.role.as_deref().unwrap_or("unknown")),
+                escape(child.parent.as_deref().unwrap_or("unspecified")),
+                child.phase
+            )
+            .expect("writing to String");
+        }
+    }
     if !external.is_empty() {
         output.push('\n');
     }

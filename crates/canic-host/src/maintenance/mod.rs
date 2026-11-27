@@ -1,7 +1,7 @@
 //! Root maintenance checks around the existing direct installation owner.
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
 
 mod stored;
 
@@ -89,13 +89,9 @@ pub(crate) fn implicit_child_root(module: &str) -> bool {
     )
 }
 
-pub(crate) fn observations(_: &Plan, after: bool) -> &'static [(&'static str, &'static str)] {
-    if after {
-        &[("custody-after", "observe_root_custody")]
-    } else {
-        &[("custody-before", "observe_root_custody")]
-    }
-}
+pub(crate) const BEFORE: &str = "custody-before";
+pub(crate) const AFTER: &str = "custody-after";
+const OBSERVE: &str = "observe_root_custody";
 
 pub(crate) fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
     validate(plan)?;
@@ -182,18 +178,17 @@ pub(crate) fn retained(dir: &Path, plan: &Plan) -> Result<bool> {
 }
 
 fn retained_at(dir: &Path, plan: &Plan, after: bool) -> Result<bool> {
-    for (step, method) in observations(plan, after) {
-        let path = dir.join(step).join("reply.bin");
-        if !path.try_exists().map_err(supplier)? {
-            return Ok(false);
-        }
-        if !matches_plan(
-            plan,
-            method,
-            &store::read(&path, application::LIMITS.bytes)?,
-        )? {
-            return Err(invalid());
-        }
+    let step = if after { AFTER } else { BEFORE };
+    let path = dir.join(step).join("reply.bin");
+    if !path.try_exists().map_err(supplier)? {
+        return Ok(false);
+    }
+    if !matches_plan(
+        plan,
+        OBSERVE,
+        &store::read(&path, application::LIMITS.bytes)?,
+    )? {
+        return Err(invalid());
     }
     Ok(true)
 }
@@ -203,12 +198,7 @@ fn matches_plan(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
         return Err(invalid());
     }
     let actual = crate::root_custody::decode(application::CUSTODY, bytes)?;
-    let expected = stored::expected(plan)?;
-    let store = plan.maintenance_store();
-    Ok(actual.applications.iter().all(Option::is_none)
-        && actual.root.current.stored == expected
-        && actual.root.current.store_operation.as_ref() == store.and_then(|s| s.operation.as_ref())
-        && actual.root.store_history.as_slice() == store.map_or(&[][..], |s| s.history.as_slice()))
+    Ok(actual == stored::expected(plan)?)
 }
 
 pub(crate) fn require_before(dir: &Path, plan: &Plan) -> Result<()> {
@@ -244,23 +234,20 @@ pub(crate) async fn observe(
             "Root maintenance code binding changed".into(),
         ));
     }
-    if let Some(store) = plan.maintenance_store() {
-        crate::managed::stored::verify_store(client, &target.to_text(), &store.store).await?;
-    }
-    for (step, method) in observations(plan, after) {
-        let call = signed::Call {
-            canister: target,
-            effective: target,
-            method,
-            args: observation_args(plan, method)?,
-        };
-        let bytes = signed::observe(&dir.join(step), plan, &call, identity, icp, client).await?;
-        if !matches_plan(plan, method, &bytes)? {
-            return Err(Error::Blocked(
-                "Root journal differs from approved maintenance custody; retain this operation"
-                    .into(),
-            ));
-        }
+    let store = plan.maintenance_store().ok_or_else(invalid)?;
+    crate::managed::stored::verify_store(client, &target.to_text(), &store.store).await?;
+    let step = if after { AFTER } else { BEFORE };
+    let call = signed::Call {
+        canister: target,
+        effective: target,
+        method: OBSERVE,
+        args: observation_args(plan, OBSERVE)?,
+    };
+    let bytes = signed::observe(&dir.join(step), plan, &call, identity, icp, client).await?;
+    if !matches_plan(plan, OBSERVE, &bytes)? {
+        return Err(Error::Blocked(
+            "Root journal differs from approved maintenance custody; retain this operation".into(),
+        ));
     }
     for expected in expected {
         // The child's live identity, code and controller also remain fixed by this window.

@@ -1,12 +1,10 @@
 //! Full Store custody comparison on both sides of the existing Root upgrade effect.
 use super::invalid;
 use crate::{Plan, Result, managed, network::principal, supplier};
-use canic_management_protocol::{children::ChildId, stored as wire};
+use canic_management_protocol::{application, children::ChildId, stored as wire};
 
 pub(super) fn validate(plan: &Plan) -> Result<()> {
-    let Some(store) = plan.maintenance_store() else {
-        return Ok(());
-    };
+    let store = plan.maintenance_store().ok_or_else(invalid)?;
     let children = plan.maintenance().ok_or_else(invalid)?;
     let id = principal(&store.store.canister)?;
     if id.to_text() != store.store.canister
@@ -15,8 +13,7 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         || plan.target() == Some(&store.store.canister)
         || crate::unhex(&store.store.module)?.len() != 32
         || store.store.module != store.store.module.to_ascii_lowercase()
-        || (store.operation.is_none() && store.sources.iter().all(Option::is_none))
-        || store.sources.len() < children.len()
+        || store.sources.len() != children.len().max(ChildId::HISTORICAL_SERVICES.len())
         || store.sources[children.len()..].iter().any(Option::is_some)
         || store.history.len() >= canic_management_protocol::store_maintenance::MAX_UPGRADES
         || (!store.history.is_empty() && store.operation.is_none())
@@ -24,9 +21,7 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         return Err(invalid());
     }
     for (index, child) in children.iter().enumerate() {
-        let Some(sources) = &store.sources[index] else {
-            continue;
-        };
+        let sources = store.sources[index].as_ref().ok_or_else(invalid)?;
         if sources.upgrades.len() != child.upgrades.len() {
             return Err(invalid());
         }
@@ -92,32 +87,16 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         {
             return Err(invalid());
         }
-        ic_wire::encode(
-            &canic_management_protocol::custody::Root {
-                stored: expected(plan)?,
-                store_operation: Some(operation.clone()),
-            },
-            ic_wire::Encoding::Payload,
-            canic_management_protocol::custody::ROOT_LIMITS,
-        )
-        .map_err(supplier)?;
-        if !store.history.is_empty() {
-            ic_wire::encode(
-                &canic_management_protocol::custody::RootHistory {
-                    current: canic_management_protocol::custody::Root {
-                        stored: expected(plan)?,
-                        store_operation: Some(operation.clone()),
-                    },
-                    store_history: store.history.clone(),
-                },
-                ic_wire::Encoding::Payload,
-                canic_management_protocol::custody::ROOT_HISTORY_LIMITS,
-            )
-            .map_err(supplier)?;
-        }
     }
-    ic_wire::encode(&expected(plan)?, ic_wire::Encoding::Payload, wire::LIMITS)
-        .map_err(supplier)?;
+    ic_wire::encoded_len(
+        &expected(plan)?,
+        ic_wire::Encoding::Frame {
+            method: application::CUSTODY,
+            direction: ic_wire::Direction::Response,
+        },
+        application::LIMITS,
+    )
+    .map_err(supplier)?;
     Ok(())
 }
 
@@ -148,26 +127,30 @@ fn delivery<A: serde::Serialize>(
     )
 }
 
-pub(super) fn expected(plan: &Plan) -> Result<wire::Custody> {
-    let children = plan.maintenance().ok_or_else(invalid)?;
-    Ok(wire::Custody {
-        children: (0..children.len().max(ChildId::HISTORICAL_SERVICES.len()))
-            .map(|i| {
-                children.get(i).cloned().unwrap_or_else(|| {
+pub(super) fn expected(plan: &Plan) -> Result<application::Custody> {
+    let journals = plan.maintenance().ok_or_else(invalid)?;
+    let store = plan.maintenance_store().ok_or_else(invalid)?;
+    let children = store
+        .sources
+        .iter()
+        .enumerate()
+        .map(|(i, sources)| {
+            Ok(application::ChildCustody {
+                slot: ChildId::service(i).ok_or_else(invalid)?,
+                journal: journals.get(i).cloned().unwrap_or_else(|| {
                     canic_management_protocol::custody::Custody {
-                        creation: canic_management_protocol::Status::default(),
+                        creation: Default::default(),
                         upgrades: Vec::new(),
                     }
-                })
+                }),
+                sources: sources.clone(),
+                lifecycle: None,
             })
-            .collect(),
-        sources: {
-            let sources = plan
-                .maintenance_store()
-                .map_or(&[][..], |s| s.sources.as_slice());
-            (0..children.len().max(ChildId::HISTORICAL_SERVICES.len()))
-                .map(|i| sources.get(i).cloned().flatten())
-                .collect()
-        },
+        })
+        .collect::<Result<_>>()?;
+    Ok(application::Custody {
+        children,
+        store_operation: store.operation.clone(),
+        store_history: store.history.clone(),
     })
 }

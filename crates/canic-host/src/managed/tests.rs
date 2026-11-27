@@ -855,16 +855,16 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
         observation(&mixed).unwrap().method,
         "observe_child_deployments"
     );
-    let child_evidence = canic_management_protocol::application::Custody {
-        root: canic_management_protocol::custody::RootHistory {
+    let child_evidence = crate::root_custody::fixture(
+        canic_management_protocol::custody::RootHistory {
             current: canic_management_protocol::custody::Root {
                 stored: custody.clone(),
                 store_operation: None,
             },
             store_history: Vec::new(),
         },
-        applications: vec![None; custody.children.len()],
-    };
+        vec![None; custody.children.len()],
+    );
     let frame = ic_wire::encode(
         &child_evidence,
         ic_wire::Encoding::Frame {
@@ -951,15 +951,15 @@ fn assert_application_arguments(
         value,
     };
     assert_eq!(request.value.arguments.as_slice(), approved_args);
-    let mut value = application::Custody {
-        root: RootHistory {
+    let mut value = crate::root_custody::fixture(
+        RootHistory {
             current: Root {
                 stored: custody.clone(),
                 store_operation: None,
             },
             store_history: vec![],
         },
-        applications: {
+        {
             let mut slots = [
                 Some(application::Lifecycle {
                     creation: request.value.arguments.clone(),
@@ -970,8 +970,9 @@ fn assert_application_arguments(
             .into_iter();
             (0..8).map(|_| slots.next().flatten()).collect()
         },
-    };
-    value.root.current.stored.sources[0]
+    );
+    value.children[0]
+        .sources
         .as_mut()
         .unwrap()
         .creation
@@ -994,10 +995,10 @@ fn assert_application_arguments(
         stored::creation(&plan, &encode(&value)).unwrap(),
         custody.children[0].creation
     );
-    value.applications[0].as_mut().unwrap().creation =
+    value.children[0].lifecycle.as_mut().unwrap().creation =
         application::Arguments::new(named(2)).unwrap();
     assert!(stored::creation(&plan, &encode(&value)).is_err());
-    value.applications[0] = None;
+    value.children[0].lifecycle = None;
     assert!(stored::creation(&plan, &encode(&value)).is_err());
     let crate::PlanAction::CreateChild(owner) = &mut plan.action else {
         unreachable!()

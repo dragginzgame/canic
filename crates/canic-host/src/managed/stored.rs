@@ -197,34 +197,25 @@ pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
     }
 }
 
-fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
+fn custody(plan: &Plan, bytes: &[u8]) -> Result<application::Custody> {
     let source = plan
         .management()
         .map(|owner| &owner.source)
         .ok_or_else(invalid)?;
     let value = {
         let value = crate::root_custody::decode(super::Method::Observe.id(plan), bytes)?;
-        let lifecycle = value
-            .applications
-            .get(slot(plan)?.service_index().ok_or_else(invalid)?)
-            .ok_or_else(invalid)?;
-        if let Some(lifecycle) = lifecycle {
+        let child = crate::root_custody::child(&value, slot(plan)?)?;
+        if let Some(lifecycle) = &child.lifecycle {
             if plan.target().is_none() {
                 if Some(lifecycle.creation.as_slice())
                     != plan.management().and_then(|m| m.arguments.as_deref())
                 {
                     return Err(invalid());
                 }
-            } else if let Some(index) = value
-                .root
-                .current
-                .stored
-                .children
-                .get(slot(plan)?.service_index().ok_or_else(invalid)?)
-                .ok_or_else(invalid)?
-                .upgrades
-                .iter()
-                .position(|s| s.approval.as_ref() == super::upgrade::approval(plan).ok().as_ref())
+            } else if let Some(index) =
+                child.journal.upgrades.iter().position(|s| {
+                    s.approval.as_ref() == super::upgrade::approval(plan).ok().as_ref()
+                })
             {
                 let maintenance = lifecycle.upgrades.get(index).ok_or_else(invalid)?;
                 if Some(maintenance.arguments.as_slice())
@@ -236,23 +227,11 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<crate::root_custody::Snapshot> {
                 }
             }
         } else if plan.management().is_some_and(|m| m.arguments.is_some())
-            && value
-                .root
-                .current
-                .stored
-                .children
-                .get(slot(plan)?.service_index().ok_or_else(invalid)?)
-                .ok_or_else(invalid)?
-                .creation
-                != Status::default()
+            && child.journal.creation != Status::default()
         {
             return Err(invalid());
         }
-        crate::root_custody::Snapshot {
-            children: crate::root_custody::children(value.root.current.stored)?,
-            store_operation: value.root.current.store_operation,
-            store_history: value.root.store_history,
-        }
+        value
     };
     if let Some(attempt) = &source.maintenance {
         if value.store_history.len() as u64 + 1 != attempt.sequence {
@@ -315,33 +294,18 @@ fn application_upgrade(plan: &Plan) -> Result<application::Upgrade> {
 }
 
 pub(super) fn maintenance(plan: &Plan, bytes: &[u8]) -> Result<Option<application::Maintenance>> {
-    custody(plan, bytes)?;
-    let value: application::Custody = ic_wire::decode(
-        bytes,
-        ic_wire::Encoding::Frame {
-            method: super::Method::Observe.id(plan),
-            direction: ic_wire::Direction::Response,
-        },
-        application::LIMITS,
-    )
-    .map_err(supplier)?;
+    let value = custody(plan, bytes)?;
+    let child = crate::root_custody::child(&value, slot(plan)?)?;
     let expected = super::upgrade::approval(plan)?;
-    let index = value
-        .root
-        .current
-        .stored
-        .children
-        .get(slot(plan)?.service_index().ok_or_else(invalid)?)
-        .ok_or_else(invalid)?
+    let index = child
+        .journal
         .upgrades
         .iter()
         .position(|s| s.approval.as_ref() == Some(&expected));
     index
         .map(|i| {
-            value
-                .applications
-                .get(slot(plan)?.service_index().ok_or_else(invalid)?)
-                .ok_or_else(invalid)?
+            child
+                .lifecycle
                 .as_ref()
                 .and_then(|l| l.upgrades.get(i))
                 .cloned()
@@ -433,7 +397,7 @@ pub(super) fn creation_evidence(
     bytes: &[u8],
 ) -> Result<(Status, Option<wire::Delivery>)> {
     let value = custody(plan, bytes)?;
-    let child = value.child(slot(plan)?)?;
+    let child = crate::root_custody::child(&value, slot(plan)?)?;
     let status = &child.journal.creation;
     if status == &Status::default() && child.sources.is_none() {
         return Ok((status.clone(), None));
@@ -469,7 +433,7 @@ pub(super) fn upgrade_evidence(
     bytes: &[u8],
 ) -> Result<(upgrade::Status, Option<wire::Delivery>)> {
     let value = custody(plan, bytes)?;
-    let child = value.child(slot(plan)?)?;
+    let child = crate::root_custody::child(&value, slot(plan)?)?;
     let journal = &child.journal;
     let expected = super::upgrade::approval(plan)?;
     let Some(position) = journal

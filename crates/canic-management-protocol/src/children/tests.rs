@@ -1,5 +1,5 @@
 //! Numeric identities retain the deployed enum's exact encoding and rejection boundary.
-use super::{ChildId, Request, STAGE};
+use super::{ChildId, Request};
 use serde::{Deserialize, Serialize};
 
 // Frozen public representation before numeric identities; includes its original type name.
@@ -32,7 +32,7 @@ fn numeric_identities_preserve_deployed_wire_and_request_bytes() {
             current
         );
         let encoding = ic_wire::Encoding::Frame {
-            method: STAGE,
+            method: crate::application::STAGE_CHILD_CREATION,
             direction: ic_wire::Direction::Request,
         };
         let old_request = OldRequest {

@@ -574,6 +574,9 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             Ok(serde_json::json!({"viewer": "stopped"}))
         }
         FleetCommand::Show {
+            canister,
+            wasm,
+            identity,
             color,
             details,
             html,
@@ -586,26 +589,31 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             watch,
             scope,
         } => {
-            let (_, configuration, state_dir) = scope.resolve()?;
-            let snapshot = fleet::collect(
-                &state_dir,
-                manager,
-                wallet.as_deref(),
-                configuration.as_ref(),
-            )
-            .await?;
-            if *watch {
-                fleet::publish(&snapshot, html.as_deref(), false, false, *port, link)?;
-                fleet::watch(
+            let (config_path, configuration, state_dir) = scope.resolve()?;
+            let collect = || {
+                fleet::collect(
                     &state_dir,
                     manager,
+                    identity.as_deref(),
                     wallet.as_deref(),
-                    link,
-                    &snapshot,
-                    *port,
-                    *open,
+                    configuration.as_ref(),
                 )
-                .await?;
+            };
+            let snapshot = collect().await?;
+            if let Some(id) = canister {
+                return fleet::inspect(
+                    &snapshot,
+                    &config_path,
+                    id,
+                    identity.as_deref(),
+                    wasm.as_deref(),
+                    cli.json,
+                )
+                .await;
+            }
+            if *watch {
+                fleet::publish(&snapshot, html.as_deref(), false, false, *port, link)?;
+                fleet::watch(collect, link, &snapshot, *port, *open).await?;
                 return Ok(Output::Json(serde_json::json!({"viewer":"stopped"})));
             }
             fleet::publish(&snapshot, html.as_deref(), *open, *serve, *port, link)?;

@@ -136,11 +136,22 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
     assert_eq!(status(pic, fresh).await.phase, Phase::Empty);
     // Give each damaged image its own installed owner and install-instruction budget.
     let mut old = stable.clone();
-    let offset = old.windows(4).position(|tag| tag == b"CUJG").unwrap();
-    old[offset..offset + 4].copy_from_slice(b"CUJF");
+    let offset = old.windows(4).position(|tag| tag == b"CMJ1").unwrap();
+    old[offset..offset + 4].copy_from_slice(b"CUJG");
+    let mut old_artifact = stable.clone();
+    let offset = old_artifact
+        .windows(4)
+        .position(|tag| tag == b"CMS1")
+        .unwrap();
+    old_artifact[offset..offset + 4].copy_from_slice(b"CUA7");
     let mut corrupt = stable;
     corrupt[0] ^= 0xff;
-    for (damaged, old_journal) in [(old, true), (corrupt, false), (vec![], false)] {
+    for (damaged, expected) in [
+        (old, Some("unsupported Root journal format")),
+        (old_artifact, Some("unsupported Root artifact format")),
+        (corrupt, None),
+        (vec![], None),
+    ] {
         let target = pic.create_canister().await;
         pic.install_canister(target, current.clone(), vec![], None)
             .await;
@@ -163,13 +174,8 @@ async fn old_and_invalid_backings_refuse_without_initialization() {
             ),
             "{refusal:?}"
         );
-        if old_journal {
-            assert!(
-                refusal
-                    .reject_message
-                    .contains("unsupported Root journal format"),
-                "{refusal:?}"
-            );
+        if let Some(message) = expected {
+            assert!(refusal.reject_message.contains(message), "{refusal:?}");
         }
         pic.advance_time(Duration::from_secs(11)).await;
         settle(pic).await;
@@ -232,10 +238,15 @@ pub(super) async fn historical_stage(
             ic_wire::encode(
                 input,
                 ic_wire::Encoding::Frame {
-                    method: STAGE,
+                    method: 20,
                     direction: ic_wire::Direction::Request,
                 },
-                STAGE_LIMITS,
+                ic_wire::Limits {
+                    bytes: 528_384,
+                    allocation: 4_788_224,
+                    nodes: 1024,
+                    depth: 12,
+                },
             )
             .unwrap(),
         )
@@ -244,7 +255,7 @@ pub(super) async fn historical_stage(
     ic_wire::decode(
         &reply,
         ic_wire::Encoding::Frame {
-            method: STAGE,
+            method: 20,
             direction: ic_wire::Direction::Response,
         },
         LIMITS,

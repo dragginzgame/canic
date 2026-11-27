@@ -825,7 +825,7 @@ fn validate_allocation(
     let (sources, installed_args) = match &state.artifact.0[&slot] {
         Artifact::Stored(sources) => (sources, &[][..]),
         Artifact::Application(sources, app) => (sources, app.creation.as_slice()),
-        Artifact::Inline(_) => panic!("placement requires a Store source"),
+        Artifact::Empty => panic!("placement requires a Store source"),
     };
     assert_eq!(
         installed_args,

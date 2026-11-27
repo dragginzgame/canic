@@ -111,28 +111,7 @@ fn fixture() -> (Vec<u8>, Plan, Call<'static>) {
 async fn maintenance_observation_cannot_sign_another_root_or_effect() {
     let (_, mut plan, mut call) = fixture();
     plan.version = 1;
-    plan.action = crate::PlanAction::MaintainRoot {
-        store: None,
-        target: crate::UpgradeTarget {
-            canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
-            module: "11".repeat(32),
-        },
-        children: vec![canic_management_protocol::custody::Custody {
-            creation: canic_management_protocol::Status {
-                approval: Some(canic_management_protocol::Approval {
-                    manager: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
-                    module_hash: [1; 32],
-                    creation_cycles: canic_management_protocol::CREATION_CYCLES,
-                    execute_at_ns: 1,
-                    expires_at_ns: 2,
-                }),
-                worker: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
-                phase: canic_management_protocol::Phase::Ready,
-                ..Default::default()
-            },
-            upgrades: vec![],
-        }],
-    };
+    plan.action = crate::maintenance::tests::action();
     let client = plan.network.client().unwrap();
     let dir = crate::tests::directory();
     for case in 0..4 {

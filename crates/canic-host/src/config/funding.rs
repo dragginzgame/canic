@@ -1,42 +1,27 @@
 //! Fleet top-up declarations normalize human-authored amounts before planning.
 use serde::{Deserialize, Serialize};
 
-/// A declared funding edge. Historical name-only entries authorize no automatic debit.
+/// Fixed replenishment rule for one direct child.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(untagged, try_from = "Input")]
-pub enum ChildTopUp {
-    /// Eligibility retained from an existing fleet without a replenishment rule.
-    Eligible(String),
-    /// Send the fixed amount when the child's balance falls strictly below the threshold.
-    Rule {
-        /// Direct child component in the fleet.
-        child: String,
-        /// Trigger threshold in cycles.
-        below_cycles: u64,
-        /// Fixed transfer in cycles.
-        amount_cycles: u64,
-    },
-}
-
-impl ChildTopUp {
-    /// Component receiving funds from its declared parent.
-    #[must_use]
-    pub fn child(&self) -> &str {
-        match self {
-            Self::Eligible(child) | Self::Rule { child, .. } => child,
-        }
-    }
+#[serde(try_from = "Input")]
+pub struct ChildTopUp {
+    /// Direct child component in the fleet.
+    pub child: String,
+    /// Trigger threshold in cycles.
+    pub below_cycles: u64,
+    /// Fixed transfer in cycles.
+    pub amount_cycles: u64,
 }
 
 #[derive(Deserialize)]
-#[serde(untagged, deny_unknown_fields)]
-enum Input {
-    Eligible(String),
-    Rule {
-        child: String,
-        below_cycles: Amount,
-        amount_cycles: Amount,
-    },
+#[serde(
+    deny_unknown_fields,
+    expecting = "a top_up_children rule with child, below_cycles and amount_cycles"
+)]
+struct Input {
+    child: String,
+    below_cycles: Amount,
+    amount_cycles: Amount,
 }
 
 #[derive(Deserialize)]
@@ -50,18 +35,11 @@ impl TryFrom<Input> for ChildTopUp {
     type Error = String;
 
     fn try_from(input: Input) -> Result<Self, Self::Error> {
-        match input {
-            Input::Eligible(child) => Ok(Self::Eligible(child)),
-            Input::Rule {
-                child,
-                below_cycles,
-                amount_cycles,
-            } => Ok(Self::Rule {
-                below_cycles: below_cycles.cycles(&child, "below_cycles")?,
-                amount_cycles: amount_cycles.cycles(&child, "amount_cycles")?,
-                child,
-            }),
-        }
+        Ok(Self {
+            below_cycles: input.below_cycles.cycles(&input.child, "below_cycles")?,
+            amount_cycles: input.amount_cycles.cycles(&input.child, "amount_cycles")?,
+            child: input.child,
+        })
     }
 }
 

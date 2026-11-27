@@ -94,21 +94,15 @@ pub(crate) fn canisters(
             .top_up_children
             .iter()
             .map(|rule| {
-                let child = rule.child();
+                let child = rule.child.as_str();
                 let parent = canisters[child]
                     .parent
                     .as_deref()
                     .expect("validated direct child");
-                match rule {
-                    canic_host::ChildTopUp::Eligible(_) => format!("{parent} → {child}"),
-                    canic_host::ChildTopUp::Rule {
-                        below_cycles,
-                        amount_cycles,
-                        ..
-                    } => format!(
-                        "{parent} → {child} (below {below_cycles} cycles, add {amount_cycles})"
-                    ),
-                }
+                format!(
+                    "{parent} → {child} (below {} cycles, add {})",
+                    rule.below_cycles, rule.amount_cycles
+                )
             })
             .collect();
         output.push_str(&format!(

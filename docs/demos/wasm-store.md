@@ -33,7 +33,7 @@ exact signed attempts under the existing journal lock. New Root attempts use Sto
 `observe_preservation` (method 117): explicit active/removed entries ordered by name, active
 before removed, then version. The retained cursor includes that flag, and a
 separate digest domain commits to the entry kind. Pre-cut Roots retain their original scan contracts, digests and refusals.
-Deploy the 0.8 Store with a fresh Root. Existing pairs finish maintenance on their original executables. Fresh Roots use CUJG for the entire fleet. Old executables refuse the new journal format.
+Deploy the 0.8 Store with a fresh Root. Existing pairs finish maintenance on their original executables. Fresh Roots use CMJ1 journals and CMS1 Store delivery records for the entire fleet. Old executables refuse the new journal format.
 
 The historical 0.2.3 rollout upgraded Store under the old Root before
 upgrading Root. New attempts require the versioned supplier endpoint; no probing
@@ -299,7 +299,7 @@ control. Root retains each immutable approval and stop-request commitment outsid
 Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CUJG journal preserves current and completed attempts across supported Root
+The CMJ1 journal preserves current and completed attempts across supported Root
 upgrades, within the existing 16 KiB ceiling. A pre-cut Root keeps its original
 executable and evidence. Existing complete child-custody
 observations refuse any retained Store maintenance, including completion,
@@ -546,14 +546,13 @@ A lost pin reply is reconstructed by replicated pin observation. Lost cache
 completion is reconstructed from Store's actual management cache. Root maintenance
 preserves both the existing journals and all Store references. Old complete-custody
 and reconciliation methods refuse Store-backed operations rather than omit the
-supplier binding. Inline and Store-backed children can coexist; an existing
-child cannot switch artifact backends through an upgrade request.
+supplier binding. Every managed child uses a published Store release.
 
 The installed fixtures use actual Root calls for pin acquisition, autonomous
 creation and installation, serial upgrades and callback-loss recovery. Executables
 larger than the old inline limit are installed with Root's own chunk cache empty.
-Other cases cover unpublished releases, expired authority, mixed inline/Store
-custody and historical replay. The separate Store fixture clears its cache and
+Other cases cover unpublished releases, expired authority, mismatched Store custody
+and replay of retained approvals. The separate Store fixture clears its cache and
 rebuilds it after Store maintenance.
 
 The first Root path deliberately remains blocked if an uncertain cache preparation
@@ -579,8 +578,7 @@ a pin backwards, remove a retained deadline or replace it with a different one;
 conflicting journals refuse status and further operation processing. Admission-only
 replies contain no delivery evidence and display unknown until it is observed,
 even when a release is approved.
-Store-backed child JSON includes `delivery` (or `null`); inline children omit it.
-The effect table distinguishes `prepare cache` from inline `upload`. Neither a
+Child JSON includes `delivery` (or `null` until observed). The effect table reports cache preparation. Neither a
 retained pin nor a past preparation establishes current cache contents. Status
 does not call Root or Store, sign requests or grant a new repair allowance.
 
@@ -641,8 +639,7 @@ canic fleet apply UPGRADE_OPERATION --app starter --fleet mainnet --identity can
 
 The final command is the greeting demo's read-only query. Root obtains an exact
 Store pin, prepares/reconstructs the derived management cache and performs the
-upgrade through its existing effect owner. An inline child cannot switch to Store
-custody through this flag. A retained whole-fleet creation approval lets named
+upgrade through its existing effect owner. A retained whole-fleet creation approval lets named
 planning use the same bounded serial history, Root/Store maintenance bindings and
 completion checks as whole-fleet convergence. Standalone named deployments without
 that fleet history retain their first-upgrade limit. No live mainnet run or latency

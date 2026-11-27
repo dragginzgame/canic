@@ -20,7 +20,7 @@ use crate::{
     },
 };
 use canic_management_protocol::{
-    Approval, CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, Stage, Status,
+    Approval, CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, Status,
     children::{self, ChildId},
     digest, stored,
 };
@@ -98,6 +98,19 @@ pub fn bootstrap(policy: canic_management_protocol::stored::RootBootstrap) {
     });
 }
 
+impl crate::storage::Journal {
+    fn custody(&self) -> canic_management_protocol::custody::Custody {
+        let mut upgrades = self.2.clone();
+        if self.1.approval.is_some() {
+            upgrades.push(self.1.clone());
+        }
+        canic_management_protocol::custody::Custody {
+            creation: self.0.clone(),
+            upgrades,
+        }
+    }
+}
+
 fn journals() -> children::Custody {
     STATE.with_borrow(|state| {
         let journals = &state.as_ref().expect("open engine").journal.0;
@@ -105,14 +118,7 @@ fn journals() -> children::Custody {
             .into_iter()
             .map(|slot| {
                 let journal = &journals[&slot];
-                let mut upgrades = journal.2.clone();
-                if journal.1.approval.is_some() {
-                    upgrades.push(journal.1.clone());
-                }
-                canic_management_protocol::custody::Custody {
-                    creation: journal.0.clone(),
-                    upgrades,
-                }
+                journal.custody()
             })
             .collect()
     })
@@ -177,13 +183,13 @@ impl State {
 
     fn set_journal(&mut self, journal: Journals) {
         let bytes = journal.to_bytes().expect("encode management journal");
-        self.journal_cell.set(bytes.into_owned());
+        self.journal_cell.set(bytes);
         self.journal = journal;
     }
 
     fn set_artifact(&mut self, artifact: Artifacts) {
         let bytes = artifact.to_bytes().expect("encode management artifacts");
-        self.artifact_cell.set(bytes.into_owned());
+        self.artifact_cell.set(bytes);
         self.artifact = artifact;
     }
 }
@@ -215,24 +221,14 @@ pub fn open(fresh: bool, readiness: Readiness) {
         &runtime,
         JOURNAL_KEY,
         JOURNAL_BYTES,
-        fresh.then(|| {
-            Journals::default()
-                .to_bytes()
-                .expect("journal")
-                .into_owned()
-        }),
+        fresh.then(|| Journals::default().to_bytes().expect("journal")),
     );
     let journal = Journals::from_bytes(journal_cell.get()).unwrap_or_else(|error| api::trap(error));
     let artifact_cell = canic::storage::cell(
         &runtime,
         ARTIFACT_KEY,
         ARTIFACT_BYTES,
-        fresh.then(|| {
-            Artifacts::default()
-                .to_bytes()
-                .expect("artifact")
-                .into_owned()
-        }),
+        fresh.then(|| Artifacts::default().to_bytes().expect("artifact")),
     );
     let backup_cell = canic::storage::cell(
         &runtime,
@@ -270,12 +266,12 @@ pub fn open(fresh: bool, readiness: Readiness) {
         matches!(auth_history.get().as_slice(), [0] | [1]),
         "invalid grant history"
     );
-    let mut state = State {
+    let state = State {
         #[cfg(feature = "auth")]
         auth_history,
         journal,
-        artifact: Artifacts::from_bytes(artifact_cell.get().as_slice().into())
-            .expect("artifact custody"),
+        artifact: Artifacts::from_bytes(artifact_cell.get())
+            .unwrap_or_else(|error| api::trap(error)),
         #[cfg(feature = "role-issuer")]
         role_key: role_issuer::open(&runtime, fresh),
         journal_cell,
@@ -323,8 +319,6 @@ pub fn open(fresh: bool, readiness: Readiness) {
             );
         }
     }
-    // Normalize admitted artifact payloads only after validating complete custody.
-    state.set_artifact(state.artifact.clone());
     STATE.with_borrow_mut(|slot| *slot = Some(state));
     canic::lifecycle::initialize_diagnostics();
     canic::lifecycle::initialize_timers().expect("one timer runtime");
@@ -547,32 +541,6 @@ pub fn status(slot: ChildId) -> Status {
     value
 }
 
-/// Retain one exact controller-approved artifact before scheduling effects.
-/// # Errors
-/// Refuses changed authority, invalid artifact/binding/time or inadequate reserve.
-/// # Panics
-/// Traps for noncontrollers, uninitialized storage or failed durable writes.
-pub fn stage(slot: ChildId, input: Stage) -> Result<Status, Refusal> {
-    assert!(api::is_controller(&api::caller()), "controller required");
-    if store_maintenance::active() || delivery::is_stored(slot) {
-        return Err(Refusal::Occupied);
-    }
-    if let Some(previous) = snapshot(slot).approval {
-        return if previous == input.approval && digest(&input.wasm) == previous.module_hash {
-            Ok(status(slot))
-        } else {
-            Err(Refusal::Occupied)
-        };
-    }
-    input.validate(&api::canister_self().to_text(), api::time())?;
-    admit(
-        Origin::Permanent,
-        slot,
-        input.approval,
-        Artifact::Inline(crate::storage::Inline(input.wasm, vec![])),
-    )
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Origin {
     Permanent,
@@ -634,7 +602,9 @@ fn admit(
     #[cfg(feature = "sharding")]
     let generation = artifact
         .sources()
-        .map_or(approval.module_hash, |s| s.creation.operation);
+        .ok_or(Refusal::Artifact)?
+        .creation
+        .operation;
     let liquid = ic_platform_runtime::raw::liquid_cycle_balance();
     #[cfg(feature = "sharding")]
     let liquid = match origin {
@@ -712,14 +682,10 @@ pub(crate) fn reply_fault(method: u64) -> bool {
         ),
         (
             Some(9),
-            canic_management_protocol::STAGE
-                | canic_management_protocol::children::STAGE
-                | canic_management_protocol::application::STAGE_CHILD_CREATION
+            canic_management_protocol::application::STAGE_CHILD_CREATION
         ) | (
             Some(10),
-            canic_management_protocol::RECONCILE
-                | canic_management_protocol::children::RECONCILE
-                | canic_management_protocol::application::RECONCILE_CHILD_CREATION
+            canic_management_protocol::application::RECONCILE_CHILD_CREATION
         ) | (Some(12), canic_management_protocol::publication::EXECUTE)
             | (
                 Some(12),
@@ -1065,18 +1031,6 @@ async fn observation(slot: ChildId) -> Result<(), Failure> {
         }
     }
     Ok(())
-}
-
-/// Reconstruct observable outcomes without reissuing uncertain effects.
-/// # Panics
-/// Traps for noncontrollers, mismatched approvals, uninitialized storage or failed durable writes.
-pub async fn reconcile(slot: ChildId, expected: canic_management_protocol::Approval) -> Status {
-    assert!(api::is_controller(&api::caller()), "controller required");
-    assert!(
-        !delivery::is_stored(slot),
-        "Store-bound reconciliation required"
-    );
-    reconcile_bound(slot, expected).await
 }
 
 async fn reconcile_bound(slot: ChildId, expected: Approval) -> Status {

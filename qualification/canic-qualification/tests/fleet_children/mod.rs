@@ -515,7 +515,7 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     let blocked_id = blocked["operation"].as_str().unwrap();
     let wasm = std::fs::read(artifacts.join("app.wasm")).unwrap();
     let now = owner.client().get_time().await.as_nanos_since_unix_epoch();
-    let change = canic_management_protocol::upgrade::Stage {
+    let change = Stage {
         approval: canic_management_protocol::upgrade::Approval {
             manager: root.to_text(),
             child: worker.into(),

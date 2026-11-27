@@ -70,20 +70,19 @@ pub(crate) async fn reconcile(
         ));
     }
     // Only replicated retained evidence establishes admission. Public queries do not.
-    let (creation, upgrading) = match plan.action {
-        crate::PlanAction::CreateChild(_) => (super::evidence(dir, plan)?, None),
-        crate::PlanAction::UpgradeChild { .. } => (None, upgrade::evidence(dir, plan)?),
-        _ => return Err(Error::Invalid("expected Root-owned child recovery".into())),
-    };
-    if creation.is_none() && upgrading.is_none() {
-        return Err(Error::Blocked("admission remains unknown; apply this original operation to retain a replicated observation first".into()));
+    enum Evidence {
+        Creation(Status),
+        Upgrade(canic_management_protocol::upgrade::Status),
     }
-    let ready = creation
-        .as_ref()
-        .is_some_and(|s| s.phase == canic_management_protocol::Phase::Ready)
-        || upgrading
-            .as_ref()
-            .is_some_and(|s| s.phase == canic_management_protocol::upgrade::Phase::Ready);
+    let evidence = match plan.action {
+        crate::PlanAction::CreateChild(_) => super::evidence(dir, plan)?.map(Evidence::Creation),
+        crate::PlanAction::UpgradeChild { .. } => upgrade::evidence(dir, plan)?.map(Evidence::Upgrade),
+        _ => return Err(Error::Invalid("expected Root-owned child recovery".into())),
+    }.ok_or_else(|| Error::Blocked("admission remains unknown; apply this original operation to retain a replicated observation first".into()))?;
+    let ready = match &evidence {
+        Evidence::Creation(s) => s.phase == canic_management_protocol::Phase::Ready,
+        Evidence::Upgrade(s) => s.phase == canic_management_protocol::upgrade::Phase::Ready,
+    };
     if !ready {
         super::stored::verify(plan, client).await?;
         operation::controllers(client, call.canister, &plan.controller).await?;
@@ -96,28 +95,31 @@ pub(crate) async fn reconcile(
         }
         let path = attempt(dir)?;
         let bytes = signed::reconcile(&path, plan, identity, icp, client).await?;
-        if let Some(previous) = creation.as_ref() {
-            let current: Status = ic_wire::decode(
-                &bytes,
-                ic_wire::Encoding::Frame {
-                    method: Method::Reconcile.id(plan),
-                    direction: ic_wire::Direction::Response,
-                },
-                LIMITS,
-            )
-            .map_err(supplier)?;
-            super::validate(plan, Some(previous), &current)?;
-        } else {
-            let current: canic_management_protocol::upgrade::Status = ic_wire::decode(
-                &bytes,
-                ic_wire::Encoding::Frame {
-                    method: Method::ReconcileUpgrade.id(plan),
-                    direction: ic_wire::Direction::Response,
-                },
-                LIMITS,
-            )
-            .map_err(supplier)?;
-            upgrade::validate(plan, upgrading.as_ref(), &current)?;
+        match &evidence {
+            Evidence::Creation(previous) => {
+                let current: Status = ic_wire::decode(
+                    &bytes,
+                    ic_wire::Encoding::Frame {
+                        method: Method::Reconcile.id(plan),
+                        direction: ic_wire::Direction::Response,
+                    },
+                    LIMITS,
+                )
+                .map_err(supplier)?;
+                super::validate(plan, Some(previous), &current)?;
+            }
+            Evidence::Upgrade(previous) => {
+                let current: canic_management_protocol::upgrade::Status = ic_wire::decode(
+                    &bytes,
+                    ic_wire::Encoding::Frame {
+                        method: Method::ReconcileUpgrade.id(plan),
+                        direction: ic_wire::Direction::Response,
+                    },
+                    LIMITS,
+                )
+                .map_err(supplier)?;
+                upgrade::validate(plan, Some(previous), &current)?;
+            }
         }
     }
     // Keep one chronological stream of authenticated progress. Existing apply

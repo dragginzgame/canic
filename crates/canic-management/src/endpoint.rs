@@ -37,9 +37,7 @@ fn placement_admits(private: bool, method: u64) -> bool {
     match method {
         children::READ_STATUS | store_maintenance::STATUS => true,
         children::INJECT => private && cfg!(feature = "fault-injection"),
-        children::STAGE | application::STAGE_CHILD_CREATION | children::RECONCILE => {
-            private && crate::sharding::has_capacity()
-        }
+        application::STAGE_CHILD_CREATION => private && crate::sharding::has_capacity(),
         children::OBSERVE_STATUS
         | store_maintenance::READ_ATTEMPT
         | publication::EXECUTE
@@ -77,9 +75,6 @@ pub const fn declared_response_limits(method: u64) -> wire::Limits {
             | protocol::application::ACTIVATE
     ) {
         return protocol::application::LIMITS;
-    }
-    if method == protocol::custody::ROOT_HISTORY {
-        return protocol::custody::ROOT_HISTORY_LIMITS;
     }
     if matches!(
         method,

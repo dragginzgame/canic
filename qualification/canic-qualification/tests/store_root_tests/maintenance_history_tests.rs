@@ -6,7 +6,7 @@ use super::{
 use canic_management_protocol::{Refusal, custody, publication, store_maintenance as wire};
 
 async fn history(root: &Client<'_>) -> custody::RootHistory {
-    super::root_custody(root).await.root
+    super::project(super::root_custody(root).await)
 }
 
 async fn stage(root: &Client<'_>, approval: &wire::Approval) -> Result<wire::Status, Refusal> {

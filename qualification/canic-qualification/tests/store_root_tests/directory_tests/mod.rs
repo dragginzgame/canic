@@ -169,6 +169,7 @@ async fn snapshot_readers(root: &Client<'_>, child: CanisterId) {
 
 mod capacity;
 mod funding;
+mod inspection;
 mod peer;
 mod retirement;
 mod role_proof;
@@ -280,7 +281,18 @@ async fn installed_publication(scenario: Scenario) {
         _ => None,
     };
     let module = "root.wasm";
-    let (mut server, instance) = support::instance(&canic_qualification::server_directory()).await;
+    let server_dir = canic_qualification::server_directory();
+    let (mut server, mut instance) = if matches!(scenario, Scenario::ProjectLedgers) {
+        support::instance_with(
+            &server_dir,
+            ic_testkit::pocket_ic::PocketIcBuilder::new()
+                .with_nns_subnet()
+                .with_application_subnet(),
+        )
+        .await
+    } else {
+        support::instance(&server_dir).await
+    };
     let pic = instance.client();
     let (root, supplier) =
         readiness_tests::fixture_with_root(pic, std::fs::read(artifacts().join(module)).unwrap())
@@ -619,6 +631,9 @@ async fn installed_publication(scenario: Scenario) {
             stage(ChildId::HISTORICAL_SERVICES[2], duplicate.encode().unwrap()).await,
             Err(management::Refusal::Binding)
         );
+        let (root_id, operator, store_id) = (root.id, root.operator, supplier.id);
+        inspection::second_terminal(instance.client_mut(), root_id, operator, store_id, parent)
+            .await;
         assert_eq!(
             instance.close(Duration::from_secs(10)).await,
             ic_testkit::server::Deletion::Attempted

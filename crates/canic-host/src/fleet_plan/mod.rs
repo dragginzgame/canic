@@ -116,7 +116,7 @@ pub struct FleetPlan {
     pub store: FleetStore,
 }
 
-const CONTRACT: &str = "canic:fleet-plan.v1";
+const CONTRACT: &str = "canic:store-fleet-plan.v1";
 const CHILD_WINDOW_NS: u64 = 600_000_000_000;
 
 impl FleetPlan {
@@ -255,12 +255,7 @@ impl FleetPlan {
             .is_some_and(|root| root.app == name.app && root.fleet == name.fleet)
     }
 
-    fn child_plan(
-        &self,
-        receipt: &Receipt,
-        store: Option<&Receipt>,
-        slot: ChildId,
-    ) -> Result<Plan> {
+    fn child_plan(&self, receipt: &Receipt, store: &Receipt, slot: ChildId) -> Result<Plan> {
         let child = self.child(slot)?;
         self.verify_root_receipt(receipt)?;
         let plan = Plan {
@@ -290,7 +285,7 @@ impl FleetPlan {
         &self,
         dir: &Path,
         receipt: &Receipt,
-        store: Option<&Receipt>,
+        store: &Receipt,
         slot: ChildId,
     ) -> Result<Plan> {
         let mut plan = self.child_plan(receipt, store, slot)?;
@@ -380,8 +375,12 @@ pub(crate) fn load(dir: &Path, id: &str) -> Result<FleetPlan> {
         }
         if path.join("plan.json").try_exists().map_err(supplier)? {
             let receipt = root_receipt(dir, &value)?.ok_or_else(invalid)?;
-            let expected =
-                value.resolved_child(dir, &receipt, store_receipt(dir, &value)?.as_ref(), index)?;
+            let expected = value.resolved_child(
+                dir,
+                &receipt,
+                &store_receipt(dir, &value)?.ok_or_else(invalid)?,
+                index,
+            )?;
             if plan::load(&path, &expected.digest()?)?.0 != expected {
                 return Err(invalid());
             }
@@ -894,7 +893,7 @@ pub(crate) async fn execute(
     }
     let mut outcomes = Vec::new();
     for (index, definition) in value.children() {
-        let child = value.resolved_child(dir, &root, Some(&store), index)?;
+        let child = value.resolved_child(dir, &root, &store, index)?;
         let outcome = run(&dir.join(record::child_leaf(index)), &child, MISSING_CHILD).await?;
         outcomes.push(crate::operation::ChildOutcome {
             name: definition.deployment.canister.clone(),
@@ -924,7 +923,12 @@ pub(crate) fn status(dir: &Path, id: &str) -> Result<crate::FleetStatus> {
             Some(operation::status_at(
                 &path,
                 &value
-                    .resolved_child(dir, &receipt, store_receipt(dir, &value)?.as_ref(), index)?
+                    .resolved_child(
+                        dir,
+                        &receipt,
+                        &store_receipt(dir, &value)?.ok_or_else(invalid)?,
+                        index,
+                    )?
                     .digest()?,
             )?)
         } else {
@@ -975,7 +979,12 @@ pub(crate) fn inventory(
             records.push(crate::fleet::local_operation_at(
                 &path,
                 &value
-                    .resolved_child(dir, &receipt, store_receipt(dir, &value)?.as_ref(), index)?
+                    .resolved_child(
+                        dir,
+                        &receipt,
+                        &store_receipt(dir, &value)?.ok_or_else(invalid)?,
+                        index,
+                    )?
                     .digest()?,
                 now,
             )?);

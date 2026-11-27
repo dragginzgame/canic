@@ -19,21 +19,15 @@ use sha2::{Digest, Sha256};
 
 /// One bounded publication envelope, including a transient Store chunk.
 pub const PUBLICATION_LIMITS: ic_wire::Limits = publication::REQUEST_LIMITS;
-/// Infrastructure replacement bytes, separate from inline worker staging.
+/// Bounded Store executable replacement.
 pub const STORE_INSTALL_LIMITS: ic_wire::Limits = store_maintenance::INSTALL_LIMITS;
-/// Store metadata request budget, independent of inline Wasm envelopes.
+/// Store metadata request budget.
 pub const STORED_LIMITS: ic_wire::Limits = stored::LIMITS;
 
-/// Admit one immutable approval with its artifact bytes.
-pub const STAGE: u64 = 20;
 /// Read a small evidence projection without artifact bytes.
 pub const STATUS: u64 = 21;
-/// Reconstruct outcomes for the exact retained `Approval`; legacy unbound ID 22 is retired.
-pub const RECONCILE: u64 = 27;
 /// Test-build-only fault endpoint; production managers do not export it.
 pub const INJECT: u64 = 23;
-/// Maximum worker artifact (uncompressed).
-pub const MAX_WASM: usize = 524_288;
 /// Fixed one-worker attachment ceiling.
 pub const CREATION_CYCLES: u64 = 1_000_000_000_000;
 /// Minimum liquid reserve retained alongside the worker attachment.
@@ -44,14 +38,6 @@ pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     nodes: 1024,
     depth: 12,
     bytes: 4096,
-};
-/// Large staging envelope; observations use the separate small evidence policy.
-pub const STAGE_LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: MAX_WASM + 4096,
-    // Wire charges eight allocation bytes per blob byte, plus the frame ceiling.
-    allocation: MAX_WASM * 8 + MAX_WASM + 4096 + 65_536,
-    nodes: 1024,
-    depth: 12,
 };
 
 /// Exact immutable controller-approved work. A slot cannot be reset or reused.
@@ -67,16 +53,6 @@ pub struct Approval {
     pub execute_at_ns: u64,
     /// Last time a new effect may be issued, at most ten minutes after dispatch.
     pub expires_at_ns: u64,
-}
-
-/// Full staging payload; the manager keeps bytes before scheduling work.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Stage {
-    /// Exact one-slot authority.
-    pub approval: Approval,
-    /// Raw Wasm retained at the effect owner.
-    #[serde(with = "serde_bytes")]
-    pub wasm: Vec<u8>,
 }
 
 /// Committed phase. Issued states never dispatch the same effect again.
@@ -166,25 +142,6 @@ pub enum Refusal {
 #[must_use]
 pub fn digest(bytes: &[u8]) -> [u8; 32] {
     Sha256::digest(bytes).into()
-}
-
-impl Stage {
-    /// Validate content, recipient, ceiling and admission time.
-    ///
-    /// # Errors
-    /// Returns the first failed admission condition; controller guards live at the endpoint.
-    pub fn validate(&self, manager: &str, now: u64) -> Result<(), Refusal> {
-        self.approval.validate(manager, now)?;
-        let a = &self.approval;
-        if self.wasm.len() > MAX_WASM
-            || !self.wasm.starts_with(b"\0asm\x01\0\0\0")
-            || digest(&self.wasm) != a.module_hash
-        {
-            return Err(Refusal::Artifact);
-        }
-
-        Ok(())
-    }
 }
 
 impl Approval {

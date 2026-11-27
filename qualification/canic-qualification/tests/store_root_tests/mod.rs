@@ -50,7 +50,27 @@ async fn settle(pic: &PocketIc) {
 }
 
 async fn custody(root: &Client<'_>) -> stored::Custody {
-    root_custody(root).await.root.current.stored
+    project(root_custody(root).await).current.stored
+}
+
+// Compare individual Store receipts with the corresponding fields of full Root custody.
+fn project(value: management::application::Custody) -> management::custody::RootHistory {
+    let (children, sources) = value
+        .children
+        .into_iter()
+        .enumerate()
+        .map(|(i, child)| {
+            assert_eq!(Some(child.slot), ChildId::service(i));
+            (child.journal, child.sources)
+        })
+        .unzip();
+    management::custody::RootHistory {
+        current: management::custody::Root {
+            stored: stored::Custody { children, sources },
+            store_operation: value.store_operation,
+        },
+        store_history: value.store_history,
+    }
 }
 
 async fn root_custody(root: &Client<'_>) -> management::application::Custody {
@@ -367,7 +387,7 @@ async fn root_creates_upgrades_and_preserves_store_custody_without_retaining_was
                     value: &input.approval
                 },
                 ic_wire::Encoding::Frame {
-                    method: children::RECONCILE,
+                    method: 33,
                     direction: ic_wire::Direction::Request
                 },
                 management::LIMITS

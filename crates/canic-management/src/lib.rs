@@ -28,9 +28,7 @@ pub use engine::{bootstrap, configure_snapshot_readers, custody, open};
 #[cfg(feature = "fault-injection")]
 pub use single::inject_fault;
 
-pub use single::{
-    observe_upgrade, reconcile, reconcile_upgrade, stage, stage_upgrade, status, upgrade_status,
-};
+pub use single::{observe_upgrade, status, upgrade_status};
 
 /// Root placement grants, child allocation and standby pool management.
 #[cfg(feature = "sharding")]
@@ -42,11 +40,8 @@ pub mod children {
     #[cfg(feature = "fault-injection")]
     pub use crate::engine::inject_fault;
     pub use crate::engine::{
-        owner_custody as custody, reconcile, stage, status,
-        upgrade::{
-            observe as observe_upgrade, reconcile as reconcile_upgrade, stage as stage_upgrade,
-            status as upgrade_status,
-        },
+        owner_custody as custody, status,
+        upgrade::{observe as observe_upgrade, status as upgrade_status},
     };
 }
 
@@ -65,7 +60,7 @@ pub struct Readiness {
 /// Store-bound operations, mounted explicitly by the owning canister.
 
 pub mod stored {
-    pub use crate::engine::stored_api::{custody, root_history};
+    pub use crate::engine::stored_api::custody;
 }
 
 /// Exact application lifecycle bindings, mounted explicitly by Root.
@@ -77,7 +72,7 @@ pub mod application {
     };
     #[cfg(feature = "blob")]
     pub use crate::engine::blob::activate;
-    pub use crate::engine::directory::redeliver_directory_revision;
+    pub use crate::engine::directory::{list_children, redeliver_directory_revision};
 }
 
 /// Root-owned Store maintenance custody, mounted explicitly by Root.

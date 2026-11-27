@@ -107,6 +107,35 @@ pub(super) async fn exercise(
     let a = install(first).await;
     let b = install(second).await;
     assert_ne!(a, b);
+    {
+        use management::children::ListChildren;
+        let request = ListChildren::encode_request(&None).unwrap();
+        assert!(
+            pic.query_call(
+                root.id,
+                CanisterId::anonymous(),
+                ListChildren::NAME,
+                request.clone()
+            )
+            .await
+            .is_err()
+        );
+        let reply = pic
+            .query_call(root.id, root.operator, ListChildren::NAME, request)
+            .await
+            .unwrap();
+        let (children, next) = ListChildren::decode_reply(&reply).unwrap();
+        assert!(next.is_none());
+        for (parent, child) in [(first, a), (second, b)] {
+            let entry = children
+                .iter()
+                .find(|entry| entry.canister == child.to_text())
+                .unwrap();
+            assert_eq!(entry.parent.as_deref(), Some(parent.to_text().as_str()));
+            assert_eq!(entry.role.as_deref(), Some("project_ledger"));
+        }
+    }
+
     for (parent, own, other) in [(first, a, b), (second, b, a)] {
         let status = async |child| -> (String, Option<Option<u64>>) {
             query_service(pic, parent, "topology_status", child).await

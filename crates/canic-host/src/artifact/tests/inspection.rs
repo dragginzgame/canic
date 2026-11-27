@@ -128,6 +128,20 @@ fn endpoints_only_list_callable_function_exports() {
     assert_eq!(methods[2].reply.as_deref(), Some("Result<(), Error>"));
     assert!(methods[0].argument.is_none());
 
+    let section = b"canic:limits:v1:update:z";
+    annotated.extend([0, (1 + section.len() + 32) as u8, section.len() as u8]);
+    annotated.extend(section);
+    for word in 1_u32..=8 {
+        annotated.extend(word.to_le_bytes());
+    }
+    std::fs::write(file.path(), &annotated).unwrap();
+    assert!(crate::installed_endpoints(file.path(), &crate::artifact::digest(&wasm)).is_err());
+    let methods =
+        crate::installed_endpoints(file.path(), &crate::artifact::digest(&annotated)).unwrap();
+    assert_eq!(methods[2].request_limits.as_ref().unwrap().bytes, 1);
+    assert_eq!(methods[2].reply_limits.as_ref().unwrap().depth, 8);
+    assert!(methods[0].request_limits.is_none());
+
     wasm.truncate(wasm.len() - 7);
     std::fs::write(file.path(), wasm).unwrap();
     assert!(crate::endpoints(file.path()).is_err());

@@ -41,7 +41,10 @@ pub mod subnet_comparison;
 mod wallet;
 
 pub use app_build::{BuiltCanister, build_app};
-pub use artifact::{Artifact, BuildReport, WasmEndpoint, build, build_report, endpoints, inspect};
+pub use artifact::{
+    Artifact, BuildReport, WasmEndpoint, WasmLimits, build, build_report, endpoints, inspect,
+    installed_endpoints,
+};
 pub use auth::{
     AuthApproval, AuthConfig, AuthReceipt, ReceiverController, ReceiverPolicy, create_auth_plan,
     create_auth_revocation, create_receiver_auth_plan,
@@ -56,14 +59,15 @@ pub use config::{
     init_config, init_fleet, load_config, resolve_config_path,
 };
 pub use fleet::{
-    Fleet, FleetCanister, FleetManager, FleetMetrics, FleetOperation, FleetStoreMaintenance,
-    FleetUpgrade, fleet, fleet_with_config, fleet_with_managers, save_fleet_report,
+    Availability, Fleet, FleetCanister, FleetManager, FleetMetrics, FleetOperation,
+    FleetStoreMaintenance, FleetUpgrade, fleet, fleet_with_config, fleet_with_identity,
+    fleet_with_managers, save_fleet_report,
 };
 pub use fleet_plan::{
     Cancellation, CreatedCanister, FleetChild, FleetPlan, FleetPlanning, FleetStore,
     cancel_fleet_plan, plan_fleet,
 };
-pub use inspection::InspectionClient;
+pub use inspection::{Diagnostics, InspectionClient, Observation};
 pub use managed::{activate, create_managed_plan, stored::StoredArtifact};
 pub use network::Network;
 pub use operation::{

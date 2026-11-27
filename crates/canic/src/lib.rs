@@ -149,6 +149,19 @@ macro_rules! __canic_inspect {
             )]
             #[unsafe(link_section = concat!("canic:signature:v1:", stringify!($mode), ":", $name))]
             static SIGNATURE: [u8; TYPES.len()] = *TYPES.as_bytes().first_chunk().unwrap();
+            #[used]
+            #[allow(unsafe_code, reason = "Wire limits in the shipped Wasm")]
+            #[unsafe(link_section = concat!("canic:limits:v1:", stringify!($mode), ":", $name))]
+            static __CANIC_WIRE_LIMITS: [u32; 8] = [
+                ($request).bytes as u32,
+                ($request).allocation as u32,
+                ($request).nodes as u32,
+                ($request).depth as u32,
+                ($reply).bytes as u32,
+                ($reply).allocation as u32,
+                ($reply).nodes as u32,
+                ($reply).depth as u32,
+            ];
         };
     };
 }

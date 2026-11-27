@@ -106,7 +106,7 @@ async fn directory_recipients_retain_the_installing_root() {
     let mut successor = wasm.clone();
     successor.extend_from_slice(&[0, 2, 1, b'b']); // Valid custom section, distinct module hash.
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    let change = upgrade::Stage {
+    let change = Stage {
         approval: upgrade::Approval {
             manager: root.to_text(),
             child: hub.to_text(),

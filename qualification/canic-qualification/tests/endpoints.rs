@@ -1,8 +1,18 @@
 //! Installed management adapter contracts and reply-failure transaction boundaries.
-use canic_management_protocol::{
-    Approval, CREATION_CYCLES, INJECT, LIMITS, Phase, RECONCILE, Refusal, STAGE, STAGE_LIMITS,
-    STATUS, Stage, Status, children, digest, upgrade,
+use canic_management_protocol::application::{
+    RECONCILE_CHILD_CREATION as RECONCILE, STAGE_CHILD_CREATION as STAGE, STAGE_CHILD_UPGRADE,
 };
+use canic_management_protocol::{
+    Approval, CREATION_CYCLES, INJECT, LIMITS, Phase, Refusal, STATUS, Status, children, digest,
+    upgrade,
+};
+#[path = "../fixtures/child_module.rs"]
+mod child_module;
+#[path = "../fixtures/child_store.rs"]
+mod child_store;
+#[path = "../fixtures/local_store.rs"]
+mod local_store;
+use child_module::Stage;
 use ic_testkit::{
     pocket_ic::{CanisterId, PocketIcBuilder, RejectCode, RejectResponse, nonblocking::PocketIc},
     server::{Limits, PreparedServer, Server},
@@ -253,12 +263,36 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
                     canic_management_protocol::custody::OBSERVE,
                     LIMITS,
                 ),
-                ("stage", false, true, STAGE, STAGE_LIMITS),
-                ("reconcile", false, true, RECONCILE, LIMITS),
-                ("stage_upgrade", false, true, upgrade::STAGE, STAGE_LIMITS),
+                (
+                    "stage_child_creation",
+                    false,
+                    true,
+                    STAGE,
+                    canic_management_protocol::stored::LIMITS,
+                ),
+                (
+                    "reconcile_child_creation",
+                    false,
+                    true,
+                    RECONCILE,
+                    canic_management_protocol::stored::LIMITS,
+                ),
+                (
+                    "stage_child_upgrade",
+                    false,
+                    true,
+                    STAGE_CHILD_UPGRADE,
+                    canic_management_protocol::stored::LIMITS,
+                ),
                 ("upgrade_status", true, false, upgrade::STATUS, LIMITS),
                 ("observe_upgrade", false, true, upgrade::OBSERVE, LIMITS),
-                ("reconcile_upgrade", false, true, upgrade::RECONCILE, LIMITS),
+                (
+                    "reconcile_child_upgrade",
+                    false,
+                    true,
+                    canic_management_protocol::application::RECONCILE_CHILD_UPGRADE,
+                    canic_management_protocol::stored::LIMITS,
+                ),
             ]
         };
         if variant == "faults" {
@@ -533,24 +567,25 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
             continue;
         }
         assert_eq!(status(pic, target).await, initial);
+        let store = child_store::ChildStore::install(
+            pic,
+            target,
+            std::fs::read(artifacts.join("store.wasm")).unwrap(),
+        )
+        .await;
         let now = pic.get_time().await.as_nanos_since_unix_epoch();
         let mut invalid = stage_input(target, &worker, now);
         invalid.approval.module_hash = [0; 32];
-        let frame = ic_wire::encode(
-            &invalid,
-            ic_wire::Encoding::Frame {
-                method: STAGE,
-                direction: ic_wire::Direction::Request,
-            },
-            STAGE_LIMITS,
-        )
-        .unwrap();
-        assert!(
-            frame.len() > LIMITS.bytes,
-            "exercise the asymmetric staging budget"
-        );
+        let frame = store
+            .frame(
+                STAGE,
+                children::ChildId::FIRST,
+                &invalid.approval,
+                &invalid.wasm,
+            )
+            .await;
         let reply = pic
-            .update_call(target, controller, "stage", frame)
+            .update_call(target, controller, "stage_child_creation", frame)
             .await
             .unwrap();
         let refusal: Result<Status, Refusal> = ic_wire::decode(
@@ -563,7 +598,7 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         )
         .unwrap();
         assert_eq!(refusal, Err(Refusal::Artifact));
-        let invalid_upgrade = upgrade::Stage {
+        let invalid_upgrade = Stage {
             approval: upgrade::Approval {
                 manager: target.to_text(),
                 child: target.to_text(),
@@ -578,23 +613,22 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
             .update_call(
                 target,
                 controller,
-                "stage_upgrade",
-                ic_wire::encode(
-                    &invalid_upgrade,
-                    ic_wire::Encoding::Frame {
-                        method: upgrade::STAGE,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    STAGE_LIMITS,
-                )
-                .unwrap(),
+                "stage_child_upgrade",
+                store
+                    .frame(
+                        STAGE_CHILD_UPGRADE,
+                        children::ChildId::FIRST,
+                        &invalid_upgrade.approval,
+                        &invalid_upgrade.wasm,
+                    )
+                    .await,
             )
             .await
             .unwrap();
         let refusal: Result<upgrade::Status, Refusal> = ic_wire::decode(
             &reply,
             ic_wire::Encoding::Frame {
-                method: upgrade::STAGE,
+                method: STAGE_CHILD_UPGRADE,
                 direction: ic_wire::Direction::Response,
             },
             LIMITS,
@@ -605,6 +639,12 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
     }
 
     let target = fault_target.unwrap();
+    let store = child_store::ChildStore::install(
+        pic,
+        target,
+        std::fs::read(artifacts.join("store.wasm")).unwrap(),
+    )
+    .await;
     let subnet = pic.get_subnet(target).await.unwrap();
     let count = pic.get_subnet_metrics(subnet).await.unwrap().num_canisters;
     let original = status(pic, target).await;
@@ -618,16 +658,15 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         .update_call(
             target,
             controller,
-            "stage",
-            ic_wire::encode(
-                &input,
-                ic_wire::Encoding::Frame {
-                    method: STAGE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
+            "stage_child_creation",
+            store
+                .frame(
+                    STAGE,
+                    children::ChildId::FIRST,
+                    &input.approval,
+                    &input.wasm,
+                )
+                .await,
         )
         .await
         .unwrap_err();
@@ -660,16 +699,15 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         .update_call(
             target,
             controller,
-            "stage",
-            ic_wire::encode(
-                &input,
-                ic_wire::Encoding::Frame {
-                    method: STAGE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
+            "stage_child_creation",
+            store
+                .frame(
+                    STAGE,
+                    children::ChildId::FIRST,
+                    &input.approval,
+                    &input.wasm,
+                )
+                .await,
         )
         .await
         .unwrap();
@@ -687,15 +725,9 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
     let mut other = input.approval.clone();
     other.expires_at_ns += 1;
     for frame in [
-        ic_wire::encode(
-            &other,
-            ic_wire::Encoding::Frame {
-                method: RECONCILE,
-                direction: ic_wire::Direction::Request,
-            },
-            LIMITS,
-        )
-        .unwrap(),
+        store
+            .frame(RECONCILE, children::ChildId::FIRST, &other, &input.wasm)
+            .await,
         ic_wire::encode(
             &(),
             ic_wire::Encoding::Frame {
@@ -716,7 +748,7 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         .unwrap(),
     ] {
         assert!(
-            pic.update_call(target, controller, "reconcile", frame)
+            pic.update_call(target, controller, "reconcile_child_creation", frame)
                 .await
                 .is_err()
         );
@@ -739,16 +771,15 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         .update_call(
             target,
             controller,
-            "reconcile",
-            ic_wire::encode(
-                &input.approval,
-                ic_wire::Encoding::Frame {
-                    method: RECONCILE,
-                    direction: ic_wire::Direction::Request,
-                },
-                LIMITS,
-            )
-            .unwrap(),
+            "reconcile_child_creation",
+            store
+                .frame(
+                    RECONCILE,
+                    children::ChildId::FIRST,
+                    &input.approval,
+                    &input.wasm,
+                )
+                .await,
         )
         .await
         .unwrap_err();
@@ -781,16 +812,15 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         .update_call(
             target,
             controller,
-            "reconcile",
-            ic_wire::encode(
-                &input.approval,
-                ic_wire::Encoding::Frame {
-                    method: RECONCILE,
-                    direction: ic_wire::Direction::Request,
-                },
-                LIMITS,
-            )
-            .unwrap(),
+            "reconcile_child_creation",
+            store
+                .frame(
+                    RECONCILE,
+                    children::ChildId::FIRST,
+                    &input.approval,
+                    &input.wasm,
+                )
+                .await,
         )
         .await
         .unwrap();
@@ -808,16 +838,15 @@ async fn management_mounts_preserve_contracts_authority_and_reply_rollback() {
         .update_call(
             target,
             controller,
-            "stage",
-            ic_wire::encode(
-                &input,
-                ic_wire::Encoding::Frame {
-                    method: STAGE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
+            "stage_child_creation",
+            store
+                .frame(
+                    STAGE,
+                    children::ChildId::FIRST,
+                    &input.approval,
+                    &input.wasm,
+                )
+                .await,
         )
         .await
         .unwrap();

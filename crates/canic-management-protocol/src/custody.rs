@@ -6,8 +6,6 @@ use serde::{Deserialize, Serialize};
 pub const OBSERVE: u64 = 30;
 /// Complete Root evidence, including a retained Store maintenance operation.
 pub const ROOT: u64 = 57;
-/// Complete Root evidence including all completed Store predecessors.
-pub const ROOT_HISTORY: u64 = 58;
 /// Complete bounded Store history in addition to child custody.
 pub const ROOT_HISTORY_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: ROOT_LIMITS.bytes

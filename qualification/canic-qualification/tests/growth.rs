@@ -1,47 +1,61 @@
 //! One operator-absent worker, real caller wiring, and irreversible effect boundaries.
+#[path = "../fixtures/child_module.rs"]
+mod child_module;
 use canic_management_protocol::{
-    Approval, CREATION_CYCLES, INJECT, LIMITS, Phase, RECONCILE, Refusal, STAGE, STAGE_LIMITS,
-    STATUS, Stage, Status, digest,
+    Approval, CREATION_CYCLES, INJECT, LIMITS, Phase, Refusal, STATUS, Status, digest,
 };
 use canic_profile_protocol::{PUT, ProfileResult, Put};
+use child_module::Stage;
 use ic_testkit::{
     pocket_ic::{CanisterId, CreateCanisterParams, PocketIcBuilder, nonblocking::PocketIc},
     server::{Limits, PreparedServer, Server},
 };
-use serde_json::Value;
+
 use std::{
     path::{Path, PathBuf},
-    process::Command,
     time::Duration,
 };
 
-fn cli(root: &Path, args: &[&str]) -> Value {
-    let output = Command::new(std::env::var_os("CANIC_CLI").unwrap())
-        .args(args)
-        .arg("--json")
-        .arg("--config")
-        .arg(root.join("canic.toml"))
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
+#[path = "../fixtures/child_store.rs"]
+mod child_store;
+#[path = "../fixtures/local_store.rs"]
+mod local_store;
+use canic_management_protocol::{application, children::ChildId};
+use child_store::ChildStore;
+
+async fn store(pic: &PocketIc, manager: CanisterId) -> ChildStore<'_> {
+    ChildStore::install(
+        pic,
+        manager,
+        std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/growth/store.wasm"))
+            .unwrap(),
+    )
+    .await
 }
 
-fn client(args: &[&str]) -> Value {
-    let output = Command::new(std::env::var_os("CANIC_PROFILE_CLIENT").unwrap())
-        .args(args)
-        .output()
+async fn managed_call<A: serde::Serialize, R: serde::de::DeserializeOwned>(
+    pic: &PocketIc,
+    manager: CanisterId,
+    store: &ChildStore<'_>,
+    method: &str,
+    id: u64,
+    approval: &A,
+    wasm: &[u8],
+) -> R {
+    let frame = store.frame(id, ChildId::FIRST, approval, wasm).await;
+    let reply = pic
+        .update_call(manager, CanisterId::anonymous(), method, frame)
+        .await
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    serde_json::from_slice(&output.stdout).unwrap()
+    ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: id,
+            direction: ic_wire::Direction::Response,
+        },
+        LIMITS,
+    )
+    .unwrap()
 }
 
 async fn status(pic: &PocketIc, manager: CanisterId) -> Status {
@@ -73,62 +87,39 @@ async fn status(pic: &PocketIc, manager: CanisterId) -> Status {
     .unwrap()
 }
 
-async fn reconcile(pic: &PocketIc, manager: CanisterId) -> Status {
-    let reply = pic
-        .update_call(
-            manager,
-            CanisterId::anonymous(),
-            "reconcile",
-            ic_wire::encode(
-                &status(pic, manager).await.approval.unwrap(),
-                ic_wire::Encoding::Frame {
-                    method: RECONCILE,
-                    direction: ic_wire::Direction::Request,
-                },
-                LIMITS,
-            )
-            .unwrap(),
-        )
-        .await
-        .unwrap();
-    ic_wire::decode(
-        &reply,
-        ic_wire::Encoding::Frame {
-            method: RECONCILE,
-            direction: ic_wire::Direction::Response,
-        },
-        LIMITS,
+async fn reconcile(
+    pic: &PocketIc,
+    manager: CanisterId,
+    store: &ChildStore<'_>,
+    input: &Stage,
+) -> Status {
+    managed_call(
+        pic,
+        manager,
+        store,
+        "reconcile_child_creation",
+        application::RECONCILE_CHILD_CREATION,
+        &input.approval,
+        &input.wasm,
     )
-    .unwrap()
+    .await
 }
-
-async fn stage(pic: &PocketIc, manager: CanisterId, input: &Stage) -> Result<Status, Refusal> {
-    let reply = pic
-        .update_call(
-            manager,
-            CanisterId::anonymous(),
-            "stage",
-            ic_wire::encode(
-                input,
-                ic_wire::Encoding::Frame {
-                    method: STAGE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
-        )
-        .await
-        .unwrap();
-    ic_wire::decode(
-        &reply,
-        ic_wire::Encoding::Frame {
-            method: STAGE,
-            direction: ic_wire::Direction::Response,
-        },
-        LIMITS,
+async fn stage(
+    pic: &PocketIc,
+    manager: CanisterId,
+    store: &ChildStore<'_>,
+    input: &Stage,
+) -> Result<Status, Refusal> {
+    managed_call(
+        pic,
+        manager,
+        store,
+        "stage_child_creation",
+        application::STAGE_CHILD_CREATION,
+        &input.approval,
+        &input.wasm,
     )
-    .unwrap()
+    .await
 }
 
 async fn settle(pic: &PocketIc) {
@@ -184,7 +175,7 @@ async fn autonomous_growth_and_commit_boundaries() {
         },
     )
     .unwrap();
-    let mut owner = server
+    let owner = server
         .instance(
             PocketIcBuilder::new()
                 .with_nns_subnet()
@@ -193,15 +184,6 @@ async fn autonomous_growth_and_commit_boundaries() {
         )
         .await
         .unwrap();
-    let url = owner.client_mut().make_live(None).await.to_string();
-    let key: String = owner
-        .client()
-        .root_key()
-        .await
-        .unwrap()
-        .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect();
     let pic = owner.client();
     let manager = pic
         .create_canister_with_params(
@@ -215,75 +197,19 @@ async fn autonomous_growth_and_commit_boundaries() {
         .unwrap();
     pic.install_canister(manager, manager_wasm.clone(), vec![], None)
         .await;
-    let manager_text = manager.to_text();
-    let root_subnet = pic.topology().await.get_nns().unwrap();
-    let root = artifacts.join(format!("journey-{}", std::process::id()));
-    std::fs::create_dir_all(&root).unwrap();
-    std::fs::write(
-        root.join("canic.toml"),
-        format!(
-            r#"
-[apps.growth.canisters.manager]
-role = "manager"
-parent = "root"
-[apps.growth.fleets.local]
-network = {{ kind = "Local", url = "{url}", root_key = "{key}", routing_canister = "{manager}", root_subnet = "{root_subnet}" }}
-[apps.growth.fleets.local.canisters.manager]
-id = "{manager}"
-"#
-        ),
-    )
-    .unwrap();
-    let icp = repo.join(".tools/ic/bin/icp");
+    let supplier = store(pic, manager).await;
     let original_count = count(pic, manager).await;
-    let file = root.join("approval.json");
-    let base = [
-        "--manager",
-        &manager_text,
-        "--identity",
-        "anonymous",
-        "--network",
-        &url,
-        "--root-key",
-        &key,
-        "--icp-bin",
-        icp.to_str().unwrap(),
-    ];
-    let mut args = base.to_vec();
-    let worker_path = artifacts.join("worker.wasm");
-    args.extend([
-        "growth-plan",
-        "--wasm",
-        worker_path.to_str().unwrap(),
-        "--output",
-        file.to_str().unwrap(),
-        "--delay-seconds",
-        "60",
-    ]);
-    let planned = client(&args);
-    assert_eq!(planned["approval"]["creation_cycles"], CREATION_CYCLES);
-    // Equal principal text on another network must not reuse the retained authority.
-    let refused = Command::new(std::env::var_os("CANIC_PROFILE_CLIENT").unwrap())
-        .args([
-            "--manager",
-            &manager_text,
-            "--network",
-            "ic",
-            "growth-approve",
-            file.to_str().unwrap(),
-        ])
-        .output()
-        .unwrap();
-    assert!(!refused.status.success());
-    assert!(String::from_utf8_lossy(&refused.stderr).contains("network/root key differs"));
-    let mut args = base.to_vec();
-    args.extend(["growth-approve", file.to_str().unwrap()]);
-    let accepted = client(&args);
-    assert_eq!(accepted["result"]["phase"], "Scheduled");
+    let input = approval(
+        manager,
+        &worker_wasm,
+        pic.get_time().await.as_nanos_since_unix_epoch(),
+    );
+    assert_eq!(
+        stage(pic, manager, &supplier, &input).await.unwrap().phase,
+        Phase::Scheduled
+    );
     assert_eq!(count(pic, manager).await, original_count);
-    // No mutating ingress follows admission: only IC time/ticks and read-only observations.
-    pic.stop_progress().await;
-    pic.advance_time(Duration::from_secs(61)).await;
+    pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     let ready = status(pic, manager).await;
     assert_eq!(ready.phase, Phase::Ready, "{ready:?}");
@@ -341,35 +267,17 @@ id = "{manager}"
         Some(digest(&maintenance_wasm).to_vec())
     );
     assert_eq!(count(pic, manager).await, original_count + 1);
-    pic.auto_progress().await;
-    let replay = client(&args);
-    assert_eq!(replay["result"]["phase"], "Ready");
-    let report = root.join("fleet.html");
-    let fleet = cli(
-        &root,
-        &[
-            "fleet",
-            "show",
-            "--manager",
-            &manager_text,
-            "--html",
-            report.to_str().unwrap(),
-        ],
+    assert_eq!(
+        stage(pic, manager, &supplier, &input).await.unwrap().phase,
+        Phase::Ready
     );
-    assert_eq!(fleet["canisters"].as_array().unwrap().len(), 2);
-    assert_eq!(fleet["managers"][0]["reported"]["phase"], "Ready");
-    assert!(
-        std::fs::read_to_string(report)
-            .unwrap()
-            .contains("Manager report (uncertified)")
-    );
-    pic.stop_progress().await;
 
     for fault in 1_u8..=5 {
         let manager = pic.create_canister().await;
         pic.add_cycles(manager, 3_000_000_000_000).await;
         pic.install_canister(manager, faults_wasm.clone(), vec![], None)
             .await;
+        let supplier = store(pic, manager).await;
         let input = approval(
             manager,
             &worker_wasm,
@@ -380,23 +288,25 @@ id = "{manager}"
             pic.update_call(
                 manager,
                 outsider,
-                "stage",
-                ic_wire::encode(
-                    &input,
-                    ic_wire::Encoding::Frame {
-                        method: STAGE,
-                        direction: ic_wire::Direction::Request
-                    },
-                    STAGE_LIMITS
-                )
-                .unwrap()
+                "stage_child_creation",
+                supplier
+                    .frame(
+                        application::STAGE_CHILD_CREATION,
+                        ChildId::FIRST,
+                        &input.approval,
+                        &input.wasm
+                    )
+                    .await
             )
             .await
             .is_err()
         );
         let mut invalid = input.clone();
         invalid.approval.module_hash[0] ^= 1;
-        assert_eq!(stage(pic, manager, &invalid).await, Err(Refusal::Artifact));
+        assert_eq!(
+            stage(pic, manager, &supplier, &invalid).await,
+            Err(Refusal::Artifact)
+        );
         pic.update_call(
             manager,
             CanisterId::anonymous(),
@@ -414,7 +324,7 @@ id = "{manager}"
         .await
         .unwrap();
         let before = count(pic, manager).await;
-        stage(pic, manager, &input).await.unwrap();
+        stage(pic, manager, &supplier, &input).await.unwrap();
         pic.advance_time(Duration::from_secs(11)).await;
         settle(pic).await;
         let blocked = status(pic, manager).await;
@@ -429,7 +339,10 @@ id = "{manager}"
         assert_eq!(count(pic, manager).await, before + u64::from(fault != 1));
         invalid = input.clone();
         invalid.approval.expires_at_ns += 1;
-        assert_eq!(stage(pic, manager, &invalid).await, Err(Refusal::Occupied));
+        assert_eq!(
+            stage(pic, manager, &supplier, &invalid).await,
+            Err(Refusal::Occupied)
+        );
         if fault >= 4 {
             // An abandoned timer stays blocked even after another scheduling
             // opportunity; only the domain reconciliation below may resume it.
@@ -438,7 +351,7 @@ id = "{manager}"
             assert_eq!(status(pic, manager).await, blocked);
             // Callback cleanup must release heap exclusion without replacing
             // the owner. Preserve the issued upload/install evidence throughout.
-            reconcile(pic, manager).await;
+            reconcile(pic, manager, &supplier, &input).await;
             settle(pic).await;
             let recovered = status(pic, manager).await;
             assert_eq!(
@@ -458,7 +371,10 @@ id = "{manager}"
             .await
             .unwrap();
         if fault == 2 {
-            assert_eq!(reconcile(pic, manager).await.phase, Phase::CreateIssued);
+            assert_eq!(
+                reconcile(pic, manager, &supplier, &input).await.phase,
+                Phase::CreateIssued
+            );
             settle(pic).await;
             let still = status(pic, manager).await;
             assert_eq!(still.worker, None);
@@ -466,7 +382,7 @@ id = "{manager}"
             assert_eq!(still.attempts, [1, 0, 0]);
         } else {
             if fault >= 4 {
-                reconcile(pic, manager).await;
+                reconcile(pic, manager, &supplier, &input).await;
             }
             settle(pic).await;
             let recovered = status(pic, manager).await;
@@ -481,7 +397,7 @@ id = "{manager}"
             }
         }
         assert_eq!(count(pic, manager).await, before + 1);
-        stage(pic, manager, &input).await.unwrap();
+        stage(pic, manager, &supplier, &input).await.unwrap();
         settle(pic).await;
         assert_eq!(count(pic, manager).await, before + 1);
         println!(
@@ -492,13 +408,14 @@ id = "{manager}"
     let manager = pic.create_canister().await;
     pic.install_canister(manager, manager_wasm.clone(), vec![], None)
         .await;
+    let supplier = store(pic, manager).await;
     let input = approval(
         manager,
         &worker_wasm,
         pic.get_time().await.as_nanos_since_unix_epoch(),
     );
     let before = count(pic, manager).await;
-    stage(pic, manager, &input).await.unwrap();
+    stage(pic, manager, &supplier, &input).await.unwrap();
     pic.advance_time(Duration::from_secs(121)).await;
     settle(pic).await;
     assert_eq!(status(pic, manager).await.phase, Phase::Expired);
@@ -515,13 +432,17 @@ id = "{manager}"
         .unwrap();
     pic.install_canister(underfunded, manager_wasm.clone(), vec![], None)
         .await;
+    let supplier = store(pic, underfunded).await;
     let input = approval(
         underfunded,
         &worker_wasm,
         pic.get_time().await.as_nanos_since_unix_epoch(),
     );
     let before = count(pic, underfunded).await;
-    assert_eq!(stage(pic, underfunded, &input).await, Err(Refusal::Reserve));
+    assert_eq!(
+        stage(pic, underfunded, &supplier, &input).await,
+        Err(Refusal::Reserve)
+    );
     pic.advance_time(Duration::from_secs(11)).await;
     settle(pic).await;
     assert_eq!(status(pic, underfunded).await.phase, Phase::Empty);
@@ -573,89 +494,37 @@ async fn upgrade_status(
 async fn stage_upgrade(
     pic: &PocketIc,
     manager: CanisterId,
-    input: &canic_management_protocol::upgrade::Stage,
+    store: &ChildStore<'_>,
+    input: &Stage<canic_management_protocol::upgrade::Approval>,
 ) -> Result<canic_management_protocol::upgrade::Status, Refusal> {
-    let reply = pic
-        .update_call(
-            manager,
-            CanisterId::anonymous(),
-            "stage_upgrade",
-            ic_wire::encode(
-                input,
-                ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::upgrade::STAGE,
-                    direction: ic_wire::Direction::Request,
-                },
-                STAGE_LIMITS,
-            )
-            .unwrap(),
-        )
-        .await
-        .unwrap();
-    ic_wire::decode(
-        &reply,
-        ic_wire::Encoding::Frame {
-            method: canic_management_protocol::upgrade::STAGE,
-            direction: ic_wire::Direction::Response,
-        },
-        LIMITS,
-    )
-    .unwrap()
-}
-
-async fn reconcile_upgrade(pic: &PocketIc, manager: CanisterId) {
-    let retained = upgrade_status(pic, manager).await;
-    let mut other = retained.approval.clone().unwrap();
-    other.expires_at_ns += 1;
-    for frame in [
-        ic_wire::encode(
-            &other,
-            ic_wire::Encoding::Frame {
-                method: canic_management_protocol::upgrade::RECONCILE,
-                direction: ic_wire::Direction::Request,
-            },
-            LIMITS,
-        )
-        .unwrap(),
-        ic_wire::encode(
-            &(),
-            ic_wire::Encoding::Frame {
-                method: 26,
-                direction: ic_wire::Direction::Request,
-            },
-            LIMITS,
-        )
-        .unwrap(),
-    ] {
-        assert!(
-            pic.update_call(manager, CanisterId::anonymous(), "reconcile_upgrade", frame)
-                .await
-                .is_err()
-        );
-        // Existing autonomous timers may advance while the refused call runs.
-        assert_eq!(
-            upgrade_status(pic, manager).await.approval,
-            retained.approval
-        );
-    }
-    pic.update_call(
+    managed_call(
+        pic,
         manager,
-        CanisterId::anonymous(),
-        "reconcile_upgrade",
-        ic_wire::encode(
-            &upgrade_status(pic, manager).await.approval.unwrap(),
-            ic_wire::Encoding::Frame {
-                method: canic_management_protocol::upgrade::RECONCILE,
-                direction: ic_wire::Direction::Request,
-            },
-            LIMITS,
-        )
-        .unwrap(),
+        store,
+        "stage_child_upgrade",
+        application::STAGE_CHILD_UPGRADE,
+        &input.approval,
+        &input.wasm,
     )
     .await
-    .unwrap();
 }
-
+async fn reconcile_upgrade(
+    pic: &PocketIc,
+    manager: CanisterId,
+    store: &ChildStore<'_>,
+    input: &Stage<canic_management_protocol::upgrade::Approval>,
+) -> canic_management_protocol::upgrade::Status {
+    managed_call(
+        pic,
+        manager,
+        store,
+        "reconcile_child_upgrade",
+        application::RECONCILE_CHILD_UPGRADE,
+        &input.approval,
+        &input.wasm,
+    )
+    .await
+}
 async fn profile_get(pic: &PocketIc, worker: CanisterId, caller: CanisterId) -> ProfileResult {
     let reply = pic
         .query_call(
@@ -728,12 +597,13 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
         pic.add_cycles(manager, 3_000_000_000_000).await;
         pic.install_canister(manager, manager_wasm.clone(), vec![], None)
             .await;
+        let supplier = store(pic, manager).await;
         let creation = approval(
             manager,
             &original,
             pic.get_time().await.as_nanos_since_unix_epoch(),
         );
-        stage(pic, manager, &creation).await.unwrap();
+        stage(pic, manager, &supplier, &creation).await.unwrap();
         pic.advance_time(Duration::from_secs(11)).await;
         settle(pic).await;
         let created = status(pic, manager).await;
@@ -774,7 +644,7 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
         let before = count(pic, manager).await;
         let wasm = if case == 9 { &rejected } else { &replacement };
         let now = pic.get_time().await.as_nanos_since_unix_epoch();
-        let input = upgrade::Stage {
+        let input = Stage {
             approval: upgrade::Approval {
                 manager: manager.to_text(),
                 child: worker.to_text(),
@@ -789,16 +659,15 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
             pic.update_call(
                 manager,
                 bob,
-                "stage_upgrade",
-                ic_wire::encode(
-                    &input,
-                    ic_wire::Encoding::Frame {
-                        method: upgrade::STAGE,
-                        direction: ic_wire::Direction::Request
-                    },
-                    STAGE_LIMITS
-                )
-                .unwrap()
+                "stage_child_upgrade",
+                supplier
+                    .frame(
+                        application::STAGE_CHILD_UPGRADE,
+                        ChildId::FIRST,
+                        &input.approval,
+                        &input.wasm
+                    )
+                    .await
             )
             .await
             .is_err()
@@ -806,13 +675,13 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
         let mut invalid = input.clone();
         invalid.approval.child = manager.to_text();
         assert_eq!(
-            stage_upgrade(pic, manager, &invalid).await,
+            stage_upgrade(pic, manager, &supplier, &invalid).await,
             Err(Refusal::Binding)
         );
         invalid = input.clone();
         invalid.approval.previous_module[0] ^= 1;
         assert_eq!(
-            stage_upgrade(pic, manager, &invalid).await,
+            stage_upgrade(pic, manager, &supplier, &invalid).await,
             Err(Refusal::Binding)
         );
         if (6..=8).contains(&case) || case >= 24 {
@@ -834,7 +703,10 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
             .unwrap();
         }
         assert_eq!(
-            stage_upgrade(pic, manager, &input).await.unwrap().phase,
+            stage_upgrade(pic, manager, &supplier, &input)
+                .await
+                .unwrap()
+                .phase,
             upgrade::Phase::Scheduled
         );
         pic.advance_time(Duration::from_secs(11)).await;
@@ -862,13 +734,13 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
         invalid = input.clone();
         invalid.approval.expires_at_ns += 1;
         assert_eq!(
-            stage_upgrade(pic, manager, &invalid).await,
+            stage_upgrade(pic, manager, &supplier, &invalid).await,
             Err(Refusal::Occupied)
         );
         canic_qualification::upgrade_stopped(pic, manager, maintenance.clone(), vec![], None)
             .await
             .unwrap();
-        reconcile_upgrade(pic, manager).await;
+        reconcile_upgrade(pic, manager, &supplier, &input).await;
         settle(pic).await;
         let complete = upgrade_status(pic, manager).await;
         assert_eq!(complete.approval, Some(input.approval.clone()));
@@ -928,8 +800,13 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
         assert_eq!(preserved.attempts, created.attempts);
         assert_eq!(preserved.observed_module, created.observed_module);
         // Replaying authority or reconciliation cannot reset a consumed upgrade slot.
-        assert_eq!(stage_upgrade(pic, manager, &input).await.unwrap(), complete);
-        reconcile_upgrade(pic, manager).await;
+        assert_eq!(
+            stage_upgrade(pic, manager, &supplier, &input)
+                .await
+                .unwrap(),
+            complete
+        );
+        reconcile_upgrade(pic, manager, &supplier, &input).await;
         settle(pic).await;
         assert_eq!(upgrade_status(pic, manager).await, complete);
         assert_eq!(count(pic, manager).await, before);
@@ -937,11 +814,11 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
             repeated_upgrades(
                 pic,
                 manager,
+                &supplier,
                 &original,
                 &replacement,
                 &maintenance,
-                input.clone(),
-                complete.clone(),
+                (input.clone(), complete.clone()),
             )
             .await;
             assert_eq!(profile_get(pic, worker, alice).await.unwrap(), profile);
@@ -953,7 +830,7 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
             let mut successor = input.clone();
             successor.approval.execute_at_ns += 1;
             assert_eq!(
-                stage_upgrade(pic, manager, &successor).await,
+                stage_upgrade(pic, manager, &supplier, &successor).await,
                 Err(Refusal::Occupied)
             );
         }
@@ -973,15 +850,18 @@ async fn child_upgrade_preserves_state_and_never_reissues_uncertain_install() {
 async fn repeated_upgrades(
     pic: &PocketIc,
     manager: CanisterId,
+    supplier: &ChildStore<'_>,
     original: &[u8],
     replacement: &[u8],
     maintenance: &[u8],
-    first: canic_management_protocol::upgrade::Stage,
-    first_status: canic_management_protocol::upgrade::Status,
+    first: (
+        Stage<canic_management_protocol::upgrade::Approval>,
+        canic_management_protocol::upgrade::Status,
+    ),
 ) {
     use canic_management_protocol::upgrade;
-    let worker = CanisterId::from_text(&first.approval.child).unwrap();
-    let mut retained = vec![(first, first_status)];
+    let worker = CanisterId::from_text(&first.0.approval.child).unwrap();
+    let mut retained = vec![first];
     for index in 1..upgrade::MAX_UPGRADES {
         let latest = upgrade_status(pic, manager).await;
         let now = pic.get_time().await.as_nanos_since_unix_epoch();
@@ -990,7 +870,7 @@ async fn repeated_upgrades(
         } else {
             replacement
         };
-        let next = upgrade::Stage {
+        let next = Stage {
             approval: upgrade::Approval {
                 manager: manager.to_text(),
                 child: worker.to_text(),
@@ -1002,14 +882,17 @@ async fn repeated_upgrades(
             wasm: wasm.to_vec(),
         };
         assert_eq!(
-            stage_upgrade(pic, manager, &next).await.unwrap().phase,
+            stage_upgrade(pic, manager, supplier, &next)
+                .await
+                .unwrap()
+                .phase,
             upgrade::Phase::Scheduled
         );
         // A second approval cannot replace admitted work, even before effects.
         let mut competing = next.clone();
         competing.approval.expires_at_ns += 1;
         assert_eq!(
-            stage_upgrade(pic, manager, &competing).await,
+            stage_upgrade(pic, manager, supplier, &competing).await,
             Err(Refusal::Occupied)
         );
         pic.advance_time(Duration::from_secs(11)).await;
@@ -1021,41 +904,14 @@ async fn repeated_upgrades(
         retained.push((next, complete.clone()));
         // Historical replay and recovery must not mutate the newest operation.
         for (input, expected) in &retained {
-            assert_eq!(stage_upgrade(pic, manager, input).await.unwrap(), *expected);
-            for (method, id) in [
-                ("observe_upgrade", upgrade::OBSERVE),
-                ("reconcile_upgrade", upgrade::RECONCILE),
-            ] {
-                let reply = pic
-                    .update_call(
-                        manager,
-                        CanisterId::anonymous(),
-                        method,
-                        ic_wire::encode(
-                            &input.approval,
-                            ic_wire::Encoding::Frame {
-                                method: id,
-                                direction: ic_wire::Direction::Request,
-                            },
-                            LIMITS,
-                        )
-                        .unwrap(),
-                    )
-                    .await
-                    .unwrap();
-                assert_eq!(
-                    ic_wire::decode::<upgrade::Status>(
-                        &reply,
-                        ic_wire::Encoding::Frame {
-                            method: id,
-                            direction: ic_wire::Direction::Response
-                        },
-                        LIMITS
-                    )
-                    .unwrap(),
-                    *expected
-                );
-            }
+            assert_eq!(
+                stage_upgrade(pic, manager, supplier, input).await.unwrap(),
+                *expected
+            );
+            assert_eq!(
+                reconcile_upgrade(pic, manager, supplier, input).await,
+                *expected
+            );
         }
         assert_eq!(upgrade_status(pic, manager).await, complete);
     }
@@ -1066,7 +922,7 @@ async fn repeated_upgrades(
     let (last, expected) = retained.last().unwrap();
     assert_eq!(upgrade_status(pic, manager).await, *expected);
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    let exhausted = upgrade::Stage {
+    let exhausted = Stage {
         approval: upgrade::Approval {
             previous_module: last.approval.module_hash,
             module_hash: digest(original),
@@ -1077,11 +933,13 @@ async fn repeated_upgrades(
         wasm: original.to_vec(),
     };
     assert_eq!(
-        stage_upgrade(pic, manager, &exhausted).await,
+        stage_upgrade(pic, manager, supplier, &exhausted).await,
         Err(Refusal::Occupied)
     );
     assert_eq!(
-        stage_upgrade(pic, manager, &retained[0].0).await.unwrap(),
+        stage_upgrade(pic, manager, supplier, &retained[0].0)
+            .await
+            .unwrap(),
         retained[0].1
     );
     assert_eq!(pic.get_controllers(worker).await, [manager]);

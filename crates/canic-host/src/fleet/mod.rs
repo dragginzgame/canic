@@ -125,9 +125,41 @@ impl FleetOperation {
     }
 }
 
+/// Live runtime query outcome. Protected replies and network failures keep their diagnostics.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Availability {
+    /// The actor answered its runtime metrics query.
+    Running {
+        /// Current IC canister version.
+        version: u64,
+        /// Controller-visible balance, decimal for JSON portability.
+        liquid_cycles: Option<String>,
+    },
+    /// The application answered readiness while access to runtime metrics was unavailable.
+    Responding {
+        /// Application-defined admission state at observation time.
+        readiness: canic::readiness::State,
+        /// Independent refusal or transport error for the metrics query.
+        metrics_error: String,
+    },
+    /// The replica explicitly rejected a query because the target is stopped.
+    Stopped,
+    /// The replica explicitly reported the target is stopping.
+    Stopping,
+    /// The query was refused, unavailable or exceeded its observation budget.
+    Unknown(String),
+}
+
 /// One canister's current certified management metadata, or an explicit unknown observation.
 #[derive(Debug, Serialize)]
 pub struct FleetCanister {
+    /// Direct bounded runtime observation during authenticated inspection.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub availability: Option<Availability>,
+    /// Protected Root installation record, when the operator queried the inventory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub installation: Option<children::InstalledChild>,
     /// Exact network trust binding digest; local replicas never merge by principal alone.
     pub network_id: String,
     /// Human-readable network label.
@@ -642,6 +674,18 @@ pub async fn fleet_with_config(
     selected: &[String],
     configuration: Option<&crate::SelectedFleet>,
 ) -> Result<Fleet> {
+    fleet_with_identity(root, selected, configuration, None).await
+}
+
+/// Collect the same fleet view with optional controller-authenticated child discovery.
+/// # Errors
+/// Returns configuration, identity and journal errors.
+pub async fn fleet_with_identity(
+    root: &Path,
+    selected: &[String],
+    configuration: Option<&crate::SelectedFleet>,
+    identity: Option<&Path>,
+) -> Result<Fleet> {
     if let Some(config) = configuration {
         config.validate()?;
     }
@@ -685,11 +729,17 @@ pub async fn fleet_with_config(
         }
         operations.push(operation);
     }
-    let selected: std::collections::BTreeSet<_> = selected.iter().cloned().collect();
+    let mut selected: std::collections::BTreeSet<_> = selected.iter().cloned().collect();
     if let Some(config) = configuration {
         let network_id = config.config.network.binding_id()?;
         for (slot, declaration) in &config.config.canisters {
             if let Some(id) = &declaration.id {
+                if identity.is_some()
+                    && declaration.role.as_deref() == Some("root")
+                    && declaration.parent.is_none()
+                {
+                    selected.insert(id.clone());
+                }
                 targets.insert(
                     (network_id.clone(), id.clone()),
                     config.config.network.clone(),
@@ -710,6 +760,66 @@ pub async fn fleet_with_config(
     let selected = select_managers(&operations, &targets, &selected)?;
     let metric_targets = selected.clone();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(30);
+    let mut installations = BTreeMap::new();
+    let mut completed_inventories = std::collections::BTreeSet::new();
+    if let Some(identity) = identity {
+        if selected.is_empty() {
+            return Err(Error::Invalid(
+                "authenticated inventory needs a bound Root or --manager".into(),
+            ));
+        }
+        for ((binding, root), network) in &selected {
+            use canic::method::Contract;
+            use children::ListChildren;
+            let client = crate::InspectionClient::new(network, root, Some(identity))?;
+            let mut cursor = None;
+            loop {
+                let page = budgeted_observation(
+                    deadline,
+                    Duration::from_secs(5),
+                    "inventory budget exhausted",
+                    "inventory query timed out",
+                    async {
+                        let request = ListChildren::encode_request(&cursor).map_err(supplier)?;
+                        let bytes = client
+                            .query(ListChildren::NAME, &request, Duration::from_secs(5))
+                            .await?;
+                        ListChildren::decode_reply(&bytes).map_err(supplier)
+                    },
+                )
+                .await;
+                let (rows, next) = match page {
+                    Ok(page) => page,
+                    Err(error) => {
+                        issues.push(format!("{root}: child inventory incomplete: {error}"));
+                        break;
+                    }
+                };
+                if next.is_some_and(|next| Some(next) <= cursor)
+                    || rows.windows(2).any(|pair| pair[0].slot >= pair[1].slot)
+                    || rows.iter().any(|child| {
+                        Some(child.slot) <= cursor
+                            || next.is_some_and(|last| child.slot > last)
+                            || network::principal(&child.canister).is_err()
+                            || &child.canister == root
+                    })
+                {
+                    issues.push(format!("{root}: invalid child inventory page"));
+                    break;
+                }
+                for child in rows {
+                    let key = (binding.clone(), child.canister.clone());
+                    targets.insert(key.clone(), network.clone());
+                    installations.insert(key, child);
+                }
+                if next.is_none() {
+                    completed_inventories.insert((binding.clone(), root.clone()));
+                    break;
+                }
+                cursor = next;
+            }
+        }
+    }
     let spare_counts = if let Some(config) = configuration {
         match spares::observe(config, &operations).await {
             Ok(value) => value,
@@ -732,6 +842,11 @@ pub async fn fleet_with_config(
             })
             .map(|op| op.slot)
             .collect();
+        if retained_slots.is_empty()
+            && completed_inventories.contains(&(network_id.clone(), manager.clone()))
+        {
+            continue;
+        }
         // With no journal, identify a single-slot predecessor by its certified
         // module hash. An unavailable hash gives no reason to use its old ABI.
         let known_single_slot = retained_slots.is_empty()
@@ -856,7 +971,26 @@ pub async fn fleet_with_config(
             Ok((module, controllers)) => (Some(module), Some(controllers), None),
             Err(error) => (None, None, Some(error)),
         };
+        let availability = if identity.is_some() {
+            let result = budgeted_observation(
+                deadline,
+                Duration::from_secs(3),
+                "runtime budget exhausted",
+                "runtime query timed out",
+                async {
+                    Ok(crate::InspectionClient::new(&network, &canister, identity)?
+                        .runtime()
+                        .await)
+                },
+            )
+            .await;
+            Some(result.unwrap_or_else(Availability::Unknown))
+        } else {
+            None
+        };
         canisters.push(FleetCanister {
+            availability,
+            installation: installations.remove(&(network_id.clone(), canister.clone())),
             network_id,
             network: label(&network),
             canister,

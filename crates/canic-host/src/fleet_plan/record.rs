@@ -1,15 +1,15 @@
 //! Retained fleet format and journal locations; callers use identified collections.
-use super::{ChildId, FleetChild, FleetPlan, invalid};
+use super::{ChildId, FleetPlan, invalid};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct ServiceRecord {
-    contract: String,
+struct ServiceRecord<Name, Root, Children, Store> {
+    contract: Name,
     version: u32,
-    root: crate::Plan,
-    children: Vec<FleetChild>,
-    store: super::FleetStore,
+    root: Root,
+    children: Children,
+    store: Store,
 }
 
 impl Serialize for FleetPlan {
@@ -19,11 +19,11 @@ impl Serialize for FleetPlan {
     ) -> std::result::Result<S::Ok, S::Error> {
         self.validate().map_err(serde::ser::Error::custom)?;
         let record = ServiceRecord {
-            contract: super::CONTRACT.into(),
+            contract: super::CONTRACT,
             version: self.version,
-            root: self.root.clone(),
-            children: self.children.clone(),
-            store: self.store.clone(),
+            root: &self.root,
+            children: &self.children,
+            store: &self.store,
         };
         record.serialize(serializer)
     }
@@ -32,7 +32,7 @@ impl<'de> Deserialize<'de> for FleetPlan {
     fn deserialize<D: serde::Deserializer<'de>>(
         deserializer: D,
     ) -> std::result::Result<Self, D::Error> {
-        let r = ServiceRecord::deserialize(deserializer)?;
+        let r = ServiceRecord::<String, _, _, _>::deserialize(deserializer)?;
         if r.contract != super::CONTRACT {
             return Err(serde::de::Error::custom(invalid()));
         }

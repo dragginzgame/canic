@@ -1,9 +1,12 @@
 //! Installed Root ownership and preservation, using synthetic cycles only.
+#[path = "../fixtures/child_module.rs"]
+mod child_module;
 #[path = "../fixtures/child_store.rs"]
 mod child_store;
 #[path = "../fixtures/local_store.rs"]
 mod local_store;
 use canic_management_protocol::application;
+use child_module::Stage;
 use child_store::ChildStore;
 mod children;
 mod fleet_children;
@@ -15,8 +18,7 @@ mod snapshot;
 mod storage_reopen;
 
 use canic_management_protocol::{
-    Approval, CREATION_CYCLES, LIMITS, Phase, Refusal, STAGE, STAGE_LIMITS, STATUS, Stage, Status,
-    digest,
+    Approval, CREATION_CYCLES, LIMITS, Phase, Refusal, STATUS, Status, digest,
 };
 use ic_testkit::{
     pocket_ic::{CanisterId, PocketIcBuilder, nonblocking::PocketIc},
@@ -117,13 +119,7 @@ async fn settle(pic: &PocketIc) {
 
 // Both a fresh Root and a previously shipped manager must preserve the same
 // immutable creation authority. The readiness codec is owned by each wrapper.
-async fn qualify(
-    original: Vec<u8>,
-    replacement: Vec<u8>,
-    child: Vec<u8>,
-    greeting: bool,
-    before_dispatch: bool,
-) {
+async fn qualify(original: Vec<u8>, replacement: Vec<u8>, child: Vec<u8>) {
     assert_ne!(original, replacement);
     let binary = PreparedServer::check(&canic_qualification::server_directory())
         .expect("make qualification-setup");
@@ -181,11 +177,9 @@ async fn qualify(
     let admitted = stage(pic, root, &store, &input).await.unwrap();
     assert_eq!(admitted.phase, Phase::Scheduled);
     // Scheduled migration must resume original bytes and authority.
-    if before_dispatch {
-        canic_qualification::upgrade_stopped(pic, root, replacement.clone(), vec![], None)
-            .await
-            .unwrap();
-    }
+    canic_qualification::upgrade_stopped(pic, root, replacement, vec![], None)
+        .await
+        .unwrap();
     let maintained = status(pic, root).await;
     assert_eq!(maintained.approval, admitted.approval);
     assert_eq!(maintained.phase, Phase::Scheduled);
@@ -196,20 +190,6 @@ async fn qualify(
     assert_eq!(ready.phase, Phase::Ready, "{ready:?}");
     assert_eq!(ready.attempts, [1; 3]);
     assert_eq!(ready.approval, admitted.approval);
-    if !before_dispatch {
-        // Completed migration must retain the irreplaceable principal and evidence.
-        canic_qualification::upgrade_stopped(pic, root, replacement, vec![], None)
-            .await
-            .unwrap();
-        let preserved = status(pic, root).await;
-        assert_eq!(preserved.approval, ready.approval);
-        assert_eq!(preserved.worker, ready.worker);
-        assert_eq!(preserved.phase, ready.phase);
-        assert_eq!(preserved.attempts, ready.attempts);
-        assert_eq!(preserved.requests, ready.requests);
-        assert_eq!(preserved.creation_refund, ready.creation_refund);
-        assert_eq!(preserved.observed_module, ready.observed_module);
-    }
     assert_eq!(
         ready.observed_module,
         Some(input.approval.module_hash.to_vec())
@@ -220,35 +200,33 @@ async fn qualify(
     let root_status = pic.canister_status(root, None).await.unwrap();
     assert_eq!(root_status.settings.controllers, [CanisterId::anonymous()]);
     assert!(pic.canister_status(child, Some(outsider)).await.is_err());
-    if greeting {
-        let reply = pic
-            .query_call(
-                child,
-                outsider,
-                "greet",
-                ic_wire::encode(
-                    &"team",
-                    ic_wire::Encoding::Frame {
-                        method: canic_greeting_witness::GREET,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    canic_greeting_witness::LIMITS,
-                )
-                .unwrap(),
+    let reply = pic
+        .query_call(
+            child,
+            outsider,
+            "greet",
+            ic_wire::encode(
+                &"team",
+                ic_wire::Encoding::Frame {
+                    method: canic_greeting_witness::GREET,
+                    direction: ic_wire::Direction::Request,
+                },
+                canic_greeting_witness::LIMITS,
             )
-            .await
-            .unwrap();
-        let reply: canic_greeting_witness::Greeting = ic_wire::decode(
-            &reply,
-            ic_wire::Encoding::Frame {
-                method: canic_greeting_witness::GREET,
-                direction: ic_wire::Direction::Response,
-            },
-            canic_greeting_witness::LIMITS,
+            .unwrap(),
         )
+        .await
         .unwrap();
-        assert_eq!(reply.message, "Hello from Canic, team!");
-    }
+    let reply: canic_greeting_witness::Greeting = ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: canic_greeting_witness::GREET,
+            direction: ic_wire::Direction::Response,
+        },
+        canic_greeting_witness::LIMITS,
+    )
+    .unwrap();
+    assert_eq!(reply.message, "Hello from Canic, team!");
     let subnet = pic.get_subnet(root).await.unwrap();
     let count = pic.get_subnet_metrics(subnet).await.unwrap().num_canisters;
     assert_eq!(count, 3);
@@ -281,36 +259,6 @@ async fn root_controls_one_greeting_application() {
         std::fs::read(artifacts.join("root.wasm")).unwrap(),
         std::fs::read(artifacts.join("maintenance.wasm")).unwrap(),
         std::fs::read(artifacts.join("app.wasm")).unwrap(),
-        true,
-        true,
-    )
-    .await;
-}
-
-#[tokio::test(flavor = "current_thread")]
-#[ignore = "historical old-Storage migration; requires a compatible old build and CANIC_PREVIOUS_MANAGER"]
-async fn previous_profile_manager_preserves_admitted_work() {
-    let artifacts = repo().join("target/growth");
-    qualify(
-        std::fs::read(std::env::var_os("CANIC_PREVIOUS_MANAGER").unwrap()).unwrap(),
-        std::fs::read(artifacts.join("manager.wasm")).unwrap(),
-        std::fs::read(artifacts.join("worker.wasm")).unwrap(),
-        false,
-        true,
-    )
-    .await;
-}
-
-#[tokio::test(flavor = "current_thread")]
-#[ignore = "historical old-Storage migration; requires a compatible old build and CANIC_PREVIOUS_ROOT"]
-async fn previous_root_migrates_payloads_without_replacing_creation() {
-    let artifacts = repo().join("target/root");
-    qualify(
-        std::fs::read(std::env::var_os("CANIC_PREVIOUS_ROOT").unwrap()).unwrap(),
-        std::fs::read(artifacts.join("root.wasm")).unwrap(),
-        std::fs::read(artifacts.join("app.wasm")).unwrap(),
-        true,
-        false,
     )
     .await;
 }
@@ -900,7 +848,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     );
     assert_eq!(
         upgraded["plan"]["action"]["contract"],
-        "canic:child-upgrade.v1"
+        "canic:store-child-upgrade.v1"
     );
     assert_eq!(cli(&config, &plan_args), upgraded);
     let id = upgraded["operation"].as_str().unwrap();
@@ -1014,7 +962,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
     ];
     if untracked {
         let wasm = std::fs::read(artifacts.join("app.wasm")).unwrap();
-        let input = canic_management_protocol::upgrade::Stage {
+        let input = Stage {
             approval: canic_management_protocol::upgrade::Approval {
                 manager: identities[0].0.to_text(),
                 child: identities[0].1.to_text(),

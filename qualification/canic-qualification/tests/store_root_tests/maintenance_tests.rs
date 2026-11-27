@@ -82,7 +82,7 @@ pub(super) async fn check_predecessor_custody(root: &Client<'_>, expected: &Stat
 }
 
 async fn check_current_custody(root: &Client<'_>, expected: &Status) {
-    let complete = super::root_custody(root).await.root.current;
+    let complete = super::project(super::root_custody(root).await).current;
     assert_eq!(complete.store_operation.as_ref(), Some(expected));
 }
 

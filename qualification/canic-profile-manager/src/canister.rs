@@ -37,10 +37,7 @@ management::mount_endpoints! {
     maintain_store, observe_store_maintenance, store_maintenance_status, recover_store_maintenance,
     observe_root_custody,
     stage_child_creation, reconcile_child_creation, stage_child_upgrade, reconcile_child_upgrade,
-    child_status, stage_inline_child_creation, reconcile_inline_child_creation, observe_child_status,
-    stage_inline_child_upgrade, reconcile_inline_child_upgrade,
-    status, observe, observe_custody, stage, reconcile,
-    stage_upgrade, upgrade_status, observe_upgrade, reconcile_upgrade,
+    child_status, observe_child_status, status, observe, observe_custody, upgrade_status, observe_upgrade,
 }
 
 #[cfg(feature = "fault-injection")]

@@ -62,6 +62,16 @@ management::mount_endpoints! {
     activate_child_upgrade,
 }
 
+#[canic::query(contract = canic_management_protocol::children::ListChildren, guard = canic::guard::require_controller)]
+fn list_children(
+    after: Option<canic_management_protocol::children::ChildId>,
+) -> (
+    Vec<canic_management_protocol::children::InstalledChild>,
+    Option<canic_management_protocol::children::ChildId>,
+) {
+    management::application::list_children(after)
+}
+
 // redeliver_directory_revision
 // Deliver one exact revision to a ready named service under the operator's approval.
 // guard  : Root controller

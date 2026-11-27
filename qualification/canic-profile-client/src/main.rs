@@ -1,6 +1,5 @@
 //! Application-owned profile client; ICP CLI owns identity and network submission.
 #![forbid(unsafe_code)]
-mod growth;
 
 use canic_profile_protocol::{
     BIND, CHECK, CheckResult, GET, INFO, Info, LIMITS, PUT, ProfileResult, Put, ROUTE, Route,
@@ -11,7 +10,7 @@ use ic_host_process::{self as process, Input, Ownership, Policy, Stderr};
 use std::{path::PathBuf, process::Command, time::Duration};
 
 #[derive(Parser)]
-#[command(version, about = "Use the Canic profile demo", group(ArgGroup::new("destination").required(true).args(["canister", "entry", "manager"])))]
+#[command(version, about = "Use the Canic profile demo", group(ArgGroup::new("destination").required(true).args(["canister", "entry"])))]
 struct Cli {
     /// Deployed profile worker principal.
     #[arg(long)]
@@ -19,9 +18,6 @@ struct Cli {
     /// Discover the worker through this entry's certified replicated resolution.
     #[arg(long)]
     entry: Option<String>,
-    /// One-slot autonomous worker manager.
-    #[arg(long)]
-    manager: Option<String>,
     /// ICP identity; enter its password only in ICP CLI's terminal prompt.
     #[arg(long, default_value = "canic-mainnet")]
     identity: String,
@@ -40,21 +36,6 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Action {
-    /// Retain an exact growth approval and Wasm; makes no network mutations.
-    GrowthPlan {
-        #[arg(long)]
-        wasm: PathBuf,
-        #[arg(long)]
-        output: PathBuf,
-        #[arg(long, default_value_t = 60, value_parser = clap::value_parser!(u64).range(10..=3600))]
-        delay_seconds: u64,
-    },
-    /// Approve the retained growth frame; the manager admits at most one slot.
-    GrowthApprove { approval: PathBuf },
-    /// Read public, uncertified manager evidence without making effects.
-    GrowthStatus,
-    /// Observe uncertain upload/install outcomes; never repeat an issued effect.
-    GrowthReconcile,
     /// Read the entry's route using replicated resolution (requires --entry).
     Route,
     /// Bind an entry once; requires its controller identity and --entry.
@@ -77,23 +58,7 @@ enum Action {
 }
 
 fn run(cli: &Cli) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    if matches!(
-        cli.command,
-        Action::GrowthPlan { .. }
-            | Action::GrowthApprove { .. }
-            | Action::GrowthStatus
-            | Action::GrowthReconcile
-    ) {
-        return growth::run(cli);
-    }
-    if cli.manager.is_some() {
-        return Err("profile commands require --entry or --canister".into());
-    }
     let (method, id, request, query) = match &cli.command {
-        Action::GrowthPlan { .. }
-        | Action::GrowthApprove { .. }
-        | Action::GrowthStatus
-        | Action::GrowthReconcile => unreachable!("growth commands handled above"),
         Action::Route => (
             "resolve",
             ROUTE,
@@ -273,7 +238,7 @@ fn invoke(
     query: bool,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let args: String = request.iter().map(|byte| format!("{byte:02x}")).collect();
-    invoke_arguments(cli, target, method, Some(&args), None, query)
+    invoke_arguments(cli, target, method, &args, query)
 }
 
 #[derive(Debug)]
@@ -303,8 +268,7 @@ fn invoke_arguments(
     cli: &Cli,
     target: &str,
     method: &str,
-    args: Option<&str>,
-    file: Option<&std::path::Path>,
+    args: &str,
     query: bool,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut command = Command::new(&cli.icp_bin);
@@ -312,7 +276,7 @@ fn invoke_arguments(
         "canister",
         "call",
         "--args-format",
-        if file.is_some() { "bin" } else { "hex" },
+        "hex",
         "--output",
         "hex",
         "--network",
@@ -327,13 +291,7 @@ fn invoke_arguments(
         command.arg("--query");
     }
     // Keep discovered text in positional arguments, never in ICP's option parser.
-    if let Some(path) = file {
-        command.arg("--args-file").arg(path);
-    }
-    command.args(["--", target, method]);
-    if let Some(args) = args {
-        command.arg(args);
-    }
+    command.args(["--", target, method, args]);
     // Retain foreground terminal interaction; only this child is owned.
     let mut stdout = Vec::new();
     let report = process::run(
@@ -381,7 +339,7 @@ fn main() -> std::process::ExitCode {
         }
         Err(error) => {
             eprintln!(
-                "{error}\nNo automatic retry was made. Inspect retained profile or growth evidence before submitting more work."
+                "{error}\nNo automatic retry was made. Inspect retained profile evidence before submitting more work."
             );
             std::process::ExitCode::FAILURE
         }

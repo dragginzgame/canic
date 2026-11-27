@@ -125,30 +125,6 @@ pub fn custody() -> stored::Custody {
     stored_journals()
 }
 
-/// Read all child custody and every retained Store maintenance attempt synchronously.
-/// # Panics
-/// Traps if lifecycle has not opened storage.
-#[must_use]
-pub fn root_history() -> canic_management_protocol::custody::RootHistory {
-    super::application::require_legacy();
-    root_history_complete()
-}
-
-pub(super) fn root_history_complete() -> canic_management_protocol::custody::RootHistory {
-    canic_management_protocol::custody::RootHistory {
-        current: current_root_custody(),
-        store_history: STATE
-            .with_borrow(|state| state.as_ref().expect("open engine").journal.2.clone()),
-    }
-}
-
-fn current_root_custody() -> canic_management_protocol::custody::Root {
-    canic_management_protocol::custody::Root {
-        stored: stored_journals(),
-        store_operation: super::store_maintenance::observe(),
-    }
-}
-
 fn stored_journals() -> stored::Custody {
     let children: children::Custody = super::journals();
     let sources = STATE.with_borrow(|state| {

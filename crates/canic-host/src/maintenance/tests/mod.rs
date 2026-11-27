@@ -18,45 +18,28 @@ fn fixture() -> (std::path::PathBuf, Plan) {
         fleet: "mainnet".into(),
         canister: "root".into(),
     });
-    plan.action = crate::PlanAction::MaintainRoot {
-        store: None,
-        target: crate::UpgradeTarget {
-            canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
-            module: "11".repeat(32),
-        },
-        children: vec![Custody {
-            creation: Status {
-                approval: Some(canic_management_protocol::Approval {
-                    manager: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
-                    module_hash: [1; 32],
-                    creation_cycles: canic_management_protocol::CREATION_CYCLES,
-                    execute_at_ns: 1,
-                    expires_at_ns: 2,
-                }),
-                worker: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
-                phase: Phase::Ready,
-                ..Default::default()
-            },
-            upgrades: vec![],
-        }],
-    };
+    plan.action = action();
     plan.validate().unwrap();
     (dir, plan)
 }
 
-#[test]
-fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
+pub(crate) fn action() -> crate::PlanAction {
     use canic_management_protocol::stored as wire;
-    let (dir, mut plan) = fixture();
-    let crate::PlanAction::MaintainRoot {
-        target,
-        children,
-        store,
-    } = &mut plan.action
-    else {
-        panic!("maintenance");
-    };
-    target.module = "11".repeat(32);
+    let children = vec![Custody {
+        creation: Status {
+            approval: Some(canic_management_protocol::Approval {
+                manager: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+                module_hash: [1; 32],
+                creation_cycles: canic_management_protocol::CREATION_CYCLES,
+                execute_at_ns: 1,
+                expires_at_ns: 2,
+            }),
+            worker: Some("ryjl3-tyaaa-aaaaa-aaaba-cai".into()),
+            phase: Phase::Ready,
+            ..Default::default()
+        },
+        upgrades: vec![],
+    }];
     let reference = wire::Reference {
         store: "r7inp-6aaaa-aaaaa-aaabq-cai".into(),
         manifest: ic_wasm_store_protocol::Manifest {
@@ -73,36 +56,63 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         approval: children[0].creation.approval.clone().unwrap(),
         reference,
     };
-    *store = Some(Box::new(crate::StoreMaintenance {
+    let store_id = stage.reference.store.clone();
+    let mut sources =
+        vec![None; canic_management_protocol::children::ChildId::HISTORICAL_SERVICES.len()];
+    sources[0] = Some(wire::Sources {
+        creation: wire::Delivery {
+            operation: stage
+                .pin(
+                    wire::STAGE,
+                    canic_management_protocol::children::ChildId::FIRST,
+                )
+                .operation,
+            reference: stage.reference,
+            state: wire::PinState::Retained,
+            cache_deadline: Some(2),
+        },
+        upgrades: Vec::new(),
+    });
+    let store = Box::new(crate::StoreMaintenance {
         history: Vec::new(),
         operation: None,
         store: crate::UpgradeTarget {
-            canister: stage.reference.store.clone(),
+            canister: store_id,
             module: "22".repeat(32),
         },
-        sources: vec![
-            Some(wire::Sources {
-                creation: wire::Delivery {
-                    operation: stage
-                        .pin(
-                            wire::STAGE,
-                            canic_management_protocol::children::ChildId::FIRST,
-                        )
-                        .operation,
-                    reference: stage.reference,
-                    state: wire::PinState::Retained,
-                    cache_deadline: Some(2),
-                },
-                upgrades: Vec::new(),
-            }),
-            None,
-        ],
-    }));
+        sources,
+    });
+    crate::PlanAction::MaintainRoot {
+        target: crate::UpgradeTarget {
+            canister: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+            module: "11".repeat(32),
+        },
+        children,
+        store,
+    }
+}
+
+#[test]
+fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
+    use canic_management_protocol::stored as wire;
+    let (dir, plan) = fixture();
     plan.validate().unwrap();
     assert_eq!(
         serde_json::from_value::<Plan>(serde_json::to_value(&plan).unwrap()).unwrap(),
         plan
     );
+    let serialized = serde_json::to_value(&plan).unwrap();
+    for old in ["canic:root-maintenance.v1", "canic:deployment-upgrade.v1"] {
+        let mut prior = serialized.clone();
+        prior["action"]["contract"] = old.into();
+        assert!(serde_json::from_value::<Plan>(prior).is_err());
+    }
+    let mut missing = serialized;
+    missing["action"]["approval"]
+        .as_object_mut()
+        .unwrap()
+        .remove("store");
+    assert!(serde_json::from_value::<Plan>(missing).is_err());
     let observed = wire::Custody {
         children: {
             let mut slots = [
@@ -155,7 +165,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         application::LIMITS,
     )
     .unwrap();
-    unexpected.applications[0] = Some(application::Lifecycle {
+    unexpected.children[0].lifecycle = Some(application::Lifecycle {
         creation: application::Arguments::new(vec![42]).unwrap(),
         upgrades: vec![],
     });
@@ -220,10 +230,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         installation: None,
     };
     let mut full_plan = plan.clone();
-    let crate::PlanAction::MaintainRoot {
-        store: Some(full), ..
-    } = &mut full_plan.action
-    else {
+    let crate::PlanAction::MaintainRoot { store: full, .. } = &mut full_plan.action else {
         unreachable!()
     };
     full.operation = Some(operation.clone());
@@ -278,20 +285,14 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
     }
     assert!(retained(&dir.join("complete"), &full_plan).unwrap());
     complete_history_requires_every_retained_predecessor(&full_plan, &complete);
-    let crate::PlanAction::MaintainRoot {
-        store: Some(full), ..
-    } = &mut full_plan.action
-    else {
+    let crate::PlanAction::MaintainRoot { store: full, .. } = &mut full_plan.action else {
         unreachable!()
     };
     full.operation = None;
     assert_eq!(full_plan.digest().unwrap(), child_only_digest);
-    for case in 0..4 {
+    for case in 0..5 {
         let mut invalid = plan.clone();
-        let crate::PlanAction::MaintainRoot {
-            store: Some(store), ..
-        } = &mut invalid.action
-        else {
+        let crate::PlanAction::MaintainRoot { store, .. } = &mut invalid.action else {
             panic!("stored maintenance");
         };
         let source = &mut store.sources[0].as_mut().unwrap().creation;
@@ -299,7 +300,10 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
             0 => source.operation[0] ^= 1,
             1 => source.state = wire::PinState::Issued,
             2 => source.reference.store = "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
-            _ => store.sources[1] = store.sources[0].clone(),
+            3 => store.sources[1] = store.sources[0].clone(),
+            _ => {
+                store.sources.pop();
+            }
         }
         assert!(invalid.validate().is_err());
     }
@@ -349,10 +353,7 @@ fn complete_history_requires_every_retained_predecessor(plan: &Plan, previous: &
         store_history: vec![first.clone()],
     };
     let mut plan = plan.clone();
-    let crate::PlanAction::MaintainRoot {
-        store: Some(store), ..
-    } = &mut plan.action
-    else {
+    let crate::PlanAction::MaintainRoot { store, .. } = &mut plan.action else {
         unreachable!()
     };
     store.store.module = "44".repeat(32);
@@ -363,7 +364,6 @@ fn complete_history_requires_every_retained_predecessor(plan: &Plan, previous: &
         serde_json::from_slice::<Plan>(&serde_json::to_vec(&plan).unwrap()).unwrap(),
         plan
     );
-    assert_eq!(observations(&plan, false)[0].1, "observe_root_custody");
     assert!(observation_args(&plan, "observe_root_history").is_err());
     let frame = |value: &custody::RootHistory| {
         crate::root_custody::frame(value.current.clone(), value.store_history.clone())
@@ -387,10 +387,7 @@ fn complete_history_requires_every_retained_predecessor(plan: &Plan, previous: &
     }
     for case in 0..4 {
         let mut changed = plan.clone();
-        let crate::PlanAction::MaintainRoot {
-            store: Some(store), ..
-        } = &mut changed.action
-        else {
+        let crate::PlanAction::MaintainRoot { store, .. } = &mut changed.action else {
             unreachable!()
         };
         match case {

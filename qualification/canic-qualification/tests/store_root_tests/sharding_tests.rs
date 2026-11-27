@@ -1367,7 +1367,7 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
         )
         .await
     };
-    let prior = evidence().await.root.current.stored;
+    let prior = super::project(evidence().await).current.stored;
     let creation = &prior.children[0].creation;
     assert_eq!(creation.phase, management::Phase::Ready);
     let child = creation.worker.clone().unwrap();
@@ -1401,7 +1401,7 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
     .await
     .unwrap();
     settle(pic).await;
-    let after = evidence().await.root.current.stored;
+    let after = super::project(evidence().await).current.stored;
     let status = root
         .update::<_, upgrade::Status>(
             "reconcile_child_upgrade",

@@ -1,4 +1,4 @@
-//! Store-backed authority; legacy inline approvals keep their original wire representation.
+//! Store-backed child creation and upgrade authority.
 
 #[cfg(test)]
 mod tests;
@@ -103,7 +103,7 @@ pub struct Sources {
 pub struct Custody {
     /// Complete creation and upgrade journals.
     pub children: children::Custody,
-    /// None denotes an inline child; no raw bytes are exported.
+    /// Empty slots have no Store source.
     pub sources: Vec<Option<Sources>>,
 }
 

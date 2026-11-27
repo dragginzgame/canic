@@ -76,17 +76,13 @@ fn full_upgrade_history_fits_original_journal_budget() {
 
 #[test]
 fn upgrade_binds_original_child_old_and_new_code_and_time() {
-    let wasm = b"\0asm\x01\0\0\0".to_vec();
-    let input = Stage {
-        approval: Approval {
-            manager: "root".into(),
-            child: "child".into(),
-            previous_module: [1; 32],
-            module_hash: digest(&wasm),
-            execute_at_ns: 100,
-            expires_at_ns: 200,
-        },
-        wasm,
+    let input = Approval {
+        manager: "root".into(),
+        child: "child".into(),
+        previous_module: [1; 32],
+        module_hash: [2; 32],
+        execute_at_ns: 100,
+        expires_at_ns: 200,
     };
     assert_eq!(input.validate("root", "child", &[1; 32], 99), Ok(()));
     assert_eq!(
@@ -111,44 +107,19 @@ fn upgrade_binds_original_child_old_and_new_code_and_time() {
         );
     }
     let mut too_long = input.clone();
-    too_long.approval.expires_at_ns = 3_600_000_000_101;
+    too_long.expires_at_ns = 3_600_000_000_101;
     assert_eq!(
         too_long.validate("root", "child", &[1; 32], 3_600_000_000_100),
         Err(Refusal::Time)
     );
     let mut changed = input.clone();
-    changed.approval.previous_module = changed.approval.module_hash;
+    changed.previous_module = changed.module_hash;
     assert_eq!(
-        changed.validate("root", "child", &changed.approval.previous_module, 99),
+        changed.validate("root", "child", &changed.previous_module, 99),
         Err(Refusal::Binding)
     );
-    changed = input.clone();
-    changed.wasm.push(0);
-    assert_eq!(
-        changed.validate("root", "child", &[1; 32], 99),
-        Err(Refusal::Artifact)
-    );
-    let bytes = ic_wire::encode(
-        &input,
-        ic_wire::Encoding::Frame {
-            method: STAGE,
-            direction: ic_wire::Direction::Request,
-        },
-        crate::STAGE_LIMITS,
-    )
-    .unwrap();
-    let decoded: Stage = ic_wire::decode(
-        &bytes,
-        ic_wire::Encoding::Frame {
-            method: STAGE,
-            direction: ic_wire::Direction::Request,
-        },
-        crate::STAGE_LIMITS,
-    )
-    .unwrap();
-    assert_eq!(decoded.approval, input.approval);
     let status = Status {
-        approval: Some(input.approval),
+        approval: Some(input),
         phase: Phase::Ready,
         attempts: [1; 2],
         requests: [Some([3; 32]); 2],

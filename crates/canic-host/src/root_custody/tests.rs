@@ -90,7 +90,7 @@ fn frame(value: &impl serde::Serialize, method: u64) -> Vec<u8> {
 }
 
 #[test]
-fn historical_contracts_keep_empty_and_uncertain_children_bound_to_identity() {
+fn custody_binds_empty_and_uncertain_children_to_ordered_service_ids() {
     let stored = stored();
     let current = custody::Root {
         stored: stored.clone(),
@@ -100,28 +100,21 @@ fn historical_contracts_keep_empty_and_uncertain_children_bound_to_identity() {
         current: current.clone(),
         store_history: vec![operation(1)],
     };
-    let value = application::Custody {
-        applications: vec![None; stored.children.len()],
-        root: history.clone(),
-    };
+    let value = fixture(history.clone(), vec![None; stored.children.len()]);
     for method in [application::CUSTODY, application::CHILD_EVIDENCE] {
         let bytes = frame(&value, method);
         let decoded = decode(method, &bytes).unwrap();
         assert_eq!(decoded, value);
-        let slots = children(decoded.root.current.stored).unwrap();
         for (index, id) in ChildId::HISTORICAL_SERVICES.into_iter().enumerate() {
-            assert_eq!(slots[&id].journal, stored.children[index]);
-            assert_eq!(slots[&id].sources, stored.sources[index]);
+            assert_eq!(child(&decoded, id).unwrap().journal, stored.children[index]);
+            assert_eq!(child(&decoded, id).unwrap().sources, stored.sources[index]);
         }
         assert!(decode(method, &bytes[..bytes.len() - 1]).is_err());
     }
     for (old, bytes) in [
         (stored::CUSTODY, frame(&stored, stored::CUSTODY)),
         (custody::ROOT, frame(&current, custody::ROOT)),
-        (
-            custody::ROOT_HISTORY,
-            frame(&history, custody::ROOT_HISTORY),
-        ),
+        (58, frame(&history, 58)),
     ] {
         assert!(decode(old, &bytes).is_err());
         assert!(decode(application::CUSTODY, &bytes).is_err());
@@ -133,7 +126,22 @@ fn historical_contracts_keep_empty_and_uncertain_children_bound_to_identity() {
         )
         .is_err()
     );
-    let mut invalid = value;
-    invalid.applications.pop();
-    assert!(decode(application::CUSTODY, &frame(&invalid, application::CUSTODY)).is_err());
+    for mutate in 0..3 {
+        let mut invalid = value.clone();
+        match mutate {
+            0 => invalid.children.swap(0, 1),
+            1 => invalid.children[1].slot = invalid.children[0].slot,
+            _ => {
+                invalid.children.remove(1);
+            }
+        }
+        assert!(decode(application::CUSTODY, &frame(&invalid, application::CUSTODY)).is_err());
+    }
+    for old in [
+        "canic.root.observe_child_deployments.v1",
+        "canic.root.observe_root_custody.v1",
+    ] {
+        let old = ic_wire::method_id(old);
+        assert!(decode(application::CUSTODY, &frame(&history, old)).is_err());
+    }
 }

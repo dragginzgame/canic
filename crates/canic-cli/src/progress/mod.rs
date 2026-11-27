@@ -94,7 +94,7 @@ fn build_row(label: String, item: &BuiltCanister, mount_width: usize) -> [String
         ),
         endpoints,
         if item.modules.is_empty() {
-            "—".into()
+            "n/a".into()
         } else {
             item.modules.join(",")
         },

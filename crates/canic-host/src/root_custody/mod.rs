@@ -5,47 +5,48 @@
 mod tests;
 
 use crate::{Error, Result, supplier};
-use canic_management_protocol::{
-    application, children::ChildId, custody, store_maintenance, stored,
-};
-use std::collections::BTreeMap;
+use canic_management_protocol::{application, children::ChildId};
+#[cfg(test)]
+use canic_management_protocol::{custody, store_maintenance, stored};
 
-#[derive(Debug, Eq, PartialEq)]
-pub(crate) struct Child {
-    pub journal: custody::Custody,
-    pub sources: Option<stored::Sources>,
+pub(crate) fn child(
+    value: &application::Custody,
+    slot: ChildId,
+) -> Result<&application::ChildCustody> {
+    slot.service_index()
+        .and_then(|index| value.children.get(index))
+        .filter(|child| child.slot == slot)
+        .ok_or_else(|| Error::Invalid("Root custody omitted the selected child identity".into()))
 }
 
-#[derive(Debug, Eq, PartialEq)]
-pub(crate) struct Snapshot {
-    pub children: BTreeMap<ChildId, Child>,
-    pub store_operation: Option<store_maintenance::Status>,
-    pub store_history: Vec<store_maintenance::Status>,
-}
-
-impl Snapshot {
-    pub fn child(&self, id: ChildId) -> Result<&Child> {
-        self.children.get(&id).ok_or_else(|| {
-            Error::Invalid("Root custody omitted the selected child identity".into())
-        })
+#[cfg(test)]
+pub(crate) fn fixture(
+    root: custody::RootHistory,
+    applications: Vec<Option<application::Lifecycle>>,
+) -> application::Custody {
+    let stored = root.current.stored;
+    assert_eq!(stored.children.len(), stored.sources.len());
+    assert_eq!(stored.children.len(), applications.len());
+    let children = stored
+        .children
+        .into_iter()
+        .zip(stored.sources)
+        .zip(applications)
+        .enumerate()
+        .map(
+            |(i, ((journal, sources), lifecycle))| application::ChildCustody {
+                slot: ChildId::service(i).unwrap(),
+                journal,
+                sources,
+                lifecycle,
+            },
+        )
+        .collect();
+    application::Custody {
+        children,
+        store_operation: root.current.store_operation,
+        store_history: root.store_history,
     }
-}
-
-// Historical array positions become explicit identities only at the codec boundary.
-// Empty slots remain present; they are evidence, not missing observations.
-pub(crate) fn children(value: stored::Custody) -> Result<BTreeMap<ChildId, Child>> {
-    if value.children.len() < ChildId::HISTORICAL_SERVICES.len()
-        || value.children.len() != value.sources.len()
-    {
-        return Err(Error::Invalid(
-            "historical Root custody cannot represent the admitted child identities".into(),
-        ));
-    }
-    Ok((0..value.children.len())
-        .map(|index| ChildId::service(index).expect("bounded custody"))
-        .zip(value.children.into_iter().zip(value.sources))
-        .map(|(id, (journal, sources))| (id, Child { journal, sources }))
-        .collect())
 }
 
 #[cfg(test)]
@@ -54,13 +55,14 @@ pub(crate) fn frame(
     store_history: Vec<store_maintenance::Status>,
 ) -> Vec<u8> {
     use canic_management_protocol::application;
-    let value = application::Custody {
-        applications: vec![None; current.stored.children.len()],
-        root: custody::RootHistory {
+    let empty = vec![None; current.stored.children.len()];
+    let value = fixture(
+        custody::RootHistory {
             current,
             store_history,
         },
-    };
+        empty,
+    );
     ic_wire::encode(
         &value,
         ic_wire::Encoding::Frame {
@@ -87,10 +89,12 @@ pub(crate) fn decode(method: u64, bytes: &[u8]) -> Result<application::Custody> 
         application::LIMITS,
     )
     .map_err(supplier)?;
-    let stored = &value.root.current.stored;
-    if stored.children.len() < ChildId::HISTORICAL_SERVICES.len()
-        || value.applications.len() != stored.children.len()
-        || stored.sources.len() != stored.children.len()
+    if value.children.len() < ChildId::HISTORICAL_SERVICES.len()
+        || value
+            .children
+            .iter()
+            .enumerate()
+            .any(|(i, child)| ChildId::service(i) != Some(child.slot))
     {
         return Err(Error::Invalid(
             "Root custody has inconsistent service slots".into(),

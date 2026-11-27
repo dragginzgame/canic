@@ -307,12 +307,12 @@ pub(super) fn plan(
                     module: root_module,
                 },
                 children: children.iter().map(|c| c.custody.clone()).collect(),
-                store: Some(Box::new(store_custody(
+                store: Box::new(store_custody(
                     &children,
                     &store_binding,
                     store_operation.as_ref(),
                     &store_history,
-                ))),
+                )),
             },
             ..desired.root
         };

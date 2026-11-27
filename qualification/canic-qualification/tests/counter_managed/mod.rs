@@ -1,13 +1,16 @@
 //! The actual fleet CLI publishes and installs a counter through separate Root/Store owners.
 use super::*;
-use canic_management_protocol::{Phase, stored};
+use canic_management_protocol::Phase;
 use example_counter::{Error, Request};
 use ic_testkit::pocket_ic::nonblocking::PocketIc;
 use ic_wire::{Direction, Encoding};
 
 use canic_qualification::counter;
 
-async fn custody(pic: &PocketIc, root: CanisterId) -> stored::Custody {
+async fn custody(
+    pic: &PocketIc,
+    root: CanisterId,
+) -> canic_management_protocol::application::Custody {
     let reply = pic
         .update_call(
             root,
@@ -34,9 +37,6 @@ async fn custody(pic: &PocketIc, root: CanisterId) -> stored::Custody {
         canic_management_protocol::application::LIMITS,
     )
     .unwrap()
-    .root
-    .current
-    .stored
 }
 
 async fn advance(pic: &PocketIc) {
@@ -129,7 +129,7 @@ async fn fleet_counter_preserves_value_and_never_treats_fenced_as_ready() {
         let root =
             CanisterId::from_text(report["root"]["receipt"]["canister"].as_str().unwrap()).unwrap();
         let state = custody(owner.client(), root).await;
-        let creation = &state.children[0].creation;
+        let creation = &state.children[0].journal.creation;
         let child = CanisterId::from_text(creation.worker.as_ref().unwrap()).unwrap();
         assert_eq!(creation.attempts, [1; 3]);
         assert_eq!(
@@ -175,9 +175,15 @@ async fn fleet_counter_preserves_value_and_never_treats_fenced_as_ready() {
                 apply(id);
                 advance(owner.client()).await;
                 let observed = custody(owner.client(), root).await;
-                assert_eq!(observed.children[0].creation.phase, Phase::Verified);
-                assert_eq!(observed.children[0].creation.attempts, creation.attempts);
-                assert_eq!(observed.children[0].creation.worker, creation.worker);
+                assert_eq!(observed.children[0].journal.creation.phase, Phase::Verified);
+                assert_eq!(
+                    observed.children[0].journal.creation.attempts,
+                    creation.attempts
+                );
+                assert_eq!(
+                    observed.children[0].journal.creation.worker,
+                    creation.worker
+                );
                 assert_eq!(owner.client().get_stable_memory(child).await, stable);
             }
             assert_eq!(
@@ -301,7 +307,7 @@ async fn fleet_counter_preserves_value_and_never_treats_fenced_as_ready() {
             assert_eq!(plan()["action"], "unchanged");
         }
         // Store is independently controlled infrastructure; only one application was allocated.
-        assert!(state.children[1].creation.approval.is_none());
+        assert!(state.children[1].journal.creation.approval.is_none());
         assert_eq!(
             owner
                 .client()

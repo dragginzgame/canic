@@ -205,6 +205,8 @@ fn declared_routes_require_unambiguous_known_network_and_escape_text() {
     assert!(declared_routes(&snapshot, std::slice::from_ref(&link)).is_err());
     for canister in ["entry<script>", "worker"] {
         snapshot.canisters.push(canic_host::FleetCanister {
+            installation: None,
+            availability: None,
             network_id: "network-a".into(),
             network: "local".into(),
             canister: canister.into(),
@@ -227,6 +229,8 @@ fn declared_routes_require_unambiguous_known_network_and_escape_text() {
     snapshot.canisters[1].network_id = "network-a".into();
     for canister in ["entry<script>", "worker"] {
         snapshot.canisters.push(canic_host::FleetCanister {
+            installation: None,
+            availability: None,
             network_id: "network-b".into(),
             network: "local".into(),
             canister: canister.into(),

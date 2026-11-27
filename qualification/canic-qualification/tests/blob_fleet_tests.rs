@@ -287,22 +287,16 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
     .unwrap();
     let position = request.slot.index();
     assert_eq!(
-        custody.applications[position]
+        custody.children[position]
+            .lifecycle
             .as_ref()
             .unwrap()
             .creation
             .as_slice(),
         args
     );
-    assert_eq!(
-        custody.root.current.stored.children[position]
-            .creation
-            .attempts,
-        [1; 3]
-    );
-    let sources = custody.root.current.stored.sources[position]
-        .as_ref()
-        .unwrap();
+    assert_eq!(custody.children[position].journal.creation.attempts, [1; 3]);
+    let sources = custody.children[position].sources.as_ref().unwrap();
     assert_eq!(
         sources.creation.pin(),
         request.value.pin(application::STAGE, request.slot)
@@ -443,13 +437,15 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
     ] {
         let mut observed = read_custody(owner.client(), root).await;
         for _ in 0..60 {
-            let state = observed.applications[position]
+            let state = observed.children[position]
+                .lifecycle
                 .as_ref()
                 .unwrap()
                 .upgrades
                 .last()
                 .unwrap();
-            let installed = observed.root.current.stored.children[position]
+            let installed = observed.children[position]
+                .journal
                 .upgrades
                 .last()
                 .unwrap()
@@ -464,7 +460,8 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
             observed = read_custody(owner.client(), root).await;
         }
         assert_eq!(
-            observed.applications[position]
+            observed.children[position]
+                .lifecycle
                 .as_ref()
                 .unwrap()
                 .upgrades
@@ -502,7 +499,8 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
     }
     let mut retained = read_custody(owner.client(), root).await;
     for _ in 0..25 {
-        if retained.applications[position]
+        if retained.children[position]
+            .lifecycle
             .as_ref()
             .unwrap()
             .upgrades
@@ -515,7 +513,8 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         progress = apply(upgrade);
         retained = read_custody(owner.client(), root).await;
     }
-    let maintenance = retained.applications[position]
+    let maintenance = retained.children[position]
+        .lifecycle
         .as_ref()
         .unwrap()
         .upgrades
@@ -691,7 +690,8 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
     );
     let before_recovery = read_custody(owner.client(), root).await;
     assert_eq!(
-        before_recovery.applications[position]
+        before_recovery.children[position]
+            .lifecycle
             .as_ref()
             .unwrap()
             .upgrades
@@ -831,7 +831,8 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         .unwrap();
     let mut pending = read_custody(owner.client(), root).await;
     for _ in 0..60 {
-        if pending.root.current.stored.children[position]
+        if pending.children[position]
+            .journal
             .upgrades
             .last()
             .unwrap()
@@ -844,7 +845,8 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         pending = read_custody(owner.client(), root).await;
     }
     assert_eq!(
-        pending.root.current.stored.children[position]
+        pending.children[position]
+            .journal
             .upgrades
             .last()
             .unwrap()
@@ -885,7 +887,8 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         owner.client().tick().await;
     }
     let expired = read_custody(owner.client(), root).await;
-    let lifecycle = expired.applications[position]
+    let lifecycle = expired.children[position]
+        .lifecycle
         .as_ref()
         .unwrap()
         .upgrades
@@ -896,10 +899,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         lifecycle.requests[2].is_none(),
         "expiry must prevent a new start"
     );
-    let install = expired.root.current.stored.children[position]
-        .upgrades
-        .last()
-        .unwrap();
+    let install = expired.children[position].journal.upgrades.last().unwrap();
     assert_eq!(
         install.phase,
         canic_management_protocol::upgrade::Phase::Verified

@@ -10,29 +10,28 @@ impl FleetPlan {
     pub(super) fn source(
         &self,
         root: &Receipt,
-        store: Option<&Receipt>,
+        store: &Receipt,
         slot: ChildId,
     ) -> Result<StoredArtifact> {
         let manifest = &self.child(slot)?.release;
-        let receipt = store.ok_or_else(invalid)?;
         let expected = self.store_plan(root)?;
-        if receipt.operation != expected.digest()?
-            || receipt.module_hash != expected.artifact.sha256
-            || receipt.controller != root.canister
+        if store.operation != expected.digest()?
+            || store.module_hash != expected.artifact.sha256
+            || store.controller != root.canister
         {
             return Err(invalid());
         }
         Ok(StoredArtifact {
             store: UpgradeTarget {
-                canister: receipt.canister.clone(),
-                module: receipt.module_hash.clone(),
+                canister: store.canister.clone(),
+                module: store.module_hash.clone(),
             },
             manifest: manifest.clone(),
             maintenance: None,
         })
     }
 
-    fn publication(&self, root: &Receipt, store: Option<&Receipt>, slot: ChildId) -> Result<Plan> {
+    fn publication(&self, root: &Receipt, store: &Receipt, slot: ChildId) -> Result<Plan> {
         let child = self.child_plan(root, store, slot)?;
         let source = child.management().map(|o| &o.source).ok_or_else(invalid)?;
         publication_plan(&child, source)
@@ -69,7 +68,11 @@ pub(super) fn validate(dir: &Path, fleet: &FleetPlan, slot: ChildId, bytes: &[u8
         return Ok(());
     }
     let root = root_receipt(dir, fleet)?.ok_or_else(invalid)?;
-    let value = fleet.publication(&root, store_receipt(dir, fleet)?.as_ref(), slot)?;
+    let value = fleet.publication(
+        &root,
+        &store_receipt(dir, fleet)?.ok_or_else(invalid)?,
+        slot,
+    )?;
     let id = value.digest()?;
     if plan::load(&path, &id)?.0 != value {
         return Err(invalid());
@@ -93,7 +96,7 @@ pub(super) async fn apply(
 ) -> Result<()> {
     // Publish every selected release before the first child admission. Resume the same signed attempts.
     for (slot, child) in fleet.children() {
-        let value = fleet.publication(root, Some(store), slot)?;
+        let value = fleet.publication(root, store, slot)?;
         let child_dir = dir.join(record::child_leaf(slot));
         let path = child_dir.join("publication");
         let bytes = store::read(&child_dir.join("module.wasm"), artifact::MAX_ARTIFACT_BYTES)?;
@@ -134,7 +137,11 @@ fn retained_publication(
         return Ok(None);
     }
     let root = root_receipt(dir, fleet)?.ok_or_else(invalid)?;
-    let value = fleet.publication(&root, store_receipt(dir, fleet)?.as_ref(), slot)?;
+    let value = fleet.publication(
+        &root,
+        &store_receipt(dir, fleet)?.ok_or_else(invalid)?,
+        slot,
+    )?;
     Ok(Some((path, value)))
 }
 

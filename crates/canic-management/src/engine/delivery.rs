@@ -2,7 +2,7 @@
 use super::{MANAGEMENT_LIMITS, STATE, State, failure, management, response};
 use crate::storage::Artifact;
 use canic_management_protocol::{
-    Failure, Refusal, STAGE_LIMITS, children::ChildId, stored, stored::STORE_LIMITS,
+    Failure, Refusal, children::ChildId, stored, stored::STORE_LIMITS,
 };
 use ic_platform_protocol::{
     management::CanisterArgs,
@@ -44,7 +44,7 @@ fn mutate(slot: ChildId, upgrade: bool, f: impl FnOnce(&mut stored::Delivery)) {
         let mut artifacts = state.artifact.clone();
         let sources = match artifacts.0.get_mut(&slot).expect("known child") {
             Artifact::Stored(sources) | Artifact::Application(sources, _) => sources,
-            Artifact::Inline(_) => panic!("Store source required"),
+            Artifact::Empty => panic!("Store source required"),
         };
         f(if upgrade {
             sources.upgrades.last_mut().expect("upgrade source")
@@ -85,6 +85,10 @@ pub(super) fn retained<A: Serialize>(
 
 pub(super) fn validate(state: &State, slot: ChildId) {
     let Some(sources) = state.artifact.0[&slot].sources() else {
+        assert!(
+            state.journal.0[&slot].0.approval.is_none(),
+            "missing child source"
+        );
         return;
     };
     let journal = &state.journal.0[&slot];
@@ -230,9 +234,7 @@ pub(super) async fn call<T: Serialize, R: DeserializeOwned>(
 
 /// Pending pins dispatch once. Issued pins can only be reconstructed by observation.
 pub(super) async fn pin(slot: ChildId, upgrade: bool) -> Result<(), Failure> {
-    let Some(source) = source(slot, upgrade) else {
-        return Ok(());
-    };
+    let source = source(slot, upgrade).ok_or(Failure::Mismatch)?;
     if source.state == stored::PinState::Retained {
         return Ok(());
     }
@@ -283,8 +285,11 @@ pub(super) async fn dispatch_upload(
     expires: u64,
     issue: impl FnOnce(&[u8]),
 ) -> Result<(), Failure> {
-    let source = source(slot, upgrade);
-    let bytes = if let Some(source) = &source {
+    let source = source(slot, upgrade).ok_or(Failure::Mismatch)?;
+    if source.reference.manifest.hash != hash {
+        return Err(Failure::Mismatch);
+    }
+    let bytes = {
         assert_eq!(source.state, stored::PinState::Retained);
         assert!(source.cache_deadline.is_none(), "one cache preparation");
         let deadline = expires.min(api::time().saturating_add(300_000_000_000));
@@ -301,47 +306,30 @@ pub(super) async fn dispatch_upload(
             STORE_LIMITS,
         )
         .expect("Store cache request")
-    } else {
-        let wasm = STATE.with_borrow(|state| {
-            state.as_ref().expect("open engine").artifact.0[&slot]
-                .wasm(upgrade)
-                .to_vec()
-        });
-        chunks::encode_upload_chunk(api::canister_self(), &wasm, STAGE_LIMITS.bytes)
-            .expect("upload args")
     };
     issue(&bytes);
-    if let Some(source) = source {
-        let reply = Call::new(
-            Principal::from_text(&source.reference.store).expect("Store principal"),
-            "prepare_cache",
-            Wait::Unbounded,
-        )
-        .owned_args(bytes)
-        .execute()
-        .await
-        .map_err(failure)
-        .and_then(response)?;
-        let ready: Result<store::CacheReady, store::CacheError> = ic_wire::decode(
-            &reply,
-            ic_wire::Encoding::Frame {
-                method: store::PREPARE_CACHE,
-                direction: ic_wire::Direction::Response,
-            },
-            STORE_LIMITS,
-        )
-        .map_err(|_| Failure::InvalidReply)?;
-        let ready = ready.map_err(|_| Failure::Uncertain)?;
-        if ready.pin != source.pin() || ready.uploaded as usize > store::MAX_CHUNKS {
-            return Err(Failure::Mismatch);
-        }
-    } else {
-        let reply = management("upload_chunk", bytes, 0).await?;
-        let chunk = chunks::decode_upload_chunk(&reply, MANAGEMENT_LIMITS)
-            .map_err(|_| Failure::InvalidReply)?;
-        if chunk.hash != hash {
-            return Err(Failure::Mismatch);
-        }
+    let reply = Call::new(
+        Principal::from_text(&source.reference.store).expect("Store principal"),
+        "prepare_cache",
+        Wait::Unbounded,
+    )
+    .owned_args(bytes)
+    .execute()
+    .await
+    .map_err(failure)
+    .and_then(response)?;
+    let ready: Result<store::CacheReady, store::CacheError> = ic_wire::decode(
+        &reply,
+        ic_wire::Encoding::Frame {
+            method: store::PREPARE_CACHE,
+            direction: ic_wire::Direction::Response,
+        },
+        STORE_LIMITS,
+    )
+    .map_err(|_| Failure::InvalidReply)?;
+    let ready = ready.map_err(|_| Failure::Uncertain)?;
+    if ready.pin != source.pin() || ready.uploaded as usize > store::MAX_CHUNKS {
+        return Err(Failure::Mismatch);
     }
     Ok(())
 }
@@ -355,7 +343,7 @@ pub(super) async fn install(
 ) -> Result<(), Failure> {
     use ic_platform_protocol::management::{self as mgmt, InstallChunkedCodeArgs, InstallMode};
     let upgrade = matches!(mode, InstallMode::Upgrade(_));
-    let (store, chunks) = layout(slot, upgrade, hash);
+    let (store, chunks) = layout(slot, upgrade, hash)?;
     let bytes = InstallChunkedCodeArgs {
         mode,
         target_canister: target,
@@ -372,28 +360,27 @@ pub(super) async fn install(
     mgmt::decode_empty_response(&reply, MANAGEMENT_LIMITS).map_err(|_| Failure::InvalidReply)
 }
 
-fn layout(slot: ChildId, upgrade: bool, hash: [u8; 32]) -> (Principal, Vec<ChunkHash>) {
-    if let Some(source) = source(slot, upgrade) {
-        (
-            Principal::from_text(&source.reference.store).expect("Store principal"),
-            source
-                .reference
-                .manifest
-                .chunks
-                .into_iter()
-                .map(|hash| ChunkHash {
-                    hash: hash.to_vec(),
-                })
-                .collect(),
-        )
-    } else {
-        (
-            api::canister_self(),
-            vec![ChunkHash {
-                hash: hash.to_vec(),
-            }],
-        )
+fn layout(
+    slot: ChildId,
+    upgrade: bool,
+    hash: [u8; 32],
+) -> Result<(Principal, Vec<ChunkHash>), Failure> {
+    let source = source(slot, upgrade).ok_or(Failure::Mismatch)?;
+    if source.reference.manifest.hash != hash {
+        return Err(Failure::Mismatch);
     }
+    Ok((
+        Principal::from_text(&source.reference.store).expect("Store principal"),
+        source
+            .reference
+            .manifest
+            .chunks
+            .into_iter()
+            .map(|hash| ChunkHash {
+                hash: hash.to_vec(),
+            })
+            .collect(),
+    ))
 }
 
 pub(super) async fn observe_cache(
@@ -401,7 +388,7 @@ pub(super) async fn observe_cache(
     upgrade: bool,
     hash: [u8; 32],
 ) -> Result<(), Failure> {
-    let (canister_id, expected) = layout(slot, upgrade, hash);
+    let (canister_id, expected) = layout(slot, upgrade, hash)?;
     verify_chunks(canister_id, &expected).await
 }
 

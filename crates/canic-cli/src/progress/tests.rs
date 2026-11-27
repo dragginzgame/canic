@@ -210,17 +210,17 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
     store.canister = "artifacts".into();
     store.role = Some("wasm-store".into());
     store.endpoint_count = 14;
-    store.modules = vec!["auth", "db"];
     assert_eq!(
         serde_json::to_value(&hub).unwrap()["client"],
         "artifacts/user_shard.codec"
     );
     let table = built(&[shard, hub, store]);
+    assert_eq!(table.matches("n/a").count(), 2);
     let row = table
         .lines()
         .find(|row| row.starts_with("├─ [WASM_STORE]"))
         .unwrap();
-    assert!(row.find("KiB").unwrap() < row.find("auth,db").unwrap());
+    assert!(row.contains("14 (14)  n/a"));
     assert!(row.contains("14 (14)"));
     assert!(row.contains("0.8.0"));
     assert!(row.contains("wasm_store.wasm"));

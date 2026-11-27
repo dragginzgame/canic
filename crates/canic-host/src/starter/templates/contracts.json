@@ -2,7 +2,7 @@
   "app": {
     "canic_logs": {
       "id": "0x2183955139ce40a5",
-      "mode": "update",
+      "mode": "query",
       "reply": {
         "rust": "canic::logging::Page",
         "schema": {
@@ -311,6 +311,13 @@
             },
             "k": "option"
           },
+          "Wire_Option_69e7a2959e1486f0": {
+            "item": {
+              "k": "ref",
+              "name": "Wire_u128_9478b2e531ac5cf1"
+            },
+            "k": "option"
+          },
           "Wire_Option_8177596c9bc78c33": {
             "item": {
               "k": "ref",
@@ -574,6 +581,29 @@
                   ],
                   "k": "record"
                 }
+              },
+              {
+                "id": 7,
+                "name": "Runtime",
+                "value": {
+                  "fields": [
+                    {
+                      "name": "version",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_u64_4d35d3193e8d66f2"
+                      }
+                    },
+                    {
+                      "name": "liquid_cycles",
+                      "value": {
+                        "k": "ref",
+                        "name": "Wire_Option_69e7a2959e1486f0"
+                      }
+                    }
+                  ],
+                  "k": "record"
+                }
               }
             ]
           },
@@ -762,6 +792,13 @@
                 "value": {
                   "k": "unit"
                 }
+              },
+              {
+                "id": 6,
+                "name": "Runtime",
+                "value": {
+                  "k": "unit"
+                }
               }
             ]
           },
@@ -779,7 +816,7 @@
     },
     "canic_readiness": {
       "id": "0x0000000000000003",
-      "mode": "update",
+      "mode": "query",
       "reply": {
         "rust": "canic::readiness::State",
         "schema": {

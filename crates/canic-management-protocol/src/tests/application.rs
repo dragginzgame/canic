@@ -19,22 +19,20 @@ fn maximum_application_history_fits_and_incomplete_effect_custody_refuses() {
         upgrades: vec![maintenance.clone(); upgrade::MAX_UPGRADES],
     };
     let value = Custody {
-        root: custody::RootHistory {
-            current: custody::Root {
-                stored: stored::Custody {
-                    children: (0..8)
-                        .map(|_| custody::Custody {
-                            creation: Default::default(),
-                            upgrades: vec![],
-                        })
-                        .collect(),
-                    sources: vec![None; 8],
+        children: ChildId::HISTORICAL_SERVICES
+            .into_iter()
+            .map(|slot| ChildCustody {
+                slot,
+                journal: custody::Custody {
+                    creation: Default::default(),
+                    upgrades: vec![],
                 },
-                store_operation: None,
-            },
-            store_history: vec![],
-        },
-        applications: (0..8).map(|_| Some(lifecycle.clone())).collect(),
+                sources: None,
+                lifecycle: Some(lifecycle.clone()),
+            })
+            .collect(),
+        store_operation: None,
+        store_history: vec![],
     };
     let encoding = ic_wire::Encoding::Frame {
         method: CUSTODY,

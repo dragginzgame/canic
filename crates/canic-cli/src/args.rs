@@ -413,6 +413,15 @@ pub(super) enum FleetCommand {
         #[arg(long, value_enum, default_value_t = ColorMode::Auto)]
         color: ColorMode,
 
+        /// Query Root's protected live child inventory as this existing controller.
+        #[arg(long, value_name = "PEM")]
+        identity: Option<PathBuf>,
+        /// Inspect one deployed principal and its directly accessible diagnostics.
+        #[arg(long, conflicts_with_all = ["viewer", "html", "wallet", "link", "details"])]
+        canister: Option<String>,
+        /// Local Wasm for the selected principal. Its hash must match certified metadata.
+        #[arg(long, requires = "canister")]
+        wasm: Option<PathBuf>,
         /// Include code hashes, network bindings and timer diagnostics in terminal output.
         #[arg(long)]
         details: bool,

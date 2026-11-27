@@ -231,3 +231,58 @@ pub(super) fn schedule(ready: Option<ChildId>) {
     .set(OnceDemand::At(ic_platform_runtime::system::time()))
     .expect("schedule directory delivery");
 }
+
+/// Page existing journal keys in order. The cursor excludes the last scanned slot.
+/// # Panics
+/// Requires an open Root engine.
+#[must_use]
+pub fn list_children(
+    after: Option<ChildId>,
+) -> (
+    Vec<canic_management_protocol::children::InstalledChild>,
+    Option<ChildId>,
+) {
+    use canic_management_protocol::children::InstalledChild;
+    use std::ops::Bound::{Excluded, Unbounded};
+    let root = ic_platform_runtime::system::canister_self();
+    STATE.with_borrow(|state| {
+        let state = state.as_ref().expect("open engine");
+        let mut slots = state
+            .journal
+            .0
+            .range((after.map_or(Unbounded, Excluded), Unbounded));
+        let mut rows = Vec::new();
+        let mut last = None;
+        for (&slot, journal) in slots.by_ref().take(32) {
+            last = Some(slot);
+            let Some(canister) = &journal.0.worker else {
+                continue;
+            };
+            #[cfg(feature = "sharding")]
+            if state.pools.withdrawn(slot) {
+                continue;
+            }
+            let mut role = None;
+            let mut parent = None;
+            if let Some(Artifact::Application(_, lifecycle)) = state.artifact.0.get(&slot) {
+                let bytes = lifecycle.creation.as_slice();
+                if let Ok(Some(binding)) = canic::topology::Install::approved(bytes)
+                    && binding.root == root
+                {
+                    role = Some(binding.role);
+                    parent = Some(binding.parent.to_text());
+                } else if let Ok(service) = ServiceInstall::approved(bytes, root) {
+                    role = Some(service.role);
+                }
+            }
+            rows.push(InstalledChild {
+                slot,
+                canister: canister.clone(),
+                role,
+                parent,
+                phase: journal.0.phase,
+            });
+        }
+        (rows, slots.next().and(last))
+    })
+}

@@ -1,23 +1,19 @@
 //! Versioned payloads in two bounded Storage records.
-//! Logical predecessor codecs do not import an older Storage backing format.
+//! Open accepts only the current journal and Store delivery tags.
 
 #[cfg(test)]
 mod tests;
 
-use canic_management_protocol::{
-    LIMITS, MAX_WASM, Status, children::ChildId, store_maintenance, upgrade,
-};
+use canic_management_protocol::{LIMITS, Status, children::ChildId, store_maintenance, upgrade};
 
-use ic_wire::{Bytes, BytesRef};
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::BTreeMap};
+use std::collections::BTreeMap;
 
 // Persist identities explicitly. The protocol remains the admission ceiling;
 // accepting a new record shape never creates capacity or drops unknown entries.
 type Records<T> = Vec<(u32, T)>;
 
-// Older formats require every historical slot. Expanded records retain sorted
-// identities explicitly and need no placeholder for an unallocated child.
+// Require unique, ordered identities before collecting into the runtime map.
 fn identified<T>(entries: Records<T>) -> Result<BTreeMap<ChildId, T>, &'static str> {
     let mut map = BTreeMap::new();
     for (id, value) in entries {
@@ -29,16 +25,10 @@ fn identified<T>(entries: Records<T>) -> Result<BTreeMap<ChildId, T>, &'static s
         }
         map.insert(slot, value);
     }
-    if !historical_or_complete(&map) {
+    if !complete(&map) {
         return Err("child identities");
     }
     Ok(map)
-}
-
-fn expanded<T>(entries: &BTreeMap<ChildId, T>) -> bool {
-    entries
-        .last_key_value()
-        .is_some_and(|(id, _)| id.index() >= 4)
 }
 
 fn complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
@@ -53,20 +43,10 @@ fn complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
         && entries.contains_key(&ChildId::PROJECT[0]) == entries.contains_key(&ChildId::PROJECT[1])
 }
 
-fn historical_or_complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
-    complete(entries)
-        || entries
-            .keys()
-            .copied()
-            .eq([ChildId::FIRST, ChildId::SECOND])
-}
-
-const JOURNAL_TAG: &[u8; 4] = b"CUJG";
-const ARTIFACT_TAG: &[u8] = b"CUA2";
+const JOURNAL_TAG: &[u8; 4] = b"CMJ1";
+const ARTIFACT_TAG: &[u8; 4] = b"CMS1";
 pub(super) const JOURNAL_BYTES: usize = 65_536;
-// Each extra empty record encodes its slot, inline variant and two empty byte vectors.
-const SLOT_FRAMING: usize = 4 * (ChildId::SLOT_COUNT - 2);
-pub(super) const ARTIFACT_BYTES: usize = 2 * MAX_WASM + 24 + SLOT_FRAMING;
+pub(super) const ARTIFACT_BYTES: usize = 1_048_576;
 pub(super) const JOURNAL_KEY: &str = "manager.journal.v2";
 pub(super) const ARTIFACT_KEY: &str = "manager.artifacts.v1";
 #[cfg(feature = "sharding")]
@@ -96,9 +76,7 @@ const JOURNAL_LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: LIMITS.depth + 5,
 };
 const ARTIFACT_LIMITS: ic_wire::Limits = ic_wire::Limits {
-    // Freeze the historical payload ceiling (24-byte Cell header plus 4-byte tag).
-    // New Storage framing does not expand admitted inline artifact authority.
-    bytes: 2 * MAX_WASM - 28,
+    bytes: ARTIFACT_BYTES - ARTIFACT_TAG.len(),
     allocation: ARTIFACT_BYTES * 9 + canic_management_protocol::stored::LIMITS.allocation,
     nodes: canic_management_protocol::stored::LIMITS.nodes + 64,
     depth: canic_management_protocol::stored::LIMITS.depth + 3,
@@ -116,88 +94,27 @@ impl Journal {
     }
 }
 
-#[derive(Clone, Default)]
-pub(super) struct Inline(pub Vec<u8>, pub Vec<u8>);
-impl Serialize for Inline {
-    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let creation = BytesRef::<MAX_WASM>::new(&self.0).map_err(serde::ser::Error::custom)?;
-        let upgrade = BytesRef::<MAX_WASM>::new(&self.1).map_err(serde::ser::Error::custom)?;
-        (creation, upgrade).serialize(serializer)
-    }
-}
-impl<'de> Deserialize<'de> for Inline {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let (creation, upgrade) = <(Bytes<MAX_WASM>, Bytes<MAX_WASM>)>::deserialize(deserializer)?;
-        Ok(Self(creation.into_vec(), upgrade.into_vec()))
-    }
-}
-impl Inline {
-    fn decode(bytes: Cow<'_, [u8]>) -> Result<Self, &'static str> {
-        if let Some(payload) = bytes.strip_prefix(ARTIFACT_TAG) {
-            let length: [u8; 4] = payload
-                .get(..4)
-                .ok_or("artifact header")?
-                .try_into()
-                .map_err(|_| "artifact header")?;
-            let length = u32::from_le_bytes(length) as usize;
-            let payload = &payload[4..];
-            if length > MAX_WASM || length > payload.len() || payload.len() - length > MAX_WASM {
-                return Err("artifact bounds");
-            }
-            Ok(Self(payload[..length].to_vec(), payload[length..].to_vec()))
-        } else if bytes.len() <= MAX_WASM
-            && (bytes.is_empty() || bytes.starts_with(b"\0asm\x01\0\0\0"))
-        {
-            Ok(Self(bytes.into_owned(), vec![]))
-        } else {
-            Err("creation artifact migration")
-        }
-    }
-}
-
-// New collections encode payloads directly; nested historical tags are read-only.
-// This avoids adding framing bytes to a predecessor that filled its checked lease.
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub(super) enum Artifact {
-    Inline(Inline),
+    #[default]
+    Empty,
     Stored(canic_management_protocol::stored::Sources),
     Application(
         canic_management_protocol::stored::Sources,
         canic_management_protocol::application::Lifecycle,
     ),
 }
-impl Default for Artifact {
-    fn default() -> Self {
-        Self::Inline(Inline::default())
-    }
-}
 impl Artifact {
     pub(super) fn sources(&self) -> Option<&canic_management_protocol::stored::Sources> {
         match self {
-            Self::Inline(_) => None,
+            Self::Empty => None,
             Self::Stored(value) | Self::Application(value, _) => Some(value),
-        }
-    }
-
-    pub(super) fn wasm(&self, upgrade: bool) -> &[u8] {
-        match self {
-            Self::Inline(value) => {
-                if upgrade {
-                    &value.1
-                } else {
-                    &value.0
-                }
-            }
-            Self::Stored(_) | Self::Application(..) => panic!("Store bytes never belong to Root"),
         }
     }
 
     pub(super) fn hash(&self, upgrade: bool) -> Option<[u8; 32]> {
         match self {
-            Self::Inline(_) => {
-                let bytes = self.wasm(upgrade);
-                (!bytes.is_empty()).then(|| canic_management_protocol::digest(bytes))
-            }
+            Self::Empty => None,
             Self::Stored(value) | Self::Application(value, _) => if upgrade {
                 value.upgrades.last()
             } else {
@@ -206,28 +123,6 @@ impl Artifact {
             .map(|source| source.reference.manifest.hash),
         }
     }
-
-    fn decode(bytes: Cow<'_, [u8]>) -> Result<Self, &'static str> {
-        if let Some(payload) = bytes.strip_prefix(b"CUS1") {
-            let value: canic_management_protocol::stored::Sources = ic_wire::decode(
-                payload,
-                ic_wire::Encoding::Payload,
-                canic_management_protocol::stored::LIMITS,
-            )
-            .map_err(|_| "Store custody")?;
-            if value.upgrades.len() > upgrade::MAX_UPGRADES {
-                return Err("Store history bound");
-            }
-            Ok(Self::Stored(value))
-        } else {
-            Inline::decode(bytes).map(Self::Inline)
-        }
-    }
-}
-
-// Only this codec maps historical array positions to runtime child identities.
-fn bind<T>([first, second]: [T; 2]) -> BTreeMap<ChildId, T> {
-    BTreeMap::from([(ChildId::FIRST, first), (ChildId::SECOND, second)])
 }
 
 // All children share the original checked leases; each retains separate payloads.
@@ -270,7 +165,7 @@ impl Journals {
     }
 }
 impl Journals {
-    pub(super) fn to_bytes(&self) -> Result<Cow<'_, [u8]>, &'static str> {
+    pub(super) fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
         self.validate()?;
         let entries: Vec<_> = self
             .0
@@ -285,7 +180,7 @@ impl Journals {
         .map_err(|_| "child journals")?;
         let mut bytes = JOURNAL_TAG.to_vec();
         bytes.extend_from_slice(&payload);
-        Ok(Cow::Owned(bytes))
+        Ok(bytes)
     }
 
     pub(super) fn from_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
@@ -313,39 +208,14 @@ impl Default for Artifacts {
     }
 }
 impl Artifacts {
-    fn limits(expanded_layout: bool) -> ic_wire::Limits {
-        if expanded_layout {
-            ic_wire::Limits {
-                bytes: ARTIFACT_LIMITS.bytes + SLOT_FRAMING,
-                ..ARTIFACT_LIMITS
-            }
-        } else {
-            ARTIFACT_LIMITS
-        }
-    }
-
     pub(super) fn fits(&self) -> bool {
         self.entries().is_ok_and(|entries| {
-            ic_wire::encoded_len(
-                &entries,
-                ic_wire::Encoding::Payload,
-                Self::limits(expanded(&self.0)),
-            )
-            .is_ok()
+            ic_wire::encoded_len(&entries, ic_wire::Encoding::Payload, ARTIFACT_LIMITS).is_ok()
         })
     }
 
     fn entries(&self) -> Result<Vec<(u32, &Artifact)>, &'static str> {
-        let inline_bytes: usize = self
-            .0
-            .values()
-            .map(|artifact| match artifact {
-                Artifact::Inline(value) => value.0.len() + value.1.len(),
-                Artifact::Stored(_) | Artifact::Application(..) => 0,
-            })
-            .sum();
-        if !historical_or_complete(&self.0)
-            || inline_bytes > canic_management_protocol::children::MAX_ARTIFACT_BYTES
+        if !complete(&self.0)
             || self
                 .0
                 .values()
@@ -370,80 +240,27 @@ impl Artifacts {
     }
 }
 impl Artifacts {
-    pub(super) fn to_bytes(&self) -> Result<Cow<'_, [u8]>, &'static str> {
-        let mut bytes = if expanded(&self.0) {
-            b"CUA7"
-        } else if self.0.len() > 2 {
-            b"CUA6"
-        } else if self
-            .0
-            .values()
-            .any(|a| matches!(a, Artifact::Application(..)))
-        {
-            b"CUA5"
-        } else {
-            b"CUA4"
-        }
-        .to_vec();
+    pub(super) fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
+        let mut bytes = ARTIFACT_TAG.to_vec();
         bytes.extend(
             ic_wire::encode(
                 &self.entries()?,
                 ic_wire::Encoding::Payload,
-                Self::limits(expanded(&self.0)),
+                ARTIFACT_LIMITS,
             )
             .map_err(|_| "identified child artifacts")?,
         );
-        Ok(Cow::Owned(bytes))
+        Ok(bytes)
     }
 
-    pub(super) fn from_bytes(bytes: Cow<'_, [u8]>) -> Result<Self, &'static str> {
-        let historical = bytes.starts_with(b"CUA4");
-        let value =
-            if let Some(payload) = bytes
-                .strip_prefix(b"CUA7")
-                .or_else(|| bytes.strip_prefix(b"CUA6"))
-                .or_else(|| bytes.strip_prefix(b"CUA5"))
-                .or_else(|| bytes.strip_prefix(b"CUA4"))
-            {
-                let limits = Self::limits(bytes.starts_with(b"CUA7"));
-                let entries: Records<Artifact> =
-                    ic_wire::decode(payload, ic_wire::Encoding::Payload, limits)
-                        .map_err(|_| "identified child artifacts")?;
-                let expected = (!bytes.starts_with(b"CUA7"))
-                    .then_some(if bytes.starts_with(b"CUA6") { 4 } else { 2 });
-                let entries = identified(entries)?;
-                if expected.is_some_and(|count| entries.len() != count)
-                    || expanded(&entries) != expected.is_none()
-                {
-                    return Err("child identities");
-                }
-                Ok::<_, &'static str>(Self(entries))
-            } else if let Some(payload) = bytes.strip_prefix(b"CUA3") {
-                let length: [u8; 4] = payload
-                    .get(..4)
-                    .ok_or("child artifact header")?
-                    .try_into()
-                    .map_err(|_| "child artifact header")?;
-                let length = u32::from_le_bytes(length) as usize;
-                let payload = &payload[4..];
-                if length > payload.len() {
-                    return Err("child artifact bounds");
-                }
-                Ok(Self(bind([
-                    Artifact::decode(Cow::Borrowed(&payload[..length]))?,
-                    Artifact::decode(Cow::Borrowed(&payload[length..]))?,
-                ])))
-            } else {
-                Ok(Self(bind([Artifact::decode(bytes)?, Artifact::default()])))
-            }?;
-        if historical
-            && value
-                .0
-                .values()
-                .any(|a| matches!(a, Artifact::Application(..)))
-        {
-            return Err("application arguments require CUA5");
-        }
+    pub(super) fn from_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
+        let payload = bytes
+            .strip_prefix(ARTIFACT_TAG)
+            .ok_or("unsupported Root artifact format")?;
+        let entries: Records<Artifact> =
+            ic_wire::decode(payload, ic_wire::Encoding::Payload, ARTIFACT_LIMITS)
+                .map_err(|_| "identified child artifacts")?;
+        let value = Self(identified(entries)?);
         if !value.fits() {
             return Err("aggregate artifact budget");
         }

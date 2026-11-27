@@ -616,15 +616,11 @@ impl FleetConfig {
         budget_cycles: u64,
         expires_at_ns: u64,
     ) -> Result<canic_management_protocol::stored::ChildFunding> {
-        let Some(ChildTopUp::Rule {
+        let Some(ChildTopUp {
             below_cycles,
             amount_cycles,
             ..
-        }) = self
-            .policy
-            .top_up_children
-            .iter()
-            .find(|r| r.child() == name)
+        }) = self.policy.top_up_children.iter().find(|r| r.child == name)
         else {
             return Err(Error::Invalid(format!(
                 "no top-up amount and threshold declared for {name:?}"
@@ -673,14 +669,13 @@ fn validate_top_up_children(
 ) -> Result<()> {
     let mut seen = std::collections::BTreeSet::new();
     for rule in children {
-        let child = rule.child();
-        if let ChildTopUp::Rule {
+        let child = rule.child.as_str();
+        let ChildTopUp {
             below_cycles,
             amount_cycles,
             ..
-        } = rule
-            && (*below_cycles == 0 || *amount_cycles == 0)
-        {
+        } = rule;
+        if *below_cycles == 0 || *amount_cycles == 0 {
             return Err(Error::Invalid(format!(
                 "top_up_children {child:?} has below_cycles={below_cycles}, amount_cycles={amount_cycles}; both must be positive"
             )));

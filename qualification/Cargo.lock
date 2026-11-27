@@ -296,7 +296,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -430,7 +430,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -461,7 +461,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -471,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -489,7 +489,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -505,11 +505,8 @@ dependencies = [
 name = "canic-profile-client"
 version = "0.0.0"
 dependencies = [
- "canic-management-protocol",
  "canic-profile-protocol",
  "clap",
- "ic-host-artifacts",
- "ic-host-fs",
  "ic-host-process",
  "ic-wire",
  "serde_json",
@@ -597,8 +594,10 @@ dependencies = [
  "ic-wire",
  "rustyline-async",
  "serde",
+ "serde_bytes",
  "serde_json",
  "sha2 0.11.2",
+ "tempfile",
  "tokio",
  "toko-tooling",
  "toml",
@@ -608,7 +607,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -1195,7 +1194,7 @@ dependencies = [
 
 [[package]]
 name = "example-counter"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "canic",
  "clap",
@@ -1209,7 +1208,7 @@ dependencies = [
 
 [[package]]
 name = "example-miner-pool-hub"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "canic",
  "clap",
@@ -1223,7 +1222,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-hub"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "canic",
  "example-user-directory-schema",
@@ -1233,7 +1232,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-schema"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -1243,7 +1242,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-shard"
-version = "0.275.0"
+version = "0.276.0"
 dependencies = [
  "canic",
  "example-user-directory-schema",
@@ -1679,9 +1678,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.33.0"
+version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59e87131aa740b8627bb713deba600f4cac4d708d8358a48de8ed57d35183672"
+checksum = "3d9bc18b89a9db6a3a73c2c5e803f83b7e658f270b6d060b4390485a257b3a8f"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1701,9 +1700,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.33.0"
+version = "0.34.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "810126ec389cea0d7bf87c8cfb5efe401e9bfe4b1b5b045ebaca03e3b1e63014"
+checksum = "b95f7963cb650e1df7b61fc6797d37ec5e0330e4164635bbc56d504f4680cf28"
 dependencies = [
  "proc-macro2",
  "quote",

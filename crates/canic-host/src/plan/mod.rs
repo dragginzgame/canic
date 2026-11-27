@@ -120,7 +120,7 @@ impl Plan {
                 PlanAction::Create {
                     bootstrap: None,
                     ..
-                } | PlanAction::Upgrade(_)
+                }
             )
     }
 
@@ -254,8 +254,7 @@ impl Plan {
             {
                 return Err(Error::Invalid("creation needs 0.5T–5T cycles".into()));
             }
-            PlanAction::Upgrade(target)
-            | PlanAction::UpgradeStore { target, .. }
+            PlanAction::UpgradeStore { target, .. }
             | PlanAction::UpgradeChild { target, .. }
             | PlanAction::MaintainRoot { target, .. } => {
                 principal(&target.canister)?;
@@ -363,9 +362,6 @@ pub(crate) fn prepare(
             if input.creation_cycles == canic_management_protocol::CREATION_CYCLES =>
         {
             PlanAction::CreateChild(owner)
-        }
-        (Some(canister), Some(module), None) if input.creation_cycles == 0 => {
-            PlanAction::Upgrade(UpgradeTarget { canister, module })
         }
         (Some(canister), Some(module), Some(owner)) if input.creation_cycles == 0 => {
             PlanAction::UpgradeChild {
@@ -531,11 +527,6 @@ pub(crate) fn retain_locked(store: &Store, mut plan: Plan, bytes: &[u8]) -> Resu
                         return Err(Error::Blocked(
                             "upgrade requires its retained predecessor module".into(),
                         ));
-                    }
-                    if existing.management().map(|m| &m.source).is_some()
-                        != plan.management().map(|m| &m.source).is_some()
-                    {
-                        return Err(Error::Blocked("changing an admitted child between inline and Store custody requires qualified migration".into()));
                     }
                     continue;
                 }

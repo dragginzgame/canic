@@ -1,6 +1,8 @@
 #[cfg(test)]
 mod tests;
 
+mod inspect;
+pub(crate) use inspect::inspect;
 mod metrics;
 mod roles;
 mod stores;

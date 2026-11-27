@@ -538,16 +538,7 @@ Future child plans bind the new Root hash; historical approvals remain unchanged
 The original creation approval may no longer apply against the new Root code;
 inspect its historical receipt with `fleet status`.
 
-The replacement must export `observe_custody` (ID 30). The predecessor normally
-uses that contract too. One retained single-upgrade Root, SHA-256
-`e4a4127abd525f59378503dcdb98fcb13f8eb9895673d4d8a4dea41d85e24296`, instead uses
-its controller-only creation and unit upgrade observations before installation.
-Both replies must match the approved journal, including an empty upgrade slot
-when no upgrade is recorded. The same full-custody postflight then proves the
-transition. The module hash selects this contract before dispatch; there is no
-endpoint probing, error fallback or change to old approvals. Other old binaries,
-maintenance during active/uncertain work, and Root replacement need separate
-qualification. Existing mainnet demos are unchanged.
+Both executables must export `observe_root_custody` and support the identified service record. Host checks each slot, creation, upgrade, source and lifecycle binding, plus the current and completed Store operations. A changed observation blocks completion. Older Root images require their original executables.
 
 ## Responsibility and bounds
 
@@ -559,31 +550,9 @@ Root does not use them to infer readiness.
 
 `canic-management-protocol` contains only authority/evidence messages, hashing
 and decoding limits. Host tooling and application protocol consumers do not link
-the management runtime. Existing `manager` and `worker` wire fields, RPC numbers,
-stable keys and enum ordering remain unchanged, preserving retained profile-demo
-authority. Upgrade messages have their own method numbers. The versioned stable
-payload migration packs the separate creation/upgrade journals and artifact bytes
-inside the original two checked allocations, under the existing 64-page bound.
-The v3 journal retains creation, the current upgrade and up to seven completed
-predecessors within the existing 8 KiB cell. It reads original creation and v2
-single-upgrade payloads before validation and migration. Historical artifact
-bytes remain in the host journal; Root retains their hashes and outcomes.
-It validates the original payloads before writing the new format during lifecycle
-execution. Downgrading to a binary that only reads the old payload is unsupported.
+the management runtime. Root persists each service journal and its Store delivery metadata under checked Storage leases. It rejects older journal and artifact formats on reopen. Each service retains its original creation and up to eight upgrade approvals.
 
-For inline delivery, the engine retains one creation approval and at most 512 KiB of application Wasm, attaches
-1T cycles on creation and requires a 0.5T liquid reserve. Each creation, upload
-and installation effect is issued at most once. An uncertain creation with no
-retained principal stays blocked; retry does not obtain another allowance.
-Module/controller observations precede application-reported readiness. These
-bounds and the separate-message commit boundaries come from the existing
-[growth qualification](growth.md).
-An inline upgrade approval retains at most another 512 KiB, uses existing
-canister cycles and checks the same 0.5T liquid reserve. Application data remains
-owned by the application's lifecycle; management evidence alone cannot prove
-that an arbitrary application's migration preserves its data.
-Store-backed children instead retain immutable references and pins; the Store
-owns up to 8 MiB per artifact and the derived management cache.
+Root obtains a Store pin for the approved release before issuing management effects. For an ordinary permanent child it attaches 1T cycles and requires a 0.5T liquid reserve. An uncertain creation with no retained principal stays blocked. For installation and upgrade, Root verifies the ordered chunks in the Store cache and the approved module hash. It checks the installed module and controller before accepting the application’s readiness reply. The [growth suite](growth.md) exercises these boundaries.
 
 ## Remaining work
 

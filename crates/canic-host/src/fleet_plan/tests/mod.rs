@@ -205,7 +205,6 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
         .unwrap()
         .is_none()
     );
-    assert!(value.child_plan(&receipt, None, ChildId::FIRST).is_err());
     let store_receipt = Receipt {
         operation: resolved.digest().unwrap(),
         canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
@@ -213,7 +212,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
         controller: receipt.canister.clone(),
     };
     let child = value
-        .child_plan(&receipt, Some(&store_receipt), ChildId::FIRST)
+        .child_plan(&receipt, &store_receipt, ChildId::FIRST)
         .unwrap();
     assert_eq!(
         child.management().unwrap().source.manifest.release.version,
@@ -221,11 +220,7 @@ fn fleet_store_is_an_independent_output_binding_and_debit() {
     );
     let mut wrong = store_receipt;
     wrong.operation = "00".repeat(32);
-    assert!(
-        value
-            .child_plan(&receipt, Some(&wrong), ChildId::FIRST)
-            .is_err()
-    );
+    assert!(value.child_plan(&receipt, &wrong, ChildId::FIRST).is_err());
     assert!(path.join("store/module.wasm").exists());
     assert!(!path.join("store/plan.json").exists());
     let mut invalid = value.clone();
@@ -279,7 +274,7 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
     .unwrap();
     store::put_json(&path.join("root/receipt.json"), &root).unwrap();
     let child = fleet
-        .child_plan(&root, Some(&store_output(&fleet, &root)), ChildId::FIRST)
+        .child_plan(&root, &store_output(&fleet, &root), ChildId::FIRST)
         .unwrap();
     store::put_json(&path.join("child/plan.json"), &child).unwrap();
     let receipt = Receipt {
@@ -471,11 +466,7 @@ fn fleet_refuses_unsupported_trees_conflicts_and_tampered_artifacts() {
         controller: value.root.controller.clone(),
     };
     let child = value
-        .child_plan(
-            &receipt,
-            Some(&store_output(&value, &receipt)),
-            ChildId::FIRST,
-        )
+        .child_plan(&receipt, &store_output(&value, &receipt), ChildId::FIRST)
         .unwrap();
     store::put_json(&root.join("child/plan.json"), &child).unwrap();
     // An invented child plan without Root result custody is never admitted.
@@ -607,10 +598,10 @@ fn two_child_approval_retains_slot_mapping_and_cancels_only_before_preparation()
         controller: fleet.root.controller.clone(),
     };
     let first = fleet
-        .child_plan(&root, Some(&store_output(&fleet, &root)), ChildId::FIRST)
+        .child_plan(&root, &store_output(&fleet, &root), ChildId::FIRST)
         .unwrap();
     let second = fleet
-        .child_plan(&root, Some(&store_output(&fleet, &root)), ChildId::SECOND)
+        .child_plan(&root, &store_output(&fleet, &root), ChildId::SECOND)
         .unwrap();
     assert_eq!(
         first.management().unwrap().slot,
@@ -746,4 +737,47 @@ fn retired_catalog_record_version_is_refused() {
     assert!(serde_json::from_value::<FleetPlan>(record.clone()).is_err());
     record["children"][0]["backup_history"] = serde_json::json!({});
     assert!(serde_json::from_value::<FleetPlan>(record).is_err());
+}
+
+#[test]
+fn borrowed_fleet_record_preserves_owned_json_wire_and_digest() {
+    let (dir, selected) = fixture();
+    let (id, fleet) = create(&dir, &selected).unwrap();
+    #[derive(serde::Serialize)]
+    struct Owned {
+        contract: String,
+        version: u32,
+        root: Plan,
+        children: Vec<FleetChild>,
+        store: FleetStore,
+    }
+    let mut retired = serde_json::to_value(&fleet).unwrap();
+    retired["contract"] = "canic:fleet-plan.v1".into();
+    assert!(serde_json::from_value::<FleetPlan>(retired).is_err());
+    let original = Owned {
+        contract: CONTRACT.into(),
+        version: fleet.version,
+        root: fleet.root.clone(),
+        children: fleet.children.clone(),
+        store: fleet.store.clone(),
+    };
+    assert_eq!(
+        serde_json::to_vec(&fleet).unwrap(),
+        serde_json::to_vec(&original).unwrap()
+    );
+    let limits = ic_wire::Limits {
+        bytes: 65_536,
+        allocation: 1_048_576,
+        nodes: 65_536,
+        depth: 16,
+    };
+    let wire = ic_wire::encode(&original, ic_wire::Encoding::Payload, limits).unwrap();
+    assert_eq!(
+        wire,
+        ic_wire::encode(&fleet, ic_wire::Encoding::Payload, limits).unwrap()
+    );
+    let mut bytes = CONTRACT.as_bytes().to_vec();
+    bytes.push(0);
+    bytes.extend(wire);
+    assert_eq!(id, artifact::digest(&bytes));
 }

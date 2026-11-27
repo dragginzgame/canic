@@ -41,7 +41,7 @@ pub enum State {
     Ready,
 }
 
-/// Mount a public replicated observation using an explicit synchronous application handler.
+/// Mount a public observation, callable as a query or through replicated Root execution, using an explicit synchronous application handler.
 /// The handler returns `readiness::State` without changing application state.
 /// Mounting initializes no storage, timers or services and grants no activation authority.
 #[cfg(feature = "endpoints")]
@@ -55,7 +55,7 @@ macro_rules! mount_readiness_endpoint {
             use $crate::readiness::{State, endpoint};
 
             $crate::__canic_builtin! {
-                wire, $crate::readiness::METHOD, ($crate::readiness::REQUEST_LIMITS, $crate::readiness::RESPONSE_LIMITS), runtime::update, "canic_readiness", (
+                wire, $crate::readiness::METHOD, ($crate::readiness::REQUEST_LIMITS, $crate::readiness::RESPONSE_LIMITS), runtime::query, "canic_readiness", (
                     runtime = runtime,
                     guard = endpoint::admit,
                     decode = endpoint::decode,

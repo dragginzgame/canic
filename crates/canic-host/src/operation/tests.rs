@@ -38,10 +38,7 @@ fn replacement_codecs_preserve_retained_management_and_ledger_arguments() {
     let target = Principal::from_slice(&[3; 29]);
     for upgrade in [false, true] {
         if upgrade {
-            value.action = crate::PlanAction::Upgrade(crate::UpgradeTarget {
-                canister: target.to_text(),
-                module: "11".repeat(32),
-            });
+            value.action = crate::maintenance::tests::action();
         }
         let call = super::install_call(&value, b"retained exact artifact", target).unwrap();
         assert_eq!(

@@ -121,7 +121,7 @@ fn store_maintenance_evidence_fits_its_scoped_metadata_budget() {
                 method: MAINTAIN,
                 direction: ic_wire::Direction::Request
             },
-            crate::STAGE_LIMITS
+            crate::LIMITS
         )
         .is_err()
     );

@@ -467,11 +467,11 @@ fn retained_replies_and_expiry_never_claim_deployment_success() {
 
 #[test]
 fn upgrade_summary_keeps_previous_module_and_unexpected_creation_evidence() {
-    let mut state = state();
-    state["plan"]["action"] = serde_json::json!({"contract":"canic:deployment-upgrade.v1","approval":{"canister":"aaaaa-aa","module":"c".repeat(64)}});
+    let mut state = managed_state(true);
+    state["effects"]["create"] = "not_submitted".into();
     let text = render(&state, Path::new("journal")).unwrap();
-    assert!(text.contains("Planned action: upgrade existing canister"));
-    assert!(text.contains("Upgrade target: aaaaa-aa"));
+    assert!(text.contains("Planned action: Root upgrades its existing child"));
+    assert!(text.contains("Upgrade target: ryjl3-tyaaa-aaaaa-aaaba-cai"));
     assert!(text.contains(&format!("Required previous module: {}", "c".repeat(64))));
     assert!(text.contains("Creation debit ceiling: 0 cycles"));
     assert!(text.contains("Not applicable to this upgrade (not submitted)"));
@@ -508,12 +508,24 @@ fn managed_state(upgrade: bool) -> serde_json::Value {
         "execute_at_ns":1_500_000_000_u64, "slot":"First", "source":{
             "store":{"canister":"aaaaa-aa","module":"f".repeat(64)}, "manifest":{"release":{"name":"worker","version":"v1"},"hash":([1;32]),"bytes":8,"chunks":[([1;32])]}}});
     value["plan"]["action"] = if upgrade {
-        serde_json::json!({"contract":"canic:child-upgrade.v1","approval":{"owner":owner,"target":{"canister":"ryjl3-tyaaa-aaaaa-aaaba-cai","module":"c".repeat(64)}}})
+        serde_json::json!({"contract":"canic:store-child-upgrade.v1","approval":{"owner":owner,"target":{"canister":"ryjl3-tyaaa-aaaaa-aaaba-cai","module":"c".repeat(64)}}})
     } else {
-        serde_json::json!({"contract":"canic:child-creation.v1","approval":owner})
+        serde_json::json!({"contract":"canic:store-child-creation.v1","approval":owner})
     };
     value["effects"] = serde_json::json!({"stage":"reply_retained"});
     value
+}
+
+#[test]
+fn previous_child_approvals_are_refused_before_status_projection() {
+    for (upgrade, contract) in [
+        (false, "canic:child-creation.v1"),
+        (true, "canic:child-upgrade.v1"),
+    ] {
+        let mut state = managed_state(upgrade);
+        state["plan"]["action"]["contract"] = contract.into();
+        assert!(render(&state, Path::new("journal")).is_err());
+    }
 }
 
 #[test]

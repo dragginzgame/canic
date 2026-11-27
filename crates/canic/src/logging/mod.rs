@@ -155,7 +155,7 @@ pub fn retained_bytes() -> usize {
     with_log(|_, log| log.borrow().retained_bytes())
 }
 
-#[crate::__canic_update(contract = Logs, guard = crate::guard::require_controller)]
+#[crate::__canic_query(contract = Logs, guard = crate::guard::require_controller)]
 fn logs(before: Option<u64>) -> Page {
     page(before)
 }

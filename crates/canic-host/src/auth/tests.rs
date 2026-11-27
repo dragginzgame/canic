@@ -134,9 +134,14 @@ fn auth_approval_keeps_original_authority_and_rejects_conflicting_configuration(
     );
     selected.check_operation(&dir, &id).unwrap();
     let mut upgrade = plan.clone();
-    upgrade.action = PlanAction::Upgrade(plan.auth().unwrap().receiver.clone());
+    upgrade.action = crate::maintenance::tests::action();
+    if let PlanAction::MaintainRoot { target, .. } = &mut upgrade.action {
+        *target = plan.auth().unwrap().receiver.clone();
+    }
     permit_upgrade(&dir, &upgrade).unwrap();
-    upgrade.action = PlanAction::Upgrade(plan.auth().unwrap().root.clone());
+    if let PlanAction::MaintainRoot { target, .. } = &mut upgrade.action {
+        *target = plan.auth().unwrap().root.clone();
+    }
     assert!(permit_upgrade(&dir, &upgrade).is_err());
     assert!(
         crate::create_plan(
@@ -150,7 +155,7 @@ fn auth_approval_keeps_original_authority_and_rejects_conflicting_configuration(
                 creation_cycles: 0,
             }
         )
-        .is_ok()
+        .is_err()
     );
 }
 
@@ -159,22 +164,43 @@ fn a_prior_receiver_upgrade_allows_grant_planning_but_a_root_upgrade_blocks_it()
     for slot in ["receiver", "root"] {
         let (dir, selected) = fixture();
         let wasm = dir.join("root.wasm");
-        let module =
-            artifact::admit_bounded(&std::fs::read(&wasm).unwrap(), artifact::MAX_ARTIFACT_BYTES)
-                .unwrap()
-                .sha256;
-        crate::create_plan(
-            &dir,
+        let (mut plan, bytes) = plan::prepare(
             &wasm,
             crate::PlanInput {
                 network: selected.config.network.clone(),
-                controller: "2vxsx-fae".into(),
-                target: selected.config.canisters[slot].id.clone(),
-                previous_module: Some(module),
-                creation_cycles: 0,
+                ..crate::tests::input()
             },
+            Some(crate::DeploymentName {
+                app: selected.app.clone(),
+                fleet: selected.fleet.clone(),
+                canister: slot.into(),
+            }),
+            None,
+            crate::now().unwrap(),
         )
         .unwrap();
+        let root = selected.config.canisters["root"].id.clone().unwrap();
+        plan.action = if slot == "root" {
+            crate::maintenance::tests::action()
+        } else {
+            PlanAction::UpgradeChild {
+                target: crate::UpgradeTarget {
+                    canister: selected.config.canisters[slot].id.clone().unwrap(),
+                    module: "11".repeat(32),
+                },
+                owner: crate::ManagedOwner {
+                    root,
+                    root_module: "22".repeat(32),
+                    slot: canic_management_protocol::children::ChildId::FIRST,
+                    source: crate::tests::stored_source(slot, &bytes),
+                    arguments: None,
+                    blob_attempt: None,
+                    child_evidence_only: false,
+                    execute_at_ns: plan.expires_at_ns - 600_000_000_000,
+                },
+            }
+        };
+        plan::publish_locked(&crate::store::Store::open(&dir).unwrap(), plan, &bytes).unwrap();
         let grant = create_auth_plan(&dir, &dir.join("canic.toml"), &selected, "2vxsx-fae");
         if slot == "receiver" {
             grant.unwrap();

@@ -36,10 +36,10 @@ async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
         canic_management_protocol::application::LIMITS,
     )
     .unwrap()
-    .root
-    .current
-    .stored
     .children
+    .into_iter()
+    .map(|child| child.journal)
+    .collect()
 }
 
 pub(super) async fn admit(
@@ -134,7 +134,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     for name in ["app-v2.wasm", "app.wasm"] {
         let wasm = padded_artifact(name);
         let now = pic.get_time().await.as_nanos_since_unix_epoch();
-        let change = upgrade::Stage {
+        let change = Stage {
             approval: upgrade::Approval {
                 manager: root.to_text(),
                 child: first_ready.worker.clone().unwrap(),
@@ -328,7 +328,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     }
     let wasm = padded_artifact("app-v2.wasm");
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    let change = upgrade::Stage {
+    let change = Stage {
         approval: upgrade::Approval {
             manager: root.to_text(),
             child: ids[0].to_text(),
@@ -400,7 +400,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
                 "app.wasm"
             });
             let now = pic.get_time().await.as_nanos_since_unix_epoch();
-            let change = upgrade::Stage {
+            let change = Stage {
                 approval: upgrade::Approval {
                     manager: root.to_text(),
                     child: ids[slot.index()].to_text(),
@@ -563,7 +563,7 @@ async fn lost_creation_callback_does_not_block_sibling() {
     .unwrap();
     let wasm = artifact("app.wasm");
     let now = pic.get_time().await.as_nanos_since_unix_epoch();
-    let change = upgrade::Stage {
+    let change = Stage {
         approval: upgrade::Approval {
             manager: root.to_text(),
             child: evidence[1].creation.worker.clone().unwrap(),
@@ -723,7 +723,7 @@ async fn child_admission_reserves_siblings_unissued_attachment() {
 // A custom section changes the exact module bytes without changing application
 // semantics. Its payload uses a three-byte ULEB length and an empty section name.
 fn padded_artifact(name: &str) -> Vec<u8> {
-    pad_artifact(name, children::MAX_ARTIFACT_BYTES / 4)
+    pad_artifact(name, 256 * 1024 - 16)
 }
 
 fn pad_artifact(name: &str, maximum: usize) -> Vec<u8> {

@@ -190,6 +190,8 @@ pub(crate) fn wire_fixture(name: &str) -> Vec<u8> {
 fn wire_comparison_excludes_only_the_exact_timer_update() {
     use crate::{WasmEndpoint, app_wire::verify_exports};
     let method = |name: &str, mode| WasmEndpoint {
+        request_limits: None,
+        reply_limits: None,
         name: name.into(),
         mode,
         argument: None,

@@ -232,9 +232,9 @@ limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns
         )
         .await;
     let receiver = custody
-        .applications
+        .children
         .iter()
-        .flatten()
+        .filter_map(|child| child.lifecycle.as_ref())
         .find_map(|life| install::Install::decode(life.creation.as_slice()).ok())
         .unwrap();
     policy.root = Principal::from_slice(root.id.as_slice());

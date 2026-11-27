@@ -51,23 +51,28 @@ fn replicas_with_equal_principals_keep_separate_trust_bindings() {
     std::fs::write(&wasm, b"\0asm\x01\0\0\0").unwrap();
     let mut projections = Vec::new();
     for byte in ["aa", "bb"] {
-        let (id, plan) = create_plan(
-            &root,
+        let network = Network::Local {
+            url: "http://127.0.0.1:8080/".into(),
+            root_key: byte.repeat(133),
+            root_subnet: None,
+            routing_canister: "aaaaa-aa".into(),
+        };
+        let (mut plan, bytes) = crate::plan::prepare(
             &wasm,
-            PlanInput {
-                network: Network::Local {
-                    url: "http://127.0.0.1:8080/".into(),
-                    root_key: byte.repeat(133),
-                    root_subnet: None,
-                    routing_canister: "aaaaa-aa".into(),
-                },
-                target: Some("aaaaa-aa".into()),
-                previous_module: Some("00".repeat(32)),
-                creation_cycles: 0,
-                ..input()
-            },
+            PlanInput { network, ..input() },
+            Some(crate::DeploymentName {
+                app: "demo".into(),
+                fleet: "local".into(),
+                canister: "root".into(),
+            }),
+            None,
+            crate::now().unwrap(),
         )
         .unwrap();
+        plan.action = crate::maintenance::tests::action();
+        let (id, plan) =
+            crate::plan::publish_locked(&crate::store::Store::open(&root).unwrap(), plan, &bytes)
+                .unwrap();
         projections.push(
             local_operation(&root, &id, plan.expires_at_ns + 1)
                 .unwrap()

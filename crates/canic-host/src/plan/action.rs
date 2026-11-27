@@ -20,8 +20,7 @@ pub struct StoreMaintenance {
     pub store: UpgradeTarget,
     /// Original creation and every upgrade delivery, in permanent child-slot order.
     pub sources: Vec<Option<canic_management_protocol::stored::Sources>>,
-    /// Exact surviving Store operation; selects complete Root custody when present.
-    /// Absence selects child-only observation.
+    /// Latest Store maintenance attempt, when one has been admitted.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub operation: Option<canic_management_protocol::store_maintenance::Status>,
     /// Completed Store predecessors, oldest first.
@@ -67,9 +66,6 @@ pub enum PlanAction {
         /// Existing Root identity and reviewed code; consumes no application slot.
         root: UpgradeTarget,
     },
-    /// Upgrade a directly controlled canister.
-    #[serde(rename = "canic:deployment-upgrade.v1")]
-    Upgrade(UpgradeTarget),
     /// Root replaces its separate Store under one retained maintenance attempt.
     #[serde(rename = "canic:store-maintenance.v1")]
     UpgradeStore {
@@ -81,10 +77,10 @@ pub enum PlanAction {
         sequence: u64,
     },
     /// Root creates its permanently assigned child with the protocol's fixed grant.
-    #[serde(rename = "canic:child-creation.v1")]
+    #[serde(rename = "canic:store-child-creation.v1")]
     CreateChild(ManagedOwner),
     /// Root upgrades its existing child.
-    #[serde(rename = "canic:child-upgrade.v1")]
+    #[serde(rename = "canic:store-child-upgrade.v1")]
     UpgradeChild {
         /// Existing child and predecessor code.
         target: UpgradeTarget,
@@ -92,14 +88,14 @@ pub enum PlanAction {
         owner: ManagedOwner,
     },
     /// Upgrade Root while preserving every admitted child's complete custody.
-    #[serde(rename = "canic:root-maintenance.v1")]
+    #[serde(rename = "canic:root-store-maintenance.v1")]
     MaintainRoot {
         /// Existing Root and predecessor code.
         target: UpgradeTarget,
         /// Complete child journals in stable slot order.
         children: Vec<Custody>,
-        /// Present when complete Store custody is required; absent preserves inline approvals.
-        store: Option<Box<StoreMaintenance>>,
+        /// Complete Store custody retained across the upgrade.
+        store: Box<StoreMaintenance>,
     },
 }
 
@@ -181,8 +177,7 @@ impl super::Plan {
 
     fn upgrade_target(&self) -> Option<&UpgradeTarget> {
         match &self.action {
-            PlanAction::Upgrade(target)
-            | PlanAction::UpgradeStore { target, .. }
+            PlanAction::UpgradeStore { target, .. }
             | PlanAction::UpgradeChild { target, .. }
             | PlanAction::MaintainRoot { target, .. } => Some(target),
             PlanAction::BootstrapRoot { .. }
@@ -230,7 +225,7 @@ impl super::Plan {
     #[must_use]
     pub fn maintenance_store(&self) -> Option<&StoreMaintenance> {
         match &self.action {
-            PlanAction::MaintainRoot { store, .. } => store.as_deref(),
+            PlanAction::MaintainRoot { store, .. } => Some(store),
             _ => None,
         }
     }
@@ -247,12 +242,11 @@ impl PlanAction {
             Self::Remove(_) => "canic:artifact-removal.v1",
             Self::Create { .. } => "canic:deployment-create.v1",
             Self::BootstrapRoot { .. } => ROOT_BOOTSTRAP,
-            Self::Upgrade(_) => "canic:deployment-upgrade.v1",
             Self::CreateStore { .. } => "canic:store-bootstrap.v1",
             Self::UpgradeStore { .. } => "canic:store-maintenance.v1",
-            Self::CreateChild(_) => "canic:child-creation.v1",
-            Self::UpgradeChild { .. } => "canic:child-upgrade.v1",
-            Self::MaintainRoot { .. } => "canic:root-maintenance.v1",
+            Self::CreateChild(_) => "canic:store-child-creation.v1",
+            Self::UpgradeChild { .. } => "canic:store-child-upgrade.v1",
+            Self::MaintainRoot { .. } => "canic:root-store-maintenance.v1",
         }
     }
 }

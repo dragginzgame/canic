@@ -47,9 +47,8 @@ example-user-directory-schema = { path = "../apps/examples/user-directory/schema
 example-user-directory-shard = { path = "../apps/examples/user-directory/shard" }
 ic-auth = { version = "0.51.1", features = ["receiver-stable", "ed25519-verification"] }
 ic-auth-protocol-types = "0.44.2"
-ic-db = "0.33.0"
+ic-db = "0.34.0"
 ic-host-artifacts = { version = "0.80.3", default-features = false }
-ic-host-fs = { version = "0.80.3", default-features = false }
 ic-host-process = { version = "0.81.0", default-features = false }
 ic-platform-crypto = { package = "ic-platform", version = "0.35.1", default-features = false, features = ["ed25519"] }
 ic-platform-protocol = { version = "0.3.11", default-features = false }

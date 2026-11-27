@@ -3,19 +3,15 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{Failure, MAX_WASM, Refusal, digest};
+use crate::{Failure, Refusal};
 use serde::{Deserialize, Serialize};
 
-/// Admit one immutable upgrade and its bytes.
-pub const STAGE: u64 = 24;
 /// Read committed upgrade evidence.
 pub const STATUS: u64 = 25;
 /// Observe the exact approval, including completed historical work.
 pub const OBSERVE: u64 = 29;
 /// Maximum retained upgrade approvals, including the current one. No eviction or reset.
 pub const MAX_UPGRADES: usize = 8;
-/// Reconstruct outcomes for the exact retained `Approval`; legacy unbound ID 26 is retired.
-pub const RECONCILE: u64 = 28;
 
 /// Exact child, code transition and finite dispatch interval.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -32,16 +28,6 @@ pub struct Approval {
     pub execute_at_ns: u64,
     /// Last time a new effect can be issued.
     pub expires_at_ns: u64,
-}
-
-/// Bounded artifact envelope.
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub struct Stage {
-    /// Immutable authority.
-    pub approval: Approval,
-    /// Exact raw Wasm, retained before scheduling.
-    #[serde(with = "serde_bytes")]
-    pub wasm: Vec<u8>,
 }
 
 /// Committed progress; issued effects are never issued again.
@@ -97,30 +83,6 @@ pub struct Status {
     pub observed_version: Option<u64>,
     /// Failure does not grant retry authority.
     pub failure: Option<Failure>,
-}
-
-impl Stage {
-    /// Check the exact retained child, artifact and finite interval before admission.
-    /// # Errors
-    /// Refuses another child/owner, unchanged code, invalid bytes or an invalid interval.
-    pub fn validate(
-        &self,
-        manager: &str,
-        child: &str,
-        previous: &[u8; 32],
-        now: u64,
-    ) -> Result<(), Refusal> {
-        self.approval.validate(manager, child, previous, now)?;
-        let a = &self.approval;
-        if self.wasm.len() > MAX_WASM
-            || !self.wasm.starts_with(b"\0asm\x01\0\0\0")
-            || digest(&self.wasm) != a.module_hash
-        {
-            return Err(Refusal::Artifact);
-        }
-
-        Ok(())
-    }
 }
 
 impl Approval {

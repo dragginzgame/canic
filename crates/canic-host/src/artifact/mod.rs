@@ -14,7 +14,7 @@ use std::{
 };
 
 // Leave at least 190 KiB for Candid/envelope overhead below the IC's 2 MiB ingress limit.
-// This is Host direct installation, independent of Root's retained inline-child quota.
+// Direct Host installation has its own ingress budget.
 pub(crate) const MAX_WASM: usize = 1_900_000;
 // Build/inspection can admit the complete Store artifact without granting installation authority.
 pub(crate) const MAX_ARTIFACT_BYTES: usize =
@@ -118,6 +118,19 @@ pub fn inspect(path: &Path) -> Result<Artifact> {
     admit_bounded(&bytes, MAX_ARTIFACT_BYTES)
 }
 
+/// Directional Wire bounds declared by the shipped module.
+#[derive(Debug, Serialize)]
+pub struct WasmLimits {
+    /// Maximum encoded frame size.
+    pub bytes: u32,
+    /// Maximum allocation accounting.
+    pub allocation: u32,
+    /// Maximum visited nodes.
+    pub nodes: u32,
+    /// Maximum nesting depth.
+    pub depth: u32,
+}
+
 /// A callable method name and its IC export mode.
 #[derive(Debug, Serialize)]
 pub struct WasmEndpoint {
@@ -131,6 +144,12 @@ pub struct WasmEndpoint {
     /// Declared Wire response type when included by the build.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reply: Option<String>,
+    /// Request bounds when embedded in this Wasm.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub request_limits: Option<WasmLimits>,
+    /// Reply bounds when embedded in this Wasm.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reply_limits: Option<WasmLimits>,
 }
 
 /// Read callable function exports in name order without executing the module.
@@ -138,6 +157,21 @@ pub struct WasmEndpoint {
 /// Refuses unreadable, oversized or malformed export sections.
 pub fn endpoints(path: &Path) -> Result<Vec<WasmEndpoint>> {
     let bytes = crate::store::read(&path.canonicalize().map_err(supplier)?, MAX_ARTIFACT_BYTES)?;
+    exported_methods(&bytes)
+}
+
+/// Inspect only the exact module observed at the selected canister.
+///
+/// # Errors
+/// Refuses a missing or mismatched local artifact before interpreting its exports.
+pub fn installed_endpoints(path: &Path, module_hash: &str) -> Result<Vec<WasmEndpoint>> {
+    let bytes = crate::store::read(&path.canonicalize().map_err(supplier)?, MAX_ARTIFACT_BYTES)?;
+    let hash = digest(&bytes);
+    if hash != module_hash {
+        return Err(Error::Invalid(format!(
+            "local Wasm {hash} differs from installed {module_hash}"
+        )));
+    }
     exported_methods(&bytes)
 }
 
@@ -160,6 +194,7 @@ pub(crate) fn exported_methods(bytes: &[u8]) -> Result<Vec<WasmEndpoint>> {
     admit_bounded(bytes, MAX_ARTIFACT_BYTES)?;
     let mut methods = Vec::new();
     let mut signatures = std::collections::BTreeMap::new();
+    let mut limits = std::collections::BTreeMap::new();
     for payload in Parser::new(0).parse_all(bytes) {
         let payload = payload.map_err(supplier)?;
         if let Payload::CustomSection(section) = &payload
@@ -184,6 +219,29 @@ pub(crate) fn exported_methods(bytes: &[u8]) -> Result<Vec<WasmEndpoint>> {
                 )));
             }
         }
+        if let Payload::CustomSection(section) = &payload
+            && let Some(key) = section
+                .name()
+                .strip_prefix("canic:limits:v1:")
+                .and_then(|s| s.split_once(':'))
+        {
+            let data: &[u8; 32] = section.data().try_into().map_err(|_| {
+                Error::Invalid(format!("invalid Wire limits for {}", section.name()))
+            })?;
+            let words = data.as_chunks::<4>().0;
+            let direction = |start: usize| WasmLimits {
+                bytes: u32::from_le_bytes(words[start]),
+                allocation: u32::from_le_bytes(words[start + 1]),
+                nodes: u32::from_le_bytes(words[start + 2]),
+                depth: u32::from_le_bytes(words[start + 3]),
+            };
+            if limits.insert(key, (direction(0), direction(4))).is_some() {
+                return Err(Error::Invalid(format!(
+                    "duplicate Wire limits for {}",
+                    section.name()
+                )));
+            }
+        }
         let Payload::ExportSection(exports) = payload else {
             continue;
         };
@@ -192,6 +250,8 @@ pub(crate) fn exported_methods(bytes: &[u8]) -> Result<Vec<WasmEndpoint>> {
                 methods.push(WasmEndpoint {
                     name: name.to_owned(),
                     mode,
+                    request_limits: None,
+                    reply_limits: None,
                     argument: None,
                     reply: None,
                 });
@@ -199,6 +259,10 @@ pub(crate) fn exported_methods(bytes: &[u8]) -> Result<Vec<WasmEndpoint>> {
         }
     }
     for method in &mut methods {
+        if let Some((request, reply)) = limits.remove(&(method.mode, method.name.as_str())) {
+            method.request_limits = Some(request);
+            method.reply_limits = Some(reply);
+        }
         if let Some((input, output)) = signatures.get(&(method.mode, method.name.as_str())) {
             method.argument = Some(display_type(input));
             method.reply = Some(display_type(output));
