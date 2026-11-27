@@ -1,6 +1,6 @@
 //! Shared wording for terminal and localhost Store-maintenance diagnostics.
 use canic_host::FleetStoreMaintenance;
-use canic_management_protocol::store_maintenance::{MAX_UPGRADES, Phase};
+use canic_management_protocol::store_maintenance::Phase;
 
 pub(super) fn summary(report: &FleetStoreMaintenance) -> String {
     if report.observation_error.is_some() {
@@ -31,10 +31,6 @@ pub(super) fn summary(report: &FleetStoreMaintenance) -> String {
 pub(super) fn details(report: &FleetStoreMaintenance) -> Vec<(&'static str, String)> {
     let mut rows = vec![("Root", report.root.clone())];
     if let Some(status) = &report.reported {
-        rows.push((
-            "Qualified history limit",
-            format!("{MAX_UPGRADES} retained attempts"),
-        ));
         rows.push((
             "Dispatch deadline (Unix seconds)",
             (status.approval.expires_at_ns / 1_000_000_000).to_string(),

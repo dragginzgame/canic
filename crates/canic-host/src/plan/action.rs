@@ -88,7 +88,7 @@ pub enum PlanAction {
         owner: ManagedOwner,
     },
     /// Upgrade Root while preserving every admitted child's complete custody.
-    #[serde(rename = "canic:root-store-maintenance.v1")]
+    #[serde(rename = "canic:service-root-maintenance.v1")]
     MaintainRoot {
         /// Existing Root and predecessor code.
         target: UpgradeTarget,
@@ -246,7 +246,7 @@ impl PlanAction {
             Self::UpgradeStore { .. } => "canic:store-maintenance.v1",
             Self::CreateChild(_) => "canic:store-child-creation.v1",
             Self::UpgradeChild { .. } => "canic:store-child-upgrade.v1",
-            Self::MaintainRoot { .. } => "canic:root-store-maintenance.v1",
+            Self::MaintainRoot { .. } => "canic:service-root-maintenance.v1",
         }
     }
 }

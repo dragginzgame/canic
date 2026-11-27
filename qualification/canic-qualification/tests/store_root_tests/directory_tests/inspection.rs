@@ -26,7 +26,9 @@ pub(super) async fn second_terminal(
             .map(|b| format!("{b:02x}"))
             .collect(),
     };
-    let reader = canic_host::InspectionClient::new(&network, &root.to_text(), Some(&pem))
+    let reader = canic_host::InspectionSession::new(Some(&pem))
+        .unwrap()
+        .client(&network, &root.to_text())
         .unwrap()
         .caller();
     pic.set_controllers(

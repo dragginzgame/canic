@@ -276,14 +276,14 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
     let child = fleet
         .child_plan(&root, &store_output(&fleet, &root), ChildId::FIRST)
         .unwrap();
-    store::put_json(&path.join("child/plan.json"), &child).unwrap();
+    store::put_json(&path.join("child-1/plan.json"), &child).unwrap();
     let receipt = Receipt {
         operation: child.digest().unwrap(),
         canister: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
         module_hash: child.artifact.sha256.clone(),
         controller: root.canister,
     };
-    store::put_json(&path.join("child/receipt.json"), &receipt).unwrap();
+    store::put_json(&path.join("child-1/receipt.json"), &receipt).unwrap();
     // A matching receipt without authenticated Ready evidence cannot authorize an upgrade.
     assert!(create(&dir, &selected).is_err());
     let ready = Status {
@@ -294,9 +294,9 @@ fn fleet_upgrade_requires_completion_and_never_reopens_or_substitutes_authority(
         attempts: [1; 3],
         ..Default::default()
     };
-    std::fs::create_dir_all(path.join("child/observe/0")).unwrap();
+    std::fs::create_dir_all(path.join("child-1/observe/0")).unwrap();
     store::put(
-        &path.join("child/observe/0/reply.bin"),
+        &path.join("child-1/observe/0/reply.bin"),
         &ic_wire::encode(
             &ready,
             ic_wire::Encoding::Frame {
@@ -365,7 +365,7 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
         value.children[0].parent.operation,
         value.root.digest().unwrap()
     );
-    assert!(!journal.join(&id).join("child/plan.json").exists());
+    assert!(!journal.join(&id).join("child-1/plan.json").exists());
     let inventory = crate::fleet::inventory(&journal, false, crate::now().unwrap()).unwrap();
     assert!(inventory.issues.is_empty());
     assert_eq!(inventory.records.len(), 1);
@@ -404,9 +404,9 @@ fn fleet_authority_is_retained_before_outputs_and_replanning_never_renews_it() {
 #[test]
 fn fleet_child_bound_is_explicit_before_artifact_reads_or_journal_creation() {
     for with_store in [false, true] {
-        for count in [0, ChildId::HISTORICAL_SERVICES.len() + 1] {
+        for count in [0, 4] {
             let (dir, mut selected) = fixture();
-            selected.config.policy.subnet_child_limit = Some(8);
+            selected.config.policy.subnet_child_limit = Some(3);
             let child = selected.config.canisters.remove("app").unwrap();
             for index in 0..count {
                 selected
@@ -433,8 +433,7 @@ fn fleet_child_bound_is_explicit_before_artifact_reads_or_journal_creation() {
             assert_eq!(
                 message,
                 format!(
-                    "fleet declares {count} direct application children under root; supported range is 1..={} (Wasm Store is separate)",
-                    ChildId::HISTORICAL_SERVICES.len()
+                    "fleet declares {count} direct application children under root; supported range is 1..=3 (Wasm Store is separate)"
                 )
             );
             assert!(!dir.join("journal").exists());
@@ -468,11 +467,11 @@ fn fleet_refuses_unsupported_trees_conflicts_and_tampered_artifacts() {
     let child = value
         .child_plan(&receipt, &store_output(&value, &receipt), ChildId::FIRST)
         .unwrap();
-    store::put_json(&root.join("child/plan.json"), &child).unwrap();
+    store::put_json(&root.join("child-1/plan.json"), &child).unwrap();
     // An invented child plan without Root result custody is never admitted.
     assert!(load(&root, &id).is_err());
-    std::fs::remove_file(root.join("child/plan.json")).unwrap();
-    std::fs::write(root.join("child/module.wasm"), b"\0asm\x01\0\0\0\0").unwrap();
+    std::fs::remove_file(root.join("child-1/plan.json")).unwrap();
+    std::fs::write(root.join("child-1/module.wasm"), b"\0asm\x01\0\0\0\0").unwrap();
     assert!(crate::status(&dir.join("journal"), &id).is_err());
     assert!(
         !crate::fleet::inventory(&dir.join("journal"), false, crate::now().unwrap())
@@ -496,7 +495,7 @@ async fn expired_unsubmitted_fleet_cannot_start_root_or_renew_its_schedule() {
         value.store.parent.operation = value.root.digest().unwrap();
         let id = value.digest().unwrap();
         let path = journal.join(&id);
-        for leaf in ["root", "store", "child"] {
+        for leaf in ["root", "store", "child-1"] {
             std::fs::create_dir_all(path.join(leaf)).unwrap();
             std::fs::copy(
                 journal.join(&original_id).join(leaf).join("module.wasm"),
@@ -519,7 +518,7 @@ async fn expired_unsubmitted_fleet_cannot_start_root_or_renew_its_schedule() {
             .unwrap_err();
         assert!(error.to_string().contains("no Root creation was signed"));
         assert!(!path.join("root/create").exists());
-        assert!(!path.join("child/plan.json").exists());
+        assert!(!path.join("child-1/plan.json").exists());
         cancel_fleet_plan(&journal, &original_id).unwrap();
         cancel_fleet_plan(&journal, &id).unwrap();
         assert_ne!(create(&dir, &selected).unwrap().0, id);
@@ -617,7 +616,7 @@ fn two_child_approval_retains_slot_mapping_and_cancels_only_before_preparation()
     renamed.config.canisters.insert("aaa".into(), definition);
     assert!(matches!(create(&dir, &renamed), Err(Error::Blocked(_))));
     let journal = dir.join("journal");
-    let prepared = journal.join(&id).join("sibling/stage");
+    let prepared = journal.join(&id).join("child-2/stage");
     std::fs::create_dir(&prepared).unwrap();
     assert!(matches!(
         cancel_fleet_plan(&journal, &id),
@@ -701,7 +700,7 @@ fn whole_fleet_keeps_nine_service_approvals_and_journal_paths() {
     assert!(record.get("additional").is_none());
     assert_eq!(
         record["children"][2]["slot"],
-        serde_json::json!(ChildId::HISTORICAL_SERVICES[2])
+        serde_json::json!(ChildId::service(2).unwrap())
     );
     record["children"][2]["slot"] = serde_json::json!(ChildId::FIRST);
     assert!(serde_json::from_value::<FleetPlan>(record).is_err());

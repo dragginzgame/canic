@@ -24,6 +24,7 @@ clap.workspace = true
 ic-host-process.workspace = true
 ic-host-text.workspace = true
 ic-wire.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 time.workspace = true
 tiny_http.workspace = true

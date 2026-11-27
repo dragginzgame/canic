@@ -90,9 +90,18 @@ async fn discovers_nine_children_without_local_deployment_records() {
     assert_eq!(empty["issues"], serde_json::json!([]));
     assert_eq!(pic.get_stable_memory(root).await, stable);
 
-    // Admit remotely, starting out of order, without giving Host any child IDs.
+    // A gap cannot reserve or hide a service from journal-free discovery.
+    let gap = input(
+        root,
+        artifact("app.wasm"),
+        pic.get_time().await.as_nanos_since_unix_epoch(),
+    );
+    assert_eq!(
+        admit(pic, root, &store, ChildId::SECOND, gap).await,
+        Err(Refusal::Binding)
+    );
     let mut discovered = Vec::new();
-    for index in [2, 1, 0, 3, 4, 5, 6, 7, 8] {
+    for index in 0..9 {
         let slot = ChildId::service(index).unwrap();
         pic.stop_progress().await;
         let stage = input(
@@ -120,7 +129,10 @@ async fn discovers_nine_children_without_local_deployment_records() {
         discovered.push((index + 1, status.worker.clone().unwrap()));
         let stable = pic.get_stable_memory(root).await;
         pic.auto_progress().await;
-        let report = directory.join(format!("after-slot-{}.html", slot.index() + 1));
+        let report = directory.join(format!(
+            "after-slot-{}.html",
+            slot.service_index().unwrap() + 1
+        ));
         let observed = show(&root.to_text(), &report);
         assert_eq!(observed["operations"], serde_json::json!([]));
         assert_eq!(observed["issues"], serde_json::json!([]));
@@ -201,15 +213,14 @@ async fn discovers_nine_children_without_local_deployment_records() {
     let stable = pic.get_stable_memory(old).await;
     let unknown = show(&old.to_text(), &directory.join("older-root.html"));
     assert_eq!(unknown["canisters"].as_array().unwrap().len(), 1);
-    assert_eq!(unknown["managers"].as_array().unwrap().len(), 1);
-    assert!(unknown["managers"][0]["reported"].is_object());
+    assert!(unknown["managers"].as_array().unwrap().is_empty());
     let issues = unknown["issues"].as_array().unwrap();
     assert_eq!(issues.len(), 1);
     assert!(
         issues[0]
             .as_str()
             .unwrap()
-            .contains("other slots cannot be observed")
+            .contains("permanent service slot 1 unknown")
     );
     assert_eq!(pic.get_stable_memory(old).await, stable);
     assert!(!directory.join("journal").exists());

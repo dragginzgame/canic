@@ -272,7 +272,10 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
             root,
             CanisterId::anonymous(),
             "observe_root_custody",
-            frame(application::CUSTODY, &()),
+            frame(
+                application::CUSTODY,
+                &None::<canic_management_protocol::application::DeploymentSelector>,
+            ),
         )
         .await
         .unwrap();
@@ -285,7 +288,7 @@ async fn approved_catalog_creation_retains_exact_arguments_and_actual_root_autho
         application::LIMITS,
     )
     .unwrap();
-    let position = request.slot.index();
+    let position = request.slot.service_index().unwrap();
     assert_eq!(
         custody.children[position]
             .lifecycle
@@ -953,7 +956,10 @@ async fn read_custody(
             root,
             CanisterId::anonymous(),
             "observe_root_custody",
-            frame(application::CUSTODY, &()),
+            frame(
+                application::CUSTODY,
+                &None::<canic_management_protocol::application::DeploymentSelector>,
+            ),
         )
         .await
         .unwrap();

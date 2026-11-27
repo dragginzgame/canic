@@ -129,7 +129,6 @@ fn creation_evidence_fits_the_response_budget() {
         failure: Some(Failure::Rejected(u32::MAX)),
         observed_module: Some(vec![255; 32]),
         stable_pages: 64,
-        maintenance_candidate: true,
     };
     let frame = ic_wire::encode(
         &status,
@@ -193,6 +192,7 @@ fn store_readiness_frame_is_separate_from_publication_and_carries_bounded_info()
         .is_err()
     );
     let expected = store::Info {
+        maintenance_candidate: true,
         quota: store::Quota {
             reserved_bytes: u64::MAX,
             releases: u64::MAX,
@@ -201,7 +201,6 @@ fn store_readiness_frame_is_separate_from_publication_and_carries_bounded_info()
         releases: u64::MAX,
         artifacts: u64::MAX,
         chunks: u64::MAX,
-        maintenance_candidate: true,
     };
     let reply: publication::InfoReply = Ok(expected.clone());
     let frame = ic_wire::encode(

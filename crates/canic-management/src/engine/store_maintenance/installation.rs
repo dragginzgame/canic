@@ -123,7 +123,7 @@ async fn issue(record: &Status, wasm: Vec<u8>) -> Result<(), Failure> {
             request: None,
             sender_version: None,
             start_request: None,
-            verification: record.preservation.empty(),
+            verification: None,
             activation_request: None,
         });
     });

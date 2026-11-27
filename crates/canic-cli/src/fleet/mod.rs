@@ -465,14 +465,13 @@ pub(crate) fn publish(
 }
 
 fn child_label(snapshot: &Fleet, manager: &canic_host::FleetManager) -> String {
-    use canic_management_protocol::children::ChildId;
-    let slot = manager.slot.unwrap_or(ChildId::FIRST);
+    let slot = manager.slot;
     let mut names = snapshot
         .operations
         .iter()
         .filter(|op| {
             op.network_id == manager.network_id
-                && op.slot.unwrap_or(ChildId::FIRST) == slot
+                && op.slot == Some(slot)
                 && op.management_owner() == Some(manager.manager.as_str())
         })
         .filter_map(|op| op.deployment.as_ref());

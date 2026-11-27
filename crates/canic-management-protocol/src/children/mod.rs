@@ -64,69 +64,32 @@ pub enum ObservedStatus {
     Upgrade(crate::upgrade::Status),
 }
 
-/// Stable numeric identity scoped to one management owner, never a canister principal.
-/// Admission order and configuration sorting cannot change it. The current protocol
-/// preserves the original two service identities and assigns separate slots for mixed-fleet growth.
+/// A Root-local identity. Placement slots occupy a bounded namespace below service slots.
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 pub struct ChildId(u32);
 
 impl ChildId {
-    /// Original allocation, including journals migrated from one-child executables.
-    pub const FIRST: Self = Self(0);
-    /// Additional allocation with independent authority and evidence.
-    pub const SECOND: Self = Self(1);
-    /// Historical service slots, in custody order. Fresh Roots extend this prefix.
-    pub const HISTORICAL_SERVICES: [Self; 8] = [
-        Self::FIRST,
-        Self::SECOND,
-        Self(16),
-        Self(17),
-        Self(18),
-        Self(19),
-        Self(20),
-        Self(21),
-    ];
-
-    /// Position in permanent-service custody. Placement-only identities have no position.
-    #[must_use]
-    pub fn service_index(self) -> Option<usize> {
-        if self.index() >= Self::SLOT_COUNT {
-            Some(self.index() - Self::SLOT_COUNT + Self::HISTORICAL_SERVICES.len())
-        } else {
-            Self::HISTORICAL_SERVICES
-                .iter()
-                .position(|&slot| slot == self)
-        }
-    }
-
-    /// Map a permanent service ordinal into its own namespace, beyond the frozen placement IDs.
-    #[must_use]
-    pub fn service(index: usize) -> Option<Self> {
-        if let Some(id) = Self::HISTORICAL_SERVICES.get(index) {
-            return Some(*id);
-        }
-        let raw = index.checked_add(Self::SLOT_COUNT - Self::HISTORICAL_SERVICES.len())?;
-        Some(Self(u32::try_from(raw).ok()?))
-    }
-
-    /// Original dedicated children retained by the four-child Root format.
-    pub const PROJECT: [Self; 2] = [Self(2), Self(3)];
-
-    /// Shared-shard identities in HRW candidate order. A pool grant admits a prefix.
+    /// Number of placement slots across both allocation policies.
+    pub const SLOT_COUNT: usize = 16;
+    /// First permanent service.
+    pub const FIRST: Self = Self(Self::SLOT_COUNT as u32);
+    /// Second permanent service.
+    pub const SECOND: Self = Self(Self::FIRST.0 + 1);
+    /// Shared-shard identities in HRW order.
     pub const SHARDS: [Self; 8] = [
-        Self(22),
-        Self(23),
+        Self(0),
+        Self(1),
+        Self(2),
+        Self(3),
         Self(4),
         Self(5),
         Self(6),
         Self(7),
+    ];
+    /// Dedicated instance identities in claim order.
+    pub const INSTANCES: [Self; 8] = [
         Self(8),
         Self(9),
-    ];
-    /// Dedicated instance identities in claim order. A pool grant admits a prefix.
-    pub const INSTANCES: [Self; 8] = [
-        Self(2),
-        Self(3),
         Self(10),
         Self(11),
         Self(12),
@@ -134,74 +97,74 @@ impl ChildId {
         Self(14),
         Self(15),
     ];
-    /// Size of the original mixed service and placement namespace.
-    pub const SLOT_COUNT: usize = 24;
 
-    /// Reopen a placement identity held in the Root journals.
+    /// Permanent service ordinal.
     #[must_use]
-    pub const fn placement(index: usize) -> Option<Self> {
-        if index < Self::SLOT_COUNT {
-            Some(Self(index as u32))
-        } else {
-            None
-        }
+    pub fn service_index(self) -> Option<usize> {
+        self.index().checked_sub(Self::SLOT_COUNT)
     }
 
-    /// Construct an ordinary management request identity; unsupported values refuse.
+    /// Select a permanent service by ordinal.
     #[must_use]
-    pub fn new(value: usize) -> Option<Self> {
-        let slot = Self(u32::try_from(value).ok()?);
-        slot.service_index().map(|_| slot)
+    pub fn service(index: usize) -> Option<Self> {
+        Some(Self(u32::try_from(index).ok()?.checked_add(Self::FIRST.0)?))
     }
 
-    /// Stable numeric identity, also its position in historical custody arrays.
+    /// Select an allocation from its placement slot.
+    #[must_use]
+    pub fn placement(index: usize) -> Option<Self> {
+        (index < Self::SLOT_COUNT).then_some(Self(index as u32))
+    }
+
+    /// Reopen either namespace from its retained raw slot.
+    #[must_use]
+    pub const fn from_raw(raw: u32) -> Self {
+        Self(raw)
+    }
+
+    /// Raw slot in retained allocation evidence.
     #[must_use]
     pub const fn index(self) -> usize {
         self.0 as usize
     }
 }
 
-// These names and discriminants belong to retained Wire requests, approval
-// digests and Store pins. Runtime identities must not rewrite their encoding.
-#[derive(Deserialize, Serialize)]
-enum RecordId {
-    First,
-    Second,
-    FirstProject,
-    SecondProject,
-    Placement(u8),
-    Service(u32),
-}
+// The discriminator precedes the slot so superseded positional approvals refuse.
+const ID_DOMAIN: u8 = 73;
 
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum Slot {
+    Service(u32),
+    Placement(u32),
+}
 impl Serialize for ChildId {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-        let record = match self.0 {
-            0 => RecordId::First,
-            1 => RecordId::Second,
-            2 => RecordId::FirstProject,
-            3 => RecordId::SecondProject,
-            id if self.index() < Self::SLOT_COUNT => RecordId::Placement(id as u8),
-            id => RecordId::Service(id),
-        };
-        record.serialize(serializer)
+        if serializer.is_human_readable() {
+            let slot = match self.0.checked_sub(Self::FIRST.0) {
+                Some(ordinal) => Slot::Service(ordinal),
+                None => Slot::Placement(self.0),
+            };
+            slot.serialize(serializer)
+        } else {
+            (ID_DOMAIN, self.0).serialize(serializer)
+        }
     }
 }
-
 impl<'de> Deserialize<'de> for ChildId {
     fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        Ok(match RecordId::deserialize(deserializer)? {
-            RecordId::Service(id) if id >= Self::SLOT_COUNT as u32 => Self(id),
-            RecordId::Service(_) => {
-                return Err(serde::de::Error::custom("overlapping service identity"));
+        if deserializer.is_human_readable() {
+            return match Slot::deserialize(deserializer)? {
+                Slot::Service(ordinal) => Self::service(ordinal as usize),
+                Slot::Placement(index) => Self::placement(index as usize),
             }
-            RecordId::First => Self::FIRST,
-            RecordId::Second => Self::SECOND,
-            RecordId::FirstProject => Self::PROJECT[0],
-            RecordId::SecondProject => Self::PROJECT[1],
-            RecordId::Placement(id) => Self::placement(usize::from(id))
-                .filter(|_| id >= 4)
-                .ok_or_else(|| serde::de::Error::custom("unsupported placement identity"))?,
-        })
+            .ok_or_else(|| serde::de::Error::custom("invalid child slot"));
+        }
+        let (domain, raw) = <(u8, u32)>::deserialize(deserializer)?;
+        if domain != ID_DOMAIN {
+            return Err(serde::de::Error::custom("unknown child identity"));
+        }
+        Ok(Self(raw))
     }
 }
 
@@ -227,7 +190,9 @@ pub struct AllocationRequest<T> {
 
 fn ordinary_child<'de, D: serde::Deserializer<'de>>(deserializer: D) -> Result<ChildId, D::Error> {
     let slot = ChildId::deserialize(deserializer)?;
-    ChildId::new(slot.index()).ok_or_else(|| serde::de::Error::custom("ordinary child required"))
+    slot.service_index()
+        .map(|_| slot)
+        .ok_or_else(|| serde::de::Error::custom("ordinary child required"))
 }
 
 /// Read the selected creation journal.
@@ -240,8 +205,8 @@ pub const INJECT: u64 = 38;
 pub type Custody = Vec<super::custody::Custody>;
 /// Bounded observation of all permanent service histories.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: ChildId::HISTORICAL_SERVICES.len() * super::custody::LIMITS.bytes,
-    allocation: ChildId::HISTORICAL_SERVICES.len() * super::custody::LIMITS.allocation,
-    nodes: ChildId::HISTORICAL_SERVICES.len() * super::custody::LIMITS.nodes,
+    bytes: 65_536,
+    allocation: 65_536 * 1024,
+    nodes: 65_536 * 8,
     depth: super::custody::LIMITS.depth + 1,
 };

@@ -19,7 +19,7 @@ fn request() -> Request {
             generation: 1,
             target: args.canister_id.to_text(),
         },
-        step: Step::Upload(0),
+        step: Step::Upload(300),
         effect: Effect::Upload(args),
         arguments_hash: digest(&bytes),
         arguments_bytes: bytes.len() as u32,

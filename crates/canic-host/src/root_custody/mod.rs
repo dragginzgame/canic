@@ -13,8 +13,10 @@ pub(crate) fn child(
     value: &application::Custody,
     slot: ChildId,
 ) -> Result<&application::ChildCustody> {
-    slot.service_index()
-        .and_then(|index| value.children.get(index))
+    value
+        .children
+        .iter()
+        .find(|c| c.slot == slot)
         .filter(|child| child.slot == slot)
         .ok_or_else(|| Error::Invalid("Root custody omitted the selected child identity".into()))
 }
@@ -74,7 +76,7 @@ pub(crate) fn frame(
     .unwrap()
 }
 
-pub(crate) fn decode(method: u64, bytes: &[u8]) -> Result<application::Custody> {
+fn read(method: u64, bytes: &[u8]) -> Result<application::Custody> {
     if !matches!(method, application::CUSTODY | application::CHILD_EVIDENCE) {
         return Err(Error::Invalid(
             "unsupported Root custody observation".into(),
@@ -89,12 +91,27 @@ pub(crate) fn decode(method: u64, bytes: &[u8]) -> Result<application::Custody> 
         application::LIMITS,
     )
     .map_err(supplier)?;
-    if value.children.len() < ChildId::HISTORICAL_SERVICES.len()
-        || value
-            .children
-            .iter()
-            .enumerate()
-            .any(|(i, child)| ChildId::service(i) != Some(child.slot))
+    Ok(value)
+}
+
+pub(crate) fn decode_selected(
+    method: u64,
+    bytes: &[u8],
+    slot: ChildId,
+) -> Result<application::Custody> {
+    let value = read(method, bytes)?;
+    child(&value, slot)?;
+    Ok(value)
+}
+
+#[cfg(test)]
+pub(crate) fn decode(method: u64, bytes: &[u8]) -> Result<application::Custody> {
+    let value = read(method, bytes)?;
+    if value
+        .children
+        .iter()
+        .enumerate()
+        .any(|(i, child)| ChildId::service(i) != Some(child.slot))
     {
         return Err(Error::Invalid(
             "Root custody has inconsistent service slots".into(),

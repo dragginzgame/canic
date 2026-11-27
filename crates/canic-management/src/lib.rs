@@ -67,7 +67,7 @@ pub mod stored {
 
 pub mod application {
     pub use crate::engine::application::{
-        child_evidence, custody, reconcile_child_creation, reconcile_child_upgrade,
+        child_evidence, custody, custody_page, reconcile_child_creation, reconcile_child_upgrade,
         stage_child_creation, stage_child_upgrade,
     };
     #[cfg(feature = "blob")]

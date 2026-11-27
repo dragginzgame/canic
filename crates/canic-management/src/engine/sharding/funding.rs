@@ -48,9 +48,14 @@ impl Grant {
 
 fn installed(slot: ChildId, r: &ChildFunding) -> bool {
     STATE.with_borrow(|s| {
-        s.as_ref().unwrap().journal.0.get(&slot).is_some_and(|j| {
-            j.0.phase == Phase::Ready && j.0.worker.as_deref() == Some(&r.child.to_text())
-        })
+        s.as_ref()
+            .unwrap()
+            .journal
+            .rows()
+            .get(&slot)
+            .is_some_and(|j| {
+                j.0.phase == Phase::Ready && j.0.worker.as_deref() == Some(&r.child.to_text())
+            })
     }) && directory::named_service(slot).is_some_and(|service| service.name == r.component)
 }
 
@@ -89,7 +94,8 @@ pub fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, FundingError>
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().unwrap();
         s.pools.funding.insert(slot, grant);
-        s.pool.set(s.pools.encode());
+        s.pool
+            .put(&super::Key::Funding(slot), &s.pools.funding[&slot]);
     });
     schedule(slot);
     Ok(ChildFundingStatus::default())
@@ -106,15 +112,15 @@ pub fn stop(child: Principal) -> Result<ChildFundingStatus, FundingError> {
     }
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().unwrap();
-        let g = s
+        let (slot, g) = s
             .pools
             .funding
-            .values_mut()
-            .find(|g| g.rule.child == child)
+            .iter_mut()
+            .find(|(_, g)| g.rule.child == child)
             .ok_or(FundingError::UnknownChild)?;
         g.status.closed = true;
         let status = g.status.clone();
-        s.pool.set(s.pools.encode());
+        s.pool.put(&super::Key::Funding(*slot), g);
         Ok(status)
     })
 }
@@ -131,11 +137,14 @@ fn active(slot: ChildId) -> Option<ChildFunding> {
 }
 
 pub(in crate::engine) fn resume() {
-    for slot in super::super::service_slots() {
-        if active(slot).is_some() {
-            schedule(slot);
+    let now = api::time();
+    STATE.with_borrow(|s| {
+        for (&slot, grant) in &s.as_ref().unwrap().pools.funding {
+            if grant.active(now) {
+                schedule(slot);
+            }
         }
-    }
+    });
 }
 
 fn schedule(slot: ChildId) {
@@ -168,6 +177,12 @@ async fn step(slot: ChildId) -> OnceResult {
 }
 
 async fn deposit(slot: ChildId, rule: &ChildFunding) -> Result<bool, ()> {
+    if crate::backup::target_occupied(&rule.child.to_text()) {
+        return Ok(false);
+    }
+    let Some(_guard) = super::super::observing(slot) else {
+        return Ok(false);
+    };
     let args = mgmt::CanisterArgs {
         canister_id: rule.child,
     }
@@ -196,7 +211,8 @@ async fn deposit(slot: ChildId, rule: &ChildFunding) -> Result<bool, ()> {
         status.charged_cycles += rule.amount_cycles;
         status.issued = true;
         status.refund_cycles = None;
-        s.pool.set(s.pools.encode());
+        s.pool
+            .put(&super::Key::Funding(slot), &s.pools.funding[&slot]);
     });
     let (success, refund) = super::super::deposit_cycles(rule.child, rule.amount_cycles).await;
     STATE.with_borrow_mut(|s| {
@@ -210,7 +226,11 @@ async fn deposit(slot: ChildId, rule: &ChildFunding) -> Result<bool, ()> {
         }
         status.closed |= !success;
         status.refund_cycles = refund;
-        s.pool.set(s.pools.encode());
+        s.pool
+            .put(&super::Key::Funding(slot), &s.pools.funding[&slot]);
+        if success {
+            s.pool.put(&super::Key::FundingReceipts, &s.pools.receipts);
+        }
     });
     if success { Ok(true) } else { Err(()) }
 }

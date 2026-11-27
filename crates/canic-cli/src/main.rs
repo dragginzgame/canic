@@ -590,11 +590,12 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
             scope,
         } => {
             let (config_path, configuration, state_dir) = scope.resolve()?;
+            let session = canic_host::InspectionSession::new(identity.as_deref())?;
             let collect = || {
                 fleet::collect(
                     &state_dir,
                     manager,
-                    identity.as_deref(),
+                    identity.as_ref().map(|_| &session),
                     wallet.as_deref(),
                     configuration.as_ref(),
                 )
@@ -605,7 +606,7 @@ async fn run_fleet(cli: &Cli, command: &FleetCommand) -> canic_host::Result<Outp
                     &snapshot,
                     &config_path,
                     id,
-                    identity.as_deref(),
+                    &session,
                     wasm.as_deref(),
                     cli.json,
                 )

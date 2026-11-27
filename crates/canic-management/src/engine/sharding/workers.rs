@@ -1,5 +1,5 @@
 //! Independent worker allowance. Ordinals are permanent within the approved pool.
-use super::{Pools, STATE, api, create, placement, validate_pool_install};
+use super::{Key, Pools, STATE, api, create, ordinal, placement, validate_pool_install};
 use canic::sharding::{Allocation, Placement};
 use canic_management_protocol::{Refusal, children::ChildId, stored};
 use serde::{Deserialize, Serialize};
@@ -33,18 +33,24 @@ impl Pools {
 
 // Keep the original evidence before making this management slot available again.
 pub(super) fn archive(state: &mut super::super::State, slot: ChildId, generation: [u8; 32]) {
-    let claim = state
+    let (name, i, claim) = state
         .pools
         .workers
-        .values_mut()
-        .flat_map(|w| &mut w.claims)
-        .find(|claim| claim.slot == slot && claim.generation == generation && !claim.returned)
+        .iter_mut()
+        .find_map(|(name, w)| {
+            w.claims
+                .iter_mut()
+                .enumerate()
+                .find(|(_, c)| c.slot == slot && c.generation == generation && !c.returned)
+                .map(|(i, c)| (name, i, c))
+        })
         .expect("live worker allocation");
     claim.returned = true;
-    let mut journals = state.journal.clone();
-    let mut artifacts = state.artifact.clone();
-    let journal = std::mem::take(journals.0.get_mut(&slot).expect("original journal"));
-    let artifact = std::mem::take(artifacts.0.get_mut(&slot).expect("original artifact"));
+    state
+        .pool
+        .put(&Key::WorkerClaim(name.clone(), ordinal(i)), claim);
+    let journal = &state.journal.rows()[&slot];
+    let artifact = &state.artifact.rows()[&slot];
     assert_eq!(journal.0.attempts[0], u8::from(claim.created));
     let bytes = ic_wire::encode(
         &(journal, artifact),
@@ -58,8 +64,11 @@ pub(super) fn archive(state: &mut super::super::State, slot: ChildId, generation
             .insert(claim.generation, bytes)
             .is_none()
     );
-    state.set_journal(journals);
-    state.set_artifact(artifacts);
+    state.set_journal(slot, Default::default());
+    state
+        .artifact
+        .set(slot, Default::default())
+        .expect("empty child artifact");
 }
 
 impl Workers {
@@ -115,7 +124,7 @@ fn compatible(pools: &Pools, grant: &stored::InstancePool) -> bool {
 
 fn installed_hub(state: &super::super::State, hub: &str) -> bool {
     state.pools.permanent.iter().copied().any(|slot| {
-        let child = &state.journal.0[&slot].0;
+        let child = &state.journal.rows()[&slot].0;
         child.phase == canic_management_protocol::Phase::Ready
             && child.worker.as_deref() == Some(hub)
     })
@@ -143,7 +152,8 @@ pub fn configure_workers(grant: stored::InstancePool) -> Result<(), Refusal> {
                 .then_some(Err(Refusal::Binding))
         },
         validate_worker,
-        |pools, grant| {
+        |pools, rows, grant| {
+            rows.put(&Key::Worker(grant.component.clone()), &grant);
             pools.workers.insert(
                 grant.component.clone(),
                 Workers {
@@ -192,10 +202,10 @@ pub(super) fn resolve_worker(
             return Err(placement::resolve(
                 allocation,
                 claim.principal.as_deref(),
-                state.artifact.0[&slot]
+                state.artifact.rows()[&slot]
                     .sources()
                     .map(|s| s.creation.operation),
-                &state.journal.0[&slot].0,
+                &state.journal.rows()[&slot].0,
             ));
         }
         if !reserve {
@@ -251,7 +261,10 @@ pub(super) fn resolve_worker(
                 generation,
                 principal: None,
             });
-        state.pool.set(state.pools.encode());
+        state.pool.put(
+            &Key::WorkerClaim(component.to_owned(), super::ordinal(index)),
+            &state.pools.workers[component].claims[index],
+        );
     });
     Placement::Pending(Allocation {
         slot: slot.index() as u32,

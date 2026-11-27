@@ -8,13 +8,9 @@ pub const OBSERVE: u64 = 30;
 pub const ROOT: u64 = 57;
 /// Complete bounded Store history in addition to child custody.
 pub const ROOT_HISTORY_LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: ROOT_LIMITS.bytes
-        + (crate::store_maintenance::MAX_UPGRADES - 1) * crate::store_maintenance::LIMITS.bytes,
-    allocation: ROOT_LIMITS.allocation
-        + (crate::store_maintenance::MAX_UPGRADES - 1)
-            * crate::store_maintenance::LIMITS.allocation,
-    nodes: ROOT_LIMITS.nodes
-        + (crate::store_maintenance::MAX_UPGRADES - 1) * crate::store_maintenance::LIMITS.nodes,
+    bytes: ROOT_LIMITS.bytes + 7 * crate::store_maintenance::LIMITS.bytes,
+    allocation: ROOT_LIMITS.allocation + 7 * crate::store_maintenance::LIMITS.allocation,
+    nodes: ROOT_LIMITS.nodes + 7 * crate::store_maintenance::LIMITS.nodes,
     depth: ROOT_LIMITS.depth + 2,
 };
 /// Combined metadata budget; child-only and Store-only contracts remain unchanged.
@@ -27,8 +23,8 @@ pub const ROOT_LIMITS: ic_wire::Limits = ic_wire::Limits {
 /// Bounded full journal response; no artifact bytes are exported.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 8192,
-    allocation: (1 + upgrade::MAX_UPGRADES) * crate::LIMITS.allocation,
-    nodes: (1 + upgrade::MAX_UPGRADES) * crate::LIMITS.nodes,
+    allocation: 9 * crate::LIMITS.allocation,
+    nodes: 9 * crate::LIMITS.nodes,
     depth: crate::LIMITS.depth + 2,
 };
 

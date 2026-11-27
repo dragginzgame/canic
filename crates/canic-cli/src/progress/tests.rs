@@ -197,6 +197,7 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
     assert!(!built(std::slice::from_ref(&store)).contains("[WASM_STORE]"));
     for (role, badge) in [("root", "[ROOT]"), ("coordinator", "[COORDINATOR]")] {
         store.role = Some(role.into());
+        assert_eq!(build_row(String::new(), &store, 2)[5], "n/a");
         if role == "root" {
             store.endpoint_count = 52;
             assert_eq!(build_row(String::new(), &store, 2)[4], "52 (52)");
@@ -215,7 +216,13 @@ fn app_build_summary_marks_infrastructure_in_canister_column_and_keeps_codec_pat
         "artifacts/user_shard.codec"
     );
     let table = built(&[shard, hub, store]);
-    assert_eq!(table.matches("n/a").count(), 2);
+    assert_eq!(table.matches("n/a").count(), 1);
+    assert!(
+        table
+            .lines()
+            .any(|row| row.contains("user_shard")
+                && row.split_whitespace().rev().nth(2) == Some("-"))
+    );
     let row = table
         .lines()
         .find(|row| row.starts_with("├─ [WASM_STORE]"))

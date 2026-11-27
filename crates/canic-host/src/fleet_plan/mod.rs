@@ -116,7 +116,7 @@ pub struct FleetPlan {
     pub store: FleetStore,
 }
 
-const CONTRACT: &str = "canic:store-fleet-plan.v1";
+const CONTRACT: &str = "canic:service-fleet-plan.v1";
 const CHILD_WINDOW_NS: u64 = 600_000_000_000;
 
 impl FleetPlan {

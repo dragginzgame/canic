@@ -17,7 +17,7 @@ async fn custody(
             CanisterId::anonymous(),
             "observe_root_custody",
             ic_wire::encode(
-                &(),
+                &None::<canic_management_protocol::application::DeploymentSelector>,
                 Encoding::Frame {
                     method: canic_management_protocol::application::CUSTODY,
                     direction: Direction::Request,
@@ -307,7 +307,7 @@ async fn fleet_counter_preserves_value_and_never_treats_fenced_as_ready() {
             assert_eq!(plan()["action"], "unchanged");
         }
         // Store is independently controlled infrastructure; only one application was allocated.
-        assert!(state.children[1].journal.creation.approval.is_none());
+        assert_eq!(state.children.len(), 1);
         assert_eq!(
             owner
                 .client()

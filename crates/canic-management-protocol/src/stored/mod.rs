@@ -173,7 +173,7 @@ pub struct SingletonGrant {
 }
 
 /// Maximum standby pool entries per acquisition source.
-pub const MAX_STANDBY_POOL_ENTRIES: u8 = 8;
+pub const MAX_STANDBY_POOL_ENTRIES: u8 = u8::MAX;
 /// Dedicated instances also consume the shared subnet allowance.
 pub const MAX_INSTANCES: u8 = crate::children::ChildId::INSTANCES.len() as u8;
 /// Addressable shared shard slots.
@@ -185,7 +185,7 @@ pub struct SpareCounts {
     /// Root's approved target.
     pub min_available_spares: u8,
     /// Immediately claimable principals.
-    pub ready: u8,
+    pub ready: u32,
     /// Automatic creations charged, including unresolved attempts.
     pub creations_used: u8,
     /// Lifetime paid creation allowance.

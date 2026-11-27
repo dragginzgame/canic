@@ -627,8 +627,20 @@ async fn installed_publication(scenario: Scenario) {
             parent: parent.to_text().parse().unwrap(),
             application: vec![],
         };
+        let deployments: management::application::Custody = root
+            .update(
+                "observe_child_deployments",
+                management::application::CHILD_EVIDENCE,
+                &None::<canic_management_protocol::application::DeploymentSelector>,
+                management::application::LIMITS,
+            )
+            .await;
         assert_eq!(
-            stage(ChildId::HISTORICAL_SERVICES[2], duplicate.encode().unwrap()).await,
+            stage(
+                ChildId::service(deployments.children.len()).unwrap(),
+                duplicate.encode().unwrap()
+            )
+            .await,
             Err(management::Refusal::Binding)
         );
         let (root_id, operator, store_id) = (root.id, root.operator, supplier.id);
@@ -651,7 +663,7 @@ async fn installed_publication(scenario: Scenario) {
         return;
     }
     if matches!(scenario, Scenario::ThreeServices) {
-        let third = ChildId::HISTORICAL_SERVICES[2];
+        let third = ChildId::service(2).unwrap();
         stage(third, named("discovery_hub")).await.unwrap();
         let discovery = ready(third).await;
         for (slot, name, original) in [
@@ -833,7 +845,7 @@ async fn installed_publication(scenario: Scenario) {
                 let canic::sharding::standby::Asset::Claimed(id, allocation) = asset else {
                     panic!("one spare per installed child")
                 };
-                let slot = ChildId::placement(allocation.slot as usize).unwrap();
+                let slot = ChildId::from_raw(allocation.slot);
                 let status: management::Status = root.observe_creation(slot).await;
                 assert_eq!(status.worker, Some(id.to_text()));
                 assert_eq!(status.attempts, [0, 1, 1]);

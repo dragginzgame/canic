@@ -1,5 +1,60 @@
 # Changelog
 
+## [0.277.0] - 2026-11-27
+
+### 🗄️ Database
+
+Canic and its qualification workspace use IC DB 0.36.0 and the matching schema macros.
+
+### ▶️ Try it
+
+```sh
+# From a checkout with the simulator prepared, exercise the schema mount and Wire inspection.
+bash scripts/dev/test-store.sh db-roles
+```
+
+### Fleet management
+
+On fresh fleets, Root retains child and Store upgrades in individual stable
+records. Host verifies every custody page before and after Root maintenance.
+Snapshot reservations follow the target. Each canister can use all ten of its IC
+snapshot slots and controllers can approve a replacement by its exact ID.
+
+```sh
+# From a checkout with the simulator prepared, exercise repeated upgrades and snapshot replacement.
+bash scripts/dev/test-growth.sh
+bash scripts/dev/test-root.sh snapshot::
+```
+
+Fleet standby configuration accepts up to 255 entries per acquisition source
+within the subnet ceiling. Application payers retain a separate funding grant
+for every approved direct child. Fresh Roots persist each snapshot step by
+operation and step identity. Chunked procedures can exceed 64 steps and
+16 MiB of cumulative reply allowances. Each call still enforces its own budget.
+
+```sh
+# With the local simulator prepared, exercise standby replenishment and snapshot recovery.
+bash scripts/dev/test-store.sh miner
+bash scripts/dev/test-root.sh snapshot::
+```
+
+
+In the build table, ordinary canisters with no modules show `-` under `MODS`. Infrastructure canisters with no modules show `n/a`.
+
+```sh
+# From an app directory, build the canisters and display their modules.
+canic app build
+```
+
+Fresh Roots save each child’s journal and artifact manifest independently. The new stable layout requires a fresh fleet. Store maintenance and bootstrap policy use their own metadata record. Root dispatches due children through four shared execution slots. Placement, snapshot operations, application funding and hub shard occupancy now persist independently by record. Rebuild the affected canisters for a fresh fleet.
+
+Fresh Roots retain installed service slots on admission. Rebuild Root and Host and use a fresh fleet journal. Authenticated fleet inspection pages Root’s installation records and queries individual journals for retained operations.
+
+```sh
+# Inspect a fresh fleet with a bound Root and its controller identity.
+canic fleet show --identity controller.pem
+```
+
 ## [0.276.0] - 2026-11-27
 
 Canic’s database adapter and qualification workspace now use IC DB 0.34.0.
@@ -978,7 +1033,7 @@ Receiver callbacks can require the installed issuer directly. [Canic #77](https:
 
 ### 🌳 Fleet growth and named pools
 
-Fresh Roots can host up to eight permanent services. Adding a service preserves
+Adding a service preserves
 the slots and upgrade targets already approved for its siblings. Permanent
 services and placement pools share the subnet ceiling. Roots with the old
 two-service journal require their original executable. [Canic #75](https://github.com/dragginzgame/canic/issues/75)

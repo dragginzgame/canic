@@ -1,6 +1,6 @@
 //! Full Store custody comparison on both sides of the existing Root upgrade effect.
 use super::invalid;
-use crate::{Plan, Result, managed, network::principal, supplier};
+use crate::{Plan, Result, managed, network::principal};
 use canic_management_protocol::{application, children::ChildId, stored as wire};
 
 pub(super) fn validate(plan: &Plan) -> Result<()> {
@@ -13,9 +13,7 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         || plan.target() == Some(&store.store.canister)
         || crate::unhex(&store.store.module)?.len() != 32
         || store.store.module != store.store.module.to_ascii_lowercase()
-        || store.sources.len() != children.len().max(ChildId::HISTORICAL_SERVICES.len())
-        || store.sources[children.len()..].iter().any(Option::is_some)
-        || store.history.len() >= canic_management_protocol::store_maintenance::MAX_UPGRADES
+        || store.sources.len() != children.len()
         || (!store.history.is_empty() && store.operation.is_none())
     {
         return Err(invalid());
@@ -48,26 +46,25 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
         }
     }
     if let Some(operation) = &store.operation {
-        if !store.history.is_empty() {
-            let chain: Vec<_> = store
-                .history
-                .iter()
-                .chain(std::iter::once(operation))
-                .collect();
-            for (index, record) in chain.iter().enumerate() {
-                if record.approval.attempt.sequence != index as u64 + 1
-                    || record.approval.store != store.store.canister
-                    || (index < store.history.len() && !crate::store_upgrade::ready(record))
-                    || (index > 0
-                        && chain[index - 1].approval.module_hash != record.approval.previous_module)
-                    || record.approval.attempt.operation == [0; 32]
-                    || chain[..index].iter().any(|old| {
-                        old.approval.attempt.operation == record.approval.attempt.operation
-                    })
-                {
-                    return Err(invalid());
-                }
+        let mut operations = std::collections::BTreeSet::new();
+        let mut previous_module = None;
+        for (index, record) in store
+            .history
+            .iter()
+            .chain(std::iter::once(operation))
+            .enumerate()
+        {
+            let approval = &record.approval;
+            if approval.attempt.sequence != index as u64 + 1
+                || approval.store != store.store.canister
+                || (index < store.history.len() && !crate::store_upgrade::ready(record))
+                || previous_module.is_some_and(|hash| hash != approval.previous_module)
+                || approval.attempt.operation == [0; 32]
+                || !operations.insert(approval.attempt.operation)
+            {
+                return Err(invalid());
             }
+            previous_module = Some(approval.module_hash);
         }
         let approval = &operation.approval;
         let operator = principal(&operation.operator)?;
@@ -88,15 +85,6 @@ pub(super) fn validate(plan: &Plan) -> Result<()> {
             return Err(invalid());
         }
     }
-    ic_wire::encoded_len(
-        &expected(plan)?,
-        ic_wire::Encoding::Frame {
-            method: application::CUSTODY,
-            direction: ic_wire::Direction::Response,
-        },
-        application::LIMITS,
-    )
-    .map_err(supplier)?;
     Ok(())
 }
 
@@ -137,12 +125,7 @@ pub(super) fn expected(plan: &Plan) -> Result<application::Custody> {
         .map(|(i, sources)| {
             Ok(application::ChildCustody {
                 slot: ChildId::service(i).ok_or_else(invalid)?,
-                journal: journals.get(i).cloned().unwrap_or_else(|| {
-                    canic_management_protocol::custody::Custody {
-                        creation: Default::default(),
-                        upgrades: Vec::new(),
-                    }
-                }),
+                journal: journals.get(i).ok_or_else(invalid)?.clone(),
                 sources: sources.clone(),
                 lifecycle: None,
             })

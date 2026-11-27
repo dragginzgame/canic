@@ -110,7 +110,7 @@ fn reply(record: Record) -> Vec<u8> {
     }
 }
 
-async fn fixture(pic: &PocketIc, wasm: Vec<u8>) -> (CanisterId, CanisterId, u64) {
+async fn fixture(pic: &PocketIc, wasm: Vec<u8>) -> (CanisterId, CanisterId, u64, ChildStore<'_>) {
     let root = pic.create_canister().await;
     let store = ChildStore::install(
         pic,
@@ -140,6 +140,7 @@ async fn fixture(pic: &PocketIc, wasm: Vec<u8>) -> (CanisterId, CanisterId, u64)
         root,
         CanisterId::from_text(s.worker.unwrap()).unwrap(),
         now + 250_000_000_000,
+        store,
     )
 }
 
@@ -177,7 +178,7 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         .unwrap();
     let pic = owner.client();
     let wasm = std::fs::read(repo().join("target/backup/root.wasm")).unwrap();
-    let (root, child, expiry) = fixture(pic, wasm.clone()).await;
+    let (root, child, expiry, store) = fixture(pic, wasm.clone()).await;
     let value = canic_qualification::counter(
         pic,
         child,
@@ -216,6 +217,22 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
             .is_err()
     );
     reply(execute(pic, root, &stop).await.unwrap());
+    // While the first child stays stopped, Root can create and start a sibling.
+    let sibling = canic_management_protocol::children::ChildId::SECOND;
+    let mut input = children::input(
+        root,
+        std::fs::read(repo().join("target/backup/app.wasm")).unwrap(),
+        pic.get_time().await.as_nanos_since_unix_epoch(),
+    );
+    input.approval.execute_at_ns = pic.get_time().await.as_nanos_since_unix_epoch();
+    children::admit(pic, root, &store, sibling, input)
+        .await
+        .unwrap();
+    settle(pic).await;
+    assert_eq!(
+        creation_status(pic, root, sibling).await.phase,
+        Phase::Ready
+    );
     assert!(
         pic.update_call(
             root,
@@ -481,6 +498,49 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         original_memory,
         "the uploaded snapshot restores the populated counter bytes"
     );
+    // The capture and restore allocation already occupy two native snapshots.
+    for index in 0..10_u8 {
+        let operation = Operation {
+            id: [20 + index; 16],
+            approval: [20 + index; 32],
+            ..op.clone()
+        };
+        let capture = request(
+            &operation,
+            Step::Take,
+            Effect::Take(m::TakeSnapshotArgs {
+                canister_id: args.canister_id,
+                replace_snapshot: (index == 9).then(|| snapshot.id.clone()),
+                uninstall_code: Some(false),
+                sender_canister_version: None,
+            }),
+            expiry,
+        );
+        let recorded = execute(pic, root, &capture).await.unwrap();
+        if index == 8 {
+            assert!(
+                matches!(recorded.outcome, Outcome::Rejected(..)),
+                "{recorded:?}"
+            );
+        } else {
+            m::decode_take_snapshot(&reply(recorded.clone()), DECODE).unwrap();
+        }
+        assert_eq!(lookup(pic, root, &capture).await.unwrap(), recorded);
+        reply(
+            execute(
+                pic,
+                root,
+                &request(
+                    &operation,
+                    Step::FinalStatus,
+                    Effect::Canister(args.clone()),
+                    expiry,
+                ),
+            )
+            .await
+            .unwrap(),
+        );
+    }
     pic.advance_time(Duration::from_secs(300)).await;
     assert_eq!(
         execute(pic, root, &take).await.unwrap(),
@@ -490,7 +550,7 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
     // A callback trap after the management effect leaves the original slot pending across upgrade.
     let fault_wasm = std::fs::read(repo().join("target/backup/root-fault.wasm")).unwrap();
     for (point, step) in [(1u8, Step::Take), (2, Step::Take), (1, Step::Fence)] {
-        let (broken, worker, expiry) = fixture(pic, fault_wasm.clone()).await;
+        let (broken, worker, expiry, _) = fixture(pic, fault_wasm.clone()).await;
         let op = operation(broken, worker);
         let args = m::CanisterArgs {
             canister_id: op.target.parse().unwrap(),
@@ -593,7 +653,7 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
     }
     // The application can reject Root's requested generation. A valid transport
     // reply from the executor retains that rejection and grants no stop.
-    let (r, worker, expiry) = fixture(pic, wasm.clone()).await;
+    let (r, worker, expiry, _) = fixture(pic, wasm.clone()).await;
     canic_qualification::counter(
         pic,
         worker,
@@ -629,7 +689,7 @@ async fn original_snapshot_results_survive_duplicates_upgrade_and_callback_failu
         Err(Error::Busy)
     );
     // An original management rejection is terminal evidence, not an outer rejection.
-    let (rejected_root, worker, expiry) = fixture(pic, wasm).await;
+    let (rejected_root, worker, expiry, _) = fixture(pic, wasm).await;
     let op = operation(rejected_root, worker);
     let invalid_snapshot = request(
         &op,

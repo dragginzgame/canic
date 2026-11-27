@@ -1,5 +1,6 @@
 //! Keep paid refill outcomes outside the disposable canister.
 use super::super::{MANAGEMENT_LIMITS, create_args, management, reserved_cycles};
+use super::{Key, ordinal};
 use super::{STATE, api};
 use canic::sharding::standby::StandbyPoolError;
 use canic::sharding::{
@@ -132,7 +133,7 @@ pub async fn refill(input: Refill) -> Result<Asset, StandbyPoolError> {
             .filter(|(source, _)| matches!(source, Source::Refill(_)))
             .count()
             != usize::from(input.sequence)
-            || input.sequence >= MAX_STANDBY_POOL_ENTRIES
+            || input.sequence == MAX_STANDBY_POOL_ENTRIES
         {
             return Err(StandbyPoolError::Capacity(
                 "refill sequence outside retained capacity".into(),
@@ -143,7 +144,9 @@ pub async fn refill(input: Refill) -> Result<Asset, StandbyPoolError> {
             .pools
             .standby
             .push((Source::Refill(input.clone()), Asset::Issued));
-        state.pool.set(state.pools.encode());
+        state
+            .pool
+            .put(&Key::Standby(ordinal(index)), &state.pools.standby[index]);
         Ok(index)
     })?;
     create_issued(index, Source::Refill(input)).await
@@ -166,7 +169,9 @@ async fn create_issued(index: usize, source: Source) -> Result<Asset, StandbyPoo
         assert_eq!(entry, &(source, Asset::Issued));
         entry.1 = Asset::Empty(id);
         log_surplus(&state.pools);
-        state.pool.set(state.pools.encode());
+        state
+            .pool
+            .put(&Key::Standby(ordinal(index)), &state.pools.standby[index]);
     });
     Ok(Asset::Empty(id))
 }
@@ -317,12 +322,14 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
         if already_released(&state.pools) {
             return Ok(());
         }
-        if let Some((_, asset)) = state.pools.standby.iter_mut().find(|(_, a)| a == &claimed) {
-            *asset = released;
+        let index = if let Some(index) = state.pools.standby.iter().position(|(_, a)| a == &claimed)
+        {
+            state.pools.standby[index].1 = released;
+            index
         } else {
             let status = &state
                 .journal
-                .0
+                .rows()
                 .get(&slot)
                 .ok_or_else(|| StandbyPoolError::WrongAsset("missing worker journal".into()))?
                 .0;
@@ -338,8 +345,11 @@ pub async fn confirm_release(target: canic::sharding::ShardTarget) -> Result<(),
                 .pools
                 .standby
                 .push((Source::Worker(target.clone()), released));
-        }
-        state.pool.set(state.pools.encode());
+            state.pools.standby.len() - 1
+        };
+        state
+            .pool
+            .put(&Key::Standby(ordinal(index)), &state.pools.standby[index]);
         Ok(())
     })
 }

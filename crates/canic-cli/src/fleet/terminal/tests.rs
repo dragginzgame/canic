@@ -23,7 +23,7 @@ fn empty() -> Fleet {
 fn child_reports_keep_slots_names_and_ambiguity_distinct() {
     use canic_management_protocol::{Approval, children::ChildId};
     let mut snapshot = empty();
-    for slot in [None, Some(ChildId::SECOND)] {
+    for slot in [ChildId::FIRST, ChildId::SECOND] {
         snapshot.managers.push(FleetManager {
             slot,
             upgrade: None,
@@ -77,7 +77,6 @@ fn child_reports_keep_slots_names_and_ambiguity_distinct() {
         approval_expired: false,
     };
     snapshot.operations = vec![operation("named"), operation("named")];
-    // Legacy None and explicit First denote the same physical slot.
     snapshot.operations[0].slot = None;
     check(&snapshot, "slot 1 · named");
     check(&snapshot, "slot 2 · child<untrusted>");
@@ -161,7 +160,6 @@ fn store_maintenance_reports_keep_uncertainty_activation_and_historical_completi
         assert!(!concise.contains("Dispatch deadline"));
         assert!(!concise.contains('\x1b'));
         let detailed = render(&snapshot, &[], true, false);
-        assert!(detailed.contains("Qualified history limit: 8 retained attempts"));
         assert!(detailed.contains("Before replacement: not retained"));
         let html = super::super::render(&snapshot, "");
         assert!(html.contains(&format!("attempt 7 — {wording}")));
@@ -279,7 +277,7 @@ fn terminal_escapes_external_unicode_controls_without_changing_evidence() {
 fn terminal_distinguishes_unknown_wallet_balance_and_uncertified_manager() {
     let mut snapshot = empty();
     snapshot.managers.push(FleetManager {
-        slot: None,
+        slot: canic_management_protocol::children::ChildId::FIRST,
         upgrade: None,
         network_id: "mainnet".into(),
         manager: "manager".into(),
@@ -381,7 +379,7 @@ fn roles_follow_observed_authority_without_inventing_root_or_crossing_networks()
         });
     }
     snapshot.managers.push(FleetManager {
-        slot: None,
+        slot: canic_management_protocol::children::ChildId::FIRST,
         upgrade: None,
         network_id: "a".into(),
         manager: "manager".into(),
@@ -498,7 +496,7 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
         });
     }
     snapshot.managers.push(FleetManager {
-        slot: None,
+        slot: canic_management_protocol::children::ChildId::FIRST,
         upgrade: None,
         network_id: network,
         manager: declarations[2].1.into(),
@@ -621,7 +619,7 @@ fn compact_fleet_names_each_identity_once_and_keeps_details_opt_in() {
 fn upgrade_progress_stays_uncertified_and_unknowns_do_not_hide_creation() {
     let mut snapshot = empty();
     snapshot.managers.push(FleetManager {
-        slot: None,
+        slot: canic_management_protocol::children::ChildId::FIRST,
         network_id: "mainnet".into(),
         manager: "root".into(),
         reported: Some(Default::default()),

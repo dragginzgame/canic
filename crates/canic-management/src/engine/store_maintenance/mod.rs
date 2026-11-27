@@ -5,7 +5,7 @@ mod preservation;
 use super::{MANAGEMENT_LIMITS, OBSERVING, STATE, State, api, digest, management};
 use canic_management_protocol::{
     Failure, Refusal,
-    store_maintenance::{Approval, MAX_UPGRADES, Phase, Scan, Status},
+    store_maintenance::{Approval, Phase, Status},
     stored::STORE_LIMITS,
 };
 use ic_platform_protocol::{
@@ -39,15 +39,15 @@ pub(crate) fn active() -> bool {
         state
             .as_ref()
             .expect("open engine")
-            .journal
-            .1
+            .metadata
+            .maintenance
             .as_ref()
             .is_some_and(|record| record.phase != Phase::Ready)
     })
 }
 
 fn quiescent(state: &State) -> bool {
-    state.journal.0.values().all(|journal| {
+    state.journal.rows().values().all(|journal| {
         matches!(
             journal.0.phase,
             canic_management_protocol::Phase::Empty | canic_management_protocol::Phase::Ready
@@ -73,25 +73,28 @@ fn binding(state: &State, approval: &Approval) -> bool {
         && approval.attempt.operation != [0; 32]
         && state
             .journal
-            .0
+            .rows()
             .values()
             .all(|j| j.0.worker.as_ref() != Some(&approval.store))
-        && state.artifact.0.values().all(|a| {
+        && state.artifact.rows().values().all(|a| {
             a.sources()
                 .is_none_or(|s| s.creation.reference.store == approval.store)
         })
 }
 
 pub(super) fn validate(state: &State) {
-    let journals = &state.journal;
-    assert!(journals.2.len() < MAX_UPGRADES, "Store history bound");
+    let metadata = &state.metadata;
     assert!(
-        journals.2.is_empty() || journals.1.is_some(),
+        metadata.history.is_empty() || metadata.maintenance.is_some(),
         "Store history tip"
     );
-    let records: Vec<_> = journals.2.iter().chain(journals.1.iter()).collect();
+    let records: Vec<_> = metadata
+        .history
+        .iter()
+        .chain(metadata.maintenance.iter())
+        .collect();
     for (index, record) in records.iter().enumerate() {
-        if index < journals.2.len() {
+        if index < metadata.history.len() {
             assert!(
                 record.phase == Phase::Ready && record.failure.is_none(),
                 "completed Store predecessor"
@@ -140,7 +143,14 @@ pub(super) fn validate(state: &State) {
 /// Traps if lifecycle has not opened the engine.
 #[must_use]
 pub fn observe() -> Option<Status> {
-    STATE.with_borrow(|state| state.as_ref().expect("open engine").journal.1.clone())
+    STATE.with_borrow(|state| {
+        state
+            .as_ref()
+            .expect("open engine")
+            .metadata
+            .maintenance
+            .clone()
+    })
 }
 
 fn successor(previous: &Status, approval: &Approval) -> bool {
@@ -157,11 +167,11 @@ fn successor(previous: &Status, approval: &Approval) -> bool {
 #[must_use]
 pub fn observe_attempt(approval: &Approval) -> Option<Status> {
     STATE.with_borrow(|state| {
-        let journals = &state.as_ref().expect("open engine").journal;
-        journals
-            .1
+        let metadata = &state.as_ref().expect("open engine").metadata;
+        metadata
+            .maintenance
             .iter()
-            .chain(journals.2.iter())
+            .chain(metadata.history.iter())
             .find(|record| &record.approval == approval)
             .cloned()
     })
@@ -191,8 +201,8 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
         state
             .as_ref()
             .expect("open engine")
-            .journal
-            .1
+            .metadata
+            .maintenance
             .as_ref()
             .is_some_and(|old| !successor(old, &approval))
     }) {
@@ -210,13 +220,12 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
         if !quiescent(state) || OBSERVING.with_borrow(|active| !active.is_empty()) {
             return Err(Refusal::Occupied);
         }
-        let journals = &state.journal;
-        if journals.2.len() + usize::from(journals.1.is_some()) >= MAX_UPGRADES
-            || (journals.1.is_none() && approval.attempt.sequence != 1)
-            || journals
-                .1
+        let metadata = &state.metadata;
+        if (metadata.maintenance.is_none() && approval.attempt.sequence != 1)
+            || metadata
+                .maintenance
                 .iter()
-                .chain(journals.2.iter())
+                .chain(metadata.history.iter())
                 .any(|old| old.approval.attempt.operation == approval.attempt.operation)
         {
             return Err(Refusal::Occupied);
@@ -227,14 +236,14 @@ pub fn stage(approval: Approval) -> Result<Status, Refusal> {
             phase: Phase::Reserved,
             stop_request: None,
             failure: None,
-            preservation: Scan::Entries(None),
+            preservation: None,
             installation: None,
         };
-        let mut journals = state.journal.clone();
-        if let Some(previous) = journals.1.replace(record.clone()) {
-            journals.2.push(previous);
+        let metadata = &mut state.metadata;
+        if let Some(previous) = metadata.maintenance.replace(record.clone()) {
+            metadata.history.push(previous);
         }
-        state.set_journal(journals);
+        state.save_metadata();
         Ok(record)
     })
 }
@@ -254,12 +263,12 @@ fn selected(approval: &Approval) -> Status {
 fn change(approval: &Approval, expected: Phase, update: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
-        let mut journals = state.journal.clone();
-        let value = journals.1.as_mut().expect("retained maintenance");
+        let metadata = &mut state.metadata;
+        let value = metadata.maintenance.as_mut().expect("retained maintenance");
         // Both operation and phase fence callbacks, including a successor at the same phase.
         if &value.approval == approval && value.phase == expected {
             update(value);
-            state.set_journal(journals);
+            state.save_metadata();
         }
     });
 }

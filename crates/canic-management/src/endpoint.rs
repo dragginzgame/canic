@@ -22,8 +22,12 @@ pub fn admit(limit: usize, private: bool, _method: u64) -> Result<(), String> {
     if crate::sharding::occupied() && !placement_admits(private, _method) {
         return Err("shard pool custody required".into());
     }
-    if private && crate::backup::occupied() {
-        return Err("snapshot custody fences ordinary management".into());
+    if matches!(
+        _method,
+        protocol::application::CUSTODY_PAGE | protocol::store_maintenance::MAINTAIN
+    ) && crate::backup::occupied()
+    {
+        return Err("active child snapshot prevents fleet maintenance".into());
     }
     if ic_platform_runtime::system::argument_size() > limit {
         return Err("management frame too large".into());
@@ -71,6 +75,7 @@ pub const fn declared_response_limits(method: u64) -> wire::Limits {
     if matches!(
         method,
         protocol::application::CUSTODY
+            | protocol::application::CUSTODY_PAGE
             | protocol::application::CHILD_EVIDENCE
             | protocol::application::ACTIVATE
     ) {

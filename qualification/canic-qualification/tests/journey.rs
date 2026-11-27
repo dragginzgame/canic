@@ -94,7 +94,7 @@ async fn deploy_call_resume_and_upgrade() {
     let first = apply(id);
     let path = PathBuf::from(creation["state_dir"].as_str().unwrap())
         .join(id)
-        .join("child/stage");
+        .join("child-1/stage");
     let signed = std::fs::read(path.join("signed.json")).unwrap();
     std::fs::remove_file(path.join("reply.bin")).unwrap();
     for _ in 0..60 {

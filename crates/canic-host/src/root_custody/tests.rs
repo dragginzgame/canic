@@ -29,30 +29,14 @@ fn stored() -> stored::Custody {
         cache_deadline: Some(123),
     };
     stored::Custody {
-        children: {
-            let mut slots = [empty, pending].into_iter();
-            (0..8)
-                .map(|_| {
-                    slots
-                        .next()
-                        .unwrap_or_else(|| canic_management_protocol::custody::Custody {
-                            creation: Default::default(),
-                            upgrades: vec![],
-                        })
-                })
-                .collect()
-        },
-        sources: {
-            let mut slots = [
-                None,
-                Some(stored::Sources {
-                    creation: delivery,
-                    upgrades: vec![],
-                }),
-            ]
-            .into_iter();
-            (0..8).map(|_| slots.next().flatten()).collect()
-        },
+        children: vec![empty, pending],
+        sources: vec![
+            None,
+            Some(stored::Sources {
+                creation: delivery,
+                upgrades: vec![],
+            }),
+        ],
     }
 }
 
@@ -72,7 +56,7 @@ fn operation(sequence: u64) -> store_maintenance::Status {
         phase: store_maintenance::Phase::StopIssued,
         stop_request: Some([4; 32]),
         failure: None,
-        preservation: canic_management_protocol::store_maintenance::Scan::Legacy(None),
+        preservation: None,
         installation: None,
     }
 }
@@ -105,7 +89,8 @@ fn custody_binds_empty_and_uncertain_children_to_ordered_service_ids() {
         let bytes = frame(&value, method);
         let decoded = decode(method, &bytes).unwrap();
         assert_eq!(decoded, value);
-        for (index, id) in ChildId::HISTORICAL_SERVICES.into_iter().enumerate() {
+        for index in 0..stored.children.len() {
+            let id = ChildId::service(index).unwrap();
             assert_eq!(child(&decoded, id).unwrap().journal, stored.children[index]);
             assert_eq!(child(&decoded, id).unwrap().sources, stored.sources[index]);
         }
@@ -132,7 +117,7 @@ fn custody_binds_empty_and_uncertain_children_to_ordered_service_ids() {
             0 => invalid.children.swap(0, 1),
             1 => invalid.children[1].slot = invalid.children[0].slot,
             _ => {
-                invalid.children.remove(1);
+                invalid.children.remove(0);
             }
         }
         assert!(decode(application::CUSTODY, &frame(&invalid, application::CUSTODY)).is_err());

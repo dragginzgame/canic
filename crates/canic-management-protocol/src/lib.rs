@@ -119,8 +119,6 @@ pub struct Status {
     pub observed_module: Option<Vec<u8>>,
     /// Current physical stable page use.
     pub stable_pages: u64,
-    /// Historical qualification marker retained in the Wire and journal formats.
-    pub maintenance_candidate: bool,
 }
 
 /// Staging refusal; the unchanged original slot remains authoritative.
@@ -128,7 +126,7 @@ pub struct Status {
 pub enum Refusal {
     /// Different work already owns the selected slot.
     Occupied,
-    /// Artifact is oversized, exceeds combined custody capacity, is not raw Wasm, or has the wrong digest.
+    /// Artifact is oversized, exceeds its child record budget, is not raw Wasm, or has the wrong digest.
     Artifact,
     /// Wrong manager or cycle ceiling.
     Binding,

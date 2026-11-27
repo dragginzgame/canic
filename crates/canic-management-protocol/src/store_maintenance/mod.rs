@@ -5,11 +5,11 @@ mod tests;
 
 mod preservation;
 
-pub use preservation::{Preservation, Scan};
+pub use preservation::Preservation;
 use serde::{Deserialize, Serialize};
 
 /// Controller command for an approved Store replacement.
-pub const MAINTAIN: u64 = ic_wire::method_id("maintain_store");
+pub const MAINTAIN: u64 = ic_wire::method_id("canic.root.maintain_store_entries.v1");
 
 /// Each action carries its exact approval. Only installation supplies replacement bytes.
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -25,13 +25,11 @@ pub enum Request {
 }
 
 /// Public diagnostic query; never authenticated completion custody or current Store readiness.
-pub const STATUS: u64 = 55;
+pub const STATUS: u64 = ic_wire::method_id("canic.root.store_entry_maintenance_status.v1");
 /// Reconcile already-issued effects by observation; never issue fresh maintenance effects.
-pub const RECOVER: u64 = 56;
+pub const RECOVER: u64 = ic_wire::method_id("canic.root.recover_store_entry_maintenance.v1");
 /// Read the latest attempt (None) or one exact retained approval (Some).
-pub const READ_ATTEMPT: u64 = ic_wire::method_id("observe_store_maintenance");
-/// Retained Store upgrades, including the current attempt. History is never evicted.
-pub const MAX_UPGRADES: usize = 8;
+pub const READ_ATTEMPT: u64 = ic_wire::method_id("canic.root.observe_store_entry_maintenance.v1");
 /// Two bounded metadata commitments and issued-effect evidence; child observations keep their budget.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
     allocation: 262_144,
@@ -118,8 +116,8 @@ pub struct Status {
     pub stop_request: Option<[u8; 32]>,
     /// Latest failure; never evidence that the issued effect did not happen.
     pub failure: Option<super::Failure>,
-    /// Scan contract and closed catalog commitment. CUJ5 records retain absent historical evidence.
-    pub preservation: Scan,
+    /// Closed catalog commitment after the first observed page.
+    pub preservation: Option<Preservation>,
     /// Installation custody, absent before explicit installation or in migrated CUJ5 records.
     pub installation: Option<Installation>,
 }
@@ -136,7 +134,7 @@ pub struct Installation {
     /// Start request commitment; absent until issued.
     pub start_request: Option<[u8; 32]>,
     /// Independent post-upgrade scan, compared with the retained pre-stop scan.
-    pub verification: Scan,
+    pub verification: Option<Preservation>,
     /// Exact Store activation frame commitment; absent until explicitly issued.
     pub activation_request: Option<[u8; 32]>,
 }

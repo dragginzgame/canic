@@ -54,7 +54,7 @@ fn store_report_distinguishes_empty_from_malformed_and_foreign_attempts() {
         phase: wire::Phase::Stopped,
         stop_request: Some([4; 32]),
         failure: None,
-        preservation: canic_management_protocol::store_maintenance::Scan::Legacy(None),
+        preservation: None,
         installation: None,
     };
     let reply = ic_wire::encode(

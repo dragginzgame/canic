@@ -16,10 +16,10 @@ fn maximum_application_history_fits_and_incomplete_effect_custody_refuses() {
     assert!(maintenance.valid());
     let lifecycle = Lifecycle {
         creation: arguments,
-        upgrades: vec![maintenance.clone(); upgrade::MAX_UPGRADES],
+        upgrades: vec![maintenance.clone(); 8],
     };
     let value = Custody {
-        children: ChildId::HISTORICAL_SERVICES
+        children: [ChildId::FIRST, ChildId::SECOND]
             .into_iter()
             .map(|slot| ChildCustody {
                 slot,

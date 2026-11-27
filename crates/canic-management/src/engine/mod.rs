@@ -2,6 +2,8 @@ pub(crate) mod application;
 #[cfg(feature = "blob")]
 pub(crate) mod blob;
 mod delivery;
+mod scheduler;
+use scheduler::{resume_after_reconciliation, schedule};
 pub(crate) mod directory;
 #[cfg(feature = "role-issuer")]
 pub mod role_issuer;
@@ -14,10 +16,7 @@ pub(crate) mod upgrade;
 
 use crate::{
     Readiness,
-    storage::{
-        ARTIFACT_BYTES, ARTIFACT_KEY, Artifact, Artifacts, JOURNAL_BYTES, JOURNAL_KEY, Journals,
-        KEYS,
-    },
+    storage::{ARTIFACT_KEY, Artifact, ChildRows, JOURNAL_KEY, Journal, KEYS, META_KEY, Metadata},
 };
 use canic_management_protocol::{
     Approval, CREATION_CYCLES, Failure, Phase, RESERVE_CYCLES, Refusal, Status,
@@ -34,11 +33,9 @@ use ic_platform_runtime::{
 };
 use ic_platform_types::Principal;
 use ic_storage::{DefaultMemoryImpl, adapter::StableCell};
-use ic_timers::{Lifetime, Observation, Once, OnceDemand, OnceNext, OnceResult, OnceStatus};
-use std::{
-    cell::RefCell,
-    collections::{BTreeMap, BTreeSet},
-};
+#[cfg(feature = "fault-injection")]
+use std::collections::BTreeMap;
+use std::{cell::RefCell, collections::BTreeSet};
 
 /// Read all retained approvals without scheduling or dispatching work.
 /// # Panics
@@ -77,11 +74,25 @@ pub(crate) fn service_slots() -> Vec<ChildId> {
             .as_ref()
             .expect("open engine")
             .journal
-            .0
+            .rows()
             .keys()
             .copied()
             .filter(|id| id.service_index().is_some())
             .collect()
+    })
+}
+
+pub(crate) fn service_for_worker(worker: &str) -> Option<ChildId> {
+    STATE.with_borrow(|s| {
+        s.as_ref()
+            .expect("open engine")
+            .journal
+            .rows()
+            .iter()
+            .find_map(|(&slot, journal)| {
+                (slot.service_index().is_some() && journal.0.worker.as_deref() == Some(worker))
+                    .then_some(slot)
+            })
     })
 }
 
@@ -92,9 +103,12 @@ pub fn bootstrap(policy: canic_management_protocol::stored::RootBootstrap) {
     assert!(policy.valid(), "invalid Root bootstrap policy");
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().expect("initialized Root");
-        let mut journals = state.journal.clone();
-        assert!(journals.3.replace(policy).is_none(), "already bootstrapped");
-        state.set_journal(journals);
+
+        assert!(
+            state.metadata.bootstrap.replace(policy).is_none(),
+            "already bootstrapped"
+        );
+        state.save_metadata();
     });
 }
 
@@ -113,7 +127,7 @@ impl crate::storage::Journal {
 
 fn journals() -> children::Custody {
     STATE.with_borrow(|state| {
-        let journals = &state.as_ref().expect("open engine").journal.0;
+        let journals = &state.as_ref().expect("open engine").journal.rows();
         service_slots()
             .into_iter()
             .map(|slot| {
@@ -135,13 +149,15 @@ const MANAGEMENT_LIMITS: Limits = Limits {
 };
 
 pub(crate) struct State {
-    journal: Journals,
-    artifact: Artifacts,
-    journal_cell: StableCell<Vec<u8>>,
-    artifact_cell: StableCell<Vec<u8>>,
-    backup_cell: StableCell<Vec<u8>>,
+    open_version: u64,
+    journal: ChildRows<Journal>,
+    admitted: usize,
+    scheduled: usize,
+    artifact: ChildRows<Artifact>,
+    metadata: Metadata,
+    metadata_rows: ChildRows<Metadata>,
     #[cfg(feature = "sharding")]
-    pool: StableCell<Vec<u8>>,
+    pool: sharding::PlacementRows,
     #[cfg(feature = "sharding")]
     pools: sharding::Pools,
     #[cfg(feature = "sharding")]
@@ -176,33 +192,38 @@ pub fn record_auth_grant() {
 }
 
 impl State {
-    pub(crate) fn save_backup(&mut self) {
-        let bytes = self.backup.encode();
-        self.backup_cell.set(bytes);
+    fn set_journal(&mut self, slot: ChildId, journal: Journal) {
+        let previous = self.journal.rows().get(&slot);
+        self.admitted -= usize::from(previous.is_some_and(|j| j.0.approval.is_some()));
+        self.scheduled -= usize::from(previous.is_some_and(|j| j.0.phase == Phase::Scheduled));
+        self.admitted += usize::from(journal.0.approval.is_some());
+        self.scheduled += usize::from(journal.0.phase == Phase::Scheduled);
+        self.journal.set(slot, journal).expect("child journal");
     }
 
-    fn set_journal(&mut self, journal: Journals) {
-        let bytes = journal.to_bytes().expect("encode management journal");
-        self.journal_cell.set(bytes);
-        self.journal = journal;
+    fn service_count(&self) -> usize {
+        self.journal
+            .rows()
+            .last_key_value()
+            .and_then(|(id, _)| id.service_index())
+            .map_or(0, |index| index + 1)
     }
 
-    fn set_artifact(&mut self, artifact: Artifacts) {
-        let bytes = artifact.to_bytes().expect("encode management artifacts");
-        self.artifact_cell.set(bytes);
-        self.artifact = artifact;
+    fn save_metadata(&mut self) {
+        self.metadata_rows
+            .set(ChildId::FIRST, self.metadata.clone())
+            .expect("management metadata");
     }
 }
 
 thread_local! {
     pub(crate) static STATE: RefCell<Option<State>> = const { RefCell::new(None) };
-    static TIMER: RefCell<BTreeMap<ChildId, Once>> = const { RefCell::new(BTreeMap::new()) };
     static OBSERVING: RefCell<BTreeSet<ChildId>> = const { RefCell::new(BTreeSet::new()) };
     #[cfg(feature = "fault-injection")]
     static FAULT: RefCell<BTreeMap<ChildId, u8>> = const { RefCell::new(BTreeMap::new()) };
 }
 
-/// Open the bounded child engine and register independent continuation timers.
+/// Open the child engine and its shared scheduler.
 /// The canister owns lifecycle entrypoints and supplies its application readiness check.
 /// Reopens the records backing strictly; older allocator images require their old executable.
 ///
@@ -217,43 +238,20 @@ pub fn open(fresh: bool, readiness: Readiness) {
     };
     let runtime =
         canic::storage::bootstrap(DefaultMemoryImpl::default(), fresh, "manager", KEYS, pages);
-    let journal_cell = canic::storage::cell(
-        &runtime,
-        JOURNAL_KEY,
-        JOURNAL_BYTES,
-        fresh.then(|| Journals::default().to_bytes().expect("journal")),
-    );
-    let journal = Journals::from_bytes(journal_cell.get()).unwrap_or_else(|error| api::trap(error));
-    let artifact_cell = canic::storage::cell(
-        &runtime,
-        ARTIFACT_KEY,
-        ARTIFACT_BYTES,
-        fresh.then(|| Artifacts::default().to_bytes().expect("artifact")),
-    );
-    let backup_cell = canic::storage::cell(
-        &runtime,
-        "manager.snapshot.v1",
-        crate::backup::CAPACITY,
-        fresh.then(|| crate::backup::Ledger::default().encode()),
-    );
+    let journal = ChildRows::<Journal>::open(&runtime, JOURNAL_KEY, fresh);
+    let artifact = ChildRows::open(&runtime, ARTIFACT_KEY, fresh);
+    let mut metadata_rows = ChildRows::<Metadata>::open(&runtime, META_KEY, fresh);
+    if fresh {
+        metadata_rows
+            .set(ChildId::FIRST, Metadata::default())
+            .expect("management metadata");
+    }
+    let metadata = metadata_rows.rows()[&ChildId::FIRST].clone();
+    let backup = crate::backup::Ledger::open(&runtime, fresh);
     #[cfg(feature = "sharding")]
-    let pool = canic::storage::cell(
-        &runtime,
-        crate::storage::SHARDS_KEY,
-        sharding::BYTES,
-        fresh.then(|| sharding::Pools::default().encode()),
-    );
+    let (pool, pools) = sharding::PlacementRows::open(&runtime, fresh);
     #[cfg(feature = "sharding")]
-    let worker_history = {
-        let lease = runtime
-            .open_memory(&ic_storage::StableKey::parse(crate::storage::WORKER_HISTORY_KEY).unwrap())
-            .expect("placement index lease");
-        if fresh {
-            ic_storage::adapter::StableBTreeMap::create(lease)
-        } else {
-            ic_storage::adapter::StableBTreeMap::load(lease)
-        }
-    };
+    let worker_history = canic::storage::map(&runtime, crate::storage::WORKER_HISTORY_KEY, fresh);
     #[cfg(feature = "auth")]
     let auth_history = canic::storage::cell(
         &runtime,
@@ -267,31 +265,40 @@ pub fn open(fresh: bool, readiness: Readiness) {
         "invalid grant history"
     );
     let state = State {
+        open_version: api::canister_version(),
         #[cfg(feature = "auth")]
         auth_history,
+        admitted: journal
+            .rows()
+            .values()
+            .filter(|j| j.0.approval.is_some())
+            .count(),
+        scheduled: journal
+            .rows()
+            .values()
+            .filter(|j| j.0.phase == Phase::Scheduled)
+            .count(),
         journal,
-        artifact: Artifacts::from_bytes(artifact_cell.get())
-            .unwrap_or_else(|error| api::trap(error)),
+        artifact,
+        metadata,
+        metadata_rows,
         #[cfg(feature = "role-issuer")]
         role_key: role_issuer::open(&runtime, fresh),
-        journal_cell,
         #[cfg(feature = "sharding")]
-        pools: sharding::open(pool.get()),
+        pools,
 
         #[cfg(feature = "sharding")]
         worker_history,
         #[cfg(feature = "sharding")]
         pool,
-        artifact_cell,
-        backup: crate::backup::Ledger::open(backup_cell.get()),
-        backup_cell,
+        backup,
         readiness,
     };
     assert!(
-        state.journal.0.keys().eq(state.artifact.0.keys()),
+        state.journal.rows().keys().eq(state.artifact.rows().keys()),
         "matching child custody"
     );
-    let slots: Vec<_> = state.journal.0.keys().copied().collect();
+    let slots: Vec<_> = state.journal.rows().keys().copied().collect();
     #[cfg(feature = "sharding")]
     sharding::validate_claims(&state);
     #[cfg(not(feature = "sharding"))]
@@ -304,10 +311,9 @@ pub fn open(fresh: bool, readiness: Readiness) {
         upgrade::validate(&state, slot);
         delivery::validate(&state, slot);
     }
-    assert!(state.artifact.fits(), "aggregate artifact budget");
     store_maintenance::validate(&state);
     let mut children = BTreeSet::new();
-    for (slot, journal) in &state.journal.0 {
+    for (slot, journal) in state.journal.rows() {
         #[cfg(feature = "sharding")]
         if state.pools.archived(*slot) {
             continue;
@@ -322,9 +328,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
     STATE.with_borrow_mut(|slot| *slot = Some(state));
     canic::lifecycle::initialize_diagnostics();
     canic::lifecycle::initialize_timers().expect("one timer runtime");
-    for slot in slots {
-        schedule(slot);
-    }
+    scheduler::open(slots);
     #[cfg(feature = "sharding")]
     {
         sharding::standby::policy::wake();
@@ -336,7 +340,7 @@ pub fn open(fresh: bool, readiness: Readiness) {
 }
 
 fn validate(state: &State, slot: ChildId) {
-    let s = &state.journal.0[&slot].0;
+    let s = &state.journal.rows()[&slot].0;
     assert!(s.attempts.iter().all(|n| *n <= 1), "single-use counts");
     for index in 0..3 {
         assert_eq!(
@@ -353,7 +357,7 @@ fn validate(state: &State, slot: ChildId) {
         );
         assert_eq!(a.creation_cycles, CREATION_CYCLES, "ceiling");
         assert_eq!(
-            state.artifact.0[&slot].hash(false),
+            state.artifact.rows()[&slot].hash(false),
             Some(a.module_hash),
             "artifact custody"
         );
@@ -366,7 +370,7 @@ fn validate(state: &State, slot: ChildId) {
     } else {
         assert_eq!(s, &Status::default(), "unadmitted journal");
         assert!(
-            state.artifact.0[&slot].hash(false).is_none(),
+            state.artifact.rows()[&slot].hash(false).is_none(),
             "unadmitted artifact"
         );
     }
@@ -410,7 +414,7 @@ fn snapshot(slot: ChildId) -> Status {
             .as_ref()
             .expect("initialized manager")
             .journal
-            .0
+            .rows()
             .get(&slot)
             .map(|j| j.0.clone())
             .unwrap_or_default()
@@ -420,11 +424,12 @@ fn snapshot(slot: ChildId) -> Status {
 fn mutate(slot: ChildId, f: impl FnOnce(&mut Status)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
-        let mut journal = state.journal.clone();
-        let previous = &state.journal.0[&slot].0;
-        let next = &mut journal.0.get_mut(&slot).expect("known child").0;
+        let mut journal = state.journal.rows().get(&slot).cloned().unwrap_or_default();
+        let previous_phase = journal.0.phase;
+        let previous_failure = journal.0.failure.clone();
+        let next = &mut journal.0;
         f(next);
-        if previous.phase != next.phase || previous.failure != next.failure {
+        if previous_phase != next.phase || previous_failure != next.failure {
             use canic::logging::{Level, record};
             let phase = next.phase;
             let id = slot.index();
@@ -443,7 +448,7 @@ fn mutate(slot: ChildId, f: impl FnOnce(&mut Status)) {
                 record(level, "management", &format!("child {id}: {phase:?}"));
             }
         }
-        state.set_journal(journal);
+        state.set_journal(slot, journal);
     });
 }
 
@@ -458,77 +463,6 @@ fn next(s: &Status) -> Option<u64> {
     }
 }
 
-fn schedule(slot: ChildId) {
-    let desired = next(&snapshot(slot))
-        .or_else(|| upgrade::next(slot))
-        .map_or(OnceDemand::Inactive, OnceDemand::At);
-    TIMER.with_borrow_mut(|timers| {
-        let timer = timers.entry(slot).or_insert_with(|| {
-            let name = format!("child-{}", slot.index());
-            ic_timers::bind_once(
-                [
-                    "profile",
-                    "manager",
-                    match slot {
-                        ChildId::FIRST => "one-worker",
-                        ChildId::SECOND => "second-worker",
-                        s if s == ChildId::PROJECT[0] => "first-project",
-                        s if s == ChildId::PROJECT[1] => "second-project",
-                        _ => &name,
-                    },
-                ],
-                // Child slots keep their identities across creation and all upgrades.
-                Lifetime::Retained,
-                move || async move {
-                    let Some(observation) = observing(slot) else {
-                        return OnceResult {
-                            observation: Observation::NoWork,
-                            next: OnceNext::Stop,
-                        };
-                    };
-                    if snapshot(slot).phase == Phase::Ready {
-                        upgrade::step(slot).await;
-                    } else {
-                        step(slot).await;
-                    }
-                    drop(observation);
-                    let decision = next(&snapshot(slot))
-                        .or_else(|| upgrade::next(slot))
-                        .map_or(OnceNext::Stop, OnceNext::At);
-                    OnceResult {
-                        observation: if snapshot(slot).failure.is_some()
-                            || upgrade::status(slot).failure.is_some()
-                        {
-                            Observation::ExpectedFailure
-                        } else {
-                            Observation::Success
-                        },
-                        next: decision,
-                    }
-                },
-            )
-            .expect("bind retained child timer")
-        });
-        timer.set(desired).expect("schedule retained demand");
-    });
-}
-
-// Only authenticated domain reconciliation may clear an abandoned timer's
-// barrier. Stop it first, then derive eligibility from the retained journal;
-// these local commands commit together and never reset effect intent.
-fn resume_after_reconciliation(slot: ChildId) {
-    TIMER.with_borrow(|timers| {
-        if let Some(timer) = timers.get(&slot)
-            && let OnceStatus::RecoveryRequired(token) = timer.status().expect("timer status")
-        {
-            timer
-                .recover(token, OnceDemand::Inactive)
-                .expect("reconciled timer recovery");
-        }
-    });
-    schedule(slot);
-}
-
 /// Read committed evidence without resuming work.
 /// # Panics
 /// Traps if lifecycle initialization has not completed.
@@ -536,8 +470,6 @@ fn resume_after_reconciliation(slot: ChildId) {
 pub fn status(slot: ChildId) -> Status {
     let mut value = snapshot(slot);
     value.stable_pages = ic_platform_runtime::raw::stable64_size();
-    // Historical status frames include this build marker. Current executables never set it.
-    value.maintenance_candidate = false;
     value
 }
 
@@ -557,7 +489,7 @@ fn admit(
     if origin == Origin::Permanent
         && slot
             .service_index()
-            .is_none_or(|index| index > service_slots().len())
+            .is_none_or(|index| index > STATE.with_borrow(|s| s.as_ref().unwrap().service_count()))
     {
         return Err(Refusal::Binding);
     }
@@ -568,17 +500,11 @@ fn admit(
             if state.pools.capacity_approved() {
                 return false;
             }
-            let maximum = state.journal.3.map_or(
+            let maximum = state.metadata.bootstrap.map_or(
                 canic_management_protocol::stored::DEFAULT_SUBNET_CHILD_LIMIT,
                 |policy| policy.max_children,
             );
-            state
-                .journal
-                .0
-                .values()
-                .filter(|entry| entry.0.approval.is_some())
-                .count()
-                >= maximum as usize
+            state.admitted >= maximum as usize
         })
     {
         return Err(Refusal::Occupied);
@@ -614,28 +540,15 @@ fn admit(
     if liquid < reserved_cycles() + attachment {
         return Err(Refusal::Reserve);
     }
-    let mut artifacts =
-        STATE.with_borrow(|state| state.as_ref().expect("open engine").artifact.clone());
-    // The released four-child format opens both original project slots together.
-    if ChildId::PROJECT.contains(&slot) {
-        for original in ChildId::PROJECT {
-            artifacts.0.entry(original).or_default();
-        }
-    }
-    artifacts.0.insert(slot, artifact);
-    if !artifacts.fits() {
-        return Err(Refusal::Artifact);
-    }
-    STATE.with_borrow_mut(|state| {
-        let state = state.as_mut().expect("open engine");
-        state.journal.0.entry(slot).or_default();
-        if ChildId::PROJECT.contains(&slot) {
-            for original in ChildId::PROJECT {
-                state.journal.0.entry(original).or_default();
-            }
-        }
-        state.set_artifact(artifacts);
-    });
+    STATE
+        .with_borrow_mut(|state| {
+            state
+                .as_mut()
+                .expect("open engine")
+                .artifact
+                .set(slot, artifact)
+        })
+        .map_err(|_| Refusal::Artifact)?;
     mutate(slot, |s| {
         s.approval = Some(approval);
         s.phase = Phase::Scheduled;
@@ -779,18 +692,25 @@ pub async fn configure_snapshot_readers(input: stored::SnapshotReaders) -> Resul
         return Err(Failure::Mismatch);
     }
     let target = input.child.to_text();
-    let ready = STATE.with_borrow(|state| {
-        state.as_ref().is_some_and(|s| {
-            s.journal.0.iter().any(|(slot, j)| {
-                slot.service_index().is_some()
-                    && j.0.phase == Phase::Ready
-                    && j.0.worker.as_ref() == Some(&target)
-            })
+    let slot = STATE
+        .with_borrow(|state| {
+            state
+                .as_ref()?
+                .journal
+                .rows()
+                .iter()
+                .find_map(|(&slot, j)| {
+                    (slot.service_index().is_some()
+                        && j.0.phase == Phase::Ready
+                        && j.0.worker.as_ref() == Some(&target))
+                    .then_some(slot)
+                })
         })
-    });
-    if !ready {
-        return Err(Failure::Mismatch);
+        .ok_or(Failure::Mismatch)?;
+    if crate::backup::target_occupied(&target) {
+        return Err(Failure::Uncertain);
     }
+    let _guard = observing(slot).ok_or(Failure::Uncertain)?;
     let visibility = if input.readers.is_empty() {
         mgmt::SnapshotVisibility::Controllers
     } else {
@@ -1055,33 +975,16 @@ async fn reconcile_bound(slot: ChildId, expected: Approval) -> Status {
 // already deducted their cycles; uncertain outcomes never reissue that attachment.
 pub(crate) fn reserved_cycles() -> u128 {
     STATE.with_borrow(|state| {
-        u128::from(RESERVE_CYCLES)
-            + state
-                .as_ref()
-                .expect("open engine")
-                .journal
-                .0
-                .iter()
-                .filter(|(_slot, journal)| {
-                    #[cfg(feature = "sharding")]
-                    if state
-                        .as_ref()
-                        .unwrap()
-                        .pools
-                        .standby_claim(**_slot)
-                        .is_some()
-                    {
-                        return false;
-                    }
-                    journal.0.phase == Phase::Scheduled
-                })
-                .map(|_| u128::from(CREATION_CYCLES))
-                .sum::<u128>()
+        let state = state.as_ref().expect("open engine");
+        let count = state.scheduled;
+        #[cfg(feature = "sharding")]
+        let count = count - state.pools.scheduled_spares(state.journal.rows());
+        u128::from(RESERVE_CYCLES) + count as u128 * u128::from(CREATION_CYCLES)
     })
 }
 
-pub(crate) fn snapshot_idle() -> bool {
-    OBSERVING.with_borrow(BTreeSet::is_empty)
+pub(crate) fn snapshot_idle(slot: ChildId) -> bool {
+    OBSERVING.with_borrow(|active| !active.contains(&slot))
 }
 
 // The executor drops the suspended future during callback-trap cleanup. Keep

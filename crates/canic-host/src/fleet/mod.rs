@@ -50,9 +50,8 @@ pub struct Fleet {
 /// Management protocol observation; reports do not grant authority or output custody.
 #[derive(Debug, Serialize)]
 pub struct FleetManager {
-    /// Selected child scope; absent retains the original manager observation.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub slot: Option<ChildId>,
+    /// Service whose journal was observed.
+    pub slot: ChildId,
     /// Exact network binding from the manager's local plan or configuration.
     pub network_id: String,
     /// Known manager principal.
@@ -281,10 +280,12 @@ fn local_operation_status(
     ))
 }
 
-async fn observe(network: &Network, canister: &str) -> Result<(String, Vec<String>)> {
-    let client = network.client()?;
+async fn observe(
+    client: &ic_platform::native::ReadClient,
+    canister: &str,
+) -> Result<(String, Vec<String>)> {
     let principal = network::principal(canister)?;
-    let module = crate::operation::module(&client, principal).await?;
+    let module = crate::operation::module(client, principal).await?;
     let (expiry, time) = network::context()?;
     let observation = network::bounded(client.read_canister(principal, expiry, time, 10)).await?;
     Ok((
@@ -339,7 +340,6 @@ fn empty_report(report: &canic_management_protocol::Status) -> bool {
     report
         == &canic_management_protocol::Status {
             stable_pages: report.stable_pages,
-            maintenance_candidate: report.maintenance_candidate,
             ..Default::default()
         }
 }
@@ -439,9 +439,6 @@ fn ordered_upgrades<'a>(
 }
 
 fn validate_upgrade_order(operations: &[&FleetOperation]) -> Result<()> {
-    if operations.len() > canic_management_protocol::upgrade::MAX_UPGRADES {
-        return Err(Error::Invalid("upgrade history bound exceeded".into()));
-    }
     for pair in operations.windows(2) {
         let previous = pair[0].upgrade.as_ref().expect("selected upgrade");
         let next = pair[1].upgrade.as_ref().expect("selected upgrade");
@@ -457,7 +454,7 @@ fn validate_upgrade_order(operations: &[&FleetOperation]) -> Result<()> {
 }
 
 async fn query_status<I: serde::Serialize, O: serde::de::DeserializeOwned>(
-    network: &Network,
+    client: &ic_platform::native::ReadClient,
     manager: &str,
     name: &str,
     method: u64,
@@ -470,13 +467,7 @@ async fn query_status<I: serde::Serialize, O: serde::de::DeserializeOwned>(
         canic_management_protocol::LIMITS,
     )
     .map_err(supplier)?;
-    let reply = network::query(
-        &network.client()?,
-        network::principal(manager)?,
-        name,
-        &args,
-    )
-    .await?;
+    let reply = network::query(client, network::principal(manager)?, name, &args).await?;
     ic_wire::decode(
         &reply,
         frame(ic_wire::Direction::Response),
@@ -490,7 +481,7 @@ async fn observe_upgrade(
     network_id: &str,
     manager: &str,
     slot: ChildId,
-    network: &Network,
+    client: &ic_platform::native::ReadClient,
     deadline: tokio::time::Instant,
 ) -> Option<FleetUpgrade> {
     let matching = ordered_upgrades(operations, network_id, manager, slot);
@@ -510,7 +501,7 @@ async fn observe_upgrade(
                 value: Some(approval.clone()),
             });
             let children::ObservedStatus::Upgrade(report) = query_status(
-                network,
+                client,
                 manager,
                 "child_status",
                 children::READ_STATUS,
@@ -684,11 +675,18 @@ pub async fn fleet_with_identity(
     root: &Path,
     selected: &[String],
     configuration: Option<&crate::SelectedFleet>,
-    identity: Option<&Path>,
+    identity: Option<&crate::InspectionSession>,
 ) -> Result<Fleet> {
     if let Some(config) = configuration {
         config.validate()?;
     }
+    let anonymous;
+    let session = if let Some(session) = identity {
+        session
+    } else {
+        anonymous = crate::InspectionSession::new(None)?;
+        &anonymous
+    };
     let started_at_ns = crate::now()?;
     let Inventory {
         records,
@@ -771,7 +769,7 @@ pub async fn fleet_with_identity(
         for ((binding, root), network) in &selected {
             use canic::method::Contract;
             use children::ListChildren;
-            let client = crate::InspectionClient::new(network, root, Some(identity))?;
+            let client = identity.client(network, root)?;
             let mut cursor = None;
             loop {
                 let page = budgeted_observation(
@@ -833,67 +831,41 @@ pub async fn fleet_with_identity(
     };
     let mut managers = Vec::new();
     for ((network_id, manager), network) in selected {
+        let client = session.network_client(&network)?;
         // Creation and upgrade share this owner's existing five-second budget.
         let owner_deadline = deadline.min(tokio::time::Instant::now() + Duration::from_secs(5));
-        let retained_slots: std::collections::BTreeSet<_> = operations
+        let mut retained: std::collections::BTreeSet<_> = operations
             .iter()
             .filter(|op| {
                 op.network_id == network_id && op.management_owner() == Some(manager.as_str())
             })
-            .map(|op| op.slot)
+            .filter_map(|op| op.slot)
             .collect();
-        if retained_slots.is_empty()
-            && completed_inventories.contains(&(network_id.clone(), manager.clone()))
+        let complete = completed_inventories.contains(&(network_id.clone(), manager.clone()));
+        let mut discovery = (!complete).then_some(0usize);
+        while let Some(id) = discovery
+            .and_then(ChildId::service)
+            .or_else(|| retained.first().copied())
         {
-            continue;
-        }
-        // With no journal, identify a single-slot predecessor by its certified
-        // module hash. An unavailable hash gives no reason to use its old ABI.
-        let known_single_slot = retained_slots.is_empty()
-            && tokio::time::timeout_at(owner_deadline, async {
-                operation::module(&network.client()?, network::principal(&manager)?).await
-            })
-            .await
-            .is_ok_and(|result| {
-                result.is_ok_and(|hash| crate::maintenance::implicit_child_root(&hash))
-            });
-        let implicit_first = known_single_slot;
-        for (index, id) in (0..).map_while(ChildId::service).enumerate() {
-            if known_single_slot && id != ChildId::FIRST {
-                issues.push(format!("{manager} on {network_id}: historical Root exposes only its original service; other slots cannot be observed"));
-                break;
+            let requested = retained.remove(&id);
+            let ordinal = discovery;
+            if let Some(index) = &mut discovery {
+                *index += 1;
             }
-            let slot = if implicit_first && id == ChildId::FIRST {
-                None
-            } else {
-                Some(id)
-            };
             let budget = owner_deadline
                 .saturating_duration_since(tokio::time::Instant::now())
                 .min(Duration::from_secs(5));
             let report = tokio::time::timeout(budget, async {
-                let report = if let Some(slot) = slot {
-                    let children::ObservedStatus::Creation(report) = query_status(
-                        &network,
-                        &manager,
-                        "child_status",
-                        children::READ_STATUS,
-                        &children::StatusRequest::Creation(slot),
-                    )
-                    .await?
-                    else {
-                        return Err(Error::Invalid("expected child creation status".into()));
-                    };
-                    report
-                } else {
-                    query_status(
-                        &network,
-                        &manager,
-                        "status",
-                        canic_management_protocol::STATUS,
-                        &(),
-                    )
-                    .await?
+                let children::ObservedStatus::Creation(report) = query_status(
+                    &client,
+                    &manager,
+                    "child_status",
+                    children::READ_STATUS,
+                    &children::StatusRequest::Creation(id),
+                )
+                .await?
+                else {
+                    return Err(Error::Invalid("expected child creation status".into()));
                 };
                 check_report(&operations, &network_id, &manager, id, &report)?;
                 Ok::<_, Error>(report)
@@ -901,31 +873,16 @@ pub async fn fleet_with_identity(
             .await
             .map_err(|_| Error::Blocked("manager observation timed out".into()))
             .and_then(|value| value);
-            if slot.is_some() && !retained_slots.contains(&slot) {
-                match &report {
-                    Ok(report)
-                        if empty_report(report) && index >= ChildId::HISTORICAL_SERVICES.len() =>
-                    {
-                        break;
-                    }
-                    Ok(report) if empty_report(report) => continue,
-                    Err(error) => {
+            if report.as_ref().map_or(true, empty_report) {
+                discovery = None;
+                if !requested {
+                    if let (Err(error), Some(index)) = (&report, ordinal) {
                         issues.push(format!(
-                            "{manager} on {network_id}: permanent service slot {} unknown: {}",
-                            index + 1,
-                            error.to_string().chars().take(500).collect::<String>()
+                            "{manager} on {network_id}: permanent service slot {} unknown: {error}",
+                            index + 1
                         ));
-                        if index + 1 >= ChildId::HISTORICAL_SERVICES.len()
-                            && retained_slots
-                                .iter()
-                                .flatten()
-                                .all(|id| id.service_index().is_none_or(|i| i <= index))
-                        {
-                            break;
-                        }
-                        continue;
                     }
-                    Ok(_) => {}
+                    continue;
                 }
             }
             let (reported, observation_error) = match report {
@@ -942,12 +899,12 @@ pub async fn fleet_with_identity(
                 &network_id,
                 &manager,
                 id,
-                &network,
+                &client,
                 owner_deadline,
             )
             .await;
             managers.push(FleetManager {
-                slot,
+                slot: id,
                 network_id: network_id.clone(),
                 manager: manager.clone(),
                 reported,
@@ -964,24 +921,20 @@ pub async fn fleet_with_identity(
             Duration::from_secs(5),
             "snapshot network budget exhausted; target not observed",
             "observation timed out; current state is unknown",
-            observe(&network, &canister),
+            async { observe(&session.network_client(&network)?, &canister).await },
         )
         .await;
         let (module_hash, controllers, observation_error) = match result {
             Ok((module, controllers)) => (Some(module), Some(controllers), None),
             Err(error) => (None, None, Some(error)),
         };
-        let availability = if identity.is_some() {
+        let availability = if let Some(identity) = identity {
             let result = budgeted_observation(
                 deadline,
                 Duration::from_secs(3),
                 "runtime budget exhausted",
                 "runtime query timed out",
-                async {
-                    Ok(crate::InspectionClient::new(&network, &canister, identity)?
-                        .runtime()
-                        .await)
-                },
+                async { Ok(identity.client(&network, &canister)?.runtime().await) },
             )
             .await;
             Some(result.unwrap_or_else(Availability::Unknown))

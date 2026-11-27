@@ -575,7 +575,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
     };
     let mut custody = wire::Custody {
         children: {
-            let mut slots = [
+            vec![
                 canic_management_protocol::custody::Custody {
                     creation: status.clone(),
                     upgrades: vec![],
@@ -585,28 +585,15 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
                     upgrades: vec![],
                 },
             ]
-            .into_iter();
-            (0..8)
-                .map(|_| {
-                    slots
-                        .next()
-                        .unwrap_or_else(|| canic_management_protocol::custody::Custody {
-                            creation: Default::default(),
-                            upgrades: vec![],
-                        })
-                })
-                .collect()
         },
         sources: {
-            let mut slots = [
+            vec![
                 Some(wire::Sources {
                     creation: delivery.clone(),
                     upgrades: vec![],
                 }),
                 None,
             ]
-            .into_iter();
-            (0..8).map(|_| slots.next().flatten()).collect()
         },
     };
     let encode = |value: &wire::Custody| {
@@ -702,17 +689,13 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
             phase: maintenance::Phase::Ready,
             stop_request: Some([3; 32]),
             failure: None,
-            preservation: canic_management_protocol::store_maintenance::Scan::Legacy(Some(
-                preservation.clone(),
-            )),
+            preservation: Some(preservation.clone()),
             installation: Some(maintenance::Installation {
                 upload_request: [4; 32],
                 request: Some([5; 32]),
                 sender_version: Some(1),
                 start_request: Some([6; 32]),
-                verification: canic_management_protocol::store_maintenance::Scan::Legacy(Some(
-                    preservation,
-                )),
+                verification: Some(preservation),
                 activation_request: Some([8; 32]),
             }),
         };
@@ -733,10 +716,7 @@ fn stored_child_binds_release_slot_and_retained_recovery_without_inline_bytes() 
                 0 => operation.approval.attempt.operation[0] ^= 1,
                 1 => operation.approval.module_hash[0] ^= 1,
                 2 => operation.operator = operation.approval.store.clone(),
-                3 => {
-                    operation.preservation =
-                        canic_management_protocol::store_maintenance::Scan::Legacy(None)
-                }
+                3 => operation.preservation = None,
                 4 => operation.phase = maintenance::Phase::Verified,
                 _ => changed.store_operation = None,
             }
@@ -960,15 +940,13 @@ fn assert_application_arguments(
             store_history: vec![],
         },
         {
-            let mut slots = [
+            vec![
                 Some(application::Lifecycle {
                     creation: request.value.arguments.clone(),
                     upgrades: vec![],
                 }),
                 None,
             ]
-            .into_iter();
-            (0..8).map(|_| slots.next().flatten()).collect()
         },
     );
     value.children[0]
@@ -1167,7 +1145,7 @@ fn adding_discovery_preserves_two_earlier_named_creation_approvals() {
     for (name, expected) in [
         (&user, ChildId::SECOND),
         (&registry, ChildId::FIRST),
-        (&discovery, ChildId::HISTORICAL_SERVICES[2]),
+        (&discovery, ChildId::service(2).unwrap()),
     ] {
         assert_eq!(
             permanent_slot(&children, name, reserved.into_iter()).unwrap(),

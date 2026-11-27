@@ -57,11 +57,10 @@ pub(crate) fn validate(plan: &Plan, source: &StoredArtifact) -> Result<()> {
         || id == principal("2vxsx-fae")?
         || crate::unhex(&source.store.module)?.len() != 32
         || source.store.module != source.store.module.to_ascii_lowercase()
-        || source.maintenance.as_ref().is_some_and(|attempt| {
-            !(1..=canic_management_protocol::store_maintenance::MAX_UPGRADES as u64)
-                .contains(&attempt.sequence)
-                || attempt.operation == [0; 32]
-        })
+        || source
+            .maintenance
+            .as_ref()
+            .is_some_and(|attempt| attempt.sequence == 0 || attempt.operation == [0; 32])
     {
         return Err(invalid());
     }
@@ -173,9 +172,19 @@ pub(super) fn arguments(plan: &Plan, method: u64) -> Result<Vec<u8>> {
             application::LIMITS,
         )
         .map_err(supplier),
-        application::CUSTODY | application::CHILD_EVIDENCE => {
-            ic_wire::encode(&(), frame, application::LIMITS).map_err(supplier)
-        }
+        application::CUSTODY | application::CHILD_EVIDENCE => ic_wire::encode(
+            &Some(application::DeploymentSelector {
+                slot,
+                value: if plan.target().is_some() {
+                    Some(super::upgrade::approval(plan)?)
+                } else {
+                    None
+                },
+            }),
+            frame,
+            application::LIMITS,
+        )
+        .map_err(supplier),
         application::STAGE_CHILD_CREATION | application::RECONCILE_CHILD_CREATION => {
             let approval = super::approval(plan)?;
             let value: application::Creation = if configured {
@@ -203,7 +212,11 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<application::Custody> {
         .map(|owner| &owner.source)
         .ok_or_else(invalid)?;
     let value = {
-        let value = crate::root_custody::decode(super::Method::Observe.id(plan), bytes)?;
+        let value = crate::root_custody::decode_selected(
+            super::Method::Observe.id(plan),
+            bytes,
+            slot(plan)?,
+        )?;
         let child = crate::root_custody::child(&value, slot(plan)?)?;
         if let Some(lifecycle) = &child.lifecycle {
             if plan.target().is_none() {
@@ -234,9 +247,6 @@ fn custody(plan: &Plan, bytes: &[u8]) -> Result<application::Custody> {
         value
     };
     if let Some(attempt) = &source.maintenance {
-        if value.store_history.len() as u64 + 1 != attempt.sequence {
-            return Err(invalid());
-        }
         let operation = value.store_operation.as_ref().ok_or_else(invalid)?;
         if &operation.approval.attempt != attempt
             || operation.approval.store != source.store.canister

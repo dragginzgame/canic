@@ -31,8 +31,7 @@ The installed child suite exercises these paths with real simulator principals.
 
 Every fresh Root exposes the controller-only `execute_snapshot_step` and
 `lookup_snapshot_step` updates. It uses one surviving original-result ledger alongside the existing
-Storage records. After admitting snapshot work it fences ordinary private
-management endpoints; it never starts or activates a restored application.
+Storage records. During snapshot work Root reserves the target and fences whole-fleet maintenance. Other children can proceed. Reopening a restored application requires explicit approval. Each target can hold ten native snapshots. At capacity, replacement requires the exact snapshot ID in the approved request.
 See the [executor contract](../design/canic-system-design.md#backup-signing-and-execution-ownership).
 The installed local witness is `bash scripts/dev/test-root.sh snapshot::` after simulator
 preparation. This is not yet a Backup CLI workflow or an upgrade for existing fleets.
@@ -56,7 +55,7 @@ Root's controller is the external operator identity. The application's sole
 controller is Root. External identities appear as controller metadata, never as
 nodes above the canister tree.
 
-Root stores the management journal, artifacts and snapshot custody in named cells on one backing. Fresh installs and compatible new executables
+Root stores the management journal, artifact metadata and snapshot custody in named stable maps on one backing. Fresh installs and compatible new executables
 are locally qualified. Root now uses journal schema 2 and accepts only an explicit
 `Ready` response. Schema-1 greeting and existing 0.74 fleet images must keep their qualified old
 Root; the new executable refuses those images. A failed Host maintenance install
@@ -64,9 +63,8 @@ retains its signed attempt and leaves the target stopped for explicit recovery.
 Do not rebuild and upgrade the historical mainnet demo below with this executable.
 
 The generated `wasm-store` child is separate from the permanent application slots.
-Whole-fleet planning currently admits one to eight direct application children.
-The initial Root creation debit remains capped at 5T cycles. Bootstrap a smaller fleet and add services under separate funded approvals when the complete set exceeds that budget. An unsupported slot count is reported before reading artifacts or opening the journal. This is the qualified implementation bound, not an operator capacity
-setting. Adding a declaration cannot extend a retained approval; changing or
+Whole-fleet planning checks direct application children against the fleet subnet ceiling.
+The initial Root creation debit remains capped at 5T cycles. Bootstrap a smaller fleet and add services under separate funded approvals when the complete set exceeds that budget. An unsupported slot count is reported before reading artifacts or opening the journal. Adding a declaration cannot extend a retained approval; changing or
 removing a declaration does not release an existing allocation.
 Once initial creation completes, adding a second declaration selects a separate
 child approval through `fleet plan`. It consumes the unused runtime identity;
@@ -113,8 +111,7 @@ history, and the explicit Root module against completed maintenance. Store-backe
 named plans retain their bound-Store and completed `--release` prerequisites.
 Both planners validate the same custody history; switching to whole-fleet planning
 returns the identical pending upgrade. Each successor needs the previous upgrade's
-retained completion and exact predecessor hash; both paths keep the eight-upgrade
-bound and immutable historical approvals.
+retained completion and exact predecessor hash. Both paths preserve every historical approval.
 
 From 0.218, upgrades stop the target and drain callbacks before installation,
 then restart it before readiness checks. Expect application downtime during this
@@ -238,7 +235,7 @@ canic fleet show --app siblings
 Apply again to retain completed outcomes after autonomous work finishes. Two-child
 greeting calls select the retained child name with `--canister`; the sole child
 remains inferred for the starter. Fleet views remain read-only and open no browser.
-Each child has up to eight serial upgrades. Change one child artifact at a time,
+Each child retains its serial upgrade history. Change one child artifact at a time,
 then use the same plan/apply commands; change Root separately after both complete.
 Maintenance verifies complete custody and both children's code/controllers.
 The current Root migrates historical positional child records to identified
@@ -459,12 +456,10 @@ application's readiness response before reporting completion. The child keeps
 its principal and Root controller. Creation evidence and its receipt remain
 historical records; they do not describe the replacement executable.
 
-This experimental owner retains **at most eight serial upgrades**, separate from
-creation. After verified successful completion, edit/build/plan/apply again for
+Root retains each child upgrade separately from its creation. After verified successful completion, edit/build/plan/apply again for
 the next change. Each approval is new authority linked to the last completed code,
 not a reset of earlier work. Expired, failed and uncertain operations cannot be
-overtaken; an uncertain install is never issued again. History exhaustion blocks
-new work without erasing any approval or outcome. A lost host admission reply can be recovered through
+overtaken; an uncertain install is never issued again. A lost host admission reply can be recovered through
 `fleet apply`'s replicated read. Use explicit `fleet reconcile UPGRADE_OPERATION
 --identity canic-mainnet` for supported engine recovery on a compatible Root.
 Owner maintenance still requires the qualified controller path. Preserve blocked
@@ -538,7 +533,7 @@ Future child plans bind the new Root hash; historical approvals remain unchanged
 The original creation approval may no longer apply against the new Root code;
 inspect its historical receipt with `fleet status`.
 
-Both executables must export `observe_root_custody` and support the identified service record. Host checks each slot, creation, upgrade, source and lifecycle binding, plus the current and completed Store operations. A changed observation blocks completion. Older Root images require their original executables.
+Both executables must export `observe_root_custody_page` and support the same custody page format. Host checks each slot, creation, upgrade, source and lifecycle binding, plus the current and completed Store operations. A changed observation blocks completion. Older Root images require their original executables.
 
 ## Responsibility and bounds
 
@@ -550,7 +545,7 @@ Root does not use them to infer readiness.
 
 `canic-management-protocol` contains only authority/evidence messages, hashing
 and decoding limits. Host tooling and application protocol consumers do not link
-the management runtime. Root persists each service journal and its Store delivery metadata under checked Storage leases. It rejects older journal and artifact formats on reopen. Each service retains its original creation and up to eight upgrade approvals.
+the management runtime. Root persists each service journal and its Store delivery metadata under checked Storage leases. It rejects older journal and artifact formats on reopen. Each service retains its original creation and every admitted upgrade approval.
 
 Root obtains a Store pin for the approved release before issuing management effects. For an ordinary permanent child it attaches 1T cycles and requires a 0.5T liquid reserve. An uncertain creation with no retained principal stays blocked. For installation and upgrade, Root verifies the ordered chunks in the Store cache and the approved module hash. It checks the installed module and controller before accepting the application’s readiness reply. The [growth suite](growth.md) exercises these boundaries.
 

@@ -33,7 +33,7 @@ exact signed attempts under the existing journal lock. New Root attempts use Sto
 `observe_preservation` (method 117): explicit active/removed entries ordered by name, active
 before removed, then version. The retained cursor includes that flag, and a
 separate digest domain commits to the entry kind. Pre-cut Roots retain their original scan contracts, digests and refusals.
-Deploy the 0.8 Store with a fresh Root. Existing pairs finish maintenance on their original executables. Fresh Roots use CMJ1 journals and CMS1 Store delivery records for the entire fleet. Old executables refuse the new journal format.
+Deploy the 0.8 Store with a fresh Root. Existing pairs finish maintenance on their original executables. Fresh Roots retain a journal and Store delivery record for each child in separate stable tables.
 
 The historical 0.2.3 rollout upgraded Store under the old Root before
 upgrading Root. New attempts require the versioned supplier endpoint; no probing
@@ -200,7 +200,7 @@ canic fleet apply UPGRADE_OPERATION --app starter --fleet mainnet --identity can
 ```
 
 Repeat that upgrade apply after dispatch to retain completion. Each child retains
-up to eight upgrades. Pending installation must finish before a successor; exact
+the complete upgrade history. Pending installation must finish before a successor; exact
 replanning retains its original schedule and authority. After child work completes,
 a Root-only artifact change uses the same maintenance plan/apply flow while
 preserving full Store custody. See [Root maintenance](root.md#root-maintenance).
@@ -296,11 +296,10 @@ Store record migration and downgrade restrictions are owned by the supplier's
 Root's `maintain_store` (Stage, Advance, Install or Activate) and
 `observe_store_maintenance` mounts now qualify the next boundary under sole Root
 control. Root retains each immutable approval and stop-request commitment outside
-Store. Up to eight attempts are retained, with no eviction or reset. It fences child/publication mutations and raw gate changes, closes Store,
+Store. Root retains each attempt and verifies the ordered history during maintenance. It fences child/publication mutations and raw gate changes, closes Store,
 then issues stop once. Lost callbacks recover through observations; expiry never
 renews dispatch authority. A stopped observation establishes this drain boundary.
-The CMJ1 journal preserves current and completed attempts across supported Root
-upgrades, within the existing 16 KiB ceiling. A pre-cut Root keeps its original
+The Root metadata cell preserves current and completed Store attempts across supported Root upgrades. A pre-cut Root keeps its original
 executable and evidence. Existing complete child-custody
 observations refuse any retained Store maintenance, including completion,
 preventing the current Host Root-maintenance path from omitting it.
@@ -353,9 +352,7 @@ The report is uncertified; completed maintenance is historical evidence, not
 current Store admission or readiness. Terminal and localhost views identify the
 reported attempt. `fleet status` and apply/reconcile progress identify their own
 retained attempt, which may precede the latest fleet report. `--details` includes
-the original deadline, before/after catalog counts and the current implementation's
-qualified eight-attempt limit. That limit is not an observation of remaining
-capacity or proof that an older deployed Root supports repeat maintenance.
+the original deadline and catalog counts before and after maintenance. Root preserves one record per attempt. Host verifies those records by ordinal during Root maintenance.
 For an existing selected app/fleet with its retained journal:
 
 ```sh
@@ -412,8 +409,7 @@ The planner refuses concurrent artifact changes and unfinished child/publication
 work. Authenticated Ready evidence advances the retained Store hash, enabling later
 Root maintenance and child publication/upgrades. A completion pointer without its
 signed observation cannot do so. Only a completed predecessor permits the next
-sequence and code transition. The current scope is eight retained Store attempts,
-at most 1 MiB of replacement Wasm and 4096 observations per attempt. No reset,
+sequence and code transition. The current scope is at most 1 MiB of replacement Wasm and 4096 observations per attempt. No reset,
 cancellation, history eviction or mainnet maintenance is qualified. Exhaustion or an
 unrecoverable effect remains blocked with its original evidence.
 

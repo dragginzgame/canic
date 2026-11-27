@@ -113,25 +113,5 @@ async fn root_maintenance_preserves_store_operation() {
     assert!(
         serde_json::to_value(crate::status(&journal, &id).unwrap()).unwrap()["receipt"].is_object()
     );
-    for side in ["custody-before", "custody-after"] {
-        let reply = std::fs::read(path.join(side).join("reply.bin")).unwrap();
-        assert_eq!(
-            ic_wire::decode::<canic_management_protocol::application::Custody>(
-                &reply,
-                ic_wire::Encoding::Frame {
-                    method: canic_management_protocol::application::CUSTODY,
-                    direction: ic_wire::Direction::Response
-                },
-                canic_management_protocol::application::LIMITS
-            )
-            .unwrap(),
-            crate::root_custody::fixture(
-                custody::RootHistory {
-                    current: input.expected.clone(),
-                    store_history: vec![]
-                },
-                vec![None; input.expected.stored.children.len()]
-            )
-        );
-    }
+    assert!(super::retained(&path, &plan).unwrap());
 }

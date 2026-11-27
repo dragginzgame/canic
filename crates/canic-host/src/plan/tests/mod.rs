@@ -3,16 +3,26 @@ use super::*;
 const WASM: &[u8] = b"\0asm\x01\0\0\0";
 
 #[test]
-fn numeric_child_identity_keeps_retained_json_names() {
+fn child_identity_refuses_retired_json_names() {
     use canic_management_protocol::children::ChildId;
     for (identity, encoded) in [
-        (ChildId::FIRST, "\"First\""),
-        (ChildId::SECOND, "\"Second\""),
+        (ChildId::FIRST, r#"{"service":0}"#),
+        (ChildId::SECOND, r#"{"service":1}"#),
     ] {
         assert_eq!(serde_json::to_string(&identity).unwrap(), encoded);
         assert_eq!(serde_json::from_str::<ChildId>(encoded).unwrap(), identity);
     }
-    for invalid in ["0", "1", "2", "-1", "\"Third\"", "null", "{}"] {
+    for invalid in [
+        "\"First\"",
+        "\"Second\"",
+        "0",
+        "1",
+        "2",
+        "-1",
+        "\"Third\"",
+        "null",
+        "{}",
+    ] {
         assert!(serde_json::from_str::<ChildId>(invalid).is_err());
     }
 }
@@ -271,27 +281,27 @@ fn incomplete_or_conflicting_record_authority_is_rejected_at_decode() {
 }
 
 #[test]
-fn historical_scan_json_keeps_approval_fields_while_entries_are_explicit() {
-    use canic_management_protocol::store_maintenance::Scan;
+fn scan_json_refuses_retired_approval_fields() {
+    use canic_management_protocol::store_maintenance::Preservation;
     let historical = serde_json::json!({
         "catalog": {"quota": {"reserved_bytes": 8, "releases": 2},
             "reserved_bytes": 8, "releases": 1, "artifacts": 1, "chunks": 1},
         "after": {"name": "app", "version": "v1"},
         "observed": 1, "digest": ([7; 32]), "complete": true
     });
-    let scan: Scan = serde_json::from_value(historical.clone()).unwrap();
-    assert!(matches!(scan, Scan::Legacy(_)));
-    assert_eq!(serde_json::to_value(&scan).unwrap(), historical);
-    assert_eq!(serde_json::to_string(&Scan::Legacy(None)).unwrap(), "null");
-    let entries = Scan::Entries(scan.as_ref().cloned());
+    assert!(serde_json::from_value::<Option<Preservation>>(historical).is_err());
+    let entries = None::<Preservation>;
     let value = serde_json::to_value(&entries).unwrap();
-    assert_eq!(value["entries"]["after_removed"], false);
-    assert_eq!(serde_json::from_value::<Scan>(value).unwrap(), entries);
+    assert!(value.is_null());
+    assert_eq!(
+        serde_json::from_value::<Option<Preservation>>(value).unwrap(),
+        entries
+    );
     for invalid in [
         serde_json::json!({"entries": null, "unknown": true}),
         serde_json::json!({"version": 3}),
     ] {
-        assert!(serde_json::from_value::<Scan>(invalid).is_err());
+        assert!(serde_json::from_value::<Option<Preservation>>(invalid).is_err());
     }
 }
 

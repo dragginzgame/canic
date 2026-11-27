@@ -45,6 +45,19 @@ fn supply_store_artifact(config: &std::path::Path) {
 }
 
 async fn status(pic: &PocketIc, root: CanisterId) -> Status {
+    creation_status(
+        pic,
+        root,
+        canic_management_protocol::children::ChildId::FIRST,
+    )
+    .await
+}
+
+async fn creation_status(
+    pic: &PocketIc,
+    root: CanisterId,
+    slot: canic_management_protocol::children::ChildId,
+) -> Status {
     use canic_management_protocol::children;
     let reply = pic
         .query_call(
@@ -52,7 +65,7 @@ async fn status(pic: &PocketIc, root: CanisterId) -> Status {
             CanisterId::anonymous(),
             "child_status",
             ic_wire::encode(
-                &children::StatusRequest::Creation(children::ChildId::FIRST),
+                &children::StatusRequest::Creation(slot),
                 ic_wire::Encoding::Frame {
                     method: children::READ_STATUS,
                     direction: ic_wire::Direction::Request,
@@ -702,7 +715,7 @@ async fn qualify_whole_fleet(profile: bool, untracked: bool) {
             "Scheduled"
         );
         let root = CanisterId::from_text(pending["root"]["canister"].as_str().unwrap()).unwrap();
-        let child_dir = journal.join(id).join("child");
+        let child_dir = journal.join(id).join("child-1");
         let signed = std::fs::read(child_dir.join("stage/signed.json")).unwrap();
         // Crash after admission, before retaining its reply: same aggregate approval resumes.
         std::fs::remove_file(child_dir.join("stage/reply.bin")).unwrap();

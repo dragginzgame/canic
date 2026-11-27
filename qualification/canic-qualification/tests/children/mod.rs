@@ -2,6 +2,7 @@
 mod directory;
 mod discovery;
 mod identity;
+mod scheduling;
 
 use super::*;
 use canic_management_protocol::{
@@ -16,7 +17,7 @@ async fn read(pic: &PocketIc, root: CanisterId) -> children::Custody {
             CanisterId::anonymous(),
             "observe_root_custody",
             ic_wire::encode(
-                &(),
+                &None::<canic_management_protocol::application::DeploymentSelector>,
                 ic_wire::Encoding::Frame {
                     method: canic_management_protocol::application::CUSTODY,
                     direction: ic_wire::Direction::Request,
@@ -240,7 +241,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     assert_eq!(migrated[0].creation.approval, first_ready.approval);
     assert_eq!(migrated[0].creation.worker, first_ready.worker);
     assert_eq!(migrated[0].creation.requests, first_ready.requests);
-    assert_eq!(migrated[1].creation, Status::default());
+    assert_eq!(migrated.len(), 1);
     let second = input(
         root,
         padded_artifact("app-v2.wasm"),
@@ -251,7 +252,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
         (
             "observe_root_custody",
             ic_wire::encode(
-                &(),
+                &None::<canic_management_protocol::application::DeploymentSelector>,
                 ic_wire::Encoding::Frame {
                     method: canic_management_protocol::application::CUSTODY,
                     direction: ic_wire::Direction::Request,
@@ -383,10 +384,10 @@ async fn two_children_preserve_history_and_upgrade_independently() {
     );
     // Fill both histories and the combined artifact budget. Every successor
     // must leave the sibling's full retained evidence unchanged.
-    for round in 0..upgrade::MAX_UPGRADES {
+    for round in 0..10 {
         for slot in [ChildId::FIRST, ChildId::SECOND] {
             let before = read(pic, root).await;
-            let record = &before[slot.index()];
+            let record = &before[slot.service_index().unwrap()];
             if record.upgrades.len() > round {
                 continue;
             }
@@ -403,7 +404,7 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             let change = Stage {
                 approval: upgrade::Approval {
                     manager: root.to_text(),
-                    child: ids[slot.index()].to_text(),
+                    child: ids[slot.service_index().unwrap()].to_text(),
                     previous_module: previous,
                     module_hash: digest(&wasm),
                     execute_at_ns: now + 10_000_000_000,
@@ -440,19 +441,22 @@ async fn two_children_preserve_history_and_upgrade_independently() {
             pic.advance_time(Duration::from_secs(11)).await;
             settle(pic).await;
             let after = read(pic, root).await;
-            assert_eq!(after[1 - slot.index()], before[1 - slot.index()]);
             assert_eq!(
-                after[slot.index()].upgrades.last().unwrap().phase,
+                after[1 - slot.service_index().unwrap()],
+                before[1 - slot.service_index().unwrap()]
+            );
+            assert_eq!(
+                after[slot.service_index().unwrap()]
+                    .upgrades
+                    .last()
+                    .unwrap()
+                    .phase,
                 upgrade::Phase::Ready
             );
         }
     }
     let upgraded = read(pic, root).await;
-    assert!(
-        upgraded[..2]
-            .iter()
-            .all(|c| c.upgrades.len() == upgrade::MAX_UPGRADES)
-    );
+    assert!(upgraded[..2].iter().all(|c| c.upgrades.len() == 10));
     let replay = admit(pic, root, &store, ChildId::SECOND, second.clone())
         .await
         .unwrap();
@@ -693,7 +697,7 @@ async fn child_admission_reserves_siblings_unissued_attachment() {
         admit(pic, root, &store, ChildId::SECOND, second.clone()).await,
         Err(Refusal::Reserve)
     );
-    assert_eq!(read(pic, root).await[1].creation, Status::default());
+    assert_eq!(read(pic, root).await.len(), 1);
     pic.add_cycles(root, 1_000_000_000_000).await;
     admit(pic, root, &store, ChildId::SECOND, second)
         .await

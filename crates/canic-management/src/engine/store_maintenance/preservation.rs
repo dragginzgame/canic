@@ -1,26 +1,16 @@
 //! One read per continuation. Root retains a cursor and digest, never Store's catalog or bytes.
 use super::{Call, Failure, Phase, Status, Wait, change, store, target};
-use canic_management_protocol::{
-    store_maintenance::{Preservation, Scan},
-    stored::STORE_LIMITS,
-};
+use canic_management_protocol::{store_maintenance::Preservation, stored::STORE_LIMITS};
 
 pub(super) fn validate(record: &Status) {
     if let Some(value) = record.preservation.as_ref() {
         assert!(!matches!(record.phase, Phase::Reserved | Phase::Closing));
         validate_scan(value);
-        if matches!(record.preservation, Scan::Legacy(_)) {
-            assert!(!value.after_removed, "historical cursor");
-        }
         if record.phase != Phase::Closed {
             assert!(value.complete, "scan must finish before stop");
         }
     }
     if let Some(installation) = &record.installation {
-        assert_eq!(
-            installation.verification.empty(),
-            record.preservation.empty()
-        );
         let Some(value) = installation.verification.as_ref() else {
             return;
         };
@@ -46,7 +36,7 @@ fn validate_scan(value: &Preservation) {
     }
 }
 
-fn scan(record: &Status) -> &Scan {
+fn scan(record: &Status) -> &Option<Preservation> {
     if record.phase == Phase::Verifying {
         &record
             .installation
@@ -59,9 +49,6 @@ fn scan(record: &Status) -> &Scan {
 }
 
 pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
-    if !matches!(scan(record), Scan::Entries(_)) {
-        return Err(Failure::Mismatch);
-    }
     let method = store::PRESERVATION;
     let request = store::preservation::Request {
         attempt: record.approval.attempt.clone(),
@@ -151,7 +138,7 @@ pub(super) async fn capture(record: &Status) -> Result<(), Failure> {
     {
         return Err(Failure::Mismatch);
     }
-    let value = Scan::Entries(Some(value));
+    let value = Some(value);
     // Concurrent responses to the same cursor may commit it only once. A later page must win.
     change(&record.approval, record.phase, |current| {
         if scan(current) == scan(record) {

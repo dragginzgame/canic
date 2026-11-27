@@ -7,30 +7,7 @@ use canic::sharding::standby::Source;
 use canic_management_protocol::{CREATION_CYCLES, children::ChildId, stored};
 use ic_platform_types::Principal;
 
-const PLACEMENT_BYTES: usize = 64 * 1024;
-pub(in crate::engine) const BYTES: usize = PLACEMENT_BYTES + crate::funding::receipts::EXTRA_BYTES;
-const LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: PLACEMENT_BYTES,
-    allocation: PLACEMENT_BYTES * 16,
-    nodes: PLACEMENT_BYTES,
-    depth: 24,
-};
-
-impl Pools {
-    pub(in crate::engine) fn encode(&self) -> Vec<u8> {
-        let limits = ic_wire::Limits {
-            bytes: PLACEMENT_BYTES - 4,
-            ..LIMITS
-        };
-        let payload = ic_wire::encode(self, ic_wire::Encoding::Payload, limits);
-        let mut bytes = b"PL12".to_vec();
-        bytes.extend(payload.expect("bounded placement ledger"));
-        self.receipts.wrap(bytes)
-    }
-}
-
-pub(in crate::engine) fn open(bytes: &[u8]) -> Pools {
-    let pools = decode(bytes);
+pub(super) fn validate(pools: &Pools) {
     for (&slot, generation) in &pools.draining {
         let ledger = pools.shard_at(slot).expect("draining pool");
         assert!(
@@ -109,32 +86,22 @@ pub(in crate::engine) fn open(bytes: &[u8]) -> Pools {
             assert!(principal.is_none() || l.generations[index].is_some());
         }
     }
-    pools
-}
-
-fn decode(bytes: &[u8]) -> Pools {
-    let (receipts, bytes) = crate::funding::receipts::History::split(bytes);
-    let payload = bytes
-        .strip_prefix(b"PL12")
-        .expect("placement custody requires its original Root");
-    let mut pools: Pools =
-        ic_wire::decode(payload, ic_wire::Encoding::Payload, LIMITS).expect("placement custody");
-    receipts.validate(|child| {
+    pools.receipts.validate(|child| {
         pools
             .funding
             .values()
             .find(|grant| grant.rule.child == child)
             .map(super::funding::Grant::settled)
     });
-    pools.receipts = receipts;
+
     assert!(
         pools
             .evacuated
             .iter()
             .all(|slot| pools.draining.contains_key(slot) && pools.shard_at(*slot).is_some())
     );
-    validate_inventory(&pools);
-    super::payment::validate(&pools);
+    validate_inventory(pools);
+    super::payment::validate(pools);
     for (slot, grant) in &pools.funding {
         assert!(slot.service_index().is_some() && grant.valid());
     }
@@ -142,7 +109,7 @@ fn decode(bytes: &[u8]) -> Pools {
     assert!(pools.workers.len() <= usize::from(pools.pool_limit()));
     for (name, pool) in &pools.workers {
         assert_eq!(name, &pool.grant.component);
-        pool.validate(&pools);
+        pool.validate(pools);
         for claim in pool.claims.iter().filter(|claim| !claim.returned) {
             assert!(
                 ChildId::INSTANCES[pools.projects.len()..].contains(&claim.slot)
@@ -150,7 +117,6 @@ fn decode(bytes: &[u8]) -> Pools {
             );
         }
     }
-    pools
 }
 
 fn worker_claim<'a>(
@@ -234,9 +200,7 @@ fn validate_inventory(pools: &Pools) {
             Asset::Claimed(id, allocation)
             | Asset::Released(id, allocation)
             | Asset::Reset(id, allocation, ..) => {
-                let slot = ChildId::placement(allocation.slot as usize)
-                    .or_else(|| ChildId::new(allocation.slot as usize))
-                    .expect("standby slot");
+                let slot = ChildId::from_raw(allocation.slot);
                 assert!(slots.insert(slot));
                 if matches!(asset, Asset::Released(..) | Asset::Reset(..)) {
                     let (_, claim) = pools.worker_at(slot).expect("released worker claim");

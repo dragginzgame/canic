@@ -55,7 +55,7 @@ fn complete_store_custody_fits_and_operation_identity_binds_source_slot_and_acti
     };
     let sources = Sources {
         creation: delivery.clone(),
-        upgrades: vec![delivery; upgrade::MAX_UPGRADES],
+        upgrades: vec![delivery; 8],
     };
     let journal = custody::Custody {
         creation: Status {
@@ -83,12 +83,12 @@ fn complete_store_custody_fits_and_operation_identity_binds_source_slot_and_acti
                 observed_version: Some(u64::MAX),
                 ..Default::default()
             };
-            upgrade::MAX_UPGRADES
+            8
         ],
     };
     let custody = Custody {
-        children: (0..8).map(|_| journal.clone()).collect(),
-        sources: (0..8).map(|_| Some(sources.clone())).collect(),
+        children: vec![journal; 3],
+        sources: vec![Some(sources); 3],
     };
     let bytes = ic_wire::encode(
         &custody,

@@ -52,7 +52,7 @@ fn post_upgrade((): ()) {
 management::mount_endpoints! {
     publish_store_artifact, observe_store, change_store_admission, remove_store_artifact,
     maintain_store, observe_store_maintenance, store_maintenance_status, recover_store_maintenance,
-    observe_root_custody, observe_child_deployments,
+    observe_root_custody, observe_root_custody_page, observe_child_deployments,
     stage_child_creation, reconcile_child_creation,
     stage_child_upgrade, reconcile_child_upgrade,
     child_status, observe_child_status,
@@ -93,8 +93,8 @@ async fn observe_child_metrics(request: (u32, canic::metrics::Request)) -> canic
     use canic::metrics::ReadMetrics;
     use canic_management_protocol::{Phase, children::ChildId};
     let (slot, source) = request;
-    let slot =
-        ChildId::new(slot as usize).unwrap_or_else(|| runtime::system::trap("unknown child slot"));
+    let slot = ChildId::service(slot as usize)
+        .unwrap_or_else(|| runtime::system::trap("unknown child slot"));
     let status = management::children::status(slot);
     if status.phase != Phase::Ready {
         runtime::system::trap("child is not ready");

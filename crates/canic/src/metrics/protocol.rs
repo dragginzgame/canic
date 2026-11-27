@@ -164,7 +164,7 @@ pub struct ObserveChildMetrics;
 
 impl crate::method::Contract for ObserveChildMetrics {
     const NAME: &'static str = "observe_child_metrics";
-    const ID: u64 = ic_wire::method_id(Self::NAME);
+    const ID: u64 = ic_wire::method_id("canic.root.observe_service_metrics.v1");
     const REQUEST: ic_wire::Limits = ReadMetrics::REQUEST;
     const REPLY: ic_wire::Limits = ReadMetrics::REPLY;
     type Input = (u32, Request);

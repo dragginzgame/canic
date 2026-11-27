@@ -226,7 +226,7 @@ pub async fn acquire_placement(demand: Demand, maximum: u128) -> Result<Payment,
                     .is_some_and(|q| q.demand == demand)
             {
                 s.pools.quotes.remove(&pool);
-                s.pool.set(s.pools.encode());
+                s.pool.remove(&super::Key::Quote(pool.clone()));
             }
         });
         return Ok(Payment::Placed(unpaid, receipt));
@@ -272,7 +272,7 @@ pub async fn acquire_placement(demand: Demand, maximum: u128) -> Result<Payment,
             observed: index.is_none(),
         };
         s.pools.quotes.insert(pool.clone(), q.clone());
-        s.pool.set(s.pools.encode());
+        s.pool.put(&super::Key::Quote(pool.clone()), &q);
         Ok(q)
     })?;
     if !reserved.observed {
@@ -315,7 +315,7 @@ pub async fn acquire_placement(demand: Demand, maximum: u128) -> Result<Payment,
                 q.quote.working_cycles = balance;
             } else {
                 s.pools.quotes.remove(&pool);
-                s.pool.set(s.pools.encode());
+                s.pool.remove(&super::Key::Quote(pool.clone()));
                 if s.pools.full() {
                     return Err(Refusal::SubnetFull);
                 }
@@ -327,8 +327,9 @@ pub async fn acquire_placement(demand: Demand, maximum: u128) -> Result<Payment,
             }
             q.observed = true;
             let quote = q.quote.clone();
-            s.pools.quotes.insert(pool, q);
-            s.pool.set(s.pools.encode());
+            s.pools.quotes.insert(pool.clone(), q);
+            s.pool
+                .put(&super::Key::Quote(pool.clone()), &s.pools.quotes[&pool]);
             Ok(Payment::Quoted(quote))
         });
     }
@@ -378,7 +379,11 @@ pub async fn acquire_placement(demand: Demand, maximum: u128) -> Result<Payment,
                 )
                 .is_none()
         );
-        s.pool.set(s.pools.encode());
+        s.pool.remove(&super::Key::Quote(pool));
+        s.pool.put(
+            &super::Key::Payment(allocation.generation),
+            &s.pools.payments[&allocation.generation],
+        );
     });
     Ok(Payment::Placed(placed, Some(reserved.quote)))
 }

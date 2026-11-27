@@ -26,7 +26,7 @@ async fn pin_delivery_resumes_before_stage() {
     let path = dir.join("journal").join(id);
     let signer = assets.ancestors().nth(2).unwrap().join(".tools/ic/bin/icp");
     let pause = dir.join("pause-stage");
-    std::fs::write(&pause, format!("#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */child/stage/arguments.bin) exit 72;; esac\ndone\nexec '{}' \"$@\"\n",signer.display())).unwrap();
+    std::fs::write(&pause, format!("#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */child-1/stage/arguments.bin) exit 72;; esac\ndone\nexec '{}' \"$@\"\n",signer.display())).unwrap();
     std::fs::set_permissions(&pause, std::fs::Permissions::from_mode(0o700)).unwrap();
     let apply = |signer: &Path| {
         run(
@@ -49,9 +49,9 @@ async fn pin_delivery_resumes_before_stage() {
         "{}",
         String::from_utf8_lossy(&paused.stderr)
     );
-    assert!(!path.join("child/stage/signed.json").exists());
+    assert!(!path.join("child-1/stage/signed.json").exists());
     let signed = std::fs::read(path.join("role-key/signed.json")).unwrap();
-    let arguments = std::fs::read(path.join("child/plan.json")).unwrap();
+    let arguments = std::fs::read(path.join("child-1/plan.json")).unwrap();
     let resumed = apply(&signer);
     assert!(
         resumed.status.success(),
@@ -80,7 +80,7 @@ async fn pin_delivery_resumes_before_stage() {
         signed
     );
     assert_eq!(
-        std::fs::read(path.join("child/plan.json")).unwrap(),
+        std::fs::read(path.join("child-1/plan.json")).unwrap(),
         arguments
     );
     assert_eq!(

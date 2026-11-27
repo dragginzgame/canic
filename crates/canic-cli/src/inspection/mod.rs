@@ -4,7 +4,7 @@
 mod tests;
 
 use canic::db::{RPC_LIMITS, inspection as protocol};
-use canic_host::{Error, InspectionClient};
+use canic_host::{Error, InspectionSession};
 use clap::{Args, Subcommand};
 use ic_host_text::{bordered_table, escape};
 use ic_wire::{Direction, Encoding};
@@ -55,7 +55,8 @@ fn decode(bytes: &[u8]) -> canic_host::Result<protocol::Response> {
 
 pub(super) async fn run(options: &Options, json: bool) -> canic_host::Result<crate::Output> {
     let network = options.network.clone().into_network()?;
-    let client = InspectionClient::new(&network, &options.canister, options.identity.as_deref())?;
+    let client =
+        InspectionSession::new(options.identity.as_deref())?.client(&network, &options.canister)?;
     let payload = ic_wire::encode(
         &(),
         Encoding::Frame {

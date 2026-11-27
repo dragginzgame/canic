@@ -227,7 +227,7 @@ limits = {{ default_session_secs = 60, max_session_secs = 1800, max_proof_ttl_ns
         .update(
             "observe_child_deployments",
             management::application::CHILD_EVIDENCE,
-            &(),
+            &None::<canic_management_protocol::application::DeploymentSelector>,
             stored::LIMITS,
         )
         .await;

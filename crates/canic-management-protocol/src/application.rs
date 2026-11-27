@@ -11,27 +11,19 @@ pub const STAGE: u64 = 61;
 /// Reconcile only that complete configured creation.
 pub const RECONCILE: u64 = 62;
 /// Child-only deployment evidence. Never an input to Root maintenance.
-pub const CHILD_EVIDENCE: u64 =
-    ic_wire::method_id("canic.root.observe_identified_child_deployments.v1");
+pub const CHILD_EVIDENCE: u64 = ic_wire::method_id("canic.root.select_child_deployments.v1");
 /// Complete Root custody including lifecycle arguments.
-pub const CUSTODY: u64 = ic_wire::method_id("canic.root.observe_identified_root_custody.v1");
+pub const CUSTODY: u64 = ic_wire::method_id("canic.root.select_root_custody.v1");
 /// Admit an exact Blob maintenance upgrade.
 pub const STAGE_UPGRADE: u64 = 64;
 /// Reconcile that upgrade without issuing a replacement effect.
 pub const RECONCILE_UPGRADE: u64 = 65;
 /// Separately authorize activation after verified reopening.
 pub const ACTIVATE: u64 = 66;
-/// Complete custody with at most two bounded application argument histories.
+/// Complete custody within the retained artifact byte budget.
 pub const LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: crate::custody::ROOT_HISTORY_LIMITS.bytes
-        + crate::children::ChildId::HISTORICAL_SERVICES.len()
-            * (1 + crate::upgrade::MAX_UPGRADES)
-            * (3 * MAX_ARGUMENT_BYTES + 512),
-    allocation: crate::custody::ROOT_HISTORY_LIMITS.allocation
-        + crate::children::ChildId::HISTORICAL_SERVICES.len()
-            * (1 + crate::upgrade::MAX_UPGRADES)
-            * (3 * MAX_ARGUMENT_BYTES + 512)
-            * 9,
+    bytes: crate::custody::ROOT_HISTORY_LIMITS.bytes + 1_048_576,
+    allocation: crate::custody::ROOT_HISTORY_LIMITS.allocation + 1_048_576 * 9,
     nodes: crate::custody::ROOT_HISTORY_LIMITS.nodes + 2048,
     depth: crate::custody::ROOT_HISTORY_LIMITS.depth + 2,
 };
@@ -214,3 +206,134 @@ pub const STAGE_CHILD_UPGRADE: u64 = ic_wire::method_id("canic.root.stage_child_
 /// Method identity for `reconcile_child_upgrade`.
 pub const RECONCILE_CHILD_UPGRADE: u64 =
     ic_wire::method_id("canic.root.reconcile_child_upgrade.v1");
+
+/// Controller observation of a single indexed piece of Root maintenance custody.
+pub const CUSTODY_PAGE: u64 = ic_wire::method_id("canic.root.maintenance_custody_page.v1");
+
+/// The inventory and per-child counts determine exactly which pages Host must verify.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CustodyKey {
+    /// Fleet-wide record counts.
+    Inventory,
+    /// Original creation evidence for one service slot.
+    Child(ChildId),
+    /// Zero-based child upgrade, oldest first.
+    Upgrade(ChildId, u64),
+    /// Zero-based Store attempt, oldest first.
+    Store(u64),
+}
+
+/// One independently verifiable record from the selected maintenance window.
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CustodyItem {
+    /// Counts include all service slots and all Store attempts.
+    Inventory {
+        /// Number of service slots.
+        children: u64,
+        /// Number of Store attempts including the current attempt.
+        store_attempts: u64,
+    },
+    /// Creation approval, source, arguments and number of admitted upgrades.
+    Child {
+        /// Retained creation state.
+        creation: crate::Status,
+        /// Exact retained Store delivery when present.
+        source: Option<stored::Delivery>,
+        /// Original application bytes.
+        arguments: Option<Arguments>,
+        /// Number of admitted upgrades.
+        upgrades: u64,
+    },
+    /// Evidence for the single addressed upgrade.
+    Upgrade {
+        /// Original approval and observed effects.
+        status: crate::upgrade::Status,
+        /// Exact retained Store delivery when present.
+        source: Option<stored::Delivery>,
+        /// Optional application maintenance record.
+        lifecycle: Option<Maintenance>,
+    },
+    /// Original Store approval and its complete effect evidence.
+    Store(Box<crate::store_maintenance::Status>),
+}
+
+/// All pages in one observation must have the same Root incarnation and mutation count.
+#[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CustodyPage {
+    /// Root open version and in-memory custody write sequence.
+    pub revision: (u64, u64),
+    /// Exact page being returned.
+    pub key: CustodyKey,
+    /// Absent when the requested ordinal does not exist.
+    pub item: Option<CustodyItem>,
+}
+
+impl Custody {
+    /// Enumerate every required record including empty slots and the current Store attempt.
+    pub fn keys(&self) -> impl Iterator<Item = CustodyKey> + '_ {
+        std::iter::once(CustodyKey::Inventory)
+            .chain(self.children.iter().flat_map(|c| {
+                std::iter::once(CustodyKey::Child(c.slot)).chain(
+                    (0..c.journal.upgrades.len() as u64)
+                        .map(move |n| CustodyKey::Upgrade(c.slot, n)),
+                )
+            }))
+            .chain(
+                (0..(self.store_history.len() + usize::from(self.store_operation.is_some()))
+                    as u64)
+                    .map(CustodyKey::Store),
+            )
+    }
+
+    /// Project the approved local record for an exact remote page.
+    #[must_use]
+    pub fn item(&self, key: CustodyKey) -> Option<CustodyItem> {
+        let child = |slot: ChildId| {
+            self.children
+                .get(slot.service_index()?)
+                .filter(|c| c.slot == slot)
+        };
+        match key {
+            CustodyKey::Inventory => Some(CustodyItem::Inventory {
+                children: self.children.len() as u64,
+                store_attempts: (self.store_history.len()
+                    + usize::from(self.store_operation.is_some()))
+                    as u64,
+            }),
+            CustodyKey::Child(slot) => {
+                let c = child(slot)?;
+                Some(CustodyItem::Child {
+                    creation: c.journal.creation.clone(),
+                    source: c.sources.as_ref().map(|s| s.creation.clone()),
+                    arguments: c.lifecycle.as_ref().map(|l| l.creation.clone()),
+                    upgrades: c.journal.upgrades.len() as u64,
+                })
+            }
+            CustodyKey::Upgrade(slot, n) => {
+                let i = usize::try_from(n).ok()?;
+                let c = child(slot)?;
+                Some(CustodyItem::Upgrade {
+                    status: c.journal.upgrades.get(i)?.clone(),
+                    source: c.sources.as_ref().and_then(|s| s.upgrades.get(i)).cloned(),
+                    lifecycle: c
+                        .lifecycle
+                        .as_ref()
+                        .and_then(|l| l.upgrades.get(i))
+                        .cloned(),
+                })
+            }
+            CustodyKey::Store(n) => {
+                let i = usize::try_from(n).ok()?;
+                let s = if i == self.store_history.len() {
+                    self.store_operation.as_ref()
+                } else {
+                    self.store_history.get(i)
+                }?;
+                Some(CustodyItem::Store(Box::new(s.clone())))
+            }
+        }
+    }
+}
+
+/// Exact child and optional upgrade approval selected for deployment recovery.
+pub type DeploymentSelector = crate::children::Request<Option<crate::upgrade::Approval>>;

@@ -61,13 +61,13 @@ pub(super) fn upgrade_source(
 ) -> Option<stored::Delivery> {
     STATE.with_borrow(|state| {
         let state = state.as_ref().expect("open engine");
-        let journal = &state.journal.0[&slot];
+        let journal = &state.journal.rows()[&slot];
         let index = journal
             .2
             .iter()
             .chain(std::iter::once(&journal.1))
             .position(|record| record.approval.as_ref() == Some(approval))?;
-        state.artifact.0[&slot]
+        state.artifact.rows()[&slot]
             .sources()?
             .upgrades
             .get(index)
@@ -128,7 +128,7 @@ pub fn custody() -> stored::Custody {
 fn stored_journals() -> stored::Custody {
     let children: children::Custody = super::journals();
     let sources = STATE.with_borrow(|state| {
-        let artifacts = &state.as_ref().expect("open engine").artifact.0;
+        let artifacts = &state.as_ref().expect("open engine").artifact.rows();
         super::service_slots()
             .into_iter()
             .map(|slot| artifacts[&slot].sources().cloned())

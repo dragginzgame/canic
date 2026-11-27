@@ -8,7 +8,7 @@ use canic_management_protocol::stored::FundingError;
 use canic_management_protocol::stored::{ChildFunding, ChildFundingStatus};
 use ic_platform_runtime::{raw, system};
 use ic_platform_types::Principal;
-use ic_storage::{DefaultMemoryImpl, MemoryRuntime, adapter::StableCell};
+use ic_storage::{DefaultMemoryImpl, MemoryRuntime, adapter::StableBTreeMap};
 use receipts::History;
 use serde::{Deserialize, Serialize};
 use std::{cell::RefCell, collections::BTreeMap};
@@ -31,12 +31,7 @@ const LIMITS: ic_wire::Limits = ic_wire::Limits {
     nodes: 16_384,
     depth: 16,
 };
-const MAX_FUNDED_CHILDREN: usize = 8;
 const CHECK_NS: u64 = 60_000_000_000;
-const BOOK: ic_wire::Encoding = ic_wire::Encoding::Frame {
-    method: ic_wire::method_id("canic.owner.child_funding.v1"),
-    direction: ic_wire::Direction::Response,
-};
 
 #[derive(Serialize, Deserialize)]
 struct Grant {
@@ -46,9 +41,8 @@ struct Grant {
     paid: u64,
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default)]
 struct Book {
-    #[serde(skip)]
     history: History,
     operator: Option<Principal>,
     children: BTreeMap<Principal, Grant>,
@@ -63,33 +57,32 @@ struct Incoming {
     paid: u64,
 }
 
-type Cell = StableCell<Vec<u8>, DefaultMemoryImpl>;
-thread_local! { static CELL: RefCell<Option<Cell>> = const {RefCell::new(None)}; }
-
-fn encode(book: &Book) -> Vec<u8> {
-    book.history
-        .wrap(ic_wire::encode(book, BOOK, LIMITS).expect("bounded funding ledger"))
+#[derive(Clone, Copy, Serialize, Deserialize)]
+enum Key {
+    Operator,
+    Incoming,
+    History,
+    Child(Principal),
 }
-fn load(cell: &Cell) -> Book {
-    let (history, bytes) = History::split(cell.get());
-    let mut book: Book = ic_wire::decode(bytes, BOOK, LIMITS).expect("retained funding ledger");
-    book.history = history;
-    book
+type Rows = StableBTreeMap<Vec<u8>, Vec<u8>>;
+thread_local! { static STATE: RefCell<Option<(Book,Rows)>> = const { RefCell::new(None) }; }
+fn bytes(value: &impl Serialize) -> Vec<u8> {
+    ic_wire::encode(value, ic_wire::Encoding::Payload, LIMITS).expect("funding record")
 }
-fn change<T>(f: impl FnOnce(&mut Book) -> T) -> T {
-    CELL.with_borrow_mut(|c| {
-        let cell = c.as_mut().expect("open funding ledger");
-        let mut book = load(cell);
-        let result = f(&mut book);
-        let bytes = encode(&book);
-        if cell.get() != &bytes {
-            cell.set(bytes);
-        }
-        result
+fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> T {
+    ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS).expect("retained funding record")
+}
+fn put(rows: &mut Rows, key: Key, value: &impl Serialize) {
+    rows.insert(bytes(&key), bytes(value));
+}
+fn change<T>(f: impl FnOnce(&mut Book, &mut Rows) -> T) -> T {
+    STATE.with_borrow_mut(|s| {
+        let (book, rows) = s.as_mut().expect("open funding ledger");
+        f(book, rows)
     })
 }
 fn read<T>(f: impl FnOnce(&Book) -> T) -> T {
-    CELL.with_borrow(|c| f(&load(c.as_ref().expect("open funding ledger"))))
+    STATE.with_borrow(|s| f(&s.as_ref().expect("open funding ledger").0))
 }
 
 /// Install or reopen the funding participant in the application's selected storage lease.
@@ -100,23 +93,34 @@ pub fn open(
     key: &str,
     install: Option<Option<Principal>>,
 ) {
-    let cell = canic::storage::cell(
-        runtime,
-        key,
-        LIMITS.bytes + receipts::EXTRA_BYTES,
-        install.map(|operator| {
-            encode(&Book {
-                operator,
-                ..Book::default()
-            })
-        }),
+    let mut rows: Rows = canic::storage::map(runtime, key, install.is_some());
+    if let Some(operator) = install {
+        put(&mut rows, Key::Operator, &operator);
+    }
+    let operator = decode(
+        &rows
+            .get(&bytes(&Key::Operator))
+            .expect("funding operator record"),
     );
-    let book = load(&cell);
+    let mut book = Book {
+        operator,
+        ..Book::default()
+    };
+    for entry in rows.iter() {
+        match decode(entry.key()) {
+            Key::Operator => (),
+            Key::Incoming => book.incoming = Some(decode(&entry.value())),
+            Key::History => book.history = decode(&entry.value()),
+            Key::Child(child) => {
+                book.children.insert(child, decode(&entry.value()));
+            }
+        }
+    }
     book.history
         .validate(|child| book.children.get(&child).map(|grant| grant.paid));
-    for (child, grant) in book.children {
-        let rule = grant.rule;
-        let status = grant.status;
+    for (&child, grant) in &book.children {
+        let rule = &grant.rule;
+        let status = &grant.status;
         assert!(
             child == rule.child
                 && rule.parent == system::canister_self()
@@ -131,8 +135,8 @@ pub fn open(
             "retained child funding custody"
         );
     }
-    let deadline = book.incoming.map(|i| i.deadline);
-    CELL.set(Some(cell));
+    let deadline = book.incoming.as_ref().map(|i| i.deadline);
+    STATE.set(Some((book, rows)));
     if let Some(deadline) = deadline {
         schedule(deadline);
     }
@@ -185,16 +189,13 @@ pub async fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, Funding
     }
     let child = rule.child;
     let terms = (rule.below_cycles, rule.expires_at_ns);
-    let status = change(|b| {
+    let status = change(|b, rows| {
         if let Some(g) = b.children.get(&child) {
             return if g.rule == rule && g.generation == generation {
                 Ok(g.status.clone())
             } else {
                 Err(FundingError::ApprovalConflict)
             };
-        }
-        if b.children.len() >= MAX_FUNDED_CHILDREN {
-            return Err(FundingError::Capacity);
         }
         if system::time() >= rule.expires_at_ns {
             return Err(FundingError::Expired);
@@ -208,6 +209,7 @@ pub async fn configure(rule: ChildFunding) -> Result<ChildFundingStatus, Funding
                 paid: 0,
             },
         );
+        put(rows, Key::Child(child), &b.children[&child]);
         Ok(ChildFundingStatus::default())
     })?;
     if !status.closed && system::time() < terms.1 {
@@ -225,12 +227,13 @@ pub fn stop(child: Principal) -> Result<ChildFundingStatus, FundingError> {
     if !read(|book| book.operator == Some(system::caller())) {
         return Err(FundingError::Unauthorized);
     }
-    change(|b| {
+    change(|b, rows| {
         let g = b
             .children
             .get_mut(&child)
             .ok_or(FundingError::UnknownChild)?;
         g.status.closed = true;
+        put(rows, Key::Child(child), g);
         Ok(g.status.clone())
     })
 }
@@ -249,7 +252,7 @@ pub fn watch((threshold, deadline): (u64, u64)) -> Result<(), FundingError> {
     if threshold == 0 {
         return Err(FundingError::InvalidApproval);
     }
-    let inserted = change(|b| {
+    let inserted = change(|b, rows| {
         if let Some(i) = &b.incoming {
             return if (i.parent, i.threshold, i.deadline) == (parent, threshold, deadline) {
                 Ok(false)
@@ -257,12 +260,14 @@ pub fn watch((threshold, deadline): (u64, u64)) -> Result<(), FundingError> {
                 Err(FundingError::ApprovalConflict)
             };
         }
-        b.incoming = Some(Incoming {
+        let incoming = Incoming {
             parent,
             threshold,
             deadline,
             paid: 0,
-        });
+        };
+        put(rows, Key::Incoming, &incoming);
+        b.incoming = Some(incoming);
         Ok(true)
     })?;
     if inserted {
@@ -278,7 +283,7 @@ pub fn watch((threshold, deadline): (u64, u64)) -> Result<(), FundingError> {
 /// Traps if the original grant disappears during a deposit.
 pub async fn request((sequence, balance): (u64, u128)) -> Result<u64, FundingError> {
     let child = system::caller();
-    let amount = change(|b| {
+    let amount = change(|b, rows| {
         let g = b
             .children
             .get_mut(&child)
@@ -318,11 +323,12 @@ pub async fn request((sequence, balance): (u64, u128)) -> Result<u64, FundingErr
         s.charged_cycles += g.rule.amount_cycles;
         s.issued = true;
         s.refund_cycles = None;
+        put(rows, Key::Child(child), g);
         Ok(Some(g.rule.amount_cycles))
     })?;
     if let Some(amount) = amount {
         let (success, refund) = crate::engine::deposit_cycles(child, amount).await;
-        change(|b| {
+        change(|b, rows| {
             let g = b.children.get_mut(&child).expect("issued child funding");
             g.status.issued = !success && refund != Some(u128::from(amount));
             g.status.closed |= !success;
@@ -330,7 +336,9 @@ pub async fn request((sequence, balance): (u64, u128)) -> Result<u64, FundingErr
             if success {
                 g.paid = sequence;
                 b.history.record(child, sequence, system::time());
+                put(rows, Key::History, &b.history);
             }
+            put(rows, Key::Child(child), g);
         });
         if !success {
             return Err(if refund == Some(u128::from(amount)) {
@@ -400,9 +408,10 @@ pub async fn check() -> Result<bool, FundingError> {
     if ack != seq {
         return Err(FundingError::InvalidSequence);
     }
-    change(|b| {
+    change(|b, rows| {
         let i = b.incoming.as_mut().expect("original trigger");
         i.paid = i.paid.max(seq);
+        put(rows, Key::Incoming, i);
     });
     Ok(true)
 }

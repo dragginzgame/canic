@@ -195,8 +195,8 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     assert!(summary.contains("Child: app"));
     assert!(summary.contains("Child: worker"));
     let path = journal.join(id);
-    let first_signed = std::fs::read(path.join("child/stage/signed.json")).unwrap();
-    let second_signed = std::fs::read(path.join("sibling/stage/signed.json")).unwrap();
+    let first_signed = std::fs::read(path.join("child-1/stage/signed.json")).unwrap();
+    let second_signed = std::fs::read(path.join("child-2/stage/signed.json")).unwrap();
     assert_ne!(first_signed, second_signed); // Same Wasm/approval, different authenticated slot.
     // A declaration cannot enlarge an already admitted fleet or remap its children.
     owner.client().stop_progress().await;
@@ -226,11 +226,11 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         approval_bytes
     );
     assert_eq!(
-        std::fs::read(path.join("child/stage/signed.json")).unwrap(),
+        std::fs::read(path.join("child-1/stage/signed.json")).unwrap(),
         first_signed
     );
     assert_eq!(
-        std::fs::read(path.join("sibling/stage/signed.json")).unwrap(),
+        std::fs::read(path.join("child-2/stage/signed.json")).unwrap(),
         second_signed
     );
     assert_eq!(owner.client().get_stable_memory(root).await, stable);
@@ -240,14 +240,14 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         planned
     );
     owner.client().auto_progress().await;
-    std::fs::remove_file(path.join("sibling/stage/reply.bin")).unwrap();
+    std::fs::remove_file(path.join("child-2/stage/reply.bin")).unwrap();
     let recovered = cli(&config, &apply);
     assert_eq!(
         recovered["children"][1]["outcome"]["status"]["phase"],
         "Scheduled"
     );
     assert_eq!(
-        std::fs::read(path.join("sibling/stage/signed.json")).unwrap(),
+        std::fs::read(path.join("child-2/stage/signed.json")).unwrap(),
         second_signed
     );
     assert_eq!(
@@ -273,8 +273,8 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
             .iter()
             .all(|m| m["reported"]["phase"] == "Ready" && m["observation_error"].is_null())
     );
-    assert!(!path.join("child/receipt.json").exists());
-    assert!(!path.join("sibling/receipt.json").exists());
+    assert!(!path.join("child-1/receipt.json").exists());
+    assert!(!path.join("child-2/receipt.json").exists());
     let html = std::fs::read_to_string(&report).unwrap();
     assert!(html.contains("Child: <strong>slot 1 · app</strong>"));
     assert!(html.contains("Child: <strong>slot 2 · worker</strong>"));
@@ -337,10 +337,21 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
     );
     std::fs::write(&config, &config_bytes).unwrap();
     let creation_receipts = [
-        std::fs::read(path.join("child/receipt.json")).unwrap(),
-        std::fs::read(path.join("sibling/receipt.json")).unwrap(),
+        std::fs::read(path.join("child-1/receipt.json")).unwrap(),
+        std::fs::read(path.join("child-2/receipt.json")).unwrap(),
     ];
-    for (name, child, slot) in [("app", app, "First"), ("worker", worker, "Second")] {
+    for (name, child, slot) in [
+        (
+            "app",
+            app,
+            serde_json::json!(canic_management_protocol::children::ChildId::FIRST),
+        ),
+        (
+            "worker",
+            worker,
+            serde_json::json!(canic_management_protocol::children::ChildId::SECOND),
+        ),
+    ] {
         std::fs::copy(
             artifacts.join("app-v2.wasm"),
             workspace.join(format!("artifacts/{name}.wasm")),
@@ -495,11 +506,11 @@ async fn multi_child_cli_creation_upgrades_maintenance_and_views() {
         "unchanged"
     );
     assert_eq!(
-        std::fs::read(path.join("child/receipt.json")).unwrap(),
+        std::fs::read(path.join("child-1/receipt.json")).unwrap(),
         creation_receipts[0]
     );
     assert_eq!(
-        std::fs::read(path.join("sibling/receipt.json")).unwrap(),
+        std::fs::read(path.join("child-2/receipt.json")).unwrap(),
         creation_receipts[1]
     );
     assert_eq!(std::fs::read(&config).unwrap(), config_bytes);

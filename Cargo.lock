@@ -293,7 +293,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic-macros",
  "ic-auth",
@@ -320,7 +320,7 @@ dependencies = [
 
 [[package]]
 name = "canic-cli"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "canic-host",
@@ -330,6 +330,7 @@ dependencies = [
  "ic-host-text",
  "ic-query-topology",
  "ic-wire",
+ "serde",
  "serde_json",
  "time",
  "tiny_http",
@@ -340,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "canic-dormant"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -350,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "canic-host"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "base64 0.23.1",
  "canic",
@@ -383,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -394,7 +395,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "canic-management-protocol",
@@ -413,7 +414,7 @@ dependencies = [
 
 [[package]]
 name = "canic-management-protocol"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "ic-platform-protocol",
@@ -428,7 +429,7 @@ dependencies = [
 
 [[package]]
 name = "canic-root"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "canic-management",
@@ -925,7 +926,7 @@ dependencies = [
 
 [[package]]
 name = "example-counter"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "clap",
@@ -940,7 +941,7 @@ dependencies = [
 
 [[package]]
 name = "example-metrics"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "clap",
@@ -950,7 +951,7 @@ dependencies = [
 
 [[package]]
 name = "example-miner-pool-hub"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "clap",
@@ -965,7 +966,7 @@ dependencies = [
 
 [[package]]
 name = "example-miner-pool-miner"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -978,7 +979,7 @@ dependencies = [
 
 [[package]]
 name = "example-notebook"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "ic-platform-runtime",
@@ -991,7 +992,7 @@ dependencies = [
 
 [[package]]
 name = "example-template"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "serde",
@@ -1000,7 +1001,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-hub"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "clap",
@@ -1014,7 +1015,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-schema"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "ic-db",
@@ -1025,7 +1026,7 @@ dependencies = [
 
 [[package]]
 name = "example-user-directory-shard"
-version = "0.276.0"
+version = "0.277.0"
 dependencies = [
  "canic",
  "example-user-directory-schema",
@@ -1468,9 +1469,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db"
-version = "0.34.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3d9bc18b89a9db6a3a73c2c5e803f83b7e658f270b6d060b4390485a257b3a8f"
+checksum = "10a0ae88fb6494ad0206b39ffcaceed4587d15b6c6c5c320d665e09f046a8254"
 dependencies = [
  "ctor",
  "ethnum",
@@ -1490,9 +1491,9 @@ dependencies = [
 
 [[package]]
 name = "ic-db-macros"
-version = "0.34.0"
+version = "0.36.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b95f7963cb650e1df7b61fc6797d37ec5e0330e4164635bbc56d504f4680cf28"
+checksum = "aa9710440a4a08e3170d692c9a0f1b03f7983d0efd0f3956d4476dc3ed50b6bc"
 dependencies = [
  "proc-macro2",
  "quote",

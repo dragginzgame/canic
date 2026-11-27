@@ -312,19 +312,18 @@ local control; the subsequent fleet witness qualifies Root's readiness contract
 with Store-backed artifacts. Neither qualifies Backup integration or grants a
 Root endpoint for arbitrary application calls/fencing/activation.
 
-Fresh Root always grants management the named cells `manager.journal.v2`,
-`manager.artifacts.v1` and `manager.snapshot.v1`. Reopen requires the exact selected membership. Keep the
-existing payload versions and semantic validation; the physical backing is a
-hard cut, not an importer for 0.74 leases. Known old payload decoders remain
-codec compatibility evidence, not proof of physical-image migration. Commit
-encoded records synchronously at existing mutation sites, before dispatch or
+Fresh Root stores child journals in `manager.child_journal_pages.v1`, artifact manifests in
+`manager.child_artifact_pages.v1`, snapshot operations in `manager.target_snapshots.v1`,
+and bootstrap and Store metadata in the `manager.metadata_pages.v1` table. Placement
+records have their own table, `manager.placement_rows.v1`. Reopen requires the exact selected membership. The old
+aggregate layout requires its original executable. Commit encoded rows synchronously at existing mutation sites, before dispatch or
 callback completion, and trap on failure; no pre-upgrade flush is introduced.
 The CLI now generates a standalone greeting workspace whose artifact passes that
 same installed qualification. Managed-child CLI plan/apply now pins Root code,
 retains exact admission attempts and recovers completion through replicated
 observations. One child upgrade is now locally qualified, including persistent
-application state and interrupted callbacks. The runtime assigns permanent child slots on demand, each with a bounded history
-for eight serial upgrades and independent continuations. Both share finite cycle
+application state and interrupted callbacks. The runtime assigns permanent child slots on demand, each with independently stored serial upgrade history
+and independent continuations. Both share finite cycle
 and artifact custody budgets. The installed CLI qualifies both children through
 creation, independent upgrades, recovery and fleet views. Root maintenance
 compares complete custody for all service slots, including Empty. General trees and
@@ -574,8 +573,7 @@ bindings at `apps.APP.fleets.FLEET.canisters.SLOT`. Every fleet resolves the sha
 definitions; its bindings cannot override topology or artifacts. Network and
 journal path remain fleet-owned. Wasm paths resolve beside the config; exact
 bytes are retained only when planning. The generated starter now has a bounded
-whole-fleet planner for Root, Store and up to eight applications; generation selects
-one application. Store-backed upgrades publish new bytes before a separate
+whole-fleet planner for Root, Store and the declared applications under the fleet ceiling. The starter declares one application. Store-backed upgrades publish new bytes before a separate
 installation approval. General spawn policy, larger fleet funding policy and
 adoption of existing fleets remain unimplemented.
 The default journal is `.canic/apps/APP/fleets/FLEET/` beside the config.
@@ -642,8 +640,7 @@ Markers describe build composition without establishing readiness or authority.
 Only structured output (`--json`) is global. App/fleet selection and journal
 arguments belong to deployment actions, not artifact inspection, saved-report
 viewing or wallet queries. Without a canister, Wasm override or target,
-`fleet plan` consumes the selected fleet's declared Root, mandatory Store and up to eight
-application artifacts. Fresh creation refuses unsupported trees, existing
+`fleet plan` consumes the selected fleet's declared Root, mandatory Store and declared application artifacts. Fresh creation refuses unsupported trees, existing
 bindings and competing individual plans rather than deploying a partial fleet.
 Its immutable approval names the future Root as the
 typed output of its approved creation. Root and child signing/evidence remain
@@ -757,9 +754,7 @@ Host custody and remote authority have different records. The host retains signe
 The current Host operation model selects one explicit action with its complete
 required authority: direct creation/upgrade, Root-owned child creation/upgrade,
 or Root maintenance with the full ordered child custody. Fleet children form one
-ordered collection of permanent identities. The selected runtime supports up to eight
-direct children; that capacity does not justify separate child/sibling
-branches throughout planning, execution and presentation. The v1 fleet approval identifies each child by its permanent slot. The Host
+ordered collection of permanent identities. Host uses the same collection for planning, execution and presentation. The v1 fleet approval identifies each child by its permanent slot. The Host
 retains the exact approved digest, journal location and signed attempts for recovery. Replanning cannot remap names to different slots.
 Named replanning must check the complete bounded reservation scope before reusing
 a matching approval. Directory order cannot hide competing ownership, corruption
@@ -952,7 +947,7 @@ fleet policy is 10,000 keys per shard with two shards. Rollover at 10,001
 and refusal at 20,001 must preserve lookup and retry for existing assignments.
 The hub retains its account index and occupancy in the same Storage bootstrap.
 Root retains one slot and installation generation per capacity ordinal. The
-PL12 layout requires a fresh sharding Root and excludes account claims. Use
+placement table requires a fresh sharding Root and excludes account claims. Use
 fresh hub state when switching from a system that retained those claims at Root.
 
 Shard assignments are durable from the first reservation. Directory delivery
@@ -1135,15 +1130,14 @@ retains an unfinished child operation under its original owner.
 
 Fresh fleet approvals encode permanent services as one collection with explicit slot
 IDs. The dispatch window belongs to the fleet approval. Unsigned fleet discovery
-examines every permanent service slot under its observation budget, including
+reads consecutive occupied services until the first empty slot, subject to its observation deadline, including
 when Host has no local journal. Placement pools keep their own inventories.
-Historical approvals retain their original positional encoding and digest. Fresh service-only fleets may set the same optional ceiling. Host binds the ceiling and bootstrap service count into the Root creation approval and install bytes. An exact retry of an admitted service consumes no new slot. The 40,000 default is an admission backstop. Aggregate journal, custody and directory budgets remain independent constraints.
+Fresh Roots start without service records. Admission assigns consecutive permanent service ordinals independently of placement IDs. Host journals use child-1, child-2 and subsequent numbered directories. Superseded records require their original executable. Fresh service-only fleets may set the same optional ceiling. Host binds the ceiling and bootstrap service count into the Root creation approval and install bytes. An exact retry of an admitted service consumes no new slot. The 40,000 default is an admission backstop. Per-child record budgets, custody response sizes and directory limits apply independently.
 
-The CMJ1 journal and CMS1 artifact records require a fresh installation. A Root using CUJG or earlier keeps its
-original executable. On a fresh Root, adding a service preserves the existing
+The per-child stable tables require a fresh installation. Earlier Roots keep their original executable. On a fresh Root, adding a service preserves the existing
 canister principals, signed attempts, funding approvals and upgrade targets.
 
-Root returns the ID, creation and upgrade journal, Store sources and lifecycle evidence together for every permanent slot. Host verifies the service IDs and their order before consuming the selected observation. Empty slots and the current and completed Store operations are explicit. Child recovery and Root maintenance retain distinct observation authorities.
+Root returns the ID, creation and upgrade journal, Store sources and lifecycle evidence together for every permanent slot. Host verifies the service IDs and their order before consuming the selected observation. A successful controller inventory pages retained installations. Host separately observes slots with local operations. Current and completed Store operations are explicit. Child recovery and Root maintenance retain distinct observation authorities.
 
 Each pattern's useful journey includes creation, resolution, bounded growth where
 applicable, upgrade and interrupted-operation recovery. Before extending to many
@@ -1338,6 +1332,10 @@ selected. Canic must not grow a substitute allocator or copy private supplier
 qualification runtime code to bridge the gap.
 
 Use one qualified executor/timer provider instance in a composed canister. The scheduler owns wakeups; the domain owns durable demand. Each recovery-critical task retains its operation and attempt fence. A bounded independently rearmed watchdog can recover abandoned work, but does not create new business authority. Stale callbacks cannot clear successors.
+
+Root queues eligible child creation and upgrade steps by deadline. One dispatcher feeds four independent execution timers. An outstanding call occupies only its own execution slot. If a callback traps, its child stays fenced until authenticated reconciliation or the existing upgrade reconstruction path; other due children can use the freed slot. The retained journals own every attempt and deadline. Root validates all retained children and reconstructs the deadline queue at upgrade. Recurring named-service funding and directory delivery still register separate timers for active grants and delivery triggers.
+
+Placement reservations and payments persist by identity so changing one pool does not serialize the others. The keyed legacy component registry at revision 377fbceb3994c9d1f3033979ef4e4ce9e6b85801 supplies the storage precedent.
 
 Heap exclusion belongs to the executing task and must release when the executor
 cleans up a trapped callback. Releasing it permits observation of the retained
@@ -1577,9 +1575,7 @@ two-slot Root to concurrent shared and dedicated placement.
 [Index regressions and history](https://github.com/dragginzgame/canic-legacy/blame/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/placement/index/tests.rs)
 and [sharding regressions](https://github.com/dragginzgame/canic-legacy/blob/377fbceb3994c9d1f3033979ef4e4ce9e6b85801/crates/canic-core/src/workflow/placement/sharding/tests.rs).
 
-Root allocates shared shards from a dedicated list of child identities. The first
-two entries retain the original HRW scoring inputs. Permanent service reservations
-use a separate list. A count increase preserves existing assignments, HRW inputs and
+Root allocates shared shards from a dedicated list of placement identities. Permanent services have a separate namespace. A count increase preserves existing assignments, HRW inputs and
 retained claim identities. A readiness result belongs to a shard claim only when
 the slot and retained creation generation match. Dedicated project slots need
 their own approval and a custody format that accounts for every issued child.
@@ -1645,16 +1641,15 @@ The registry retains completed project keys on its own Storage lease. Root authe
 retry through that index before reserving a slot. On reopen, check every project
 claim against its indexed position and refuse a missing or inconsistent index.
 The previous sharding Root layout requires its original executable.
-Fresh placement Roots use the PL12 ledger and the `canic.placement.configure_subnet_capacity.v1` frame, which retains the explicit large-subnet opt-in. PL12 retains Root’s own funding approvals. Each application payer retains its operator and revocation path. Roots with earlier placement ledgers require their original executable. The subnet ceiling is separate from the capacities of permanent services,
+Fresh placement Roots use keyed placement records and the `canic.placement.configure_subnet_capacity.v1` frame, which retains the explicit large-subnet opt-in. Root retains each funding approval in its own row. Each application payer retains its operator and revocation path. Roots with earlier placement ledgers require their original executable. The subnet ceiling is separate from the capacities of permanent services,
 shared shards and registry instances. A project and its singleton ledger each
 consume one reservation. The current slot representation still bounds each
 family separately; larger registries need indexed child journals and Store custody.
 
 Root counts ordinary reservations already present when the ceiling is admitted.
-Its mixed-fleet ledger records which ordinary slots belong to permanent children.
+Its placement table records each ordinary slot reserved for a permanent child.
 Shard selection skips these slots. On reopen Root checks total reservations
-against its creation journal. Pool-only ledgers retain their historical encoding
-and allocation identities. The installed directory suite races both placement
+against its creation journal. The installed directory suite races both placement
 systems for the last slot and recovers the winning assignment after Root upgrade.
 
 To raise a live pool from two to six, keep its original release, install bytes,
@@ -1926,7 +1921,7 @@ identify a `stop_child_funding` request on Root. Root handles its own approvals 
 verifies the retained application parent before forwarding a stop to that owner.
 The controller's shard and standby observations and the former Root's standby handoff
 observation are replicated calls. Fresh Roots expose `execute_snapshot_step` and `lookup_snapshot_step` with
-the existing snapshot frames. Signed calls retain their original method names.
+the existing snapshot frames. Each step reserves its own reply budget and records its original result under the operation and step identity. Opening the ledger does not load previous result payloads. Signed calls retain their original method names.
 
 
 A hub without a database can mount the retained role and Auth receiver lifecycle
@@ -2171,8 +2166,7 @@ unfinished publication authority under different Root code. The existing
 bounded serial upgrade chain retains target, code, source and slot authority.
 Current Root installations accept only the identified service journal and Store delivery format. Previous images require their original executable. Host Root maintenance binds the
 Store identity/code and every child's original creation and historical upgrade
-delivery, including retention pins and cache deadlines. Both Root observation modes return one record per permanent service ID with its journal, Store source and lifecycle arguments. Empty slots are explicit. Replicated full-custody
-observations must match before and after the original direct install attempt;
+delivery, including retention pins and cache deadlines. Host requests the selected child and approval when observing deployment. During Root maintenance it reads the inventory, every service slot and every upgrade in separate replicated pages. Empty slots are explicit. Each pass must observe one Root revision and match the approved custody before and after the original direct install attempt;
 legacy inline observations cannot substitute. Store authority/code/placement and
 child identity/code/controllers are independently checked. Only completed
 maintenance advances Root code authority for subsequent work. Two Host-driven
@@ -2263,8 +2257,7 @@ callback faults qualify recovery through observation without repeating stop.
 Root replacement preserves that record. Stopped status under the approved old
 code and sole Root control establishes the drain boundary, even when observed
 after the dispatch deadline. This does not rely on canister-version arithmetic.
-The CMJ1 journal retains current and completed attempts in the original checked
-allocation. Existing child-only reads refuse Store custody; after a second
+The Root metadata cell retains current and completed Store attempts. Existing child-only reads refuse Store custody; after a second
 attempt, full-history observation is required so Root maintenance cannot omit any
 predecessor. Older executables reject the new journal rather than losing history.
 
@@ -2282,12 +2275,7 @@ records and Stores without the new observation cannot acquire it by assumption.
 New attempts select Store 0.8’s explicit active/removed entry and defined
 `(name, removed, version)` order. The selected scan contract survives before the
 first page; its cursor retains the removed flag, and its digest has a separate
-domain including the entry kind. Historical attempts retain method 113, their
-original digest and name/version ordering, including an existing refusal. Their
-Wire discriminants and Host JSON encodings stay exact. Versioned evidence uses a
-new discriminant rejected by historical readers; CMJ1 preserves that evidence across supported Root
-upgrades. Fresh attempts require method 117; missing support blocks before
-stop without falling back.
+domain including the entry kind. Root retains only entry-scan evidence. Unsupported Store scans block before stop. Existing fleets and attempts require their original executables.
 
 Root's separate `remove_store_artifact` contract forwards one exact deletion or cancellation
 under captured controller authority and the original dispatch deadline. Store
@@ -2353,7 +2341,7 @@ admission and bounded continuations; Root remains the sole management-effect own
 Completion points to an admitted signed Ready observation rather than duplicating
 the runtime journal. Apply permits at most 32 continuations per invocation and
 4096 observations per operation. Reaching a bound retains blocked exposure.
-Up to eight attempts are retained. Only a completed predecessor admits the next
+Root retains every admitted attempt. Only a completed predecessor admits the next
 sequence and exact code transition; replay addresses the original approval and
 callbacks match both approval and phase. There is no reset, cancellation or history
 eviction. Live use, larger infrastructure replacements and explicit repair of
@@ -2425,10 +2413,7 @@ child planning now selects a completed publication operation, freezes its immuta
 manifest and Store code, and reuses the existing Store-backed creation/upgrade
 contracts. Observations validate complete source and pin custody. Fresh whole
 fleets publish content-hash releases, converge serial child upgrades and preserve
-full Store custody during Root maintenance. Bounded repeat Store replacement
-qualifies subsequent Root and child upgrades. Root retains at most eight attempts
-inside its original allocation, with exact replay and approval/phase callback
-fencing. Every successor binds the next sequence and predecessor code; incomplete
+full Store custody during Root maintenance. Repeated Store replacement qualifies subsequent Root and child upgrades. Root stores each attempt independently, preserves exact replay, and checks the approval and phase on each callback. Every successor binds the next sequence and predecessor code; incomplete
 or uncertain work cannot be replaced. Complete history survives Root maintenance
 and is never evicted. Inline-to-Store migration remains pending. See the
 [current implementation scope](../demos/wasm-store.md). First prove fresh
@@ -2476,6 +2461,8 @@ Structural Wasm finalization is excluded from the initial product. A future exec
 Artifact publication is atomic and content-addressed. Verify uploads/chunks before installation and bind retention to unfinished operations. A cache can reproduce known bytes but cannot supply missing approval or qualification. Passive inspection preserves externally supplied bytes and reports unknown provenance honestly.
 
 ## 13 Persistent releases checkpoints and recovery
+
+Root persists creation and upgrade journals and artifact custody in separate stable B-trees keyed by child identity. Root bootstrap policy and Store maintenance evidence share a separate bounded record. A child transition writes only its affected records. This fresh-install layout follows the keyed registry at canic-legacy revision 377fbceb3994c9d1f3033979ef4e4ce9e6b85801 (crates/canic-control-plane/src/storage/stable/component_registry). The aggregate leases introduced for the two-child starter cannot reopen under this layout.
 
 ### Application persistence across ordinary upgrades
 
@@ -2565,7 +2552,7 @@ restoration stays fenced until explicit acceptance/reopening. No automatic
 reopening policy or profile application migration is part of this first slice.
 
 For the counter, the maintainer selected its installing Root as surviving
-recovery authority. The single-use capture and restore each retain their own
+recovery authority. Each capture and restore retains its own
 fence and stop. The operator admits allocation and load separately. Starting
 the restored counter leaves the captured fence intact. Root mediates a fresh
 acceptance generation and a separate explicit reopen call. Original slots are
@@ -2589,6 +2576,14 @@ Subnet-loss recovery and a coordinated restore across tens of thousands of
 independently changing canisters are deferred.
 
 Every Root build includes snapshot execution, lookup and native snapshot reader configuration. Fresh installs include the snapshot lease. Roots with an older layout missing that lease require a fresh install. The planned recurring scheduler will also be included in every Root build. The separate history canister and Host IC Backup integration have been retired.
+
+The management canister allows ten live snapshots per target. At capacity, a capture or restore allocation may replace the exact snapshot ID in the approval. Canic
+retains exact step evidence separately from that inventory. A snapshot workflow
+reserves its target through completion. An unresolved effect or application
+fence stays with that child across Root upgrades. Root maintenance requires all
+targets to be quiescent. Maintenance custody observations must page and verify
+the complete child and Store upgrade histories.
+[IC resource limits](https://docs.internetcomputer.org/references/resource-limits/)
 
 **Proposed initial fleet policy**
 
@@ -2882,6 +2877,13 @@ documents the cost of polling a healthy pool.
 
 #### Standby minimum, replenishment and surplus imports
 
+The fleet chooses its spare target, paid creation allowance and approved imports.
+Each source supports up to 255 entries within the subnet ceiling. The aggregate
+available count includes all sources. Each application payer retains one funding
+grant per approved direct child without a fixed child count. Per-edge budgets,
+installation generations and pending debits still govern payment.
+
+
 The fleet operator needs three flows: establish a minimum available inventory,
 replenish it after allocations, and contribute specific surplus principals.
 Use one fleet-level `min_available_spares` for both initial fill and replenishment.
@@ -3053,7 +3055,7 @@ inspect progress and recover supported interruptions through CLI commands,
 then upgrade while preserving the application's invariant. The same definition
 must serve a second isolated fleet. The initial whole-fleet path now deploys a
 new Root with permanent children, resumes the same authority, and derives its next child
-upgrade from retained completion, retaining at most eight upgrades per child. Matching
+upgrade from retained completion, retaining the complete sequence for each child. Matching
 artifacts report no change against
 retained completion, not freshly observed network state. A separate Root-only
 maintenance plan now preserves the full completed journal through the direct
@@ -3061,7 +3063,7 @@ installation owner, then advances the Root binding for future child plans.
 The replacement must support the controller-only full-custody observation.
 Both sides of maintenance must answer the same identified full-custody contract. Unknown older owners, unfinished work and combined Root/child changes
 are refused; a missing endpoint never authorizes a fallback.
-Unbounded upgrade history, existing-fleet adoption and larger trees remain open. `fleet reconcile`
+Existing-fleet adoption and larger trees remain open. `fleet reconcile`
 requests recovery of an exact retained creation/upgrade approval on a compatible
 Root, retaining original effect limits and ordered signed-attempt custody.
 Maintenance of active/uncertain work, other old-owner transitions and Root replacement

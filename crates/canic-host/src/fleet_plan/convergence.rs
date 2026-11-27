@@ -236,12 +236,7 @@ pub(super) fn plan(
     }
     if desired.store.artifact.sha256 != store_binding.module {
         let sequence = store_history.len() + usize::from(store_operation.is_some()) + 1;
-        if sequence > canic_management_protocol::store_maintenance::MAX_UPGRADES {
-            return Err(Error::Blocked(
-                "Root Store maintenance history is full; retained evidence cannot be evicted"
-                    .into(),
-            ));
-        }
+
         if !changed.is_empty() || desired.root.artifact.sha256 != root_module {
             return Err(Error::Blocked(
                 "change Store, Root and child artifacts in separate reviewed windows".into(),

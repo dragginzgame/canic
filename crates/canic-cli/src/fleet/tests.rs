@@ -135,7 +135,7 @@ fn report_escapes_untrusted_text_and_labels_partial_inventory() {
         wallet: None,
     };
     snapshot.managers.push(canic_host::FleetManager {
-        slot: None,
+        slot: canic_management_protocol::children::ChildId::FIRST,
         upgrade: None,
         network_id: "local".into(),
         manager: "manager<script>".into(),

@@ -1,6 +1,13 @@
 use super::*;
 use canic_management_protocol::backup::{Kind, Operation};
 
+fn runtime(
+    fresh: bool,
+    memory: &ic_storage::DefaultMemoryImpl,
+) -> ic_storage::MemoryRuntime<ic_storage::DefaultMemoryImpl> {
+    canic::storage::bootstrap(memory.clone(), fresh, "manager", &[KEY], 512)
+}
+
 fn binding() -> Binding {
     Binding {
         operation: Operation {
@@ -28,10 +35,12 @@ fn binding() -> Binding {
 #[test]
 fn original_slots_survive_reopen_and_conflicts_never_replace() {
     let b = binding();
-    let mut l = Ledger::default();
+    let memory = DefaultMemoryImpl::default();
+    let mut l = Ledger::open(&runtime(true, &memory), true);
     l.reserve(b.clone()).unwrap();
     assert!(l.occupied());
-    l = Ledger::open(&l.encode());
+    drop(l);
+    l = Ledger::open(&runtime(false, &memory), false);
     assert_eq!(l.lookup(&b).unwrap().outcome, Outcome::Pending);
     for changed in [0, 1, 2, 3] {
         let mut other = b.clone();
@@ -48,31 +57,41 @@ fn original_slots_survive_reopen_and_conflicts_never_replace() {
     next.step = Step::Metadata;
     assert_eq!(l.reserve(next.clone()), Err(Error::Busy));
     l.complete(&b, Outcome::Reply(vec![8, 9]));
-    l = Ledger::open(&l.encode());
+    drop(l);
+    l = Ledger::open(&runtime(false, &memory), false);
     assert_eq!(l.lookup(&b).unwrap().outcome, Outcome::Reply(vec![8, 9]));
     l.reserve(next).unwrap();
 }
 
 #[test]
-fn oversized_results_remain_pending_and_liabilities_never_refund() {
+fn oversized_results_stay_pending_and_chunk_history_reopens() {
     let b = binding();
-    let mut l = Ledger::default();
+    let memory = DefaultMemoryImpl::default();
+    let mut l = Ledger::open(&runtime(true, &memory), true);
     l.reserve(b.clone()).unwrap();
     l.complete(&b, Outcome::Reply(vec![0; 1025]));
     assert_eq!(l.lookup(&b).unwrap().outcome, Outcome::Pending);
     let mut new = b.clone();
     new.operation.id = [8; 16];
     assert_eq!(l.reserve(new), Err(Error::Busy));
-    let mut l = Ledger::default();
-    for index in 0..MAX_STEPS {
+    let memory = DefaultMemoryImpl::default();
+    let mut l = Ledger::open(&runtime(true, &memory), true);
+    for index in 0..300 {
         let mut b = b.clone();
-        b.step = Step::Read(index as u32);
+        b.step = Step::Read(index);
+        b.reply_bytes = 1_048_576;
         l.reserve(b.clone()).unwrap();
         l.complete(&b, Outcome::Reply(vec![]));
     }
-    let mut b = b.clone();
+    drop(l);
+    let mut l = Ledger::open(&runtime(false, &memory), false);
+    let mut last = b.clone();
+    last.step = Step::Read(299);
+    last.reply_bytes = 1_048_576;
+    assert_eq!(l.lookup(&last).unwrap().outcome, Outcome::Reply(vec![]));
+    let mut b = b;
     b.step = Step::FinalStatus;
-    assert_eq!(l.reserve(b), Err(Error::Capacity));
+    l.reserve(b).unwrap();
 }
 
 #[test]
@@ -80,7 +99,8 @@ fn rewind_admission_uses_the_surviving_capture_and_current_phase() {
     use canic_management_protocol::backup::{Effect, Request, management::CanisterArgs};
     let mut capture = binding();
     capture.step = Step::Fence;
-    let mut ledger = Ledger::default();
+    let memory = DefaultMemoryImpl::default();
+    let mut ledger = Ledger::open(&runtime(true, &memory), true);
     let mut remember = |b: &Binding| {
         ledger.reserve(b.clone()).unwrap();
         ledger.complete(b, Outcome::Reply(vec![]));
@@ -118,7 +138,8 @@ fn rewind_admission_uses_the_surviving_capture_and_current_phase() {
         cycle_limit: 100,
         reply_bytes: 128,
     };
-    let ledger = Ledger::open(&ledger.encode());
+    drop(ledger);
+    let ledger = Ledger::open(&runtime(false, &memory), false);
     assert_eq!(ledger.admit_recovery(&request), Ok(()));
     let mut changed = request.clone();
     changed.operation.generation += 1;
@@ -143,4 +164,33 @@ fn rewind_admission_uses_the_surviving_capture_and_current_phase() {
             Err(Error::Busy)
         );
     }
+}
+
+#[test]
+fn target_fences_survive_upgrade_and_original_results_outlive_the_fence() {
+    let a = binding();
+    let mut b = a.clone();
+    b.operation.target = "sibling".into();
+    b.operation.id = [7; 16];
+    let memory = DefaultMemoryImpl::default();
+    let mut ledger = Ledger::open(&runtime(true, &memory), true);
+    ledger.reserve(a.clone()).unwrap();
+    ledger.reserve(b.clone()).unwrap();
+    ledger.complete(&b, Outcome::Reply(vec![1]));
+    let mut finish = b.clone();
+    finish.step = Step::FinalStatus;
+    ledger.reserve(finish.clone()).unwrap();
+    ledger.complete(&finish, Outcome::Reply(vec![]));
+    drop(ledger);
+    let mut ledger = Ledger::open(&runtime(false, &memory), false);
+    assert!(ledger.active("child").is_some());
+    assert!(ledger.active("sibling").is_none());
+    let mut next = b.clone();
+    next.operation.id = [8; 16];
+    ledger.reserve(next).unwrap();
+    assert_eq!(ledger.lookup(&b).unwrap().outcome, Outcome::Reply(vec![1]));
+    assert_eq!(ledger.lookup(&a).unwrap().outcome, Outcome::Pending);
+    let mut stale = b;
+    stale.step = Step::Metadata;
+    assert!(ledger.reserve(stale).is_err());
 }

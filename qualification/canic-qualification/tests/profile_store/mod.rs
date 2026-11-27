@@ -447,9 +447,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     );
     let maintenance: canic_management_protocol::store_maintenance::Status =
         serde_json::from_value(store_status["store_maintenance"].clone()).unwrap();
-    let canic_management_protocol::store_maintenance::Scan::Entries(Some(preservation)) =
-        &maintenance.preservation
-    else {
+    let Some(preservation) = maintenance.preservation.as_ref() else {
         panic!("new Store maintenance must retain the explicit entries scan");
     };
     assert!(preservation.complete);
@@ -584,7 +582,10 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     complete(&config, publication["operation"].as_str().unwrap(), &signer).await;
     let addition = plan();
     assert_eq!(addition["action"], "add_child");
-    assert_eq!(addition["plan"]["action"]["approval"]["slot"], "Second");
+    assert_eq!(
+        addition["plan"]["action"]["approval"]["slot"],
+        serde_json::json!(canic_management_protocol::children::ChildId::SECOND)
+    );
     let added = complete(&config, addition["operation"].as_str().unwrap(), &signer).await;
     let archive = CanisterId::from_text(added["canister"].as_str().unwrap()).unwrap();
     assert_ne!(archive, child);
@@ -756,7 +757,7 @@ async fn profile_store_fleet_preserves_users_across_child_and_owner_upgrades() {
     );
     assert!(retained["children"][0]["outcome"]["canister"].is_null());
     let journal = PathBuf::from(refused["state_dir"].as_str().unwrap()).join(id);
-    assert!(!journal.join("child/receipt.json").exists());
+    assert!(!journal.join("child-1/receipt.json").exists());
     assert_eq!(status(pic, refused_root).await.attempts, [1, 1, 1]);
     assert!(
         super::metrics::read(pic, refused_root, operator)

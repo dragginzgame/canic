@@ -4,17 +4,10 @@ mod tests;
 
 use super::{Placement, ShardTarget, grow_shard};
 pub use ic_platform_types::Principal;
-use ic_storage::{
-    DefaultMemoryImpl, MemoryRuntime, StableKey,
-    adapter::{StableBTreeMap, StableCell},
-};
+use ic_storage::{DefaultMemoryImpl, MemoryRuntime, adapter::StableBTreeMap};
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-const FRAME: ic_wire::Encoding = ic_wire::Encoding::Frame {
-    method: ic_wire::method_id("canic.hub.route_roster.v1"),
-    direction: ic_wire::Direction::Response,
-};
 const LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: 16384,
     allocation: 65536,
@@ -34,16 +27,12 @@ struct Shard {
     occupied: u32,
     draining: bool,
 }
-#[derive(Serialize, Deserialize)]
 struct Roster {
     operator: Option<Principal>,
     root: Principal,
     pools: Vec<Pool>,
 }
 impl Roster {
-    fn encode(&self) -> Vec<u8> {
-        ic_wire::encode(self, FRAME, LIMITS).expect("bounded shard roster")
-    }
     fn pool(&self, name: &str) -> Option<usize> {
         self.pools.iter().position(|p| p.name == name)
     }
@@ -53,8 +42,26 @@ type Owners = StableBTreeMap<(u8, [u8; 30]), (u8, u8)>;
 
 struct Index {
     roster: Roster,
-    cell: StableCell<Vec<u8>>,
+    rows: StableBTreeMap<[u8; 3], Vec<u8>>,
     owners: Owners,
+}
+fn bytes(value: &impl Serialize) -> Vec<u8> {
+    ic_wire::encode(value, ic_wire::Encoding::Payload, LIMITS).expect("route roster row")
+}
+fn decode<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> T {
+    ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS).expect("retained route roster row")
+}
+impl Index {
+    fn save_shard(&mut self, pool: usize, shard: usize) {
+        self.rows.insert(
+            [
+                2,
+                pool.try_into().expect("pool ordinal"),
+                shard.try_into().expect("shard ordinal"),
+            ],
+            bytes(&self.roster.pools[pool].shards[shard]),
+        );
+    }
 }
 thread_local! {
     static INDEX: RefCell<Option<Index>> = const { RefCell::new(None) };
@@ -79,34 +86,45 @@ pub fn open(
     owners_key: &str,
     install_root: Option<(Principal, Option<Principal>)>,
 ) {
-    let cell = crate::storage::cell(
-        runtime,
-        roster_key,
-        LIMITS.bytes,
-        install_root.map(|(root, operator)| {
-            assert!(
-                operator.is_none_or(
-                    |p| p != Principal::anonymous() && p != Principal::management_canister()
-                ),
-                "invalid hub operator"
-            );
-            Roster {
-                operator,
-                root,
-                pools: vec![],
-            }
-            .encode()
-        }),
-    );
-    let roster: Roster = ic_wire::decode(cell.get(), FRAME, LIMITS).expect("retained shard roster");
-    let lease = runtime
-        .open_memory(&StableKey::parse(owners_key).expect("route index key"))
-        .expect("route index lease");
-    let owners = if install_root.is_some() {
-        StableBTreeMap::create(lease)
-    } else {
-        StableBTreeMap::load(lease)
+    let fresh = install_root.is_some();
+    let mut rows: StableBTreeMap<[u8; 3], Vec<u8>> =
+        crate::storage::map(runtime, roster_key, fresh);
+    if let Some((root, operator)) = install_root {
+        assert!(
+            operator.is_none_or(
+                |p| p != Principal::anonymous() && p != Principal::management_canister()
+            ),
+            "invalid hub operator"
+        );
+        rows.insert([0, 0, 0], bytes(&(root, operator)));
+    }
+    let (root, operator) = decode(&rows.get(&[0, 0, 0]).expect("route authority"));
+    let mut roster = Roster {
+        root,
+        operator,
+        pools: Vec::new(),
     };
+    for entry in rows.iter() {
+        match *entry.key() {
+            [0, 0, 0] => (),
+            [1, n, 0] => {
+                assert_eq!(usize::from(n), roster.pools.len(), "pool ordinal");
+                let (name, limit) = decode(&entry.value());
+                roster.pools.push(Pool {
+                    name,
+                    limit,
+                    shards: Vec::new(),
+                });
+            }
+            [2, n, i] => {
+                let shards = &mut roster.pools[usize::from(n)].shards;
+                assert_eq!(usize::from(i), shards.len(), "shard ordinal");
+                shards.push(decode(&entry.value()));
+            }
+            _ => panic!("unknown route row"),
+        }
+    }
+    let owners: Owners = crate::storage::map(runtime, owners_key, fresh);
     let occupied: u64 = roster
         .pools
         .iter()
@@ -119,7 +137,7 @@ pub fn open(
     assert_eq!(owners.len(), occupied, "retained route count");
     INDEX.set(Some(Index {
         roster,
-        cell,
+        rows,
         owners,
     }));
 }
@@ -247,7 +265,7 @@ async fn reserve<E>(
                 assert!(old.is_none(), "route changed");
                 s.occupied += 1;
                 let target = s.target.clone();
-                i.cell.set(i.roster.encode());
+                i.save_shard(n, slot);
                 Ok(Reservation::Assigned(target))
             } else {
                 Ok(Reservation::Grow(
@@ -324,7 +342,8 @@ pub fn configure_shard_routes(
             limit,
             shards: vec![],
         });
-        index.cell.set(index.roster.encode());
+        let n = u8::try_from(index.roster.pools.len() - 1).unwrap();
+        index.rows.insert([1, n, 0], bytes(&(pool, limit)));
         Ok(())
     })
 }
@@ -344,7 +363,7 @@ fn record_shard(pool: &str, ordinal: u8, target: ShardTarget) {
                 occupied: 0,
                 draining: false,
             });
-            i.cell.set(i.roster.encode());
+            i.save_shard(n, usize::from(ordinal));
         }
     });
 }
@@ -394,7 +413,7 @@ pub fn confirm_move(
             (u8::try_from(to).unwrap(), u8::try_from(from).unwrap()),
         );
         shards[from].occupied -= 1;
-        i.cell.set(i.roster.encode());
+        i.save_shard(n, from);
         Ok(())
     })
 }
@@ -429,7 +448,7 @@ pub fn release(pool: &str, subject: Principal, target: &ShardTarget) -> Result<(
             }
             i.owners.remove(&key);
             shards[slot].occupied -= 1;
-            i.cell.set(i.roster.encode());
+            i.save_shard(n, slot);
         }
         Ok(())
     })
@@ -479,17 +498,23 @@ fn fence(caller: Principal, target: &ShardTarget) -> Result<(Principal, u32), su
         if index.roster.operator != Some(caller) {
             return Err(super::ShardError::Unauthorized);
         }
-        let shard = index
+        let (pool, slot, shard) = index
             .roster
             .pools
             .iter_mut()
-            .flat_map(|pool| &mut pool.shards)
-            .find(|shard| shard.target == *target)
+            .enumerate()
+            .find_map(|(p, pool)| {
+                pool.shards
+                    .iter_mut()
+                    .enumerate()
+                    .find(|(_, shard)| shard.target == *target)
+                    .map(|(slot, shard)| (p, slot, shard))
+            })
             .ok_or(super::ShardError::GenerationChanged)?;
         let occupied = shard.occupied;
         if !shard.draining {
             shard.draining = true;
-            index.cell.set(index.roster.encode());
+            index.save_shard(pool, slot);
         }
         Ok((index.roster.root, occupied))
     })

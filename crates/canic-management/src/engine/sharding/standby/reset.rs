@@ -1,4 +1,5 @@
 //! Only the exact released worker may be stopped and uninstalled.
+use super::super::{Key, ordinal};
 use super::{Asset, MANAGEMENT_LIMITS, STATE, api, management, mgmt};
 use canic::sharding::standby::StandbyPoolError;
 use canic::sharding::{ShardTarget, standby::ResetPhase};
@@ -69,7 +70,7 @@ pub async fn reset(
         let minimum = workers
             .minimum_reuse_cycles()
             .map_err(|e| StandbyPoolError::NotConfigured(e.into()))?;
-        let journal = &state.journal.0[&slot];
+        let journal = &state.journal.rows()[&slot];
         if journal.1.approval.is_some() {
             return Err(StandbyPoolError::CustodyOccupied(
                 "worker has separate upgrade custody".into(),
@@ -126,11 +127,17 @@ pub async fn reset(
                 deadline,
                 balance,
             });
+            let i = state.pools.returns.len() - 1;
+            state
+                .pool
+                .put(&Key::Return(ordinal(i)), &state.pools.returns[i]);
             super::log_surplus(&state.pools);
         } else {
             *asset = Asset::Reset(target.shard, target.allocation, deadline, phase);
         }
-        state.pool.set(state.pools.encode());
+        state
+            .pool
+            .put(&Key::Standby(ordinal(index)), &state.pools.standby[index]);
         Ok(())
     })?;
     if let Some(method) = method {

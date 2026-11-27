@@ -85,7 +85,13 @@ async fn controller_queries_preserve_state_and_upgrade_resets_only_diagnostics()
     assert_eq!(complete.phase, Phase::Ready);
     let ready = logs(None).await;
     assert_eq!(ready.entries[0].source, "management");
-    assert_eq!(ready.entries[0].message, "child 0: Ready");
+    assert_eq!(
+        ready.entries[0].message,
+        format!(
+            "child {}: Ready",
+            canic_management_protocol::children::ChildId::FIRST.index()
+        )
+    );
     let earlier = logs(Some(ready.entries[0].sequence)).await;
     assert_eq!(earlier.entries.last(), first.entries.last());
     assert!(
@@ -177,7 +183,13 @@ async fn controller_queries_preserve_state_and_upgrade_resets_only_diagnostics()
     pic.advance_time(Duration::from_secs(121)).await;
     settle(pic).await;
     let expired = logs(None).await;
-    assert_eq!(expired.entries[0].message, "child 1: Expired");
+    assert_eq!(
+        expired.entries[0].message,
+        format!(
+            "child {}: Expired",
+            canic_management_protocol::children::ChildId::SECOND.index()
+        )
+    );
     assert_eq!(expired.entries[0].level, "Warn");
     assert_eq!(
         owner.close(std::time::Duration::from_secs(10)).await,

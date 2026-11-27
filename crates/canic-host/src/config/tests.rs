@@ -1095,6 +1095,14 @@ principals = ["ryjl3-tyaaa-aaaaa-aaaba-cai", "r7inp-6aaaa-aaaaa-aaabq-cai"]
         )),
         "{error}"
     );
+    let larger: Config = toml::from_str(
+        &source
+            .replace("subnet_child_limit = 4", "subnet_child_limit = 255")
+            .replace("min_available_spares = 2", "min_available_spares = 32")
+            .replace("maximum_creations = 3", "maximum_creations = 255"),
+    )
+    .unwrap();
+    larger.validate().unwrap();
     let invalid: Config =
         toml::from_str(&source.replace("min_available_spares = 2", "min_available_spares = 5"))
             .unwrap();

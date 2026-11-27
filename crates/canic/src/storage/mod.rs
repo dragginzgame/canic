@@ -140,3 +140,29 @@ pub fn cell<M: MemoryBacking>(
         StableCell::load(lease).expect("load retained cell")
     }
 }
+
+/// Create or reopen a B-tree on an admitted named lease.
+///
+/// # Panics
+/// Traps if the key was not admitted or the backing does not match the lifecycle.
+#[must_use]
+pub fn map<K, V, M>(
+    runtime: &MemoryRuntime<M>,
+    key: &str,
+    fresh: bool,
+) -> ic_storage::adapter::StableBTreeMap<K, V, M>
+where
+    M: MemoryBacking,
+    K: ic_storage::adapter::Storable + Ord + Clone,
+    V: ic_storage::adapter::Storable,
+{
+    use ic_storage::adapter::StableBTreeMap;
+    let lease = runtime
+        .open_memory(&StableKey::parse(key).expect("map key"))
+        .expect("map lease");
+    if fresh {
+        StableBTreeMap::create(lease)
+    } else {
+        StableBTreeMap::load(lease)
+    }
+}

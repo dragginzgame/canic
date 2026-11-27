@@ -5,7 +5,53 @@ use crate::{
     DeploymentName, create_plan,
     tests::{directory, input},
 };
-use canic_management_protocol::{Status, custody::Custody};
+use canic_management_protocol::{
+    Status,
+    custody::{self, Custody},
+};
+
+fn save_pages(dir: &Path, plan: &Plan, side: &str) {
+    let full = stored::expected(plan).unwrap();
+    for (i, key) in full.keys().enumerate() {
+        let page = application::CustodyPage {
+            revision: (5, 7),
+            key,
+            item: full.item(key),
+        };
+        let bytes = ic_wire::encode(
+            &page,
+            ic_wire::Encoding::Frame {
+                method: application::CUSTODY_PAGE,
+                direction: ic_wire::Direction::Response,
+            },
+            application::LIMITS,
+        )
+        .unwrap();
+        store::put(&page_path(&dir.join(side), i).join("reply.bin"), &bytes).unwrap();
+    }
+}
+
+#[test]
+fn paged_preflight_requires_every_reply_at_one_revision_in_order() {
+    let (dir, plan) = fixture();
+    save_pages(&dir, &plan, BEFORE);
+    assert!(retained_at(&dir, &plan, false).unwrap());
+    let full = stored::expected(&plan).unwrap();
+    let child_path = page_path(&dir.join(BEFORE), 1).join("reply.bin");
+    let child = std::fs::read(&child_path).unwrap();
+    let key = full.keys().nth(1).unwrap();
+    assert!(matches!(
+        check_page(&full, key, &child, &mut Some((5, 8))),
+        Err(Error::Blocked(_))
+    ));
+    let inventory = full.keys().next().unwrap();
+    assert!(matches!(
+        check_page(&full, inventory, &child, &mut None),
+        Err(Error::Blocked(_))
+    ));
+    std::fs::remove_file(child_path).unwrap();
+    assert!(!retained_at(&dir, &plan, false).unwrap());
+}
 
 fn fixture() -> (std::path::PathBuf, Plan) {
     let dir = directory();
@@ -57,8 +103,7 @@ pub(crate) fn action() -> crate::PlanAction {
         reference,
     };
     let store_id = stage.reference.store.clone();
-    let mut sources =
-        vec![None; canic_management_protocol::children::ChildId::HISTORICAL_SERVICES.len()];
+    let mut sources = vec![None; children.len()];
     sources[0] = Some(wire::Sources {
         creation: wire::Delivery {
             operation: stage
@@ -114,36 +159,8 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         .remove("store");
     assert!(serde_json::from_value::<Plan>(missing).is_err());
     let observed = wire::Custody {
-        children: {
-            let mut slots = [
-                plan.maintenance().unwrap()[0].clone(),
-                Custody {
-                    creation: Status::default(),
-                    upgrades: vec![],
-                },
-            ]
-            .into_iter();
-            (0..8)
-                .map(|_| {
-                    slots
-                        .next()
-                        .unwrap_or_else(|| canic_management_protocol::custody::Custody {
-                            creation: Default::default(),
-                            upgrades: vec![],
-                        })
-                })
-                .collect()
-        },
-        sources: (0..8)
-            .map(|i| {
-                plan.maintenance_store()
-                    .unwrap()
-                    .sources
-                    .get(i)
-                    .cloned()
-                    .flatten()
-            })
-            .collect(),
+        children: plan.maintenance().unwrap().to_vec(),
+        sources: plan.maintenance_store().unwrap().sources.clone(),
     };
     let frame = |v: &wire::Custody| {
         crate::root_custody::frame(
@@ -191,7 +208,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
             0 => changed.sources[0].as_mut().unwrap().creation.operation[0] ^= 1,
             1 => changed.sources[0].as_mut().unwrap().creation.cache_deadline = Some(3),
             2 => changed.sources[0] = None,
-            3 => changed.children[1] = changed.children[0].clone(),
+            3 => changed.children[0].upgrades.push(Default::default()),
             _ => {
                 changed.sources[0]
                     .as_mut()
@@ -205,10 +222,10 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         }
         assert!(!matches_plan(&plan, "observe_root_custody", &frame(&changed)).unwrap());
     }
-    store::put(&dir.join("custody-before/reply.bin"), &frame(&observed)).unwrap();
+    save_pages(&dir, &plan, "custody-before");
     require_before(&dir, &plan).unwrap();
     assert!(!retained(&dir, &plan).unwrap());
-    store::put(&dir.join("custody-after/reply.bin"), &frame(&observed)).unwrap();
+    save_pages(&dir, &plan, "custody-after");
     assert!(retained(&dir, &plan).unwrap());
     let child_only_digest = plan.digest().unwrap();
     let operation = canic_management_protocol::store_maintenance::Status {
@@ -226,7 +243,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         phase: canic_management_protocol::store_maintenance::Phase::Reserved,
         stop_request: None,
         failure: None,
-        preservation: canic_management_protocol::store_maintenance::Scan::Legacy(None),
+        preservation: None,
         installation: None,
     };
     let mut full_plan = plan.clone();
@@ -277,11 +294,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
         assert!(!matches_plan(&full_plan, "observe_root_custody", &full_frame(&changed)).unwrap());
     }
     for side in ["custody-before", "custody-after"] {
-        store::put(
-            &dir.join("complete").join(side).join("reply.bin"),
-            &full_frame(&complete),
-        )
-        .unwrap();
+        save_pages(&dir.join("complete"), &full_plan, side);
     }
     assert!(retained(&dir.join("complete"), &full_plan).unwrap());
     complete_history_requires_every_retained_predecessor(&full_plan, &complete);
@@ -300,7 +313,7 @@ fn store_maintenance_preserves_exact_pins_sources_and_empty_slots() {
             0 => source.operation[0] ^= 1,
             1 => source.state = wire::PinState::Issued,
             2 => source.reference.store = "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
-            3 => store.sources[1] = store.sources[0].clone(),
+            3 => store.sources.push(store.sources[0].clone()),
             _ => {
                 store.sources.pop();
             }
@@ -330,14 +343,13 @@ fn complete_history_requires_every_retained_predecessor(plan: &Plan, previous: &
         digest: [7; 32],
         complete: true,
     };
-    first.preservation =
-        canic_management_protocol::store_maintenance::Scan::Legacy(Some(scan.clone()));
+    first.preservation = Some(scan.clone());
     first.installation = Some(wire::Installation {
         upload_request: [1; 32],
         request: Some([2; 32]),
         sender_version: Some(1),
         start_request: Some([3; 32]),
-        verification: canic_management_protocol::store_maintenance::Scan::Legacy(Some(scan)),
+        verification: Some(scan),
         activation_request: Some([4; 32]),
     });
     let mut next = first.clone();
@@ -385,7 +397,7 @@ fn complete_history_requires_every_retained_predecessor(plan: &Plan, previous: &
         }
         assert!(!matches_plan(&plan, "observe_root_custody", &frame(&changed)).unwrap());
     }
-    for case in 0..4 {
+    for case in 0..5 {
         let mut changed = plan.clone();
         let crate::PlanAction::MaintainRoot { store, .. } = &mut changed.action else {
             unreachable!()
@@ -394,7 +406,8 @@ fn complete_history_requires_every_retained_predecessor(plan: &Plan, previous: &
             0 => store.history[0].phase = wire::Phase::InstallIssued,
             1 => store.operation.as_mut().unwrap().approval.attempt.sequence = 3,
             2 => store.history[0].approval.module_hash = [9; 32],
-            _ => store.history = vec![store.history[0].clone(); wire::MAX_UPGRADES],
+            3 => store.history.clear(),
+            _ => store.history = vec![store.history[0].clone(); 8],
         }
         assert!(changed.validate().is_err());
     }

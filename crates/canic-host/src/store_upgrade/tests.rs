@@ -144,11 +144,16 @@ fn later_sequence_has_distinct_approval_and_observes_the_exact_attempt() {
     assert_eq!(approval(&next).unwrap().attempt.sequence, 2);
     let roundtrip: Plan = serde_json::from_slice(&serde_json::to_vec(&next).unwrap()).unwrap();
     assert_eq!(roundtrip, next);
-    for invalid in [0, wire::MAX_UPGRADES as u64 + 1] {
+    {
         let PlanAction::UpgradeStore { sequence, .. } = &mut next.action else {
             unreachable!()
         };
-        *sequence = invalid;
+        *sequence = 9;
+        assert!(next.validate().is_ok());
+        let PlanAction::UpgradeStore { sequence, .. } = &mut next.action else {
+            unreachable!()
+        };
+        *sequence = 0;
         assert!(next.validate().is_err());
     }
     let restored: Plan = serde_json::from_slice(&old_bytes).unwrap();
@@ -224,7 +229,7 @@ fn recovery_keeps_expired_effect_authority_and_cannot_select_advance() {
         phase: Phase::Ready,
         stop_request: None,
         failure: None,
-        preservation: canic_management_protocol::store_maintenance::Scan::Legacy(None),
+        preservation: None,
         installation: None,
     };
     assert!(admit(&plan, &status).is_ok());

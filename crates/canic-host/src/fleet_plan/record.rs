@@ -47,11 +47,9 @@ impl<'de> Deserialize<'de> for FleetPlan {
     }
 }
 
-// Preserve the first two historical paths; later paths use the service ordinal.
 pub(super) fn child_leaf(slot: ChildId) -> String {
-    match slot.service_index().expect("permanent child record") {
-        0 => "child".into(),
-        1 => "sibling".into(),
-        index => format!("child-{}", index + 1),
-    }
+    format!(
+        "child-{}",
+        slot.service_index().expect("permanent child record") + 1
+    )
 }

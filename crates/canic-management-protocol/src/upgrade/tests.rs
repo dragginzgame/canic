@@ -35,21 +35,21 @@ fn full_upgrade_history_fits_original_journal_budget() {
         creation_refund: Some(u128::MAX),
         ..Default::default()
     };
-    let history = vec![completed.clone(); MAX_UPGRADES - 1];
+    let history = vec![completed.clone(); 8 - 1];
     let limits = ic_wire::Limits {
         bytes: 8188,
-        allocation: (1 + MAX_UPGRADES) * crate::LIMITS.allocation,
-        nodes: (1 + MAX_UPGRADES) * crate::LIMITS.nodes,
+        allocation: (1 + 8) * crate::LIMITS.allocation,
+        nodes: (1 + 8) * crate::LIMITS.nodes,
         depth: crate::LIMITS.depth + 2,
     };
     let payload = (&creation, &completed, &history);
     let bytes = ic_wire::encode(&payload, ic_wire::Encoding::Payload, limits).unwrap();
     let decoded: (crate::Status, Status, Vec<Status>) =
         ic_wire::decode(&bytes, ic_wire::Encoding::Payload, limits).unwrap();
-    assert_eq!(decoded.2.len(), MAX_UPGRADES - 1);
+    assert_eq!(decoded.2.len(), 8 - 1);
     let custody = crate::custody::Custody {
         creation,
-        upgrades: vec![completed; MAX_UPGRADES],
+        upgrades: vec![completed; 8],
     };
     let response = ic_wire::encode(
         &custody,

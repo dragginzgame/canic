@@ -355,9 +355,10 @@ async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
     let operation = upgrade_operation(network.clone());
     let root = operation.management_owner().unwrap().to_owned();
     let id = operation.network_id.clone();
+    let client = network.client().unwrap();
     let future = tokio::time::Instant::now() + Duration::from_secs(5);
     assert!(
-        observe_upgrade(&[], &id, &root, ChildId::FIRST, &network, future)
+        observe_upgrade(&[], &id, &root, ChildId::FIRST, &client, future)
             .await
             .is_none()
     );
@@ -368,7 +369,7 @@ async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
             "another-network",
             &root,
             ChildId::FIRST,
-            &network,
+            &client,
             future
         )
         .await
@@ -380,7 +381,7 @@ async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
             &id,
             "another-root",
             ChildId::FIRST,
-            &network,
+            &client,
             future
         )
         .await
@@ -392,7 +393,7 @@ async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
         &id,
         &root,
         ChildId::FIRST,
-        &network,
+        &client,
         tokio::time::Instant::now(),
     )
     .await
@@ -402,7 +403,7 @@ async fn unselected_exhausted_or_ambiguous_upgrade_observations_never_query() {
     assert_eq!(serde_json::to_value(&operations).unwrap(), before);
     let [operation] = operations;
     let ambiguous = [operation, upgrade_operation(network.clone())];
-    let unknown = observe_upgrade(&ambiguous, &id, &root, ChildId::FIRST, &network, future)
+    let unknown = observe_upgrade(&ambiguous, &id, &root, ChildId::FIRST, &client, future)
         .await
         .unwrap();
     assert!(unknown.reported.is_none());

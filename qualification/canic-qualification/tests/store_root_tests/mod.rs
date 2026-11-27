@@ -77,7 +77,7 @@ async fn root_custody(root: &Client<'_>) -> management::application::Custody {
     root.update(
         "observe_root_custody",
         management::application::CUSTODY,
-        &(),
+        &None::<canic_management_protocol::application::DeploymentSelector>,
         management::application::LIMITS,
     )
     .await
@@ -765,6 +765,4 @@ mod predecessor_store {
     pub(super) const STAGE: u64 = 50;
     pub(super) const ADVANCE: u64 = 51;
     pub(super) const OBSERVE: u64 = 52;
-    pub(super) const INSTALL: u64 = 53;
-    pub(super) const ACTIVATE: u64 = 54;
 }

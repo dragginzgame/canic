@@ -13,7 +13,7 @@ const INTERVAL: Duration = Duration::from_secs(30);
 pub(crate) async fn collect(
     root: &Path,
     managers: &[String],
-    identity: Option<&Path>,
+    identity: Option<&canic_host::InspectionSession>,
     wallet: Option<&str>,
     configuration: Option<&canic_host::SelectedFleet>,
 ) -> Result<Fleet> {

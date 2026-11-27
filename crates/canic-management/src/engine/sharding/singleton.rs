@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 pub(super) struct Registry {
     pub(super) grant: stored::SingletonGrant,
     // Original parent allocation generation maps to its child's custody and generation.
-    children: BTreeMap<[u8; 32], (ChildId, [u8; 32])>,
+    pub(super) children: BTreeMap<[u8; 32], (ChildId, [u8; 32])>,
 }
 
 impl super::Pools {
@@ -92,7 +92,7 @@ pub fn configure_singleton(grant: stored::SingletonGrant) -> Result<(), Refusal>
         if api::time() >= grant.expires_at_ns {
             return Err(Refusal::Time);
         }
-        if state.artifact.0.values().any(|artifact| {
+        if state.artifact.rows().values().any(|artifact| {
             let Artifact::Application(_, lifecycle) = artifact else {
                 return false;
             };
@@ -110,11 +110,12 @@ pub fn configure_singleton(grant: stored::SingletonGrant) -> Result<(), Refusal>
             Principal::from_text(&grant.registry).map_err(|_| Refusal::Binding)?,
         )?;
         delivery::admit(&grant.reference, &grant.reference.manifest.hash)?;
+        state.pool.put(&super::Key::Singleton, &grant);
         pools.singleton = Some(Registry {
             grant,
             children: BTreeMap::new(),
         });
-        state.pool.set(pools.encode());
+
         Ok(())
     })
 }
@@ -131,10 +132,10 @@ pub(super) fn request(role: &str, paid: Option<payment::Settlement>) -> Placemen
             .ok_or(Placement::GrowthRefused)?;
         let (index, parent) = pools.project(caller).ok_or(Placement::GrowthRefused)?;
         let parent_slot = ChildId::INSTANCES[index];
-        let parent_journal = &state.journal.0[&parent_slot].0;
+        let parent_journal = &state.journal.rows()[&parent_slot].0;
         if parent_journal.phase != Phase::Ready
             || parent_journal.worker != parent.principal
-            || state.artifact.0[&parent_slot]
+            || state.artifact.rows()[&parent_slot]
                 .sources()
                 .map(|s| s.creation.operation)
                 != Some(parent.generation)
@@ -142,14 +143,14 @@ pub(super) fn request(role: &str, paid: Option<payment::Settlement>) -> Placemen
             return Err(Placement::GrowthRefused);
         }
         if let Some(&(slot, generation)) = r.children.get(&parent.generation) {
-            let journal = &state.journal.0[&slot].0;
+            let journal = &state.journal.rows()[&slot].0;
             return Err(placement::resolve(
                 Allocation {
                     slot: slot.index() as u32,
                     generation,
                 },
                 journal.worker.as_deref(),
-                state.artifact.0[&slot]
+                state.artifact.rows()[&slot]
                     .sources()
                     .map(|s| s.creation.operation),
                 journal,
@@ -161,16 +162,7 @@ pub(super) fn request(role: &str, paid: Option<payment::Settlement>) -> Placemen
         if api::time() >= r.grant.expires_at_ns {
             return Err(Placement::GrowthRefused);
         }
-        let slot = state
-            .journal
-            .0
-            .keys()
-            .copied()
-            .filter(|s| s.service_index().is_some())
-            .rev()
-            .find(|s| state.journal.0[s].0.phase == Phase::Empty)
-            .or_else(|| ChildId::service(super::super::service_slots().len()))
-            .ok_or(Placement::Full)?;
+        let slot = ChildId::service(state.service_count()).ok_or(Placement::Full)?;
         let origin = paid.ok_or(Placement::GrowthRefused)?.origin();
         Ok((r.grant.clone(), slot, parent.generation, origin))
     });
@@ -193,7 +185,7 @@ pub(super) fn request(role: &str, paid: Option<payment::Settlement>) -> Placemen
     };
     STATE.with_borrow_mut(|cell| {
         let state = cell.as_mut().unwrap();
-        state.pools.permanent.insert(slot);
+        super::retain_permanent(state, slot);
         assert!(
             state
                 .pools
@@ -204,7 +196,9 @@ pub(super) fn request(role: &str, paid: Option<payment::Settlement>) -> Placemen
                 .insert(parent, (slot, generation))
                 .is_none()
         );
-        state.pool.set(state.pools.encode());
+        state
+            .pool
+            .put(&super::Key::SingletonChild(parent), &(slot, generation));
     });
     Placement::Pending(Allocation {
         slot: slot.index() as u32,
@@ -231,7 +225,7 @@ pub(super) fn validate(state: &State) {
             .and_then(|p| p.principal.as_deref())
             .expect("installed project");
         assert!(slots.insert(slot) && state.pools.permanent.contains(&slot));
-        let artifact = &state.artifact.0[&slot];
+        let artifact = &state.artifact.rows()[&slot];
         let source = &artifact.sources().expect("singleton release").creation;
         assert_eq!(source.operation, generation);
         assert_eq!(source.reference, r.grant.reference);

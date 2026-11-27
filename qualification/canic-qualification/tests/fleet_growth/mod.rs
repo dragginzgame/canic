@@ -93,7 +93,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         .unwrap()
         .to_owned();
     let envelope = std::fs::read(path.join("fleet.json")).unwrap();
-    let first_signed = std::fs::read(path.join("child/stage/signed.json")).unwrap();
+    let first_signed = std::fs::read(path.join("child-1/stage/signed.json")).unwrap();
     assert_eq!(plan(&dispatch)["action"], "unchanged");
 
     // Growth must follow retained maintenance bindings, not the original creation code.
@@ -147,7 +147,7 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
     assert_eq!(addition["action"], "add_child", "{addition}");
     assert_eq!(
         addition["plan"]["action"]["approval"]["slot"],
-        serde_json::to_value(canic_management_protocol::children::ChildId::HISTORICAL_SERVICES[2],)
+        serde_json::to_value(canic_management_protocol::children::ChildId::service(2).unwrap(),)
             .unwrap(),
         "{addition}"
     );
@@ -217,11 +217,11 @@ async fn existing_fleet_adds_child_preserving_identity_and_maintenance() {
         .success()
     );
     let retained: Value =
-        serde_json::from_slice(&std::fs::read(path.join("child/receipt.json")).unwrap()).unwrap();
+        serde_json::from_slice(&std::fs::read(path.join("child-1/receipt.json")).unwrap()).unwrap();
     assert_eq!(retained["canister"], first);
     assert_eq!(std::fs::read(path.join("fleet.json")).unwrap(), envelope);
     assert_eq!(
-        std::fs::read(path.join("child/stage/signed.json")).unwrap(),
+        std::fs::read(path.join("child-1/stage/signed.json")).unwrap(),
         first_signed
     );
 

@@ -35,7 +35,7 @@ fn post_upgrade((): ()) {
 management::mount_endpoints! {
     publish_store_artifact, observe_store, change_store_admission,
     maintain_store, observe_store_maintenance, store_maintenance_status, recover_store_maintenance,
-    observe_root_custody,
+    observe_root_custody, observe_root_custody_page,
     stage_child_creation, reconcile_child_creation, stage_child_upgrade, reconcile_child_upgrade,
     child_status, observe_child_status, status, observe, observe_custody, upgrade_status, observe_upgrade,
 }

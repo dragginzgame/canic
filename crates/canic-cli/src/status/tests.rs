@@ -202,7 +202,7 @@ fn store_state() -> serde_json::Value {
             phase: canic_management_protocol::store_maintenance::Phase::Verified,
             stop_request: Some([2; 32]),
             failure: None,
-            preservation: canic_management_protocol::store_maintenance::Scan::Legacy(None),
+            preservation: None,
             installation: None,
         })
         .unwrap();
@@ -221,21 +221,19 @@ fn store_catalog_summary_distinguishes_partial_absent_and_completed_scans() {
         "after_removed": false
     }))
     .unwrap();
-    status.preservation =
-        canic_management_protocol::store_maintenance::Scan::Legacy(Some(scan.clone()));
+    status.preservation = Some(scan.clone());
     let text = super::store::render(&status, Some(0), false);
     assert!(text.contains("before 2/3 releases (incomplete); after not retained"));
     assert!(text.contains("Continuation:"));
     scan.observed = 3;
     scan.complete = true;
-    status.preservation =
-        canic_management_protocol::store_maintenance::Scan::Legacy(Some(scan.clone()));
+    status.preservation = Some(scan.clone());
     status.installation = Some(Installation {
         upload_request: [1; 32],
         request: Some([2; 32]),
         sender_version: Some(1),
         start_request: Some([3; 32]),
-        verification: canic_management_protocol::store_maintenance::Scan::Legacy(Some(scan)),
+        verification: Some(scan),
         activation_request: Some([4; 32]),
     });
     let text = super::store::render(&status, Some(0), true);
@@ -249,7 +247,6 @@ fn store_upgrade_status_exposes_phase_without_claiming_completion() {
     state["store_maintenance"]["approval"]["attempt"]["sequence"] = 2.into();
     let text = render(&state, Path::new("journal")).unwrap();
     assert!(text.contains("Store maintenance: Verified (attempt 2)"));
-    assert!(text.contains("Qualified history limit: 8 retained attempts"));
     assert!(text.contains("Root: rrkah-fqaaa-aaaaa-aaaaq-cai"));
     assert!(text.contains("deployment completion is not established"));
     state["store_maintenance"] = serde_json::Value::Null;
@@ -505,7 +502,7 @@ fn receipts_are_historical_and_display_escaping_preserves_raw_evidence() {
 fn managed_state(upgrade: bool) -> serde_json::Value {
     let mut value = state();
     let owner = serde_json::json!({"child_evidence_only":false, "root":"rrkah-fqaaa-aaaaa-aaaaq-cai", "root_module":"d".repeat(64),
-        "execute_at_ns":1_500_000_000_u64, "slot":"First", "source":{
+        "execute_at_ns":1_500_000_000_u64, "slot":canic_management_protocol::children::ChildId::FIRST, "source":{
             "store":{"canister":"aaaaa-aa","module":"f".repeat(64)}, "manifest":{"release":{"name":"worker","version":"v1"},"hash":([1;32]),"bytes":8,"chunks":[([1;32])]}}});
     value["plan"]["action"] = if upgrade {
         serde_json::json!({"contract":"canic:store-child-upgrade.v1","approval":{"owner":owner,"target":{"canister":"ryjl3-tyaaa-aaaaa-aaaba-cai","module":"c".repeat(64)}}})

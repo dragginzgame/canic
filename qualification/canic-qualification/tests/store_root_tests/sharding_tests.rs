@@ -1135,7 +1135,7 @@ async fn exhausted_creation_authority_never_claims_a_key_or_creates_a_shard() {
         .await,
         Err(management::Refusal::Occupied)
     );
-    for slot in ChildId::HISTORICAL_SERVICES {
+    for slot in [ChildId::FIRST, ChildId::SECOND] {
         let journal: management::Status = root.observe_creation(slot).await;
         assert_eq!(journal.phase, management::Phase::Empty);
         assert_eq!(journal.attempts, [0; 3]);
@@ -1362,7 +1362,7 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
         root.update::<_, management::application::Custody>(
             "observe_child_deployments",
             management::application::CHILD_EVIDENCE,
-            &(),
+            &None::<canic_management_protocol::application::DeploymentSelector>,
             management::application::LIMITS,
         )
         .await
@@ -1429,7 +1429,7 @@ async fn full_fleet_upgrades_a_store_backed_service_with_child_only_evidence() {
         Some(change.approval.module_hash.to_vec())
     );
     let frame = ic_wire::encode(
-        &(),
+        &None::<canic_management_protocol::application::DeploymentSelector>,
         ic_wire::Encoding::Frame {
             method: management::application::CUSTODY,
             direction: ic_wire::Direction::Request,

@@ -245,20 +245,20 @@ and a freshly signed admission until a controller-triggered enrollment refresh.
 Only the injected callback-failure cases install the fault-injection build. It covers exact
 execute/lookup replay, one-MiB transfer, upload/load with stopped completion,
 populated stable-byte preservation, authority and argument refusal, expiry,
-call-cost admission and callback-evidence loss across Root upgrade. Protocol and
+call-cost admission and callback-evidence loss across Root upgrade. While one child is stopped for capture, a sibling reaches Ready. The test fills a child's ten native snapshot slots, observes the IC refuse the eleventh, and replaces an explicitly selected snapshot. Protocol and
 ledger unit tests cover full-extent framing, conflicting original bindings,
-finite slots and unretained oversized replies. The installed consumer decodes
+target-specific reservations and unretained oversized replies. The installed consumer decodes
 execute and lookup with `Exchange::decode_response`. A response for another
 method, a changed original binding or an oversized inner result fails closed.
 The decoder accepts payloads only after the caller authenticates the outer ingress.
 
 The installed directory suite exercises native reader grants and revocation on existing snapshots. Canic #7 owns application fencing and reopening. No
-mainnet work or existing-Root layout migration is qualified. Every fresh Root allocates a bounded record for snapshot custody.
+mainnet work or existing-Root layout migration is qualified. Fresh Roots persist snapshot custody by operation and step.
 
 ## Storage 0.80 adoption
 
 Both workspaces select Wire 0.31.1 and Storage 0.80.6. Auth 0.51.1, Blob Storage 0.113.1
-and DB 0.34.0 consume leases from the same application bootstrap. The
+and DB 0.36.0 consume leases from the same application bootstrap. The
 separate Wasm Store 0.11.0 uses the same Storage release. Stable Auth
 receivers and the qualification issuer pass the IC canister version to
 the supplier when sealing and reopening their checkpoints.
@@ -271,7 +271,11 @@ incompatible budgets, missing or extra names, and out-of-prefix refusal.
 including byte-exact replies, caller rejection before decode, wrong direction
 and method, bounded requests, synchronous reply rollback and an async worker check.
 
-The installed children discovery test fills nine service slots, reopens Root, retries the ninth, discovers every principal from an empty Host journal, and refuses a tenth under a nine-child ceiling. Root uses the CMJ1 journal and CMS1 Store delivery format at every fleet size. The installed `storage_reopen::` case injects the predecessor CUJG and CUA7 tags independently and checks each refusal, the stable bytes, module hash and subnet canister count.
+The installed children discovery test fills nine service slots, reopens Root, retries the ninth, discovers every principal from an empty Host journal, and refuses a tenth under a nine-child ceiling. The installed storage reopen case damages the Root metadata tag and allocation backing and checks that refused upgrades preserve the original Wasm and bytes. The native row-table test below inserts 80,001 synthetic child journals, replaces one, and reopens the table. The installed scheduler case queues 70 children, upgrades Root, and holds all four execution slots at outbound Store calls. Releasing one reply lets another child complete while three calls remain outstanding. An expired child issues no effects. The 80,001-row native test covers storage reopen only.
+
+```sh
+cargo test --locked -p canic-management --all-features eighty_thousand_child_journals_reopen -- --ignored
+```
 The installed sharding journey grows a fresh Root through shared and dedicated
 child allocations and checks their identities after upgrade.
 
@@ -510,7 +514,7 @@ explicitly and supplies synchronous inspect/query/write handlers to
 `db-store` for the IC DB engine. The passive `db::inspection` contract is versioned independently as
 `method_id("canic.db.status.v1")`. The unit request returns the executable schema fingerprint
 and ordinary admission status, including the incarnation when readable. The application
-obtains both from IC DB. The witness uses IC DB and its schema macros at 0.34.0. Both workspaces resolve one copy of IC DB. The db-roles integration builds a generated schema into the Wasm and checks the Wire description of a DB-owned type.
+obtains both from IC DB. The witness uses IC DB and its schema macros at 0.36.0. Both workspaces resolve one copy of IC DB. The db-roles integration builds a generated schema into the Wasm and checks the Wire description of a DB-owned type.
 
 ```sh
 make qualification-setup

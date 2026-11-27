@@ -12,7 +12,8 @@
 /// `maintain_store` takes an explicit Stage, Advance, Install or Activate command.
 /// `store_maintenance_status` reports the same retained metadata as an uncertified public query.
 /// `recover_store_maintenance` retains observed outcomes without issuing fresh maintenance effects.
-/// `observe_root_custody` reads all service children, artifact sources, lifecycle inputs and Store history.
+/// `observe_root_custody` reads the selected deployment or a size-bounded fleet report.
+/// `observe_root_custody_page` reads one revision-tagged record for Root maintenance.
 /// `observe_child_deployments` reads retained deployment evidence on placement Roots.
 /// `activate_child_upgrade` activates an approved Blob application upgrade.
 /// Pass an approval to `observe_store_maintenance` to read its exact retained outcome.
@@ -75,13 +76,18 @@ macro_rules! mount_endpoints {
     };
     (@select observe_child_deployments) => {
         $crate::mount_endpoints!(@method observe_child_deployments, "observe_child_deployments", update, true, application::CHILD_EVIDENCE, LIMITS,
-            [] () -> $crate::endpoint::protocol::application::Custody,
-            $crate::application::child_evidence());
+            [] (input: Option<$crate::endpoint::protocol::application::DeploymentSelector>) -> $crate::endpoint::protocol::application::Custody,
+            $crate::application::child_evidence(input));
+    };
+    (@select observe_root_custody_page) => {
+        $crate::mount_endpoints!(@method observe_root_custody_page, "observe_root_custody_page", update, true, application::CUSTODY_PAGE, LIMITS,
+            [] (input: $crate::endpoint::protocol::application::CustodyKey) -> $crate::endpoint::protocol::application::CustodyPage,
+            $crate::application::custody_page(input));
     };
     (@select observe_root_custody) => {
         $crate::mount_endpoints!(@method observe_root_custody, "observe_root_custody", update, true, application::CUSTODY, LIMITS,
-            [] () -> $crate::endpoint::protocol::application::Custody,
-            $crate::application::custody());
+            [] (input: Option<$crate::endpoint::protocol::application::DeploymentSelector>) -> $crate::endpoint::protocol::application::Custody,
+            $crate::application::custody(input));
     };
     (@select observe_stored_children) => {
         $crate::mount_endpoints!(@method observe_stored_children, "observe_stored_children", update, true, stored::CUSTODY, LIMITS,

@@ -3,7 +3,13 @@
 use crate::{Error, Network, Result, network, supplier};
 use ic_platform::native::{Ed25519Identity, ReadClient, Secp256k1Identity};
 use ic_platform_types::Principal;
-use std::{io::Read, path::Path, time::Duration};
+use std::{
+    collections::BTreeMap,
+    io::Read,
+    path::Path,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 
 enum Caller {
     Anonymous,
@@ -45,15 +51,20 @@ pub struct Diagnostics {
 pub struct InspectionClient {
     client: ReadClient,
     target: Principal,
-    caller: Caller,
+    caller: Arc<Caller>,
 }
 
-impl InspectionClient {
-    /// Admit the target, network and optional PEM before issuing a request.
+/// Shares query credentials and network trust bindings for one inspection command.
+pub struct InspectionSession {
+    caller: Arc<Caller>,
+    networks: Mutex<BTreeMap<String, ReadClient>>,
+}
+
+impl InspectionSession {
+    /// Parse the selected identity once.
     /// # Errors
-    /// Refuses invalid network bindings, principals and unreadable or invalid identities.
-    pub fn new(network: &Network, target: &str, pem: Option<&Path>) -> Result<Self> {
-        let target = network::principal(target)?;
+    /// Refuses unreadable or invalid PEM credentials.
+    pub fn new(pem: Option<&Path>) -> Result<Self> {
         let caller = if let Some(path) = pem {
             const LIMIT: usize = 4096;
             let mut text = String::new();
@@ -76,16 +87,42 @@ impl InspectionClient {
             Caller::Anonymous
         };
         Ok(Self {
-            client: network.client()?,
-            caller,
+            caller: Arc::new(caller),
+            networks: Mutex::default(),
+        })
+    }
+
+    /// Bind the cached network client to a target.
+    /// # Errors
+    /// Refuses invalid network bindings and canister principals.
+    pub fn client(&self, network: &Network, target: &str) -> Result<InspectionClient> {
+        let target = network::principal(target)?;
+        Ok(InspectionClient {
+            client: self.network_client(network)?,
+            caller: Arc::clone(&self.caller),
             target,
         })
     }
 
+    pub(crate) fn network_client(&self, network: &Network) -> Result<ReadClient> {
+        let key = network.binding_id()?;
+        let mut networks = self
+            .networks
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let client = match networks.entry(key) {
+            std::collections::btree_map::Entry::Occupied(entry) => entry.into_mut(),
+            std::collections::btree_map::Entry::Vacant(entry) => entry.insert(network.client()?),
+        };
+        Ok(client.clone())
+    }
+}
+
+impl InspectionClient {
     /// Principal whose application permissions govern the response.
     #[must_use]
     pub fn caller(&self) -> Principal {
-        match &self.caller {
+        match self.caller.as_ref() {
             Caller::Anonymous => Principal::anonymous(),
             Caller::Ed25519(id) => id.principal(),
             Caller::Secp256k1(id) => id.principal(),
@@ -181,7 +218,7 @@ impl InspectionClient {
     ) -> Result<Vec<u8>> {
         let (expiry, time) = network::context()?;
         tokio::time::timeout(timeout, async {
-            match &self.caller {
+            match self.caller.as_ref() {
                 Caller::Anonymous => {
                     self.client
                         .query(self.target, method, payload, expiry, time)

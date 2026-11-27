@@ -8,16 +8,6 @@ use std::collections::{BTreeMap, VecDeque};
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct History(VecDeque<(Principal, u64, u64)>);
 
-const PREFIX: &[u8; 4] = b"FR01";
-// Each row holds at most a 29-byte principal and two ten-byte varints.
-const LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: 4096,
-    allocation: 262_144,
-    nodes: 8192,
-    depth: 12,
-};
-pub(crate) const EXTRA_BYTES: usize = PREFIX.len() + 2 + LIMITS.bytes;
-
 impl History {
     pub(crate) fn record(&mut self, child: Principal, sequence: u64, confirmed_at_ns: u64) {
         if self.0.len() == RETAINED_RECEIPTS {
@@ -28,6 +18,7 @@ impl History {
 
     /// Each child's retained rows must form a suffix of its original settled sequences.
     pub(crate) fn validate(&self, paid: impl Fn(Principal) -> Option<u64>) {
+        assert!(self.0.len() <= RETAINED_RECEIPTS, "funding receipt count");
         let mut expected = BTreeMap::new();
         for &(child, sequence, _) in self.0.iter().rev() {
             let next = expected
@@ -65,38 +56,6 @@ impl History {
             receipts,
         }
     }
-
-    // Keep the original state codec and its entire byte budget. Legacy images
-    // have no prefix. Older readers refuse the new envelope on downgrade.
-    pub(crate) fn wrap(&self, state: Vec<u8>) -> Vec<u8> {
-        if self.0.is_empty() {
-            return state;
-        }
-        let history = ic_wire::encode(self, ic_wire::Encoding::Payload, LIMITS)
-            .expect("bounded funding receipts");
-        let mut bytes = PREFIX.to_vec();
-        bytes.extend(
-            u16::try_from(history.len())
-                .expect("receipt byte limit")
-                .to_le_bytes(),
-        );
-        bytes.extend(history);
-        bytes.extend(state);
-        bytes
-    }
-
-    pub(crate) fn split(bytes: &[u8]) -> (Self, &[u8]) {
-        let Some(rest) = bytes.strip_prefix(PREFIX) else {
-            return (Self::default(), bytes);
-        };
-        let (length, rest) = rest.split_at(2);
-        let (history, state) =
-            rest.split_at(usize::from(u16::from_le_bytes(length.try_into().unwrap())));
-        let history: Self = ic_wire::decode(history, ic_wire::Encoding::Payload, LIMITS)
-            .expect("retained funding receipts");
-        assert!(history.0.len() <= RETAINED_RECEIPTS);
-        (history, state)
-    }
 }
 
 #[cfg(test)]
@@ -117,9 +76,7 @@ mod tests {
             budget_cycles: u64::MAX,
             expires_at_ns: u64::MAX,
         };
-        let previous = b"PL12previous custody";
-        let (mut history, bytes) = History::split(previous);
-        assert_eq!(bytes, previous);
+        let mut history = History::default();
         let mut status = ChildFundingStatus {
             attempts: 4,
             issued: true,
@@ -132,9 +89,8 @@ mod tests {
         for seq in 4..=68 {
             history.record(child, seq, u64::MAX);
         }
-        let encoded = history.wrap(previous.to_vec());
-        let (mut reopened, bytes) = History::split(&encoded);
-        assert_eq!(bytes, previous);
+        let encoded = super::super::bytes(&history);
+        let mut reopened: History = super::super::decode(&encoded);
         reopened.validate(|id| (id == child).then_some(68));
         let result = reopened.report(&rule, &status, 68);
         assert_eq!(result.unavailable_through, 4);

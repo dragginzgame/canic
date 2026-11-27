@@ -82,10 +82,13 @@ pub fn configure_subnet_capacity(capacity: stored::SubnetCapacity) -> Result<(),
                 return Err(Refusal::Occupied);
             }
             state.pools.capacity = Some(capacity);
-            state.pool.set(state.pools.encode());
+            state.pool.put(
+                &super::Key::Capacity,
+                state.pools.capacity.as_ref().unwrap(),
+            );
             return Ok(());
         }
-        if let Some(initial) = state.journal.3
+        if let Some(initial) = state.metadata.bootstrap
             && capacity.max_children > initial.max_children
             && !(capacity.allow_large_subnet
                 && capacity.max_children > stored::DEFAULT_SUBNET_CHILD_LIMIT)
@@ -94,12 +97,12 @@ pub fn configure_subnet_capacity(capacity: stored::SubnetCapacity) -> Result<(),
         }
         let permanent: std::collections::BTreeSet<_> = state
             .journal
-            .0
+            .rows()
             .keys()
             .copied()
             .filter(|slot| {
                 slot.service_index().is_some()
-                    && state.journal.0[slot].0.approval.is_some()
+                    && state.journal.rows()[slot].0.approval.is_some()
                     && state.pools.shard_at(*slot).is_none()
             })
             .collect();
@@ -117,9 +120,14 @@ pub fn configure_subnet_capacity(capacity: stored::SubnetCapacity) -> Result<(),
         {
             return Err(Refusal::Occupied);
         }
-        state.pools.permanent = permanent;
         state.pools.capacity = Some(capacity);
-        state.pool.set(state.pools.encode());
+        for slot in permanent {
+            super::retain_permanent(state, slot);
+        }
+        state.pool.put(
+            &super::Key::Capacity,
+            state.pools.capacity.as_ref().unwrap(),
+        );
         Ok(())
     })
 }
@@ -139,7 +147,7 @@ pub fn increase_pool_limit(change: stored::IncreasePoolLimit) -> Result<(), Refu
             .as_ref()
             .ok_or(Refusal::Binding)?
             .max_children;
-        let (initial, previous, next, history, deadline, family_limit) = match change {
+        let (initial, previous, next, history, deadline, family_limit, key) = match change {
             stored::IncreasePoolLimit::Shards(mut old, next) => {
                 let ledger = state
                     .pools
@@ -158,6 +166,7 @@ pub fn increase_pool_limit(change: stored::IncreasePoolLimit) -> Result<(), Refu
                     &mut ledger.increases,
                     initial.expires_at_ns,
                     stored::MAX_SHARDS,
+                    super::Key::Shard(old.pool),
                 )
             }
             stored::IncreasePoolLimit::Instances(mut old, next) => {
@@ -173,6 +182,7 @@ pub fn increase_pool_limit(change: stored::IncreasePoolLimit) -> Result<(), Refu
                     &mut state.pools.instance_increases,
                     initial.expires_at_ns,
                     stored::MAX_INSTANCES,
+                    super::Key::InstanceIncreases,
                 )
             }
         };
@@ -193,7 +203,12 @@ pub fn increase_pool_limit(change: stored::IncreasePoolLimit) -> Result<(), Refu
             return Err(Refusal::Time);
         }
         history.push(next);
-        state.pool.set(state.pools.encode());
+        match key {
+            super::Key::Shard(ref name) => state
+                .pool
+                .put(&super::Key::Shard(name.clone()), &state.pools.shards[name]),
+            _ => state.pool.put(&key, &state.pools.instance_increases),
+        }
         Ok(())
     })
 }

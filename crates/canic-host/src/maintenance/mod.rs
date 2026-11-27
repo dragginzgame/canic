@@ -6,7 +6,7 @@ pub(crate) mod tests;
 mod stored;
 
 use crate::{Error, Plan, Result, network::principal, operation, signed, store, supplier};
-use canic_management_protocol::{Phase, application, custody, upgrade};
+use canic_management_protocol::{Phase, application, upgrade};
 use ic_platform::native::ReadClient;
 use std::path::Path;
 
@@ -91,9 +91,9 @@ pub(crate) fn implicit_child_root(module: &str) -> bool {
 
 pub(crate) const BEFORE: &str = "custody-before";
 pub(crate) const AFTER: &str = "custody-after";
-const OBSERVE: &str = "observe_root_custody";
 
-pub(crate) fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
+#[cfg(test)]
+fn observation_args(plan: &Plan, method: &str) -> Result<Vec<u8>> {
     validate(plan)?;
     if method != "observe_root_custody" {
         return Err(invalid());
@@ -139,8 +139,6 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
             || expected.creation.failure.is_some()
             || expected.creation.worker.is_none()
             || expected.creation.stable_pages != 0
-            || expected.creation.maintenance_candidate
-            || expected.upgrades.len() > upgrade::MAX_UPGRADES
             || expected.upgrades.iter().any(|s| {
                 s.phase != upgrade::Phase::Ready
                     || s.failure.is_some()
@@ -152,21 +150,14 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
         {
             return Err(invalid());
         }
-        ic_wire::encode(expected, ic_wire::Encoding::Payload, custody::LIMITS).map_err(supplier)?;
     }
-    ic_wire::encode(
-        expected,
-        ic_wire::Encoding::Payload,
-        canic_management_protocol::children::LIMITS,
-    )
-    .map_err(supplier)?;
     stored::validate(plan)?;
     Ok(())
 }
 
 fn invalid() -> Error {
     Error::Invalid(
-        "Root maintenance requires a bounded completed child journal and exact Root target".into(),
+        "Root maintenance requires a complete child journal and exact Root target".into(),
     )
 }
 
@@ -179,20 +170,59 @@ pub(crate) fn retained(dir: &Path, plan: &Plan) -> Result<bool> {
 
 fn retained_at(dir: &Path, plan: &Plan, after: bool) -> Result<bool> {
     let step = if after { AFTER } else { BEFORE };
-    let path = dir.join(step).join("reply.bin");
-    if !path.try_exists().map_err(supplier)? {
-        return Ok(false);
-    }
-    if !matches_plan(
-        plan,
-        OBSERVE,
-        &store::read(&path, application::LIMITS.bytes)?,
-    )? {
-        return Err(invalid());
+    let base = dir.join(step);
+    let expected = stored::expected(plan)?;
+    let mut revision = None;
+    for (i, key) in expected.keys().enumerate() {
+        let path = page_path(&base, i).join("reply.bin");
+        if !path.try_exists().map_err(supplier)? {
+            return Ok(false);
+        }
+        check_page(
+            &expected,
+            key,
+            &store::read(&path, application::LIMITS.bytes)?,
+            &mut revision,
+        )?;
     }
     Ok(true)
 }
 
+fn page_path(base: &Path, i: usize) -> std::path::PathBuf {
+    if i == 0 {
+        base.to_owned()
+    } else {
+        base.join(format!("page-{i}"))
+    }
+}
+
+fn check_page(
+    expected: &application::Custody,
+    key: application::CustodyKey,
+    bytes: &[u8],
+    revision: &mut Option<(u64, u64)>,
+) -> Result<()> {
+    let page: application::CustodyPage = ic_wire::decode(
+        bytes,
+        ic_wire::Encoding::Frame {
+            method: application::CUSTODY_PAGE,
+            direction: ic_wire::Direction::Response,
+        },
+        application::LIMITS,
+    )
+    .map_err(supplier)?;
+    if page.key != key
+        || revision.is_some_and(|r| r != page.revision)
+        || page.item != expected.item(key)
+    {
+        return Err(Error::Blocked(
+            "Root custody page changed or differs from the approved history".into(),
+        ));
+    }
+    *revision = Some(page.revision);
+    Ok(())
+}
+#[cfg(test)]
 fn matches_plan(plan: &Plan, method: &str, bytes: &[u8]) -> Result<bool> {
     if method != "observe_root_custody" {
         return Err(invalid());
@@ -237,17 +267,19 @@ pub(crate) async fn observe(
     let store = plan.maintenance_store().ok_or_else(invalid)?;
     crate::managed::stored::verify_store(client, &target.to_text(), &store.store).await?;
     let step = if after { AFTER } else { BEFORE };
-    let call = signed::Call {
-        canister: target,
-        effective: target,
-        method: OBSERVE,
-        args: observation_args(plan, OBSERVE)?,
-    };
-    let bytes = signed::observe(&dir.join(step), plan, &call, identity, icp, client).await?;
-    if !matches_plan(plan, OBSERVE, &bytes)? {
-        return Err(Error::Blocked(
-            "Root journal differs from approved maintenance custody; retain this operation".into(),
-        ));
+    let full = stored::expected(plan)?;
+    let mut revision = None;
+    for (i, key) in full.keys().enumerate() {
+        let bytes = signed::custody_page(
+            &page_path(&dir.join(step), i),
+            plan,
+            key,
+            identity,
+            icp,
+            client,
+        )
+        .await?;
+        check_page(&full, key, &bytes, &mut revision)?;
     }
     for expected in expected {
         // The child's live identity, code and controller also remain fixed by this window.

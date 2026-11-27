@@ -10,8 +10,6 @@ use serde::{Deserialize, Serialize};
 pub const STATUS: u64 = 25;
 /// Observe the exact approval, including completed historical work.
 pub const OBSERVE: u64 = 29;
-/// Maximum retained upgrade approvals, including the current one. No eviction or reset.
-pub const MAX_UPGRADES: usize = 8;
 
 /// Exact child, code transition and finite dispatch interval.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

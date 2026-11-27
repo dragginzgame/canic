@@ -7,12 +7,18 @@ use canic_management_protocol::{
 use ic_platform_runtime::system as api;
 
 pub(super) fn lifecycle(slot: ChildId) -> Option<application::Lifecycle> {
-    STATE.with_borrow(
-        |state| match state.as_ref().expect("open engine").artifact.0.get(&slot)? {
+    STATE.with_borrow(|state| {
+        match state
+            .as_ref()
+            .expect("open engine")
+            .artifact
+            .rows()
+            .get(&slot)?
+        {
             Artifact::Application(_, value) => Some(value.clone()),
             _ => None,
-        },
-    )
+        }
+    })
 }
 
 pub(super) fn arguments(slot: ChildId, upgrade: bool) -> Vec<u8> {
@@ -99,7 +105,7 @@ fn stage(slot: ChildId, input: application::Stage<Approval>) -> Result<Status, R
                 .as_ref()
                 .expect("open engine")
                 .journal
-                .0
+                .rows()
                 .values()
                 .any(|journal| {
                     journal.0.phase == canic_management_protocol::Phase::Ready
@@ -203,35 +209,93 @@ async fn reconcile(slot: ChildId, input: application::Stage<Approval>) -> Status
 /// # Panics
 /// Traps if storage has not opened.
 #[must_use]
-pub fn custody() -> application::Custody {
+pub fn custody(selected: Option<application::DeploymentSelector>) -> application::Custody {
     #[cfg(feature = "role-issuer")]
     super::role_issuer::require_unprepared();
-    child_evidence()
+    child_evidence(selected)
 }
 
 /// Observe child deployments. This endpoint grants no Root maintenance authority.
 /// # Panics
 /// Requires open Root storage.
 #[must_use]
-pub fn child_evidence() -> application::Custody {
+pub fn child_evidence(selected: Option<application::DeploymentSelector>) -> application::Custody {
     STATE.with_borrow(|state| {
         let state = state.as_ref().expect("open engine");
+        if let Some(request) = selected {
+            let slot = request.slot;
+            assert!(slot.service_index().is_some(), "permanent service required");
+            let mut children = Vec::new();
+            if let Some(j) = state.journal.rows().get(&slot) {
+                let a = &state.artifact.rows()[&slot];
+                let pinned = request.value.as_ref().and_then(|approval| {
+                    j.2.iter()
+                        .chain(std::iter::once(&j.1))
+                        .enumerate()
+                        .find(|(_, u)| u.approval.as_ref() == Some(approval))
+                });
+                let sources = a
+                    .sources()
+                    .map(|s| canic_management_protocol::stored::Sources {
+                        creation: s.creation.clone(),
+                        upgrades: pinned
+                            .map(|(i, _)| s.upgrades[i].clone())
+                            .into_iter()
+                            .collect(),
+                    });
+                let lifecycle = if let Artifact::Application(_, l) = a {
+                    Some(application::Lifecycle {
+                        creation: l.creation.clone(),
+                        upgrades: pinned
+                            .map(|(i, _)| l.upgrades[i].clone())
+                            .into_iter()
+                            .collect(),
+                    })
+                } else {
+                    None
+                };
+                children.push(application::ChildCustody {
+                    slot,
+                    journal: canic_management_protocol::custody::Custody {
+                        creation: j.0.clone(),
+                        upgrades: pinned.map(|(_, u)| u.clone()).into_iter().collect(),
+                    },
+                    sources,
+                    lifecycle,
+                });
+            } else {
+                children.push(application::ChildCustody {
+                    slot,
+                    journal: canic_management_protocol::custody::Custody {
+                        creation: Status::default(),
+                        upgrades: vec![],
+                    },
+                    sources: None,
+                    lifecycle: None,
+                });
+            }
+            return application::Custody {
+                children,
+                store_operation: state.metadata.maintenance.clone(),
+                store_history: vec![],
+            };
+        }
         let children = state
             .journal
-            .0
+            .rows()
             .iter()
             .filter(|(id, _)| id.service_index().is_some())
             .map(|(&slot, journal)| application::ChildCustody {
                 slot,
                 journal: journal.custody(),
-                sources: state.artifact.0[&slot].sources().cloned(),
+                sources: state.artifact.rows()[&slot].sources().cloned(),
                 lifecycle: lifecycle(slot),
             })
             .collect();
         application::Custody {
             children,
-            store_operation: state.journal.1.clone(),
-            store_history: state.journal.2.clone(),
+            store_operation: state.metadata.maintenance.clone(),
+            store_history: state.metadata.history.clone(),
         }
     })
 }
@@ -240,8 +304,8 @@ pub fn child_evidence() -> application::Custody {
 pub(super) fn upgrade_matches(slot: ChildId, input: &application::Upgrade) -> bool {
     STATE.with_borrow(|state| {
         let state = state.as_ref().expect("open engine");
-        let journal = &state.journal.0[&slot];
-        let Artifact::Application(sources, lifecycle) = &state.artifact.0[&slot] else {
+        let journal = &state.journal.rows()[&slot];
+        let Artifact::Application(sources, lifecycle) = &state.artifact.rows()[&slot] else {
             return false;
         };
         journal
@@ -360,4 +424,69 @@ pub async fn reconcile_child_upgrade(
             ic_platform_runtime::system::trap("application upgrade requires Blob")
         }
     }
+}
+
+/// Observe a bounded Root-maintenance page. The revision changes on custody writes and Root upgrade.
+/// # Panics
+/// Requires an opened Root with admitted maintenance custody.
+#[must_use]
+pub fn custody_page(key: application::CustodyKey) -> application::CustodyPage {
+    use application::{CustodyItem as Item, CustodyKey as Key};
+    #[cfg(feature = "role-issuer")]
+    super::role_issuer::require_unprepared();
+    STATE.with_borrow(|s| {
+        let state = s.as_ref().expect("open Root");
+        let item = (|| match key {
+            Key::Inventory => Some(Item::Inventory {
+                children: state.service_count() as u64,
+                store_attempts: (state.metadata.history.len()
+                    + usize::from(state.metadata.maintenance.is_some()))
+                    as u64,
+            }),
+            Key::Store(n) => {
+                let i = usize::try_from(n).ok()?;
+                let s = if i == state.metadata.history.len() {
+                    state.metadata.maintenance.as_ref()
+                } else {
+                    state.metadata.history.get(i)
+                }?;
+                Some(Item::Store(Box::new(s.clone())))
+            }
+            Key::Child(slot) | Key::Upgrade(slot, _) => {
+                slot.service_index()?;
+                let j = state.journal.rows().get(&slot)?;
+                let a = state.artifact.rows().get(&slot)?;
+                let l = if let Artifact::Application(_, l) = a {
+                    Some(l)
+                } else {
+                    None
+                };
+                if let Key::Upgrade(_, n) = key {
+                    let i = usize::try_from(n).ok()?;
+                    let status = if i == j.2.len() && j.1.approval.is_some() {
+                        &j.1
+                    } else {
+                        j.2.get(i)?
+                    };
+                    Some(Item::Upgrade {
+                        status: status.clone(),
+                        source: a.sources().and_then(|s| s.upgrades.get(i)).cloned(),
+                        lifecycle: l.and_then(|l| l.upgrades.get(i)).cloned(),
+                    })
+                } else {
+                    Some(Item::Child {
+                        creation: j.0.clone(),
+                        source: a.sources().map(|s| s.creation.clone()),
+                        arguments: l.map(|l| l.creation.clone()),
+                        upgrades: (j.2.len() + usize::from(j.1.approval.is_some())) as u64,
+                    })
+                }
+            }
+        })();
+        application::CustodyPage {
+            revision: (state.open_version, crate::storage::revision()),
+            key,
+            item,
+        }
+    })
 }

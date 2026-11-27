@@ -124,11 +124,7 @@ pub(crate) fn permits_upgrade(
 
 pub(super) fn check_upgrade(children: &[Child], index: usize, dispatch: u64) -> Result<()> {
     let child = &children[index];
-    if child.custody.upgrades.len() >= canic_management_protocol::upgrade::MAX_UPGRADES {
-        return Err(Error::Blocked(
-            "Root's eight-upgrade child history is full; preserve all evidence".into(),
-        ));
-    }
+
     if dispatch <= child.dispatch {
         return Err(Error::Invalid(
             "successor dispatch must follow the preceding upgrade".into(),
@@ -224,7 +220,6 @@ impl Child {
             managed::evidence_with_source(dir, &plan)?.ok_or_else(invalid)?;
         let creation_source = source.ok_or_else(invalid)?;
         creation.stable_pages = 0;
-        creation.maintenance_candidate = false;
         Ok(Self {
             module: receipt.module_hash.clone(),
             plan,
@@ -387,7 +382,6 @@ pub(super) fn load(
                         && new.execute_at_ns > child.dispatch
                 })
             || value.previous_module() != Some(&child.module)
-            || child.custody.upgrades.len() >= canic_management_protocol::upgrade::MAX_UPGRADES
         {
             return Err(Error::Invalid(
                 "upgrade history is not an ordered child/slot/code chain".into(),
@@ -443,8 +437,6 @@ pub(super) fn store_custody(
         operation: operation.cloned(),
         history: history.to_vec(),
         store: binding.clone(),
-        sources: (0..children.len().max(ChildId::HISTORICAL_SERVICES.len()))
-            .map(|i| children.get(i).map(|c| c.sources.clone()))
-            .collect(),
+        sources: children.iter().map(|c| Some(c.sources.clone())).collect(),
     }
 }

@@ -36,10 +36,10 @@ async fn identified_records_preserve_pending_children_and_refuse_old_storage_cod
         .await;
     pic.add_cycles(root, 10_000_000_000_000).await;
     let mut approvals = Vec::new();
-    // Admission order must never decide identity, including while no principal exists.
+    // Approvals bind permanent ordinals before either principal is assigned.
     for (slot, name) in [
-        (ChildId::SECOND, "app-v2.wasm"),
         (ChildId::FIRST, "app.wasm"),
+        (ChildId::SECOND, "app-v2.wasm"),
     ] {
         let stage = input(
             root,
@@ -90,7 +90,7 @@ async fn identified_records_preserve_pending_children_and_refuse_old_storage_cod
     settle(pic).await;
     let completed = read(pic, root).await;
     for (slot, stage) in &approvals {
-        let child = &completed[slot.index()].creation;
+        let child = &completed[slot.service_index().unwrap()].creation;
         assert_eq!(child.phase, Phase::Ready);
         assert_eq!(child.approval, Some(stage.approval.clone()));
         assert_eq!(child.attempts, [1; 3]);

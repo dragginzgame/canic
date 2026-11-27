@@ -53,7 +53,9 @@ pub fn release_child_allocation(
             .draining
             .insert(slot, target.allocation.generation);
         state.pools.evacuated.insert(slot);
-        state.pool.set(state.pools.encode());
+        state
+            .pool
+            .put(&super::Key::Drain(slot), &target.allocation.generation);
         Ok(())
     })
 }

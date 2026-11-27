@@ -15,7 +15,7 @@ pub struct Cancellation {
 
 fn pristine(dir: &Path) -> Result<()> {
     // These original anchors exist in every retained fleet approval.
-    for name in ["root", "child"] {
+    for name in ["root", "child-1"] {
         if !std::fs::symlink_metadata(dir.join(name))
             .map_err(supplier)?
             .is_dir()

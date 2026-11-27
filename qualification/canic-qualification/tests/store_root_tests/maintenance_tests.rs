@@ -54,97 +54,15 @@ pub(super) async fn observe(root: &Client<'_>) -> Status {
     retained
 }
 
-// The pinned predecessor executables accept the original unit request and method 52.
-pub(super) async fn predecessor_observation(root: &Client<'_>) -> Status {
-    root.update::<_, Option<Status>>(
-        "observe_store_maintenance",
-        super::predecessor_store::OBSERVE,
-        &(),
-        wire::LIMITS,
-    )
-    .await
-    .unwrap()
-}
-
-// The frozen Roots have a two-child Wire tuple. Decode their exact installed shape.
-pub(super) async fn check_predecessor_custody(root: &Client<'_>, expected: &Status) {
-    type Children = [management::custody::Custody; 2];
-    type Sources = [Option<management::stored::Sources>; 2];
-    let (_, operation): ((Children, Sources), Option<Status>) = root
-        .update(
-            "observe_root_custody",
-            management::custody::ROOT,
-            &(),
-            management::custody::ROOT_LIMITS,
-        )
-        .await;
-    assert_eq!(operation.as_ref(), Some(expected));
-}
-
 async fn check_current_custody(root: &Client<'_>, expected: &Status) {
     let complete = super::project(super::root_custody(root).await).current;
     assert_eq!(complete.store_operation.as_ref(), Some(expected));
-}
-
-// These two checked-in executables predate the command envelope. Exercise their exact ABI.
-async fn uses_legacy_maintenance(root: &Client<'_>) -> bool {
-    let hash = root
-        .pic
-        .canister_status(root.id, Some(root.operator))
-        .await
-        .unwrap()
-        .module_hash
-        .unwrap();
-    [
-        include_bytes!("../../fixtures/root-release-scan.wasm").as_slice(),
-        include_bytes!("../../fixtures/root-store-single-maintenance.wasm").as_slice(),
-    ]
-    .iter()
-    .any(|wasm| store::digest(wasm).as_slice() == hash)
 }
 
 pub(super) async fn command(
     root: &Client<'_>,
     request: &wire::Request,
 ) -> Result<Status, management::Refusal> {
-    if uses_legacy_maintenance(root).await {
-        return match request {
-            wire::Request::Stage(a) => {
-                root.update(
-                    "stage_store_maintenance",
-                    super::predecessor_store::STAGE,
-                    a,
-                    wire::LIMITS,
-                )
-                .await
-            }
-            wire::Request::Advance(a) => Ok(root
-                .update(
-                    "advance_store_maintenance",
-                    super::predecessor_store::ADVANCE,
-                    a,
-                    wire::LIMITS,
-                )
-                .await),
-            wire::Request::Activate(a) => Ok(root
-                .update(
-                    "activate_store_maintenance",
-                    super::predecessor_store::ACTIVATE,
-                    a,
-                    wire::LIMITS,
-                )
-                .await),
-            wire::Request::Install(i) => {
-                root.update(
-                    "install_store_maintenance",
-                    super::predecessor_store::INSTALL,
-                    i,
-                    wire::INSTALL_LIMITS,
-                )
-                .await
-            }
-        };
-    }
     root.update(
         "maintain_store",
         wire::MAINTAIN,
@@ -255,43 +173,18 @@ async fn restore_faults(root: &Client<'_>) {
 
 #[tokio::test(flavor = "current_thread")]
 async fn root_replaces_store_preserves_all_stable_bytes_and_recovers_each_callback() {
-    replacement_preserves_state(
-        std::fs::read(artifacts().join("original.wasm")).unwrap(),
-        false,
-    )
-    .await;
-}
-
-#[tokio::test(flavor = "current_thread")]
-async fn refused_pre_registry_root_upgrade_preserves_original_upload_and_store() {
-    replacement_preserves_state(
-        include_bytes!("../../fixtures/store-0.1.0.wasm").to_vec(),
-        true,
-    )
-    .await;
-}
-
-async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool) {
+    let store_wasm = std::fs::read(artifacts().join("original.wasm")).unwrap();
     let previous_module = store::digest(&store_wasm);
     let (_, binary) = support::inputs();
     let (mut server, owner) = support::instance(&binary).await;
     let pic = owner.client();
     let (root, supplier) = readiness_tests::fixture_with_code(
         pic,
-        if historical_scan {
-            include_bytes!("../../fixtures/root-release-scan.wasm").to_vec()
-        } else {
-            std::fs::read(artifacts().join("root-faults.wasm")).unwrap()
-        },
+        std::fs::read(artifacts().join("root-faults.wasm")).unwrap(),
         store_wasm,
     )
     .await;
-    // The installed Store 0.1.0 requires a manifest using its original chunk size.
-    let chunk_bytes = if historical_scan {
-        256 * 1024
-    } else {
-        store::CHUNK_BYTES
-    };
+    let chunk_bytes = store::CHUNK_BYTES;
     let mut payload = vec![42; chunk_bytes + 17];
     payload[..8].copy_from_slice(b"\0asm\x01\0\0\0");
     let first = supplier
@@ -346,14 +239,7 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     let replacement = std::fs::read(artifacts().join("candidate.wasm")).unwrap();
     let approval = stopped(&root, &supplier, &replacement).await;
     assert_eq!(approval.previous_module, previous_module);
-    let read = async || {
-        if historical_scan {
-            predecessor_observation(&root).await
-        } else {
-            observe(&root).await
-        }
-    };
-    let closed = read().await;
+    let closed = observe(&root).await;
     assert_eq!(recover_store(&root, &approval).await, closed);
     let before_store = pic.get_stable_memory(supplier.id).await;
     let before_root = pic.get_stable_memory(root.id).await.len();
@@ -363,57 +249,27 @@ async fn replacement_preserves_state(store_wasm: Vec<u8>, historical_scan: bool)
     };
     assert_eq!(activate(&root, &approval).await, closed);
     inject(&root, 15).await;
-    let failed = if historical_scan {
-        root.pic
-            .update_call(
-                root.id,
-                root.operator,
-                "install_store_maintenance",
-                ic_wire::encode(
-                    &input,
-                    ic_wire::Encoding::Frame {
-                        method: super::predecessor_store::INSTALL,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    wire::INSTALL_LIMITS,
-                )
-                .unwrap(),
+    let failed = root
+        .pic
+        .update_call(
+            root.id,
+            root.operator,
+            "maintain_store",
+            ic_wire::encode(
+                &wire::Request::Install(input.clone()),
+                ic_wire::Encoding::Frame {
+                    method: wire::MAINTAIN,
+                    direction: ic_wire::Direction::Request,
+                },
+                wire::INSTALL_LIMITS,
             )
-            .await
-    } else {
-        root.pic
-            .update_call(
-                root.id,
-                root.operator,
-                "maintain_store",
-                ic_wire::encode(
-                    &wire::Request::Install(input.clone()),
-                    ic_wire::Encoding::Frame {
-                        method: wire::MAINTAIN,
-                        direction: ic_wire::Direction::Request,
-                    },
-                    wire::INSTALL_LIMITS,
-                )
-                .unwrap(),
-            )
-            .await
-    };
+            .unwrap(),
+        )
+        .await;
     assert!(failed.is_err());
     inject(&root, 0).await;
-    assert_eq!(read().await.phase, Phase::UploadIssued);
-    let pending_upload = read().await;
-    if historical_scan {
-        super::refuse_old_backing(&root).await;
-        assert_eq!(predecessor_observation(&root).await, pending_upload);
-        check_predecessor_custody(&root, &pending_upload).await;
-        assert_eq!(pic.get_stable_memory(supplier.id).await, before_store);
-        assert_eq!(
-            owner.close(Duration::from_secs(10)).await,
-            ic_testkit::server::Deletion::Attempted
-        );
-        assert!(server.stop().unwrap().process.cleanup.is_empty());
-        return;
-    }
+    assert_eq!(observe(&root).await.phase, Phase::UploadIssued);
+    let pending_upload = observe(&root).await;
     maintain(&root).await;
     assert_eq!(observe(&root).await, pending_upload); // Preserve the original upload commitment.
     restore_faults(&root).await;

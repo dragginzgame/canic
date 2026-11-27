@@ -7,6 +7,29 @@ for current test ownership and commands, the [Root guide](../demos/root.md) for
 the current hands-on workflow, and the [architecture](../design/canic-system-design.md)
 for scope and milestone gates. Old local output paths remain evidence references.
 
+## Root child admission instruction profile — 2026-11-27
+
+Two local PocketIC runs per instrumented Root build staged 1,025 sequential
+Store-backed children on a fresh application subnet. Each request referenced an
+eight-byte artifact with one chunk hash. Future execution deadlines kept child
+creation and Store calls outside the measurement. The row probe bracketed
+`StableBTreeMap::insert` after encoding and before updating the heap index.
+A separate build sampled IC performance counter 0 after encoding the ordinary
+endpoint reply, before sending it. Both runs reproduced the samples below.
+
+| Child | 142-byte artifact insert | 111-byte journal insert | Fresh update through reply encoding | Exact replay through reply encoding |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 182,120 | 181,377 | 1,158,721 | 645,085 |
+| 64 | 209,946 | 209,736 | 1,380,064 | 807,163 |
+| 1,024 | 707,275 | 467,095 | 3,177,866 | 1,688,387 |
+
+All table values are metered instructions. Replay performed zero child-row
+inserts. The row and endpoint probes used different Wasm binaries, so the
+figures support comparisons of magnitude rather than an exact additive
+breakdown. The separate ordinary Root balance benchmark measured 8,268,317
+cycles for fresh admission at child 64. These small synthetic rows do not
+establish admission or upgrade cost for an 80,000-child fleet.
+
 ## IC Wire 0.31.0 compatibility check — 2026-11-26
 
 At Canic `81b4eb7`, selecting Wire 0.31.0 in both workspaces compiled the

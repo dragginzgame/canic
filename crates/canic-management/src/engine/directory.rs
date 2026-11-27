@@ -7,18 +7,42 @@ use canic_management_protocol::children::ChildId;
 use ic_platform_types::Principal;
 use ic_timers::{Lifetime, Observation, OnceDemand, OnceNext, OnceResult};
 
+enum Binding {
+    Service(ServiceInstall),
+    Child(canic::topology::Install),
+}
+
+fn binding(artifact: &Artifact) -> Option<Binding> {
+    let Artifact::Application(_, lifecycle) = artifact else {
+        return None;
+    };
+    let bytes = lifecycle.creation.as_slice();
+    let root = ic_platform_runtime::system::canister_self();
+    if let Ok(service) = ServiceInstall::approved(bytes, root) {
+        return Some(Binding::Service(service));
+    }
+    canic::topology::Install::approved(bytes)
+        .ok()
+        .flatten()
+        .filter(|child| child.root == root)
+        .map(Binding::Child)
+}
+
 pub(super) fn named_service(slot: ChildId) -> Option<ServiceInstall> {
     slot.service_index()?;
-    STATE.with_borrow(
-        |state| match &state.as_ref().expect("open engine").artifact.0[&slot] {
-            Artifact::Application(_, lifecycle) => ServiceInstall::approved(
-                lifecycle.creation.as_slice(),
-                ic_platform_runtime::system::canister_self(),
-            )
-            .ok(),
-            _ => None,
-        },
-    )
+    STATE.with_borrow(|state| {
+        match binding(
+            state
+                .as_ref()
+                .expect("open engine")
+                .artifact
+                .rows()
+                .get(&slot)?,
+        )? {
+            Binding::Service(service) => Some(service),
+            Binding::Child(_) => None,
+        }
+    })
 }
 
 /// Project ready named services from permanent ordinary install records.
@@ -62,7 +86,7 @@ fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
         let state = state.as_ref().expect("open engine");
         let mut children = std::collections::BTreeMap::<Principal, Vec<Hop>>::new();
         let mut service = None;
-        for (slot, journal) in &state.journal.0 {
+        for (slot, journal) in state.journal.rows() {
             #[cfg(feature = "sharding")]
             if state.pools.withdrawn(*slot) {
                 continue;
@@ -70,7 +94,8 @@ fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
             if journal.0.phase != canic_management_protocol::Phase::Ready {
                 continue;
             }
-            let Artifact::Application(source, lifecycle) = &state.artifact.0[slot] else {
+            let artifact = &state.artifact.rows()[slot];
+            let Artifact::Application(source, _) = artifact else {
                 continue;
             };
             let canister = super::worker(&journal.0);
@@ -82,10 +107,7 @@ fn paths(recipient: &Service) -> Vec<Vec<Hop>> {
                     generation,
                     role: recipient.role.clone(),
                 });
-            } else if let Ok(Some(binding)) =
-                canic::topology::Install::approved(lifecycle.creation.as_slice())
-                && binding.root == ic_platform_runtime::system::canister_self()
-            {
+            } else if let Some(Binding::Child(binding)) = binding(artifact) {
                 children.entry(binding.parent).or_default().push(Hop {
                     #[cfg(feature = "sharding")]
                     shard_pool: state.pools.shard_pool_name(*slot).map(str::to_owned),
@@ -199,18 +221,9 @@ pub(super) fn schedule(ready: Option<ChildId>) {
     let (trigger, child) = if let Some(slot) = ready {
         let target = STATE.with_borrow(|state| {
             let state = state.as_ref().expect("open engine");
-            let Artifact::Application(_, lifecycle) = &state.artifact.0[&slot] else {
-                return None;
-            };
-            let args = lifecycle.creation.as_slice();
-            if ServiceInstall::approved(args, ic_platform_runtime::system::canister_self()).is_ok()
-            {
-                Some(None)
-            } else {
-                canic::topology::Install::approved(args)
-                    .ok()
-                    .flatten()
-                    .map(|_| Some(super::worker(&state.journal.0[&slot].0)))
+            match binding(state.artifact.rows().get(&slot)?)? {
+                Binding::Service(_) => Some(None),
+                Binding::Child(_) => Some(Some(super::worker(&state.journal.rows()[&slot].0))),
             }
         });
         let Some(child) = target else { return };
@@ -244,12 +257,11 @@ pub fn list_children(
 ) {
     use canic_management_protocol::children::InstalledChild;
     use std::ops::Bound::{Excluded, Unbounded};
-    let root = ic_platform_runtime::system::canister_self();
     STATE.with_borrow(|state| {
         let state = state.as_ref().expect("open engine");
         let mut slots = state
             .journal
-            .0
+            .rows()
             .range((after.map_or(Unbounded, Excluded), Unbounded));
         let mut rows = Vec::new();
         let mut last = None;
@@ -262,19 +274,11 @@ pub fn list_children(
             if state.pools.withdrawn(slot) {
                 continue;
             }
-            let mut role = None;
-            let mut parent = None;
-            if let Some(Artifact::Application(_, lifecycle)) = state.artifact.0.get(&slot) {
-                let bytes = lifecycle.creation.as_slice();
-                if let Ok(Some(binding)) = canic::topology::Install::approved(bytes)
-                    && binding.root == root
-                {
-                    role = Some(binding.role);
-                    parent = Some(binding.parent.to_text());
-                } else if let Ok(service) = ServiceInstall::approved(bytes, root) {
-                    role = Some(service.role);
-                }
-            }
+            let (role, parent) = match state.artifact.rows().get(&slot).and_then(binding) {
+                Some(Binding::Service(service)) => (Some(service.role), None),
+                Some(Binding::Child(child)) => (Some(child.role), Some(child.parent.to_text())),
+                None => (None, None),
+            };
             rows.push(InstalledChild {
                 slot,
                 canister: canister.clone(),

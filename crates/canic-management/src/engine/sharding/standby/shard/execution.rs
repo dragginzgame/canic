@@ -1,5 +1,6 @@
 //! Each uncertain effect resumes by observation under the original approval.
 use super::{ChildRetirement, Retirement, RetirementPhase as P, Stage};
+use crate::engine::sharding::{Key, ordinal};
 use crate::engine::{
     self, STATE, api, delivery, management,
     sharding::{self, standby},
@@ -81,7 +82,7 @@ pub async fn retire(
             }
             None => None,
         };
-        let journal = &s.journal.0[&slot];
+        let journal = &s.journal.rows()[&slot];
         if !journal.ready_for_role() || journal.1.approval.is_some() {
             return Err(StandbyPoolError::CustodyOccupied(
                 "shard has outstanding custody".into(),
@@ -119,7 +120,9 @@ pub async fn retire(
                     proof_deadline: deadline,
                 })
                 .phase = next;
-            state.pool.set(state.pools.encode());
+            state
+                .pool
+                .put(&Key::Retirement(slot), &state.pools.retirements[&slot]);
         })
     };
     let reference = &input.reference;
@@ -315,23 +318,30 @@ pub async fn retire(
                     r.phase = next;
                     let target = r.target();
                     let balance = balance.expect("observed return balance");
-                    if let Some((_, asset)) = s.pools.standby.iter_mut().find(|(_, asset)| {
+                    let index = if let Some(i) = s.pools.standby.iter().position(|(_, asset)| {
                         *asset == Asset::Claimed(subject, target.allocation.clone())
                     }) {
-                        *asset = Asset::Available(subject, balance);
+                        s.pools.standby[i].1 = Asset::Available(subject, balance);
+                        i
                     } else {
                         s.pools.standby.push((
                             Source::Shard(target.clone()),
                             Asset::Available(subject, balance),
                         ));
-                    }
+                        s.pools.standby.len() - 1
+                    };
                     s.pools.returns.push(standby::Returned {
                         target,
                         deadline: approval.expires_at_ns,
                         balance,
                     });
                     standby::log_surplus(&s.pools);
-                    s.pool.set(s.pools.encode());
+                    s.pool
+                        .put(&Key::Retirement(slot), &s.pools.retirements[&slot]);
+                    s.pool
+                        .put(&Key::Standby(ordinal(index)), &s.pools.standby[index]);
+                    let i = s.pools.returns.len() - 1;
+                    s.pool.put(&Key::Return(ordinal(i)), &s.pools.returns[i]);
                 });
                 return Ok(next);
             }

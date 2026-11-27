@@ -15,6 +15,10 @@ pub(crate) fn occupied() -> bool {
     STATE.with_borrow(|s| s.as_ref().is_some_and(|s| s.backup.occupied()))
 }
 
+pub(crate) fn target_occupied(target: &str) -> bool {
+    read(|ledger| ledger.active(target).is_some())
+}
+
 fn read<T>(f: impl FnOnce(&Ledger) -> T) -> T {
     STATE.with_borrow(|s| f(&s.as_ref().expect("open manager").backup))
 }
@@ -22,9 +26,7 @@ fn read<T>(f: impl FnOnce(&Ledger) -> T) -> T {
 fn mutate<T>(f: impl FnOnce(&mut Ledger) -> T) -> T {
     STATE.with_borrow_mut(|s| {
         let s = s.as_mut().expect("open manager");
-        let value = f(&mut s.backup);
-        s.save_backup();
-        value
+        f(&mut s.backup)
     })
 }
 
@@ -46,10 +48,6 @@ pub fn lookup(binding: &Binding) -> Result<Record, Error> {
 /// Traps on authority failure, failed custody writes or qualification fault injection.
 pub async fn execute(request: Request) -> Result<Record, Error> {
     assert!(api::is_controller(&api::caller()), "controller required");
-    #[cfg(feature = "sharding")]
-    if crate::sharding::occupied() {
-        return Err(Error::Busy);
-    }
     let (binding, bytes) = request.prepare()?;
     match read(|l| l.lookup(&binding)) {
         Ok(r) => return Ok(r),
@@ -73,18 +71,20 @@ pub async fn execute(request: Request) -> Result<Record, Error> {
     if version.is_some_and(|v| v != api::canister_version()) {
         return Err(Error::Invalid);
     }
-    let mut found = false;
-    for child in crate::engine::service_slots() {
-        let creation = engine::status(child);
-        let u = engine::upgrade::status(child);
-        if !matches!(creation.phase, Phase::Empty | Phase::Ready)
-            || !matches!(u.phase, upgrade::Phase::Empty | upgrade::Phase::Ready)
-        {
-            return Err(Error::Busy);
-        }
-        found |= creation.worker.as_deref() == Some(op.target.as_str());
+    let slot = engine::service_for_worker(&op.target).ok_or(Error::Busy)?;
+    #[cfg(feature = "sharding")]
+    if !engine::sharding::snapshot_eligible(slot) {
+        return Err(Error::Busy);
     }
-    if !found || !engine::snapshot_idle() || engine::store_maintenance::observe().is_some() {
+    let creation = engine::status(slot);
+    let upgrade = engine::upgrade::status(slot);
+    if creation.phase != Phase::Ready
+        || creation.failure.is_some()
+        || !matches!(upgrade.phase, upgrade::Phase::Empty | upgrade::Phase::Ready)
+        || upgrade.failure.is_some()
+        || !engine::snapshot_idle(slot)
+        || engine::store_maintenance::active()
+    {
         return Err(Error::Busy);
     }
     read(|ledger| ledger.admit_recovery(&request))?;
@@ -114,7 +114,16 @@ pub async fn execute(request: Request) -> Result<Record, Error> {
     {
         return Err(Error::Capacity);
     }
-    mutate(|l| l.reserve(binding.clone()))?;
+    mutate(|l| {
+        l.reserve(binding.clone())?;
+        if op.kind == canic_management_protocol::backup::Kind::Restore
+            && binding.step == canic_management_protocol::backup::Step::Fence
+            && let Effect::Recovery { source, .. } = &request.effect
+        {
+            l.bind_restore(op, *source);
+        }
+        Ok(())
+    })?;
     // This reservation and enqueue commit together when this execution returns.
     // Callback trapping rolls back only callback evidence, leaving Pending permanent.
     let completion = call.execute().await;

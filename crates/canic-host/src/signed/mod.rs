@@ -395,21 +395,8 @@ pub(crate) async fn observe(
     icp: &Path,
     client: &ReadClient,
 ) -> Result<Vec<u8>> {
-    let (root, method, args) = if plan.maintenance().is_some() {
-        let args = crate::maintenance::observation_args(plan, call.method)?;
-        (
-            principal(
-                plan.target()
-                    .map(String::as_str)
-                    .expect("validated maintenance target"),
-            )?,
-            call.method,
-            args,
-        )
-    } else {
-        let selected = crate::managed::observation(plan)?;
-        (selected.canister, selected.method, selected.args)
-    };
+    let selected = crate::managed::observation(plan)?;
+    let (root, method, args) = (selected.canister, selected.method, selected.args);
     if call.canister != root
         || call.effective != call.canister
         || call.method != method
@@ -596,4 +583,48 @@ pub fn signing_principal(identity: &str, icp: &Path) -> Result<String> {
     .map_err(supplier)?;
     crate::network::principal(std::str::from_utf8(&output).map_err(supplier)?.trim())
         .map(|principal| principal.to_text())
+}
+
+/// Sign only a bounded read of an approved Root's maintenance custody.
+pub(crate) async fn custody_page(
+    path: &Path,
+    plan: &Plan,
+    key: canic_management_protocol::application::CustodyKey,
+    identity: &str,
+    icp: &Path,
+    client: &ReadClient,
+) -> Result<Vec<u8>> {
+    use canic_management_protocol::application;
+    let crate::PlanAction::MaintainRoot { target, .. } = &plan.action else {
+        return Err(Error::Invalid("Root maintenance approval required".into()));
+    };
+    let root = principal(&target.canister)?;
+    let call = Call {
+        canister: root,
+        effective: root,
+        method: "observe_root_custody_page",
+        args: ic_wire::encode(
+            &key,
+            ic_wire::Encoding::Frame {
+                method: application::CUSTODY_PAGE,
+                direction: ic_wire::Direction::Request,
+            },
+            canic_management_protocol::LIMITS,
+        )
+        .map_err(supplier)?,
+    };
+    execute_with(
+        path,
+        &Authority {
+            network: &plan.network,
+            controller: &plan.controller,
+            expires_at_ns: now()? + 600_000_000_000,
+        },
+        &call,
+        identity,
+        icp,
+        client,
+        true,
+    )
+    .await
 }

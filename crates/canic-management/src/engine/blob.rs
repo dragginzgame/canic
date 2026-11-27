@@ -28,13 +28,12 @@ fn state(slot: ChildId) -> Option<Maintenance> {
 fn mutate(slot: ChildId, f: impl FnOnce(&mut Maintenance)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
-        let mut artifacts = state.artifact.clone();
-        let Artifact::Application(_, lifecycle) = artifacts.0.get_mut(&slot).expect("slot") else {
+        let mut artifact = state.artifact.rows()[&slot].clone();
+        let Artifact::Application(_, lifecycle) = &mut artifact else {
             panic!("application custody")
         };
         f(lifecycle.upgrades.last_mut().expect("admitted maintenance"));
-        assert!(artifacts.fits(), "maintenance evidence budget");
-        state.set_artifact(artifacts);
+        state.artifact.set(slot, artifact).expect("child artifact");
     });
 }
 
@@ -304,6 +303,9 @@ pub async fn activate(slot: ChildId, input: Upgrade) -> Result<Maintenance, Fail
         Some(&input.source.source.approval),
         "current upgrade required"
     );
+    if crate::backup::target_occupied(&input.source.source.approval.child) {
+        return Err(Failure::Uncertain);
+    }
     let Some(_guard) = super::observing(slot) else {
         return Err(Failure::Uncertain);
     };

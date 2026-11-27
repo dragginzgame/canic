@@ -37,13 +37,13 @@ fn complete_root_custody_fits_combined_budget() {
         phase: maintenance::Phase::Ready,
         stop_request: Some([255; 32]),
         failure: Some(crate::Failure::Rejected(u32::MAX)),
-        preservation: crate::store_maintenance::Scan::Entries(Some(preservation.clone())),
+        preservation: Some(preservation.clone()),
         installation: Some(maintenance::Installation {
             upload_request: [255; 32],
             request: Some([255; 32]),
             sender_version: Some(u64::MAX),
             start_request: Some([255; 32]),
-            verification: crate::store_maintenance::Scan::Entries(Some(preservation)),
+            verification: Some(preservation),
             activation_request: Some([255; 32]),
         }),
     };
@@ -99,17 +99,17 @@ fn complete_root_custody_fits_combined_budget() {
                 observed_version: Some(u64::MAX),
                 failure: Some(crate::Failure::Rejected(u32::MAX)),
             };
-            upgrade::MAX_UPGRADES
+            8
         ],
     };
     let sources = stored::Sources {
         creation: source.clone(),
-        upgrades: vec![source; upgrade::MAX_UPGRADES],
+        upgrades: vec![source; 8],
     };
     let value = custody::Root {
         stored: stored::Custody {
-            children: (0..8).map(|_| child.clone()).collect(),
-            sources: (0..8).map(|_| Some(sources.clone())).collect(),
+            children: vec![child.clone(); 3],
+            sources: vec![Some(sources); 3],
         },
         store_operation: Some(operation.clone()),
     };
@@ -136,7 +136,7 @@ fn complete_root_custody_fits_combined_budget() {
     );
     let history = custody::RootHistory {
         current: value,
-        store_history: vec![operation; maintenance::MAX_UPGRADES - 1],
+        store_history: vec![operation; 8 - 1],
     };
     let bytes_history = ic_wire::encode(
         &history,
@@ -158,7 +158,7 @@ fn complete_root_custody_fits_combined_budget() {
     let child_journal = (
         &child.creation,
         child.upgrades.last().unwrap(),
-        &child.upgrades[..upgrade::MAX_UPGRADES - 1],
+        &child.upgrades[..8 - 1],
     );
     let journal = (
         vec![(0_u8, child_journal), (1_u8, child_journal)],
@@ -167,10 +167,8 @@ fn complete_root_custody_fits_combined_budget() {
     );
     let stable_limits = ic_wire::Limits {
         bytes: 16_384 - 4,
-        allocation: 2 * (1 + upgrade::MAX_UPGRADES) * crate::LIMITS.allocation
-            + maintenance::MAX_UPGRADES * maintenance::LIMITS.allocation,
-        nodes: 2 * (1 + upgrade::MAX_UPGRADES) * crate::LIMITS.nodes
-            + maintenance::MAX_UPGRADES * maintenance::LIMITS.nodes,
+        allocation: 2 * (1 + 8) * crate::LIMITS.allocation + 8 * maintenance::LIMITS.allocation,
+        nodes: 2 * (1 + 8) * crate::LIMITS.nodes + 8 * maintenance::LIMITS.nodes,
         depth: crate::LIMITS.depth + 5,
     };
     let journal_bytes =

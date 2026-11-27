@@ -16,10 +16,6 @@ pub const LOOKUP: u64 = 81;
 pub const GENERATION: u64 = 1;
 /// Full one-MiB extent plus Candid framing.
 pub const MAX_INNER: usize = 1_048_576 + 16_384;
-/// Finite lifetime slots, across both operations.
-pub const MAX_STEPS: usize = 64;
-/// Reserved result bytes, never refunded by lookup or short replies.
-pub const MAX_RETAINED: usize = 16 * 1_048_576;
 /// Maximum cycles attached to one original inner call.
 pub const MAX_CYCLES: u64 = 1_000_000_000_000;
 /// Request contains typed arguments and the exact encoded-byte commitment.
@@ -57,7 +53,7 @@ pub enum Step {
     Metadata,
     /// Read a capture extent or verify an uploaded extent.
     Read(u32),
-    /// Allocate a non-replacing restore snapshot.
+    /// Allocate a restore snapshot, optionally replacing an approved snapshot.
     Allocate,
     /// Upload one extent.
     Upload(u32),
@@ -105,13 +101,13 @@ pub struct Operation {
 pub enum Effect {
     /// Stop, status or inventory, selected by the fixed step.
     Canister(management::CanisterArgs),
-    /// Non-replacing, non-uninstalling snapshot creation.
+    /// Snapshot creation with optional exact replacement, preserving installed code.
     Take(management::TakeSnapshotArgs),
     /// Metadata read.
     Metadata(management::SnapshotArgs),
     /// One bounded data read.
     Read(management::ReadDataArgs),
-    /// Non-replacing metadata upload.
+    /// Metadata upload with optional exact snapshot replacement.
     Allocate(management::UploadMetadataArgs),
     /// One bounded data upload.
     Upload(management::UploadDataArgs),
@@ -278,7 +274,7 @@ impl Request {
     /// Validate exact Platform encoding and derive the commitment without any effects.
     /// Sender version is preserved here and checked by the manager only for new dispatch.
     /// # Errors
-    /// Refuses unknown combinations, changed bytes, replacement, excessive extents or budgets.
+    /// Refuses unknown combinations, changed bytes, invalid snapshot IDs, excessive extents or budgets.
     pub fn prepare(&self) -> Result<(Binding, Vec<u8>), Error> {
         let op = &self.operation;
         if op.generation != GENERATION
@@ -317,7 +313,10 @@ impl Request {
                     a.encode(MAX_INNER),
                 ),
                 (Effect::Take(a), Step::Take, Kind::Capture)
-                    if a.replace_snapshot.is_none() && a.uninstall_code != Some(true) =>
+                    if a.replace_snapshot
+                        .as_ref()
+                        .is_none_or(|snapshot| id(snapshot))
+                        && a.uninstall_code != Some(true) =>
                 {
                     ("take_canister_snapshot", a.canister_id, a.encode(MAX_INNER))
                 }
@@ -326,8 +325,8 @@ impl Request {
                     a.canister_id,
                     a.encode(MAX_INNER),
                 ),
-                (Effect::Read(a), Step::Read(n), _)
-                    if n < MAX_STEPS as u32 && id(&a.snapshot_id) && read_bound(&a.kind) =>
+                (Effect::Read(a), Step::Read(_), _)
+                    if id(&a.snapshot_id) && read_bound(&a.kind) =>
                 {
                     (
                         "read_canister_snapshot_data",
@@ -336,7 +335,9 @@ impl Request {
                     )
                 }
                 (Effect::Allocate(a), Step::Allocate, Kind::Restore)
-                    if a.replace_snapshot.is_none()
+                    if a.replace_snapshot
+                        .as_ref()
+                        .is_none_or(|snapshot| id(snapshot))
                         && a.certified_data.len() <= 32
                         && a.globals.len() <= 1024 =>
                 {
@@ -346,8 +347,8 @@ impl Request {
                         a.encode(MAX_INNER),
                     )
                 }
-                (Effect::Upload(a), Step::Upload(n), Kind::Restore)
-                    if n < MAX_STEPS as u32 && id(&a.snapshot_id) && a.chunk.len() <= 1_048_576 =>
+                (Effect::Upload(a), Step::Upload(_), Kind::Restore)
+                    if id(&a.snapshot_id) && a.chunk.len() <= 1_048_576 =>
                 {
                     (
                         "upload_canister_snapshot_data",

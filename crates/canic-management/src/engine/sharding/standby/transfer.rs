@@ -1,4 +1,5 @@
 //! One source approval pins an empty spare to the Root that reserved it.
+use super::super::{Key, ordinal};
 use super::{Asset, STATE, api, available, management, mgmt, policy, reset};
 use canic::sharding::standby::StandbyPoolError;
 use canic::sharding::standby::{ImportStandby, ObserveStandbyHandoff, TransferPhase};
@@ -14,7 +15,8 @@ fn replace(index: usize, expected: &Asset, next: Asset) -> Result<(), StandbyPoo
             ));
         }
         s.pools.standby[index].1 = next;
-        s.pool.set(s.pools.encode());
+        s.pool
+            .put(&Key::Standby(ordinal(index)), &s.pools.standby[index]);
         Ok(())
     })
 }

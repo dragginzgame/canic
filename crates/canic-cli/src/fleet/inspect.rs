@@ -8,7 +8,7 @@ pub(crate) async fn inspect(
     snapshot: &Fleet,
     config_path: &Path,
     id: &str,
-    identity: Option<&Path>,
+    session: &canic_host::InspectionSession,
     wasm: Option<&Path>,
     json: bool,
 ) -> Result<Output> {
@@ -49,44 +49,65 @@ pub(crate) async fn inspect(
                 .join(path)
         })
     });
-    let client = canic_host::InspectionClient::new(&config.config.network, id, identity)?;
-    let mut view = serde_json::json!({"canister":target,"caller":client.caller().to_text(),"diagnostics":client.diagnostics().await,"artifact":path,"inventory_issues":snapshot.issues});
-    match (path, &target.module_hash) {
-        (Some(path), Some(hash)) => match canic_host::installed_endpoints(&path, hash) {
-            Ok(methods) => view["endpoints"] = serde_json::json!(methods),
-            Err(error) => view["artifact_error"] = error.to_string().into(),
-        },
-        _ => view["artifact_error"] = "local artifact or certified module hash unavailable".into(),
+    #[derive(serde::Serialize)]
+    struct View<'a> {
+        canister: &'a canic_host::FleetCanister,
+        caller: String,
+        diagnostics: canic_host::Diagnostics,
+        artifact: Option<std::path::PathBuf>,
+        inventory_issues: &'a [String],
+        #[serde(skip_serializing_if = "Option::is_none")]
+        endpoints: Option<Vec<canic_host::WasmEndpoint>>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        artifact_error: Option<String>,
     }
-
+    let client = session.client(&config.config.network, id)?;
+    let result = match (&path, &target.module_hash) {
+        (Some(path), Some(hash)) => {
+            canic_host::installed_endpoints(path, hash).map_err(|e| e.to_string())
+        }
+        _ => Err("local artifact or certified module hash unavailable".into()),
+    };
+    let (endpoints, artifact_error) = match result {
+        Ok(methods) => (Some(methods), None),
+        Err(error) => (None, Some(error)),
+    };
+    let view = View {
+        canister: target,
+        caller: client.caller().to_text(),
+        diagnostics: client.diagnostics().await,
+        artifact: path,
+        inventory_issues: &snapshot.issues,
+        endpoints,
+        artifact_error,
+    };
     if json {
-        return Ok(Output::Json(view));
+        return Ok(Output::Json(serde_json::json!(view)));
     }
     let mut text = format!(
         "{}  {}\n",
         escape(id),
         escape(target.module_hash.as_deref().unwrap_or("module unknown"))
     );
-    if let Some(error) = view["artifact_error"].as_str() {
+    if let Some(error) = view.artifact_error.as_deref() {
         writeln!(text, "Artifact: {}", escape(error)).unwrap();
     }
-    if let Some(methods) = view["endpoints"].as_array() {
+    if let Some(methods) = view.endpoints.as_ref() {
         let rows: Vec<_> = methods
             .iter()
             .map(|m| {
-                let field = |key: &str| m[key].as_str().unwrap_or("—").to_owned();
-                let bytes = |key: &str| {
-                    m[key]["bytes"]
-                        .as_u64()
-                        .map_or_else(|| "—".into(), |n| n.to_string())
+                let bytes = |limits: &Option<canic_host::WasmLimits>| {
+                    limits
+                        .as_ref()
+                        .map_or_else(|| "—".into(), |v| v.bytes.to_string())
                 };
                 [
-                    field("name"),
-                    field("mode"),
-                    field("argument"),
-                    field("reply"),
-                    bytes("request_limits"),
-                    bytes("reply_limits"),
+                    m.name.clone(),
+                    m.mode.into(),
+                    m.argument.as_deref().unwrap_or("—").into(),
+                    m.reply.as_deref().unwrap_or("—").into(),
+                    bytes(&m.request_limits),
+                    bytes(&m.reply_limits),
                 ]
             })
             .collect();
@@ -115,8 +136,18 @@ pub(crate) async fn inspect(
         )
         .unwrap();
     }
-    for name in ["readiness", "logs", "metrics"] {
-        writeln!(text, "{name} {}", view["diagnostics"][name]).unwrap();
-    }
+    writeln!(
+        text,
+        "readiness {}",
+        serde_json::json!(view.diagnostics.readiness)
+    )
+    .unwrap();
+    writeln!(text, "logs {}", serde_json::json!(view.diagnostics.logs)).unwrap();
+    writeln!(
+        text,
+        "metrics {}",
+        serde_json::json!(view.diagnostics.metrics)
+    )
+    .unwrap();
     Ok(Output::Text(text))
 }

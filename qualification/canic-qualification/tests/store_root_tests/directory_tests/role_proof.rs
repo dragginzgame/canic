@@ -427,7 +427,7 @@ pub(super) async fn exercise(
     );
     assert!(renew(&child).await.is_ok());
     let custody = ic_wire::encode(
-        &(),
+        &None::<canic_management_protocol::application::DeploymentSelector>,
         ic_wire::Encoding::Frame {
             method: canic_management_protocol::application::CUSTODY,
             direction: ic_wire::Direction::Request,

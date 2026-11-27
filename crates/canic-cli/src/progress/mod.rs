@@ -94,7 +94,11 @@ fn build_row(label: String, item: &BuiltCanister, mount_width: usize) -> [String
         ),
         endpoints,
         if item.modules.is_empty() {
-            "n/a".into()
+            item.role
+                .as_deref()
+                .and_then(crate::topology::infrastructure_badge)
+                .map_or("-", |_| "n/a")
+                .into()
         } else {
             item.modules.join(",")
         },

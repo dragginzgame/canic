@@ -4,6 +4,8 @@ mod drain;
 pub mod funding;
 pub mod payment;
 mod persistence;
+mod rows;
+use rows::{Key, ordinal};
 mod singleton;
 pub use singleton::configure_singleton;
 pub mod standby;
@@ -12,7 +14,7 @@ mod tests;
 mod workers;
 pub use capacity::{configure_subnet_capacity, increase_pool_limit};
 pub use drain::release_child_allocation;
-pub(super) use persistence::{BYTES, open};
+pub(super) use rows::PlacementRows;
 pub use workers::{configure_workers, lookup_worker};
 
 use super::{STATE, api, delivery, snapshot};
@@ -49,9 +51,8 @@ impl Ledger {
     }
 }
 
-#[derive(Default, Serialize, Deserialize)]
+#[derive(Default)]
 pub(super) struct Pools {
-    #[serde(skip)]
     receipts: crate::funding::receipts::History,
     evacuated: std::collections::BTreeSet<ChildId>,
     funding: BTreeMap<ChildId, funding::Grant>,
@@ -170,6 +171,29 @@ impl Pools {
         &ChildId::INSTANCES[..usize::from(count)]
     }
 
+    pub(super) fn scheduled_spares(&self, journals: &BTreeMap<ChildId, super::Journal>) -> usize {
+        use canic::sharding::standby::Asset;
+        // Only inventory and retired shard identities can own a standby claim.
+        self.standby
+            .iter()
+            .filter_map(|(_, asset)| match asset {
+                Asset::Claimed(_, a) | Asset::Released(_, a) | Asset::Reset(_, a, ..) => {
+                    Some(ChildId::from_raw(a.slot))
+                }
+                _ => None,
+            })
+            .chain(self.retirements.keys().copied())
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .filter(|slot| {
+                journals
+                    .get(slot)
+                    .is_some_and(|j| j.0.phase == Phase::Scheduled)
+                    && self.standby_claim(*slot).is_some()
+            })
+            .count()
+    }
+
     pub(super) fn standby_claim(&self, slot: ChildId) -> Option<Principal> {
         use canic::sharding::standby::{Asset, Source};
         for (origin, asset) in &self.standby {
@@ -233,9 +257,23 @@ pub(crate) fn occupied() -> bool {
     })
 }
 
+pub(crate) fn snapshot_eligible(slot: ChildId) -> bool {
+    STATE.with_borrow(|s| {
+        let pools = &s.as_ref().expect("open engine").pools;
+        pools.permanent.contains(&slot)
+            || (pools.capacity.is_none() && pools.shards.is_empty() && pools.instances.is_none())
+    })
+}
+
 /// Ordinary staging is available alongside placement only under an explicit backstop.
 pub(crate) fn has_capacity() -> bool {
     STATE.with_borrow(|s| s.as_ref().is_some_and(|s| s.pools.capacity.is_some()))
+}
+
+fn retain_permanent(state: &mut super::State, slot: ChildId) {
+    if state.pools.permanent.insert(slot) {
+        state.pool.put(&Key::Permanent(slot), &());
+    }
 }
 
 pub(super) fn retain_child(
@@ -248,10 +286,14 @@ pub(super) fn retain_child(
         let state = s.as_mut().expect("open Root");
         if state.pools.capacity.is_some() {
             if origin == super::Origin::Permanent {
-                state.pools.permanent.insert(slot);
+                retain_permanent(state, slot);
             }
             standby::reserve(&mut state.pools, slot, generation, selected);
-            state.pool.set(state.pools.encode());
+            if let Acquisition::Reserve { index, .. } = selected {
+                state
+                    .pool
+                    .put(&Key::Standby(ordinal(index)), &state.pools.standby[index]);
+            }
         }
     });
     standby::policy::wake();
@@ -288,7 +330,7 @@ fn admit_grant<G>(
     expires_at_ns: u64,
     prior: impl FnOnce(&super::State, &G) -> Option<Result<(), Refusal>>,
     validate: impl FnOnce(&G) -> Result<(), Refusal>,
-    insert: impl FnOnce(&mut Pools, G) -> Result<(), Refusal>,
+    insert: impl FnOnce(&mut Pools, &mut PlacementRows, G) -> Result<(), Refusal>,
 ) -> Result<(), Refusal> {
     assert!(api::is_controller(&api::caller()));
     if let Some(result) = STATE.with_borrow(|s| prior(s.as_ref().expect("open Root"), &grant)) {
@@ -301,8 +343,8 @@ fn admit_grant<G>(
     }
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().expect("open Root");
-        insert(&mut state.pools, grant)?;
-        state.pool.set(state.pools.encode());
+        insert(&mut state.pools, &mut state.pool, grant)?;
+
         Ok(())
     })
 }
@@ -355,10 +397,11 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
             }
             check_shard_topology(a)
         },
-        |pools, a| {
+        |pools, rows, a| {
             delivery::admit(&a.reference, &a.reference.manifest.hash)?;
+            let name = a.pool.clone();
             pools.shards.insert(
-                a.pool.clone(),
+                name.clone(),
                 Ledger {
                     ordinals: Vec::new(),
                     increases: Vec::new(),
@@ -367,7 +410,7 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
                     principals: Default::default(),
                 },
             );
-
+            rows.put(&Key::Shard(name.clone()), &pools.shards[&name]);
             Ok(())
         },
     )
@@ -376,9 +419,6 @@ pub fn configure(a: ShardPool) -> Result<(), Refusal> {
 // An explicit backstop accounts for existing ordinary reservations. Historical
 // grants without that backstop retain their placement-only layout.
 fn admit_pool_change(admitting_capacity: bool) -> Result<(), Refusal> {
-    if crate::backup::occupied() {
-        return Err(Refusal::Occupied);
-    }
     if super::store_maintenance::observe().is_some()
         || (!admitting_capacity
             && !occupied()
@@ -456,7 +496,8 @@ pub fn configure_instances(a: stored::InstancePool) -> Result<(), Refusal> {
                 .map(|_| Err(Refusal::Binding))
         },
         validate_instance,
-        |pools, a| {
+        |pools, rows, a| {
+            rows.put(&Key::Instances, &a);
             pools.instances = Some(a);
             Ok(())
         },
@@ -477,57 +518,75 @@ fn resolve(
     if state.pools.retirements.contains_key(&slot) {
         return Placement::Unavailable(allocation, principal.map(str::to_owned));
     }
-    let generation = state.artifact.0[&slot]
+    let generation = state.artifact.rows()[&slot]
         .sources()
         .map(|s| s.creation.operation);
-    placement::resolve(allocation, principal, generation, &state.journal.0[&slot].0)
+    placement::resolve(
+        allocation,
+        principal,
+        generation,
+        &state.journal.rows()[&slot].0,
+    )
 }
 
 /// Record the first verified worker in the same callback that commits readiness.
 pub(super) fn bind_ready(slot: ChildId, pid: &str) {
     STATE.with_borrow_mut(|s| {
         let state = s.as_mut().unwrap();
-        let (generation, original) = if let Some(index) =
-            ChildId::INSTANCES.iter().position(|id| *id == slot)
-        {
-            let pools = &mut state.pools;
-            if let Some(claim) = pools.projects.get_mut(index) {
-                (claim.generation, &mut claim.principal)
-            } else {
-                let claim = pools
-                    .workers
-                    .values_mut()
-                    .flat_map(|w| &mut w.claims)
-                    .find(|claim| claim.slot == slot && !claim.returned)
-                    .expect("claimed worker");
-                (claim.generation, &mut claim.principal)
-            }
-        } else {
-            let Some(ledger) = state
-                .pools
-                .shards
-                .values_mut()
-                .find(|l| l.generations.get(slot.index()).is_some_and(Option::is_some))
-            else {
-                return;
-            };
-            let Some(generation) = ledger.generations.get(slot.index()).copied().flatten() else {
-                return;
-            };
-            (generation, &mut ledger.principals[slot.index()])
-        };
-        let source = state.artifact.0[&slot]
+        let expected = state.artifact.rows()[&slot]
             .sources()
-            .expect("claimed child source");
-        assert_eq!(
-            source.creation.operation, generation,
-            "child generation changed"
-        );
-        if let Some(original) = original {
-            assert_eq!(original, pid, "child identity changed");
-        } else {
-            *original = Some(pid.to_owned());
-            state.pool.set(state.pools.encode());
+            .expect("child source")
+            .creation
+            .operation;
+        let bind = |generation, original: &mut Option<String>| {
+            assert_eq!(expected, generation, "child generation changed");
+            if let Some(previous) = original {
+                assert_eq!(pid, previous, "child identity changed");
+                false
+            } else {
+                *original = Some(pid.to_owned());
+                true
+            }
+        };
+        if let Some(index) = ChildId::INSTANCES.iter().position(|id| *id == slot) {
+            if let Some(claim) = state.pools.projects.get_mut(index) {
+                if bind(claim.generation, &mut claim.principal) {
+                    state.pool.put(&Key::Project(ordinal(index)), claim);
+                }
+            } else {
+                let (name, index, claim) = state
+                    .pools
+                    .workers
+                    .iter_mut()
+                    .find_map(|(name, pool)| {
+                        pool.claims
+                            .iter_mut()
+                            .enumerate()
+                            .find(|(_, c)| c.slot == slot && !c.returned)
+                            .map(|(i, c)| (name, i, c))
+                    })
+                    .expect("claimed worker");
+                if bind(claim.generation, &mut claim.principal) {
+                    state
+                        .pool
+                        .put(&Key::WorkerClaim(name.clone(), ordinal(index)), claim);
+                }
+            }
+        } else if let Some(ledger) = state
+            .pools
+            .shards
+            .values_mut()
+            .find(|l| l.generations.get(slot.index()).is_some_and(Option::is_some))
+        {
+            let index = slot.index();
+            if bind(
+                ledger.generations[index].unwrap(),
+                &mut ledger.principals[index],
+            ) {
+                state
+                    .pool
+                    .put(&Key::Shard(ledger.approval.pool.clone()), ledger);
+            }
         }
     });
 }
@@ -610,7 +669,7 @@ fn allocate_shard(pool: &str, ordinal: u8, paid: Option<payment::Settlement>) ->
         let ledger = state.pools.shards.get_mut(pool).unwrap();
         ledger.ordinals.push(slot);
         ledger.generations[slot.index()] = Some(generation);
-        state.pool.set(state.pools.encode());
+        state.pool.put(&Key::Shard(pool.to_owned()), ledger);
         resolve(state, &state.pools.shards[pool], slot, generation)
     })
 }
@@ -637,7 +696,7 @@ fn create(
         s.as_ref()
             .unwrap()
             .journal
-            .0
+            .rows()
             .get(&slot)
             .is_none_or(|j| j.0.phase == Phase::Empty)
     }));
@@ -677,18 +736,28 @@ fn create(
     Some(generation)
 }
 
-fn validate_subnet_claims(pools: &Pools, journal: &super::Journals, archived_workers: u64) {
-    for &slot in journal.0.keys().filter(|s| s.service_index().is_some()) {
+fn validate_subnet_claims(
+    pools: &Pools,
+    journal: &BTreeMap<ChildId, super::Journal>,
+    archived_workers: u64,
+) {
+    assert!(
+        pools
+            .permanent
+            .iter()
+            .all(|slot| journal.contains_key(slot)),
+        "permanent service reservation"
+    );
+    for &slot in journal.keys().filter(|s| s.service_index().is_some()) {
         assert_eq!(
             pools.permanent.contains(&slot),
-            journal.0[&slot].0.approval.is_some() && pools.shard_at(slot).is_none(),
+            journal[&slot].0.approval.is_some() && pools.shard_at(slot).is_none(),
             "permanent service reservation"
         );
     }
     assert_eq!(
         pools.used() - usize::try_from(archived_workers).expect("bounded worker history"),
         journal
-            .0
             .values()
             .filter(|entry| entry.0.approval.is_some())
             .count(),
@@ -715,11 +784,11 @@ pub(super) fn validate_claims(state: &super::State) {
     let pools = &state.pools;
     for (_, asset) in &pools.standby {
         if let canic::sharding::standby::Asset::Claimed(id, allocation) = asset {
-            let slot = ChildId::placement(allocation.slot as usize).expect("claimed slot");
-            let journal = &state.journal.0[&slot].0;
+            let slot = ChildId::from_raw(allocation.slot);
+            let journal = &state.journal.rows()[&slot].0;
             let approval = journal.approval.as_ref().expect("claimed admission");
             assert_eq!(
-                state.artifact.0[&slot]
+                state.artifact.rows()[&slot]
                     .sources()
                     .map_or(approval.module_hash, |s| s.creation.operation),
                 allocation.generation
@@ -743,12 +812,12 @@ pub(super) fn validate_claims(state: &super::State) {
     }
     assert_eq!(archived_workers, state.worker_history.len());
     if pools.capacity.is_some() {
-        validate_subnet_claims(pools, &state.journal, archived_workers);
+        validate_subnet_claims(pools, state.journal.rows(), archived_workers);
     } else {
         assert_eq!(
             state
                 .journal
-                .0
+                .rows()
                 .keys()
                 .any(|s| ChildId::INSTANCES.contains(s)),
             !claims.is_empty()
@@ -775,7 +844,7 @@ pub(super) fn validate_claims(state: &super::State) {
             assert!(
                 state
                     .artifact
-                    .0
+                    .rows()
                     .get(&slot)
                     .and_then(Artifact::sources)
                     .is_none(),
@@ -784,11 +853,11 @@ pub(super) fn validate_claims(state: &super::State) {
         }
     }
     for (index, slot) in ChildId::INSTANCES.into_iter().enumerate() {
-        let Some(journal) = state.journal.0.get(&slot) else {
+        let Some(journal) = state.journal.rows().get(&slot) else {
             assert!(claims.get(index).is_none() && pools.worker_at(slot).is_none());
             continue;
         };
-        let source = state.artifact.0[&slot].sources();
+        let source = state.artifact.rows()[&slot].sources();
         let (grant, generation, principal) = if let Some(claim) = claims.get(index) {
             (
                 pools.instances.as_ref().expect("project grant"),
@@ -822,7 +891,7 @@ fn validate_allocation(
     reference: &stored::Reference,
     arguments: &canic_management_protocol::application::Arguments,
 ) {
-    let (sources, installed_args) = match &state.artifact.0[&slot] {
+    let (sources, installed_args) = match &state.artifact.rows()[&slot] {
         Artifact::Stored(sources) => (sources, &[][..]),
         Artifact::Application(sources, app) => (sources, app.creation.as_slice()),
         Artifact::Empty => panic!("placement requires a Store source"),
@@ -837,7 +906,7 @@ fn validate_allocation(
         sources.creation.operation, generation,
         "placement generation"
     );
-    let journal = &state.journal.0[&slot].0;
+    let journal = &state.journal.rows()[&slot].0;
     assert!(journal.approval.is_some());
     assert_eq!(
         principal.is_some(),
@@ -881,10 +950,10 @@ pub fn lookup_instance(request: &[u8; 32]) -> Placement {
                 generation: claim.generation,
             },
             claim.principal.as_deref(),
-            state.artifact.0[&slot]
+            state.artifact.rows()[&slot]
                 .sources()
                 .map(|s| s.creation.operation),
-            &state.journal.0[&slot].0,
+            &state.journal.rows()[&slot].0,
         )
     })
 }
@@ -931,7 +1000,10 @@ fn instance(request: [u8; 32], paid: Option<payment::Settlement>) -> Placement {
             generation,
             principal: None,
         });
-        state.pool.set(state.pools.encode());
+        let i = state.pools.projects.len() - 1;
+        state
+            .pool
+            .put(&Key::Project(ordinal(i)), &state.pools.projects[i]);
     });
     lookup_instance(&request)
 }
@@ -954,7 +1026,7 @@ pub(super) fn assigned_role(
         let state = s.as_ref().expect("open Root");
         let (&slot, journal) = state
             .journal
-            .0
+            .rows()
             .iter()
             .find(|(slot, journal)| {
                 !state.pools.withdrawn(**slot)
@@ -964,7 +1036,7 @@ pub(super) fn assigned_role(
         if !journal.ready_for_role() {
             return Err(RoleError::Unavailable);
         }
-        let Artifact::Application(sources, app) = &state.artifact.0[&slot] else {
+        let Artifact::Application(sources, app) = &state.artifact.rows()[&slot] else {
             return Err(RoleError::Unassigned);
         };
         let generation = sources.creation.operation;

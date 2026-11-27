@@ -106,10 +106,7 @@ async fn maintain_root(
     let sources = planned["plan"]["action"]["approval"]["store"]["sources"]
         .as_array()
         .unwrap();
-    assert_eq!(
-        sources.len(),
-        canic_management_protocol::children::ChildId::HISTORICAL_SERVICES.len()
-    );
+    assert_eq!(sources.len(), 2);
     assert!(
         sources[..2]
             .iter()
@@ -182,10 +179,10 @@ async fn maintain_root(
         std::fs::read(path.join("install/signed.json")).unwrap(),
         signed
     );
-    assert_eq!(
-        std::fs::read(path.join("custody-before/reply.bin")).unwrap(),
-        std::fs::read(path.join("custody-after/reply.bin")).unwrap()
-    );
+    for side in ["custody-before", "custody-after"] {
+        assert!(path.join(side).join("reply.bin").exists());
+        assert!(path.join(side).join("page-1/reply.bin").exists());
+    }
     let migrated = pic.get_stable_memory(root).await;
     assert_eq!(
         migrated, stable,
@@ -339,7 +336,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
                 .is_file()
         );
     }
-    for leaf in ["child", "sibling"] {
+    for leaf in ["child-1", "child-2"] {
         assert!(!path.join(leaf).join("plan.json").exists());
     }
     assert_eq!(
@@ -394,7 +391,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         signed
     );
     // Pause the second publication after the first completed. Neither child may be admitted.
-    std::fs::write(&paused, "#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */sibling/publication/publication/observe/1/arguments.bin) exit 72;; esac\ndone\nexec \"$CANIC_REAL_SIGNER\" \"$@\"\n").unwrap();
+    std::fs::write(&paused, "#!/bin/sh\nfor arg in \"$@\"; do\n case \"$arg\" in */child-2/publication/publication/observe/1/arguments.bin) exit 72;; esac\ndone\nexec \"$CANIC_REAL_SIGNER\" \"$@\"\n").unwrap();
     let stopped = Command::new(std::env::var_os("CANIC_CLI").unwrap())
         .args(["fleet", "apply", id, "--json", "--config"])
         .arg(dir.join("canic.toml"))
@@ -405,13 +402,13 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         .unwrap();
     assert!(!stopped.status.success(), "pause must reach publication");
     assert!(
-        path.join("child/publication/publication.json").exists(),
+        path.join("child-1/publication/publication.json").exists(),
         "{}",
         String::from_utf8_lossy(&stopped.stderr)
     );
-    assert!(!path.join("child/plan.json").exists());
-    assert!(!path.join("sibling/plan.json").exists());
-    let prepared = path.join("sibling/publication/publication/prepare");
+    assert!(!path.join("child-1/plan.json").exists());
+    assert!(!path.join("child-2/plan.json").exists());
+    let prepared = path.join("child-2/publication/publication/prepare");
     let signed_prepare = std::fs::read(prepared.join("signed.json")).unwrap();
     std::fs::remove_file(prepared.join("reply.bin")).unwrap();
     assert_eq!(
@@ -434,7 +431,7 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
         .status
         .success()
     );
-    assert!(!path.join("child/plan.json").exists());
+    assert!(!path.join("child-1/plan.json").exists());
     let apply = || {
         cli(
             &dir,
@@ -456,11 +453,11 @@ async fn fleet_bootstrap_gates_both_application_slots_on_store_readiness() {
     );
     assert!(
         !path
-            .join("sibling/publication/publication/chunk-0")
+            .join("child-2/publication/publication/chunk-0")
             .exists(),
         "shared content must not upload twice"
     );
-    let staged = path.join("child/stage");
+    let staged = path.join("child-1/stage");
     let signed_stage = std::fs::read(staged.join("signed.json")).unwrap();
     assert!(
         std::fs::metadata(staged.join("arguments.bin"))

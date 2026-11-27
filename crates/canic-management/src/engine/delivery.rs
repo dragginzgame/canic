@@ -22,7 +22,7 @@ pub(super) fn source(slot: ChildId, upgrade: bool) -> Option<stored::Delivery> {
             .as_ref()
             .expect("open engine")
             .artifact
-            .0
+            .rows()
             .get(&slot)?
             .sources()?;
         if upgrade {
@@ -41,8 +41,8 @@ pub(super) fn is_stored(slot: ChildId) -> bool {
 fn mutate(slot: ChildId, upgrade: bool, f: impl FnOnce(&mut stored::Delivery)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("open engine");
-        let mut artifacts = state.artifact.clone();
-        let sources = match artifacts.0.get_mut(&slot).expect("known child") {
+        let mut artifact = state.artifact.rows()[&slot].clone();
+        let sources = match &mut artifact {
             Artifact::Stored(sources) | Artifact::Application(sources, _) => sources,
             Artifact::Empty => panic!("Store source required"),
         };
@@ -51,7 +51,7 @@ fn mutate(slot: ChildId, upgrade: bool, f: impl FnOnce(&mut stored::Delivery)) {
         } else {
             &mut sources.creation
         });
-        state.set_artifact(artifacts);
+        state.artifact.set(slot, artifact).expect("child artifact");
     });
 }
 
@@ -84,14 +84,14 @@ pub(super) fn retained<A: Serialize>(
 }
 
 pub(super) fn validate(state: &State, slot: ChildId) {
-    let Some(sources) = state.artifact.0[&slot].sources() else {
+    let Some(sources) = state.artifact.rows()[&slot].sources() else {
         assert!(
-            state.journal.0[&slot].0.approval.is_none(),
+            state.journal.rows()[&slot].0.approval.is_none(),
             "missing child source"
         );
         return;
     };
-    let journal = &state.journal.0[&slot];
+    let journal = &state.journal.rows()[&slot];
     let creation = journal
         .0
         .approval
@@ -101,7 +101,7 @@ pub(super) fn validate(state: &State, slot: ChildId) {
         approval: creation,
         reference: sources.creation.reference.clone(),
     };
-    let pin = if let Artifact::Application(_, lifecycle) = &state.artifact.0[&slot] {
+    let pin = if let Artifact::Application(_, lifecycle) = &state.artifact.rows()[&slot] {
         #[cfg(not(feature = "blob"))]
         assert!(
             lifecycle.upgrades.is_empty(),
@@ -151,7 +151,7 @@ pub(super) fn validate(state: &State, slot: ChildId) {
             approval: approval.clone(),
             reference: source.reference.clone(),
         };
-        let pin = if let Artifact::Application(_, lifecycle) = &state.artifact.0[&slot] {
+        let pin = if let Artifact::Application(_, lifecycle) = &state.artifact.rows()[&slot] {
             {
                 let maintenance = &lifecycle.upgrades[index];
                 canic_management_protocol::application::Upgrade {

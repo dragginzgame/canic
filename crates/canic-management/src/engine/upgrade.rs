@@ -7,7 +7,7 @@ use canic_management_protocol::{
     Failure, Phase, Refusal,
     children::ChildId,
     digest, stored,
-    upgrade::{Approval, MAX_UPGRADES, Phase as UpgradePhase, Status as UpgradeStatus},
+    upgrade::{Approval, Phase as UpgradePhase, Status as UpgradeStatus},
 };
 use ic_platform_protocol::{
     management::{self as mgmt, CanisterArgs, CanisterStatus, InstallMode},
@@ -22,18 +22,23 @@ use ic_platform_types::Principal;
 #[must_use]
 pub fn status(slot: ChildId) -> UpgradeStatus {
     STATE.with_borrow(|state| {
-        state.as_ref().expect("initialized manager").journal.0[&slot]
-            .1
-            .clone()
+        state
+            .as_ref()
+            .expect("initialized manager")
+            .journal
+            .rows()
+            .get(&slot)
+            .map(|j| j.1.clone())
+            .unwrap_or_default()
     })
 }
 
 fn mutate(slot: ChildId, f: impl FnOnce(&mut UpgradeStatus)) {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
-        let mut value = state.journal.clone();
-        f(&mut value.0.get_mut(&slot).expect("known child").1);
-        state.set_journal(value);
+        let mut value = state.journal.rows()[&slot].clone();
+        f(&mut value.1);
+        state.set_journal(slot, value);
     });
 }
 
@@ -43,7 +48,15 @@ fn mutate(slot: ChildId, f: impl FnOnce(&mut UpgradeStatus)) {
 #[must_use]
 pub fn observe(slot: ChildId, expected: &Approval) -> UpgradeStatus {
     STATE.with_borrow(|state| {
-        let journal = &state.as_ref().expect("initialized manager").journal.0[&slot];
+        let Some(journal) = state
+            .as_ref()
+            .expect("initialized manager")
+            .journal
+            .rows()
+            .get(&slot)
+        else {
+            return UpgradeStatus::default();
+        };
         journal
             .2
             .iter()
@@ -55,8 +68,7 @@ pub fn observe(slot: ChildId, expected: &Approval) -> UpgradeStatus {
 }
 
 pub(super) fn validate(state: &State, slot: ChildId) {
-    let journal = &state.journal.0[&slot];
-    assert!(journal.2.len() < MAX_UPGRADES, "bounded upgrade history");
+    let journal = &state.journal.rows()[&slot];
     let mut previous = journal
         .0
         .approval
@@ -71,7 +83,7 @@ pub(super) fn validate(state: &State, slot: ChildId) {
     {
         validate_record(record, &journal.0, &previous);
         if record.phase == UpgradePhase::Ready
-            && let Artifact::Application(_, lifecycle) = &state.artifact.0[&slot]
+            && let Artifact::Application(_, lifecycle) = &state.artifact.rows()[&slot]
         {
             assert_eq!(
                 lifecycle.upgrades[index].phase,
@@ -105,12 +117,12 @@ pub(super) fn validate(state: &State, slot: ChildId) {
     }
     if let Some(a) = &journal.1.approval {
         assert_eq!(
-            state.artifact.0[&slot].hash(true),
+            state.artifact.rows()[&slot].hash(true),
             Some(a.module_hash),
             "current artifact custody"
         );
     } else {
-        assert!(state.artifact.0[&slot].hash(true).is_none());
+        assert!(state.artifact.rows()[&slot].hash(true).is_none());
     }
 }
 
@@ -221,6 +233,13 @@ pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, 
     if super::store_maintenance::active() {
         return Err(Refusal::Occupied);
     }
+    if snapshot(slot)
+        .worker
+        .as_deref()
+        .is_some_and(crate::backup::target_occupied)
+    {
+        return Err(Refusal::Occupied);
+    }
     let approval = input.approval().clone();
     #[cfg(feature = "blob")]
     let application = matches!(&input, Input::Application(_));
@@ -254,13 +273,6 @@ pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, 
     {
         return Err(Refusal::Occupied);
     }
-    let full = STATE.with_borrow(|state| {
-        let journal = &state.as_ref().expect("initialized manager").journal.0[&slot];
-        journal.2.len() + usize::from(journal.1.approval.is_some()) >= MAX_UPGRADES
-    });
-    if full {
-        return Err(Refusal::Occupied);
-    }
     let creation = snapshot(slot);
     if creation.phase != Phase::Ready {
         return Err(Refusal::Binding);
@@ -291,13 +303,10 @@ pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, 
     if ic_platform_runtime::raw::liquid_cycle_balance() < reserved_cycles() {
         return Err(Refusal::Reserve);
     }
-    let artifacts = STATE.with_borrow(|state| {
-        let mut artifacts = state
-            .as_ref()
-            .expect("initialized manager")
-            .artifact
-            .clone();
-        match (artifacts.0.get_mut(&slot).expect("known child"), input) {
+    let artifact = STATE.with_borrow(|state| {
+        let mut artifact =
+            state.as_ref().expect("initialized manager").artifact.rows()[&slot].clone();
+        match (&mut artifact, input) {
             #[cfg(feature = "blob")]
             (Artifact::Application(sources, lifecycle), Input::Application(input)) => {
                 use canic_management_protocol::application::{Maintenance, MaintenancePhase};
@@ -323,21 +332,20 @@ pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, 
                 .push(delivery::retained(slot, stored::STAGE_UPGRADE, &input)),
             _ => unreachable!("source mode admitted"),
         }
-        artifacts
+        artifact
     });
-    if !artifacts.fits() {
-        return Err(Refusal::Artifact);
-    }
-    STATE.with_borrow_mut(|state| {
-        state
-            .as_mut()
-            .expect("initialized manager")
-            .set_artifact(artifacts);
-    });
+    STATE
+        .with_borrow_mut(|state| {
+            state
+                .as_mut()
+                .expect("initialized manager")
+                .artifact
+                .set(slot, artifact)
+        })
+        .map_err(|_| Refusal::Artifact)?;
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("initialized manager");
-        let mut journals = state.journal.clone();
-        let journal = journals.0.get_mut(&slot).expect("known child");
+        let mut journal = state.journal.rows()[&slot].clone();
         if journal.1.approval.is_some() {
             journal.2.push(journal.1.clone());
         }
@@ -346,7 +354,7 @@ pub(super) fn stage_input(slot: ChildId, input: Input) -> Result<UpgradeStatus, 
             phase: UpgradePhase::Scheduled,
             ..Default::default()
         };
-        state.set_journal(journals);
+        state.set_journal(slot, journal);
     });
     schedule(slot);
     Ok(status(slot))
@@ -443,7 +451,7 @@ pub(super) async fn step(slot: ChildId) {
                 || value.status != RuntimeStatus::Stopped
                 || value.version == u64::MAX
                 || STATE.with_borrow(|state| {
-                    state.as_ref().expect("initialized manager").journal.0[&slot]
+                    state.as_ref().expect("initialized manager").journal.rows()[&slot]
                         .2
                         .last()
                         .is_some_and(|old| {

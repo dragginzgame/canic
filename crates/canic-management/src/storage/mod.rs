@@ -1,6 +1,7 @@
-//! Versioned payloads in two bounded Storage records.
-//! Open accepts only the current journal and Store delivery tags.
+//! Independent stable child records and bounded fleet metadata.
 
+mod history;
+pub(crate) use history::Paged;
 #[cfg(test)]
 mod tests;
 
@@ -9,48 +10,26 @@ use canic_management_protocol::{LIMITS, Status, children::ChildId, store_mainten
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-// Persist identities explicitly. The protocol remains the admission ceiling;
-// accepting a new record shape never creates capacity or drops unknown entries.
-type Records<T> = Vec<(u32, T)>;
-
-// Require unique, ordered identities before collecting into the runtime map.
-fn identified<T>(entries: Records<T>) -> Result<BTreeMap<ChildId, T>, &'static str> {
-    let mut map = BTreeMap::new();
-    for (id, value) in entries {
-        let slot = ChildId::placement(id as usize)
-            .or_else(|| ChildId::new(id as usize))
-            .ok_or("child identity bound")?;
-        if map.last_key_value().is_some_and(|(last, _)| *last >= slot) {
-            return Err("child identity order");
-        }
-        map.insert(slot, value);
-    }
-    if !complete(&map) {
-        return Err("child identities");
-    }
-    Ok(map)
+thread_local! { static REVISION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) }; }
+pub(crate) fn revision() -> u64 {
+    REVISION.get()
 }
 
-fn complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
+pub(super) fn complete<T>(entries: &BTreeMap<ChildId, T>) -> bool {
     entries
         .keys()
         .filter_map(|id| id.service_index())
         .enumerate()
         .all(|(expected, actual)| expected == actual)
-        && ChildId::HISTORICAL_SERVICES
-            .iter()
-            .all(|id| entries.contains_key(id))
-        && entries.contains_key(&ChildId::PROJECT[0]) == entries.contains_key(&ChildId::PROJECT[1])
 }
 
-const JOURNAL_TAG: &[u8; 4] = b"CMJ1";
-const ARTIFACT_TAG: &[u8; 4] = b"CMS1";
 pub(super) const JOURNAL_BYTES: usize = 65_536;
 pub(super) const ARTIFACT_BYTES: usize = 1_048_576;
-pub(super) const JOURNAL_KEY: &str = "manager.journal.v2";
-pub(super) const ARTIFACT_KEY: &str = "manager.artifacts.v1";
+pub(super) const JOURNAL_KEY: &str = "manager.child_journal_pages.v1";
+pub(super) const ARTIFACT_KEY: &str = "manager.child_artifact_pages.v1";
+pub(super) const META_KEY: &str = "manager.metadata_pages.v1";
 #[cfg(feature = "sharding")]
-pub(super) const SHARDS_KEY: &str = "manager.shards.v2";
+pub(super) const SHARDS_KEY: &str = "manager.placement_rows.v1";
 #[cfg(feature = "sharding")]
 pub(super) const WORKER_HISTORY_KEY: &str = "manager.worker_history.v1";
 #[cfg(feature = "auth")]
@@ -60,13 +39,14 @@ pub(super) const KEYS: &[&str] = &[
     super::role_issuer::KEY,
     #[cfg(feature = "auth")]
     AUTH_HISTORY_KEY,
+    META_KEY,
     JOURNAL_KEY,
     ARTIFACT_KEY,
     #[cfg(feature = "sharding")]
     SHARDS_KEY,
     #[cfg(feature = "sharding")]
     WORKER_HISTORY_KEY,
-    "manager.snapshot.v1",
+    crate::backup::KEY,
 ];
 const JOURNAL_LIMITS: ic_wire::Limits = ic_wire::Limits {
     bytes: JOURNAL_BYTES - 4,
@@ -76,7 +56,7 @@ const JOURNAL_LIMITS: ic_wire::Limits = ic_wire::Limits {
     depth: LIMITS.depth + 5,
 };
 const ARTIFACT_LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: ARTIFACT_BYTES - ARTIFACT_TAG.len(),
+    bytes: ARTIFACT_BYTES - 4,
     allocation: ARTIFACT_BYTES * 9 + canic_management_protocol::stored::LIMITS.allocation,
     nodes: canic_management_protocol::stored::LIMITS.nodes + 64,
     depth: canic_management_protocol::stored::LIMITS.depth + 3,
@@ -125,145 +105,153 @@ impl Artifact {
     }
 }
 
-// All children share the original checked leases; each retains separate payloads.
-#[derive(Clone)]
-pub(super) struct Journals(
-    pub BTreeMap<ChildId, Journal>,
-    pub Option<store_maintenance::Status>,
-    pub Vec<store_maintenance::Status>,
-    pub Option<canic_management_protocol::stored::RootBootstrap>,
-);
-impl Default for Journals {
-    fn default() -> Self {
-        Self(
-            ChildId::HISTORICAL_SERVICES
-                .into_iter()
-                .map(|id| (id, Journal::default()))
-                .collect(),
-            None,
-            vec![],
-            None,
-        )
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub(super) struct Metadata {
+    pub maintenance: Option<store_maintenance::Status>,
+    pub history: Vec<store_maintenance::Status>,
+    pub bootstrap: Option<canic_management_protocol::stored::RootBootstrap>,
+}
+
+pub(super) trait Record: Serialize + serde::de::DeserializeOwned {
+    const TAG: &'static [u8; 4];
+    const LIMITS: ic_wire::Limits;
+    fn valid(&self) -> bool;
+
+    fn encode(&self) -> Result<Vec<u8>, &'static str> {
+        if !self.valid() {
+            return Err("invalid management record");
+        }
+        let payload = ic_wire::encode(self, ic_wire::Encoding::Payload, Self::LIMITS)
+            .map_err(|_| "management record budget")?;
+        let mut bytes = Self::TAG.to_vec();
+        bytes.extend(payload);
+        Ok(bytes)
+    }
+
+    fn decode(bytes: &[u8]) -> Result<Self, &'static str> {
+        let payload = bytes
+            .strip_prefix(Self::TAG)
+            .ok_or("unsupported management record format")?;
+        let value: Self = ic_wire::decode(payload, ic_wire::Encoding::Payload, Self::LIMITS)
+            .map_err(|_| "invalid management record encoding")?;
+        if !value.valid() {
+            return Err("invalid management record");
+        }
+        Ok(value)
     }
 }
-impl Journals {
-    fn validate(&self) -> Result<(), &'static str> {
-        if self.3.is_some_and(|policy| !policy.valid()) || !complete(&self.0) {
-            return Err("child journal identities");
+
+impl Record for Metadata {
+    const TAG: &'static [u8; 4] = b"CMET";
+    const LIMITS: ic_wire::Limits = JOURNAL_LIMITS;
+    fn valid(&self) -> bool {
+        self.bootstrap.is_none_or(|policy| policy.valid())
+    }
+}
+
+impl Record for Journal {
+    const TAG: &'static [u8; 4] = b"CJRW";
+    const LIMITS: ic_wire::Limits = JOURNAL_LIMITS;
+    fn valid(&self) -> bool {
+        true
+    }
+}
+
+impl Record for Artifact {
+    const TAG: &'static [u8; 4] = b"CARW";
+    const LIMITS: ic_wire::Limits = ARTIFACT_LIMITS;
+    fn valid(&self) -> bool {
+        match self {
+            Self::Application(sources, lifecycle) => {
+                !lifecycle.creation.as_slice().is_empty()
+                    && lifecycle.upgrades.len() == sources.upgrades.len()
+                    && lifecycle
+                        .upgrades
+                        .iter()
+                        .all(|maintenance| maintenance.valid())
+            }
+            _ => true,
         }
-        if self
-            .0
-            .values()
-            .any(|journal| journal.2.len() >= upgrade::MAX_UPGRADES)
-        {
-            return Err("upgrade history bound");
+    }
+}
+
+pub(super) struct ChildRows<T> {
+    rows: BTreeMap<ChildId, T>,
+    stable: ic_storage::adapter::StableBTreeMap<(u32, u64), Vec<u8>>,
+}
+
+impl<T: Paged> ChildRows<T> {
+    pub fn rows(&self) -> &BTreeMap<ChildId, T> {
+        &self.rows
+    }
+
+    pub fn open(
+        runtime: &ic_storage::MemoryRuntime<ic_storage::DefaultMemoryImpl>,
+        key: &str,
+        fresh: bool,
+    ) -> Self {
+        let stable: ic_storage::adapter::StableBTreeMap<(u32, u64), Vec<u8>> =
+            canic::storage::map(runtime, key, fresh);
+        let mut rows: BTreeMap<ChildId, T> = BTreeMap::new();
+        let mut expected = 0;
+        for entry in stable.iter() {
+            let &(slot, ordinal) = entry.key();
+            let id = ChildId::from_raw(slot);
+            let bytes = entry.value();
+            if ordinal == 0 {
+                assert_eq!(expected, 0, "missing upgrade records");
+                let (count, head) = bytes.split_at(8);
+                expected = u64::from_le_bytes(count.try_into().unwrap());
+                rows.insert(
+                    id,
+                    T::decode(head)
+                        .unwrap_or_else(|reason| ic_platform_runtime::system::trap(reason)),
+                );
+            } else {
+                let row = rows.get_mut(&id).expect("retained child head");
+                assert_eq!(ordinal, row.len() as u64 + 1, "upgrade record order");
+                expected = expected.checked_sub(1).expect("extra upgrade record");
+                row.append(&bytes).expect("retained upgrade record");
+            }
         }
-        if self.2.len() >= store_maintenance::MAX_UPGRADES {
-            return Err("Store maintenance history bound");
-        }
+        assert_eq!(expected, 0, "missing final upgrade records");
+        assert!(complete(&rows), "child identities");
+        Self { rows, stable }
+    }
+
+    pub fn set(&mut self, slot: ChildId, value: T) -> Result<(), &'static str> {
+        let old_len = self.rows.get(&slot).map_or(0, Paged::len);
+        write_pages(&mut self.stable, slot.index() as u32, old_len, &value)?;
+        self.rows.insert(slot, value);
+        REVISION.set(revision().checked_add(1).expect("custody revision"));
         Ok(())
     }
 }
-impl Journals {
-    pub(super) fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
-        self.validate()?;
-        let entries: Vec<_> = self
-            .0
-            .iter()
-            .map(|(slot, value)| (slot.index() as u32, value))
-            .collect();
-        let payload = ic_wire::encode(
-            &(entries, &self.1, &self.2, self.3),
-            ic_wire::Encoding::Payload,
-            JOURNAL_LIMITS,
-        )
-        .map_err(|_| "child journals")?;
-        let mut bytes = JOURNAL_TAG.to_vec();
-        bytes.extend_from_slice(&payload);
-        Ok(bytes)
-    }
 
-    pub(super) fn from_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
-        let payload = bytes
-            .strip_prefix(JOURNAL_TAG)
-            .ok_or("unsupported Root journal format")?;
-        let (entries, maintenance, history, bootstrap): (Records<Journal>, _, _, _) =
-            ic_wire::decode(payload, ic_wire::Encoding::Payload, JOURNAL_LIMITS)
-                .map_err(|_| "identified child journals")?;
-        let value = Self(identified(entries)?, maintenance, history, bootstrap);
-        value.validate()?;
-        Ok(value)
+pub(super) fn write_pages<T: Paged>(
+    stable: &mut ic_storage::adapter::StableBTreeMap<(u32, u64), Vec<u8>>,
+    slot: u32,
+    old_len: usize,
+    value: &T,
+) -> Result<(), &'static str> {
+    let n = value.len();
+    let mut head = (n as u64).to_le_bytes().to_vec();
+    head.extend(value.head().encode()?);
+    // Completed predecessors are immutable. The latest delivery may settle in place.
+    let start = if n == old_len {
+        n.saturating_sub(1)
+    } else {
+        old_len.min(n)
+    };
+    let pages = (start..n)
+        .map(|i| value.entry(i))
+        .collect::<Result<Vec<_>, _>>()?;
+    for (i, bytes) in (start..n).zip(pages) {
+        stable.insert((slot, i as u64 + 1), bytes);
     }
-}
-#[derive(Clone)]
-pub(super) struct Artifacts(pub BTreeMap<ChildId, Artifact>);
-impl Default for Artifacts {
-    fn default() -> Self {
-        Self(
-            ChildId::HISTORICAL_SERVICES
-                .into_iter()
-                .map(|id| (id, Artifact::default()))
-                .collect(),
-        )
+    for i in n..old_len {
+        stable.remove(&(slot, i as u64 + 1));
     }
-}
-impl Artifacts {
-    pub(super) fn fits(&self) -> bool {
-        self.entries().is_ok_and(|entries| {
-            ic_wire::encoded_len(&entries, ic_wire::Encoding::Payload, ARTIFACT_LIMITS).is_ok()
-        })
-    }
-
-    fn entries(&self) -> Result<Vec<(u32, &Artifact)>, &'static str> {
-        if !complete(&self.0)
-            || self
-                .0
-                .values()
-                .filter_map(Artifact::sources)
-                .any(|source| source.upgrades.len() > upgrade::MAX_UPGRADES)
-            || self.0.values().any(|artifact| match artifact {
-                Artifact::Application(sources, lifecycle) => {
-                    lifecycle.creation.as_slice().is_empty()
-                        || lifecycle.upgrades.len() != sources.upgrades.len()
-                        || lifecycle.upgrades.iter().any(|m| !m.valid())
-                }
-                _ => false,
-            })
-        {
-            return Err("aggregate artifact budget");
-        }
-        Ok(self
-            .0
-            .iter()
-            .map(|(slot, artifact)| (slot.index() as u32, artifact))
-            .collect())
-    }
-}
-impl Artifacts {
-    pub(super) fn to_bytes(&self) -> Result<Vec<u8>, &'static str> {
-        let mut bytes = ARTIFACT_TAG.to_vec();
-        bytes.extend(
-            ic_wire::encode(
-                &self.entries()?,
-                ic_wire::Encoding::Payload,
-                ARTIFACT_LIMITS,
-            )
-            .map_err(|_| "identified child artifacts")?,
-        );
-        Ok(bytes)
-    }
-
-    pub(super) fn from_bytes(bytes: &[u8]) -> Result<Self, &'static str> {
-        let payload = bytes
-            .strip_prefix(ARTIFACT_TAG)
-            .ok_or("unsupported Root artifact format")?;
-        let entries: Records<Artifact> =
-            ic_wire::decode(payload, ic_wire::Encoding::Payload, ARTIFACT_LIMITS)
-                .map_err(|_| "identified child artifacts")?;
-        let value = Self(identified(entries)?);
-        if !value.fits() {
-            return Err("aggregate artifact budget");
-        }
-        Ok(value)
-    }
+    stable.insert((slot, 0), head);
+    Ok(())
 }

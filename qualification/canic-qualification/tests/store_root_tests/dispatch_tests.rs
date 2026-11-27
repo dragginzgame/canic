@@ -28,7 +28,7 @@ async fn elapsed_earliest_dispatch_creates_and_upgrades_without_renewing_expiry(
     input.approval.execute_at_ns = now - 1_000_000_000;
     input.approval.expires_at_ns = now + 120_000_000_000;
     // Occupy both original slots before installing the service under test.
-    for slot in &ChildId::HISTORICAL_SERVICES[..2] {
+    for slot in &[ChildId::FIRST, ChildId::SECOND] {
         root.update::<_, Result<management::Status, management::Refusal>>(
             "stage_child_creation",
             canic_management_protocol::application::STAGE_CHILD_CREATION,
@@ -43,7 +43,7 @@ async fn elapsed_earliest_dispatch_creates_and_upgrades_without_renewing_expiry(
         settle(pic).await;
     }
     let earlier = custody(&root).await;
-    let slot = ChildId::HISTORICAL_SERVICES[2];
+    let slot = ChildId::service(2).unwrap();
     let stage_third = async |input: &stored::Stage<management::Approval>| {
         root.update::<_, Result<management::Status, management::Refusal>>(
             "stage_child_creation",

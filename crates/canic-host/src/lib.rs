@@ -67,7 +67,7 @@ pub use fleet_plan::{
     Cancellation, CreatedCanister, FleetChild, FleetPlan, FleetPlanning, FleetStore,
     cancel_fleet_plan, plan_fleet,
 };
-pub use inspection::{Diagnostics, InspectionClient, Observation};
+pub use inspection::{Diagnostics, InspectionClient, InspectionSession, Observation};
 pub use managed::{activate, create_managed_plan, stored::StoredArtifact};
 pub use network::Network;
 pub use operation::{

@@ -6,69 +6,85 @@ mod tests;
 mod runtime;
 
 use canic_management_protocol::backup::{
-    Binding, Error, MAX_RETAINED, MAX_STEPS, Outcome, Record, Step,
+    Binding, Error, Kind, LIMITS, Operation, Outcome, Record, Step,
 };
 #[cfg(feature = "fault-injection")]
 #[doc(hidden)]
 pub use runtime::inject;
 
-pub(crate) use runtime::occupied;
+pub(crate) use runtime::{occupied, target_occupied};
 
+use ic_storage::{DefaultMemoryImpl, MemoryRuntime, adapter::StableBTreeMap};
 pub use runtime::{execute, lookup};
-use serde::Serialize;
+pub(crate) const KEY: &str = "manager.target_snapshots.v1";
 
-pub(crate) const CAPACITY: usize = MAX_RETAINED + 128 * 1024;
-const LIMITS: ic_wire::Limits = ic_wire::Limits {
-    bytes: CAPACITY,
-    allocation: CAPACITY * 10,
-    nodes: 131_072,
-    depth: 24,
-};
-#[derive(Default, Serialize)]
-pub(crate) struct Ledger(Vec<Record>);
+#[derive(Clone, Copy, serde::Serialize)]
+enum Key<'a> {
+    Owner(Kind, [u8; 16]),
+    Active(&'a str),
+    Count,
+    Capture(&'a str),
+    Source(&'a str, [u8; 32]),
+    RestoreSource([u8; 16]),
+    Step(Kind, [u8; 16], Step),
+    Unsettled(&'a str),
+}
+
+fn encode(value: &impl serde::Serialize) -> Vec<u8> {
+    ic_wire::encode(value, ic_wire::Encoding::Payload, LIMITS).expect("snapshot row")
+}
+
+pub(crate) struct Ledger {
+    stable: StableBTreeMap<Vec<u8>, Vec<u8>>,
+}
+
 impl Ledger {
-    pub(crate) fn encode(&self) -> Vec<u8> {
-        ic_wire::encode(self, ic_wire::Encoding::Payload, LIMITS).expect("bounded snapshot ledger")
+    pub(crate) fn open(runtime: &MemoryRuntime<DefaultMemoryImpl>, fresh: bool) -> Self {
+        Self {
+            stable: canic::storage::map(runtime, KEY, fresh),
+        }
     }
 
-    pub(crate) fn open(bytes: &[u8]) -> Self {
-        let records: ic_wire::List<Record, MAX_STEPS> =
-            ic_wire::decode(bytes, ic_wire::Encoding::Payload, LIMITS)
-                .expect("snapshot ledger reopen");
-        let ledger = Self(records.into_vec());
-        assert!(ledger.0.len() <= MAX_STEPS);
-        assert!(
-            ledger
-                .0
-                .iter()
-                .map(|r| r.binding.reply_bytes as usize)
-                .sum::<usize>()
-                <= MAX_RETAINED
-        );
-        ledger
+    fn get<T: serde::de::DeserializeOwned>(&self, key: Key<'_>) -> Option<T> {
+        self.stable.get(&encode(&key)).map(|bytes| {
+            ic_wire::decode(&bytes, ic_wire::Encoding::Payload, LIMITS)
+                .expect("retained snapshot row")
+        })
+    }
+
+    fn active(&self, target: &str) -> Option<Operation> {
+        self.get(Key::Active(target))
+    }
+
+    fn count(&self) -> u64 {
+        self.get(Key::Count).unwrap_or(0)
+    }
+
+    fn record(&self, operation: &Operation, step: Step) -> Option<Record> {
+        self.get(Key::Step(operation.kind, operation.id, step))
+    }
+
+    fn done(&self, op: &Operation, step: Step) -> bool {
+        self.record(op, step)
+            .is_some_and(|r| matches!(r.outcome, Outcome::Reply(_)))
     }
 
     pub(crate) fn occupied(&self) -> bool {
-        !self.0.is_empty()
+        self.count() != 0
     }
 
     pub(crate) fn lookup(&self, b: &Binding) -> Result<Record, Error> {
-        for r in self.0.iter() {
-            let a = &r.binding.operation;
-            if a.id == b.operation.id && a.kind == b.operation.kind {
-                if a != &b.operation {
-                    return Err(Error::Conflict);
-                }
-                if r.binding.step == b.step {
-                    return if &r.binding == b {
-                        Ok(r.clone())
-                    } else {
-                        Err(Error::Conflict)
-                    };
-                }
-            }
+        if self
+            .get::<Operation>(Key::Owner(b.operation.kind, b.operation.id))
+            .is_some_and(|op| op != b.operation)
+        {
+            return Err(Error::Conflict);
         }
-        Err(Error::Missing)
+        let r = self.record(&b.operation, b.step).ok_or(Error::Missing)?;
+        if r.binding != *b {
+            return Err(Error::Conflict);
+        }
+        Ok(r)
     }
 
     pub(crate) fn reserve(&mut self, b: Binding) -> Result<(), Error> {
@@ -77,83 +93,150 @@ impl Ledger {
             Ok(_) => return Err(Error::Conflict),
             Err(e) => return Err(e),
         }
-        if self
-            .0
-            .iter()
-            .any(|r| !matches!(r.outcome, Outcome::Reply(_)))
-        {
+        let op = &b.operation;
+        let pending = encode(&Key::Unsettled(&op.target));
+        if self.stable.contains_key(&pending) {
             return Err(Error::Busy);
         }
-        let previous = self
-            .0
-            .iter()
-            .find(|r| r.binding.operation.kind == b.operation.kind);
-        if previous.is_some_and(|r| r.binding.operation != b.operation) {
-            return Err(Error::Capacity);
+        if let Some(active) = self.active(&op.target) {
+            if active != *op {
+                return Err(Error::Busy);
+            }
+        } else {
+            let owner = encode(&Key::Owner(op.kind, op.id));
+            if self.stable.contains_key(&owner) {
+                return Err(Error::Conflict);
+            }
+            if op.kind == Kind::Capture
+                && b.step == Step::Fence
+                && self
+                    .stable
+                    .contains_key(&encode(&Key::Source(&op.target, op.approval)))
+            {
+                return Err(Error::Conflict);
+            }
+            self.stable.insert(owner, encode(op));
+            self.stable
+                .insert(encode(&Key::Active(&op.target)), encode(op));
+            self.stable
+                .insert(encode(&Key::Count), encode(&(self.count() + 1)));
+            if op.kind == Kind::Capture {
+                self.stable
+                    .insert(encode(&Key::Capture(&op.target)), encode(op));
+                if b.step == Step::Fence {
+                    self.stable
+                        .insert(encode(&Key::Source(&op.target, op.approval)), encode(op));
+                }
+            }
         }
-        // A second operation cannot adopt the first operation's incomplete target work.
-        if previous.is_none()
-            && !self.0.is_empty()
-            && !self.0.iter().any(|r| {
-                r.binding.step == Step::FinalStatus && matches!(r.outcome, Outcome::Reply(_))
-            })
-        {
-            return Err(Error::Busy);
-        }
-        if self.0.len() >= MAX_STEPS
-            || self
-                .0
-                .iter()
-                .map(|r| r.binding.reply_bytes as usize)
-                .sum::<usize>()
-                + b.reply_bytes as usize
-                > MAX_RETAINED
-        {
-            return Err(Error::Capacity);
-        }
-        self.0.push(Record {
-            binding: b,
-            outcome: Outcome::Pending,
-        });
+        let key = encode(&Key::Step(b.operation.kind, b.operation.id, b.step));
+        self.stable.insert(pending, key.clone());
+        self.stable.insert(
+            key,
+            encode(&Record {
+                binding: b,
+                outcome: Outcome::Pending,
+            }),
+        );
         Ok(())
     }
 
     pub(crate) fn complete(&mut self, b: &Binding, outcome: Outcome) {
-        let r = self
-            .0
-            .iter_mut()
-            .find(|r| &r.binding == b)
-            .expect("original issued slot");
+        let mut r = self.lookup(b).expect("original issued slot");
         assert_eq!(r.outcome, Outcome::Pending, "terminal outcome immutable");
         if outcome.retained_bytes() <= b.reply_bytes as usize {
+            let key = encode(&Key::Step(b.operation.kind, b.operation.id, b.step));
+            let pending = encode(&Key::Unsettled(&b.operation.target));
+            assert_eq!(
+                self.stable.get(&pending).as_ref(),
+                Some(&key),
+                "original unsettled snapshot step"
+            );
+            let replied = matches!(outcome, Outcome::Reply(_));
+            let declined_snapshot = matches!(outcome, Outcome::Rejected(..) | Outcome::Refused)
+                && matches!(b.step, Step::Take | Step::Allocate);
+            if replied || declined_snapshot {
+                self.stable.remove(&pending);
+                let fenced = self.record(&b.operation, Step::Fence).is_some();
+                if b.step
+                    == if fenced {
+                        Step::Open
+                    } else {
+                        Step::FinalStatus
+                    }
+                {
+                    self.stable
+                        .remove(&encode(&Key::Active(&b.operation.target)))
+                        .expect("active snapshot target");
+                    self.stable
+                        .insert(encode(&Key::Count), encode(&(self.count() - 1)));
+                }
+            }
             r.outcome = outcome;
+            self.stable.insert(key, encode(&r));
         }
     }
 }
 
 impl Ledger {
-    /// Existing raw executor operations retain their original profile. A capture fence
-    /// selects the recovery profile for the lifetime of this two-operation ledger.
+    fn bind_restore(&mut self, op: &Operation, source: [u8; 32]) {
+        self.stable
+            .insert(encode(&Key::RestoreSource(op.id)), encode(&source));
+    }
+
+    /// Enforce the selected capture and the exact operation's recovery procedure.
     pub(crate) fn admit_recovery(
         &self,
         request: &canic_management_protocol::backup::Request,
     ) -> Result<(), Error> {
-        use canic_management_protocol::backup::{Effect, Kind};
+        use canic_management_protocol::backup::Effect;
         let op = &request.operation;
-        let Some(capture) = self
-            .0
-            .iter()
-            .find(|r| r.binding.operation.kind == Kind::Capture && r.binding.step == Step::Fence)
-        else {
-            return match (&request.effect, op.kind, request.step) {
-                (Effect::Recovery { .. }, Kind::Capture, Step::Fence) if self.0.is_empty() => {
-                    Ok(())
+        let capture = match (op.kind, &request.effect) {
+            (Kind::Capture, _) => {
+                if request.step == Step::Fence {
+                    return if self.active(&op.target).is_none() {
+                        Ok(())
+                    } else {
+                        Err(Error::Busy)
+                    };
                 }
-                (Effect::Recovery { .. }, _, _) => Err(Error::Busy),
-                _ => Ok(()),
+                if self.active(&op.target).is_none()
+                    && self
+                        .get::<Operation>(Key::Capture(&op.target))
+                        .is_some_and(|old| self.record(&old, Step::Fence).is_some())
+                {
+                    return Err(Error::Busy);
+                }
+                self.record(op, Step::Fence).map(|r| r.binding.operation)
+            }
+            (Kind::Restore, Effect::Recovery { source, .. }) => {
+                let capture: Operation = self
+                    .get(Key::Source(&op.target, *source))
+                    .ok_or(Error::Conflict)?;
+                if self
+                    .get::<[u8; 32]>(Key::RestoreSource(op.id))
+                    .is_some_and(|bound| bound != *source)
+                {
+                    return Err(Error::Conflict);
+                }
+                Some(capture)
+            }
+            (Kind::Restore, _) => {
+                let capture = if let Some(source) = self.get(Key::RestoreSource(op.id)) {
+                    self.get(Key::Source(&op.target, source))
+                } else {
+                    self.get(Key::Capture(&op.target))
+                };
+                capture.filter(|c| self.record(c, Step::Fence).is_some())
+            }
+        };
+        let Some(capture) = capture else {
+            return if matches!(request.effect, Effect::Recovery { .. }) {
+                Err(Error::Busy)
+            } else {
+                Ok(())
             };
         };
-        let capture = &capture.binding.operation;
         if capture.manager != op.manager
             || capture.caller != op.caller
             || capture.network != op.network
@@ -167,16 +250,13 @@ impl Ledger {
         {
             return Err(Error::Conflict);
         }
-        let done = |kind, step| {
-            self.0.iter().any(|r| {
-                r.binding.operation.kind == kind
-                    && r.binding.step == step
-                    && matches!(r.outcome, Outcome::Reply(_))
-            })
-        };
-        let here = |step| done(op.kind, step);
+        let here = |step| self.done(op, step);
         let allowed = match request.step {
-            Step::Fence => op.kind == Kind::Restore && done(Kind::Capture, Step::Open),
+            Step::Fence => {
+                op.kind == Kind::Restore
+                    && self.done(&capture, Step::Open)
+                    && self.done(&capture, Step::Take)
+            }
             Step::Stop => here(Step::Fence),
             Step::Start => here(Step::FinalStatus),
             Step::Accept => op.kind == Kind::Restore && here(Step::Start),
@@ -194,11 +274,10 @@ impl Ledger {
             Step::BeforeLoad => here(Step::Allocate) && here(Step::Metadata),
             Step::AdmitLoad => here(Step::BeforeLoad),
             Step::Load => here(Step::AdmitLoad),
-            Step::FinalStatus => here(if op.kind == Kind::Capture {
-                Step::Take
-            } else {
-                Step::Load
-            }),
+            Step::FinalStatus if op.kind == Kind::Capture => self
+                .record(op, Step::Take)
+                .is_some_and(|r| !matches!(r.outcome, Outcome::Pending)),
+            Step::FinalStatus => here(Step::Load),
             Step::Read(_) | Step::Metadata => {
                 if op.kind == Kind::Capture {
                     here(Step::Take)

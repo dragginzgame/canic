@@ -144,7 +144,12 @@ async fn directory_recipients_retain_the_installing_root() {
     .unwrap()
     .unwrap();
     pic.advance_time(Duration::from_secs(11)).await;
-    settle(pic).await;
+    for _ in 0..60 {
+        if read(pic, root).await[0].upgrades[0].phase == upgrade::Phase::Ready {
+            break;
+        }
+        pic.tick().await;
+    }
     assert_eq!(
         read(pic, root).await[0].upgrades[0].phase,
         upgrade::Phase::Ready

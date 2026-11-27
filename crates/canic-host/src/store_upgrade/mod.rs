@@ -24,8 +24,7 @@ pub(crate) fn validate(plan: &Plan) -> Result<()> {
     let target_id = principal(target)?;
     if plan.deployment.is_none()
         || plan.version != crate::plan::APPROVAL_VERSION
-        || !(1..=wire::MAX_UPGRADES as u64)
-            .contains(&plan.store_upgrade_sequence().ok_or_else(invalid)?)
+        || plan.store_upgrade_sequence().ok_or_else(invalid)? == 0
         || plan.controller == "2vxsx-fae"
         || root_id.to_text() != root.canister
         || target_id.to_text() != *target

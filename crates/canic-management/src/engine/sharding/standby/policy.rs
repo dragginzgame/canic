@@ -1,4 +1,5 @@
 //! One controller approval owns initial fill, replenishment and external handoff.
+use super::super::{Key, ordinal};
 use super::{Asset, Refill, STATE, Source, api, available, create_issued, reserved_cycles};
 use crate::engine::{MANAGEMENT_LIMITS, sharding};
 use canic::sharding::standby::StandbyPoolError;
@@ -116,7 +117,7 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), StandbyPoolError> {
                 .iter()
                 .any(|(_, a)| matches!(a, Asset::Issued))
                 || s.journal
-                    .0
+                    .rows()
                     .values()
                     .any(|j| j.0.attempts[0] > 0 && j.0.worker.is_none()))
         {
@@ -127,11 +128,11 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), StandbyPoolError> {
         for candidate in added {
             let text = &candidate.principal;
             if s.journal
-                .0
+                .rows()
                 .values()
                 .any(|j| j.0.worker.as_ref() == Some(text))
                 || s.artifact
-                    .0
+                    .rows()
                     .values()
                     .filter_map(|a| a.sources())
                     .any(|a| a.creation.reference.store == *text)
@@ -153,6 +154,7 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), StandbyPoolError> {
                 ));
             }
         }
+        let start = pools.standby.len();
         for candidate in added {
             let text = &candidate.principal;
             let id = text.parse().expect("validated principal");
@@ -166,7 +168,11 @@ pub fn configure(policy: StandbyPolicy) -> Result<(), StandbyPoolError> {
             ));
         }
         pools.reserve_policy = Some(policy);
-        s.pool.set(pools.encode());
+        s.pool
+            .put(&Key::StandbyPolicy, pools.reserve_policy.as_ref().unwrap());
+        for (i, entry) in pools.standby.iter().enumerate().skip(start) {
+            s.pool.put(&Key::Standby(ordinal(i)), entry);
+        }
         Ok(())
     })?;
     wake();
@@ -184,13 +190,13 @@ pub fn spare_counts() -> Option<canic_management_protocol::stored::SpareCounts> 
         let mut issued = 0;
         let mut paid = 0;
         for (index, (source, asset)) in pools.standby.iter().enumerate() {
-            ready += u8::from(available(asset).is_some() && !pools.reserved_for_payment(index));
-            issued += u8::from(matches!(asset, Asset::Issued));
+            ready += u32::from(available(asset).is_some() && !pools.reserved_for_payment(index));
+            issued += u32::from(matches!(asset, Asset::Issued));
             paid += u8::from(matches!(source, Source::Automatic(_)));
         }
-        let refill = if ready >= p.minimum_available {
+        let refill = if ready >= u32::from(p.minimum_available) {
             RefillStatus::AtTarget
-        } else if ready + issued >= p.minimum_available {
+        } else if ready + issued >= u32::from(p.minimum_available) {
             RefillStatus::AwaitingCreation
         } else if paid >= p.maximum_creations {
             RefillStatus::AllowanceSpent
@@ -240,7 +246,8 @@ async fn step() -> OnceResult {
             let s = s.as_mut().unwrap();
             let index = s.pools.standby.len();
             s.pools.standby.push((source.clone(), Asset::Issued));
-            s.pool.set(s.pools.encode());
+            s.pool
+                .put(&Key::Standby(ordinal(index)), &s.pools.standby[index]);
             index
         });
         observation = if create_issued(index, source).await.is_ok() {
@@ -383,7 +390,8 @@ pub async fn import(id: Principal) -> Result<Asset, StandbyPoolError> {
         return STATE.with_borrow_mut(|s| {
             let s = s.as_mut().unwrap();
             s.pools.standby[index].1 = Asset::AwaitingHandoff(id);
-            s.pool.set(s.pools.encode());
+            s.pool
+                .put(&Key::Standby(ordinal(index)), &s.pools.standby[index]);
             Ok(Asset::AwaitingHandoff(id))
         });
     }
@@ -450,7 +458,8 @@ pub async fn import(id: Principal) -> Result<Asset, StandbyPoolError> {
             if available(&result).is_some() {
                 super::log_surplus(&s.pools);
             }
-            s.pool.set(s.pools.encode());
+            s.pool
+                .put(&Key::Standby(ordinal(index)), &s.pools.standby[index]);
             Ok(result)
         } else {
             Ok(entry.clone())
