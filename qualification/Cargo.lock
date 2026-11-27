@@ -1647,9 +1647,9 @@ dependencies = [
 
 [[package]]
 name = "ic-blob-storage"
-version = "0.113.1"
+version = "0.113.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52c622bfca0dea2c7a275849182882980648f475ee9880e1aa1036e98390d764"
+checksum = "eaa64f2953e7333f2b09301597fb9d4e3996342f7d93a6eeb1b5753faea2ad97"
 dependencies = [
  "ic-logging",
  "ic-metrics",
