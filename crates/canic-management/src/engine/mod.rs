@@ -43,7 +43,7 @@ use std::{cell::RefCell, collections::BTreeSet};
 #[must_use]
 pub fn custody() -> canic_management_protocol::custody::Custody {
     let mut slots = owner_custody().into_iter();
-    let first = slots.next().expect("first custody slot");
+    let first = slots.next().unwrap_or_else(|| Journal::default().custody());
     assert!(
         slots.all(|s| s.creation.approval.is_none()),
         "two-child custody required"
